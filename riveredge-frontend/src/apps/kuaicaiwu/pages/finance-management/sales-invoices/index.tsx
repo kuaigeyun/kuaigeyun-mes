@@ -50,6 +50,7 @@ import {
   resolveSalesInvoiceListParams,
 } from '../../../utils/financeListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 type PullPreviewKind = 'sales_order' | 'sales_delivery';
 
@@ -688,7 +689,7 @@ const SalesInvoicesPage: React.FC = () => {
         }}
         skipFuzzyPinyinClientFilter
         pinnedTabsField={FINANCE_INVOICE_PINNED_REVIEW_FIELD}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
       />
 
       <UniPullQueryModal<SalesInvoicePullCandidate>

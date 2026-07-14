@@ -44,10 +44,6 @@ class AssemblyTemplate(BaseModel):
     total_items = fields.IntField(default=0, description="组件行数")
     remarks = fields.TextField(null=True, description="备注")
 
-    created_by = fields.IntField(null=True, description="创建人ID")
-    created_by_name = fields.CharField(max_length=100, null=True, description="创建人姓名")
-    updated_by = fields.IntField(null=True, description="更新人ID")
-    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
 
     def __str__(self):

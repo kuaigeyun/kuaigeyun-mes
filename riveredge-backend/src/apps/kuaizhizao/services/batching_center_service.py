@@ -425,6 +425,16 @@ class BatchingCenterService:
         for line in all_call_items:
             items_by_call.setdefault(line.request_id, []).append(line)
 
+        wh_ids = list({c.target_warehouse_id for c in calls if c.target_warehouse_id})
+        wh_name_by_id: dict = {}
+        if wh_ids:
+            from apps.master_data.models.warehouse import Warehouse
+
+            warehouses = await Warehouse.filter(
+                tenant_id=tenant_id, id__in=wh_ids, deleted_at__isnull=True
+            ).all()
+            wh_name_by_id = {w.id: (w.name or "") for w in warehouses}
+
         now = now_utc()
         tasks: List[BatchingCenterTaskItem] = []
         for call in calls:
@@ -433,6 +443,9 @@ class BatchingCenterService:
             if call.needed_at:
                 sla = now > make_aware(call.needed_at)
             score_detail = score_detail_map.get(call.work_order_id) if call.work_order_id else None
+            tgt_wh_name = None
+            if call.target_warehouse_id:
+                tgt_wh_name = wh_name_by_id.get(call.target_warehouse_id) or None
             tasks.append(
                 BatchingCenterTaskItem(
                     task_type="material_call",
@@ -449,10 +462,15 @@ class BatchingCenterService:
                     material_name=call.material_name,
                     material_code=call.material_code,
                     requested_quantity=float(call.requested_quantity or 0),
+                    delivered_quantity=float(call.delivered_quantity or 0),
                     material_unit=call.material_unit,
                     caller_name=call.caller_name,
+                    created_by_name=getattr(call, "created_by_name", None),
+                    updated_by_name=getattr(call, "updated_by_name", None),
                     created_at=call.created_at,
                     updated_at=call.updated_at,
+                    needed_at=call.needed_at,
+                    target_warehouse_name=tgt_wh_name,
                     items=[ln.model_dump() for ln in (resp.items or [])],
                 )
             )
@@ -531,6 +549,19 @@ class BatchingCenterService:
             if len(lines) > 3:
                 summary += f" 等{len(lines)}项"
 
+            # 齐套率：按工单配料 BOM+库存分析（与主动备料同源）；无工单时退化为明细行已拣占比
+            kitting_rate: Optional[float] = None
+            if wo is not None:
+                try:
+                    kitting_rate, _, _ = await self._analyze_wo_batching_shortages(tenant_id, wo)
+                except Exception:
+                    kitting_rate = None
+            if kitting_rate is None and lines:
+                req_sum = sum(float(ln.required_quantity or 0) for ln in lines)
+                picked_sum = sum(float(ln.picked_quantity or 0) for ln in lines)
+                if req_sum > 0:
+                    kitting_rate = round(min(100.0, picked_sum / req_sum * 100), 2)
+
             tasks.append(
                 BatchingCenterTaskItem(
                     task_type="batching_draft",
@@ -542,15 +573,18 @@ class BatchingCenterService:
                     picking_score=score_detail.composite_score if score_detail else None,
                     picking_rank_band=score_detail.rank_band if score_detail else None,
                     score_breakdown=score_detail.breakdown if score_detail else None,
-                    kitting_rate=None,
+                    kitting_rate=kitting_rate,
                     shortage_summary=summary or None,
                     requested_quantity=float(wo.quantity) if wo and wo.quantity else None,
                     priority=wo.priority if wo and wo.priority else "normal",
                     status=order.status,
+                    created_by_name=order.created_by_name,
+                    updated_by_name=order.updated_by_name,
                     created_at=order.created_at,
                     updated_at=order.updated_at,
                     suggested_warehouse_id=order.warehouse_id,
                     suggested_warehouse_name=order.warehouse_name,
+                    target_warehouse_name=order.warehouse_name,
                 )
             )
         self._sort_tasks(tasks)

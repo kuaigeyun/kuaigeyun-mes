@@ -108,6 +108,8 @@ import {
   resolvePurchaseReturnListLifecycleParams,
 } from '../../../utils/purchaseReturnLifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import type { PurchaseReturnListParams } from '../../../services/purchase-return';
@@ -120,7 +122,7 @@ import {
 } from '../../../../../components/custom-fields';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatNumber, formatQuantity } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
@@ -1008,11 +1010,11 @@ const PurchaseReturnsPage: React.FC = () => {
       },
       { title: t('app.kuaizhizao.purchaseReturn.returnReason'), dataIndex: 'return_reason' },
       { title: t('app.kuaizhizao.purchaseReturn.returnType'), dataIndex: 'return_type' },
-      { title: t('app.kuaizhizao.purchaseReturn.totalQuantity'), dataIndex: 'total_quantity' },
+      { title: t('app.kuaizhizao.purchaseReturn.totalQuantity'), dataIndex: 'total_quantity', render: formatQuantity },
       {
         title: t('app.kuaizhizao.purchaseReturn.totalAmount'),
         dataIndex: 'total_amount',
-        render: (text: any) => `¥${text?.toLocaleString() || 0}`,
+        render: (text: any) => (text != null && text !== '' ? `¥${formatNumber(text, 2)}` : '-'),
       },
       { title: t('app.kuaizhizao.purchaseReturn.returnTime'), dataIndex: 'return_time', valueType: 'dateTime' },
       { title: t('app.kuaizhizao.purchaseReturn.returner'), dataIndex: 'returner_name' },
@@ -1086,7 +1088,7 @@ const PurchaseReturnsPage: React.FC = () => {
   };
 
   const columns: ProColumns<PurchaseReturn>[] = useMemo(
-    () => [
+    () => alignProColumns<PurchaseReturn>([
       {
         title: t('app.kuaizhizao.purchaseReturn.returnTime'),
         dataIndex: 'return_time_range',
@@ -1161,7 +1163,15 @@ const PurchaseReturnsPage: React.FC = () => {
           );
         },
       },
-      { title: t('app.kuaizhizao.purchaseReturn.colWarehouse'), dataIndex: 'warehouse_name', width: 120, sorter: true, hideInSearch: true, ellipsis: true },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.colWarehouse'),
+        dataIndex: 'warehouse_name',
+        width: 140,
+        ellipsis: true,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t('app.kuaizhizao.purchaseReturn.totalQuantity'),
         dataIndex: 'total_quantity',
@@ -1169,6 +1179,7 @@ const PurchaseReturnsPage: React.FC = () => {
         align: 'right',
         sorter: true,
         hideInSearch: true,
+        render: formatQuantity,
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.totalAmount'),
@@ -1177,7 +1188,7 @@ const PurchaseReturnsPage: React.FC = () => {
         align: 'right',
         sorter: true,
         hideInSearch: true,
-        render: (text: any) => `¥${text?.toLocaleString() || 0}`,
+        render: (text: any) => (text != null && text !== '' ? `¥${formatNumber(text, 2)}` : '-'),
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.returnTime'),
@@ -1188,16 +1199,7 @@ const PurchaseReturnsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => (r.return_time ? formatDateTime(r.return_time, 'YYYY-MM-DD HH:mm') : '-'),
       },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        defaultSortOrder: 'descend',
-        hideInSearch: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm') : '-'),
-      },
+      ...buildDocumentAuditColumns<PurchaseReturn>(t),
       {
         title: t('common.createdAt'),
         dataIndex: 'created_at_range',
@@ -1303,7 +1305,7 @@ const PurchaseReturnsPage: React.FC = () => {
           return renderPurchaseReturnRowActions(parts, `purchase-return-actions-${record.id ?? 'row'}`);
         },
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [
       handleConfirm,
       handleDetail,
@@ -1406,7 +1408,7 @@ const PurchaseReturnsPage: React.FC = () => {
     () => [
       { title: t('app.kuaizhizao.purchaseReturn.import.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
       { title: t('app.kuaizhizao.shipmentNotice.import.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
-      { title: t('app.kuaizhizao.purchaseReturn.returnQuantity'), dataIndex: 'return_quantity', width: 100, align: 'right' as const },
+      { title: t('app.kuaizhizao.purchaseReturn.returnQuantity'), dataIndex: 'return_quantity', width: 100, align: 'right' as const , render: formatQuantity },
       {
         title: t('app.kuaizhizao.purchaseReturn.unitPrice'),
         dataIndex: 'unit_price',
@@ -1445,7 +1447,7 @@ const PurchaseReturnsPage: React.FC = () => {
       { title: t('app.kuaizhizao.purchaseReturn.colPurchaseReceiptCode'), dataIndex: 'purchase_receipt_code', width: 180, ellipsis: true },
       { title: t('app.kuaizhizao.receiptNotice.supplier'), dataIndex: 'supplier_name', width: 180, ellipsis: true },
       { title: t('app.kuaizhizao.purchaseOrder.col.materialName'), dataIndex: 'material_name', ellipsis: true },
-      { title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'), dataIndex: 'unqualified_quantity', width: 120, align: 'right', render: (v) => Number(v || 0) },
+      { title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'), dataIndex: 'unqualified_quantity', width: 120, align: 'right', render: (v) => formatQuantity(v) },
       { title: t('app.kuaizhizao.quality.common.columns.qualityStatus'), dataIndex: 'quality_status', width: 120, align: 'center', render: (v) => v || '-' },
       { title: t('app.kuaizhizao.quality.common.columns.inspectionStatus'), dataIndex: 'status', width: 120, align: 'center', render: (v) => v || '-' },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-') },
@@ -1612,10 +1614,6 @@ const PurchaseReturnsPage: React.FC = () => {
             tableRowsRef.current = rows;
           }}
           scroll={{ x: 1500 }}
-          onRow={(record) => ({
-            onClick: () => handleDetail(record),
-            style: { cursor: 'pointer' },
-          })}
         />
       </ListPageTemplate>
 
@@ -1893,9 +1891,9 @@ const PurchaseReturnsPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                 ]}
               />
             ) : (
@@ -1952,7 +1950,7 @@ const PurchaseReturnsPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'), dataIndex: 'max_push_quantity', width: 120, align: 'right' },
+                  { title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'), dataIndex: 'max_push_quantity', width: 120, align: 'right', render: formatQuantity },
                 ]}
               />
             ) : (

@@ -456,8 +456,18 @@ export async function apiRequest<T = any>(
           const detailMsg =
             typeof data.error.details?.message === 'string' ? data.error.details.message : '';
           const errorMessage = data.error.message || data.error.details || '请求失败';
+          // INTERNAL_SERVER_ERROR 常把真实原因放在 details.message（如库存不足 ValueError）
+          const resolved =
+            data.error.code === 'INTERNAL_SERVER_ERROR' && detailMsg
+              ? detailMsg
+              : errorMessage;
           const error = new Error(
-            import.meta.env.DEV && detailMsg ? `${errorMessage}: ${detailMsg}` : errorMessage,
+            import.meta.env.DEV &&
+              detailMsg &&
+              resolved !== detailMsg &&
+              data.error.code !== 'INTERNAL_SERVER_ERROR'
+              ? `${resolved}: ${detailMsg}`
+              : resolved,
           ) as any;
           error.response = { data, status: response.status };
           throw error;

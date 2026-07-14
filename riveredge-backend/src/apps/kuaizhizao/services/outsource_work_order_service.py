@@ -14,6 +14,7 @@ from datetime import date, datetime, time
 from typing import Any, Dict, List, Optional
 from decimal import Decimal
 
+from loguru import logger
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 

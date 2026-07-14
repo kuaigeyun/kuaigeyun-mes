@@ -25,6 +25,10 @@ export type MaterialProductProcess = {
   processRouteId?: number;
   allowOperationJump: boolean;
   lines: ProductProcessLine[];
+  createdAt?: string;
+  updatedAt?: string;
+  createdByName?: string;
+  updatedByName?: string;
 };
 
 export type MaterialProductProcessSave = {

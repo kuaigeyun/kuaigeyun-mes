@@ -220,6 +220,8 @@ class CustomerResponse(CustomerBase):
     tenant_id: int = Field(..., description="租户ID", alias="tenantId")
     created_at: datetime = Field(..., description="创建时间", alias="createdAt")
     updated_at: datetime = Field(..., description="更新时间", alias="updatedAt")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名", alias="createdByName")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名", alias="updatedByName")
     deleted_at: Optional[datetime] = Field(None, description="删除时间", alias="deletedAt")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
@@ -353,6 +355,8 @@ class SupplierResponse(SupplierBase):
     tenant_id: int = Field(..., description="租户ID", alias="tenantId")
     created_at: datetime = Field(..., description="创建时间", alias="createdAt")
     updated_at: datetime = Field(..., description="更新时间", alias="updatedAt")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名", alias="createdByName")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名", alias="updatedByName")
     deleted_at: Optional[datetime] = Field(None, description="删除时间", alias="deletedAt")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)

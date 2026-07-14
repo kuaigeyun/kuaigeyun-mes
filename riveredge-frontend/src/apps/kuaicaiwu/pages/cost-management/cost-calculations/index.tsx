@@ -88,7 +88,7 @@ import { formatCalculationType,
   getSourceTypeTag,
   getVarianceTypeTag,
 } from '../../../utils/costUiLabels';
-import { formatDateTime } from '../../../../../utils/format';
+import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import {
   COST_CALCULATION_PINNED_STATUS_FIELD,
   costCalculationSearchColumns,
@@ -96,6 +96,7 @@ import {
   resolveCostCalculationListParams,
 } from '../../../utils/costListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 type TopCat = 'ledger' | 'compare' | 'analyze' | 'optimization' | 'trial';
 
@@ -550,7 +551,7 @@ const CostCalculationPage: React.FC = () => {
         width: 100,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => (r.quantity != null ? Number(r.quantity).toFixed(2) : '0.00'),
+        render: (_, r) => formatQuantity(r.quantity),
       },
       {
         title: t('app.kuaicaiwu.costCommon.col.materialCost'),
@@ -665,7 +666,7 @@ const CostCalculationPage: React.FC = () => {
       {
         title: t('app.kuaicaiwu.costCommon.col.quantity'),
         dataIndex: 'quantity',
-        render: (_, entity) => (entity.quantity != null ? Number(entity.quantity).toFixed(2) : '0.00'),
+        render: (_, entity) => formatQuantity(entity.quantity),
       },
       {
         title: t('app.kuaicaiwu.costCommon.col.materialCost'),
@@ -836,7 +837,7 @@ const CostCalculationPage: React.FC = () => {
             return { data: [], success: false, total: 0 };
           }
         }}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         rowKey="uuid"
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}

@@ -26,6 +26,8 @@ class WorkGroupMemberResponse(WorkGroupMemberItem):
 
     id: int = Field(..., description="主键ID")
     work_group_id: int = Field(..., alias="workGroupId", description="工作小组ID")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
 
@@ -97,6 +99,8 @@ class WorkGroupResponse(WorkGroupBase):
     tenant_id: int = Field(..., alias="tenantId", description="租户ID")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     members: List[WorkGroupMemberResponse] = Field(

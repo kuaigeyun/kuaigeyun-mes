@@ -27,6 +27,7 @@ export type KuaizhizaoDocumentActionKey =
   | 'oqc_inspection.pull_from_shipment_notice'
   | 'oqc_inspection.pull_from_sales_delivery'
   | 'rework_order.pull_from_finished_goods_inspection'
+  | 'rework_order.pull_from_work_order'
   | 'purchase_requisition.pull_from_demand_computation'
   | 'demand_computation.pull_from_sales_forecast'
   | 'demand_computation.pull_from_demand'
@@ -290,6 +291,14 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('rework_order.pull_from_finished_goods_inspection', 'label'),
     sourceLabelKey: documentActionI18n('rework_order.pull_from_finished_goods_inspection', 'source'),
     targetLabelKey: documentActionI18n('rework_order.pull_from_finished_goods_inspection', 'target'),
+  },
+  'rework_order.pull_from_work_order': {
+    key: 'rework_order.pull_from_work_order',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('rework_order.pull_from_work_order', 'label'),
+    sourceLabelKey: documentActionI18n('rework_order.pull_from_work_order', 'source'),
+    targetLabelKey: documentActionI18n('rework_order.pull_from_work_order', 'target'),
   },
   'purchase_requisition.pull_from_demand_computation': {
     key: 'purchase_requisition.pull_from_demand_computation',

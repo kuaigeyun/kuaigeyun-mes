@@ -11,7 +11,7 @@ import { App, Popconfirm, Button, Space, Typography, Descriptions, Empty, Spin, 
 import { DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { PerformanceTraceBriefPrimaryActions } from '../PerformanceTraceBriefFooter';
@@ -21,12 +21,14 @@ import type { Skill } from '../../../types/performance';
 import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
 import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { getPerformanceActiveValueEnum, renderActiveTag } from '../components/performanceMeta';
 import { formatDateTime } from '../../../../../utils/format';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   normalizePerformanceListResponse,
   PERFORMANCE_PINNED_ACTIVE_FIELD,
@@ -138,7 +140,7 @@ const SkillsPage: React.FC = () => {
 
   const columns: ProColumns<Skill>[] = useMemo(() => {
     const customFieldColumns = generateCustomFieldColumns();
-    return [
+    return alignProColumns<Skill>([
     {
       title: t('app.kuaizhizao.performance.skills.columns.skillCode'),
       dataIndex: 'code',
@@ -162,36 +164,7 @@ const SkillsPage: React.FC = () => {
       valueType: 'select',
       valueEnum: getPerformanceActiveValueEnum(t),
     },
-    {
-      title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
-      dataIndex: 'updatedAt',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      sorter: true,
-      render: (_, r) => (r.updatedAt ? formatDateTime(r.updatedAt, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: t('app.kuaizhizao.performance.common.columns.lifecycle'),
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>, t);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
-    },
+    ...buildDocumentAuditColumns<Skill>(t),
     {
       title: t('app.kuaizhizao.performance.common.columns.actions'),
       valueType: 'option',
@@ -213,7 +186,7 @@ const SkillsPage: React.FC = () => {
         </Space>
       ),
     },
-    ];
+    ], SALES_DOC_LIST_FIELD_RANK);
   }, [t, customFields]);
 
   return (

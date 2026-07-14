@@ -206,8 +206,8 @@ export function handleNetworkError(error: any): void {
   
   if (isNetworkError) {
     Modal.error({
-      title: '网络连接错误',
-      content: '无法连接到服务器，请检查网络连接后重试。',
+      title: '服务连接中断',
+      content: '暂时无法连接服务，请稍后重试。若多次重试仍失败，请检查网络后再试。',
       okText: '重试',
       onOk: () => {
         window.location.reload();

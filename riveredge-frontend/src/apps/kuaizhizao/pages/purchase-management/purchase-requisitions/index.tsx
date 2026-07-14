@@ -84,6 +84,9 @@ import { getDocumentLifecycleStageTagProps } from '../../../../../utils/document
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { useDocumentTracking, DocumentTrackingTimelineBody } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
@@ -96,7 +99,7 @@ import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } f
 import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatNumber, formatQuantity } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -142,6 +145,11 @@ const PURCHASE_REQUISITION_RESOURCE = 'kuaizhizao:purchase-requisition';
 const PURCHASE_REQUISITION_LIST_PATH = '/apps/kuaizhizao/purchase-management/purchase-requisitions';
 const PURCHASE_REQUISITION_CREATE_PATH = `${PURCHASE_REQUISITION_LIST_PATH}/new`;
 const purchaseRequisitionEditPath = (id: number | string) => `${PURCHASE_REQUISITION_LIST_PATH}/${id}/edit`;
+const PURCHASE_REQUISITION_LIST_FIELD_RANK = {
+  ...SALES_DOC_LIST_FIELD_RANK,
+  source_type: 10.5,
+  required_date: 10.6,
+};
 
 const PurchaseRequisitionsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -407,6 +415,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
     () => createListAuditPhaseColumn<PurchaseRequisition>({ t, auditEnabled: purchaseRequestAuditEnabled }),
     [t, purchaseRequestAuditEnabled],
   );
+  const resolveRequisitionPushPercent = useCallback((record: PurchaseRequisition): number => {
+    const stageName = String(getPurchaseRequisitionLifecycle(record, purchaseRequestAuditEnabled).stageName ?? '').trim();
+    const status = String(record.status ?? '').trim();
+    if (stageName === '全部转单' || status === '全部转单' || status === 'FULL_CONVERTED') return 100;
+    if (stageName === '部分转单' || status === '部分转单' || status === 'PARTIAL_CONVERTED') return 50;
+    return 0;
+  }, [purchaseRequestAuditEnabled]);
 
   const initPurchaseRequisitionCreateForm = useCallback(async () => {
     void ensureSupplierList();
@@ -1211,7 +1226,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     });
   };
 
-  const columns: ProColumns<PurchaseRequisition>[] = useMemo(() => [
+  const columns: ProColumns<PurchaseRequisition>[] = useMemo(() => alignProColumns<PurchaseRequisition>([
     // 仅高级搜索、不在表身展示；必须放在最前，避免夹在可滚动列与右侧 fixed 列之间导致固定列顺序异常
     {
       title: t('app.kuaizhizao.purchaseRequisition.col.requiredDateRange'),
@@ -1265,11 +1280,18 @@ const PurchaseRequisitionsPage: React.FC = () => {
       hideInSearch: false,
     },
     { title: t('app.kuaizhizao.purchaseRequisition.col.name'), dataIndex: 'requisition_name', hideInTable: true, hideInSearch: false, ellipsis: true },
-    { title: t('app.kuaizhizao.purchaseRequisition.col.sourceCode'), dataIndex: 'source_code', width: 132, uniTableKeepWidth: true, sorter: true, hideInSearch: false, ellipsis: true },
     {
-      title: t('app.kuaizhizao.purchaseRequisition.col.sourceType'),
+      title: t('app.kuaizhizao.purchaseRequisition.col.sourceCode'),
+      dataIndex: 'source_code',
+      hideInTable: true,
+      hideInSearch: false,
+      ellipsis: true,
+    },
+    {
+      title: `${t('app.kuaizhizao.purchaseRequisition.col.sourceType')} / ${t('app.kuaizhizao.purchaseRequisition.col.sourceCode')}`,
       dataIndex: 'source_type',
-      width: 120,
+      width: 180,
+      uniTableKeepWidth: true,
       hideInSearch: false,
       ellipsis: true,
       valueEnum: {
@@ -1277,7 +1299,18 @@ const PurchaseRequisitionsPage: React.FC = () => {
           text: formatPurchaseRequisitionSourceType('DemandComputation', t),
         },
       },
-      render: (_, record) => formatPurchaseRequisitionSourceType(record.source_type, t),
+      render: (_, record) => {
+        const sourceCode = String(record.source_code ?? '').trim();
+        if (!sourceCode) {
+          return t('app.kuaizhizao.purchaseRequisition.col.sourceTypeActiveRequest');
+        }
+        return (
+          <UniTableStackedPrimaryCell
+            primary={formatPurchaseRequisitionSourceType(record.source_type, t)}
+            secondary={sourceCode}
+          />
+        );
+      },
     },
     {
       title: t('app.kuaizhizao.purchaseRequisition.col.requiredDate'),
@@ -1288,28 +1321,35 @@ const PurchaseRequisitionsPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
     },
-    { title: t('app.kuaizhizao.purchaseRequisition.col.itemCount'), dataIndex: 'items_count', width: 80, align: 'center', hideInSearch: true },
     {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 132,
+      title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+      dataIndex: 'downstream_push_progress',
+      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
       uniTableKeepWidth: true,
-      sorter: true,
       hideInSearch: true,
-      render: (_, record) =>
-        record.created_at ? formatDateTime(record.created_at, 'YYYY-MM-DD HH:mm') : '-',
+      render: (_, record) => (
+        <DocumentPushProgressBar percent={resolveRequisitionPushPercent(record)} />
+      ),
     },
     {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      defaultSortOrder: 'descend',
+      title: t('app.kuaizhizao.purchaseRequisition.col.quantity'),
+      dataIndex: 'total_quantity',
+      width: 100,
+      align: 'right',
       hideInSearch: true,
       render: (_, record) =>
-        record.updated_at ? formatDateTime(record.updated_at, 'YYYY-MM-DD HH:mm') : '-',
+        formatQuantity(record.total_quantity),
     },
+    {
+      title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+      dataIndex: 'total_amount',
+      width: 120,
+      align: 'right',
+      hideInSearch: true,
+      render: (_, record) =>
+        record.total_amount != null ? `¥${formatNumber(record.total_amount, 2)}` : '-',
+    },
+    ...buildDocumentAuditColumns<PurchaseRequisition>(t),
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at_range',
@@ -1386,7 +1426,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         return parts;
       },
     },
-  ], [t, purchaseRequestAuditEnabled, purchaseRequisitionAuditColumn, lifecycleValueEnum, handleDetail, handleEdit, handleDeleteOne]);
+  ], PURCHASE_REQUISITION_LIST_FIELD_RANK), [t, purchaseRequestAuditEnabled, purchaseRequisitionAuditColumn, lifecycleValueEnum, handleDetail, handleEdit, handleDeleteOne, resolveRequisitionPushPercent]);
 
   const renderPurchaseRequisitionForm = () => (
     <>
@@ -1752,7 +1792,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle={t('app.kuaizhizao.menu.purchase-management.purchase-requisitions')}
-          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-requisitions"
+          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-requisitions.v3"
           actionRef={actionRef}
           request={async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
             const s = searchFormValues ?? {};
@@ -1950,9 +1990,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                 ]}
               />
             ) : (
@@ -2091,9 +2131,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                 ]}
               />
             ) : (
@@ -2390,7 +2430,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                         { title: t('app.kuaizhizao.purchaseRequisition.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
                         { title: t('app.kuaizhizao.purchaseRequisition.col.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
                         { title: t('app.kuaizhizao.purchaseRequisition.col.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true },
-                        { title: t('app.kuaizhizao.purchaseRequisition.col.quantity'), dataIndex: 'quantity', width: 88, align: 'right' },
+                        { title: t('app.kuaizhizao.purchaseRequisition.col.quantity'), dataIndex: 'quantity', width: 88, align: 'right', render: formatQuantity },
                         {
                           title: t('app.kuaizhizao.purchaseRequisition.col.unit'),
                           dataIndex: 'unit',
@@ -2625,7 +2665,7 @@ const ConvertForm: React.FC<{
                 '-'
               ) : null,
           },
-          { title: t('app.kuaizhizao.purchaseRequisition.convert.col.demandQty'), dataIndex: 'quantity', width: 88, align: 'right', render: (v: any) => Number(v ?? 0) },
+          { title: t('app.kuaizhizao.purchaseRequisition.convert.col.demandQty'), dataIndex: 'quantity', width: 88, align: 'right', render: (v: any) => formatQuantity(v) },
           {
             title: t('app.kuaizhizao.purchaseRequisition.convert.col.pushedQty'),
             width: 120,

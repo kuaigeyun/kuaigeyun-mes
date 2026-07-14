@@ -133,7 +133,7 @@ export const getUserOptions = async () => {
 export const getDictionaryOptions = async (dictionaryCode: string) => {
   try {
     const items = await getDictionaryItemsCached(dictionaryCode);
-    return items.map((item) => ({ label: item.label, value: item.value }));
+    return items.map((item) => ({ label: item.label, value: item.value, color: item.color }));
   } catch {
     return [];
   }
@@ -142,8 +142,8 @@ export const getDictionaryOptions = async (dictionaryCode: string) => {
 /** 同步读取已缓存的字典选项；未命中返回 undefined（用于 useState 初始值） */
 export const getDictionaryOptionsSync = (
   dictionaryCode: string,
-): { label: string; value: string }[] | undefined => {
+): { label: string; value: string; color?: string }[] | undefined => {
   const items = getDictionaryItemsSync(dictionaryCode);
-  return items?.map((item) => ({ label: item.label, value: item.value }));
+  return items?.map((item) => ({ label: item.label, value: item.value, color: item.color }));
 };
 

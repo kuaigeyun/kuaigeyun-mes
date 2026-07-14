@@ -23,6 +23,7 @@ from apps.kuaizhizao.schemas.document_relation import (
     DocumentTraceNode,
     DocumentTraceReportingEntry,
 )
+from apps.common.audit_actor import audit_response_fields
 from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
@@ -100,7 +101,7 @@ def _derived_to_response(
         "tenant_id": tenant_id,
         "created_at": created,
         "updated_at": created,
-        "created_by": None,
+        **audit_response_fields(doc),
     })
 
 

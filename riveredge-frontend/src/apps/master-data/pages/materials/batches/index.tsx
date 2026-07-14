@@ -14,12 +14,14 @@ import { formatBusinessDateOnly } from '../../../../../utils/format';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import {
+  BATCH_SERIAL_LEDGER_LIST_FIELD_RANK,
   batchSerialLedgerNoSearchColumn,
-  masterCrudCreatedOnlyColumns,
+  masterCrudCreatedUpdatedColumns,
   resolveBatchSerialLedgerListParams,
 } from '../../../utils/materialListCore';
 import { materialBatchApi, materialApi } from '../../../services/material';
 import type { MaterialBatch, MaterialBatchCreate, MaterialBatchUpdate } from '../../../types/material';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const BATCH_STATUS_PINNED_FIELD = 'status';
 
@@ -187,14 +189,6 @@ const BatchesPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('app.master-data.batches.quantity'),
-      dataIndex: 'quantity',
-      width: 100,
-      valueType: 'digit',
-      sorter: true,
-      hideInSearch: true,
-    },
-    {
       title: t('app.master-data.batches.status'),
       dataIndex: 'status',
       hideInTable: true,
@@ -210,6 +204,14 @@ const BatchesPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
       valueEnum: batchStatusValueEnum,
+    },
+    {
+      title: t('app.master-data.batches.quantity'),
+      dataIndex: 'quantity',
+      width: 100,
+      valueType: 'digit',
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.master-data.batches.productionDate'),
@@ -229,7 +231,7 @@ const BatchesPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => formatBatchDateCell(r.expiryDate),
     },
-    ...masterCrudCreatedOnlyColumns<MaterialBatch>(t),
+    ...masterCrudCreatedUpdatedColumns<MaterialBatch>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -264,11 +266,11 @@ const BatchesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<MaterialBatch>
-        columnPersistenceId="apps.master-data.pages.materials.batches"
+        columnPersistenceId="apps.master-data.pages.materials.batches.v2"
         headerTitle={t('app.master-data.menu.materials.batches')}
         actionRef={actionRef}
         rowKey="uuid"
-        columns={columns}
+        columns={alignProColumns(columns, BATCH_SERIAL_LEDGER_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const { current = 1, pageSize = 20 } = params;
           const listParams = resolveBatchSerialLedgerListParams(searchFormValues, sort, {

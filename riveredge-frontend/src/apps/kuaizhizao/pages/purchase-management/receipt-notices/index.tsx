@@ -79,6 +79,10 @@ import {
   resolveReceiptNoticeListLifecycleParams,
 } from '../../../utils/receiptNoticeLifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar';
+import { receiptNoticeInboundPushPercent } from '../../sales-management/shared/pushProgress';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -103,7 +107,7 @@ import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } f
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 interface ReceiptNoticeDetail extends ReceiptNotice {
@@ -629,7 +633,7 @@ const ReceiptNoticesPage: React.FC = () => {
   };
 
   const columns: ProColumns<ReceiptNotice>[] = useMemo(
-    () => [
+    () => alignProColumns<ReceiptNotice>([
       {
         title: t('app.kuaizhizao.receiptNotice.plannedReceiptDate'),
         dataIndex: 'planned_receipt_date_range',
@@ -682,7 +686,15 @@ const ReceiptNoticesPage: React.FC = () => {
           </Typography.Text>
         ),
       },
-      { title: t('app.kuaizhizao.receiptNotice.inboundWarehouse'), dataIndex: 'warehouse_name', width: 120, sorter: true, hideInSearch: true },
+      {
+        title: t('app.kuaizhizao.receiptNotice.inboundWarehouse'),
+        dataIndex: 'warehouse_name',
+        width: 140,
+        ellipsis: true,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t('app.kuaizhizao.receiptNotice.plannedReceiptDate'),
         dataIndex: 'planned_receipt_date',
@@ -695,33 +707,49 @@ const ReceiptNoticesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.receiptNotice.receiptConversion'),
         dataIndex: 'purchase_receipt_code',
-        width: 220,
+        width: 180,
         hideInSearch: true,
         render: (_, r) => {
           if (r.purchase_receipt_id) {
             return (
-              <Space size={6}>
-                <Tag color="success">{t('app.kuaizhizao.receiptNotice.pulledToInbound')}</Tag>
-                <Typography.Text copyable={{ text: String(r.purchase_receipt_code || r.purchase_receipt_id) }} ellipsis>
-                  {r.purchase_receipt_code || `#${r.purchase_receipt_id}`}
-                </Typography.Text>
-              </Space>
+              <UniTableStackedPrimaryCell
+                primary={t('app.kuaizhizao.receiptNotice.pulledToInbound')}
+                secondary={String(r.purchase_receipt_code || `#${r.purchase_receipt_id}`)}
+              />
             );
           }
-          return <Tag color="default">{t('app.kuaizhizao.receiptNotice.notPulled')}</Tag>;
+          return (
+            <UniTableStackedPrimaryCell
+              primary={t('app.kuaizhizao.receiptNotice.notPulled')}
+              secondary="-"
+              secondaryCopyable={false}
+            />
+          );
         },
       },
       { title: t('app.kuaizhizao.shipmentNotice.notifiedAt'), dataIndex: 'notified_at', width: 132, uniTableKeepWidth: true, sorter: true, hideInSearch: true, render: (_, r) => (r.notified_at ? formatDateTime(r.notified_at, 'YYYY-MM-DD HH:mm') : '-') },
       {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        width: 132,
+        title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+        dataIndex: 'inbound_push_progress',
+        width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
         uniTableKeepWidth: true,
-        sorter: true,
-        defaultSortOrder: 'descend',
         hideInSearch: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm') : '-'),
+        render: (_, r) => {
+          const percent = receiptNoticeInboundPushPercent(r);
+          return (
+            <DocumentPushProgressBar
+              percent={percent}
+              tooltip={t('app.kuaizhizao.salesManagement.pushProgress.outboundTooltip', {
+                percent,
+                status: percent >= 100
+                  ? t('app.kuaizhizao.salesManagement.pushProgress.pushed')
+                  : t('app.kuaizhizao.salesManagement.pushProgress.notPushed'),
+              })}
+            />
+          );
+        },
       },
+      ...buildDocumentAuditColumns<ReceiptNotice>(t),
       {
         title: t('common.createdAt'),
         dataIndex: 'created_at_range',
@@ -846,7 +874,7 @@ const ReceiptNoticesPage: React.FC = () => {
           return renderReceiptNoticeRowActions(parts, `receipt-notice-actions-${record.id ?? 'row'}`);
         },
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [handleDelete, handleDetail, handleEdit, handleNotify, handleWithdraw, navigate, receiptNoticeLifecycleValueEnum, receiptNoticeSupplierSearchOptions, t, i18n.language],
   );
 
@@ -948,7 +976,7 @@ const ReceiptNoticesPage: React.FC = () => {
       { title: t('app.kuaizhizao.shipmentNotice.import.materialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.shipmentNotice.import.materialName'), dataIndex: 'material_name', width: 150 },
       { title: t('app.kuaizhizao.shipmentNotice.import.unit'), dataIndex: 'material_unit', width: 60 },
-      { title: t('app.kuaizhizao.shipmentNotice.import.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' as const },
+      { title: t('app.kuaizhizao.shipmentNotice.import.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' as const, render: formatQuantity },
       { title: t('app.kuaizhizao.shipmentNotice.import.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const },
     ],
     [t, i18n.language],
@@ -959,7 +987,7 @@ const ReceiptNoticesPage: React.FC = () => {
       { title: t('app.kuaizhizao.shipmentNotice.import.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
       { title: t('app.kuaizhizao.shipmentNotice.import.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
       { title: t('app.kuaizhizao.shipmentNotice.import.unit'), dataIndex: 'material_unit', width: 60 },
-      { title: t('app.kuaizhizao.shipmentNotice.import.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' as const },
+      { title: t('app.kuaizhizao.shipmentNotice.import.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' as const, render: formatQuantity },
       { title: t('app.kuaizhizao.shipmentNotice.import.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const },
       { title: t('app.kuaizhizao.shipmentNotice.amount'), dataIndex: 'total_amount', width: 100, align: 'right' as const },
     ],
@@ -1530,10 +1558,6 @@ const ReceiptNoticesPage: React.FC = () => {
             }
           }}
           scroll={{ x: 1400 }}
-          onRow={(record) => ({
-            onClick: () => handleDetail(record),
-            style: { cursor: 'pointer' },
-          })}
         />
       </ListPageTemplate>
 
@@ -1829,9 +1853,9 @@ const ReceiptNoticesPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                 ]}
               />
             ) : (
@@ -1891,10 +1915,10 @@ const ReceiptNoticesPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.purchaseOrder.col.noticeQty'), dataIndex: 'notice_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.purchaseOrder.col.noticeQty'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                 ]}
               />
             ) : (

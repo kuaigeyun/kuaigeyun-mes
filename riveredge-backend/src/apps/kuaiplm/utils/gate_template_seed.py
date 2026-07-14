@@ -7,6 +7,7 @@ Date: 2026-07-07
 
 from typing import Any, Dict, List, Optional, Tuple
 
+from apps.common.audit_actor import apply_create_audit
 from apps.kuaiplm.constants.rd_project import (
     DEFAULT_DELIVERY_DELIVERABLES,
     DEFAULT_DELIVERY_GATES,
@@ -20,6 +21,7 @@ from apps.kuaiplm.models import (
     RdGateTemplateDeliverable,
     RdGateTemplateStage,
 )
+from infra.models.user import User
 
 
 def _npi_stage_defs() -> List[Dict[str, Any]]:
@@ -65,17 +67,18 @@ async def ensure_system_gate_templates(
         )
         if existing:
             continue
-        template = await RdGateTemplate.create(
-            tenant_id=tenant_id,
-            project_type=spec["project_type"],
-            template_code=spec["template_code"],
-            template_name=spec["template_name"],
-            is_default=True,
-            is_active=True,
-            notes="系统预置模板",
-            created_by=created_by,
-            updated_by=created_by,
-        )
+        payload = {
+            "tenant_id": tenant_id,
+            "project_type": spec["project_type"],
+            "template_code": spec["template_code"],
+            "template_name": spec["template_name"],
+            "is_default": True,
+            "is_active": True,
+            "notes": "系统预置模板",
+        }
+        user = await User.filter(id=created_by).first() if created_by else None
+        apply_create_audit(payload, user)
+        template = await RdGateTemplate.create(**payload)
         deliverables_map: Dict[str, List[Dict[str, str]]] = spec["deliverables"]
         for stage_def in spec["stages"]:
             stage = await RdGateTemplateStage.create(

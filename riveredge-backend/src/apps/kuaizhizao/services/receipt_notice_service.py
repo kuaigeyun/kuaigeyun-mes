@@ -213,11 +213,15 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             if notice_data.notice_code:
                 code = notice_data.notice_code
 
+            user_info = await self.get_user_info(created_by)
             notice = await ReceiptNotice.create(
                 tenant_id=tenant_id,
                 notice_code=code,
+                **dump,
                 created_by=created_by,
-                **dump
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
             )
 
             items = getattr(notice_data, "items", None) or []
@@ -382,7 +386,9 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
 
         async with in_transaction():
             dump = notice_data.model_dump(exclude_unset=True, exclude={"notice_code"})
+            user_info = await self.get_user_info(updated_by)
             dump["updated_by"] = updated_by
+            dump["updated_by_name"] = user_info["name"]
             await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(**dump)
             return ReceiptNoticeResponse.model_validate(
                 await ReceiptNotice.get(tenant_id=tenant_id, id=notice_id)
@@ -642,6 +648,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             status="已通知",
             notified_at=datetime.now(),
             updated_by=notified_by,
+            updated_by_name=(await self.get_user_info(notified_by))["name"],
             purchase_receipt_id=receipt.id,
             purchase_receipt_code=receipt.receipt_code,
         )
@@ -686,6 +693,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             status="待收货",
             notified_at=None,
             updated_by=withdrawn_by,
+            updated_by_name=(await self.get_user_info(withdrawn_by))["name"],
             purchase_receipt_id=None,
             purchase_receipt_code=None,
         )

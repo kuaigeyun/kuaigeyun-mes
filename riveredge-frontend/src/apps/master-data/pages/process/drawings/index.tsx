@@ -5,22 +5,19 @@ import { rowActionKind } from '../../../../../components/uni-action';
 
 import React, { lazy, startTransition, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Grid, Input, Modal, Popconfirm, Space, Spin, Tag, Tooltip, theme, Descriptions } from 'antd';
+import { App, Button, Grid, Input, Modal, Popconfirm, Segmented, Space, Spin, Tag, Timeline, Tooltip, theme, Descriptions } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import {
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
+  ExpandOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  PlusOutlined,
-  SendOutlined,
-  StopOutlined,
-  BranchesOutlined,
-  ExpandOutlined,
   PartitionOutlined,
+  PlusOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -31,6 +28,7 @@ import {
   TWO_COLUMN_LAYOUT,
 } from '../../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
+import { DetailDrawerActions } from '../../../../../components/layout-templates/DetailDrawerActions';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import { DrawingFormModal } from '../../../components/DrawingFormModal';
 import { StepBomImportWizard } from '../../../components/StepBomImportWizard';
@@ -40,9 +38,11 @@ import { processRouteApi, unwrapProcessPagedList } from '../../../services/proce
 import {
   drawingApi,
   normalizeFileBrief,
+  type DrawingListView,
   type DrawingStatus,
   type DrawingType,
   type EngineeringDrawing,
+  type EngineeringDrawingRevisionBrief,
   type FileBrief,
 } from '../../../services/drawing';
 import {
@@ -60,6 +60,8 @@ import {
 } from './drawingTreeNav';
 import { isStepFile } from '../../../../../utils/filePreviewKind';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { masterCrudCreatedUpdatedColumns } from '../../../utils/masterListCore';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -203,9 +205,17 @@ const InlinePreviewPane = React.memo(function InlinePreviewPane({
   );
 });
 
+function formatAssociationLabels(
+  items: Array<{ code?: string; mainCode?: string; name: string }> | undefined,
+): string {
+  if (!items?.length) return '-';
+  return items.map((item) => `${item.mainCode ?? item.code ?? ''} - ${item.name}`).join('; ');
+}
+
 const DrawingsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { message: messageApi } = App.useApp();
   const screens = Grid.useBreakpoint();
   const showInlinePreview = !!screens.lg;
@@ -256,6 +266,9 @@ const DrawingsPage: React.FC = () => {
   const [selectedDrawing, setSelectedDrawing] = useState<EngineeringDrawing | null>(null);
   const [stepBomOpen, setStepBomOpen] = useState(false);
   const [stepBomDrawing, setStepBomDrawing] = useState<EngineeringDrawing | null>(null);
+  const [listView, setListView] = useState<DrawingListView>('current');
+  const [revisions, setRevisions] = useState<EngineeringDrawingRevisionBrief[]>([]);
+  const [revisionsLoading, setRevisionsLoading] = useState(false);
 
   const showPreviewPane = showInlinePreview && !!inlinePreviewFile?.uuid;
 
@@ -507,6 +520,123 @@ const DrawingsPage: React.FC = () => {
     [messageApi, t, selectedRowUuid, detail?.uuid],
   );
 
+  useEffect(() => {
+    const deepLinkUuid = searchParams.get('uuid');
+    if (!deepLinkUuid) return;
+
+    void (async () => {
+      try {
+        const data = await drawingApi.get(deepLinkUuid);
+        selectRowForPreview(data);
+        await loadDetail(deepLinkUuid);
+      } catch (err: any) {
+        messageApi.error(err?.message || t('app.master-data.drawings.getDetailFailed'));
+      } finally {
+        setSearchParams({}, { replace: true });
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅响应 URL 深链参数
+  }, [searchParams.get('uuid')]);
+
+  useEffect(() => {
+    if (!detail?.uuid) {
+      setRevisions([]);
+      return;
+    }
+    let cancelled = false;
+    setRevisionsLoading(true);
+    void drawingApi
+      .listRevisions(detail.uuid)
+      .then((res) => {
+        if (!cancelled) setRevisions(res.revisions ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setRevisions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRevisionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detail?.uuid]);
+
+  const renderLifecycleActions = useCallback(
+    (record: EngineeringDrawing, compact = false) => (
+      <Space size={0} style={{ whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
+        {record.status === 'Draft' && (
+          <>
+            <Button
+              key="edit"
+              {...rowActionKind('update')}
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => {
+                setEditUuid(record.uuid);
+                setModalVisible(true);
+              }}
+            >
+              {t('common.edit')}
+            </Button>
+            <Button key="release" {...rowActionKind('release')} onClick={() => handleRelease(record)}>
+              {t('app.master-data.drawings.release')}
+            </Button>
+            <Popconfirm
+              key="delete"
+              {...rowActionKind('delete')}
+              title={t('common.confirmDelete')}
+              onConfirm={() => handleDeleteDrawing(record)}
+            >
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {t('common.delete')}
+              </Button>
+            </Popconfirm>
+          </>
+        )}
+        {record.status === 'Released' && (
+          <>
+            <Button key="create" {...rowActionKind('create')} onClick={() => handleRevision(record)}>
+              {t('app.master-data.drawings.newRevision')}
+            </Button>
+            <Button key="obsolete" {...rowActionKind('obsolete')} onClick={() => handleObsolete(record)}>
+              {t('app.master-data.drawings.obsolete')}
+            </Button>
+          </>
+        )}
+        {record.status === 'Obsolete' && (
+          <Popconfirm
+            key="delete"
+            {...rowActionKind('delete')}
+            title={t('common.confirmDelete')}
+            onConfirm={() => handleDeleteDrawing(record)}
+          >
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {t('common.delete')}
+            </Button>
+          </Popconfirm>
+        )}
+        {!compact && record.file && !showInlinePreview && (
+          <Button key="preview" {...rowActionKind('read')} onClick={() => openPreview(record.file)}>
+            {t('app.master-data.drawings.preview')}
+          </Button>
+        )}
+      </Space>
+    ),
+    [t, showInlinePreview, handleDeleteDrawing, handleRelease, handleObsolete, handleRevision],
+  );
+
   const detailColumns: ProDescriptionsItemProps<EngineeringDrawing>[] = useMemo(
     () => [
       { title: t('app.master-data.drawings.code'), dataIndex: 'code' },
@@ -564,13 +694,27 @@ const DrawingsPage: React.FC = () => {
       },
       {
         title: t('app.master-data.drawings.materials'),
-        dataIndex: 'materialUuids',
-        render: (_, r) => (r.materialUuids?.length ? r.materialUuids.join(', ') : '-'),
+        dataIndex: 'materials',
+        render: (_, r) => formatAssociationLabels(r.materials),
       },
       {
         title: t('app.master-data.drawings.linkedBom'),
-        dataIndex: 'linkedBomVersion',
+        dataIndex: 'linkedBom',
         render: (_, r) => {
+          if (r.linkedBom) {
+            return (
+              <Button
+                type="link"
+                size="small"
+                style={{ padding: 0 }}
+                onClick={() =>
+                  navigate(bomDesignerPath(r.linkedBom!.materialId, r.linkedBom!.version))
+                }
+              >
+                {r.linkedBom.materialCode} v{r.linkedBom.version}
+              </Button>
+            );
+          }
           if (!r.linkedBomMaterialId || !r.linkedBomVersion) return '-';
           return (
             <Button
@@ -591,13 +735,13 @@ const DrawingsPage: React.FC = () => {
       },
       {
         title: t('app.master-data.drawings.routes'),
-        dataIndex: 'processRouteUuids',
-        render: (_, r) => (r.processRouteUuids?.length ? r.processRouteUuids.join(', ') : '-'),
+        dataIndex: 'processRoutes',
+        render: (_, r) => formatAssociationLabels(r.processRoutes),
       },
       {
         title: t('app.master-data.drawings.operations'),
-        dataIndex: 'operationUuids',
-        render: (_, r) => (r.operationUuids?.length ? r.operationUuids.join(', ') : '-'),
+        dataIndex: 'operations',
+        render: (_, r) => formatAssociationLabels(r.operations),
       },
       { title: t('app.master-data.drawings.description'), dataIndex: 'description' },
       { title: t('app.master-data.drawings.releasedAt'), dataIndex: 'releasedAt', valueType: 'dateTime' },
@@ -655,10 +799,25 @@ const DrawingsPage: React.FC = () => {
       },
       {
         title: t('app.master-data.drawings.linkedBom'),
-        dataIndex: 'linkedBomVersion',
+        dataIndex: 'linkedBom',
         search: false,
-        width: 96,
+        width: 120,
         render: (_, r) => {
+          if (r.linkedBom) {
+            return (
+              <Button
+                type="link"
+                size="small"
+                style={{ padding: 0 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(bomDesignerPath(r.linkedBom!.materialId, r.linkedBom!.version));
+                }}
+              >
+                {r.linkedBom.materialCode} v{r.linkedBom.version}
+              </Button>
+            );
+          }
           if (!r.linkedBomMaterialId || !r.linkedBomVersion) return '-';
           return (
             <Button
@@ -689,13 +848,7 @@ const DrawingsPage: React.FC = () => {
         search: false,
         width: 170,
       },
-      {
-        title: t('common.createdAt'),
-        dataIndex: 'createdAt',
-        valueType: 'dateTime',
-        search: false,
-        width: 170,
-      },
+      ...masterCrudCreatedUpdatedColumns<EngineeringDrawing>(t),
       ...customFieldColumns,
       {
         title: t('common.actions'),
@@ -708,84 +861,26 @@ const DrawingsPage: React.FC = () => {
             <Button key="view" {...rowActionKind('read')} onClick={() => loadDetail(record.uuid)}>
               {t('common.detail')}
             </Button>
-            {record.status === 'Draft' && (
-              <>
-                <Button key="edit" {...rowActionKind('update')}
-                  size="small"
-                  icon={<EditOutlined />}
-                  onClick={() => {
-                    setEditUuid(record.uuid);
-                    setModalVisible(true);
-                  }}
-                >
-                  {t('common.edit')}
-                </Button>
-                <Button key="submit" {...rowActionKind('submit')} onClick={() => handleRelease(record)}>
-                  {t('app.master-data.drawings.release')}
-                </Button>
-                <Popconfirm key="delete" {...rowActionKind('delete')} title={t('common.confirmDelete')}
-                  onConfirm={() => handleDeleteDrawing(record)}
-                >
-                  <Button
-                    type="link"
-                    size="small"
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {t('common.delete')}
-                  </Button>
-                </Popconfirm>
-              </>
-            )}
-            {record.status === 'Released' && (
-              <>
-                <Button key="create" {...rowActionKind('create')} onClick={() => handleRevision(record)}>
-                  {t('app.master-data.drawings.newRevision')}
-                </Button>
-                <Button key="obsolete" {...rowActionKind('obsolete')} onClick={() => handleObsolete(record)}>
-                  {t('app.master-data.drawings.obsolete')}
-                </Button>
-              </>
-            )}
-            {record.status === 'Obsolete' && (
-              <Popconfirm key="delete" {...rowActionKind('delete')} title={t('common.confirmDelete')}
-                onConfirm={() => handleDeleteDrawing(record)}
-              >
-                <Button
-                  type="link"
-                  size="small"
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {t('common.delete')}
-                </Button>
-              </Popconfirm>
-            )}
-            {record.file && !showInlinePreview && (
-              <Button key="view" {...rowActionKind('read')} onClick={() => openPreview(record.file)}>
-                {t('app.master-data.drawings.preview')}
-              </Button>
-            )}
+            {renderLifecycleActions(record)}
           </Space>
         ),
       },
     ];
     },
-    [t, customFields, generateCustomFieldColumns, showInlinePreview, navigate, handleDeleteDrawing, loadDetail, handleRelease, handleObsolete, handleRevision, openPreview],
+    [t, customFields, generateCustomFieldColumns, renderLifecycleActions, loadDetail],
   );
 
   const tableQueryKey = useMemo(
     () => [
       'apps.master-data.pages.process.drawings',
       navMode,
+      listView,
       treeFilter.drawingType ?? '',
       treeFilter.status ?? '',
       treeFilter.materialUuid ?? '',
       treeFilter.processRouteUuid ?? '',
     ],
-    [navMode, treeFilter],
+    [navMode, listView, treeFilter],
   );
 
   const tableScrollOffsetPx =
@@ -815,15 +910,28 @@ const DrawingsPage: React.FC = () => {
           rowKey="uuid"
           columnPersistenceId="apps.master-data.pages.process.drawings"
           tanstackQuery={{ queryKeyPrefix: tableQueryKey }}
-          columns={columns}
+          columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
           headerTitle={t('app.master-data.menu.process.drawings')}
           beforeSearchButtons={
-            <Tooltip title={leftPanelCollapsed ? t('app.master-data.drawings.expandNav') : t('app.master-data.drawings.collapseNav')}>
-              <Button
-                icon={leftPanelCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                onClick={() => setLeftPanelCollapsed((v) => !v)}
+            <>
+              <Tooltip title={leftPanelCollapsed ? t('app.master-data.drawings.expandNav') : t('app.master-data.drawings.collapseNav')}>
+                <Button
+                  icon={leftPanelCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                  onClick={() => setLeftPanelCollapsed((v) => !v)}
+                />
+              </Tooltip>
+              <Segmented
+                value={listView}
+                options={[
+                  { label: t('app.master-data.drawings.viewCurrent'), value: 'current' },
+                  { label: t('app.master-data.drawings.viewAllRevisions'), value: 'all' },
+                ]}
+                onChange={(value) => {
+                  setListView(value as DrawingListView);
+                  actionRef.current?.reload();
+                }}
               />
-            </Tooltip>
+            </>
           }
           showCreateButton
           createButtonText={t('app.master-data.drawings.createTitle')}
@@ -839,6 +947,7 @@ const DrawingsPage: React.FC = () => {
                 drawingType: (params.drawingType as DrawingType | undefined) ?? tf.drawingType,
                 materialUuid: tf.materialUuid,
                 processRouteUuid: tf.processRouteUuid,
+                view: listView,
               });
               const enriched = await enrichRecordsWithCustomFields(res.data ?? []);
               return { data: enriched, success: true, total: res.total ?? 0 };
@@ -867,6 +976,7 @@ const DrawingsPage: React.FC = () => {
       messageApi,
       selectedRowUuid,
       selectRowForPreview,
+      listView,
     ],
   );
 
@@ -948,6 +1058,18 @@ const DrawingsPage: React.FC = () => {
         }}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
+        extra={
+          detail ? (
+            <DetailDrawerActions
+              items={[
+                {
+                  key: 'lifecycle',
+                  render: renderLifecycleActions(detail, true),
+                },
+              ]}
+            />
+          ) : null
+        }
         basic={
           detail ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detail)} />
@@ -957,6 +1079,57 @@ const DrawingsPage: React.FC = () => {
         lines={
           hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
             <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+          ) : null
+        }
+        timelineTitle={t('app.master-data.drawings.revisionHistory')}
+        timelineVisible={!!detail}
+        timeline={
+          detail ? (
+            revisionsLoading ? (
+              <Spin />
+            ) : revisions.length ? (
+              <Timeline
+                items={revisions.map((rev) => ({
+                  color: STATUS_COLOR[rev.status],
+                  children: (
+                    <Space orientation="vertical" size={0}>
+                      <Space wrap>
+                        <Button
+                          type={rev.uuid === detail.uuid ? 'primary' : 'link'}
+                          size="small"
+                          style={{ padding: rev.uuid === detail.uuid ? undefined : 0 }}
+                          onClick={() => {
+                            if (rev.uuid !== detail.uuid) {
+                              void loadDetail(rev.uuid);
+                              if (rev.uuid) {
+                                void drawingApi.get(rev.uuid).then(selectRowForPreview);
+                              }
+                            }
+                          }}
+                        >
+                          {t('app.master-data.drawings.revision')} {rev.revision}
+                        </Button>
+                        <Tag color={STATUS_COLOR[rev.status]}>{statusLabel(rev.status)}</Tag>
+                      </Space>
+                      {rev.releasedAt ? (
+                        <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>
+                          {t('app.master-data.drawings.releasedAt')}: {rev.releasedAt}
+                        </span>
+                      ) : null}
+                      {rev.obsoleteReason ? (
+                        <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>
+                          {rev.obsoleteReason}
+                        </span>
+                      ) : null}
+                    </Space>
+                  ),
+                }))}
+              />
+            ) : (
+              <span style={{ color: 'var(--ant-color-text-secondary)' }}>
+                {t('app.master-data.drawings.noRevisionHistory')}
+              </span>
+            )
           ) : null
         }
       />

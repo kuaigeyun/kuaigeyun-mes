@@ -55,6 +55,7 @@ SALES_CONTRACT_SORTABLE_FIELDS = frozenset({
     "customer_name",
     "contract_date",
     "valid_to",
+    "total_quantity",
     "total_amount",
     "released_amount",
     "status",
@@ -196,7 +197,9 @@ class SalesContractService(AppBaseService[SalesContract]):
             "attachments": contract.attachments,
             "is_active": contract.is_active,
             "created_by": contract.created_by,
+            "created_by_name": getattr(contract, "created_by_name", None),
             "updated_by": contract.updated_by,
+            "updated_by_name": getattr(contract, "updated_by_name", None),
             "created_at": contract.created_at,
             "updated_at": contract.updated_at,
         }
@@ -402,6 +405,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         auto_submit: bool,
     ) -> SalesContractResponse:
         async with in_transaction():
+            operator_name = await self.get_user_name(created_by)
             contract = await SalesContract.create(
                 tenant_id=tenant_id,
                 contract_code=contract_code,
@@ -434,7 +438,9 @@ class SalesContractService(AppBaseService[SalesContract]):
                 root_contract_id=None,
                 version_no=1,
                 created_by=created_by,
+                created_by_name=operator_name,
                 updated_by=created_by,
+                updated_by_name=operator_name,
             )
             if data.quotation_id:
                 q = await Quotation.get_or_none(tenant_id=tenant_id, id=data.quotation_id, deleted_at__isnull=True)

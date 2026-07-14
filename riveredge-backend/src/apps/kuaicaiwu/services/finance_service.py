@@ -118,6 +118,9 @@ class PayableService(AppBaseService[Payable]):
                 tenant_id=tenant_id,
                 payable_code=code,
                 created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
                 **payable_data.model_dump(
                     exclude_unset=True,
                     exclude={'created_by', 'pull_source_type', 'pull_source_id'},
@@ -191,8 +194,10 @@ class PayableService(AppBaseService[Payable]):
         """更新应付单"""
         async with in_transaction():
             await self.get_payable_by_id(tenant_id, payable_id)
+            user_info = await self.get_user_info(updated_by)
             update_data = payable_data.model_dump(exclude_unset=True, exclude={'updated_by'})
             update_data['updated_by'] = updated_by
+            update_data['updated_by_name'] = user_info['name']
             await Payable.filter(tenant_id=tenant_id, id=payable_id).update(**update_data)
             return await self.get_payable_by_id(tenant_id, payable_id)
 
@@ -216,6 +221,7 @@ class PayableService(AppBaseService[Payable]):
             note_parts.append(f"应付单 {payable.payable_code}")
             notes = " · ".join(note_parts)
 
+            user_info = await self.get_user_info(recorded_by)
             payment = await Payment.create(
                 tenant_id=tenant_id,
                 payment_code=code,
@@ -230,6 +236,9 @@ class PayableService(AppBaseService[Payable]):
                 status="Draft",
                 notes=notes,
                 created_by=recorded_by,
+                created_by_name=user_info["name"],
+                updated_by=recorded_by,
+                updated_by_name=user_info["name"],
             )
 
             settlement_service = AccountSettlementService()
@@ -257,7 +266,8 @@ class PayableService(AppBaseService[Payable]):
                 review_time=datetime.now(),
                 review_status=review_status,
                 review_remarks=rejection_reason,
-                updated_by=approved_by
+                updated_by=approved_by,
+                updated_by_name=approver_name,
             )
             return await self.get_payable_by_id(tenant_id, payable_id)
 
@@ -429,6 +439,9 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 tenant_id=tenant_id,
                 invoice_code=code,
                 created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
                 **invoice_data.model_dump(
                     exclude_unset=True,
                     exclude={"created_by", "source_type", "source_id"},
@@ -592,14 +605,16 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 status=status,
-                updated_by=approved_by
+                updated_by=approved_by,
+                updated_by_name=approver_name,
             )
 
             if not rejection_reason and invoice.payable_id:
                 await Payable.filter(tenant_id=tenant_id, id=invoice.payable_id).update(
                     invoice_received=True,
                     invoice_number=invoice.invoice_number,
-                    updated_by=approved_by
+                    updated_by=approved_by,
+                    updated_by_name=approver_name,
                 )
 
             return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
@@ -713,6 +728,9 @@ class ReceivableService(AppBaseService[Receivable]):
                 tenant_id=tenant_id,
                 receivable_code=code,
                 created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
                 **receivable_data.model_dump(
                     exclude_unset=True,
                     exclude={'created_by', 'pull_source_type', 'pull_source_id'},
@@ -802,6 +820,7 @@ class ReceivableService(AppBaseService[Receivable]):
             note_parts.append(f"应收单 {receivable.receivable_code}")
             notes = " · ".join(note_parts)
 
+            user_info = await self.get_user_info(recorded_by)
             receipt = await Receipt.create(
                 tenant_id=tenant_id,
                 receipt_code=code,
@@ -816,6 +835,9 @@ class ReceivableService(AppBaseService[Receivable]):
                 status="Draft",
                 notes=notes,
                 created_by=recorded_by,
+                created_by_name=user_info["name"],
+                updated_by=recorded_by,
+                updated_by_name=user_info["name"],
             )
 
             settlement_service = AccountSettlementService()
@@ -843,7 +865,8 @@ class ReceivableService(AppBaseService[Receivable]):
                 review_time=datetime.now(),
                 review_status=review_status,
                 review_remarks=rejection_reason,
-                updated_by=approved_by
+                updated_by=approved_by,
+                updated_by_name=approver_name,
             )
             return await self.get_receivable_by_id(tenant_id, receivable_id)
 
@@ -1560,7 +1583,9 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
             await Receivable.filter(id=receivable_id).update(
                 received_amount=new_received,
                 remaining_amount=new_rem_receivable,
-                status="已结清" if new_rem_receivable <= Decimal("0.00") else "部分收款"
+                status="已结清" if new_rem_receivable <= Decimal("0.00") else "部分收款",
+                updated_by=operator_id,
+                updated_by_name=user_name,
             )
             if new_rem_receivable <= Decimal("0.00"):
                 from apps.kuaizhizao.services.contract_milestone_billing_service import (
@@ -1597,7 +1622,9 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
             await Receipt.filter(id=receipt_id).update(
                 settled_amount=new_settled,
                 unsettled_amount=new_unsettled,
-                status="Confirmed" # 已核销完也可以保持 Confirmed，或者加个 FullySettled
+                status="Confirmed",  # 已核销完也可以保持 Confirmed，或者加个 FullySettled
+                updated_by=operator_id,
+                updated_by_name=user_name,
             )
             await self._log_settlement_amount_audit(
                 tenant_id=tenant_id,
@@ -1710,7 +1737,9 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
             await Payable.filter(id=payable_id).update(
                 paid_amount=new_paid,
                 remaining_amount=new_rem_payable,
-                status="已结清" if new_rem_payable <= Decimal("0.00") else "部分付款"
+                status="已结清" if new_rem_payable <= Decimal("0.00") else "部分付款",
+                updated_by=operator_id,
+                updated_by_name=user_name,
             )
             await self._log_settlement_amount_audit(
                 tenant_id=tenant_id,
@@ -1739,7 +1768,9 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
             await Payment.filter(id=payment_id).update(
                 settled_amount=new_settled,
                 unsettled_amount=new_unsettled,
-                status="Confirmed"
+                status="Confirmed",
+                updated_by=operator_id,
+                updated_by_name=user_name,
             )
             await self._log_settlement_amount_audit(
                 tenant_id=tenant_id,

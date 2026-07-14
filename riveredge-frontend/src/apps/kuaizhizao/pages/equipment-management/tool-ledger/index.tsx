@@ -46,6 +46,8 @@ import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
   MASTER_DATA_PINNED_ACTIVE_FIELD,
@@ -403,8 +405,7 @@ const ToolLedgerPage: React.FC = () => {
     [t],
   );
 
-  const columns: ProColumns<Tool>[] = useMemo(
-    () => [
+  const columns: ProColumns<Tool>[] = useMemo(() => alignProColumns<Tool>([
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at_range',
@@ -472,16 +473,7 @@ const ToolLedgerPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
     },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      sorter: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -515,7 +507,7 @@ const ToolLedgerPage: React.FC = () => {
         </Button>,
       ],
     },
-  ],
+  ], SALES_DOC_LIST_FIELD_RANK),
   [t, activeStatusValueEnum, toolStatusValueEnum],
   );
 

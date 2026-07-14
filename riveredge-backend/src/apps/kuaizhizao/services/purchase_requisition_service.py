@@ -112,7 +112,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     data.requisition_code = f"CGSQ{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
 
             req_date = data.requisition_date or date.today()
-            applicant_name = await self.get_user_name(created_by)
+            user_info = await self.get_user_info(created_by)
+            applicant_name = user_info["name"]
             req = await PurchaseRequisition.create(
                 tenant_id=tenant_id,
                 requisition_code=data.requisition_code,
@@ -128,7 +129,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 notes=data.notes,
                 attachments=data.attachments,
                 created_by=created_by,
+                created_by_name=user_info["name"],
                 updated_by=created_by,
+                updated_by_name=user_info["name"],
             )
 
             for item_data in data.items:
@@ -343,6 +346,29 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         return {int(row["requisition_id"]): int(row["cnt"]) for row in rows}
 
+    async def _batch_requisition_item_totals(
+        self, tenant_id: int, requisition_ids: List[int]
+    ) -> Dict[int, Dict[str, Decimal]]:
+        """批量统计采购申请总数量与总金额（列表用，避免逐单查询）。"""
+        if not requisition_ids:
+            return {}
+        rows = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id,
+            requisition_id__in=requisition_ids,
+        ).values("requisition_id", "quantity", "suggested_unit_price")
+        totals: Dict[int, Dict[str, Decimal]] = {}
+        for row in rows:
+            req_id = int(row["requisition_id"])
+            quantity = Decimal(str(row.get("quantity") or 0))
+            unit_price = Decimal(str(row.get("suggested_unit_price") or 0))
+            bucket = totals.setdefault(
+                req_id,
+                {"total_quantity": Decimal("0"), "total_amount": Decimal("0")},
+            )
+            bucket["total_quantity"] += quantity
+            bucket["total_amount"] += quantity * unit_price
+        return totals
+
     async def _filter_requisitions_by_lifecycle_stage(
         self,
         tenant_id: int,
@@ -487,6 +513,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         req_ids = [req.id for req in reqs if req.id is not None]
 
         items_count_map = await self._batch_requisition_items_count(tenant_id, req_ids)
+        item_totals_map = await self._batch_requisition_item_totals(tenant_id, req_ids)
         from apps.kuaizhizao.services.document_lifecycle_service import (
             get_purchase_requisition_lifecycle,
         )
@@ -497,6 +524,13 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             req_dict.pop("items", None)
             resp = PurchaseRequisitionListResponse.model_construct(**req_dict)
             resp.items_count = items_count_map.get(req.id, 0)
+            totals = item_totals_map.get(req.id, None)
+            if totals:
+                resp.total_quantity = totals["total_quantity"]
+                resp.total_amount = totals["total_amount"]
+            else:
+                resp.total_quantity = Decimal("0")
+                resp.total_amount = Decimal("0")
             # 列表仅按当前 status 计算生命周期；转单状态自愈在详情/转单/修正接口执行
             resp.lifecycle = get_purchase_requisition_lifecycle(
                 req, milestones=None, audit_required=audit_required
@@ -701,7 +735,12 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
         update_data = data.model_dump(exclude_unset=True, exclude={"items"})
         if update_data:
-            await req.update_from_dict({**update_data, "updated_by": updated_by}).save()
+            user_info = await self.get_user_info(updated_by)
+            await req.update_from_dict({
+                **update_data,
+                "updated_by": updated_by,
+                "updated_by_name": user_info["name"],
+            }).save()
 
         if data.items is not None:
             await PurchaseRequisitionItem.filter(
@@ -750,7 +789,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             req.status = DocumentStatus.CONFIRMED.value
             req.review_status = ReviewStatus.APPROVED.value
             
+        user_info = await self.get_user_info(submitted_by)
         req.updated_by = submitted_by
+        req.updated_by_name = user_info["name"]
         await req.save()
 
         return await self.get_requisition_by_id(tenant_id, requisition_id)
@@ -774,7 +815,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
         assert_purchase_requisition_capability(req, "approve")
 
-        reviewer_name = await self.get_user_name(approved_by) if approved_by else None
+        user_info = await self.get_user_info(approved_by) if approved_by else None
+        reviewer_name = user_info["name"] if user_info else None
         if approved:
             req.status = "已通过"  # 采购申请业务用语
             req.review_status = ReviewStatus.APPROVED.value
@@ -786,7 +828,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         req.reviewer_name = reviewer_name
         req.review_time = datetime.now()
         req.review_remarks = review_remarks
-        req.updated_by = approved_by
+        if approved_by:
+            req.updated_by = approved_by
+            req.updated_by_name = user_info["name"]
         await req.save()
 
         return await self.get_requisition_by_id(tenant_id, requisition_id)
@@ -824,7 +868,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         req.reviewer_name = None
         req.review_time = None
         req.review_remarks = None
+        user_info = await self.get_user_info(withdrawn_by)
         req.updated_by = withdrawn_by
+        req.updated_by_name = user_info["name"]
         await req.save()
 
         return await self.get_requisition_by_id(tenant_id, requisition_id)
@@ -861,7 +907,10 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         req.reviewer_name = None
         req.review_time = None
         req.review_remarks = None
-        req.updated_by = operator_id
+        if operator_id:
+            user_info = await self.get_user_info(operator_id)
+            req.updated_by = operator_id
+            req.updated_by_name = user_info["name"]
         await req.save()
 
         return await self.get_requisition_by_id(tenant_id, requisition_id)

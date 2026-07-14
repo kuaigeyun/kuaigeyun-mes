@@ -89,6 +89,8 @@ class DefectTypeResponse(DefectTypeBase):
     tenant_id: int = Field(..., alias="tenantId", description="租户ID")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
@@ -256,6 +258,8 @@ class OperationResponse(OperationBase):
     tenant_id: int = Field(..., alias="tenantId", description="租户ID")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     defect_types: List[DefectTypeMinimal] = Field(default_factory=list, alias="defectTypes", description="允许绑定的不良品项")
     default_operator_ids: List[int] = Field(default_factory=list, alias="defaultOperatorIds", description="默认生产人员（用户ID列表）")
@@ -370,10 +374,15 @@ class ProcessRouteResponse(ProcessRouteBase):
     level: int = Field(0, description="嵌套层级（0为主工艺路线，1-3为子工艺路线）")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, alias="createdBy", description="创建人ID")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by: Optional[int] = Field(None, alias="updatedBy", description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, description="删除时间")
     
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class ProcessRouteListResponse(BaseModel):
@@ -632,10 +641,13 @@ class SOPResponse(SOPBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, description="删除时间")
     
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class SOPListResponse(BaseModel):

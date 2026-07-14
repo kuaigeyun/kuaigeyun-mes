@@ -24,6 +24,8 @@ class CustomerPoolItem(BaseModel):
     assigned_at: Optional[datetime] = None
     last_follow_up_at: Optional[datetime] = None
     recycle_at: Optional[datetime] = None
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

@@ -40,6 +40,7 @@ import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -537,7 +538,7 @@ const DefectTypesPage: React.FC = () => {
       <UniTable<DefectType>
         columnPersistenceId="apps.master-data.pages.process.defect-types"
         actionRef={actionRef}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolveProcessListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;

@@ -87,6 +87,7 @@ class Phase2Service(AppBaseService[RdRequirement]):
     async def create_requirement(
         self, tenant_id: int, data: RdRequirementCreate, created_by: int
     ) -> RdRequirementResponse:
+        user_info = await self.get_user_info(created_by)
         row = await RdRequirement.create(
             tenant_id=tenant_id,
             project_id=data.project_id,
@@ -98,7 +99,9 @@ class Phase2Service(AppBaseService[RdRequirement]):
             source_type=data.source_type,
             source_id=data.source_id,
             created_by=created_by,
+            created_by_name=user_info["name"],
             updated_by=created_by,
+            updated_by_name=user_info["name"],
         )
         return RdRequirementResponse.model_validate(row)
 
@@ -110,7 +113,11 @@ class Phase2Service(AppBaseService[RdRequirement]):
         )
         if not row:
             raise NotFoundError(f"需求不存在: {requirement_id}")
-        update_fields = {"updated_by": updated_by}
+        user_info = await self.get_user_info(updated_by)
+        update_fields = {
+            "updated_by": updated_by,
+            "updated_by_name": user_info["name"],
+        }
         for field in (
             "project_id", "title", "description", "priority", "status", "source_type", "source_id",
         ):
@@ -126,7 +133,12 @@ class Phase2Service(AppBaseService[RdRequirement]):
         )
         if not row:
             raise NotFoundError(f"需求不存在: {requirement_id}")
-        await row.update_from_dict({"deleted_at": datetime.now(), "updated_by": deleted_by}).save()
+        user_info = await self.get_user_info(deleted_by)
+        await row.update_from_dict({
+            "deleted_at": datetime.now(),
+            "updated_by": deleted_by,
+            "updated_by_name": user_info["name"],
+        }).save()
 
     # ---------- Design Reviews ----------
 
@@ -179,6 +191,7 @@ class Phase2Service(AppBaseService[RdRequirement]):
     async def create_design_review(
         self, tenant_id: int, data: RdDesignReviewCreate, created_by: int
     ) -> RdDesignReviewResponse:
+        user_info = await self.get_user_info(created_by)
         row = await RdDesignReview.create(
             tenant_id=tenant_id,
             project_id=data.project_id,
@@ -194,7 +207,9 @@ class Phase2Service(AppBaseService[RdRequirement]):
             review_date=data.review_date,
             review_notes=data.review_notes,
             created_by=created_by,
+            created_by_name=user_info["name"],
             updated_by=created_by,
+            updated_by_name=user_info["name"],
         )
         return RdDesignReviewResponse.model_validate(row)
 
@@ -206,7 +221,11 @@ class Phase2Service(AppBaseService[RdRequirement]):
         )
         if not row:
             raise NotFoundError(f"设计评审不存在: {review_id}")
-        update_fields = {"updated_by": updated_by}
+        user_info = await self.get_user_info(updated_by)
+        update_fields = {
+            "updated_by": updated_by,
+            "updated_by_name": user_info["name"],
+        }
         for field in (
             "project_id", "title", "review_type", "status", "material_id", "material_code",
             "material_name", "reviewer_id", "reviewer_name", "review_date", "review_notes",
@@ -223,7 +242,12 @@ class Phase2Service(AppBaseService[RdRequirement]):
         )
         if not row:
             raise NotFoundError(f"设计评审不存在: {review_id}")
-        await row.update_from_dict({"deleted_at": datetime.now(), "updated_by": deleted_by}).save()
+        user_info = await self.get_user_info(deleted_by)
+        await row.update_from_dict({
+            "deleted_at": datetime.now(),
+            "updated_by": deleted_by,
+            "updated_by_name": user_info["name"],
+        }).save()
 
     # ---------- FMEA ----------
 
@@ -279,6 +303,7 @@ class Phase2Service(AppBaseService[RdRequirement]):
     async def create_fmea_record(
         self, tenant_id: int, data: RdFmeaRecordCreate, created_by: int
     ) -> RdFmeaRecordResponse:
+        user_info = await self.get_user_info(created_by)
         row = await RdFmeaRecord.create(
             tenant_id=tenant_id,
             project_id=data.project_id,
@@ -291,7 +316,9 @@ class Phase2Service(AppBaseService[RdRequirement]):
             material_name=data.material_name,
             risk_items=data.risk_items,
             created_by=created_by,
+            created_by_name=user_info["name"],
             updated_by=created_by,
+            updated_by_name=user_info["name"],
         )
         return RdFmeaRecordResponse.model_validate(row)
 
@@ -303,7 +330,11 @@ class Phase2Service(AppBaseService[RdRequirement]):
         )
         if not row:
             raise NotFoundError(f"FMEA 记录不存在: {fmea_id}")
-        update_fields = {"updated_by": updated_by}
+        user_info = await self.get_user_info(updated_by)
+        update_fields = {
+            "updated_by": updated_by,
+            "updated_by_name": user_info["name"],
+        }
         for field in (
             "project_id", "title", "fmea_type", "status", "material_id",
             "material_code", "material_name", "risk_items",
@@ -320,4 +351,9 @@ class Phase2Service(AppBaseService[RdRequirement]):
         )
         if not row:
             raise NotFoundError(f"FMEA 记录不存在: {fmea_id}")
-        await row.update_from_dict({"deleted_at": datetime.now(), "updated_by": deleted_by}).save()
+        user_info = await self.get_user_info(deleted_by)
+        await row.update_from_dict({
+            "deleted_at": datetime.now(),
+            "updated_by": deleted_by,
+            "updated_by_name": user_info["name"],
+        }).save()

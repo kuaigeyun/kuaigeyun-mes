@@ -2,7 +2,7 @@
 银行账户 API
 """
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, List, Optional
 
@@ -51,6 +51,8 @@ class BankAccountResponse(BankAccountCreate):
     is_active: bool
     created_at: Optional[Any] = None
     updated_at: Optional[Any] = None
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -69,7 +71,11 @@ async def create_bank_account(
     current_user: Any = Depends(get_current_user),
 ):
     try:
-        row = await service.create(current_user.tenant_id, **data.model_dump())
+        row = await service.create(
+            current_user.tenant_id,
+            current_user=current_user,
+            **data.model_dump(),
+        )
         return BankAccountResponse.model_validate(row)
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -137,6 +143,7 @@ async def update_bank_account(
         row = await service.update(
             current_user.tenant_id,
             account_id,
+            current_user=current_user,
             **data.model_dump(exclude_unset=True),
         )
         return BankAccountResponse.model_validate(row)
@@ -163,6 +170,10 @@ class BankTransactionResponse(BaseSchema):
     source_doc_id: Optional[int] = None
     source_doc_code: Optional[str] = None
     summary: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
 
     class Config:
         from_attributes = True

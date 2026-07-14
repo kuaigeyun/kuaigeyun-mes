@@ -36,8 +36,6 @@ class SalesOpportunity(BaseModel):
     last_follow_up_at = fields.DatetimeField(null=True, description="最近跟进时间")
     next_follow_up_at = fields.DatetimeField(null=True, description="计划下次跟进时间")
 
-    created_by = fields.IntField(null=True, description="创建人ID")
-    updated_by = fields.IntField(null=True, description="更新人ID")
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
 
     class Meta:

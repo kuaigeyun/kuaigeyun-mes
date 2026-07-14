@@ -31,7 +31,7 @@ import { warehouseApi } from '../../../services/warehouse-execution';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
-import { formatDateBySiteSetting } from '../../../../../utils/format';
+import {formatDateBySiteSetting, formatQuantity} from '../../../../../utils/format';
 import { loadConfirmPreviewMaterialMeta, type ConfirmPreviewMaterialMeta } from './inboundItemTracking';
 import {
   enrichPurchaseOrderItemsMaterial,
@@ -526,7 +526,7 @@ const InboundPoPullEntryPage: React.FC = () => {
         ellipsis: true,
         render: (v: unknown, record: PurchaseOrderItem) => String(v || record.material_name || '—'),
       },
-      { title: t('app.kuaizhizao.warehouseInbound.col.purchaseQty'), dataIndex: 'ordered_quantity', width: 100, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseInbound.col.purchaseQty'), dataIndex: 'ordered_quantity', width: 100, align: 'right' as const , render: formatQuantity },
       { title: t('app.kuaizhizao.warehouseInbound.col.receivedQty'), dataIndex: 'received_quantity', width: 90, align: 'right' as const },
       { title: t('app.kuaizhizao.warehouseInbound.col.outstandingQty'), dataIndex: 'outstanding_quantity', width: 90, align: 'right' as const },
       {

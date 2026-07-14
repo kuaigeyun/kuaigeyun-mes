@@ -21,6 +21,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../../hooks/useInvalid
 import { translateWorkOrderLifecycleStatus } from '../../../../utils/workOrderLifecycle'
 import { translateOutsourceWorkOrderLifecycleStatus } from '../../../../utils/outsourceWorkOrderLifecycle'
 import { UniTableStackedPrimaryCell } from '../../../../../../components/uni-table/stackedPrimaryColumn'
+import { formatQuantity } from '../../../../../../utils/format'
 
 function useFallbackCallTypeOptions() {
   const { t } = useTranslation()
@@ -67,14 +68,6 @@ function stopRowToggle(e: React.MouseEvent) {
   e.stopPropagation()
 }
 
-/** 齐套分析项 required_quantity 展示（与列表数量风格一致，保留 4 位小数） */
-function formatKittingRequiredQty(v: unknown): string {
-  if (v == null || v === '') return '—'
-  const n = Number(v)
-  if (!Number.isFinite(n)) return String(v)
-  return n.toFixed(4)
-}
-
 const QTY_CMP_EPS = 1e-9
 
 function parseRequiredNumber(v: unknown): number | null {
@@ -89,16 +82,9 @@ function isAvailableMeetsRequirement(available: number, required: number | null)
   return available + QTY_CMP_EPS >= required
 }
 
-/** 数量按需精度：去无意义尾零，最多 6 位小数 */
-function formatQtyAdaptive(v: unknown): string {
-  const n = Number(v ?? 0)
-  if (!Number.isFinite(n)) return String(v ?? '')
-  return String(Number(n.toFixed(6)))
-}
-
 /** 叫料列表「已/需」：已送达/需求，单行不换行 */
 function formatCallDeliveredRequested(delivered: unknown, requested: unknown): string {
-  return `${formatQtyAdaptive(delivered)}/${formatQtyAdaptive(requested)}`
+  return `${formatQuantity(delivered)}/${formatQuantity(requested)}`
 }
 
 function isDeliveredMeetsRequested(delivered: unknown, requested: unknown): boolean {
@@ -569,7 +555,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
       const materialId = it.material_id
       const code = String(it.material_code ?? '')
       const name = String(it.material_name ?? '')
-      const requiredQty = formatKittingRequiredQty(it.required_quantity ?? it.requiredQuantity)
+      const requiredQty = formatQuantity(it.required_quantity ?? it.requiredQuantity)
       const requiredNum = parseRequiredNumber(it.required_quantity ?? it.requiredQuantity)
       const kittingApplicable = it.kitting_applicable !== false
       const sourceType = it.source_type ?? it.sourceType
@@ -588,7 +574,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
             materialCode: code,
             materialName: name,
             requiredQty,
-            qty: formatQtyAdaptive(received),
+            qty: formatQuantity(received),
             warehouseLocation: '—',
             qtyVsRequired: meets === null ? 'neutral' : meets ? 'ok' : 'short',
             kittingApplicable: false,
@@ -623,7 +609,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
           materialCode: code,
           materialName: name,
           requiredQty,
-          qty: formatQtyAdaptive(inventoryAvail),
+          qty: formatQuantity(inventoryAvail),
           warehouseLocation: t('app.kuaizhizao.workOrder.readinessNoWarehouseConfigured'),
           qtyVsRequired:
             materialCmp === null ? 'neutral' : materialCmp ? 'ok' : 'short',
@@ -640,7 +626,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
             materialCode: code,
             materialName: name,
             requiredQty,
-            qty: formatQtyAdaptive(qty),
+            qty: formatQuantity(qty),
             warehouseLocation: formatWarehouseLocation(loc),
             qtyVsRequired:
               materialCmp === null ? 'neutral' : materialCmp ? 'ok' : 'short',
@@ -805,7 +791,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                           <Space size={4} wrap>
                             <Tag style={{ margin: 0 }}>{statusLabel}</Tag>
                             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                              {formatQtyAdaptive(owo.receivedQuantity)}/{formatQtyAdaptive(owo.quantity)}
+                              {formatQuantity(owo.receivedQuantity)}/{formatQuantity(owo.quantity)}
                             </Typography.Text>
                           </Space>
                           <Progress
@@ -824,7 +810,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                         <Space size={4} wrap>
                           <Tag style={{ margin: 0 }}>{statusLabel}</Tag>
                           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                            {formatQtyAdaptive(wo.completedQuantity)}/{formatQtyAdaptive(wo.quantity)}
+                            {formatQuantity(wo.completedQuantity)}/{formatQuantity(wo.quantity)}
                           </Typography.Text>
                         </Space>
                         <Progress

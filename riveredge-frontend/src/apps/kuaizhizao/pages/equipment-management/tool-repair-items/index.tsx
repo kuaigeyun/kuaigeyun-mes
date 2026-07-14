@@ -18,6 +18,8 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { repairItemsApi } from '../../../services/toolOps';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   MASTER_DATA_PINNED_ACTIVE_FIELD,
   buildActiveStatusValueEnum,
@@ -94,8 +96,7 @@ const ToolRepairItemsPage: React.FC = () => {
 
   const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
 
-  const columns: ProColumns<RepairItem>[] = useMemo(
-    () => [
+  const columns: ProColumns<RepairItem>[] = useMemo(() => alignProColumns<RepairItem>([
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at_range',
@@ -145,13 +146,10 @@ const ToolRepairItemsPage: React.FC = () => {
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
+        hideInTable: true,
         hideInSearch: true,
-        defaultSortOrder: 'descend',
-        sorter: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
+      ...buildDocumentAuditColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
         key: 'action',
@@ -195,7 +193,7 @@ const ToolRepairItemsPage: React.FC = () => {
           </>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, perms, activeStatusValueEnum],
   );
 

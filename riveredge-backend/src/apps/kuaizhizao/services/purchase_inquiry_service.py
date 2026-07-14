@@ -106,8 +106,12 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             tenant_id=tenant_id, inquiry_id=inquiry.id, deleted_at__isnull=True
         ).all()
         quote_resps: List[PurchaseSupplierQuoteResponse] = []
+        awarded_total_amount = Decimal(0)
         for q in quotes:
             q_items = await PurchaseSupplierQuoteItem.filter(tenant_id=tenant_id, quote_id=q.id).all()
+            for qi in q_items:
+                if qi.is_awarded:
+                    awarded_total_amount += Decimal(str(qi.quoted_quantity or 0)) * Decimal(str(qi.unit_price or 0))
             quote_resps.append(
                 PurchaseSupplierQuoteResponse.model_validate({
                     **{k: getattr(q, k) for k in q._meta.fields_map if hasattr(q, k)},
@@ -120,6 +124,8 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         lifecycle = get_purchase_inquiry_lifecycle(inquiry, audit_required=audit_required)
         resp = PurchaseInquiryResponse.model_validate({
             **{k: getattr(inquiry, k) for k in inquiry._meta.fields_map if hasattr(inquiry, k)},
+            "items_count": len(items),
+            "total_amount": awarded_total_amount.quantize(Decimal("0.01")),
             "items": [PurchaseInquiryItemResponse.model_validate(i) for i in items],
             "vendors": [PurchaseInquiryVendorResponse.model_validate(v) for v in vendors],
             "quotes": quote_resps,
@@ -275,7 +281,8 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             code = data.inquiry_code
             if not code:
                 code = await self._generate_inquiry_code(tenant_id)
-            buyer_name = await self.get_user_name(created_by)
+            buyer_name_info = await self.get_user_info(created_by)
+            buyer_name = buyer_name_info["name"]
             total_qty = sum((i.quantity for i in data.items), Decimal(0))
             inquiry = await PurchaseInquiry.create(
                 tenant_id=tenant_id,
@@ -292,7 +299,9 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 total_quantity=total_qty,
                 notes=data.notes,
                 created_by=created_by,
+                created_by_name=buyer_name_info["name"],
                 updated_by=created_by,
+                updated_by_name=buyer_name_info["name"],
             )
             for item in data.items:
                 await PurchaseInquiryItem.create(
@@ -372,7 +381,11 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 raise ValidationError("字段「供应商」不允许在审核中修改")
 
         async with in_transaction():
-            update_fields = {"updated_by": updated_by}
+            user_info = await self.get_user_info(updated_by)
+            update_fields = {
+                "updated_by": updated_by,
+                "updated_by_name": user_info["name"],
+            }
             for field in ("inquiry_name", "inquiry_date", "quote_deadline", "notes"):
                 val = getattr(data, field, None)
                 if val is not None:
@@ -569,6 +582,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         await inquiry.update_from_dict({
             "status": PurchaseInquiryStatus.QUOTING.value,
             "updated_by": user_id,
+            "updated_by_name": (await self.get_user_info(user_id))["name"],
         }).save()
         return await self.get_inquiry_by_id(tenant_id, inquiry_id)
 
@@ -583,6 +597,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         await inquiry.update_from_dict({
             "status": PurchaseInquiryStatus.PENDING_COMPARE.value,
             "updated_by": user_id,
+            "updated_by_name": (await self.get_user_info(user_id))["name"],
         }).save()
         return await self.get_inquiry_by_id(tenant_id, inquiry_id)
 
@@ -774,6 +789,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             await inquiry.update_from_dict({
                 "status": PurchaseInquiryStatus.AWARDED.value,
                 "updated_by": user_id,
+                "updated_by_name": (await self.get_user_info(user_id))["name"],
             }).save()
         return await self.get_inquiry_by_id(tenant_id, inquiry_id)
 
@@ -1055,7 +1071,12 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             tenant_id=tenant_id, inquiry_id=inquiry_id, purchase_order_id__isnull=True
         ).count()
         new_status = PurchaseInquiryStatus.CONVERTED.value if remaining == 0 else PurchaseInquiryStatus.AWARDED.value
-        await inquiry.update_from_dict({"status": new_status, "updated_by": created_by}).save()
+        user_info = await self.get_user_info(created_by)
+        await inquiry.update_from_dict({
+            "status": new_status,
+            "updated_by": created_by,
+            "updated_by_name": user_info["name"],
+        }).save()
 
         return {"purchase_orders": purchase_orders_out, "inquiry_id": inquiry_id}
 
@@ -1067,15 +1088,18 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
         assert_purchase_inquiry_capability(inquiry, "submit")
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_inquiry")
+        user_info = await self.get_user_info(user_id)
         if not audit_required:
             await inquiry.update_from_dict({
                 "review_status": ReviewStatus.APPROVED.value,
                 "updated_by": user_id,
+                "updated_by_name": user_info["name"],
             }).save()
         else:
             await inquiry.update_from_dict({
                 "review_status": DocumentStatus.PENDING_REVIEW.value,
                 "updated_by": user_id,
+                "updated_by_name": user_info["name"],
             }).save()
         return await self.get_inquiry_by_id(tenant_id, inquiry_id)
 
@@ -1109,6 +1133,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             "review_time": None,
             "review_remarks": None,
             "updated_by": user_id,
+            "updated_by_name": (await self.get_user_info(user_id))["name"],
         }).save()
         return await self.get_inquiry_by_id(tenant_id, inquiry_id)
 
@@ -1121,7 +1146,8 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         if not inquiry:
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
         assert_purchase_inquiry_capability(inquiry, "approve")
-        reviewer_name = await self.get_user_name(user_id)
+        user_info = await self.get_user_info(user_id)
+        reviewer_name = user_info["name"]
         await inquiry.update_from_dict({
             "review_status": ReviewStatus.APPROVED.value if approved else ReviewStatus.REJECTED.value,
             "reviewer_id": user_id,
@@ -1129,6 +1155,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             "review_time": datetime.now(),
             "review_remarks": remarks,
             "updated_by": user_id,
+            "updated_by_name": user_info["name"],
         }).save()
         return await self.get_inquiry_by_id(tenant_id, inquiry_id)
 
@@ -1158,5 +1185,6 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             "review_time": None,
             "review_remarks": None,
             "updated_by": user_id,
+            "updated_by_name": (await self.get_user_info(user_id))["name"],
         }).save()
         return await self.get_inquiry_by_id(tenant_id, inquiry_id)

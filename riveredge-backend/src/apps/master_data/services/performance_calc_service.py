@@ -23,6 +23,8 @@ from apps.master_data.schemas.employee_performance_schemas import (
     PerformanceDetailItem,
     PerformanceDetailResponse,
 )
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
+from infra.models.user import User
 from apps.master_data.services.employee_performance_service import (
     EmployeePerformanceConfigService,
     PieceRateService,
@@ -132,6 +134,7 @@ class PerformanceCalcService:
         total_pieces: Decimal,
         total_unqualified: Decimal,
         records: List[ReportingRecord],
+        operator: Optional[User] = None,
     ) -> PerformanceSummary:
         existing = await PerformanceSummary.filter(
             tenant_id=tenant_id,
@@ -192,11 +195,7 @@ class PerformanceCalcService:
         )
         total_amount = (total_amount * kpi_coefficient).quantize(Decimal("0.01"))
 
-        summary, _ = await PerformanceSummary.update_or_create(
-            tenant_id=tenant_id,
-            employee_id=employee_id,
-            period=period,
-            defaults={
+        defaults = {
                 "employee_name": employee_name,
                 "total_hours": total_hours,
                 "total_pieces": total_pieces,
@@ -207,12 +206,20 @@ class PerformanceCalcService:
                 "kpi_coefficient": kpi_coefficient,
                 "total_amount": total_amount,
                 "status": "calculated",
-            },
+            }
+        apply_update_audit(defaults, operator)
+        if existing is None:
+            apply_create_audit(defaults, operator)
+        summary, _ = await PerformanceSummary.update_or_create(
+            tenant_id=tenant_id,
+            employee_id=employee_id,
+            period=period,
+            defaults=defaults,
         )
         return summary
 
     @staticmethod
-    async def calculate_period(tenant_id: int, period: str) -> List[PerformanceSummaryResponse]:
+    async def calculate_period(tenant_id: int, period: str, operator: Optional[User] = None) -> List[PerformanceSummaryResponse]:
         agg = await PerformanceCalcService.aggregate_reporting_by_employee(
             tenant_id, period, status_filter="approved",
         )
@@ -238,6 +245,7 @@ class PerformanceCalcService:
                     total_pieces=data["total_pieces"],
                     total_unqualified=data["total_unqualified"],
                     records=data["records"],
+                    operator=operator,
                 )
                 results.append(PerformanceSummaryResponse.model_validate(summary))
             except ValidationError as exc:
@@ -247,7 +255,7 @@ class PerformanceCalcService:
         return results
 
     @staticmethod
-    async def confirm_summary(tenant_id: int, summary_id: int) -> PerformanceSummaryResponse:
+    async def confirm_summary(tenant_id: int, summary_id: int, operator: Optional[User] = None) -> PerformanceSummaryResponse:
         summary = await PerformanceSummary.filter(
             id=summary_id, tenant_id=tenant_id, deleted_at__isnull=True,
         ).first()
@@ -260,11 +268,12 @@ class PerformanceCalcService:
         if (summary.total_amount or Decimal("0")) <= 0:
             raise ValidationError("应发总额须大于 0 才能确认")
         summary.status = "confirmed"
-        await summary.save(update_fields=["status", "updated_at"])
+        apply_update_audit(summary, operator)
+        await summary.save()
         return PerformanceSummaryResponse.model_validate(summary)
 
     @staticmethod
-    async def reopen_summary(tenant_id: int, summary_id: int) -> PerformanceSummaryResponse:
+    async def reopen_summary(tenant_id: int, summary_id: int, operator: Optional[User] = None) -> PerformanceSummaryResponse:
         summary = await PerformanceSummary.filter(
             id=summary_id, tenant_id=tenant_id, deleted_at__isnull=True,
         ).first()
@@ -273,11 +282,12 @@ class PerformanceCalcService:
         if summary.status != "confirmed":
             raise ValidationError("仅已确认汇总可退回重算")
         summary.status = "calculated"
-        await summary.save(update_fields=["status", "updated_at"])
+        apply_update_audit(summary, operator)
+        await summary.save()
         return PerformanceSummaryResponse.model_validate(summary)
 
     @staticmethod
-    async def batch_confirm_period(tenant_id: int, period: str) -> Dict[str, Any]:
+    async def batch_confirm_period(tenant_id: int, period: str, operator: Optional[User] = None) -> Dict[str, Any]:
         rows = await PerformanceSummary.filter(
             tenant_id=tenant_id,
             period=period,
@@ -291,7 +301,8 @@ class PerformanceCalcService:
                 skipped += 1
                 continue
             row.status = "confirmed"
-            await row.save(update_fields=["status", "updated_at"])
+            apply_update_audit(row, operator)
+            await row.save(update_fields=["status", "updated_at", "updated_by", "updated_by_name"])
             confirmed += 1
         return {"period": period, "confirmed_count": confirmed, "skipped_count": skipped}
 

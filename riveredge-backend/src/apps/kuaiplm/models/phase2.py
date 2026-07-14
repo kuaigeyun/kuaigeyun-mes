@@ -22,8 +22,6 @@ class RdRequirement(BaseModel):
     status = fields.CharField(max_length=30, default="DRAFT", description="状态")
     source_type = fields.CharField(max_length=50, null=True, description="来源类型")
     source_id = fields.IntField(null=True, description="来源ID")
-    created_by = fields.IntField(null=True)
-    updated_by = fields.IntField(null=True)
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:
@@ -51,8 +49,6 @@ class RdDesignReview(BaseModel):
     reviewer_name = fields.CharField(max_length=100, null=True, description="评审人姓名")
     review_date = fields.DateField(null=True, description="评审日期")
     review_notes = fields.TextField(null=True, description="评审意见")
-    created_by = fields.IntField(null=True)
-    updated_by = fields.IntField(null=True)
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:
@@ -77,8 +73,6 @@ class RdFmeaRecord(BaseModel):
     material_code = fields.CharField(max_length=50, null=True, description="物料编码")
     material_name = fields.CharField(max_length=200, null=True, description="物料名称")
     risk_items = fields.JSONField(null=True, description="风险项")
-    created_by = fields.IntField(null=True)
-    updated_by = fields.IntField(null=True)
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:

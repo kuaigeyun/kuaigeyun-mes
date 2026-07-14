@@ -12,9 +12,11 @@ from datetime import datetime
 
 from tortoise.expressions import Q
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.kuaizhizao.models.spare_part import SparePart, SparePartInventory, SparePartStockRecord
 from apps.kuaizhizao.schemas.equipment_extra import SparePartCreate, SparePartUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 class SparePartService:
@@ -82,7 +84,12 @@ class SparePartService:
             raise NotFoundError(f"备件不存在: {spare_part_id}")
         return part
 
-    async def create_spare_part(self, tenant_id: int, data: SparePartCreate) -> SparePart:
+    async def create_spare_part(
+        self,
+        tenant_id: int,
+        data: SparePartCreate,
+        current_user: Optional[User] = None,
+    ) -> SparePart:
         existing = await SparePart.filter(
             tenant_id=tenant_id,
             part_no=data.part_no,
@@ -90,13 +97,16 @@ class SparePartService:
         ).first()
         if existing:
             raise ValidationError(f"备件编号已存在: {data.part_no}")
-        return await SparePart.create(tenant_id=tenant_id, **data.model_dump())
+        payload = data.model_dump()
+        apply_create_audit(payload, current_user)
+        return await SparePart.create(tenant_id=tenant_id, **payload)
 
     async def update_spare_part(
         self,
         tenant_id: int,
         spare_part_id: int,
         data: SparePartUpdate,
+        current_user: Optional[User] = None,
     ) -> SparePart:
         part = await self.get_spare_part(tenant_id, spare_part_id)
         update_data = data.model_dump(exclude_unset=True)
@@ -110,6 +120,7 @@ class SparePartService:
                 raise ValidationError(f"备件编号已存在: {update_data['part_no']}")
         for k, v in update_data.items():
             setattr(part, k, v)
+        apply_update_audit(part, current_user)
         await part.save()
         return part
 

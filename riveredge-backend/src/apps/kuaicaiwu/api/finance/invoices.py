@@ -70,11 +70,24 @@ async def list_invoices(
     category: Optional[str] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:invoice:read")),
     tenant_id: int = Depends(get_current_tenant)
 ):
     items, total = await invoice_service.list_invoices(
-        tenant_id, skip, limit, category, status, search
+        tenant_id,
+        skip,
+        limit,
+        category,
+        status,
+        search,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
     return InvoiceListResponse(
         items=[InvoiceResponse.model_validate(i) for i in items],
@@ -111,11 +124,12 @@ async def get_invoice(
 async def update_invoice(
     code: str,
     data: InvoiceUpdate,
+    current_user: User = Depends(get_current_user),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:invoice:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        invoice = await invoice_service.update_invoice(tenant_id, code, data)
+        invoice = await invoice_service.update_invoice(tenant_id, code, data, current_user.id)
         return InvoiceResponse.model_validate(invoice)
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/invoices/{code}", tenant_id)

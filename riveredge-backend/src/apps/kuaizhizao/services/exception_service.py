@@ -32,8 +32,10 @@ from apps.kuaizhizao.schemas.delivery_delay_exception import (
     DeliveryDelayExceptionListResponse,
 )
 from apps.common.base_service import AppBaseService
+from apps.common.audit_actor import apply_update_audit
 from apps.kuaizhizao.services.work_order_service import WorkOrderService, WORK_ORDER_IN_PROGRESS_STATUS
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 from loguru import logger
 
 # 待处理异常状态（与模型字段一致；勿使用 open）
@@ -350,6 +352,7 @@ class ExceptionService:
         if remarks:
             exception.remarks = remarks
 
+        apply_update_audit(exception, await User.get_or_none(id=handled_by))
         await exception.save()
 
         return MaterialShortageExceptionResponse.model_validate(exception)
@@ -556,6 +559,7 @@ class ExceptionService:
         if remarks:
             exception.remarks = remarks
 
+        apply_update_audit(exception, await User.get_or_none(id=handled_by))
         await exception.save()
 
         return DeliveryDelayExceptionResponse.model_validate(exception)
@@ -728,7 +732,7 @@ class ExceptionService:
         else:
             raise ValidationError(f"不支持的检验来源类型: {source_type}")
 
-        exception = await QualityException.create(
+        exception_kwargs = dict(
             uuid=str(uuid.uuid4()),
             tenant_id=tenant_id,
             exception_type="inspection_failure",
@@ -745,6 +749,12 @@ class ExceptionService:
             status="pending",
             remarks=remarks,
         )
+        if created_by is not None:
+            from apps.common.audit_actor import apply_create_audit
+
+            user = await User.get_or_none(id=created_by)
+            apply_create_audit(exception_kwargs, user)
+        exception = await QualityException.create(**exception_kwargs)
         logger.info(
             "从检验单创建质量异常: source=%s#%s exception_id=%s",
             source_type,
@@ -829,6 +839,7 @@ class ExceptionService:
         if remarks:
             exception.remarks = remarks
 
+        apply_update_audit(exception, await User.get_or_none(id=handled_by))
         await exception.save()
 
         return QualityExceptionResponse.model_validate(exception)

@@ -23,6 +23,8 @@ from apps.master_data.services.master_data_list_core import (
     apply_master_crud_list_filters,
     resolve_master_crud_order_clause as _work_group_order_clause,
 )
+from infra.models.user import User
+from apps.common.audit_actor import apply_create_audit, apply_restore_audit, apply_update_audit
 
 
 class WorkGroupService:
@@ -38,7 +40,8 @@ class WorkGroupService:
     @staticmethod
     async def create_work_group(
         tenant_id: int,
-        data: WorkGroupCreate
+        data: WorkGroupCreate,
+        current_user: Optional[User] = None,
     ) -> WorkGroupResponse:
         """创建工作小组"""
         existing_active = await WorkGroup.filter(
@@ -61,11 +64,15 @@ class WorkGroupService:
             existing_deleted.name = data.name
             existing_deleted.description = data.description
             existing_deleted.is_active = data.is_active
+            if current_user:
+                apply_restore_audit(existing_deleted, current_user)
             await existing_deleted.save()
             work_group = existing_deleted
             await WorkGroupMember.filter(work_group_id=work_group.id).delete()
         else:
             create_data = data.model_dump(by_alias=False, exclude={"members"})
+            if current_user:
+                apply_create_audit(create_data, current_user)
             work_group = await WorkGroup.create(tenant_id=tenant_id, **create_data)
 
         members = getattr(data, "members", None) or []
@@ -81,6 +88,10 @@ class WorkGroupService:
                 employee_name=emp_name,
                 performance_weight=item.performance_weight,
                 sort_order=item.sort_order if hasattr(item, "sort_order") else i,
+                created_by=int(current_user.id) if current_user else None,
+                created_by_name=(current_user.full_name or current_user.username or "").strip() if current_user else None,
+                updated_by=int(current_user.id) if current_user else None,
+                updated_by_name=(current_user.full_name or current_user.username or "").strip() if current_user else None,
             )
 
         return await WorkGroupService.get_work_group_by_uuid(tenant_id, work_group.uuid)
@@ -111,6 +122,8 @@ class WorkGroupService:
                 employee_name=m.employee_name,
                 performance_weight=m.performance_weight,
                 sort_order=m.sort_order,
+                created_by_name=m.created_by_name,
+                updated_by_name=m.updated_by_name,
             ))
 
         members_data.sort(key=lambda x: x.sort_order)
@@ -168,6 +181,8 @@ class WorkGroupService:
                     employee_name=m.employee_name,
                     performance_weight=m.performance_weight,
                     sort_order=m.sort_order,
+                    created_by_name=m.created_by_name,
+                    updated_by_name=m.updated_by_name,
                 )
                 for m in wg.members if m.deleted_at is None
             ]
@@ -180,7 +195,8 @@ class WorkGroupService:
     async def update_work_group(
         tenant_id: int,
         work_group_uuid: str,
-        data: WorkGroupUpdate
+        data: WorkGroupUpdate,
+        current_user: Optional[User] = None,
     ) -> WorkGroupResponse:
         """更新工作小组"""
         work_group = await WorkGroup.filter(
@@ -204,6 +220,8 @@ class WorkGroupService:
         update_data = data.model_dump(exclude_unset=True, exclude={"members"}, by_alias=False)
         for key, value in update_data.items():
             setattr(work_group, key, value)
+        if current_user:
+            apply_update_audit(work_group, current_user)
 
         try:
             await work_group.save()
@@ -227,6 +245,10 @@ class WorkGroupService:
                     employee_name=emp_name,
                     performance_weight=item.performance_weight,
                     sort_order=item.sort_order if hasattr(item, "sort_order") else i,
+                    created_by=int(current_user.id) if current_user else None,
+                    created_by_name=(current_user.full_name or current_user.username or "").strip() if current_user else None,
+                    updated_by=int(current_user.id) if current_user else None,
+                    updated_by_name=(current_user.full_name or current_user.username or "").strip() if current_user else None,
                 )
 
         return await WorkGroupService.get_work_group_by_uuid(tenant_id, work_group.uuid)

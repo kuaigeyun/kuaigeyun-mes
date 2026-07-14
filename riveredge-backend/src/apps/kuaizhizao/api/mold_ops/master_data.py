@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
+from infra.api.deps.deps import get_current_user as soil_get_current_user
+from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 from apps.kuaizhizao.schemas.mold_ops import (
@@ -66,10 +68,11 @@ def _repair_scheme_response(scheme, lines) -> MoldRepairSchemeResponse:
 )
 async def create_mold_maintenance_item(
     data: MoldMaintenanceItemCreate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.maintenance_item_service.create(tenant_id, data)
+        row = await svc.maintenance_item_service.create(tenant_id, data, current_user=current_user)
         return MoldMaintenanceItemResponse.model_validate(row)
     except ValidationError as e:
         raise _validation_http(e)
@@ -130,10 +133,11 @@ async def get_mold_maintenance_item(row_id: int, tenant_id: int = Depends(get_cu
 async def update_mold_maintenance_item(
     row_id: int,
     data: MoldMaintenanceItemUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.maintenance_item_service.update(tenant_id, row_id, data)
+        row = await svc.maintenance_item_service.update(tenant_id, row_id, data, current_user=current_user)
         return MoldMaintenanceItemResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         if isinstance(e, NotFoundError):
@@ -163,10 +167,11 @@ async def delete_mold_maintenance_item(row_id: int, tenant_id: int = Depends(get
 )
 async def create_mold_maintenance_scheme(
     data: MoldMaintenanceSchemeCreate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        scheme = await svc.maintenance_scheme_service.create(tenant_id, data)
+        scheme = await svc.maintenance_scheme_service.create(tenant_id, data, current_user=current_user)
         _, lines = await svc.maintenance_scheme_service.get_with_lines(tenant_id, scheme.id)
         return _maint_scheme_response(scheme, lines)
     except ValidationError as e:
@@ -228,10 +233,11 @@ async def get_mold_maintenance_scheme(row_id: int, tenant_id: int = Depends(get_
 async def update_mold_maintenance_scheme(
     row_id: int,
     data: MoldMaintenanceSchemeUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        scheme = await svc.maintenance_scheme_service.update(tenant_id, row_id, data)
+        scheme = await svc.maintenance_scheme_service.update(tenant_id, row_id, data, current_user=current_user)
         _, lines = await svc.maintenance_scheme_service.get_with_lines(tenant_id, scheme.id)
         return _maint_scheme_response(scheme, lines)
     except (ValidationError, NotFoundError) as e:
@@ -262,10 +268,11 @@ async def delete_mold_maintenance_scheme(row_id: int, tenant_id: int = Depends(g
 )
 async def create_mold_repair_item(
     data: MoldRepairItemCreate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.repair_item_service.create(tenant_id, data)
+        row = await svc.repair_item_service.create(tenant_id, data, current_user=current_user)
         return MoldRepairItemResponse.model_validate(row)
     except ValidationError as e:
         raise _validation_http(e)
@@ -326,10 +333,11 @@ async def get_mold_repair_item(row_id: int, tenant_id: int = Depends(get_current
 async def update_mold_repair_item(
     row_id: int,
     data: MoldRepairItemUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.repair_item_service.update(tenant_id, row_id, data)
+        row = await svc.repair_item_service.update(tenant_id, row_id, data, current_user=current_user)
         return MoldRepairItemResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         if isinstance(e, NotFoundError):
@@ -359,10 +367,11 @@ async def delete_mold_repair_item(row_id: int, tenant_id: int = Depends(get_curr
 )
 async def create_mold_repair_scheme(
     data: MoldRepairSchemeCreate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        scheme = await svc.repair_scheme_service.create(tenant_id, data)
+        scheme = await svc.repair_scheme_service.create(tenant_id, data, current_user=current_user)
         _, lines = await svc.repair_scheme_service.get_with_lines(tenant_id, scheme.id)
         return _repair_scheme_response(scheme, lines)
     except ValidationError as e:
@@ -424,10 +433,11 @@ async def get_mold_repair_scheme(row_id: int, tenant_id: int = Depends(get_curre
 async def update_mold_repair_scheme(
     row_id: int,
     data: MoldRepairSchemeUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        scheme = await svc.repair_scheme_service.update(tenant_id, row_id, data)
+        scheme = await svc.repair_scheme_service.update(tenant_id, row_id, data, current_user=current_user)
         _, lines = await svc.repair_scheme_service.get_with_lines(tenant_id, scheme.id)
         return _repair_scheme_response(scheme, lines)
     except (ValidationError, NotFoundError) as e:

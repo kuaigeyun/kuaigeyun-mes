@@ -590,6 +590,8 @@ export interface BOM {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  createdByName?: string;
+  updatedByName?: string;
   deletedAt?: string;
 }
 

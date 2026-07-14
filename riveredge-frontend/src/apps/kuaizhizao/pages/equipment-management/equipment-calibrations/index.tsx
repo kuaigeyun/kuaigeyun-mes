@@ -17,6 +17,8 @@ import { equipmentApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
@@ -37,6 +39,9 @@ interface EquipmentCalibration {
   remark?: string;
   attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
+  updated_at?: string;
+  created_by_name?: string;
+  updated_by_name?: string;
 }
 
 const CALIBRATION_RESULT_LABEL_KEYS: Record<string, string> = {
@@ -193,6 +198,7 @@ const EquipmentCalibrationsPage: React.FC = () => {
         },
       },
       { title: t(`${P}.formRemark`), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
+      ...buildDocumentAuditColumns<EquipmentCalibration>(t),
     ],
     [t],
   );
@@ -209,7 +215,7 @@ const EquipmentCalibrationsPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="uuid"
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         request={async (params, sort, _filter, searchFormValues) => {

@@ -22,8 +22,10 @@ from apps.kuaizhizao.schemas.quality import (
     QualityStandardListResponse,
 )
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 class QualityStandardService(AppBaseService[QualityStandard]):
@@ -85,9 +87,9 @@ class QualityStandardService(AppBaseService[QualityStandard]):
                 "tenant_id": tenant_id,
                 "standard_code": standard_code,
                 "uuid": str(uuid.uuid4()),
-                "created_by": created_by,
-                "updated_by": created_by,
             })
+            actor = await User.filter(id=created_by).first()
+            apply_create_audit(standard_dict, actor)
 
             standard = await QualityStandard.create(**standard_dict)
 
@@ -192,8 +194,9 @@ class QualityStandardService(AppBaseService[QualityStandard]):
 
             # 更新字段
             update_dict = standard_data.model_dump(exclude_unset=True)
-            update_dict["updated_by"] = updated_by
             update_dict["updated_at"] = datetime.now()
+            actor = await User.filter(id=updated_by).first()
+            apply_update_audit(update_dict, actor)
 
             for key, value in update_dict.items():
                 setattr(standard, key, value)

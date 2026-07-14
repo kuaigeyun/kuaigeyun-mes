@@ -27,7 +27,7 @@ import { stationResourceId } from '../../../components/GanttSchedulingChart/stat
 import { factoryListItems, workstationApi, workCenterApi } from '../../../../master-data/services/factory';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import dayjs from 'dayjs';
-import { formatDateTime } from '../../../../../utils/format';
+import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import SchedulingHeaderBand from './components/SchedulingHeaderBand';
 import SchedulingBoardDropZone from './components/SchedulingBoardDropZone';
 import { collectWorkOrderDiagnosticIssues } from './components/schedulingPoolDiagnostics';
@@ -36,6 +36,10 @@ import SchedulingWorkOrderPrepModal, {
   type SchedulingWorkOrderPrepValues,
 } from './components/SchedulingWorkOrderPrepModal';
 import buildSchedulingGanttToolbar from './components/SchedulingGanttToolbar';
+import {
+  SchedulingAiAssistantDrawer,
+  SchedulingAiAssistantTrigger,
+} from './components/SchedulingAiAssistantDrawer';
 import {
   buildScheduleWorkOrderDrop,
   countScheduledOperations,
@@ -64,6 +68,7 @@ import {
   type PoolStatusFilter,
 } from './schedulingPoolUtils';
 import './delfoi-style.less';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 
 const GANTT_WORK_ORDER_LIMIT = 500;
 
@@ -164,6 +169,27 @@ function applyOperationDateUpdates(
   });
 }
 
+function applyOperationStationUpdates(
+  list: WorkOrderForGantt[],
+  updates: Array<{ operation_id: number; assigned_station_id: number }>
+): WorkOrderForGantt[] {
+  if (updates.length === 0) return list;
+  const byOpId = new Map(updates.map((u) => [u.operation_id, u.assigned_station_id]));
+  return list.map((wo) => {
+    if (!wo.operations?.length) return wo;
+    let changed = false;
+    const operations = wo.operations.map((op) => {
+      const opId = op.id;
+      if (opId == null) return op;
+      const stationId = byOpId.get(opId);
+      if (stationId == null) return op;
+      changed = true;
+      return { ...op, assigned_station_id: stationId };
+    });
+    return changed ? { ...wo, operations } : wo;
+  });
+}
+
 const SchedulingPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal } = App.useApp();
@@ -207,18 +233,25 @@ const SchedulingPage: React.FC = () => {
   >([]);
   const [prepModalSaving, setPrepModalSaving] = useState(false);
   const [prepModalLoading, setPrepModalLoading] = useState(false);
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
+  const [aiSuggestedPoolOrderIds, setAiSuggestedPoolOrderIds] = useState<number[]>([]);
   const draftWoUpdatesRef = useRef(
     new Map<number, { work_order_id: number; planned_start_date: string; planned_end_date: string }>()
   );
   const draftOpUpdatesRef = useRef(
     new Map<number, { operation_id: number; planned_start_date: string; planned_end_date: string }>()
   );
+  const draftStationUpdatesRef = useRef(
+    new Map<number, { operation_id: number; assigned_station_id: number }>()
+  );
   const undoStackRef = useRef<WorkOrderForGantt[][]>([]);
   const schedulingPerms = useResourcePermissions('plan-management-scheduling');
   const canScheduleUpdate = schedulingPerms.canUpdate;
 
   const syncDraftPendingCount = useCallback(() => {
-    setDraftPendingCount(draftWoUpdatesRef.current.size + draftOpUpdatesRef.current.size);
+    setDraftPendingCount(
+      draftWoUpdatesRef.current.size + draftOpUpdatesRef.current.size + draftStationUpdatesRef.current.size
+    );
   }, []);
 
   const selectedWorkOrderIds = useMemo(
@@ -311,8 +344,40 @@ const SchedulingPage: React.FC = () => {
     return map;
   }, [boardScan, ganttWorkOrders, t]);
 
+  const poolWorkOrderIds = useMemo(
+    () => poolWorkOrders.map((wo) => wo.id),
+    [poolWorkOrders]
+  );
+
+  const aiSuggestedPoolRankById = useMemo(() => {
+    const map = new Map<number, number>();
+    aiSuggestedPoolOrderIds.forEach((id, index) => map.set(id, index + 1));
+    return map;
+  }, [aiSuggestedPoolOrderIds]);
+
+  const handleAiSelectSuggested = useCallback((order: number[]) => {
+    setSelectedRowKeys(order);
+    setAiSuggestedPoolOrderIds(order);
+    setFocusTaskId(null);
+  }, []);
+
+  const handleAiSelectOverdue = useCallback(() => {
+    const overdueIds = poolWorkOrders
+      .filter((wo) => wo.planned_end_date && dayjs(wo.planned_end_date).isBefore(dayjs()))
+      .map((wo) => wo.id);
+    setSelectedRowKeys(overdueIds);
+    setFocusTaskId(null);
+    if (overdueIds.length === 0) {
+      messageApi.info(t('app.kuaizhizao.scheduling.aiAssist.noOverdueInPool'));
+    }
+  }, [messageApi, poolWorkOrders, t]);
+
   const poolWorkOrdersRef = useRef(poolWorkOrders);
   poolWorkOrdersRef.current = poolWorkOrders;
+
+  const handleAiPoolReorder = useCallback((order: number[]) => {
+    setAiSuggestedPoolOrderIds(order);
+  }, []);
 
   useEffect(() => {
     actionRef.current?.reload();
@@ -564,14 +629,77 @@ const SchedulingPage: React.FC = () => {
   const handleApplyDraft = useCallback(async () => {
     const woUpdates = [...draftWoUpdatesRef.current.values()];
     const opUpdates = [...draftOpUpdatesRef.current.values()];
-    if (woUpdates.length === 0 && opUpdates.length === 0) {
+    const stationUpdates = [...draftStationUpdatesRef.current.values()];
+    if (woUpdates.length === 0 && opUpdates.length === 0 && stationUpdates.length === 0) {
       messageApi.info(t('app.kuaizhizao.scheduling.msg.noDraftChanges'));
       return;
     }
+    const persistDraft = async () => {
+      const woLabel = t('app.kuaizhizao.scheduling.batch.label.workOrderDates');
+      const opLabel = t('app.kuaizhizao.scheduling.batch.label.operationDates');
+      const stationLabel = t('app.kuaizhizao.scheduling.batch.label.operationStations');
+      if (woUpdates.length > 0) {
+        const woResult = await workOrderApi.batchUpdateDates(woUpdates);
+        ensureBatchUpdatesPersisted(woResult, woUpdates.length, woLabel, t);
+        reportBatchUpdateResult(messageApi, woLabel, woResult, t);
+        mutateGanttWorkOrders((prev) => applyWorkOrderDateUpdates(prev ?? [], woUpdates));
+      }
+      if (opUpdates.length > 0) {
+        const opResult = await workOrderApi.batchUpdateOperationDates(opUpdates);
+        ensureBatchUpdatesPersisted(opResult, opUpdates.length, opLabel, t);
+        reportBatchUpdateResult(messageApi, opLabel, opResult, t);
+        mutateGanttWorkOrders((prev) => applyOperationDateUpdates(prev ?? [], opUpdates));
+      }
+      if (stationUpdates.length > 0) {
+        const result = await workOrderApi.batchUpdateOperationStations(stationUpdates);
+        reportBatchUpdateResult(messageApi, stationLabel, {
+          updated: result.updated,
+          skipped_frozen: result.skipped_frozen,
+          skipped_freeze_window: [],
+          failed: result.failed,
+        }, t);
+        mutateGanttWorkOrders((prev) => applyOperationStationUpdates(prev ?? [], stationUpdates));
+      }
+      actionRef.current?.reload();
+      refreshBoardScan();
+      refreshPlanReliability();
+    };
     try {
-      await confirmAndPersist(woUpdates, opUpdates);
+      const validation = await visualSchedulingApi.validateAdjustments({
+        work_order_updates: woUpdates,
+        operation_updates: opUpdates,
+        operation_station_updates: stationUpdates,
+      });
+      if (validation.valid) {
+        await persistDraft();
+      } else {
+        const preview = (validation.conflicts || []).slice(0, 5).map((c) => c.message).join('\n');
+        await new Promise<void>((resolve, reject) => {
+          modal.confirm({
+            title: t('app.kuaizhizao.scheduling.msg.conflictTitle'),
+            content: (
+              <div>
+                <p>{t('app.kuaizhizao.scheduling.msg.conflictContent', { count: validation.conflict_count })}</p>
+                <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>{preview}</pre>
+              </div>
+            ),
+            okText: t('app.kuaizhizao.scheduling.msg.saveAnyway'),
+            cancelText: t('app.kuaizhizao.scheduling.common.cancel'),
+            onOk: async () => {
+              try {
+                await persistDraft();
+                resolve();
+              } catch (e) {
+                reject(e);
+              }
+            },
+            onCancel: () => reject(new Error('cancelled')),
+          });
+        });
+      }
       draftWoUpdatesRef.current.clear();
       draftOpUpdatesRef.current.clear();
+      draftStationUpdatesRef.current.clear();
       undoStackRef.current = [];
       syncDraftPendingCount();
       refreshGantt();
@@ -581,7 +709,16 @@ const SchedulingPage: React.FC = () => {
         refreshGantt();
       }
     }
-  }, [confirmAndPersist, messageApi, refreshGantt, syncDraftPendingCount, t]);
+  }, [
+    messageApi,
+    modal,
+    mutateGanttWorkOrders,
+    refreshBoardScan,
+    refreshGantt,
+    refreshPlanReliability,
+    syncDraftPendingCount,
+    t,
+  ]);
 
   const handleUndoDraft = useCallback(() => {
     const prev = undoStackRef.current.pop();
@@ -592,6 +729,7 @@ const SchedulingPage: React.FC = () => {
     mutateGanttWorkOrders(prev);
     draftWoUpdatesRef.current.clear();
     draftOpUpdatesRef.current.clear();
+    draftStationUpdatesRef.current.clear();
     syncDraftPendingCount();
     messageApi.success(t('app.kuaizhizao.scheduling.msg.undoSuccess'));
   }, [messageApi, mutateGanttWorkOrders, syncDraftPendingCount, t]);
@@ -1174,7 +1312,26 @@ const SchedulingPage: React.FC = () => {
 
   const columns: ProColumns<WorkOrderForGantt>[] = useMemo(
     () => [
-      { title: t('app.kuaizhizao.scheduling.col.workOrderCode'), dataIndex: 'code', width: 130, ellipsis: true, fixed: 'left' },
+      {
+        title: t('app.kuaizhizao.scheduling.col.workOrderCode'),
+        dataIndex: 'code',
+        width: 130,
+        ellipsis: true,
+        fixed: 'left',
+        render: (_: unknown, record) => {
+          const rank = aiSuggestedPoolRankById.get(record.id);
+          return (
+            <Space size={4}>
+              <span>{record.code}</span>
+              {rank != null ? (
+                <Tag color="processing" className="scheduling-pool-ai-rank">
+                  {t('app.kuaizhizao.scheduling.aiAssist.poolRank', { rank })}
+                </Tag>
+              ) : null}
+            </Space>
+          );
+        },
+      },
       {
         title: t('app.kuaizhizao.scheduling.col.operationCount'),
         width: 64,
@@ -1211,7 +1368,7 @@ const SchedulingPage: React.FC = () => {
         },
       },
       { title: t('app.kuaizhizao.scheduling.col.productName'), dataIndex: 'product_name', width: 120, ellipsis: true },
-      { title: t('app.kuaizhizao.scheduling.col.quantity'), dataIndex: 'quantity', width: 72, align: 'right' },
+      { title: t('app.kuaizhizao.scheduling.col.quantity'), dataIndex: 'quantity', width: 72, align: 'right' , render: formatQuantity },
       { title: t('app.kuaizhizao.scheduling.col.plannedStart'), dataIndex: 'planned_start_date', valueType: 'dateTime', width: 148 },
       { title: t('app.kuaizhizao.scheduling.col.plannedEnd'), dataIndex: 'planned_end_date', valueType: 'dateTime', width: 148 },
       {
@@ -1296,7 +1453,7 @@ const SchedulingPage: React.FC = () => {
         },
       },
     ],
-    [t, workOrderDiagnosticsById]
+    [aiSuggestedPoolRankById, t, workOrderDiagnosticsById]
   );
 
   const ganttToolbarNodes = buildSchedulingGanttToolbar({
@@ -1320,6 +1477,7 @@ const SchedulingPage: React.FC = () => {
           onOk: () => {
             draftWoUpdatesRef.current.clear();
             draftOpUpdatesRef.current.clear();
+            draftStationUpdatesRef.current.clear();
             undoStackRef.current = [];
             syncDraftPendingCount();
             setDraftMode(false);
@@ -1340,6 +1498,7 @@ const SchedulingPage: React.FC = () => {
     onShiftDaysChange: setShiftDays,
     onViewModeChange: setGanttViewMode,
     onScrollToToday: () => setScrollToTodayToken((n) => n + 1),
+    aiTrigger: <SchedulingAiAssistantTrigger onOpen={() => setAiDrawerOpen(true)} />,
   });
 
   return (
@@ -1481,7 +1640,7 @@ const SchedulingPage: React.FC = () => {
                   bordered
                   actionRef={actionRef}
                   rowKey="id"
-                  columns={columns}
+                  columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
                   showFuzzySearch={false}
                   showAdvancedSearch={false}
                   viewTypes={['table']}
@@ -1532,6 +1691,9 @@ const SchedulingPage: React.FC = () => {
                     if (canScheduleUpdate) classes.push('scheduling-pool-row--draggable');
                     if (workOrderDiagnosticsById.has(record.id)) {
                       classes.push('scheduling-pool-row--has-issues');
+                    }
+                    if (aiSuggestedPoolRankById.has(record.id)) {
+                      classes.push('scheduling-pool-row--ai-suggested');
                     }
                     const rate = record.readiness_rate;
                     if (rate != null && Number(rate) < 100 && schedulingConstraints.consider_material) {
@@ -1648,6 +1810,29 @@ const SchedulingPage: React.FC = () => {
           </Space>
         </div>
       </Modal>
+
+      <SchedulingAiAssistantDrawer
+        open={aiDrawerOpen}
+        onClose={() => setAiDrawerOpen(false)}
+        canUpdate={canScheduleUpdate}
+        context={{
+          poolWorkOrderIds,
+          selectedWorkOrderIds,
+          planDate: filterPlanDate,
+          boardScan,
+          workOrders: ganttWorkOrders,
+        }}
+        draftWoUpdatesRef={draftWoUpdatesRef}
+        draftOpUpdatesRef={draftOpUpdatesRef}
+        draftStationUpdatesRef={draftStationUpdatesRef}
+        mutateGanttWorkOrders={mutateGanttWorkOrders}
+        pushUndoSnapshot={pushUndoSnapshot}
+        syncDraftPendingCount={syncDraftPendingCount}
+        setDraftMode={setDraftMode}
+        onPoolReorder={handleAiPoolReorder}
+        onSelectSuggested={handleAiSelectSuggested}
+        onSelectOverdue={handleAiSelectOverdue}
+      />
     </ListPageTemplate>
   );
 };

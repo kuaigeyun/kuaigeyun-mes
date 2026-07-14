@@ -14,9 +14,11 @@ from apps.kuaizhizao.schemas.spare_part_requisition import (
     SparePartRequisitionLineInput,
     SparePartRequisitionUpdate,
 )
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.kuaizhizao.services.spare_part_service import SparePartService
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 async def _generate_requisition_no(tenant_id: int) -> str:
@@ -82,6 +84,7 @@ class SparePartRequisitionService:
         *,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> SparePartRequisition:
         if not data.lines:
             raise ValidationError("领用明细不能为空")
@@ -97,7 +100,7 @@ class SparePartRequisitionService:
 
         requisition_no = await _generate_requisition_no(tenant_id)
         async with in_transaction():
-            header = await SparePartRequisition.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 requisition_no=requisition_no,
                 equipment_id=equipment.id if equipment else None,
@@ -110,6 +113,8 @@ class SparePartRequisitionService:
                 remark=data.remark,
                 status="草稿",
             )
+            apply_create_audit(payload, current_user)
+            header = await SparePartRequisition.create(**payload)
             await self._replace_lines(tenant_id, header.id, data.lines)
         return header
 
@@ -178,6 +183,7 @@ class SparePartRequisitionService:
         tenant_id: int,
         row_id: int,
         data: SparePartRequisitionUpdate,
+        current_user: Optional[User] = None,
     ) -> SparePartRequisition:
         row = await self.get(tenant_id, row_id)
         if row.status != "草稿":
@@ -206,6 +212,7 @@ class SparePartRequisitionService:
             payload.pop("equipment_id", None)
         for k, v in payload.items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         if lines is not None:
             if not lines:
@@ -213,7 +220,12 @@ class SparePartRequisitionService:
             await self._replace_lines(tenant_id, row.id, lines)
         return row
 
-    async def submit(self, tenant_id: int, row_id: int) -> SparePartRequisition:
+    async def submit(
+        self,
+        tenant_id: int,
+        row_id: int,
+        current_user: Optional[User] = None,
+    ) -> SparePartRequisition:
         row = await self.get(tenant_id, row_id)
         if row.status != "草稿":
             raise ValidationError("仅草稿状态可提交")
@@ -221,6 +233,7 @@ class SparePartRequisitionService:
         if not lines:
             raise ValidationError("领用明细不能为空")
         row.status = "已提交"
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 

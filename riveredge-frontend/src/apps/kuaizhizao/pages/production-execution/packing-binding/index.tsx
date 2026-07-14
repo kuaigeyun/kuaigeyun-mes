@@ -1,4 +1,4 @@
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 /**
  * 装箱打包绑定管理页面
  *
@@ -19,6 +19,7 @@ import {
   ProDescriptionsItemProps,
   ProFormText,
   ProFormDigit,
+  ProFormSelect,
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import {
@@ -53,6 +54,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
 import { packingBindingApi } from '../../../services/packing-binding';
+import { warehouseApi } from '../../../services/production';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
@@ -66,6 +68,8 @@ import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 
 interface PackingBinding {
   id?: number;
@@ -117,6 +121,73 @@ interface PackingTaskPoolResult {
   pending_outbound: number;
   total: number;
   items: PackingTaskPoolItem[];
+}
+
+type PackingBindingSourceType = 'sales_delivery' | 'finished_goods_receipt';
+
+interface PackingBindingSourceItemOption {
+  key: string;
+  productId: number;
+  productCode?: string;
+  productName?: string;
+  productSerialNo?: string;
+  maxQuantity?: number;
+}
+
+const PACKING_QTY_KEYS = [
+  'pending_quantity',
+  'available_quantity',
+  'delivery_quantity',
+  'receipt_quantity',
+  'qualified_quantity',
+  'quantity',
+];
+
+function resolvePositiveNumber(value: unknown): number | undefined {
+  if (value == null || value === '') return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return n;
+}
+
+function isNotFoundError(error: any): boolean {
+  const status = Number(error?.response?.status ?? error?.status);
+  return status === 404;
+}
+
+function buildPackingSourceItemOptions(detail: Record<string, unknown> | undefined): PackingBindingSourceItemOption[] {
+  const lines = Array.isArray(detail?.items) ? (detail.items as Array<Record<string, unknown>>) : [];
+  return lines
+    .map((line, index) => {
+      const productId = Number(line.product_id ?? line.material_id ?? line.finished_product_id);
+      if (!Number.isFinite(productId) || productId <= 0) {
+        return null;
+      }
+      const productCode = typeof line.product_code === 'string'
+        ? line.product_code
+        : typeof line.material_code === 'string'
+          ? line.material_code
+          : undefined;
+      const productName = typeof line.product_name === 'string'
+        ? line.product_name
+        : typeof line.material_name === 'string'
+          ? line.material_name
+          : undefined;
+      const productSerialNo = typeof line.product_serial_no === 'string' ? line.product_serial_no : undefined;
+      const maxQuantity = PACKING_QTY_KEYS
+        .map((key) => resolvePositiveNumber(line[key]))
+        .find((value) => value != null);
+      const lineKey = String(line.id ?? `${productId}-${index}`);
+      return {
+        key: lineKey,
+        productId,
+        productCode,
+        productName,
+        productSerialNo,
+        maxQuantity,
+      } satisfies PackingBindingSourceItemOption;
+    })
+    .filter((option): option is PackingBindingSourceItemOption => option != null);
 }
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
@@ -206,6 +277,12 @@ const PackingBindingPage: React.FC = () => {
   const [statsVersion, setStatsVersion] = useState(0);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const formRef = useRef<any>(null);
+  const createFormRef = useRef<any>(null);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [createSourceType, setCreateSourceType] = useState<PackingBindingSourceType | null>(null);
+  const [createSourceId, setCreateSourceId] = useState<number | null>(null);
+  const [createSourceLoading, setCreateSourceLoading] = useState(false);
+  const [createSourceItems, setCreateSourceItems] = useState<PackingBindingSourceItemOption[]>([]);
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentBinding, setCurrentBinding] = useState<PackingBinding | null>(null);
@@ -264,6 +341,87 @@ const PackingBindingPage: React.FC = () => {
     }
   }, [getErrorMessage, messageApi]);
 
+  const closeCreateModal = useCallback(() => {
+    setCreateModalVisible(false);
+    setCreateSourceType(null);
+    setCreateSourceId(null);
+    setCreateSourceItems([]);
+    setCreateSourceLoading(false);
+    createFormRef.current?.resetFields();
+  }, []);
+
+  const handleSourceItemChange = useCallback((lineKey: string | undefined) => {
+    if (!lineKey) return;
+    const selected = createSourceItems.find((item) => item.key === lineKey);
+    if (!selected) return;
+    const nextValues: Record<string, unknown> = {
+      product_id: selected.productId,
+      product_code: selected.productCode,
+      product_name: selected.productName,
+      product_serial_no: selected.productSerialNo,
+    };
+    if (selected.maxQuantity != null) {
+      nextValues.packing_quantity = selected.maxQuantity;
+    }
+    createFormRef.current?.setFieldsValue(nextValues);
+  }, [createSourceItems]);
+
+  const openCreateFromSource = useCallback(async (sourceType: PackingBindingSourceType, sourceId: number) => {
+    if (!packingBindingPerms.canRead && !packingBindingPerms.canCreate) {
+      messageApi.error(t('app.kuaizhizao.packingBinding.noCreatePermission'));
+      return;
+    }
+    try {
+      const existing = sourceType === 'sales_delivery'
+        ? await packingBindingApi.getByDelivery(String(sourceId))
+        : await packingBindingApi.getByReceipt(String(sourceId));
+      if (existing?.id != null) {
+        await handleDetail(existing as PackingBinding);
+        return;
+      }
+    } catch (error: any) {
+      if (!isNotFoundError(error)) {
+        messageApi.error(getErrorMessage(error, 'app.kuaizhizao.packingBinding.loadSourceFailed'));
+        return;
+      }
+    }
+    if (!packingBindingPerms.canCreate) {
+      messageApi.error(t('app.kuaizhizao.packingBinding.noCreatePermission'));
+      return;
+    }
+    setCreateModalVisible(true);
+    setCreateSourceType(sourceType);
+    setCreateSourceId(sourceId);
+    setCreateSourceLoading(true);
+    try {
+      const detail = sourceType === 'sales_delivery'
+        ? await warehouseApi.salesDelivery.get(String(sourceId))
+        : await warehouseApi.finishedGoodsReceipt.get(String(sourceId));
+      const itemOptions = buildPackingSourceItemOptions(detail as Record<string, unknown> | undefined);
+      if (itemOptions.length === 0) {
+        messageApi.warning(t('app.kuaizhizao.packingBinding.noBindableItems'));
+        closeCreateModal();
+        return;
+      }
+      setCreateSourceItems(itemOptions);
+      const preferred = itemOptions[0];
+      createFormRef.current?.setFieldsValue({
+        source_item_key: preferred.key,
+        product_id: preferred.productId,
+        product_code: preferred.productCode,
+        product_name: preferred.productName,
+        product_serial_no: preferred.productSerialNo,
+        packing_quantity: preferred.maxQuantity ?? undefined,
+        binding_method: 'manual',
+      });
+    } catch (error: any) {
+      closeCreateModal();
+      messageApi.error(getErrorMessage(error, 'app.kuaizhizao.packingBinding.loadSourceFailed'));
+    } finally {
+      setCreateSourceLoading(false);
+    }
+  }, [closeCreateModal, getErrorMessage, handleDetail, messageApi, packingBindingPerms.canCreate, packingBindingPerms.canRead, t]);
+
   useEffect(() => {
     void refreshLocalStats();
   }, [statsVersion, refreshLocalStats]);
@@ -310,6 +468,77 @@ const PackingBindingPage: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (action !== 'bind') return;
+    const sourceTypeRaw = searchParams.get('source_type');
+    const sourceId = Number(searchParams.get('source_id'));
+    if (
+      (sourceTypeRaw === 'sales_delivery' || sourceTypeRaw === 'finished_goods_receipt')
+      && Number.isFinite(sourceId)
+      && sourceId > 0
+    ) {
+      void openCreateFromSource(sourceTypeRaw, sourceId);
+    } else {
+      messageApi.warning(t('app.kuaizhizao.packingBinding.invalidSourceParam'));
+    }
+    setSearchParams({}, { replace: true });
+  }, [messageApi, openCreateFromSource, searchParams, setSearchParams, t]);
+
+  const handleCreateSubmit = useCallback(async (values: Record<string, unknown>) => {
+    if (!createSourceType || createSourceId == null) {
+      messageApi.error(t('app.kuaizhizao.packingBinding.invalidSourceParam'));
+      return false;
+    }
+    const productId = Number(values.product_id);
+    if (!Number.isFinite(productId) || productId <= 0) {
+      messageApi.error(t('app.kuaizhizao.packingBinding.ruleSelectSourceItem'));
+      return false;
+    }
+    const payload = {
+      product_id: productId,
+      product_code: values.product_code,
+      product_name: values.product_name,
+      product_serial_no: values.product_serial_no,
+      packing_material_code: values.packing_material_code,
+      packing_material_name: values.packing_material_name,
+      packing_quantity: values.packing_quantity,
+      box_no: values.box_no,
+      binding_method: values.binding_method,
+      barcode: values.barcode,
+      remarks: values.remarks,
+    };
+    try {
+      if (createSourceType === 'sales_delivery') {
+        await packingBindingApi.createFromDelivery(String(createSourceId), payload);
+      } else {
+        await packingBindingApi.createFromReceipt(String(createSourceId), payload);
+      }
+      messageApi.success(t('app.kuaizhizao.packingBinding.createSuccess'));
+      closeCreateModal();
+      setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      if (taskPoolVisible) {
+        await openTaskPool();
+      }
+      return true;
+    } catch (error: any) {
+      messageApi.error(getErrorMessage(error, 'app.kuaizhizao.packingBinding.createFailed'));
+      return false;
+    }
+  }, [
+    closeCreateModal,
+    createSourceId,
+    createSourceType,
+    getErrorMessage,
+    invalidateMenuBadgeCounts,
+    messageApi,
+    openTaskPool,
+    t,
+    taskPoolVisible,
+  ]);
 
   const handleBatchGenerateQRCode = async () => {
     if (selectedRowKeys.length === 0) {
@@ -593,7 +822,7 @@ const PackingBindingPage: React.FC = () => {
   const packingBindingSourceValueEnum = useMemo(() => buildPackingBindingSourceValueEnum(t), [t]);
 
   const columns: ProColumns<PackingBinding>[] = useMemo(
-    () => [
+    () => alignProColumns<PackingBinding>([
       {
         title: t('app.kuaizhizao.packingBinding.colBoundAt'),
         dataIndex: 'bound_at_range',
@@ -720,18 +949,7 @@ const PackingBindingPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => (r.bound_at ? formatDateTime(r.bound_at, 'YYYY-MM-DD HH:mm') : '-'),
       },
-      {
-        title: t('app.kuaizhizao.packingBinding.colUpdatedAt'),
-        dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, r) => {
-          const d = r.updated_at;
-          return d ? formatDateTime(d, 'YYYY-MM-DD HH:mm') : '-';
-        },
-      },
+      ...buildDocumentAuditColumns<PackingBinding>(t),
       {
         title: t('app.kuaizhizao.packingBinding.colLifecycle'),
         dataIndex: 'lifecycle_stage',
@@ -761,7 +979,7 @@ const PackingBindingPage: React.FC = () => {
         render: (_, record) =>
           renderPbRowActions(renderPbRowActionNodes(record), `pb-${record.id ?? 'row'}`),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [bindingMethodTag, getBindingSourceLabel, packingBindingMethodValueEnum, packingBindingSourceValueEnum, renderPbRowActionNodes, t],
   );
 
@@ -880,8 +1098,26 @@ const PackingBindingPage: React.FC = () => {
         dataIndex: 'updated_at',
         render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
+      {
+        title: t('common.actions'),
+        dataIndex: 'actions',
+        width: 120,
+        fixed: 'right' as const,
+        render: (_: unknown, row: PackingTaskPoolItem) => (
+          <Button
+            {...rowActionKind('execute')}
+            {...rowActionLabelKeep()}
+            type="link"
+            size="small"
+            disabled={!packingBindingPerms.canCreate}
+            onClick={() => void openCreateFromSource('sales_delivery', row.id)}
+          >
+            {t('app.kuaizhizao.packingBinding.actionGoBind')}
+          </Button>
+        ),
+      },
     ],
-    [t],
+    [openCreateFromSource, packingBindingPerms.canCreate, t],
   );
 
   return (
@@ -940,6 +1176,82 @@ const PackingBindingPage: React.FC = () => {
           })}
         />
       </ListPageTemplate>
+
+      <FormModalTemplate
+        title={t('app.kuaizhizao.packingBinding.createTitle')}
+        open={createModalVisible}
+        onClose={closeCreateModal}
+        onFinish={handleCreateSubmit}
+        formRef={createFormRef}
+        {...MODAL_CONFIG}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={t('app.kuaizhizao.packingBinding.sourceHint', {
+            source: createSourceType === 'sales_delivery'
+              ? t('app.kuaizhizao.packingBinding.sourceSalesDelivery')
+              : t('app.kuaizhizao.packingBinding.sourceFinishedGoodsReceipt'),
+            id: createSourceId ?? '-',
+          })}
+        />
+        <ProFormSelect
+          name="source_item_key"
+          label={t('app.kuaizhizao.packingBinding.fieldSourceItem')}
+          placeholder={t('app.kuaizhizao.packingBinding.placeholderSourceItem')}
+          rules={[{ required: true, message: t('app.kuaizhizao.packingBinding.ruleSelectSourceItem') }]}
+          options={createSourceItems.map((item) => ({
+            label: item.maxQuantity != null
+              ? `${item.productCode || '-'} / ${item.productName || '-'}（${t('app.kuaizhizao.packingBinding.fieldPackingQty')} ${item.maxQuantity}）`
+              : `${item.productCode || '-'} / ${item.productName || '-'}`,
+            value: item.key,
+          }))}
+          fieldProps={{
+            showSearch: true,
+            onChange: (value) => handleSourceItemChange(value as string),
+          }}
+        />
+        <ProFormText
+          name="product_code"
+          label={t('app.kuaizhizao.packingBinding.colProductCode')}
+          fieldProps={{ readOnly: true }}
+        />
+        <ProFormText
+          name="product_name"
+          label={t('app.kuaizhizao.packingBinding.colProductName')}
+          fieldProps={{ readOnly: true }}
+        />
+        <ProFormText name="product_serial_no" label={t('app.kuaizhizao.packingBinding.colProductSerialNo')} />
+        <ProFormText name="packing_material_code" label={t('app.kuaizhizao.packingBinding.colPackingMaterialCode')} />
+        <ProFormText name="packing_material_name" label={t('app.kuaizhizao.packingBinding.colPackingMaterialName')} />
+        <ProFormDigit
+          name="packing_quantity"
+          label={t('app.kuaizhizao.packingBinding.fieldPackingQty')}
+          placeholder={t('app.kuaizhizao.packingBinding.placeholderPackingQty')}
+          rules={[{ required: true, message: t('app.kuaizhizao.packingBinding.ruleEnterPackingQty') }]}
+          min={0.000001}
+          fieldProps={{ precision: 6 }}
+        />
+        <ProFormText name="box_no" label={t('app.kuaizhizao.packingBinding.fieldBoxNo')} />
+        <ProFormSelect
+          name="binding_method"
+          label={t('app.kuaizhizao.packingBinding.colBindingMethod')}
+          initialValue="manual"
+          options={[
+            { label: t('app.kuaizhizao.packingBinding.bindingMethodManual'), value: 'manual' },
+            { label: t('app.kuaizhizao.packingBinding.bindingMethodScan'), value: 'scan' },
+          ]}
+        />
+        <ProFormText name="barcode" label={t('app.kuaizhizao.packingBinding.colBarcode')} />
+        <ProFormTextArea
+          name="remarks"
+          label={t('app.kuaizhizao.common.fieldNotes')}
+          placeholder={t('app.kuaizhizao.packingBinding.placeholderRemarks')}
+          fieldProps={{ rows: 3 }}
+        />
+        <ProFormText name="product_id" hidden />
+      </FormModalTemplate>
 
       <FormModalTemplate
         title={t('app.kuaizhizao.packingBinding.editTitle')}

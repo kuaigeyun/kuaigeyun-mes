@@ -6,6 +6,7 @@ import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
+import { formatQuantity } from '../../../../../utils/format';
 
 const MaterialSalesSummary: React.FC = () => {
   const { t } = useTranslation();
@@ -34,9 +35,10 @@ const MaterialSalesSummary: React.FC = () => {
     {
       title: t('app.kuaizhizao.reports.totalQuantity'),
       dataIndex: 'total_quantity',
-      valueType: 'digit',
       width: 120,
       hideInSearch: true,
+      align: 'right',
+      render: formatQuantity,
     },
     {
       title: t('app.kuaizhizao.reports.totalAmount'),

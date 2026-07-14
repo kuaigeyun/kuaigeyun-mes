@@ -97,6 +97,12 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
                 "plan_code": plan_code,
                 "uuid": str(uuid.uuid4()),
             })
+            if created_by is not None:
+                user_info = await self.get_user_info(created_by)
+                plan_dict["created_by"] = created_by
+                plan_dict["created_by_name"] = user_info["name"]
+                plan_dict["updated_by"] = created_by
+                plan_dict["updated_by_name"] = user_info["name"]
             plan = await InspectionPlan.create(**plan_dict)
 
             if plan_data.steps:
@@ -212,6 +218,10 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
             update_dict = plan_data.model_dump(exclude_unset=True, exclude={"steps"})
             for key, value in update_dict.items():
                 setattr(plan, key, value)
+            if updated_by is not None:
+                user_info = await self.get_user_info(updated_by)
+                plan.updated_by = updated_by
+                plan.updated_by_name = user_info["name"]
             await plan.save()
 
             if plan_data.steps is not None:

@@ -141,6 +141,8 @@ class PartnerPriceBookResponse(BaseModel):
     is_active: bool = Field(True, alias="isActive")
     created_at: datetime = Field(..., alias="createdAt")
     updated_at: datetime = Field(..., alias="updatedAt")
+    created_by_name: Optional[str] = Field(None, alias="createdByName")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName")
 
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 

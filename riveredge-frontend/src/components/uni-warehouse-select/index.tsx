@@ -83,7 +83,9 @@ export const UniWarehouseSelect: React.FC<UniWarehouseSelectProps> = ({
 
   const handleChange = (val: number, _option: any) => {
     if (onChange) {
-      const selected = data.find((w) => w.id === val || w.uuid === val?.toString());
+      const selected = data.find(
+        (w) => Number(w.id) === Number(val) || w.uuid === val?.toString(),
+      );
       onChange(val, selected);
     }
   };

@@ -90,7 +90,7 @@ import {
   QuestionCircleOutlined,
 } from '@ant-design/icons'
 import { UniTable } from '../../../../../components/uni-table'
-import { UniBatchButton, UniBatchMenuButton } from '../../../../../components/uni-batch'
+import { UniBatchButton, UniBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch'
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -99,6 +99,7 @@ import { useUserPreferenceStore } from '../../../../../stores/userPreferenceStor
 import { useConfigStore } from '../../../../../stores/configStore'
 import {
   fetchWorkOrderListForTable,
+  hydrateDefaultWorkOrderListPageFromSession,
   prefetchDefaultWorkOrderList,
   resolveDissolvableWorkOrderGroupIdsFromRowKeys,
   resolveMergeableWorkOrderIdsFromRowKeys,
@@ -220,7 +221,9 @@ const LazyWorkOrderPeerGroupCreateDetail = lazy(
 import { EMPTY_PEER_GROUP_ITEM } from './components/WorkOrderPeerGroupCreateDetail'
 import { buildOperationsForCreatePayload } from './workOrderCreateOperations'
 const LazyWorkOrderOperationsList = lazy(() => import('./components/WorkOrderDetailDndOperations'))
-import { WorkOrderReadinessPopover } from './components/WorkOrderReadinessPopover'
+const LazyWorkOrderReadinessPopover = lazy(() =>
+  import('./components/WorkOrderReadinessPopover').then((m) => ({ default: m.WorkOrderReadinessPopover })),
+)
 import { WorkOrderOperationStepsStrip } from './components/WorkOrderOperationStepsStrip'
 import WorkOrderTrackingFields from './components/WorkOrderTrackingFields'
 import WorkOrderTrackingEditFields from './components/WorkOrderTrackingEditFields'
@@ -241,11 +244,15 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle'
 import {
   formatOperationInspectionSummary,
   buildProcessInspectionPageUrl,
+  getOperationCardPhase,
   getOperationInspectionMode,
+  getOperationProgressPercent,
+  getOperationQualityMetrics,
   getProcessInspectionCardStatus,
   getProcessInspectionStatusTagColor,
   getRemainingReportableQuantity,
   getStatusReportingCompleteQuantity,
+  isOperationEffectivelyCompleted,
   isReportBlockedByUpstreamQc,
 } from '../../../utils/workOrderReporting'
 import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel'
@@ -265,7 +272,9 @@ import { UniUserSelect } from '../../../../../components/uni-user-select'
 
 /** 列表行展开工序：TanStack 缓存键前缀（与派工/开工后 invalidate 一致） */
 const WORK_ORDER_ROW_EXPAND_QK = 'workOrderRowExpand' as const
-const WORK_ORDER_ROW_EXPAND_STALE_MS = 0
+const WORK_ORDER_ROW_EXPAND_STALE_MS = 45_000
+const WORK_ORDER_STATISTICS_STALE_MS = 60_000
+const WORK_ORDER_EXECUTION_CONFIG_STALE_MS = 5 * 60_000
 import { getFileDownloadUrl } from '../../../../../services/file'
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField'
 import { batchImport } from '../../../../../utils/batchOperations'
@@ -274,8 +283,11 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate'
-import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format'
+import { formatDateTime, formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format'
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate'
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns'
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar'
+import { resolveDownstreamPushPercent } from '../../sales-management/shared/pushProgress'
 
 const toApiDateTimeString = (value: any): string | undefined => {
   if (!value) return undefined
@@ -433,6 +445,8 @@ interface WorkOrder {
   }>
   created_at?: string
   updated_at?: string
+  created_by_name?: string
+  updated_by_name?: string
   /** 制造模式定义在物料档案；工单以 product_id 关联「本单制造的产品物料」，接口从该物料 source_config 带出（fabrication / assembly） */
   manufacturing_mode?: 'fabrication' | 'assembly'
   /** 齐套率 (%) */
@@ -473,6 +487,7 @@ interface WorkOrder {
   batch_rule_id?: number | null
   serial_rule_id?: number | null
   serial_split_child_count?: number | null
+  downstream_push_progress?: number
   capabilities?: {
     release?: { allowed: boolean; reason?: string | null }
     freeze?: { allowed: boolean; reason?: string | null }
@@ -815,19 +830,17 @@ function renderWorkOrderPriorityTag(
 }
 
 function formatWorkOrderListQuantity(record: WorkOrder): string {
-  const qty = Number(record.quantity)
-  if (!Number.isFinite(qty)) return '-'
-  const formatNum = (value: number) => (value % 1 === 0 ? String(value) : value.toFixed(2))
+  const qtyLabel = formatQuantity(record.quantity)
   const isSplitParent =
     (record.row_kind || 'work_order') === 'work_order' &&
     ['split', '已拆分'].includes(record.status || '')
   if (isSplitParent && record.split_remaining_quantity != null) {
-    const remaining = Number(record.split_remaining_quantity)
-    if (Number.isFinite(remaining)) {
-      return `${formatNum(qty)}(${formatNum(remaining)})`
+    const remainingLabel = formatQuantity(record.split_remaining_quantity)
+    if (remainingLabel !== '—') {
+      return `${qtyLabel}(${remainingLabel})`
     }
   }
-  return formatNum(qty)
+  return qtyLabel
 }
 
 function isSplitParentWorkOrder(record: WorkOrder): boolean {
@@ -1225,6 +1238,8 @@ function WorkOrderPlannedRangeCell({ record }: { record: WorkOrder }) {
     <UniTableStackedPrimaryCell
       primary={formatDateTimeBySiteSetting(record.planned_start_date)}
       secondary={formatDateTimeBySiteSetting(record.planned_end_date)}
+      primaryBadge={t('common.start')}
+      secondaryBadge={t('common.end')}
       secondaryExtra={
         overdue ? (
           <Tag color="error" style={secondaryTagStyle}>
@@ -1367,15 +1382,20 @@ const WorkOrdersPage: React.FC = () => {
   const { data: statistics } = useQuery({
     queryKey: ['workOrderStatistics'],
     queryFn: getWorkOrderStatistics,
-    staleTime: 0, // 统计与列表均实时拉取
+    staleTime: WORK_ORDER_STATISTICS_STALE_MS,
   })
   const { data: executionConfig } = useQuery({
     queryKey: ['workOrderExecutionConfig'],
     queryFn: () => workOrderApi.getExecutionConfig(),
-    staleTime: 0,
+    staleTime: WORK_ORDER_EXECUTION_CONFIG_STALE_MS,
   })
 
   useEffect(() => {
+    hydrateDefaultWorkOrderListPageFromSession(
+      queryClient,
+      workOrderListDefaultPageSize,
+      WORK_ORDER_LIST_STALE_MS,
+    )
     prefetchDefaultWorkOrderList(queryClient, workOrderListDefaultPageSize)
   }, [queryClient, workOrderListDefaultPageSize])
 
@@ -1436,12 +1456,6 @@ const WorkOrdersPage: React.FC = () => {
     loadFieldValuesForDetail: loadWorkOrderFieldValuesForDetail,
     resetDetailFieldValues: resetWorkOrderDetailFieldValues,
   } = useCustomFieldsForList<WorkOrder>({ tableName: WORK_ORDER_CUSTOM_FIELD_TABLE })
-
-  useEffect(() => {
-    if (workOrderListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200)
-    }
-  }, [workOrderListCustomFields.length])
 
   const handleWorkOrderTableRequest = useCallback(
     async (params: any, sort: any, _filter: any, searchFormValues: any) => {
@@ -1894,6 +1908,8 @@ const WorkOrdersPage: React.FC = () => {
   // 行展开相关状态
   const [operationExpandedRowKeys, setOperationExpandedRowKeys] = useState<React.Key[]>([])
   const [workOrderTreeExpandedRowKeys, setWorkOrderTreeExpandedRowKeys] = useState<React.Key[]>([])
+  const operationExpandedRowKeysRef = useRef(operationExpandedRowKeys)
+  operationExpandedRowKeysRef.current = operationExpandedRowKeys
   const [expandedOperationsMap, setExpandedOperationsMap] = useState<Record<number, any[]>>({})
   const [expandedWorkOrderDetailMap, setExpandedWorkOrderDetailMap] = useState<Record<number, WorkOrder>>({})
   const [loadingOperationsMap, setLoadingOperationsMap] = useState<Record<number, boolean>>({})
@@ -3008,7 +3024,7 @@ const WorkOrdersPage: React.FC = () => {
       messageApi.warning('已拆分主工单不可报工，请将剩余数量拆分为子工单后执行')
       return
     }
-    if (operation.status === 'completed') {
+    if (isOperationEffectivelyCompleted(operation, Number(workOrder.quantity) || 0)) {
       messageApi.info('该工序已完成')
       return
     }
@@ -3203,18 +3219,10 @@ const WorkOrdersPage: React.FC = () => {
   }
 
   /**
-   * 计算工序进度百分比
+   * 计算工序进度百分比（方案质检按检验合格数）
    */
   const calculateProgress = (operation: any, workOrder: WorkOrder) => {
-    if (operation.reporting_type === 'status') {
-      // 按状态报工：已完成返回100%，未完成返回0%
-      return operation.status === 'completed' ? 100 : 0
-    } else {
-      // 按数量报工：合格数量 / 计划数量
-      const qualified = Number(operation.qualified_quantity || 0)
-      const planned = Number(workOrder.quantity || 1)
-      return Math.min(Math.round((qualified / planned) * 100), 100)
-    }
+    return getOperationProgressPercent(operation, Number(workOrder.quantity || 0))
   }
 
   /**
@@ -3234,24 +3242,6 @@ const WorkOrdersPage: React.FC = () => {
   }
 
   /**
-   * 处理打印
-   */
-  const handlePrint = (record: WorkOrder) => {
-    if (!record.id) return
-    openPrint({ documentType: 'work_order', documentId: record.id })
-  }
-
-  /**
-   * 计算合格率
-   */
-  const calculateQualifiedRate = (operation: any) => {
-    const qualified = Number(operation.qualified_quantity || 0)
-    const completed = Number(operation.completed_quantity || 0)
-    if (completed === 0) return 0
-    return Math.round((qualified / completed) * 100)
-  }
-
-  /**
    * 渲染工序卡片（人机料法，按制造模式区分展示）
    */
   const renderOperationCard = (
@@ -3262,14 +3252,12 @@ const WorkOrdersPage: React.FC = () => {
     manufacturingMode: 'fabrication' | 'assembly' = 'fabrication'
   ) => {
     const progress = calculateProgress(operation, workOrder)
-    const qualifiedRate = calculateQualifiedRate(operation)
+    const qualityMetrics = getOperationQualityMetrics(operation)
+    const qualifiedRate = qualityMetrics.rate
     const plannedQty = Number(workOrder.quantity || 0)
-    const qualifiedQty = Number(operation.qualified_quantity || 0)
-    const isEffectivelyCompleted =
-      operation.status === 'completed' ||
-      (plannedQty > 0 && qualifiedQty >= plannedQty)
-    const isCompleted = isEffectivelyCompleted
-    const isInProgress = !isCompleted && operation.status === 'in_progress'
+    const phase = getOperationCardPhase(operation, plannedQty)
+    const isCompleted = phase === 'completed'
+    const isInProgress = phase === 'in_progress'
     const isOutsourced = Boolean(
       operation.is_outsourced ||
         operation.isOutsourced ||
@@ -3282,7 +3270,7 @@ const WorkOrdersPage: React.FC = () => {
         ? outsourceTheme.accent
         : getProgressColor(
             isCompleted ? { ...operation, status: 'completed' } : operation,
-            qualifiedRate,
+            qualifiedRate ?? progress,
           )
     const themeAccent = isCompleted
       ? token.colorSuccess
@@ -3423,16 +3411,20 @@ const WorkOrdersPage: React.FC = () => {
               {/* 右侧：完成/合格/合格率文字 */}
               <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: token.colorTextSecondary, lineHeight: 1.5 }}>
                 {operation.reporting_type === 'status' ? (
-                  <div style={{ whiteSpace: 'nowrap' }}>状态：{operation.status === 'completed' ? '已完成' : '未完成'}</div>
+                  <div style={{ whiteSpace: 'nowrap' }}>状态：{isCompleted ? '已完成' : '未完成'}</div>
                 ) : (
                   <>
-                    <div style={{ whiteSpace: 'nowrap' }}>完成: {Number(operation.completed_quantity || 0)} / {Number(workOrder.quantity || 0)}</div>
-                    <div style={{ whiteSpace: 'nowrap' }}>合格: {Number(operation.qualified_quantity || 0)} / 不合格: {Number(operation.unqualified_quantity || 0)}</div>
+                    <div style={{ whiteSpace: 'nowrap' }}>
+                      完成: {qualityMetrics.fromInspection ? qualityMetrics.qualified : Number(operation.completed_quantity || 0)} / {Number(workOrder.quantity || 0)}
+                    </div>
+                    <div style={{ whiteSpace: 'nowrap' }}>
+                      合格: {qualityMetrics.qualified} / 不合格: {qualityMetrics.unqualified}
+                    </div>
                     <div
                       style={{
                         whiteSpace: 'nowrap',
                         color:
-                          operation.completed_quantity > 0
+                          qualifiedRate != null
                             ? qualifiedRate >= 95
                               ? token.colorSuccess
                               : qualifiedRate >= 80
@@ -3441,7 +3433,7 @@ const WorkOrdersPage: React.FC = () => {
                             : token.colorTextTertiary,
                       }}
                     >
-                      合格率: {operation.completed_quantity > 0 ? `${qualifiedRate}%` : '-'}
+                      合格率: {qualifiedRate != null ? `${qualifiedRate}%` : '-'}
                     </div>
                   </>
                 )}
@@ -3707,7 +3699,7 @@ const WorkOrdersPage: React.FC = () => {
               }}
             >
               {operation.status === 'pending' && <PlayCircleOutlined style={{ marginRight: 4, fontSize: 13 }} />}
-              {operation.status === 'pending' ? '开始' : isInProgress ? '进行中' : '已完成'}
+              {isCompleted ? '已完成' : isInProgress ? '进行中' : operation.status === 'pending' ? '开始' : '待开始'}
             </div>
           </div>
         </div>
@@ -5867,10 +5859,7 @@ const WorkOrdersPage: React.FC = () => {
         key: 'quantity',
         width: 100,
         align: 'right' as const,
-        render: (_: any, record: any) => {
-          const n = Number(record.quantity)
-          return Number.isNaN(n) ? '-' : (n % 1 === 0 ? n : n.toFixed(2))
-        },
+        render: (_: any, record: any) => formatQuantity(record.quantity),
       },
       {
         title: t('app.kuaizhizao.workOrder.colMode'),
@@ -5997,10 +5986,7 @@ const WorkOrdersPage: React.FC = () => {
         key: 'quantity',
         width: 100,
         align: 'right' as const,
-        render: (_: any, record: any) => {
-          const n = Number(record.quantity)
-          return Number.isNaN(n) ? '-' : (n % 1 === 0 ? n : n.toFixed(2))
-        },
+        render: (_: any, record: any) => formatQuantity(record.quantity),
       },
       {
         title: t('app.kuaizhizao.workOrder.colMode'),
@@ -6236,9 +6222,11 @@ const WorkOrdersPage: React.FC = () => {
         }
         if (wid == null) return inner
         return (
-          <WorkOrderReadinessPopover workOrderId={wid} workOrderCode={record.code}>
-            {inner}
-          </WorkOrderReadinessPopover>
+          <Suspense fallback={inner}>
+            <LazyWorkOrderReadinessPopover workOrderId={wid} workOrderCode={record.code}>
+              {inner}
+            </LazyWorkOrderReadinessPopover>
+          </Suspense>
         )
       },
       fieldProps: {
@@ -6267,7 +6255,7 @@ const WorkOrdersPage: React.FC = () => {
         const steps = resolveWorkOrderOperationSteps(record, workOrderRowByKeyRef.current)
         const expandable = canExpandWorkOrderOperationPanel(record)
         const rowKey = getWorkOrderListRowKey(record)
-        const expanded = operationExpandedRowKeys.includes(rowKey)
+        const expanded = operationExpandedRowKeysRef.current.includes(rowKey)
         const inner = steps?.length ? (
           <WorkOrderOperationStepsStrip steps={steps} />
         ) : (
@@ -6373,14 +6361,24 @@ const WorkOrdersPage: React.FC = () => {
       formItemProps: formDateRangeFormItemProps,
     },
     {
-      title: t('app.kuaizhizao.workOrder.colCreatedAt'),
-      dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 132,
+      title: t('app.kuaizhizao.workOrder.colCompletionProgress'),
+      dataIndex: 'downstream_push_progress',
+      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
       uniTableKeepWidth: true,
-      hideInTable: true,
-      sorter: true,
+      hideInSearch: true,
+      render: (_, record) => {
+        const percent = resolveDownstreamPushPercent(record.downstream_push_progress)
+        return (
+          <DocumentPushProgressBar
+            percent={percent}
+            tooltip={t('app.kuaizhizao.workOrder.completionProgressTooltip', {
+              percent: Math.round(percent),
+            })}
+          />
+        )
+      },
     },
+    ...buildDocumentAuditColumns<WorkOrder>(t),
     {
       title: t('app.kuaizhizao.workOrder.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
@@ -6488,10 +6486,6 @@ const WorkOrdersPage: React.FC = () => {
           },
         })
 
-        const viewEditItems = [
-          makeItem('print', t('app.kuaizhizao.workOrder.actionPrint'), () => handlePrint(record), { icon: <PrinterOutlined /> }),
-        ]
-
         const derivedItems: any[] = []
         if (!isTerminal) {
           derivedItems.push(
@@ -6560,9 +6554,6 @@ const WorkOrdersPage: React.FC = () => {
         ]
 
         const moreItems: any[] = []
-        if (viewEditItems.length) {
-          moreItems.push({ type: 'group', label: t('app.kuaizhizao.workOrder.groupViewEdit'), children: viewEditItems })
-        }
         if (derivedItems.length) {
           moreItems.push({ type: 'group', label: t('app.kuaizhizao.workOrder.groupDerived'), children: derivedItems })
         }
@@ -6623,7 +6614,7 @@ const WorkOrdersPage: React.FC = () => {
         )
       },
     },
-  ], [t, dissolveGroupLoading, workOrderCustomFieldColumns, operationExpandedRowKeys, workOrderTreeExpandedRowKeys, workOrderLifecycleValueEnum])
+  ], [t, dissolveGroupLoading, workOrderCustomFieldColumns, workOrderLifecycleValueEnum])
 
   const workOrderTableBodyColSpan = useMemo(() => {
     const visibleDataCols = columns.filter((col) => !col.hideInTable).length
@@ -6914,7 +6905,7 @@ const WorkOrdersPage: React.FC = () => {
             staleTime: WORK_ORDER_LIST_STALE_MS,
             gcTime: 15 * 60 * 1000,
             prefetchNextPage: true,
-            staleWhileRevalidate: false,
+            staleWhileRevalidate: true,
           }}
           request={handleWorkOrderTableRequest}
           postData={syncWorkOrderListRowIndexFromTableData}
@@ -6941,7 +6932,7 @@ const WorkOrdersPage: React.FC = () => {
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const response = await workOrderApi.list({ skip: 0, limit: 10000, include_readiness: true })
+              const response = await workOrderApi.list({ skip: 0, limit: 10000, include_readiness: false })
               let items = Array.isArray(response) ? response : (response as any)?.data || (response as any)?.items || []
               if (type === 'currentPage' && pageData?.length) {
                 items = pageData
@@ -7010,6 +7001,34 @@ const WorkOrdersPage: React.FC = () => {
             >
               {t('app.kuaizhizao.workOrder.actionSmartRelease')}
             </Button>,
+            ...(workOrderPerms.canPrint
+              ? [
+                  <UniCapabilityBatchButton
+                    key="work-order-print"
+                    selectedRowKeys={selectedRowKeys}
+                    selectedRecords={selectedWorkOrdersForBatch}
+                    capabilityKey="print"
+                    permAllowed={workOrderPerms.canPrint}
+                    batchAllowed={(records, perm) => workOrderBatchPrintAllowed(records, perm)}
+                    singleOnly
+                    resolveId={(key) =>
+                      resolveWorkOrderIdsFromListRowKeys(
+                        [key],
+                        workOrderRowByKeyRef.current,
+                      )[0] ?? null
+                    }
+                    onRun={async (id) => {
+                      openPrint({ documentType: 'work_order', documentId: id })
+                    }}
+                    labels={{
+                      single: t('components.uniAction.print'),
+                      batch: t('components.uniAction.print'),
+                    }}
+                    icon={<PrinterOutlined />}
+                    size="middle"
+                  />,
+                ]
+              : []),
           ]}
           onDelete={handleDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.workOrder.msgConfirmDeleteCount', { count })}
@@ -7225,9 +7244,9 @@ const WorkOrdersPage: React.FC = () => {
                             ? t('app.kuaizhizao.workOrder.computationPullPreviewTargetOutsource')
                             : t('app.kuaizhizao.workOrder.computationPullPreviewTargetWorkOrder'),
                       },
-                      { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                      { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                      { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                      { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                      { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                      { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                     ]}
                   />
                 ) : (
@@ -7367,9 +7386,9 @@ const WorkOrdersPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                   {
                     title: t('app.kuaizhizao.salesOrder.productionLine'),
                     width: 170,
@@ -7522,9 +7541,9 @@ const WorkOrdersPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                 ]}
               />
             ) : (
@@ -8931,9 +8950,9 @@ const WorkOrdersPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                 ]}
               />
             ) : (

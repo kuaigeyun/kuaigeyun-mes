@@ -28,7 +28,9 @@ import { ListPageTemplate, type StatCard } from '../../../../../components/layou
 import { getUnifiedInvoiceLifecycle } from '../../../utils/financeLifecycle';
 import { buildUnifiedInvoiceStatusEnum } from '../../../utils/financeSharedOptions';
 import dayjs from 'dayjs';
-import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { financeDocCreatedUpdatedColumns } from '../../../utils/financeListCore';
+import { parseSalesReportDateRange } from '../../../../kuaizhizao/services/reports';
 
 const P = 'app.kuaicaiwu.invoice';
 
@@ -157,13 +159,7 @@ const InvoiceList: React.FC = () => {
         hideInTable: true,
         valueEnum: buildUnifiedInvoiceStatusEnum(t),
       },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        width: 168,
-        hideInSearch: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-      },
+      ...financeDocCreatedUpdatedColumns<Invoice>(t),
       {
         title: t('app.kuaicaiwu.common.lifecycle'),
         dataIndex: 'lifecycle_stage',
@@ -318,17 +314,30 @@ const InvoiceList: React.FC = () => {
         onDelete={handleBatchDelete}
         deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
         deleteConfirmDescription={(count) => t(`${P}.batchDeleteConfirm`, { count })}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           const { current, pageSize, ...rest } = params;
+          const s = (searchFormValues ?? {}) as Record<string, unknown>;
+          const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+            'created_at_range',
+            'createdAtRange',
+          ]);
+          const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+            'updated_at_range',
+            'updatedAtRange',
+          ]);
           const res = await invoiceService.listInvoices({
             skip: ((current || 1) - 1) * (pageSize || 20),
             limit: pageSize || 20,
             category: activeTabKey === 'all' ? undefined : activeTabKey as 'IN' | 'OUT',
+            created_start_date,
+            created_end_date,
+            updated_start_date,
+            updated_end_date,
             ...rest,
           });
           return { data: res.items, total: res.total, success: true };
         }}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         showImportButton
         onImport={async (data) => {
           if (!data || data.length < 2) {

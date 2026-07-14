@@ -15,6 +15,7 @@ import {
   resolveSpcSampleListParams,
 } from '../../../utils/qualityImprovementListCore';
 import SpcImrChart from './SpcImrChart';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 
 const SPC_RESOURCE = 'kuaizhizao:quality-management-spc-monitor';
 
@@ -165,7 +166,7 @@ const SPCMonitorPage: React.FC = () => {
                 headerTitle={t('app.kuaizhizao.quality.spc.pageTitle')}
                 actionRef={actionRef}
                 rowKey="id"
-                columns={columns}
+                columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
                 showAdvancedSearch
                 skipFuzzyPinyinClientFilter
                 columnPersistenceId="apps.kuaizhizao.pages.quality-management.spc-monitor"

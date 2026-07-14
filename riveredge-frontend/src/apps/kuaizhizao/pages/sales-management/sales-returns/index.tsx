@@ -58,12 +58,14 @@ import dayjs from 'dayjs';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getSalesReturnLifecycle, buildSalesReturnLifecycleValueEnum, resolveSalesReturnListLifecycleParams } from '../../../utils/salesReturnLifecycle';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { isManualAuditEnabled } from '../../../../../utils/auditMode';
 import { listSalesOrders } from '../../../services/sales-order';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   DocumentTrackingTimelineBody,
   useDocumentTracking,
@@ -80,7 +82,7 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
@@ -390,7 +392,7 @@ const SalesReturnsPage: React.FC = () => {
   const salesReturnCustomFieldColumns = generateSalesReturnCustomFieldColumns();
 
   const columns: ProColumns<SalesReturn>[] = useMemo(
-    () => [
+    () => alignProColumns<SalesReturn>([
     {
       title: t('app.kuaizhizao.salesReturn.colCustomerReturnCode'),
       key: 'return_code',
@@ -438,8 +440,9 @@ const SalesReturnsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesReturn.colWarehouse'),
       dataIndex: 'warehouse_name',
-      width: 120,
+      width: 140,
       ellipsis: true,
+      uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
     },
@@ -450,6 +453,7 @@ const SalesReturnsPage: React.FC = () => {
       align: 'right',
       sorter: true,
       hideInSearch: true,
+      render: formatQuantity,
     },
     {
       title: t('app.kuaizhizao.salesReturn.totalAmount'),
@@ -480,17 +484,7 @@ const SalesReturnsPage: React.FC = () => {
       },
       formItemProps: formDateRangeFormItemProps,
     },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      defaultSortOrder: 'descend',
-      hideInSearch: true,
-      render: (_, record) =>
-        record.created_at ? formatDateTime(record.created_at, 'YYYY-MM-DD HH:mm') : '-',
-    },
+    ...buildDocumentAuditColumns<SalesReturn>(t),
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at_range',
@@ -551,7 +545,7 @@ const SalesReturnsPage: React.FC = () => {
         />,
       ].filter(Boolean), `sr-${record.id ?? 'row'}`),
     },
-  ],
+  ], SALES_DOC_LIST_FIELD_RANK),
     [
       t,
       customersLoading,
@@ -1000,6 +994,7 @@ const SalesReturnsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesReturn.totalQuantity'),
       dataIndex: 'total_quantity',
+      render: formatQuantity,
     },
     {
       title: t('app.kuaizhizao.salesReturn.totalAmount'),
@@ -1784,7 +1779,7 @@ const SalesReturnsPage: React.FC = () => {
                       columns={[
                         { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
                         { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
-                        { title: t('app.kuaizhizao.salesReturn.returnQuantity'), dataIndex: 'return_quantity', width: 100, align: 'right' },
+                        { title: t('app.kuaizhizao.salesReturn.returnQuantity'), dataIndex: 'return_quantity', width: 100, align: 'right' , render: formatQuantity },
                         { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
                         { title: t('app.kuaizhizao.salesReturn.amount'), dataIndex: 'total_amount', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
                         { title: t('app.kuaizhizao.salesReturn.import.batchNumber'), dataIndex: 'batch_number', width: 120 },

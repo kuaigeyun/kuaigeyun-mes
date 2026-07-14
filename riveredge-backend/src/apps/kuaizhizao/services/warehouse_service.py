@@ -20,6 +20,7 @@ from tortoise.expressions import Q
 from loguru import logger
 
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+from apps.common.audit_actor import audit_response_fields
 
 
 def _agent_debug_ndjson(location: str, message: str, data: dict, hypothesis_id: str, run_id: str = "pre-fix") -> None:
@@ -193,6 +194,7 @@ def _build_purchase_receipt_item_response(item: Any) -> PurchaseReceiptItemRespo
         "notes": getattr(item, "notes", None),
         "created_at": getattr(item, "created_at"),
         "updated_at": getattr(item, "updated_at"),
+        **audit_response_fields(item),
     }
     return PurchaseReceiptItemResponse.model_validate(payload)
 
@@ -738,6 +740,8 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 picking_code=code,
                 created_by=created_by,
                 created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
                 **picking_data.model_dump(exclude_unset=True, exclude={'created_by'})
             )
 
@@ -795,12 +799,50 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             query = query.filter(work_order_id=filters['work_order_id'])
 
         pickings = await query.offset(skip).limit(limit).order_by('-created_at')
+        from tortoise.functions import Count, Sum
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
+
+        picking_ids = [int(p.id) for p in pickings]
+        qty_by_id: Dict[int, Dict[str, float]] = {}
+        if picking_ids:
+            agg_rows = await (
+                ProductionPickingItem.filter(tenant_id=tenant_id, picking_id__in=picking_ids)
+                .group_by("picking_id")
+                .annotate(
+                    c=Count("id"),
+                    req=Sum("required_quantity"),
+                    picked=Sum("picked_quantity"),
+                )
+                .values("picking_id", "c", "req", "picked")
+            )
+            for row in agg_rows:
+                pid = int(row["picking_id"])
+                req_total = float(row.get("req") or 0)
+                picked_total = float(row.get("picked") or 0)
+                qty_by_id[pid] = {
+                    "total_items": int(row.get("c") or 0),
+                    "required_quantity_total": req_total,
+                    "picked_quantity_total": picked_total,
+                    # 列表总数量取应领合计；上拉创建时 issue_quantity 写入 required_quantity
+                    "total_quantity": req_total,
+                }
+
         rows = enrich_outbound_hub_list_capabilities(
             pickings,
             [ProductionPickingListResponse.model_validate(picking) for picking in pickings],
             "production_picking",
+            item_counts={pid: v["total_items"] for pid, v in qty_by_id.items()},
         )
+        enriched_qty: List[ProductionPickingListResponse] = []
+        for picking, row in zip(pickings, rows):
+            stats = qty_by_id.get(int(picking.id), {
+                "total_items": 0,
+                "required_quantity_total": 0.0,
+                "picked_quantity_total": 0.0,
+                "total_quantity": 0.0,
+            })
+            enriched_qty.append(row.model_copy(update=stats))
+        rows = enriched_qty
 
         if rows:
             from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
@@ -1259,6 +1301,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             # 4. 生成领料单编码
             today = datetime.now().strftime("%Y%m%d")
             picking_code = await self.generate_code(tenant_id, "PRODUCTION_PICKING_CODE", prefix=f"PP{today}")
+            user_info = await self.get_user_info(created_by)
             
             # 5. 创建生产领料单
             picking = await ProductionPicking.create(
@@ -1270,7 +1313,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 workshop_name=work_order.workshop_name,
                 status='待领料',
                 created_by=created_by,
-                updated_by=created_by
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
             )
             
             # 6. 创建领料单明细
@@ -1472,6 +1517,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         async with in_transaction():
             today = datetime.now().strftime("%Y%m%d")
             picking_code = await self.generate_code(tenant_id, "PRODUCTION_PICKING_CODE", prefix=f"PP{today}")
+            user_info = await self.get_user_info(created_by)
             picking = await ProductionPicking.create(
                 tenant_id=tenant_id,
                 picking_code=picking_code,
@@ -1483,7 +1529,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 picker_name=picker_name,
                 notes=notes,
                 created_by=created_by,
+                created_by_name=user_info["name"],
                 updated_by=created_by,
+                updated_by_name=user_info["name"],
             )
 
             for line in lines:
@@ -1784,6 +1832,9 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                 tenant_id=tenant_id,
                 return_code=code,
                 created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
                 **dump
             )
 
@@ -1913,7 +1964,9 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
         async with in_transaction():
             await self.get_production_return_by_id(tenant_id, return_id)
             dump = return_data.model_dump(exclude_unset=True, exclude={"return_code"})
+            user_info = await self.get_user_info(updated_by)
             dump["updated_by"] = updated_by
+            dump["updated_by_name"] = user_info["name"]
             await ProductionReturn.filter(tenant_id=tenant_id, id=return_id).update(**dump)
             return ProductionReturnResponse.model_validate(
                 await ProductionReturn.get(tenant_id=tenant_id, id=return_id)
@@ -2024,7 +2077,8 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                 returner_id=confirmed_by,
                 returner_name=returner_name,
                 return_time=receipt_time,
-                updated_by=confirmed_by
+                updated_by=confirmed_by,
+                updated_by_name=returner_name,
             )
             await ProductionReturnItem.filter(tenant_id=tenant_id, return_id=return_id).update(
                 status="已退料", 
@@ -2222,6 +2276,8 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 notes=receipt_data.notes,
                 created_by=user_info.get("id"),
                 created_by_name=user_info.get("name", ""),
+                updated_by=user_info.get("id"),
+                updated_by_name=user_info.get("name", ""),
             )
             
             # 创建入库单明细
@@ -3301,6 +3357,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 notes=delivery_data.notes,
                 created_by=user_info.get("id"),
                 created_by_name=user_info.get("name", ""),
+                updated_by=user_info.get("id"),
+                updated_by_name=user_info.get("name", ""),
             )
             
             # 创建出库单明细
@@ -3503,7 +3561,10 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             )
 
         deliveries = await query.offset(skip).limit(limit).order_by('-created_at')
-        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_counts,
+            enrich_outbound_hub_list_capabilities,
+        )
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_delivery_lifecycle
 
         out: List[SalesDeliveryResponse] = []
@@ -3512,10 +3573,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             # 列表与详情共用生命周期计算，避免出库 Hub 列表显示「生命周期缺失」
             resp.lifecycle = get_sales_delivery_lifecycle(delivery, milestones=[])
             out.append(resp)
+        item_counts = await batch_document_item_counts(
+            tenant_id, SalesDeliveryItem, "delivery_id", [int(d.id) for d in deliveries]
+        )
         from core.services.approval.audit_record_enricher import enrich_items
 
         return await enrich_items(tenant_id, "sales_delivery", enrich_outbound_hub_list_capabilities(
-            deliveries, out, "sales_delivery"
+            deliveries, out, "sales_delivery", item_counts=item_counts
         ))
 
     async def update_sales_delivery(
@@ -4571,8 +4635,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         source_doc_code=delivery.delivery_code,
                         enforce_fifo=enforce_fifo,
                     )
+            except BusinessLogicError:
+                raise
+            except ValueError as inv_e:
+                logger.error("销售出库确认-更新库存失败: {}", inv_e)
+                raise BusinessLogicError(str(inv_e) or "库存不足，无法出库")
             except Exception as inv_e:
-                logger.error("销售出库确认-更新库存失败: %s", inv_e)
+                logger.error("销售出库确认-更新库存失败: {}", inv_e)
                 raise
 
             await self._consume_shipment_notice_reservation_after_delivery(
@@ -6220,6 +6289,12 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     if not sales_order_id:
                         sales_order_id = delivery.sales_order_id
                         sales_order_code = delivery.sales_order_code
+
+            resolved_warehouse_id, resolved_warehouse_name = await _resolve_warehouse_identity(
+                tenant_id=tenant_id,
+                warehouse_id=return_data.warehouse_id,
+                warehouse_name=return_data.warehouse_name,
+            )
             
             return_obj = await SalesReturn.create(
                 tenant_id=tenant_id,
@@ -6231,8 +6306,8 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 sales_order_code=sales_order_code or "",
                 customer_id=return_data.customer_id,
                 customer_name=return_data.customer_name,
-                warehouse_id=return_data.warehouse_id,
-                warehouse_name=return_data.warehouse_name,
+                warehouse_id=resolved_warehouse_id,
+                warehouse_name=resolved_warehouse_name,
                 return_time=return_data.return_time,
                 returner_id=return_data.returner_id,
                 returner_name=return_data.returner_name,
@@ -6251,6 +6326,9 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 shipping_address=getattr(return_data, 'shipping_address', None),
                 notes=return_data.notes,
                 created_by=user_info.get("id"),
+                created_by_name=user_info.get("name", ""),
+                updated_by=user_info.get("id"),
+                updated_by_name=user_info.get("name", ""),
             )
             
             # 创建退货单明细
@@ -6953,7 +7031,8 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 returner_id=confirmed_by,
                 returner_name=returner_name,
                 return_time=receipt_time,
-                updated_by=confirmed_by
+                updated_by=confirmed_by,
+                updated_by_name=returner_name,
             )
             await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).update(
                 status='已退货', 
@@ -7084,6 +7163,18 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 return_data = SalesReturnUpdate.model_validate(return_data)
 
             payload = return_data.model_dump(exclude_unset=True, exclude={"items"})
+            input_warehouse_id = payload.pop("warehouse_id", None)
+            input_warehouse_name = payload.pop("warehouse_name", None)
+
+            if input_warehouse_id is not None or input_warehouse_name is not None:
+                resolved_warehouse_id, resolved_warehouse_name = await _resolve_warehouse_identity(
+                    tenant_id=tenant_id,
+                    warehouse_id=input_warehouse_id if input_warehouse_id is not None else return_obj.warehouse_id,
+                    warehouse_name=input_warehouse_name,
+                )
+                return_obj.warehouse_id = resolved_warehouse_id
+                return_obj.warehouse_name = resolved_warehouse_name
+
             for key, val in payload.items():
                 if key in ("id", "tenant_id", "uuid", "created_at", "updated_at"):
                     continue
@@ -7151,6 +7242,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 return_obj.total_amount = total_amount
 
             return_obj.updated_by = updated_by
+            return_obj.updated_by_name = (await self.get_user_info(updated_by))["name"]
             await return_obj.save()
             return await self.get_sales_return_by_id(tenant_id, return_id)
 
@@ -7317,6 +7409,9 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 shipping_address=getattr(return_data, 'shipping_address', None),
                 notes=return_data.notes,
                 created_by=user_info.get("id"),
+                created_by_name=user_info.get("name", ""),
+                updated_by=user_info.get("id"),
+                updated_by_name=user_info.get("name", ""),
             )
             
             # 创建退货单明细
@@ -7688,7 +7783,8 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 returner_id=confirmed_by,
                 returner_name=returner_name,
                 return_time=resolve_business_datetime(),
-                updated_by=confirmed_by
+                updated_by=confirmed_by,
+                updated_by_name=returner_name,
             )
 
             # 更新库存（扣减，采购退货出库）
@@ -7891,6 +7987,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 return_obj.total_amount = total_amount
 
             return_obj.updated_by = updated_by
+            return_obj.updated_by_name = (await self.get_user_info(updated_by))["name"]
             await return_obj.save()
             return await self.get_purchase_return_by_id(tenant_id, return_id)
 
@@ -7983,6 +8080,9 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 tenant_id=tenant_id,
                 inbound_code=code,
                 created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
                 **dump
             )
 
@@ -8129,7 +8229,9 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         async with in_transaction():
             await self.get_other_inbound_by_id(tenant_id, inbound_id)
             dump = inbound_data.model_dump(exclude_unset=True, exclude={"inbound_code"})
+            user_info = await self.get_user_info(updated_by)
             dump["updated_by"] = updated_by
+            dump["updated_by_name"] = user_info["name"]
             await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(**dump)
             return OtherInboundResponse.model_validate(
                 await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
@@ -8316,7 +8418,8 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 receiver_id=confirmed_by,
                 receiver_name=receiver_name,
                 receipt_time=receipt_time,
-                updated_by=confirmed_by
+                updated_by=confirmed_by,
+                updated_by_name=receiver_name,
             )
             await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id).update(
                 status="已入库", 
@@ -8454,6 +8557,9 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 tenant_id=tenant_id,
                 outbound_code=code,
                 created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
                 **dump
             )
 
@@ -8580,7 +8686,10 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         )
         total = await query.count()
         outbounds = await query.offset(skip).limit(limit).order_by(order_clause)
-        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_counts,
+            enrich_outbound_hub_list_capabilities,
+        )
         from apps.kuaizhizao.services.document_lifecycle_service import get_other_outbound_lifecycle
 
         out: List[OtherOutboundListResponse] = []
@@ -8588,7 +8697,12 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             resp = OtherOutboundListResponse.model_validate(outbound)
             resp.lifecycle = get_other_outbound_lifecycle(outbound, milestones=[])
             out.append(resp)
-        enriched = enrich_outbound_hub_list_capabilities(outbounds, out, "other_outbound")
+        item_counts = await batch_document_item_counts(
+            tenant_id, OtherOutboundItem, "outbound_id", [int(o.id) for o in outbounds]
+        )
+        enriched = enrich_outbound_hub_list_capabilities(
+            outbounds, out, "other_outbound", item_counts=item_counts
+        )
         return enriched, total
 
     async def update_other_outbound(
@@ -8602,7 +8716,9 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         async with in_transaction():
             await self.get_other_outbound_by_id(tenant_id, outbound_id)
             dump = outbound_data.model_dump(exclude_unset=True, exclude={"outbound_code"})
+            user_info = await self.get_user_info(updated_by)
             dump["updated_by"] = updated_by
+            dump["updated_by_name"] = user_info["name"]
             await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(**dump)
             return OtherOutboundResponse.model_validate(
                 await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
@@ -8682,7 +8798,8 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 deliverer_id=confirmed_by,
                 deliverer_name=deliverer_name,
                 delivery_time=delivery_time,
-                updated_by=confirmed_by
+                updated_by=confirmed_by,
+                updated_by_name=deliverer_name,
             )
             for item in outbound.items:
                 await OtherOutboundItem.filter(
@@ -8819,6 +8936,7 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
         location_required, auto_outbound_enabled = await _get_warehouse_policy_flags(tenant_id)
         created_borrow_id: Optional[int] = None
         async with in_transaction():
+            user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "MATERIAL_BORROW_CODE", prefix=f"MB{today}")
 
@@ -8830,6 +8948,9 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                 tenant_id=tenant_id,
                 borrow_code=code,
                 created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
                 **dump
             )
 
@@ -8926,7 +9047,10 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
         )
         total = await query.count()
         borrows = await query.offset(skip).limit(limit).order_by(order_clause)
-        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_counts,
+            enrich_outbound_hub_list_capabilities,
+        )
         from apps.kuaizhizao.services.document_lifecycle_service import get_material_borrow_lifecycle
 
         out: List[MaterialBorrowListResponse] = []
@@ -8934,7 +9058,12 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
             resp = MaterialBorrowListResponse.model_validate(borrow)
             resp.lifecycle = get_material_borrow_lifecycle(borrow, milestones=[])
             out.append(resp)
-        enriched = enrich_outbound_hub_list_capabilities(borrows, out, "material_borrow")
+        item_counts = await batch_document_item_counts(
+            tenant_id, MaterialBorrowItem, "borrow_id", [int(b.id) for b in borrows]
+        )
+        enriched = enrich_outbound_hub_list_capabilities(
+            borrows, out, "material_borrow", item_counts=item_counts
+        )
         return enriched, total
 
     async def update_material_borrow(
@@ -8951,7 +9080,9 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
 
         async with in_transaction():
             dump = borrow_data.model_dump(exclude_unset=True, exclude={"borrow_code"})
+            user_info = await self.get_user_info(updated_by)
             dump["updated_by"] = updated_by
+            dump["updated_by_name"] = user_info["name"]
             await MaterialBorrow.filter(tenant_id=tenant_id, id=borrow_id).update(**dump)
             return MaterialBorrowResponse.model_validate(
                 await MaterialBorrow.get(tenant_id=tenant_id, id=borrow_id)
@@ -9035,7 +9166,8 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                 borrower_id=confirmed_by,
                 borrower_name=borrower_name,
                 borrow_time=borrow_time,
-                updated_by=confirmed_by
+                updated_by=confirmed_by,
+                updated_by_name=borrower_name,
             )
             for item in borrow.items:
                 await MaterialBorrowItem.filter(
@@ -9172,12 +9304,16 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
             if return_data.return_code:
                 code = return_data.return_code
 
+            user_info = await self.get_user_info(created_by)
             return_obj = await MaterialReturn.create(
                 tenant_id=tenant_id,
                 return_code=code,
                 borrow_id=borrow.id,
                 borrow_code=borrow.borrow_code,
                 created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
                 **dump
             )
 
@@ -9208,8 +9344,11 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
             raise NotFoundError(f"还料单不存在: {return_id}")
 
         items = await MaterialReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
+        from apps.kuaizhizao.services.document_lifecycle_service import get_material_return_lifecycle
+
         response = MaterialReturnWithItemsResponse.model_validate(return_obj)
         response.items = [MaterialReturnItemResponse.model_validate(i) for i in items]
+        response.lifecycle = get_material_return_lifecycle(return_obj)
         return response
 
     async def list_material_returns(
@@ -9259,8 +9398,11 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
             enrich_inbound_hub_list_capabilities,
         )
         from apps.kuaizhizao.models.material_return_item import MaterialReturnItem
+        from apps.kuaizhizao.services.document_lifecycle_service import get_material_return_lifecycle
 
         responses = [MaterialReturnListResponse.model_validate(r) for r in returns]
+        for return_obj, resp in zip(returns, responses):
+            resp.lifecycle = get_material_return_lifecycle(return_obj, milestones=[])
         item_counts = await batch_document_item_counts(
             tenant_id, MaterialReturnItem, "return_id", [r.id for r in returns]
         )
@@ -9283,7 +9425,9 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
 
         async with in_transaction():
             dump = return_data.model_dump(exclude_unset=True, exclude={"return_code"})
+            user_info = await self.get_user_info(updated_by)
             dump["updated_by"] = updated_by
+            dump["updated_by_name"] = user_info["name"]
             await MaterialReturn.filter(tenant_id=tenant_id, id=return_id).update(**dump)
             return MaterialReturnResponse.model_validate(
                 await MaterialReturn.get(tenant_id=tenant_id, id=return_id)
@@ -9325,7 +9469,8 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                 returner_id=confirmed_by,
                 returner_name=returner_name,
                 return_time=return_time,
-                updated_by=confirmed_by
+                updated_by=confirmed_by,
+                updated_by_name=returner_name,
             )
             for item in return_obj.items:
                 await MaterialReturnItem.filter(

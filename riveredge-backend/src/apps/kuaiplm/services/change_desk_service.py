@@ -53,6 +53,10 @@ class ChangeDeskService:
         keyword: Optional[str] = None,
         change_code: Optional[str] = None,
         target_name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         page: int = 1,
         page_size: int = 20,
     ) -> ChangeDeskListResponse:
@@ -63,6 +67,10 @@ class ChangeDeskService:
             "keyword": keyword,
             "change_code": change_code,
             "target_name": target_name,
+            "created_start_date": created_start_date,
+            "created_end_date": created_end_date,
+            "updated_start_date": updated_start_date,
+            "updated_end_date": updated_end_date,
         }
 
         if change_type in (None, "bom"):
@@ -85,6 +93,9 @@ class ChangeDeskService:
                     change_reason=row.change_reason,
                     applicant_id=row.applicant_id,
                     created_at=row.created_at,
+                    updated_at=row.updated_at,
+                    created_by_name=getattr(row, "created_by_name", None),
+                    updated_by_name=getattr(row, "updated_by_name", None),
                     entity_code=getattr(row, "material_code", None),
                     entity_name=getattr(row, "material_name", None),
                     extra={
@@ -114,6 +125,9 @@ class ChangeDeskService:
                     change_reason=row.change_reason,
                     applicant_id=row.applicant_id,
                     created_at=row.created_at,
+                    updated_at=row.updated_at,
+                    created_by_name=getattr(row, "created_by_name", None) or getattr(row, "applicant_name", None),
+                    updated_by_name=getattr(row, "updated_by_name", None),
                     entity_code=getattr(row, "process_route_code", None),
                     entity_name=getattr(row, "process_route_name", None),
                 ))

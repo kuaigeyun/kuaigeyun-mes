@@ -44,8 +44,13 @@ class StandardCostService(AppBaseService[StandardCost]):
                     f"标准成本已存在：{data.target_type}#{data.target_id} / {data.cost_item_type} v{data.version}"
                 )
 
+            user_info = await self.get_user_info(created_by)
             row = await StandardCost.create(
                 tenant_id=tenant_id,
+                created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
                 **data.model_dump(exclude_unset=True),
             )
             return StandardCostResponse.model_validate(row)
@@ -113,6 +118,7 @@ class StandardCostService(AppBaseService[StandardCost]):
         tenant_id: int,
         standard_cost_id: int,
         data: StandardCostUpdate,
+        updated_by: Optional[int] = None,
     ) -> StandardCostResponse:
         async with in_transaction():
             row = await StandardCost.get_or_none(
@@ -122,6 +128,10 @@ class StandardCostService(AppBaseService[StandardCost]):
                 raise NotFoundError(f"标准成本不存在: {standard_cost_id}")
 
             update_data = data.model_dump(exclude_unset=True)
+            if updated_by is not None:
+                user_info = await self.get_user_info(updated_by)
+                update_data["updated_by"] = updated_by
+                update_data["updated_by_name"] = user_info["name"]
             if update_data:
                 await StandardCost.filter(tenant_id=tenant_id, id=standard_cost_id).update(
                     **update_data

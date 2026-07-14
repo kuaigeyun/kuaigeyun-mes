@@ -255,7 +255,8 @@ async def execute_computation(
         return await computation_service.execute_computation(
             tenant_id=tenant_id,
             computation_id=computation_id,
-            computation_params_override=computation_params_override
+            computation_params_override=computation_params_override,
+            operator_id=current_user.id,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

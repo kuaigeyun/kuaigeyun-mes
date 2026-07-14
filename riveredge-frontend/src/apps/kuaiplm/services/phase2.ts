@@ -20,6 +20,8 @@ export interface RdRequirement {
   description?: string | null;
   created_at?: string;
   updated_at?: string;
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
 }
 
 export interface RdDesignReview {
@@ -35,6 +37,8 @@ export interface RdDesignReview {
   conclusion?: string | null;
   created_at?: string;
   updated_at?: string;
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
 }
 
 export interface RdFmeaRecord {
@@ -50,6 +54,8 @@ export interface RdFmeaRecord {
   description?: string | null;
   created_at?: string;
   updated_at?: string;
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
 }
 
 function unwrapList<T>(res: unknown): { items: T[]; total: number } {

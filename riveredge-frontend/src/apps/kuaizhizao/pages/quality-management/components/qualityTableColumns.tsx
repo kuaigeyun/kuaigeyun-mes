@@ -9,6 +9,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 
 export function pickRecordText(record: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
@@ -19,13 +20,11 @@ export function pickRecordText(record: Record<string, unknown>, ...keys: string[
 }
 
 export function renderQualifiedQuantity(value: unknown): React.ReactNode {
-  const val = Number(value ?? 0);
-  return <Typography.Text type="success">{val.toFixed(2)}</Typography.Text>;
+  return <Typography.Text type="success">{formatQuantity(value)}</Typography.Text>;
 }
 
 export function renderUnqualifiedQuantity(value: unknown): React.ReactNode {
-  const val = Number(value ?? 0);
-  return <Typography.Text type="danger">{val.toFixed(2)}</Typography.Text>;
+  return <Typography.Text type="danger">{formatQuantity(value)}</Typography.Text>;
 }
 
 export function stackedPrimarySecondaryColumn<T extends object>(
@@ -47,6 +46,32 @@ export function stackedPrimarySecondaryColumn<T extends object>(
         secondary={pickRecordText(record as Record<string, unknown>, ...secondaryKeys) || '-'}
       />
     ),
+  };
+}
+
+export function buildInspectorTimeStackedColumn<T extends object>(
+  title: string,
+  options?: { dataIndex?: string; width?: number; timeKeys?: string[]; primaryKeys?: string[] },
+): ProColumns<T> {
+  const timeKeys = options?.timeKeys ?? ['inspection_time', 'inspectionTime'];
+  const primaryKeys = options?.primaryKeys ?? ['inspector_name', 'inspectorName'];
+  return {
+    title,
+    dataIndex: options?.dataIndex ?? 'inspector_name',
+    width: options?.width ?? 168,
+    uniTableKeepWidth: true,
+    sorter: true,
+    hideInSearch: true,
+    render: (_, record) => {
+      const rawTime = pickRecordText(record as Record<string, unknown>, ...timeKeys);
+      return (
+        <UniTableStackedPrimaryCell
+          primary={pickRecordText(record as Record<string, unknown>, ...primaryKeys) || '-'}
+          secondary={rawTime ? formatDateTime(rawTime, 'YYYY-MM-DD HH:mm:ss') : '-'}
+          secondaryCopyable={false}
+        />
+      );
+    },
   };
 }
 

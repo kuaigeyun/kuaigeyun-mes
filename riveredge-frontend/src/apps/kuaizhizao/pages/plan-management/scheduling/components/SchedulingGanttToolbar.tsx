@@ -34,6 +34,7 @@ interface SchedulingGanttToolbarProps {
   onShiftDaysChange: (days: number) => void;
   onViewModeChange: (mode: ViewMode) => void;
   onScrollToToday: () => void;
+  aiTrigger?: React.ReactNode;
 }
 
 export interface SchedulingGanttToolbarNodes {
@@ -63,9 +64,11 @@ function buildSchedulingGanttToolbar({
   onShiftDaysChange,
   onViewModeChange,
   onScrollToToday,
+  aiTrigger,
 }: SchedulingGanttToolbarProps): SchedulingGanttToolbarNodes {
   const title = (
     <Space wrap align="center" size={[8, 8]} className="scheduling-gantt-toolbar__title">
+      {aiTrigger}
       <ReloadOutlined onClick={onRefresh} className="scheduling-gantt-toolbar__icon-btn" />
       <Typography.Text strong>{t('app.kuaizhizao.scheduling.ganttToolbar.title')}</Typography.Text>
       <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.fullscreenTip')}>

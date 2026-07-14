@@ -51,8 +51,10 @@ class BatchRuleResponse(BatchRuleBase):
     is_system: bool = Field(False, description="是否系统规则")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class BatchRuleListResponse(BaseModel):
@@ -100,8 +102,10 @@ class SerialRuleResponse(SerialRuleBase):
     is_system: bool = Field(False, description="是否系统规则")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class SerialRuleListResponse(BaseModel):

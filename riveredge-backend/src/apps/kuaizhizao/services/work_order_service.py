@@ -254,6 +254,55 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         return ProductionReturnService()
 
+    async def _batch_work_order_downstream_push_progress(
+        self,
+        tenant_id: int,
+        work_orders: List[WorkOrder],
+    ) -> Dict[int, float]:
+        """
+        批量计算工单完工进度（0-100）：
+        以最后一道工序（sequence 最大）的已完成数量 / 工单计划数量。
+        """
+        wo_by_id = {int(wo.id): wo for wo in work_orders if wo.id is not None}
+        wo_ids = list(wo_by_id.keys())
+        if not wo_ids:
+            return {}
+
+        op_rows = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id__in=wo_ids,
+            deleted_at__isnull=True,
+        ).values_list("work_order_id", "sequence", "completed_quantity")
+
+        last_completed_by_wo: Dict[int, float] = {}
+        last_sequence_by_wo: Dict[int, int] = {}
+        for work_order_id, sequence, completed_quantity in op_rows:
+            if work_order_id is None:
+                continue
+            wo_id = int(work_order_id)
+            seq = int(sequence or 0)
+            prev_seq = last_sequence_by_wo.get(wo_id)
+            if prev_seq is None or seq > prev_seq:
+                last_sequence_by_wo[wo_id] = seq
+                last_completed_by_wo[wo_id] = float(completed_quantity or 0)
+
+        def _clamp(pct: float) -> float:
+            if pct < 0:
+                return 0.0
+            if pct > 100:
+                return 100.0
+            return round(pct, 1)
+
+        result: Dict[int, float] = {}
+        for wo_id, wo in wo_by_id.items():
+            planned = float(wo.quantity or 0)
+            if planned <= 0:
+                result[wo_id] = 0.0
+                continue
+            completed = last_completed_by_wo.get(wo_id, 0.0)
+            result[wo_id] = _clamp((completed / planned) * 100.0)
+        return result
+
     @staticmethod
     async def has_confirmed_picking_for_work_order(tenant_id: int, work_order_id: int) -> bool:
         confirmed_statuses = ["已领料", "已确认", "confirmed", "picked"]
@@ -669,7 +718,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         sorted_ops = sorted(operations, key=lambda x: x.sequence)
         durations = [
-            operation_total_hours(op.setup_time, op.standard_time, work_order.planned_quantity or work_order.quantity)
+            operation_total_hours(op.setup_time, op.standard_time, work_order.quantity)
             for op in sorted_ops
         ]
         time_slots = build_operation_time_slots(
@@ -1453,15 +1502,6 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     f"{so.order_code} · {so.customer_name}" if so.customer_name else so.order_code,
                 )
 
-        # 批量预取 created_by_name（消除 N+1）
-        created_by_ids = [wo.created_by for wo in work_orders if wo.created_by and not wo.created_by_name]
-        user_name_map: dict[int, str] = {}
-        if created_by_ids:
-            from infra.models.user import User
-            users = await User.filter(id__in=list(set(created_by_ids))).values_list("id", "full_name", "username")
-            for uid, full_name, username in users:
-                user_name_map[uid] = (full_name or username or "未知用户") if (full_name or username) else "未知用户"
-
         # 批量预取工序（include_operations 时消除 N+1）
         operations_map: dict[int, list] = {}
         operation_steps_map: dict[int, list] = {}
@@ -1576,20 +1616,18 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         # 转换为响应格式
         result = []
         result_dicts: list[dict] = []
-        work_orders_to_update = []
         wo_ids_for_cap = [wo.id for wo in work_orders if wo.id is not None]
         returnable_by_wo = await self._get_production_return_service().batch_work_orders_have_returnable_picking(
             tenant_id,
             wo_ids_for_cap,
         )
+        push_progress_by_wo = await self._batch_work_order_downstream_push_progress(
+            tenant_id,
+            list(work_orders),
+        )
 
         for wo in work_orders:
             try:
-                # 确定创建人名称
-                if not wo.created_by_name and wo.created_by:
-                    wo.created_by_name = user_name_map.get(wo.created_by, "未知用户")
-                    work_orders_to_update.append(wo)
-
                 item_dict = WorkOrderListResponse.model_validate(wo).model_dump()
 
                 if include_operations:
@@ -1619,6 +1657,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     wo,
                     has_returnable_picking=returnable_by_wo.get(int(wo.id), False) if wo.id is not None else False,
                 )
+                if wo.id is not None:
+                    item_dict["downstream_push_progress"] = push_progress_by_wo.get(int(wo.id), 0.0)
 
                 result_dicts.append(item_dict)
             except Exception as e:
@@ -1641,10 +1681,6 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             result,
             operation_steps_by_wo_id=operation_steps_map if include_operation_steps else None,
         )
-
-        # 批量更新 created_by_name 为空的工单（性能优化：使用 bulk_update 减少数据库往返）
-        if work_orders_to_update:
-            await WorkOrder.bulk_update(work_orders_to_update, fields=["created_by_name"])
 
         return result, total
 
@@ -3202,6 +3238,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             resolve_operation_transfer_qualified,
             resolve_process_inspection_card_status,
             resolve_process_inspection_link_id,
+            sum_process_inspection_quality_quantities,
         )
 
         policy_cache = await build_operation_policy_cache(tenant_id, op_ids)
@@ -3259,6 +3296,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             op_data["process_inspection_id"] = (
                 resolve_process_inspection_link_id(op_inspections) if mode == "plan" else None
             )
+            if mode == "plan":
+                insp_q, insp_u = sum_process_inspection_quality_quantities(op_inspections)
+                op_data["inspection_qualified_quantity"] = insp_q
+                op_data["inspection_unqualified_quantity"] = insp_u
+            else:
+                op_data["inspection_qualified_quantity"] = None
+                op_data["inspection_unqualified_quantity"] = None
 
             # 物料剩余：上道可转下道 - 本道已报合格；首道为 计划 - 本道合格
             material_remaining = prev_transfer - qualified

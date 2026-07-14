@@ -11,6 +11,8 @@ import { apiRequest } from '../../../../../services/api';
 import { documentReconciliationService, type DocumentReconciliationGapItem } from '../../../services/finance/document-reconciliation';
 import { formatSettlementType } from '../../../utils/financeUiLabels';
 import { documentReconciliationGapReasonMessage } from '../../../utils/documentReconciliationCapabilityMessages';
+import { formatQuantity } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   documentReconciliationGapSearchColumns,
   resolveDocumentReconciliationGapListParams,
@@ -359,7 +361,7 @@ const DocumentReconciliationPage: React.FC = () => {
         tanstackQuery={{ enabled: false }}
         rowKey={(r) => `${r.doc_type}-${r.doc_id}`}
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.document-reconciliation.gaps"
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         loading={loading}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
@@ -424,17 +426,17 @@ const DocumentReconciliationPage: React.FC = () => {
                   {t(`${S}.preview.col.docAmount`)}
                   {' '}
                   ¥
-                  {Number(step.quantity).toFixed(2)}
+                  {formatQuantity(step.quantity)}
                   {' · '}
                   {t(`${S}.preview.col.settledAmount`)}
                   {' '}
                   ¥
-                  {Number(step.pushed_quantity ?? 0).toFixed(2)}
+                  {formatQuantity(step.pushed_quantity ?? 0)}
                   {' · '}
                   {t(`${S}.preview.col.settleableAmount`)}
                   {' '}
                   ¥
-                  {Number(step.max_push_quantity ?? 0).toFixed(2)}
+                  {formatQuantity(step.max_push_quantity ?? 0)}
                 </span>
               ) : step.amount != null ? (
                 <span>

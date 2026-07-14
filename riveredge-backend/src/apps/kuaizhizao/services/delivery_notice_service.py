@@ -255,11 +255,15 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
             if notice_data.notice_code:
                 code = notice_data.notice_code
 
+            user_info = await self.get_user_info(created_by)
             notice = await DeliveryNotice.create(
                 tenant_id=tenant_id,
                 notice_code=code,
+                **dump,
                 created_by=created_by,
-                **dump
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
             )
 
             items = getattr(notice_data, "items", None) or []
@@ -361,7 +365,9 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
 
         async with in_transaction():
             dump = notice_data.model_dump(exclude_unset=True, exclude={"notice_code"})
+            user_info = await self.get_user_info(updated_by)
             dump["updated_by"] = updated_by
+            dump["updated_by_name"] = user_info["name"]
             await DeliveryNotice.filter(tenant_id=tenant_id, id=notice_id).update(**dump)
             return DeliveryNoticeResponse.model_validate(
                 await DeliveryNotice.get(tenant_id=tenant_id, id=notice_id)
@@ -394,7 +400,8 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         await DeliveryNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="已发送",
             sent_at=datetime.now(),
-            updated_by=sent_by
+            updated_by=sent_by,
+            updated_by_name=(await self.get_user_info(sent_by))["name"],
         )
         return DeliveryNoticeResponse.model_validate(
             await DeliveryNotice.get(tenant_id=tenant_id, id=notice_id)

@@ -23,6 +23,7 @@ from apps.kuaizhizao.schemas.customer_follow_up import (
 )
 from apps.kuaizhizao.schemas.sales_opportunity import SalesOpportunityEnsure
 from apps.kuaizhizao.services.sales_opportunity_service import SalesOpportunityService
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.master_data.models.customer import Customer
 from core.services.authorization.data_scope_service import DataScopeService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -181,20 +182,6 @@ class CustomerFollowUpService:
         return so.id, so.order_code
 
     @staticmethod
-    async def _attach_creator_names(items: List[CustomerFollowUp]) -> None:
-        """为响应填充 created_by_name（批量查用户）"""
-        user_ids = {i.created_by for i in items if i.created_by}
-        if not user_ids:
-            return
-        from infra.models.user import User as UserModel
-
-        users = await UserModel.filter(id__in=list(user_ids))
-        id_to_name = {u.id: (u.full_name or u.username) for u in users}
-        for i in items:
-            if i.created_by:
-                setattr(i, "_creator_name", id_to_name.get(i.created_by))
-
-    @staticmethod
     async def _touch_customer_follow_up_time(tenant_id: int, customer: Customer, occurred_at: datetime) -> None:
         customer.last_follow_up_at = occurred_at
         rule = await CustomerPoolRule.filter(
@@ -238,30 +225,27 @@ class CustomerFollowUpService:
                     next_follow_up_at=data.next_follow_up_at,
                 )
 
-            row = await CustomerFollowUp.create(
-                tenant_id=tenant_id,
-                customer_id=customer.id,
-                customer_name=customer.name,
-                activity_type_code=data.activity_type_code,
-                content=data.content,
-                occurred_at=data.occurred_at,
-                next_follow_up_at=data.next_follow_up_at,
-                quotation_id=qid,
-                quotation_code=qcode,
-                sales_order_id=sid,
-                sales_order_code=scode,
-                opportunity_id=opportunity_id,
-                stage_code_before=stage_before,
-                stage_code_after=stage_after,
-                created_by=current_user.id,
-                updated_by=current_user.id,
-            )
+            row_data = {
+                "tenant_id": tenant_id,
+                "customer_id": customer.id,
+                "customer_name": customer.name,
+                "activity_type_code": data.activity_type_code,
+                "content": data.content,
+                "occurred_at": data.occurred_at,
+                "next_follow_up_at": data.next_follow_up_at,
+                "quotation_id": qid,
+                "quotation_code": qcode,
+                "sales_order_id": sid,
+                "sales_order_code": scode,
+                "opportunity_id": opportunity_id,
+                "stage_code_before": stage_before,
+                "stage_code_after": stage_after,
+            }
+            apply_create_audit(row_data, current_user)
+            row = await CustomerFollowUp.create(**row_data)
             await cls._touch_customer_follow_up_time(tenant_id, customer, data.occurred_at)
 
-        await cls._attach_creator_names([row])
-        resp = CustomerFollowUpResponse.model_validate(row)
-        resp.created_by_name = getattr(row, "_creator_name", None)
-        return resp
+        return CustomerFollowUpResponse.model_validate(row)
 
     @classmethod
     async def update(
@@ -302,7 +286,7 @@ class CustomerFollowUpService:
                 dump["sales_order_id"] = rsid
                 dump["sales_order_code"] = rscode
 
-        dump["updated_by"] = current_user.id
+        apply_update_audit(dump, current_user)
 
         occurred_at = dump.get("occurred_at", row.occurred_at)
         next_follow_up_at = dump.get("next_follow_up_at", row.next_follow_up_at) if "next_follow_up_at" in dump else row.next_follow_up_at
@@ -356,10 +340,7 @@ class CustomerFollowUpService:
             await cls._touch_customer_follow_up_time(tenant_id, customer, occurred_at)
 
         row = await CustomerFollowUp.get(id=follow_id, tenant_id=tenant_id)
-        await cls._attach_creator_names([row])
-        resp = CustomerFollowUpResponse.model_validate(row)
-        resp.created_by_name = getattr(row, "_creator_name", None)
-        return resp
+        return CustomerFollowUpResponse.model_validate(row)
 
     @classmethod
     async def delete(cls, tenant_id: int, follow_id: int, current_user: User) -> bool:
@@ -371,9 +352,11 @@ class CustomerFollowUpService:
         if not row:
             raise NotFoundError(f"跟进记录不存在: {follow_id}")
         await cls._load_customer(tenant_id, row.customer_id, current_user)
+        delete_audit: dict = {}
+        apply_update_audit(delete_audit, current_user)
         await CustomerFollowUp.filter(id=follow_id, tenant_id=tenant_id).update(
             deleted_at=datetime.now(),
-            updated_by=current_user.id,
+            **delete_audit,
         )
         return True
 
@@ -399,10 +382,7 @@ class CustomerFollowUpService:
         ):
             raise NotFoundError(f"跟进记录不存在: {follow_id}")
         await cls._load_customer(tenant_id, row.customer_id, current_user)
-        await cls._attach_creator_names([row])
-        resp = CustomerFollowUpResponse.model_validate(row)
-        resp.created_by_name = getattr(row, "_creator_name", None)
-        return resp
+        return CustomerFollowUpResponse.model_validate(row)
 
     @classmethod
     def _filter_query(
@@ -494,10 +474,7 @@ class CustomerFollowUpService:
         total = await query.count()
         primary_order, secondary_order = cls._resolve_list_order_by(order_by, pending_only)
         rows = await query.offset(skip).limit(limit).order_by(primary_order, secondary_order)
-        await cls._attach_creator_names(rows)
-        out: List[CustomerFollowUpListResponse] = []
-        for row in rows:
-            resp = CustomerFollowUpListResponse.model_validate(row)
-            resp.created_by_name = getattr(row, "_creator_name", None)
-            out.append(resp)
+        out: List[CustomerFollowUpListResponse] = [
+            CustomerFollowUpListResponse.model_validate(row) for row in rows
+        ]
         return CustomerFollowUpListEnvelope(items=out, total=total)

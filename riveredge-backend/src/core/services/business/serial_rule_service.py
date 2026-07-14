@@ -13,10 +13,12 @@ from datetime import datetime, date
 
 from tortoise.expressions import Q
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from core.models.serial_rule import SerialRule
 from core.models.serial_rule_sequence import SerialRuleSequence
 from core.services.code_rule.code_rule_component_service import CodeRuleComponentService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 from loguru import logger
 
 
@@ -127,24 +129,34 @@ class SerialRuleService:
         return rule
 
     @staticmethod
-    async def create_rule(tenant_id: int, data: dict) -> SerialRule:
+    async def create_rule(
+        tenant_id: int,
+        data: dict,
+        current_user: Optional[User] = None,
+    ) -> SerialRule:
         """创建序列号规则"""
-        rule = await SerialRule.create(
-            tenant_id=tenant_id,
-            name=data["name"],
-            code=data["code"],
-            rule_components=data.get("rule_components"),
-            description=data.get("description"),
-            seq_start=data.get("seq_start", 1),
-            seq_step=data.get("seq_step", 1),
-            seq_reset_rule=data.get("seq_reset_rule"),
-            is_system=data.get("is_system", False),
-            is_active=data.get("is_active", True),
-        )
+        create_payload = {
+            "name": data["name"],
+            "code": data["code"],
+            "rule_components": data.get("rule_components"),
+            "description": data.get("description"),
+            "seq_start": data.get("seq_start", 1),
+            "seq_step": data.get("seq_step", 1),
+            "seq_reset_rule": data.get("seq_reset_rule"),
+            "is_system": data.get("is_system", False),
+            "is_active": data.get("is_active", True),
+        }
+        apply_create_audit(create_payload, current_user)
+        rule = await SerialRule.create(tenant_id=tenant_id, **create_payload)
         return rule
 
     @staticmethod
-    async def update_rule(tenant_id: int, rule_uuid: str, data: dict) -> SerialRule:
+    async def update_rule(
+        tenant_id: int,
+        rule_uuid: str,
+        data: dict,
+        current_user: Optional[User] = None,
+    ) -> SerialRule:
         """更新序列号规则"""
         rule = await SerialRule.filter(
             tenant_id=tenant_id, uuid=rule_uuid, deleted_at__isnull=True
@@ -156,6 +168,7 @@ class SerialRuleService:
         for k, v in data.items():
             if v is not None and hasattr(rule, k):
                 setattr(rule, k, v)
+        apply_update_audit(rule, current_user)
         await rule.save()
         return rule
 

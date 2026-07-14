@@ -65,6 +65,10 @@ class ReceiptNoticeResponse(ReceiptNoticeBase):
     purchase_receipt_code: Optional[str] = Field(None, max_length=50, description="采购入库单编码")
     total_quantity: float = Field(0, description="总数量")
     total_amount: float = Field(0, description="总金额")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     capabilities: Optional[ReceiptNoticeCapabilities] = Field(

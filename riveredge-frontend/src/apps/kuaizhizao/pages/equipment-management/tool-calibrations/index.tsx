@@ -24,6 +24,8 @@ import { calibrationsApi } from '../../../services/toolOps';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
@@ -202,6 +204,7 @@ const ToolCalibrationsPage: React.FC = () => {
         },
       },
       { title: t('app.kuaizhizao.toolCalibration.formRemark'), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
+      ...buildDocumentAuditColumns<ToolCalibration>(t),
     ],
     [t],
   );
@@ -216,7 +219,7 @@ const ToolCalibrationsPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="uuid"
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         request={async (params, sort, _filter, searchFormValues) => {

@@ -15,6 +15,8 @@ export interface BankAccount {
   notes?: string;
   created_at?: string;
   updated_at?: string;
+  created_by_name?: string;
+  updated_by_name?: string;
   attachments?: Array<{ uid?: string; name?: string; status?: string; url?: string }>;
 }
 

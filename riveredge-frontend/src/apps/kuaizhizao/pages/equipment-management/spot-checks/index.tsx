@@ -22,6 +22,8 @@ import { equipmentApi } from '../../../services/equipment';
 import { inspectionSchemesApi, spotChecksApi } from '../../../services/equipmentOps';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   buildAbnormalityValueEnum,
@@ -263,8 +265,7 @@ const SpotChecksPage: React.FC = () => {
   const spotCheckStatusValueEnum = useMemo(() => buildSpotCheckStatusValueEnum(t), [t]);
   const abnormalityValueEnum = useMemo(() => buildAbnormalityValueEnum(t, P), [t]);
 
-  const columns: ProColumns<SpotCheck>[] = useMemo(
-    () => [
+  const columns: ProColumns<SpotCheck>[] = useMemo(() => alignProColumns<SpotCheck>([
       {
         title: t(`${P}.col.checkDate`),
         dataIndex: 'check_date_range',
@@ -349,13 +350,10 @@ const SpotChecksPage: React.FC = () => {
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
+        hideInTable: true,
         hideInSearch: true,
-        sorter: true,
-        defaultSortOrder: 'descend',
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
+      ...buildDocumentAuditColumns<SpotCheck>(t),
       {
         title: t('common.actions'),
         key: 'action',
@@ -411,7 +409,7 @@ const SpotChecksPage: React.FC = () => {
           </>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, perms, spotCheckStatusValueEnum, abnormalityValueEnum],
   );
 

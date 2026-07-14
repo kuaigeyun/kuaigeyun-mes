@@ -9,6 +9,8 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { equipmentFaultApi } from '../../../services/equipment';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   buildEquipmentRepairStatusValueEnum,
   EQUIPMENT_OPS_PINNED_STATUS_FIELD,
@@ -35,6 +37,9 @@ interface EquipmentRepair {
   repair_result?: string;
   repair_parts?: { items?: Array<{ spare_part_id?: number; quantity?: number }> };
   created_at?: string;
+  updated_at?: string;
+  created_by_name?: string;
+  updated_by_name?: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -148,6 +153,7 @@ const EquipmentRepairsPage: React.FC = () => {
         sorter: true,
         hideInSearch: true,
       },
+      ...buildDocumentAuditColumns<EquipmentRepair>(t),
       {
         title: t('common.actions'),
         valueType: 'option',
@@ -181,7 +187,7 @@ const EquipmentRepairsPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={perms.canDelete}
           onDelete={handleDelete}
-          columns={columns}
+          columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
           showAdvancedSearch
           pinnedTabsField={EQUIPMENT_OPS_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter

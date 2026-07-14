@@ -20,7 +20,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Select, Typography, Descriptions } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ThunderboltOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ThunderboltOutlined, ShoppingOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
@@ -48,8 +48,11 @@ import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildOtherInboundStatusValueEnum,
@@ -92,6 +95,7 @@ interface OtherInbound {
   receiver_name?: string;
   receipt_time?: string;
   total_quantity?: number;
+  total_items?: number;
   total_amount?: number;
   notes?: string;
   created_at?: string;
@@ -243,7 +247,7 @@ const OtherInboundPage: React.FC = () => {
   const otherInboundStatusValueEnum = useMemo(() => buildOtherInboundStatusValueEnum(t), [t]);
 
   const columns: ProColumns<OtherInbound>[] = useMemo(
-    () => [
+    () => alignProColumns<OtherInbound>([
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at_range',
@@ -307,6 +311,24 @@ const OtherInboundPage: React.FC = () => {
         render: (v) => <Tag>{translateReasonTypeLabel(t, String(v || ''))}</Tag>,
       },
       {
+        title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'),
+        dataIndex: 'total_quantity',
+        width: 100,
+        align: 'right',
+        sorter: true,
+        hideInSearch: true,
+        render: formatQuantity,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colMaterialKindCount'),
+        dataIndex: 'total_items',
+        width: 90,
+        align: 'right',
+        sorter: true,
+        hideInSearch: true,
+        render: (v: number | null | undefined) => (v != null ? v : '-'),
+      },
+      {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.receiver'),
         dataIndex: 'receiver_name',
         width: 100,
@@ -322,16 +344,7 @@ const OtherInboundPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => (r.receipt_time ? formatDateTime(r.receipt_time) : '-'),
       },
-      {
-        title: t('app.kuaizhizao.warehouseOtherInbound.col.updatedAt'),
-        dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        defaultSortOrder: 'descend',
-        sorter: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
-      },
+      ...buildDocumentAuditColumns<Record<string, unknown>>(t),
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.lifecycle'),
         dataIndex: 'lifecycle_stage',
@@ -389,20 +402,11 @@ const OtherInboundPage: React.FC = () => {
               </Button>,
             );
           }
-          if (record.id) {
-            actions.push(
-              <Button
-                key="print"
-                {...rowActionKind('print')}
-                onClick={() => openPrint({ documentType: 'other_inbound', documentId: record.id! })}
-              />,
-            );
-          }
           return <Space>{actions}</Space>;
         },
       },
-    ],
-    [t, otherInboundCustomFieldColumns, openPrint, otherInboundStatusValueEnum, reasonTypeOptions, reasonTypeLoading],
+    ], WAREHOUSE_DOC_LIST_FIELD_RANK),
+    [t, otherInboundCustomFieldColumns, otherInboundStatusValueEnum, reasonTypeOptions, reasonTypeLoading],
   );
 
   const handleDetail = async (record: OtherInbound) => {
@@ -452,6 +456,49 @@ const OtherInboundPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const listRowsRef = useRef<Map<string, OtherInbound>>(new Map());
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const isOtherInboundDeletable = (record: OtherInbound) => record.status === '待入库' && !!record.id;
+  const isOtherInboundPrintable = (record: OtherInbound) => !!record.id;
+
+  const handlePrint = (record: OtherInbound) => {
+    if (!record.id) return;
+    openPrint({ documentType: 'other_inbound', documentId: record.id });
+  };
+
+  const selectedOtherInboundForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => listRowsRef.current.get(String(key)))
+        .filter((row): row is OtherInbound => row != null),
+    [selectedRowKeys],
+  );
+
+  const canToolbarPrint =
+    selectedRowKeys.length === 1 &&
+    !!selectedOtherInboundForBatch[0] &&
+    isOtherInboundPrintable(selectedOtherInboundForBatch[0]);
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const rows = keys
+      .map((k) => listRowsRef.current.get(String(k)))
+      .filter((r): r is OtherInbound => !!r && isOtherInboundDeletable(r));
+    if (rows.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.warehouseCommon.batchDeleteNoneDeletable'));
+      return;
+    }
+    try {
+      for (const row of rows) {
+        await warehouseApi.otherInbound.delete(String(row.id));
+      }
+      messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: rows.length }));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.batchDeleteFailed'));
+    }
   };
 
   const handleWithdraw = async (record: OtherInbound) => {
@@ -724,7 +771,7 @@ const OtherInboundPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle={t('app.kuaizhizao.warehouseOtherInbound.title')}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-inbound"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-inbound.v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -734,6 +781,20 @@ const OtherInboundPage: React.FC = () => {
           showCreateButton
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          rowSelectionGetCheckboxProps={(record) => ({
+            disabled: !isOtherInboundDeletable(record) && !isOtherInboundPrintable(record),
+          })}
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) =>
+            t('app.kuaizhizao.warehouseCommon.batchDeleteConfirm', {
+              count,
+              noun: t('app.kuaizhizao.warehouseOtherInbound.title'),
+            })
+          }
           request={async (params, sort, _filter, searchFormValues) => {
             try {
               const listParams = resolveWarehouseDocListParams(searchFormValues, sort, {
@@ -746,12 +807,30 @@ const OtherInboundPage: React.FC = () => {
               });
               const { data: raw, total } = normalizeWarehouseListResponse(response);
               const data = await enrichOtherInboundRecordsWithCustomFields(raw);
+              const next = new Map<string, OtherInbound>();
+              for (const row of data) {
+                if (row.id != null) next.set(String(row.id), row);
+              }
+              listRowsRef.current = next;
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.warehouseOtherInbound.msg.loadListFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
+          toolBarActionsAfterBatch={[
+            <Button
+              key="other-inbound-toolbar-print"
+              icon={<PrinterOutlined />}
+              disabled={!canToolbarPrint}
+              onClick={() => {
+                const row = selectedOtherInboundForBatch[0];
+                if (row) handlePrint(row);
+              }}
+            >
+              {t('components.uniAction.print')}
+            </Button>,
+          ]}
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>

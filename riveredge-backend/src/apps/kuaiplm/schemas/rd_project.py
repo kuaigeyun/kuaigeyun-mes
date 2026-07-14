@@ -229,6 +229,8 @@ class RdProjectResponse(BaseModel):
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
 
 
 class RelatedArticleSummary(BaseModel):

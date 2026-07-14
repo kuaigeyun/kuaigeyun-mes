@@ -19,6 +19,8 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { useTranslation } from 'react-i18next';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   buildNcDefectTypeValueEnum,
   buildNcDispositionValueEnum,
@@ -102,7 +104,7 @@ const NonconformingLedgerPage: React.FC = () => {
   };
 
   const columns: ProColumns<DefectLedgerItem>[] = useMemo(
-    () => [
+    () => alignProColumns<DefectLedgerItem>([
       {
         title: t('app.kuaizhizao.quality.common.columns.createdAt'),
         dataIndex: 'created_at_range',
@@ -220,17 +222,7 @@ const NonconformingLedgerPage: React.FC = () => {
         hideInSearch: true,
         render: (_, row) => renderNcLedgerStatusTag(t, row.status),
       },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.createdAt'),
-        dataIndex: 'created_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        hideInSearch: true,
-        defaultSortOrder: 'descend',
-        render: (_, row) =>
-          row.created_at ? formatDateTime(row.created_at, 'YYYY-MM-DD HH:mm:ss') : '-',
-      },
+      ...buildDocumentAuditColumns<DefectLedgerItem>(t),
       {
         title: t('app.kuaizhizao.quality.common.columns.actions'),
         valueType: 'option',
@@ -279,7 +271,7 @@ const NonconformingLedgerPage: React.FC = () => {
           );
         },
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, ncPerms, canStart8d, navigate, ncStatusValueEnum, ncDefectTypeValueEnum, ncDispositionValueEnum],
   );
 

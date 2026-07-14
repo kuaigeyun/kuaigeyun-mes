@@ -88,6 +88,10 @@ class ToolResponse(ToolBase):
     last_calibration_date: Optional[date] = None
     next_calibration_date: Optional[date] = None
     total_usage_count: int
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -175,6 +179,11 @@ class ToolCalibrationResponse(ToolCalibrationBase):
     tool_code: Optional[str] = None
     tool_name: Optional[str] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
 
 
 # --- 列表包装 ---

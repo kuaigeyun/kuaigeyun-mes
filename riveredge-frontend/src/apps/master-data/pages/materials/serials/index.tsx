@@ -13,12 +13,14 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { formatBusinessDateOnly } from '../../../../../utils/format';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import {
+  BATCH_SERIAL_LEDGER_LIST_FIELD_RANK,
   batchSerialLedgerNoSearchColumn,
-  masterCrudCreatedOnlyColumns,
+  masterCrudCreatedUpdatedColumns,
   resolveBatchSerialLedgerListParams,
 } from '../../../utils/materialListCore';
 import { materialSerialApi, materialApi } from '../../../services/material';
 import type { MaterialSerial, MaterialSerialCreate, MaterialSerialUpdate } from '../../../types/material';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const SERIAL_STATUS_PINNED_FIELD = 'status';
 
@@ -219,7 +221,7 @@ const SerialsPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => formatSerialDateCell(r.factoryDate),
     },
-    ...masterCrudCreatedOnlyColumns<MaterialSerial>(t),
+    ...masterCrudCreatedUpdatedColumns<MaterialSerial>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -254,11 +256,11 @@ const SerialsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<MaterialSerial>
-        columnPersistenceId="apps.master-data.pages.materials.serials"
+        columnPersistenceId="apps.master-data.pages.materials.serials.v2"
         headerTitle={t('app.master-data.menu.materials.serials')}
         actionRef={actionRef}
         rowKey="uuid"
-        columns={columns}
+        columns={alignProColumns(columns, BATCH_SERIAL_LEDGER_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const { current = 1, pageSize = 20 } = params;
           const listParams = resolveBatchSerialLedgerListParams(searchFormValues, sort, {

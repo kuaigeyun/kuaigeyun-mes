@@ -1,8 +1,10 @@
 import type { TFunction } from 'i18next';
 import type { ProColumns } from '@ant-design/pro-components';
+import React from 'react';
 import { extractProTableSort } from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../../kuaizhizao/services/reports';
 import { formDateRangeFormItemProps } from '../../../utils/formDate';
+import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
 import {
   buildMasterCrudActiveValueEnum,
   formatMasterDateTimeCell,
@@ -70,6 +72,18 @@ function resolveActiveBoolean(
   if (raw === true || raw === 'true') return true;
   if (raw === false || raw === 'false') return false;
   return undefined;
+}
+
+function resolveMaterialOperatorName(record: Record<string, unknown>, key: 'created' | 'updated'): string {
+  const candidates =
+    key === 'created'
+      ? ['created_by_name', 'creator_name', 'created_user_name', 'createdByName', 'creatorName']
+      : ['updated_by_name', 'updater_name', 'updated_user_name', 'updatedByName', 'updaterName'];
+  for (const candidate of candidates) {
+    const value = String(record[candidate] ?? '').trim();
+    if (value) return value;
+  }
+  return '-';
 }
 
 export function resolveRuleListParams(
@@ -258,17 +272,23 @@ export function variantAttributeCodeNameSearchColumns(t: TFunction): ProColumns[
 }
 
 export function masterCrudCreatedOnlyColumns<
-  T extends { createdAt?: string; created_at?: string },
+  T extends Record<string, unknown>,
 >(t: TFunction): ProColumns<T>[] {
   return [
     {
       title: t('common.createdAt'),
       dataIndex: 'createdAt',
-      width: 132,
+      width: 156,
       uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
-      render: (_, r) => formatMasterDateTimeCell(r.createdAt ?? r.created_at),
+      render: (_, r) =>
+        React.createElement(UniTableStackedPrimaryCell, {
+          primary: resolveMaterialOperatorName(r as Record<string, unknown>, 'created'),
+          secondary: formatMasterDateTimeCell((r as Record<string, unknown>).createdAt ?? (r as Record<string, unknown>).created_at),
+          secondaryCopyable: false,
+          primaryBold: false,
+        }),
     },
     {
       title: t('common.createdAt'),
@@ -282,17 +302,25 @@ export function masterCrudCreatedOnlyColumns<
 }
 
 export function masterCrudCreatedUpdatedSnakeColumns<
-  T extends { created_at?: string; updated_at?: string },
+  T extends Record<string, unknown>,
 >(t: TFunction): ProColumns<T>[] {
   return [
     {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 132,
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at',
+      width: 148,
       uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
-      render: (_, r) => formatMasterDateTimeCell(r.created_at),
+      render: (_, r) => {
+        const preferred = resolveMaterialPreferredAudit(r as Record<string, unknown>);
+        return React.createElement(UniTableStackedPrimaryCell, {
+          primary: preferred.operator,
+          secondary: preferred.time,
+          secondaryCopyable: false,
+          primaryBold: false,
+        });
+      },
     },
     {
       title: t('common.createdAt'),
@@ -304,15 +332,6 @@ export function masterCrudCreatedUpdatedSnakeColumns<
     },
     {
       title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      hideInSearch: true,
-      render: (_, r) => formatMasterDateTimeCell(r.updated_at),
-    },
-    {
-      title: t('common.updatedAt'),
       dataIndex: 'updated_at_range',
       valueType: 'dateRange',
       hideInTable: true,
@@ -321,6 +340,52 @@ export function masterCrudCreatedUpdatedSnakeColumns<
     },
   ];
 }
+
+function resolveMaterialPreferredAudit(record: Record<string, unknown>): { operator: string; time: string } {
+  const updatedOperator = resolveMaterialOperatorName(record, 'updated');
+  const updatedTime = formatMasterDateTimeCell(record.updated_at ?? record.updatedAt);
+  if (updatedOperator !== '-' && updatedTime !== '-') {
+    return {
+      operator: updatedOperator,
+      time: updatedTime,
+    };
+  }
+  const createdOperator = resolveMaterialOperatorName(record, 'created');
+  const createdTime = formatMasterDateTimeCell(record.created_at ?? record.createdAt);
+  if (createdOperator !== '-' && createdTime !== '-') {
+    return { operator: createdOperator, time: createdTime };
+  }
+  if (updatedTime !== '-') {
+    return { operator: updatedOperator, time: updatedTime };
+  }
+  return {
+    operator: createdOperator,
+    time: createdTime,
+  };
+}
+
+/**
+ * 批号/序列号台账列表列序（勿套用销售单据 SALES_DOC_LIST_FIELD_RANK：
+ * 后者把 quantity 排到 60，而 batchNo/serialNo 未登记会落到默认末段，导致数量居首）。
+ *
+ * 顺序：主标识 → 物料 → 状态 → 数量 → 日期 → 审计
+ */
+export const BATCH_SERIAL_LEDGER_LIST_FIELD_RANK: Record<string, number> = {
+  batchNo: 10,
+  serialNo: 10,
+  materialCode: 20,
+  materialName: 21,
+  materialModel: 22,
+  status: 30,
+  quantity: 40,
+  productionDate: 50,
+  expiryDate: 51,
+  factoryDate: 52,
+  updatedAt: 92,
+  createdAt: 93,
+  updated_at: 92,
+  created_at: 93,
+};
 
 export function batchSerialLedgerNoSearchColumn(
   title: string,

@@ -25,8 +25,6 @@ class RdGateTemplate(BaseModel):
     is_default = fields.BooleanField(default=False, description="是否默认模板")
     is_active = fields.BooleanField(default=True, description="是否启用")
     notes = fields.TextField(null=True, description="备注")
-    created_by = fields.IntField(null=True)
-    updated_by = fields.IntField(null=True)
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:

@@ -50,11 +50,24 @@ def test_sales_order_effective_shows_business_stage():
     assert lc["main_stages"][0]["label"] == "已生效"
 
 
+def test_demand_effective_shows_business_stage():
+    lc = get_demand_lifecycle(
+        SimpleNamespace(status="已审核", review_status="APPROVED", pushed_to_computation=False),
+    )
+    assert lc["current_stage_name"] == "已生效"
+    assert lc["current_stage_key"] == "effective"
+    assert [s["key"] for s in lc["main_stages"]] == ["effective", "pushed"]
+    assert lc["main_stages"][0]["status"] == "active"
+    assert lc["main_stages"][1]["status"] == "pending"
+
+
 def test_demand_pushed_shows_business_stage():
     lc = get_demand_lifecycle(
         SimpleNamespace(status="已审核", review_status="APPROVED", pushed_to_computation=True),
     )
     assert lc["current_stage_name"] == "已下推计算"
+    assert lc["main_stages"][0]["status"] == "done"
+    assert lc["main_stages"][1]["status"] == "active"
 
 
 def test_reporting_approved_shows_recorded():

@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
 import { App, Card, Col, Popover, Row, Select, Space, Statistic, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { formatQuantity } from '../../../../../utils/format';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniTable } from '../../../../../components/uni-table';
@@ -54,12 +55,6 @@ interface GroupItem {
   total_quantity: number;
 }
 
-function formatQty(val: unknown): string {
-  const n = Number(val ?? 0);
-  if (!Number.isFinite(n)) return '0';
-  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-}
-
 function InTransitPopoverContent({
   breakdown,
   t,
@@ -90,7 +85,7 @@ function InTransitPopoverContent({
       <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
         {rows.map((row) => (
           <li key={row.key}>
-            {row.label}: <strong>{formatQty(row.value)}</strong>
+            {row.label}: <strong>{formatQuantity(row.value)}</strong>
           </li>
         ))}
       </ul>
@@ -107,11 +102,11 @@ function renderInTransitCell(record: InventoryItem, t: (key: string) => string) 
     (breakdown.purchase_quantity > 0 ||
       breakdown.work_order_quantity > 0 ||
       breakdown.outsource_work_order_quantity > 0);
-  if (!hasDetail) return formatQty(total);
+  if (!hasDetail) return formatQuantity(total);
   return (
     <Popover content={<InTransitPopoverContent breakdown={breakdown} t={t} />} trigger="hover">
       <span style={{ cursor: 'help', borderBottom: '1px dashed var(--ant-color-text-secondary)' }}>
-        {formatQty(total)}
+        {formatQuantity(total)}
       </span>
     </Popover>
   );
@@ -322,7 +317,7 @@ const InventoryPage: React.FC = () => {
         render: (_, record) => {
           const qty = Number(record.quantity || 0);
           return (
-            <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>{formatQty(qty)}</span>
+            <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>{formatQuantity(qty)}</span>
           );
         },
       },
@@ -454,7 +449,7 @@ const InventoryPage: React.FC = () => {
               {t('app.kuaizhizao.warehouseCommon.groupTag', {
                 key: g.group_key,
                 count: g.record_count,
-                qty: Number(g.total_quantity || 0).toFixed(2),
+                qty: formatQuantity(g.total_quantity),
               })}
             </Tag>
           ))}
@@ -471,6 +466,7 @@ const InventoryPage: React.FC = () => {
         skipFuzzyPinyinClientFilter
         showExportButton
         onExport={handleExport}
+        enableRowSelection
         rowKey="id"
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}

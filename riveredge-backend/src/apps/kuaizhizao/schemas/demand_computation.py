@@ -172,9 +172,14 @@ class DemandComputationResponse(DemandComputationBase):
     error_message: Optional[str]
     created_at: datetime
     updated_at: datetime
-    created_by: Optional[int]
-    updated_by: Optional[int]
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     items: Optional[List[DemandComputationItemResponse]] = Field(default_factory=list)
+    downstream_push_progress: Optional[float] = Field(
+        None, description="下推进度 0-100（列表用）"
+    )
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
     capabilities: Optional[DemandComputationCapabilities] = Field(
         None,

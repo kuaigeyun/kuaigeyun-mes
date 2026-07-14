@@ -24,6 +24,8 @@ import { moldApi } from '../../../services/equipment';
 import { borrowsApi } from '../../../services/moldOps';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   EQUIPMENT_OPS_PINNED_STATUS_FIELD,
   normalizeEquipmentListResponse,
@@ -145,8 +147,7 @@ const MoldBorrowsPage: React.FC = () => {
     [],
   );
 
-  const columns: ProColumns<MoldBorrow>[] = useMemo(
-    () => [
+  const columns: ProColumns<MoldBorrow>[] = useMemo(() => alignProColumns<MoldBorrow>([
       {
         title: t(`${P}.col.borrowDate`),
         dataIndex: 'doc_date_range',
@@ -203,13 +204,10 @@ const MoldBorrowsPage: React.FC = () => {
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
+        hideInTable: true,
         hideInSearch: true,
-        defaultSortOrder: 'descend',
-        sorter: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
+      ...buildDocumentAuditColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
         key: 'action',
@@ -265,7 +263,7 @@ const MoldBorrowsPage: React.FC = () => {
           </>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, perms, borrowStatusValueEnum],
   );
 

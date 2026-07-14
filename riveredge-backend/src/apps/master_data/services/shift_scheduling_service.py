@@ -20,7 +20,9 @@ from apps.master_data.schemas.shift_scheduling_schemas import (
     ShiftRosterResponse,
     ShiftUpdate,
 )
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 def week_bounds(anchor: date) -> Tuple[date, date]:
@@ -34,13 +36,16 @@ class ShiftSchedulingService:
     # ---------- 班次 ----------
 
     @staticmethod
-    async def create_shift(tenant_id: int, data: ShiftCreate) -> ShiftResponse:
+    async def create_shift(
+        tenant_id: int, data: ShiftCreate, operator: Optional[User] = None
+    ) -> ShiftResponse:
         existing = await Shift.filter(
             tenant_id=tenant_id, code=data.code, deleted_at__isnull=True
         ).first()
         if existing:
             raise ValidationError(f"班次编码 {data.code} 已存在")
         payload = data.model_dump(by_alias=False)
+        apply_create_audit(payload, operator)
         row = await Shift.create(tenant_id=tenant_id, **payload)
         return ShiftResponse.model_validate(row)
 
@@ -86,7 +91,10 @@ class ShiftSchedulingService:
 
     @staticmethod
     async def update_shift(
-        tenant_id: int, shift_uuid: str, data: ShiftUpdate
+        tenant_id: int,
+        shift_uuid: str,
+        data: ShiftUpdate,
+        operator: Optional[User] = None,
     ) -> ShiftResponse:
         row = await Shift.filter(
             tenant_id=tenant_id, uuid=shift_uuid, deleted_at__isnull=True
@@ -104,6 +112,7 @@ class ShiftSchedulingService:
                 raise ValidationError(f"班次编码 {updates['code']} 已存在")
         for k, v in updates.items():
             setattr(row, k, v)
+        apply_update_audit(row, operator)
         await row.save()
         return ShiftResponse.model_validate(row)
 
@@ -224,7 +233,7 @@ class ShiftSchedulingService:
         )
 
     @staticmethod
-    async def create_roster(tenant_id: int, data: ShiftRosterCreate) -> ShiftRosterResponse:
+    async def create_roster(tenant_id: int, data: ShiftRosterCreate, operator: Optional[User] = None) -> ShiftRosterResponse:
         period_start, period_end = week_bounds(data.period_start)
         existing_q = ShiftSchedulingService._roster_lookup_filter(
             tenant_id,
@@ -268,6 +277,7 @@ class ShiftSchedulingService:
                     "employee_name": user.full_name or user.username,
                 }
             )
+        apply_create_audit(roster_kwargs, operator)
         roster = await ShiftRoster.create(**roster_kwargs)
         return await ShiftSchedulingService._roster_to_response(roster, include_assignments=True)
 
@@ -344,7 +354,7 @@ class ShiftSchedulingService:
 
     @staticmethod
     async def save_assignments(
-        tenant_id: int, roster_uuid: str, data: ShiftAssignmentsBulkUpdate
+        tenant_id: int, roster_uuid: str, data: ShiftAssignmentsBulkUpdate, operator: Optional[User] = None,
     ) -> ShiftRosterResponse:
         roster = await ShiftRoster.filter(
             tenant_id=tenant_id, uuid=roster_uuid, deleted_at__isnull=True
@@ -388,6 +398,8 @@ class ShiftSchedulingService:
                     work_date=item.work_date,
                     shift_id=item.shift_id,
                 )
+            apply_update_audit(roster, operator)
+            await roster.save()
         return await ShiftSchedulingService.get_roster_by_uuid(tenant_id, roster_uuid)
 
     @staticmethod
@@ -425,7 +437,7 @@ class ShiftSchedulingService:
                 )
 
     @staticmethod
-    async def publish_roster(tenant_id: int, roster_uuid: str) -> ShiftRosterResponse:
+    async def publish_roster(tenant_id: int, roster_uuid: str, operator: Optional[User] = None) -> ShiftRosterResponse:
         roster = await ShiftRoster.filter(
             tenant_id=tenant_id, uuid=roster_uuid, deleted_at__isnull=True
         ).first()
@@ -436,6 +448,7 @@ class ShiftSchedulingService:
         await ShiftSchedulingService._validate_publish_conflicts(tenant_id, roster)
         roster.status = "published"
         roster.published_at = datetime.now()
+        apply_update_audit(roster, operator)
         await roster.save()
         return await ShiftSchedulingService.get_roster_by_uuid(tenant_id, roster_uuid)
 

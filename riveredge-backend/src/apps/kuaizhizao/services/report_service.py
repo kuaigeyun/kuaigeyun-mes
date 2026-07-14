@@ -2249,6 +2249,8 @@ class ReportService:
         include_sales_commitment: bool = False,
         include_summary: bool = False,
         group_by: Optional[str] = None,
+        ownership_type: Optional[str] = None,
+        customer_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """批次库存查询"""
         logger.info(f"query_batch_inventory: material_id={material_id}, material_ids={material_ids}, include_sales_commitment={include_sales_commitment}")
@@ -2261,6 +2263,10 @@ class ReportService:
         if material_ids: query = query.filter(material_id__in=material_ids)
         elif material_id: query = query.filter(material_id=material_id)
         if batch_number: query = query.filter(batch_no__icontains=batch_number)
+        if ownership_type:
+            query = query.filter(ownership_type=ownership_type)
+        if customer_id is not None:
+            query = query.filter(customer_id=customer_id)
         if not include_expired: query = query.filter(Q(expiry_date__isnull=True) | Q(expiry_date__gte=date.today()))
         include_main_batches = True
         main_warehouse_filter_id: Optional[int] = None
@@ -2278,6 +2284,12 @@ class ReportService:
         if material_ids: line_query = line_query.filter(material_id__in=material_ids)
         elif material_id: line_query = line_query.filter(material_id=material_id)
         if batch_number: line_query = line_query.filter(batch_no__icontains=batch_number)
+        if ownership_type:
+            # 线边仓模型若无归属字段则忽略；有则对齐过滤
+            if hasattr(LineSideInventory, "ownership_type"):
+                line_query = line_query.filter(ownership_type=ownership_type)
+        if customer_id is not None and hasattr(LineSideInventory, "customer_id"):
+            line_query = line_query.filter(customer_id=customer_id)
         if warehouse_id:
             line_query = line_query.filter(warehouse_id=warehouse_id)
         line_items = await line_query.all()
@@ -2285,12 +2297,28 @@ class ReportService:
         if summary_only:
             target_ids = material_ids if material_ids else ([material_id] if material_id else [])
             totals = {str(mid): 0.0 for mid in target_ids}
-            for b in batches: 
+            for b in batches:
+                # 与出库扣减默认口径一致：仅自购在库；客供不计入 summary
+                if (getattr(b, "status", None) or "") != "in_stock":
+                    continue
+                if (getattr(b, "ownership_type", None) or "company_owned") != "company_owned":
+                    continue
+                if int(getattr(b, "customer_id", 0) or 0) != 0:
+                    continue
+                if (b.quantity or 0) <= 0:
+                    continue
                 key = str(b.material_id)
                 totals[key] = totals.get(key, 0) + float(b.quantity or 0)
-            for l in line_items: 
+            for l in line_items:
+                if (getattr(l, "ownership_type", None) or "company_owned") != "company_owned":
+                    continue
+                if int(getattr(l, "customer_id", 0) or 0) != 0:
+                    continue
                 key = str(l.material_id)
-                totals[key] = totals.get(key, 0) + float((l.quantity or 0) - (l.reserved_quantity or 0))
+                avail = float((l.quantity or 0) - (l.reserved_quantity or 0))
+                if avail <= 0:
+                    continue
+                totals[key] = totals.get(key, 0) + avail
             if include_sales_commitment:
                 logger.info("query_batch_inventory: including sales commitment")
                 active_order_ids = await SalesOrder.filter(
@@ -2346,6 +2374,8 @@ class ReportService:
                 "status": status, 
                 "warehouse_id": resolved_wh_id,
                 "warehouse_name": resolved_wh_name,
+                "ownership_type": getattr(b, "ownership_type", None) or "company_owned",
+                "customer_id": int(getattr(b, "customer_id", 0) or 0),
             })
         for l in line_items:
             qty = float((l.quantity or 0) - (l.reserved_quantity or 0))
@@ -2360,7 +2390,9 @@ class ReportService:
                 "supplier_batch_no": None,
                 "quantity": qty, 
                 "status": "在库" if qty > 0 else "无库存", 
-                "warehouse_name": self._normalize_warehouse_display_name(getattr(l, "warehouse_name", None))
+                "warehouse_name": self._normalize_warehouse_display_name(getattr(l, "warehouse_name", None)),
+                "ownership_type": getattr(l, "ownership_type", None) or "company_owned",
+                "customer_id": int(getattr(l, "customer_id", 0) or 0),
             })
         if aggregate_by_material:
             # 即时库存口径：按物料（可按仓库）汇总，不按批次拆分

@@ -40,8 +40,6 @@ class PurchaseOrderChangeOrder(BaseModel):
     attachments = fields.JSONField(null=True)
     notes = fields.TextField(null=True)
     is_active = fields.BooleanField(default=True)
-    created_by = fields.IntField(null=True)
-    updated_by = fields.IntField(null=True)
     deleted_at = fields.DatetimeField(null=True)
 
     items: fields.ReverseRelation["PurchaseOrderChangeItem"]

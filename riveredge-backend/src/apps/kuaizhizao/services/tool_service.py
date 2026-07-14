@@ -15,18 +15,24 @@ from datetime import datetime, date
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
+from apps.common.audit_actor import apply_create_audit
 from apps.kuaizhizao.models.tool import Tool
 from apps.kuaizhizao.models.tool_ops import ToolMaintenanceScheme, ToolSchemeBinding
 from apps.kuaizhizao.schemas.tool import ToolCreate, ToolUpdate
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 class ToolService:
     """工装基础信息服务"""
 
     @staticmethod
-    async def create_tool(tenant_id: int, data: ToolCreate) -> Tool:
+    async def create_tool(
+        tenant_id: int,
+        data: ToolCreate,
+        current_user: Optional[User] = None,
+    ) -> Tool:
         try:
             if not data.code:
                 try:
@@ -39,6 +45,7 @@ class ToolService:
                     data.code = f"TL{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
             tool = Tool(tenant_id=tenant_id, **data.model_dump(exclude_none=True))
+            apply_create_audit(tool, current_user)
             await tool.save()
             return tool
         except IntegrityError:

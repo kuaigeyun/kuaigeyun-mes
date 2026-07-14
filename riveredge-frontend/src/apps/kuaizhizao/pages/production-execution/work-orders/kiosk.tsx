@@ -46,7 +46,7 @@ import { getAvatarText } from '../../../../../utils/avatar';
 import { getCurrentUser, CurrentUser } from '../../../../../services/auth';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
-import { formatOperationInspectionSummary, getProcessInspectionCardStatus } from '../../../utils/workOrderReporting';
+import { formatOperationInspectionSummary, getOperationCardPhase, getOperationProgressPercent, getOperationQualityMetrics, getProcessInspectionCardStatus, isOperationEffectivelyCompleted } from '../../../utils/workOrderReporting';
 
 const { Search } = Input;
 const { Text, Title } = Typography;
@@ -597,11 +597,11 @@ const WorkOrdersKioskPage: React.FC = () => {
                                     <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 16, padding: '0 8px', minWidth: 'min-content' }}>
                                         {operations.map((op, idx) => {
                                             const isActive = op.id === activeOperation?.id;
-                                            const isProcessing = op.status === 'processing';
-                                            const isCompleted = op.status === 'completed';
-                                            const progress = op.reporting_type === 'status'
-                                                ? (isCompleted ? 100 : 0)
-                                                : Math.min(100, Math.round(((Number(op.completed_quantity) || 0) / (Number(selectedWorkOrder?.quantity) || 1)) * 100));
+                                            const woQty = Number(selectedWorkOrder?.quantity || 0);
+                                            const phase = getOperationCardPhase(op, woQty);
+                                            const isCompleted = phase === 'completed';
+                                            const isProcessing = phase === 'in_progress';
+                                            const progress = getOperationProgressPercent(op, woQty);
                                             const strokeColor = isCompleted ? HMI_DESIGN_TOKENS.STATUS_OK : isProcessing ? HMI_DESIGN_TOKENS.STATUS_WARNING : HMI_DESIGN_TOKENS.STATUS_INFO;
                                             const opName = op.name || op.operation_name || `工序${idx + 1}`;
                                             return (
@@ -661,7 +661,15 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                 <div>
                                                     <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>状态</div>
                                                     <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>
-                                                        {activeOperation.status === 'completed' ? '已完成' : activeOperation.status === 'processing' ? '执行中' : '待执行'}
+                                                        {(() => {
+                                                            const phase = getOperationCardPhase(
+                                                                activeOperation,
+                                                                Number(selectedWorkOrder?.quantity || 0),
+                                                            );
+                                                            if (phase === 'completed') return '已完成';
+                                                            if (phase === 'in_progress') return '执行中';
+                                                            return '待执行';
+                                                        })()}
                                                     </div>
                                                 </div>
                                                 <div>
@@ -669,27 +677,36 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                     <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>
                                                         {activeOperation.reporting_type === 'status'
                                                             ? (activeOperation.status === 'completed' ? '100%' : '0%')
-                                                            : `${activeOperation.completed_quantity ?? 0} / ${selectedWorkOrder?.quantity ?? 0}`}
+                                                            : (() => {
+                                                                const qm = getOperationQualityMetrics(activeOperation);
+                                                                const done = qm.fromInspection
+                                                                    ? qm.qualified
+                                                                    : (activeOperation.completed_quantity ?? 0);
+                                                                return `${done} / ${selectedWorkOrder?.quantity ?? 0}`;
+                                                            })()}
                                                     </div>
                                                 </div>
-                                                {activeOperation.reporting_type !== 'status' && (
+                                                {activeOperation.reporting_type !== 'status' && (() => {
+                                                    const qm = getOperationQualityMetrics(activeOperation);
+                                                    return (
                                                     <>
                                                         <div>
                                                             <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>{t('app.kuaizhizao.workOrder.kioskQualifiedUnqualified')}</div>
                                                             <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>
-                                                                {activeOperation.qualified_quantity ?? 0} / {activeOperation.unqualified_quantity ?? 0}
+                                                                {qm.qualified} / {qm.unqualified}
                                                             </div>
                                                         </div>
-                                                        {(Number(activeOperation.completed_quantity) || 0) > 0 && (
+                                                        {qm.rate != null && (
                                                             <div>
                                                                 <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>{t('app.kuaizhizao.workOrder.kioskPassRate')}</div>
                                                                 <div style={{ color: HMI_DESIGN_TOKENS.STATUS_OK, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, fontWeight: 600 }}>
-                                                                    {Math.round(((Number(activeOperation.qualified_quantity) || 0) / (Number(activeOperation.completed_quantity) || 1)) * 100)}%
+                                                                    {qm.rate}%
                                                                 </div>
                                                             </div>
                                                         )}
                                                     </>
-                                                )}
+                                                    );
+                                                })()}
                                             </div>
                                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                                 <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<FileProtectOutlined />} onClick={() => { setSopModalTab('static'); setSopModalVisible(true); }}>

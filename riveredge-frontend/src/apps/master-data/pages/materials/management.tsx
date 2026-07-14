@@ -146,6 +146,27 @@ function getMaterialProcessRouteName(record: Material): string {
   return String(name).trim() || '-'
 }
 
+function resolveMaterialAuditDisplay(record: Record<string, unknown>): { operator: string; time: string } {
+  const updater = String(
+    record.updatedByName ?? record.updated_by_name ?? record.updater_name ?? record.updated_user_name ?? '',
+  ).trim();
+  const updatedAt = formatMasterDateTimeCell(record.updatedAt ?? record.updated_at);
+  if (updater && updatedAt !== '-') {
+    return { operator: updater, time: updatedAt };
+  }
+  const creator = String(
+    record.createdByName ?? record.created_by_name ?? record.creator_name ?? record.created_user_name ?? '',
+  ).trim();
+  const createdAt = formatMasterDateTimeCell(record.createdAt ?? record.created_at);
+  if (creator && createdAt !== '-') {
+    return { operator: creator, time: createdAt };
+  }
+  if (updatedAt !== '-') {
+    return { operator: updater || '-', time: updatedAt };
+  }
+  return { operator: creator || '-', time: createdAt };
+}
+
 function getMaterialSourceTypeLabel(
   record: Material,
   sourceTypeOptions: { value: string; label: string }[],
@@ -211,6 +232,7 @@ function MaterialListStackedCell({
 
 // 导入服务和类型
 import { materialApi, materialGroupApi } from '../../services/material'
+import { drawingApi, type EngineeringDrawing } from '../../services/drawing'
 import {
   buildMaterialSourceTypeOptions,
   normalizeMaterialSourceType,
@@ -496,6 +518,8 @@ const MaterialsManagementPage: React.FC = () => {
   const [materialDrawerVisible, setMaterialDrawerVisible] = useState(false)
   const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null)
   const [materialDetailLoading, setMaterialDetailLoading] = useState(false)
+  const [linkedDrawings, setLinkedDrawings] = useState<EngineeringDrawing[]>([])
+  const [linkedDrawingsLoading, setLinkedDrawingsLoading] = useState(false)
   const [fabricationWizardOpen, setFabricationWizardOpen] = useState(false)
   const [fabricationWizardMaterial, setFabricationWizardMaterial] = useState<FabricationMaterialRef | null>(null)
 
@@ -767,21 +791,27 @@ const MaterialsManagementPage: React.FC = () => {
         setMaterialDrawerVisible(true)
         setMaterialDetailLoading(true)
         setCurrentMaterial(null)
+        setLinkedDrawings([])
+        setLinkedDrawingsLoading(true)
         resetDetailFieldValues()
       })
       try {
         const detail = await materialApi.get(record.uuid)
         setCurrentMaterial(detail)
         await loadFieldValuesForDetail(detail.id)
+        const drawings = await drawingApi.listByContext({ materialUuid: record.uuid })
+        setLinkedDrawings(drawings)
       } catch (error: any) {
         messageApi.error(error.message || t('app.master-data.materials.getDetailFailed'))
         setMaterialDrawerVisible(false)
         setCurrentMaterial(null)
+        setLinkedDrawings([])
       } finally {
         setMaterialDetailLoading(false)
+        setLinkedDrawingsLoading(false)
       }
     },
-    [messageApi, t]
+    [messageApi, t, loadFieldValuesForDetail, resetDetailFieldValues]
   )
 
   const handleOpenMaterialForEdit = useCallback(
@@ -2367,19 +2397,24 @@ const MaterialsManagementPage: React.FC = () => {
           ),
       },
       {
-        title: t('common.createdAt'),
-        dataIndex: 'createdAt',
-        width: 132,
+        title: t('common.updatedAt'),
+        dataIndex: 'updatedAt',
+        width: 148,
         uniTableKeepWidth: true,
         sorter: true,
         hideInSearch: true,
-        render: (_, record) =>
-          renderMasterCell(
+        render: (_, record) => {
+          const preferred = resolveMaterialAuditDisplay(record as unknown as Record<string, unknown>);
+          return renderMasterCell(
             record,
-            formatMasterDateTimeCell(
-              (record as any).createdAt ?? (record as any).created_at,
-            ),
-          ),
+            <UniTableStackedPrimaryCell
+              primary={preferred.operator}
+              secondary={preferred.time}
+              secondaryCopyable={false}
+              primaryBold={false}
+            />,
+          );
+        },
       },
       {
         title: t('common.createdAt'),
@@ -2388,21 +2423,6 @@ const MaterialsManagementPage: React.FC = () => {
         hideInTable: true,
         order: 30,
         formItemProps: formDateRangeFormItemProps,
-      },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updatedAt',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, record) =>
-          renderMasterCell(
-            record,
-            formatMasterDateTimeCell(
-              (record as any).updatedAt ?? (record as any).updated_at,
-            ),
-          ),
       },
       {
         title: t('common.updatedAt'),
@@ -3562,6 +3582,7 @@ const MaterialsManagementPage: React.FC = () => {
         onClose={() => {
           setMaterialDrawerVisible(false)
           setCurrentMaterial(null)
+          setLinkedDrawings([])
         }}
         loading={materialDetailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
@@ -3623,6 +3644,63 @@ const MaterialsManagementPage: React.FC = () => {
         linesVisible={
           !!currentMaterial?.variantManaged ||
           !!(currentMaterial?.variantAttributes ?? (currentMaterial as any)?.variant_attributes)
+        }
+        collaborationTitle={t('app.master-data.materials.linkedDrawings')}
+        collaborationVisible={!!currentMaterial}
+        collaborationRelations={
+          currentMaterial ? (
+            linkedDrawingsLoading ? (
+              <Skeleton active paragraph={{ rows: 3 }} />
+            ) : linkedDrawings.length ? (
+              <Table<EngineeringDrawing>
+                size="small"
+                rowKey="uuid"
+                pagination={false}
+                dataSource={linkedDrawings}
+                columns={[
+                  {
+                    title: t('app.master-data.drawings.code'),
+                    dataIndex: 'code',
+                    width: 120,
+                  },
+                  {
+                    title: t('app.master-data.drawings.name'),
+                    dataIndex: 'name',
+                    ellipsis: true,
+                  },
+                  {
+                    title: t('app.master-data.drawings.revision'),
+                    dataIndex: 'revision',
+                    width: 72,
+                  },
+                  {
+                    title: t('common.actions'),
+                    width: 88,
+                    render: (_, row) => (
+                      <Button
+                        type="link"
+                        size="small"
+                        {...rowActionKind('read')}
+                        onClick={() =>
+                          window.open(
+                            `/apps/master-data/process/drawings?uuid=${encodeURIComponent(row.uuid)}`,
+                            '_blank',
+                            'noopener,noreferrer',
+                          )
+                        }
+                      >
+                        {t('common.detail')}
+                      </Button>
+                    ),
+                  },
+                ]}
+              />
+            ) : (
+              <span style={{ color: token.colorTextSecondary }}>
+                {t('app.master-data.materials.noLinkedDrawings')}
+              </span>
+            )
+          ) : null
         }
       />
 

@@ -88,6 +88,7 @@ async def create_spot_check(
             data,
             operator_id=current_user.id,
             operator_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         lines = await svc.spot_check_service._load_lines(tenant_id, header.id)
         return _spot_check_response(header, lines)
@@ -151,10 +152,11 @@ async def get_spot_check(row_id: int, tenant_id: int = Depends(get_current_tenan
 async def update_spot_check(
     row_id: int,
     data: SpotCheckUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        header = await svc.spot_check_service.update(tenant_id, row_id, data)
+        header = await svc.spot_check_service.update(tenant_id, row_id, data, current_user=current_user)
         lines = await svc.spot_check_service._load_lines(tenant_id, header.id)
         return _spot_check_response(header, lines)
     except (ValidationError, NotFoundError) as e:
@@ -205,6 +207,7 @@ async def create_route_patrol(
             data,
             operator_id=current_user.id,
             operator_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         lines = await svc.route_patrol_service._load_lines(tenant_id, header.id)
         return _route_patrol_response(header, lines)
@@ -268,10 +271,11 @@ async def get_route_patrol(row_id: int, tenant_id: int = Depends(get_current_ten
 async def update_route_patrol(
     row_id: int,
     data: RoutePatrolUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        header = await svc.route_patrol_service.update(tenant_id, row_id, data)
+        header = await svc.route_patrol_service.update(tenant_id, row_id, data, current_user=current_user)
         lines = await svc.route_patrol_service._load_lines(tenant_id, header.id)
         return _route_patrol_response(header, lines)
     except (ValidationError, NotFoundError) as e:
@@ -310,6 +314,7 @@ async def create_scrap_application(
             data,
             operator_id=current_user.id,
             operator_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return ScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -375,10 +380,11 @@ async def get_scrap_application(row_id: int, tenant_id: int = Depends(get_curren
 async def update_scrap_application(
     row_id: int,
     data: ScrapApplicationUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.scrap_application_service.update(tenant_id, row_id, data)
+        row = await svc.scrap_application_service.update(tenant_id, row_id, data, current_user=current_user)
         return ScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -390,9 +396,13 @@ async def update_scrap_application(
     response_model=ScrapApplicationResponse,
     dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-scrap:submit"))],
 )
-async def submit_scrap_application(row_id: int, tenant_id: int = Depends(get_current_tenant)):
+async def submit_scrap_application(
+    row_id: int,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
     try:
-        row = await svc.scrap_application_service.submit(tenant_id, row_id)
+        row = await svc.scrap_application_service.submit(tenant_id, row_id, current_user=current_user)
         return ScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -415,6 +425,7 @@ async def approve_scrap_application(
             row_id,
             approver_id=current_user.id,
             approver_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return ScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -440,6 +451,7 @@ async def reject_scrap_application(
             body.reject_reason,
             approver_id=current_user.id,
             approver_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return ScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -479,6 +491,7 @@ async def create_transfer_application(
             data,
             operator_id=current_user.id,
             operator_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return TransferApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -544,10 +557,11 @@ async def get_transfer_application(row_id: int, tenant_id: int = Depends(get_cur
 async def update_transfer_application(
     row_id: int,
     data: TransferApplicationUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.transfer_application_service.update(tenant_id, row_id, data)
+        row = await svc.transfer_application_service.update(tenant_id, row_id, data, current_user=current_user)
         return TransferApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -559,9 +573,13 @@ async def update_transfer_application(
     response_model=TransferApplicationResponse,
     dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-transfer:submit"))],
 )
-async def submit_transfer_application(row_id: int, tenant_id: int = Depends(get_current_tenant)):
+async def submit_transfer_application(
+    row_id: int,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
     try:
-        row = await svc.transfer_application_service.submit(tenant_id, row_id)
+        row = await svc.transfer_application_service.submit(tenant_id, row_id, current_user=current_user)
         return TransferApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -584,6 +602,7 @@ async def approve_transfer_application(
             row_id,
             approver_id=current_user.id,
             approver_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return TransferApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -609,6 +628,7 @@ async def reject_transfer_application(
             body.reject_reason,
             approver_id=current_user.id,
             approver_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return TransferApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:

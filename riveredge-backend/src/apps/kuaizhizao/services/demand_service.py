@@ -160,7 +160,9 @@ class DemandService(AppBaseService[Demand]):
             )
             create_data['demand_code'] = code
             create_data['created_by'] = created_by
+            create_data['created_by_name'] = user_info['name']
             create_data['updated_by'] = created_by
+            create_data['updated_by_name'] = user_info['name']
             
             # 创建需求
             demand = await Demand.create(
@@ -460,7 +462,9 @@ class DemandService(AppBaseService[Demand]):
             
             # 准备更新数据
             update_data = demand_data.model_dump(exclude_unset=True, exclude={'updated_by'})
+            user_info = await self.get_user_info(updated_by)
             update_data['updated_by'] = updated_by
+            update_data['updated_by_name'] = user_info['name']
 
             # 判断是否草稿（兼容 DRAFT / 草稿）
             is_draft = (demand.status or "").strip() in (DemandStatus.DRAFT, "DRAFT", "草稿")
@@ -475,7 +479,7 @@ class DemandService(AppBaseService[Demand]):
 
                     node_editable = approval_edit_context.get("editable_fields")
                     for field in update_data:
-                        if field in ("updated_by",):
+                        if field in ("updated_by", "updated_by_name"):
                             continue
                         if not is_field_editable("demand", field, node_editable):
                             raise ValidationError(f"字段「{field}」不允许在审核中修改")
@@ -487,6 +491,7 @@ class DemandService(AppBaseService[Demand]):
                             f"需求状态与上游同步，仅支持修改优先级和备注。当前状态: {demand.status}"
                         )
                     update_data['updated_by'] = updated_by
+                    update_data['updated_by_name'] = user_info['name']
             
             # 更新需求
             if update_data:
@@ -560,7 +565,8 @@ class DemandService(AppBaseService[Demand]):
                 status=DemandStatus.PENDING_REVIEW,
                 review_status=ReviewStatus.PENDING,
                 submit_time=datetime.now(),
-                updated_by=submitted_by
+                updated_by=submitted_by,
+                updated_by_name=submitter_name,
             )
 
             # 蓝图 nodes.demand.auditRequired=False 时表示自动审核，优先于审批流（与销售订单 submit 逻辑一致）
@@ -705,7 +711,8 @@ class DemandService(AppBaseService[Demand]):
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 status=status,
-                updated_by=approved_by
+                updated_by=approved_by,
+                updated_by_name=approver_name,
             )
             
             return await self.get_demand_by_id(tenant_id, demand_id)
@@ -970,10 +977,10 @@ class DemandService(AppBaseService[Demand]):
             )
 
             # 使用状态流转服务记录
+            operator_name = await self.get_user_name(unapproved_by)
             try:
                 from apps.kuaizhizao.services.state_transition_service import StateTransitionService
                 state_service = StateTransitionService()
-                operator_name = await self.get_user_name(unapproved_by)
                 
                 await state_service.transition_state(
                     tenant_id=tenant_id,
@@ -997,6 +1004,7 @@ class DemandService(AppBaseService[Demand]):
                 review_time=None,
                 review_remarks=None,
                 updated_by=unapproved_by,
+                updated_by_name=operator_name,
                 updated_at=datetime.now()
             )
             
@@ -1479,6 +1487,7 @@ class DemandService(AppBaseService[Demand]):
         if not demand:
             return {"synced": False, "reason": "no_demand"}
 
+        operator_name = await self.get_user_name(operator_id)
         trigger_reason = f"upstream_{source_type}_updated"
         had_pushed = demand.pushed_to_computation
         computation_id = demand.computation_id
@@ -1544,6 +1553,7 @@ class DemandService(AppBaseService[Demand]):
                         "notes": order.notes,
                         "source_code": order.order_code,
                         "updated_by": operator_id,
+                        "updated_by_name": operator_name,
                     }
                     await Demand.filter(tenant_id=tenant_id, id=demand.id).update(**upd)
                     await DemandItem.filter(tenant_id=tenant_id, demand_id=demand.id).delete()
@@ -1589,6 +1599,7 @@ class DemandService(AppBaseService[Demand]):
                         "reviewer_name": forecast.reviewer_name,
                         "review_time": forecast.review_time,
                         "updated_by": operator_id,
+                        "updated_by_name": operator_name,
                     }
                     await Demand.filter(tenant_id=tenant_id, id=demand.id).update(**upd)
                     await DemandItem.filter(tenant_id=tenant_id, demand_id=demand.id).delete()
@@ -2018,10 +2029,10 @@ class DemandService(AppBaseService[Demand]):
                 logger.warning(f"取消审批流程失败或无需取消: {e}")
             
             # 使用状态流转服务记录
+            operator_name = await self.get_user_name(withdrawn_by)
             try:
                 from apps.kuaizhizao.services.state_transition_service import StateTransitionService
                 state_service = StateTransitionService()
-                operator_name = await self.get_user_name(withdrawn_by)
                 
                 await state_service.transition_state(
                     tenant_id=tenant_id,
@@ -2041,6 +2052,7 @@ class DemandService(AppBaseService[Demand]):
                 status=DemandStatus.DRAFT,
                 review_status=ReviewStatus.PENDING, # 这里保持待审核可能不太对，应该重置为初始状态，但 DemandResponse 中默认为待审核
                 updated_by=withdrawn_by,
+                updated_by_name=operator_name,
                 updated_at=datetime.now()
             )
             

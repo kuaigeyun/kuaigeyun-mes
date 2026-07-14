@@ -83,6 +83,19 @@ export const packingBindingApi = {
     });
   },
 
+  createFromDelivery: async (deliveryId: string, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/sales-deliveries/${deliveryId}/packing-binding`, {
+      method: 'POST',
+      data,
+    });
+  },
+
+  getByDelivery: async (deliveryId: string) => {
+    return apiRequest(`/apps/kuaizhizao/sales-deliveries/${deliveryId}/packing-binding`, {
+      method: 'GET',
+    });
+  },
+
   generateQRCode: async (boxUuid: string, boxNo: string, productName?: string): Promise<any> => {
     const { qrcodeApi } = await import('../../../services/qrcode');
     return qrcodeApi.generateBox({

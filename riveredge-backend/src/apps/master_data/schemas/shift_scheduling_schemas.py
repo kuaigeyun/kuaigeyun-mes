@@ -49,6 +49,8 @@ class ShiftResponse(ShiftBase):
     tenant_id: int = Field(..., alias="tenantId")
     created_at: datetime = Field(..., alias="createdAt")
     updated_at: datetime = Field(..., alias="updatedAt")
+    created_by_name: Optional[str] = Field(None, alias="createdByName")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -119,5 +121,7 @@ class ShiftRosterResponse(BaseModel):
     assignments: List[ShiftAssignmentResponse] = Field(default_factory=list)
     created_at: datetime = Field(..., alias="createdAt")
     updated_at: datetime = Field(..., alias="updatedAt")
+    created_by_name: Optional[str] = Field(None, alias="createdByName")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)

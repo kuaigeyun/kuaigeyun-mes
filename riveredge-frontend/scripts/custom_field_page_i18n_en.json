@@ -47,7 +47,36 @@
     "设备管理": "Equipment",
     "模具管理": "Molds",
     "标准操作SOP": "Standard Operation SOP",
-    "节假日": "Holidays"
+    "节假日": "Holidays",
+    "报价单": "Quotations",
+    "客户跟进": "Customer Follow-ups",
+    "销售合同": "Sales Contracts",
+    "销售合同变更": "Sales Contract Changes",
+    "销售预测": "Sales Forecasts",
+    "销售变更单": "Sales Order Changes",
+    "发货通知单": "Shipment Notices",
+    "需求计划": "Demand Plans",
+    "采购申请": "Purchase Requisitions",
+    "采购询价单": "Purchase Inquiries",
+    "采购变更单": "Purchase Order Changes",
+    "收货通知单": "Receipt Notices",
+    "报工管理": "Production Reporting",
+    "装箱绑定": "Packing Binding",
+    "质检方案": "Inspection Plans",
+    "8D报告": "8D Reports",
+    "出货检验": "OQC Inspection",
+    "工装台账": "Tool Ledger",
+    "配料单": "Batching Orders",
+    "半成品入库": "Semi-finished Goods Inbound",
+    "代工来料": "Customer Material Registration",
+    "借料单": "Material Borrows",
+    "还料单": "Material Returns",
+    "送货单": "Delivery Notes",
+    "产线叫料": "Material Calls",
+    "盘点单": "Stocktaking",
+    "调拨单": "Inventory Transfers",
+    "组装单": "Assembly Orders",
+    "拆卸单": "Disassembly Orders"
   },
   "tableNameLabel": {
     "厂区表": "Plants",
@@ -90,7 +119,36 @@
     "设备表": "Equipment",
     "模具表": "Molds",
     "标准操作SOP表": "Standard operation SOP",
-    "节假日表": "Holidays"
+    "节假日表": "Holidays",
+    "报价单表": "Quotations",
+    "客户跟进表": "Customer follow-ups",
+    "销售合同表": "Sales contracts",
+    "销售合同变更表": "Sales contract changes",
+    "销售预测表": "Sales forecasts",
+    "销售变更单表": "Sales order changes",
+    "发货通知单表": "Shipment notices",
+    "需求计划表": "Demand plans",
+    "采购申请表": "Purchase requisitions",
+    "采购询价单表": "Purchase inquiries",
+    "采购变更单表": "Purchase order changes",
+    "收货通知单表": "Receipt notices",
+    "报工记录表": "Reporting records",
+    "装箱绑定表": "Packing bindings",
+    "质检方案表": "Inspection plans",
+    "8D报告表": "8D reports",
+    "出货检验表": "OQC inspections",
+    "工装表": "Tools",
+    "配料单表": "Batching orders",
+    "半成品入库表": "Semi-finished goods inbound",
+    "代工来料表": "Customer material registrations",
+    "借料单表": "Material borrows",
+    "还料单表": "Material returns",
+    "送货单表": "Delivery notes",
+    "产线叫料表": "Material calls",
+    "盘点单表": "Stocktaking",
+    "调拨单表": "Inventory transfers",
+    "组装单表": "Assembly orders",
+    "拆卸单表": "Disassembly orders"
   },
   "pages": {
     "master-data-factory-plant": {
@@ -252,6 +310,122 @@
     "kuaizhizao-mold": {
       "pageName": "Mold Ledger",
       "tableNameLabel": "Molds"
+    },
+    "kuaizhizao-quotation": {
+      "pageName": "Quotations",
+      "tableNameLabel": "Quotations"
+    },
+    "kuaizhizao-customer-follow-up": {
+      "pageName": "Customer Follow-ups",
+      "tableNameLabel": "Customer follow-ups"
+    },
+    "kuaizhizao-sales-contract": {
+      "pageName": "Sales Contracts",
+      "tableNameLabel": "Sales contracts"
+    },
+    "kuaizhizao-sales-contract-change": {
+      "pageName": "Sales Contract Changes",
+      "tableNameLabel": "Sales contract changes"
+    },
+    "kuaizhizao-sales-forecast": {
+      "pageName": "Sales Forecasts",
+      "tableNameLabel": "Sales forecasts"
+    },
+    "kuaizhizao-sales-order-change": {
+      "pageName": "Sales Order Changes",
+      "tableNameLabel": "Sales order changes"
+    },
+    "kuaizhizao-shipment-notice": {
+      "pageName": "Shipment Notices",
+      "tableNameLabel": "Shipment notices"
+    },
+    "kuaizhizao-demand-plan": {
+      "pageName": "Demand Plans",
+      "tableNameLabel": "Demand plans"
+    },
+    "kuaizhizao-purchase-requisition": {
+      "pageName": "Purchase Requisitions",
+      "tableNameLabel": "Purchase requisitions"
+    },
+    "kuaizhizao-purchase-inquiry": {
+      "pageName": "Purchase Inquiries",
+      "tableNameLabel": "Purchase inquiries"
+    },
+    "kuaizhizao-purchase-order-change": {
+      "pageName": "Purchase Order Changes",
+      "tableNameLabel": "Purchase order changes"
+    },
+    "kuaizhizao-receipt-notice": {
+      "pageName": "Receipt Notices",
+      "tableNameLabel": "Receipt notices"
+    },
+    "kuaizhizao-production-reporting": {
+      "pageName": "Production Reporting",
+      "tableNameLabel": "Reporting records"
+    },
+    "kuaizhizao-production-packing-binding": {
+      "pageName": "Packing Binding",
+      "tableNameLabel": "Packing bindings"
+    },
+    "kuaizhizao-quality-inspection-plan": {
+      "pageName": "Inspection Plans",
+      "tableNameLabel": "Inspection plans"
+    },
+    "kuaizhizao-quality-eight-d-report": {
+      "pageName": "8D Reports",
+      "tableNameLabel": "8D reports"
+    },
+    "kuaizhizao-quality-oqc-inspection": {
+      "pageName": "OQC Inspection",
+      "tableNameLabel": "OQC inspections"
+    },
+    "kuaizhizao-tool": {
+      "pageName": "Tool Ledger",
+      "tableNameLabel": "Tools"
+    },
+    "kuaizhizao-warehouse-batching-order": {
+      "pageName": "Batching Orders",
+      "tableNameLabel": "Batching orders"
+    },
+    "kuaizhizao-warehouse-semi-finished-inbound": {
+      "pageName": "Semi-finished Goods Inbound",
+      "tableNameLabel": "Semi-finished goods inbound"
+    },
+    "kuaizhizao-warehouse-customer-material-registration": {
+      "pageName": "Customer Material Registration",
+      "tableNameLabel": "Customer material registrations"
+    },
+    "kuaizhizao-warehouse-material-borrow": {
+      "pageName": "Material Borrows",
+      "tableNameLabel": "Material borrows"
+    },
+    "kuaizhizao-warehouse-material-return": {
+      "pageName": "Material Returns",
+      "tableNameLabel": "Material returns"
+    },
+    "kuaizhizao-delivery-notice": {
+      "pageName": "Delivery Notes",
+      "tableNameLabel": "Delivery notes"
+    },
+    "kuaizhizao-warehouse-material-call": {
+      "pageName": "Material Calls",
+      "tableNameLabel": "Material calls"
+    },
+    "kuaizhizao-warehouse-stocktaking": {
+      "pageName": "Stocktaking",
+      "tableNameLabel": "Stocktaking"
+    },
+    "kuaizhizao-warehouse-inventory-transfer": {
+      "pageName": "Inventory Transfers",
+      "tableNameLabel": "Inventory transfers"
+    },
+    "kuaizhizao-warehouse-assembly-order": {
+      "pageName": "Assembly Orders",
+      "tableNameLabel": "Assembly orders"
+    },
+    "kuaizhizao-warehouse-disassembly-order": {
+      "pageName": "Disassembly Orders",
+      "tableNameLabel": "Disassembly orders"
     }
   }
 }

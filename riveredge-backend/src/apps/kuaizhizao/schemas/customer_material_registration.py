@@ -59,6 +59,8 @@ class BarcodeMappingRuleResponse(BarcodeMappingRuleBase):
     updated_at: datetime = Field(..., description="更新时间")
     created_by: Optional[int] = Field(None, description="创建人ID")
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
 
     @field_validator("uuid", mode="before")
     @classmethod
@@ -168,6 +170,10 @@ class CustomerMaterialRegistrationResponse(CustomerMaterialRegistrationBase):
     items: Optional[List[CustomerMaterialRegistrationItemResponse]] = Field(None, description="明细行")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     lifecycle: Optional[Dict[str, Any]] = Field(None, description="生命周期（后端计算，供 UniLifecycle 展示）")
     capabilities: Optional[CustomerMaterialRegistrationCapabilities] = Field(
         None, description="业务态 capabilities（document_action_policy）",

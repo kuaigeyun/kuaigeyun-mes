@@ -38,6 +38,47 @@ function normalizeDrawing(raw: EngineeringDrawing): EngineeringDrawing {
   };
 }
 
+export type DrawingListView = 'current' | 'all';
+
+export interface AssociatedMaterialBrief {
+  uuid: string;
+  mainCode: string;
+  name: string;
+}
+
+export interface AssociatedProcessRouteBrief {
+  uuid: string;
+  code: string;
+  name: string;
+}
+
+export interface AssociatedOperationBrief {
+  uuid: string;
+  code: string;
+  name: string;
+}
+
+export interface LinkedBomBrief {
+  materialId: number;
+  materialCode: string;
+  materialName: string;
+  version: string;
+}
+
+export interface EngineeringDrawingRevisionBrief {
+  uuid: string;
+  revision: string;
+  status: DrawingStatus;
+  releasedAt?: string;
+  obsoleteReason?: string;
+  createdAt: string;
+}
+
+export interface EngineeringDrawingRevisionsResponse {
+  code: string;
+  revisions: EngineeringDrawingRevisionBrief[];
+}
+
 export interface EngineeringDrawing {
   id: number;
   uuid: string;
@@ -60,8 +101,14 @@ export interface EngineeringDrawing {
   linkedBomMaterialId?: number;
   linkedBomVersion?: string;
   lastStepBomImportAt?: string;
+  materials?: AssociatedMaterialBrief[];
+  processRoutes?: AssociatedProcessRouteBrief[];
+  operations?: AssociatedOperationBrief[];
+  linkedBom?: LinkedBomBrief;
   createdAt: string;
   updatedAt: string;
+  createdByName?: string;
+  updatedByName?: string;
 }
 
 export interface EngineeringDrawingCreate {
@@ -99,6 +146,7 @@ export interface EngineeringDrawingListParams {
   operationUuid?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  view?: DrawingListView;
 }
 
 export interface EngineeringDrawingListResponse {
@@ -189,6 +237,12 @@ export const drawingApi = {
   }): Promise<EngineeringDrawing[]> => {
     const res = await api.get<EngineeringDrawing[]>('/apps/master-data/process/drawings/by-context', { params });
     return (res ?? []).map(normalizeDrawing);
+  },
+
+  listRevisions: async (uuid: string): Promise<EngineeringDrawingRevisionsResponse> => {
+    return api.get<EngineeringDrawingRevisionsResponse>(
+      `/apps/master-data/process/drawings/${uuid}/revisions`,
+    );
   },
 
   importStepBom: async (

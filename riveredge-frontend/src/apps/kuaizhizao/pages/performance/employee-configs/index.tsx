@@ -4,18 +4,24 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Typography } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, Typography, Descriptions, Spin, theme as AntdTheme } from 'antd';
+import { DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { ProFormSelect, ProFormDigit, ProFormSwitch, ProFormDatePicker, ProFormField } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { rowActionKind } from '../../../../../components/uni-action';
+import {
+  ListPageTemplate,
+  FormModalTemplate,
+  DetailDrawerTemplate,
+  DetailDrawerSection,
+  MODAL_CONFIG,
+  DRAWER_CONFIG,
+} from '../../../../../components/layout-templates';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { employeePerformanceApi } from '../../../services/performance';
 import type { EmployeePerformanceConfig } from '../../../types/performance';
-import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
 import {
   modalDateFieldProps,
   modalFieldLayoutFromColSpan,
@@ -26,22 +32,31 @@ import {
   getCalcModeText,
   getPerformanceYesNoValueEnum,
   getPieceRateModeOptions,
+  getPieceRateModeText,
+  renderActiveTag,
 } from '../components/performanceMeta';
-import { formatDateTime } from '../../../../../utils/format';
+import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   normalizePerformanceListResponse,
   PERFORMANCE_PINNED_IS_ACTIVE_FIELD,
   resolveEmployeeConfigListParams,
 } from '../../../utils/performanceListCore';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 
 const EmployeeConfigsPage: React.FC = () => {
   const { t } = useTranslation();
+  const { token } = AntdTheme.useToken();
+  const detailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [modalVisible, setModalVisible] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [employees, setEmployees] = useState<{ id: number; full_name: string }[]>([]);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detail, setDetail] = useState<EmployeePerformanceConfig | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const calcModeOptions = useMemo(() => getCalcModeOptions(t), [t]);
   const pieceRateModeOptions = useMemo(() => getPieceRateModeOptions(t), [t]);
@@ -74,6 +89,43 @@ const EmployeeConfigsPage: React.FC = () => {
     }).catch((e: any) => messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed')));
   }, [modalVisible, editId, messageApi, t]);
 
+  const detailColumns: ProDescriptionsItemProps<EmployeePerformanceConfig>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.performance.common.columns.employee'), dataIndex: 'employee_name' },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.calcMode'),
+        dataIndex: 'calc_mode',
+        render: (_, r) => getCalcModeText(t, r?.calc_mode),
+      },
+      {
+        title: t('app.kuaizhizao.performance.employeeConfigs.form.pieceRateMode'),
+        dataIndex: 'piece_rate_mode',
+        render: (_, r) => getPieceRateModeText(t, r?.piece_rate_mode),
+      },
+      { title: t('app.kuaizhizao.performance.employeeConfigs.columns.hourlyRate'), dataIndex: 'hourly_rate' },
+      { title: t('app.kuaizhizao.performance.employeeConfigs.columns.defaultPieceRate'), dataIndex: 'default_piece_rate' },
+      { title: t('app.kuaizhizao.performance.employeeConfigs.columns.baseSalary'), dataIndex: 'base_salary' },
+      {
+        title: t('app.kuaizhizao.performance.employeeConfigs.form.effectiveFrom'),
+        dataIndex: 'effective_from',
+        valueType: 'date',
+      },
+      {
+        title: t('app.kuaizhizao.performance.employeeConfigs.form.effectiveTo'),
+        dataIndex: 'effective_to',
+        valueType: 'date',
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.form.active'),
+        dataIndex: 'is_active',
+        render: (_, r) => renderActiveTag(t, r?.is_active !== false),
+      },
+      { title: t('app.kuaizhizao.performance.common.columns.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('app.kuaizhizao.performance.common.columns.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    ],
+    [t],
+  );
+
   const handleCreate = () => {
     setEditId(null);
     setModalVisible(true);
@@ -91,6 +143,19 @@ const EmployeeConfigsPage: React.FC = () => {
       messageApi.error(error?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
     }
   };
+  const handleOpenDetail = async (record: EmployeePerformanceConfig) => {
+    try {
+      setDrawerVisible(true);
+      setDetail(null);
+      setDetailLoading(true);
+      setDetail(await employeePerformanceApi.getConfig(record.id));
+    } catch (e: any) {
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
+      setDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const handleModalSuccess = () => {
     setModalVisible(false);
@@ -99,7 +164,7 @@ const EmployeeConfigsPage: React.FC = () => {
   };
 
   const columns: ProColumns<EmployeePerformanceConfig>[] = useMemo(
-    () => [
+    () => alignProColumns<EmployeePerformanceConfig>([
       {
         title: t('app.kuaizhizao.performance.common.columns.employee'),
         dataIndex: 'employee_name',
@@ -131,46 +196,21 @@ const EmployeeConfigsPage: React.FC = () => {
         hideInTable: true,
         valueEnum: getPerformanceYesNoValueEnum(t),
       },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
-        dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        sorter: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-      },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.lifecycle'),
-        dataIndex: 'lifecycle_stage',
-        fixed: 'right',
-        align: 'left',
-        hideInSearch: true,
-        render: (_, record) => {
-          const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>, t);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
-        },
-      },
+      ...buildDocumentAuditColumns<EmployeePerformanceConfig>(t),
       {
         title: t('app.kuaizhizao.performance.common.columns.actions'),
-        width: 150,
+        valueType: 'option',
+        width: 160,
         fixed: 'right',
         render: (_, record) => (
           <Space>
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
+              {t('app.kuaizhizao.performance.common.actions.detail')}
+            </Button>
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
               {t('app.kuaizhizao.performance.common.actions.edit')}
             </Button>
-            <Popconfirm title={t('app.kuaizhizao.performance.employeeConfigs.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.employeeConfigs.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
               <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                 {t('app.kuaizhizao.performance.common.actions.delete')}
               </Button>
@@ -178,7 +218,7 @@ const EmployeeConfigsPage: React.FC = () => {
           </Space>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, calcModeOptions],
   );
 
@@ -298,6 +338,30 @@ const EmployeeConfigsPage: React.FC = () => {
         <ProFormDatePicker name="effective_to" label={t('app.kuaizhizao.performance.employeeConfigs.form.effectiveTo')} {...modalDateFieldProps()} />
         <ProFormSwitch name="is_active" label={t('app.kuaizhizao.performance.common.form.active')} formItemProps={modalFieldLayoutFromColSpan(12)} />
       </FormModalTemplate>
+
+      <DetailDrawerTemplate
+        title={t('app.kuaizhizao.performance.employeeConfigs.detailTitle')}
+        open={drawerVisible}
+        zIndex={detailDrawerZIndex}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetail(null);
+        }}
+        width={DRAWER_CONFIG.HALF_WIDTH}
+        loading={detailLoading}
+        columns={[]}
+        customContent={
+          detailLoading && !detail ? (
+            <div style={{ textAlign: 'center', padding: 48 }}>
+              <Spin />
+            </div>
+          ) : detail ? (
+            <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.basicInfo')}>
+              <Descriptions column={2} size="small" items={buildMasterDetailDescriptionItems(detail, detailColumns)} />
+            </DetailDrawerSection>
+          ) : null
+        }
+      />
     </>
   );
 };

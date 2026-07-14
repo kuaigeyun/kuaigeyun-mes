@@ -139,7 +139,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
   /**
    * 加载 Favicon 预览 URL
    */
-  const loadFaviconPreview = async (faviconValue: string | undefined) => {
+  const loadFaviconPreview = async (faviconValue: string | null | undefined) => {
     if (!faviconValue || !faviconValue.trim()) {
       setFaviconUrl(undefined);
       setFaviconFileList([]);
@@ -174,7 +174,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
   /**
    * 加载LOGO预览URL
    */
-  const loadLogoPreview = async (logoValue: string | undefined) => {
+  const loadLogoPreview = async (logoValue: string | null | undefined) => {
     if (!logoValue || !logoValue.trim()) {
       setLogoUrl(undefined);
       setLogoFileList([]);
@@ -416,7 +416,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
    */
   const handleClearLogo = () => {
     form.setFieldsValue({
-      platform_logo: undefined,
+      platform_logo: null,
     });
     setLogoUrl(undefined);
     setLogoFileList([]);
@@ -495,7 +495,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
    * 清除 Favicon
    */
   const handleClearFavicon = () => {
-    form.setFieldsValue({ favicon: undefined });
+    form.setFieldsValue({ favicon: null });
     setFaviconUrl(undefined);
     setFaviconFileList([]);
     messageApi.success(t('pages.infra.platform.faviconCleared'));

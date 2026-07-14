@@ -27,6 +27,7 @@ import { serialRuleApi } from '../../../services/batchSerialRules';
 import { SERIAL_RULE_AVAILABLE_FIELDS, DEFAULT_SERIAL_RULE_COMPONENTS } from '../../../constants/serialRuleConstants';
 import type { SerialRule, SerialRuleCreate, SerialRuleUpdate } from '../../../services/batchSerialRules';
 import type { CodeRuleComponent } from '../../../../../types/codeRuleComponent';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const SerialRulesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -239,7 +240,7 @@ const SerialRulesPage: React.FC = () => {
         headerTitle={t('app.master-data.serialRules.headerTitle')}
         actionRef={actionRef}
         rowKey="uuid"
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const { current = 1, pageSize = 20 } = params;
           const listParams = resolveRuleListParams(searchFormValues, sort);

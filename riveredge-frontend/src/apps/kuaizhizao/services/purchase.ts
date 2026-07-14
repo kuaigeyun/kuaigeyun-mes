@@ -104,6 +104,10 @@ export interface PurchaseOrder {
   buyer_name?: string;
   notes?: string;
   items_count?: number;
+  downstream_push_progress?: number;
+  received_total?: number;
+  outstanding_total?: number;
+  receipt_progress?: number;
   created_at?: string;
   updated_at?: string;
   items?: PurchaseOrderItem[];

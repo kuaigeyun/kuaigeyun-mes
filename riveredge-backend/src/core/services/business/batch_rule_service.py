@@ -14,10 +14,12 @@ from decimal import Decimal
 
 from tortoise.expressions import Q
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from core.models.batch_rule import BatchRule
 from core.models.batch_rule_sequence import BatchRuleSequence
 from core.services.code_rule.code_rule_component_service import CodeRuleComponentService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 from loguru import logger
 
 
@@ -126,25 +128,35 @@ class BatchRuleService:
         return rule
 
     @staticmethod
-    async def create_rule(tenant_id: int, data: dict) -> BatchRule:
+    async def create_rule(
+        tenant_id: int,
+        data: dict,
+        current_user: Optional[User] = None,
+    ) -> BatchRule:
         """创建批号规则"""
         from datetime import datetime
-        rule = await BatchRule.create(
-            tenant_id=tenant_id,
-            name=data["name"],
-            code=data["code"],
-            rule_components=data.get("rule_components"),
-            description=data.get("description"),
-            seq_start=data.get("seq_start", 1),
-            seq_step=data.get("seq_step", 1),
-            seq_reset_rule=data.get("seq_reset_rule"),
-            is_system=data.get("is_system", False),
-            is_active=data.get("is_active", True),
-        )
+        create_payload = {
+            "name": data["name"],
+            "code": data["code"],
+            "rule_components": data.get("rule_components"),
+            "description": data.get("description"),
+            "seq_start": data.get("seq_start", 1),
+            "seq_step": data.get("seq_step", 1),
+            "seq_reset_rule": data.get("seq_reset_rule"),
+            "is_system": data.get("is_system", False),
+            "is_active": data.get("is_active", True),
+        }
+        apply_create_audit(create_payload, current_user)
+        rule = await BatchRule.create(tenant_id=tenant_id, **create_payload)
         return rule
 
     @staticmethod
-    async def update_rule(tenant_id: int, rule_uuid: str, data: dict) -> BatchRule:
+    async def update_rule(
+        tenant_id: int,
+        rule_uuid: str,
+        data: dict,
+        current_user: Optional[User] = None,
+    ) -> BatchRule:
         """更新批号规则"""
         rule = await BatchRule.filter(
             tenant_id=tenant_id, uuid=rule_uuid, deleted_at__isnull=True
@@ -154,6 +166,7 @@ class BatchRuleService:
         for k, v in data.items():
             if v is not None and hasattr(rule, k):
                 setattr(rule, k, v)
+        apply_update_audit(rule, current_user)
         await rule.save()
         return rule
 

@@ -10,7 +10,7 @@ import { renderRowActionsOverflow, rowActionKind } from '../../../../../componen
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
-import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Descriptions, Tooltip, Card, Alert, Empty, Spin, Switch } from 'antd'
+import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Descriptions, Tooltip, Card, Alert, Empty, Spin, Switch, Tag } from 'antd'
 import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, AppstoreAddOutlined, ImportOutlined, ArrowLeftOutlined, PrinterOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -59,6 +59,9 @@ import {
   DOCUMENT_DETAIL_TABLE_PROPS,
 } from '../../../components/document-detail-table/documentDetailTable'
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment'
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../shared/DocumentPushProgressBar'
+import { salesForecastComputationPushPercent } from '../shared/pushProgress'
+import { resolveDocumentPreferredAudit } from '../../shared/documentAuditColumns'
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 )
@@ -107,7 +110,7 @@ import { downloadFile } from '../../../services/common'
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField'
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments'
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 
 export default function SalesForecastsPage() {
@@ -920,6 +923,12 @@ export default function SalesForecastsPage() {
     };
     return periodMap[period] || period;
   };
+  const getForecastPeriodTagColor = (period?: string): string => {
+    if (period === 'WEEKLY') return 'blue';
+    if (period === 'MONTHLY') return 'purple';
+    if (period === 'QUARTERLY') return 'gold';
+    return 'default';
+  };
 
   type ForecastTableRow = SalesForecast & {
     item?: SalesForecastItem;
@@ -996,14 +1005,18 @@ export default function SalesForecastsPage() {
       title: t('app.kuaizhizao.salesForecast.forecastPeriod'),
       dataIndex: 'forecast_period',
       valueType: 'select',
-      width: 100,
+      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
       sorter: true,
       valueEnum: {
         WEEKLY: { text: t('app.kuaizhizao.salesForecast.period.weekly') },
         MONTHLY: { text: t('app.kuaizhizao.salesForecast.period.monthly') },
         QUARTERLY: { text: t('app.kuaizhizao.salesForecast.period.quarterly') },
       },
-      ...orderLevelCellProps((_text, record) => formatForecastPeriod(record.forecast_period)),
+      ...orderLevelCellProps((_text, record) => (
+        <Tag color={getForecastPeriodTagColor(record.forecast_period)} bordered={false}>
+          {formatForecastPeriod(record.forecast_period)}
+        </Tag>
+      )),
     },
     {
       title: t('app.kuaizhizao.salesForecast.forecastType'),
@@ -1011,7 +1024,11 @@ export default function SalesForecastsPage() {
       width: 100,
       hideInSearch: true,
       sorter: true,
-      ...orderLevelCellProps((_text, record) => record.forecast_type || '-'),
+      ...orderLevelCellProps((_text, record) => (
+        <Tag color="blue" bordered={false}>
+          {record.forecast_type || '-'}
+        </Tag>
+      )),
     },
     {
       title: t('app.kuaizhizao.salesForecast.startDate'),
@@ -1032,6 +1049,8 @@ export default function SalesForecastsPage() {
             secondary={endDateText}
             secondaryCopyable={false}
             uniformText
+            primaryBadge={t('common.start')}
+            secondaryBadge={t('common.end')}
           />
         );
       }),
@@ -1055,7 +1074,29 @@ export default function SalesForecastsPage() {
       align: 'right' as const,
       hideInSearch: true,
       hideInTable: dataViewMode === 'detail',
-      ...orderLevelCellProps((_text, record) => calcForecastTotalQuantity(record)),
+      ...orderLevelCellProps((_text, record) => formatQuantity(calcForecastTotalQuantity(record))),
+    },
+    {
+      title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+      dataIndex: 'computation_push_progress',
+      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+      uniTableKeepWidth: true,
+      hideInSearch: true,
+      hideInTable: dataViewMode === 'detail',
+      ...orderLevelCellProps((_text, record) => {
+        const percent = salesForecastComputationPushPercent(record.planning_pushed_to_computation);
+        return (
+          <DocumentPushProgressBar
+            percent={percent}
+            tooltip={t('app.kuaizhizao.salesManagement.pushProgress.computationTooltip', {
+              percent,
+              status: percent >= 100
+                ? t('app.kuaizhizao.salesManagement.pushProgress.pushed')
+                : t('app.kuaizhizao.salesManagement.pushProgress.notPushed'),
+            })}
+          />
+        );
+      }),
     },
     {
       title: t('common.dateRange'),
@@ -1132,26 +1173,23 @@ export default function SalesForecastsPage() {
         record.item?.confidence_level != null ? `${record.item.confidence_level}%` : '-',
     },
     {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      hideInSearch: true,
-      ...orderLevelCellProps((_text, record) =>
-        record.created_at ? formatDateTime(record.created_at, 'YYYY-MM-DD HH:mm') : '',
-      ),
-    },
-    {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 132,
+      width: 148,
       uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
-      ...orderLevelCellProps((_text, record) =>
-        record.updated_at ? formatDateTime(record.updated_at, 'YYYY-MM-DD HH:mm') : '',
-      ),
+      ...orderLevelCellProps((_text, record) => {
+        const preferred = resolveDocumentPreferredAudit(record as Record<string, unknown>);
+        return (
+          <UniTableStackedPrimaryCell
+            primary={preferred.operator}
+            secondary={preferred.time}
+            secondaryCopyable={false}
+            primaryBold={false}
+          />
+        );
+      }),
     },
     ...(salesForecastAuditColumn ? [salesForecastAuditColumn] : []),
     {
@@ -2197,9 +2235,9 @@ export default function SalesForecastsPage() {
                   },
                   { title: t('app.kuaizhizao.quotation.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
                   { title: t('app.kuaizhizao.quotation.colMaterialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesForecast.forecastQuantity'), dataIndex: 'quantity', width: 88, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 88, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 88, align: 'right' },
+                  { title: t('app.kuaizhizao.salesForecast.forecastQuantity'), dataIndex: 'quantity', width: 88, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 88, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 88, align: 'right', render: formatQuantity },
                   {
                     title: t('app.kuaizhizao.salesForecast.forecastDate'),
                     dataIndex: 'forecast_date',
@@ -2238,7 +2276,7 @@ const SalesForecastFormSummary: React.FC = () => {
 
   return (
     <div style={{ marginTop: 12, padding: '12px', background: '#fafafa', borderRadius: '4px', display: 'flex', justifyContent: 'flex-end' }}>
-      <span>{t('app.kuaizhizao.salesForecast.totalForecastQuantity')}: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
+      <span>{t('app.kuaizhizao.salesForecast.totalForecastQuantity')}: <Typography.Text strong>{formatQuantity(totalQuantity)}</Typography.Text></span>
     </div>
   );
 };

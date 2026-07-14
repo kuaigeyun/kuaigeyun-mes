@@ -126,10 +126,11 @@ async def list_spare_parts(
 )
 async def create_spare_part(
     data: SparePartCreate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        part = await service.create_spare_part(tenant_id, data)
+        part = await service.create_spare_part(tenant_id, data, current_user=current_user)
         return SparePartResponse.model_validate(part)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
@@ -152,10 +153,13 @@ async def get_spare_part(spare_part_id: int, tenant_id: int = Depends(get_curren
 async def update_spare_part(
     spare_part_id: int,
     data: SparePartUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        part = await service.update_spare_part(tenant_id, spare_part_id, data)
+        part = await service.update_spare_part(
+            tenant_id, spare_part_id, data, current_user=current_user
+        )
         return SparePartResponse.model_validate(part)
     except (ValidationError, NotFoundError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_422_UNPROCESSABLE_ENTITY

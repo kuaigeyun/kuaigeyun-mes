@@ -35,13 +35,16 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-production-outsource-material-return": "OMR",  # 委外退料
     "kuaizhizao-production-outsource-product-return": "OPR",  # 委外退货
     "kuaizhizao-purchase-order": "CG",           # 采购
+    "kuaizhizao-purchase-order-change": "CGBG",  # 采购变更单
     "kuaizhizao-purchase-requisition": "CGSQ",   # 采购申请
     "kuaizhizao-purchase-inquiry": "CGXJ",       # 采购询价单
     "kuaizhizao-purchase-receipt": "CGSD",      # 采购收货
     "kuaizhizao-purchase-return": "CGTH",       # 采购退货
     "kuaizhizao-sales-order": "XS",             # 销售
+    "kuaizhizao-sales-order-change": "XSBG",    # 销售变更单
     "kuaizhizao-quotation": "BJ",              # 报价
     "kuaizhizao-sales-contract": "XSHT",       # 销售合同
+    "kuaizhizao-sales-contract-change": "XSHTBG",  # 销售合同变更
     "kuaizhizao-sales-delivery": "XSFH",        # 销售发货
     "kuaizhizao-delivery-notice": "SHD",        # 送货单
     "kuaizhizao-shipment-notice": "FHTZ",       # 发货通知单
@@ -56,11 +59,17 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-warehouse-other-outbound": "QTCK",        # 其他出库
     "kuaizhizao-warehouse-material-borrow": "JL",        # 借料单
     "kuaizhizao-warehouse-material-return": "HL",        # 还料单
+    "kuaizhizao-warehouse-material-call": "XLJL",        # 产线叫料
     "kuaizhizao-warehouse-finished-goods-inbound": "CPRK",  # 成品入库
+    "kuaizhizao-warehouse-semi-finished-inbound": "BCPRK",  # 半成品入库
     "kuaizhizao-quality-incoming-inspection": "LLJY",   # 来料检验
     "kuaizhizao-quality-process-inspection": "GCJY",   # 过程检验
     "kuaizhizao-quality-finished-goods-inspection": "CPJY",  # 成品检验
     "kuaizhizao-quality-inspection-plan": "ZJFA",  # 质检方案
+    "kuaizhizao-quality-oqc-inspection": "CHJY",  # 出货检验
+    "kuaizhizao-quality-eight-d-report": "BD",  # 8D报告
+    "kuaizhizao-quality-defect-record": "DF",  # 不合格品记录
+    "kuaizhizao-quality-scrap-record": "BF",  # 报废记录
     "kuaizhizao-equipment-management-equipment": "EQ",    # 设备（仅此一处使用英文缩写，其余均为汉语拼音）
     "kuaizhizao-equipment-management-mold": "MJ",        # 模具（拼音 muju）
     "kuaizhizao-equipment-management-tool": "GZ",       # 工装（拼音 gongzhuang）
@@ -422,7 +431,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
     {
         "page_code": "kuaizhizao-production-outsource-order",
         "page_name": "委外单",
-        "page_path": "/apps/kuaizhizao/production-execution/outsource-orders",
+        "page_path": "/apps/kuaizhizao/production-execution/outsource-management",
         "code_field": "code",
         "code_field_label": "委外单编码",
         "module": "快格轻制造",
@@ -442,6 +451,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "PURCHASE_ORDER_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-purchase-order-change",
+        "page_name": "采购变更单",
+        "page_path": "/apps/kuaizhizao/purchase-management/purchase-order-changes",
+        "code_field": "change_code",
+        "code_field_label": "采购变更单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "PURCHASE_ORDER_CHANGE_CODE",
         "allow_manual_edit": True,
     },
     {
@@ -530,6 +551,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "allow_manual_edit": True,
     },
     {
+        "page_code": "kuaizhizao-sales-order-change",
+        "page_name": "销售变更单",
+        "page_path": "/apps/kuaizhizao/sales-management/sales-order-changes",
+        "code_field": "change_code",
+        "code_field_label": "销售变更单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "SALES_ORDER_CHANGE_CODE",
+        "allow_manual_edit": True,
+    },
+    {
         "page_code": "kuaizhizao-sales-delivery",
         "page_name": "销售发货",
         "page_path": "/apps/kuaizhizao/warehouse-management/outbound",
@@ -544,7 +577,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
     {
         "page_code": "kuaizhizao-delivery-notice",
         "page_name": "送货单",
-        "page_path": "/apps/kuaizhizao/sales-management/delivery-notices",
+        "page_path": "/apps/kuaizhizao/warehouse-management/delivery-notes",
         "code_field": "notice_code",
         "code_field_label": "送货单编码",
         "module": "快格轻制造",
@@ -684,6 +717,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "MATERIAL_RETURN_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-warehouse-material-call",
+        "page_name": "产线叫料",
+        "page_path": "/apps/kuaizhizao/warehouse-management/material-calls",
+        "code_field": "code",
+        "code_field_label": "叫料单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "MATERIAL_CALL_CODE",
         "allow_manual_edit": True,
     },
     {
@@ -845,6 +890,54 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "rule_code": "FINISHED_GOODS_INSPECTION_CODE",
         "allow_manual_edit": True,
     },
+    {
+        "page_code": "kuaizhizao-quality-oqc-inspection",
+        "page_name": "出货检验",
+        "page_path": "/apps/kuaizhizao/quality-management/oqc-inspection",
+        "code_field": "inspection_code",
+        "code_field_label": "出货检验单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "OQC_INSPECTION_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-quality-eight-d-report",
+        "page_name": "8D报告",
+        "page_path": "/apps/kuaizhizao/quality-management/eight-d-reports",
+        "code_field": "report_code",
+        "code_field_label": "8D报告编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "EIGHT_D_REPORT_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-quality-defect-record",
+        "page_name": "不合格品记录",
+        "page_path": "/apps/kuaizhizao/quality-management/nonconforming-ledger",
+        "code_field": "code",
+        "code_field_label": "不合格品记录编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "DEFECT_RECORD_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-quality-scrap-record",
+        "page_name": "报废记录",
+        "page_path": "/apps/kuaizhizao/production-execution/reporting",
+        "code_field": "code",
+        "code_field_label": "报废单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "SCRAP_RECORD_CODE",
+        "allow_manual_edit": True,
+    },
     # 快格轻制造 - 计划管理
     # 快格轻制造 - 采购管理（补充）
     {
@@ -918,7 +1011,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
     {
         "page_code": "kuaizhizao-production-outsource-work-order",
         "page_name": "委外工单",
-        "page_path": "/apps/kuaizhizao/production-execution/outsource-work-orders",
+        "page_path": "/apps/kuaizhizao/production-execution/outsource-management",
         "code_field": "code",
         "code_field_label": "委外工单编码",
         "module": "快格轻制造",
@@ -1450,6 +1543,21 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     "EQUIPMENT_CODE": ("apps.kuaizhizao.models.equipment", "Equipment", "code"),
     "MOLD_CODE": ("apps.kuaizhizao.models.mold", "Mold", "code"),
     "TOOL_CODE": ("apps.kuaizhizao.models.tool", "Tool", "code"),
+    "PURCHASE_ORDER_CHANGE_CODE": (
+        "apps.kuaizhizao.models.purchase_order_change_order",
+        "PurchaseOrderChangeOrder",
+        "change_code",
+    ),
+    "SALES_ORDER_CHANGE_CODE": (
+        "apps.kuaizhizao.models.sales_order_change_order",
+        "SalesOrderChangeOrder",
+        "change_code",
+    ),
+    "OQC_INSPECTION_CODE": ("apps.kuaizhizao.models.oqc_inspection", "OQCInspection", "inspection_code"),
+    "EIGHT_D_REPORT_CODE": ("apps.kuaizhizao.models.quality_8d_report", "Quality8DReport", "report_code"),
+    "DEFECT_RECORD_CODE": ("apps.kuaizhizao.models.defect_record", "DefectRecord", "code"),
+    "SCRAP_RECORD_CODE": ("apps.kuaizhizao.models.scrap_record", "ScrapRecord", "code"),
+    "MATERIAL_CALL_CODE": ("apps.kuaizhizao.models.material_call_request", "MaterialCallRequest", "code"),
     "WORK_CENTER_CODE": ("apps.master_data.models.factory", "WorkCenter", "code"),
     "HAOLIGO_MOLD_TRIAL_SHEET_NO": ("apps.haoligo.models.mold_trial_sheet", "HaoligoMoldTrialSheet", "sheet_no"),
     "HAOLIGO_MOLD_BORROW_SHEET_NO": ("apps.haoligo.models.mold_borrow_sheet", "HaoligoMoldBorrowSheet", "sheet_no"),

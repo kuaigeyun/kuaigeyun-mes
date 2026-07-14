@@ -12,6 +12,7 @@ from datetime import datetime
 
 from tortoise.expressions import Q
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.master_data.models.bom_change import BOMChange
 from apps.master_data.models.material import Material
 from apps.master_data.schemas.bom_change_schemas import (
@@ -21,6 +22,7 @@ from apps.master_data.schemas.bom_change_schemas import (
     BOMChangeListResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.services.user_service import UserService
 from loguru import logger
 
 
@@ -52,6 +54,8 @@ def _to_bom_change_response(change: BOMChange) -> BOMChangeResponse:
         created_at=change.created_at,
         updated_at=change.updated_at,
         deleted_at=change.deleted_at,
+        created_by_name=getattr(change, "created_by_name", None),
+        updated_by_name=getattr(change, "updated_by_name", None),
     )
 
 
@@ -74,20 +78,23 @@ class BOMChangeService:
         if not material:
             raise NotFoundError("物料", data.material_uuid)
 
-        change = await BOMChange.create(
-            tenant_id=tenant_id,
-            material_id=material.id,
-            change_type=data.change_type,
-            change_content=data.change_content,
-            change_reason=data.change_reason,
-            change_impact=data.change_impact,
-            status="draft",
-            approval_comment=data.approval_comment,
-            bom_code=data.bom_code,
-            from_version=data.from_version,
-            to_version=data.to_version,
-            applicant_id=applicant_id,
-        )
+        create_payload = {
+            "tenant_id": tenant_id,
+            "material_id": material.id,
+            "change_type": data.change_type,
+            "change_content": data.change_content,
+            "change_reason": data.change_reason,
+            "change_impact": data.change_impact,
+            "status": "draft",
+            "approval_comment": data.approval_comment,
+            "bom_code": data.bom_code,
+            "from_version": data.from_version,
+            "to_version": data.to_version,
+            "applicant_id": applicant_id,
+        }
+        applicant = await UserService().get_user_by_id(applicant_id)
+        apply_create_audit(create_payload, applicant)
+        change = await BOMChange.create(**create_payload)
 
         await change.fetch_related("material")
         if data.status in ("pending", "draft"):
@@ -228,10 +235,19 @@ class BOMChangeService:
         keyword: Optional[str] = None,
         change_code: Optional[str] = None,
         target_name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         page: int = 1,
         page_size: int = 20,
     ) -> BOMChangeListResponse:
         """获取变更记录列表"""
+        from apps.master_data.services.master_data_list_core import (
+            apply_master_crud_created_date_range,
+            apply_master_crud_updated_date_range,
+        )
+
         query = BOMChange.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -267,6 +283,13 @@ class BOMChangeService:
             if name:
                 query = query.filter(material__name__icontains=name)
 
+        query = apply_master_crud_created_date_range(
+            query, start_date=created_start_date, end_date=created_end_date
+        )
+        query = apply_master_crud_updated_date_range(
+            query, start_date=updated_start_date, end_date=updated_end_date
+        )
+
         total = await query.count()
         changes = await query.prefetch_related("material").offset(
             (page - 1) * page_size
@@ -289,6 +312,7 @@ class BOMChangeService:
         tenant_id: int,
         change_uuid: str,
         data: BOMChangeUpdate,
+        current_user=None,
     ) -> BOMChangeResponse:
         """更新变更记录"""
         change = await BOMChange.filter(
@@ -303,7 +327,7 @@ class BOMChangeService:
         update_data = data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(change, key, value)
-
+        apply_update_audit(change, current_user)
         await change.save()
 
         return _to_bom_change_response(change)

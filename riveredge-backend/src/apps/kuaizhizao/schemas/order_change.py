@@ -89,6 +89,10 @@ class OrderChangeListResponse(BaseSchema):
     delta_amount: Decimal
     applied_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
     lifecycle: Optional[Dict[str, Any]] = None
     partner_name: Optional[str] = None
     capabilities: Optional[SalesOrderChangeCapabilities] = Field(

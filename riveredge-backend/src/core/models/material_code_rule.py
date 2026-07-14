@@ -73,8 +73,6 @@ class MaterialCodeRuleMain(BaseModel):
     version = fields.IntField(default=1, description="版本号")
     
     # 操作人信息
-    created_by = fields.IntField(null=True, description="创建人ID")
-    updated_by = fields.IntField(null=True, description="更新人ID")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -201,8 +199,6 @@ class MaterialCodeRuleAlias(BaseModel):
     version = fields.IntField(default=1, description="版本号")
     
     # 操作人信息
-    created_by = fields.IntField(null=True, description="创建人ID")
-    updated_by = fields.IntField(null=True, description="更新人ID")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

@@ -364,7 +364,18 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
 
         await self._normalize_legacy_draft_issues(issues)
 
-        return [OutsourceMaterialIssueResponse.model_validate(issue) for issue in issues]
+        out: List[OutsourceMaterialIssueResponse] = []
+        for issue in issues:
+            resp = OutsourceMaterialIssueResponse.model_validate(issue)
+            out.append(
+                resp.model_copy(
+                    update={
+                        "total_quantity": float(issue.quantity or 0),
+                        "total_items": 1,
+                    }
+                )
+            )
+        return out
 
     async def get_material_issue(
         self,
@@ -395,7 +406,13 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
 
         await self._normalize_legacy_draft_issues([issue])
 
-        return OutsourceMaterialIssueResponse.model_validate(issue)
+        resp = OutsourceMaterialIssueResponse.model_validate(issue)
+        return resp.model_copy(
+            update={
+                "total_quantity": float(issue.quantity or 0),
+                "total_items": 1,
+            }
+        )
 
     async def complete_material_issue(
         self,

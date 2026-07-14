@@ -12,6 +12,7 @@ from typing import List, Optional
 
 from tortoise.transactions import in_transaction
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.common.base_service import AppBaseService
 from apps.kuaiplm.constants.rd_project import GateMilestoneRole, RdProjectType
 from apps.kuaiplm.models import (
@@ -30,6 +31,7 @@ from apps.kuaiplm.schemas.gate_template import (
 )
 from apps.kuaiplm.utils.gate_template_seed import ensure_system_gate_templates
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.models.user import User
 
 
 def _slugify_gate_key(name: str) -> str:
@@ -159,17 +161,18 @@ class RdGateTemplateService(AppBaseService[RdGateTemplate]):
             raise BusinessLogicError(f"模板编码已存在: {template_code}")
 
         async with in_transaction():
-            template = await RdGateTemplate.create(
-                tenant_id=tenant_id,
-                project_type=data.project_type,
-                template_code=template_code,
-                template_name=data.template_name,
-                is_default=False,
-                is_active=True,
-                notes=data.notes,
-                created_by=created_by,
-                updated_by=created_by,
-            )
+            user = await User.filter(id=created_by).first()
+            template_payload = {
+                "tenant_id": tenant_id,
+                "project_type": data.project_type,
+                "template_code": template_code,
+                "template_name": data.template_name,
+                "is_default": False,
+                "is_active": True,
+                "notes": data.notes,
+            }
+            apply_create_audit(template_payload, user)
+            template = await RdGateTemplate.create(**template_payload)
             if data.copy_from_id:
                 source = await self._get_template_or_404(tenant_id, data.copy_from_id)
                 if source.project_type != data.project_type:
@@ -182,16 +185,17 @@ class RdGateTemplateService(AppBaseService[RdGateTemplate]):
         self, tenant_id: int, template_id: int, data: GateTemplateUpdate, updated_by: int
     ) -> GateTemplateDetailResponse:
         template = await self._get_template_or_404(tenant_id, template_id)
-        update_fields = {"updated_by": updated_by}
         if data.template_name is not None:
-            update_fields["template_name"] = data.template_name
+            template.template_name = data.template_name
         if data.notes is not None:
-            update_fields["notes"] = data.notes
+            template.notes = data.notes
         if data.is_active is not None:
             if template.is_default and not data.is_active:
                 raise BusinessLogicError("默认模板不可停用，请先切换默认模板")
-            update_fields["is_active"] = data.is_active
-        await template.update_from_dict(update_fields).save()
+            template.is_active = data.is_active
+        user = await User.filter(id=updated_by).first()
+        apply_update_audit(template, user)
+        await template.save()
         return await self._build_detail(tenant_id, template)
 
     def _validate_stages_payload(self, stages) -> None:
@@ -248,7 +252,9 @@ class RdGateTemplateService(AppBaseService[RdGateTemplate]):
                         sort_order=deliv.sort_order or d_idx,
                     )
 
-            await template.update_from_dict({"updated_by": updated_by}).save()
+            user = await User.filter(id=updated_by).first()
+            apply_update_audit(template, user)
+            await template.save()
 
         return await self._build_detail(tenant_id, template)
 
@@ -257,14 +263,21 @@ class RdGateTemplateService(AppBaseService[RdGateTemplate]):
         if not template.is_active:
             raise BusinessLogicError("停用的模板不可设为默认")
 
+        user = await User.filter(id=updated_by).first()
         async with in_transaction():
-            await RdGateTemplate.filter(
+            others = await RdGateTemplate.filter(
                 tenant_id=tenant_id,
                 project_type=template.project_type,
                 is_default=True,
                 deleted_at__isnull=True,
-            ).update(is_default=False, updated_by=updated_by)
-            await template.update_from_dict({"is_default": True, "updated_by": updated_by}).save()
+            ).all()
+            for other in others:
+                other.is_default = False
+                apply_update_audit(other, user)
+                await other.save()
+            template.is_default = True
+            apply_update_audit(template, user)
+            await template.save()
 
         return await self._build_detail(tenant_id, template)
 
@@ -278,6 +291,7 @@ class RdGateTemplateService(AppBaseService[RdGateTemplate]):
         if in_use:
             raise BusinessLogicError("已有项目引用该模板，不可删除")
 
+        user = await User.filter(id=deleted_by).first()
         async with in_transaction():
             stages = await RdGateTemplateStage.filter(
                 tenant_id=tenant_id, template_id=template.id
@@ -290,7 +304,6 @@ class RdGateTemplateService(AppBaseService[RdGateTemplate]):
                 await RdGateTemplateStage.filter(
                     tenant_id=tenant_id, template_id=template.id
                 ).delete()
-            await template.update_from_dict({
-                "deleted_at": datetime.now(),
-                "updated_by": deleted_by,
-            }).save()
+            template.deleted_at = datetime.now()
+            apply_update_audit(template, user)
+            await template.save()

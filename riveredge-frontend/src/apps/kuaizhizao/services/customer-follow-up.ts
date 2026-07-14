@@ -26,6 +26,7 @@ export interface CustomerFollowUp {
   created_by?: number | null;
   updated_by?: number | null;
   created_by_name?: string | null;
+  updated_by_name?: string | null;
 }
 
 export interface CustomerFollowUpListResult {

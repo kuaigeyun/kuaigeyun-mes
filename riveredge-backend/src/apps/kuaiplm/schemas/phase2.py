@@ -48,6 +48,8 @@ class RdRequirementResponse(BaseModel):
     source_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
 
 
 class RdDesignReviewCreate(BaseModel):
@@ -99,6 +101,8 @@ class RdDesignReviewResponse(BaseModel):
     review_notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
 
 
 class RdFmeaRecordCreate(BaseModel):
@@ -141,3 +145,5 @@ class RdFmeaRecordResponse(BaseModel):
     risk_items: Optional[Any] = None
     created_at: datetime
     updated_at: datetime
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None

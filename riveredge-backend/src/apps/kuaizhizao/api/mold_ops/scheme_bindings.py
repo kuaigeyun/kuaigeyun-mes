@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
+from infra.api.deps.deps import get_current_user as soil_get_current_user
+from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 from apps.kuaizhizao.schemas.mold_ops import (
@@ -43,10 +45,11 @@ async def list_mold_scheme_bindings(
 )
 async def create_mold_scheme_binding(
     data: MoldSchemeBindingCreate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.scheme_binding_service.create(tenant_id, data)
+        row = await svc.scheme_binding_service.create(tenant_id, data, current_user=current_user)
         return MoldSchemeBindingResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -60,10 +63,11 @@ async def create_mold_scheme_binding(
 )
 async def bulk_replace_mold_scheme_bindings(
     data: MoldSchemeBindingBulkReplace,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        rows = await svc.scheme_binding_service.bulk_replace(tenant_id, data)
+        rows = await svc.scheme_binding_service.bulk_replace(tenant_id, data, current_user=current_user)
         return [MoldSchemeBindingResponse.model_validate(r) for r in rows]
     except (ValidationError, NotFoundError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_422_UNPROCESSABLE_ENTITY

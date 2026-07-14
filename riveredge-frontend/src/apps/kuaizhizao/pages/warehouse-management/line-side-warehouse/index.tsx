@@ -15,6 +15,9 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { formatQuantity } from '../../../../../utils/format';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import {
   normalizeWarehouseListResponse,
   resolveLineSideInventoryListParams,
@@ -104,7 +107,7 @@ const LineSideWarehousePage: React.FC = () => {
         sorter: true,
         render: (_, record) => (
           <span style={{ color: record.quantity <= 0 ? '#ff4d4f' : 'inherit' }}>
-            {record.quantity} {record.material_unit || ''}
+            {formatQuantity(record.quantity)} {record.material_unit || ''}
           </span>
         ),
       },
@@ -158,7 +161,7 @@ const LineSideWarehousePage: React.FC = () => {
       <UniTable<LineSideInventoryItem>
         headerTitle={t('app.kuaizhizao.lineSideWarehouse.headerTitle')}
         actionRef={actionRef}
-        columns={columns}
+        columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.line-side-warehouse"
         request={fetchInventory}
         showAdvancedSearch

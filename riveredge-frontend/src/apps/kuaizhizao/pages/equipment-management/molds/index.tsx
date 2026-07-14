@@ -46,6 +46,8 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
   MASTER_DATA_PINNED_ACTIVE_FIELD,
@@ -620,7 +622,7 @@ const MoldsPage: React.FC = () => {
 
   const columns: ProColumns<Mold>[] = useMemo(() => {
     const customFieldColumns = generateMoldCustomFieldColumns();
-    return [
+    return alignProColumns<Mold>([
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at_range',
@@ -745,16 +747,7 @@ const MoldsPage: React.FC = () => {
         return `${pct}%`;
       },
     },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      sorter: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     ...customFieldColumns,
     {
       title: t('common.actions'),
@@ -803,7 +796,7 @@ const MoldsPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+  ], SALES_DOC_LIST_FIELD_RANK);
   }, [moldListCustomFields, generateMoldCustomFieldColumns, t, activeStatusValueEnum, moldStatusValueEnum]);
 
   const moldCalibrationResultOptions = useMemo(

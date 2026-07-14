@@ -90,9 +90,39 @@ async def test_process_inspection_card_status_pending():
 
 
 @pytest.mark.asyncio
+async def test_process_inspection_card_status_inspected_ignores_quality_result():
+    status = await resolve_process_inspection_card_status(
+        1, [_insp(status="已检验", quality_status="不合格")]
+    )
+    assert status == "inspected"
+
+
+@pytest.mark.asyncio
 async def test_process_inspection_card_status_not_started_without_reporting():
     status = await resolve_process_inspection_card_status(1, [])
     assert status == "not_started"
+
+
+def test_sum_process_inspection_quality_quantities():
+    from apps.kuaizhizao.services.operation_transfer_service import (
+        sum_process_inspection_quality_quantities,
+    )
+
+    q, u = sum_process_inspection_quality_quantities(
+        [
+            _insp(status="已检验", qualified=99),
+            SimpleNamespace(
+                status="已检验",
+                quality_status="不合格",
+                qualified_quantity=Decimal("0"),
+                unqualified_quantity=Decimal("1"),
+                review_status="通过",
+            ),
+            _insp(status="待检验", qualified=10),
+        ]
+    )
+    assert q == Decimal("99")
+    assert u == Decimal("1")
 
 
 @pytest.mark.asyncio
@@ -101,8 +131,31 @@ async def test_ipqc_passed_without_audit_when_conducted():
         "infra.services.business_config_service.BusinessConfigService.check_audit_required",
         new=AsyncMock(return_value=False),
     ):
-        ok = await ipqc_inspection_passed_for_transfer(1, _insp(status="已检验"))
+        ok = await ipqc_inspection_passed_for_transfer(
+            1, _insp(status="已检验", qualified=50)
+        )
     assert ok is True
+
+
+@pytest.mark.asyncio
+async def test_ipqc_partial_unqualified_still_transfers_qualified_qty():
+    """整单不合格但有合格数量时，仍可计入转下道。"""
+    with patch(
+        "infra.services.business_config_service.BusinessConfigService.check_audit_required",
+        new=AsyncMock(return_value=False),
+    ):
+        ok = await ipqc_inspection_passed_for_transfer(
+            1, _insp(status="已检验", quality_status="不合格", qualified=99)
+        )
+        zero = await ipqc_inspection_passed_for_transfer(
+            1, _insp(status="已检验", quality_status="不合格", qualified=0)
+        )
+    assert ok is True
+    assert zero is False
+    total = await sum_plan_transfer_qualified_from_inspections(
+        1, [_insp(status="已检验", quality_status="不合格", qualified=99)]
+    )
+    assert total == Decimal("99")
 
 
 @pytest.mark.asyncio
@@ -112,10 +165,14 @@ async def test_ipqc_requires_review_when_audit_enabled():
         new=AsyncMock(return_value=True),
     ):
         pending = await ipqc_inspection_passed_for_transfer(
-            1, _insp(status="已检验", review_status="待审核")
+            1, _insp(status="已检验", review_status="待审核", qualified=10)
         )
         approved = await ipqc_inspection_passed_for_transfer(
-            1, _insp(status="已审核", review_status="通过")
+            1, _insp(status="已审核", review_status="通过", qualified=10)
+        )
+        approved_alias = await ipqc_inspection_passed_for_transfer(
+            1, _insp(status="已检验", review_status="已通过", qualified=10)
         )
     assert pending is False
     assert approved is True
+    assert approved_alias is True

@@ -57,7 +57,6 @@ class PartnerStatement(BaseModel):
 
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
-    created_by = fields.IntField(null=True, description="创建人ID")
     created_at = fields.DatetimeField(auto_now_add=True, description="创建时间")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 

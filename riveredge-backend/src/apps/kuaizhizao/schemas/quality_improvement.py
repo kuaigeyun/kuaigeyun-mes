@@ -93,6 +93,10 @@ class Quality8DResponse(Quality8DBase):
     capabilities: Optional[EightDReportCapabilities] = Field(
         None, description="业务态 capabilities（不含 RBAC）"
     )
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     created_at: datetime
     updated_at: datetime
 
@@ -174,6 +178,10 @@ class OQCInspectionResponse(OQCInspectionBase):
     capabilities: Optional[OQCInspectionCapabilities] = Field(
         None, description="业务态 capabilities（不含 RBAC）"
     )
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     created_at: datetime
     updated_at: datetime
 

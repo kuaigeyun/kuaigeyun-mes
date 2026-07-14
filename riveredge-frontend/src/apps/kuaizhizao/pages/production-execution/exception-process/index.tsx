@@ -35,6 +35,7 @@ import {
 } from '../../../utils/productionExceptionList';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 
 const EXCEPTION_PROCESS_RESOURCE = 'kuaizhizao:production-execution-reporting';
 
@@ -480,7 +481,7 @@ const ExceptionProcessPage: React.FC = () => {
         <UniTable<ExceptionProcessRecord>
           columnPersistenceId="apps.kuaizhizao.pages.production-execution.exception-process"
           actionRef={actionRef}
-          columns={columns}
+          columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
           request={async (params, sort, _filter, searchFormValues) => {
             const s = searchFormValues ?? {};
             const statusParams = resolveProductionExceptionListStatusParams(s, 'process_status');

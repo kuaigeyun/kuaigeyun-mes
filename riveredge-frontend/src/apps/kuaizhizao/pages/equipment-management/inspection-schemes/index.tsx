@@ -21,6 +21,8 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { inspectionItemsApi, inspectionSchemesApi } from '../../../services/equipmentOps';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   MASTER_DATA_PINNED_ACTIVE_FIELD,
   buildActiveStatusValueEnum,
@@ -130,8 +132,7 @@ const InspectionSchemesPage: React.FC = () => {
 
   const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
 
-  const columns: ProColumns<InspectionScheme>[] = useMemo(
-    () => [
+  const columns: ProColumns<InspectionScheme>[] = useMemo(() => alignProColumns<InspectionScheme>([
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at_range',
@@ -187,13 +188,10 @@ const InspectionSchemesPage: React.FC = () => {
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
+        hideInTable: true,
         hideInSearch: true,
-        defaultSortOrder: 'descend',
-        sorter: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
+      ...buildDocumentAuditColumns<InspectionScheme>(t),
       {
         title: t('common.actions'),
         key: 'action',
@@ -237,7 +235,7 @@ const InspectionSchemesPage: React.FC = () => {
           </>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, perms, activeStatusValueEnum],
   );
 

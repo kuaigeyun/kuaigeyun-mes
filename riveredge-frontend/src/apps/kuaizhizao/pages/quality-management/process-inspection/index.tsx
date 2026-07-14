@@ -46,6 +46,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
+  buildInspectorTimeStackedColumn,
   qualifiedQuantityColumnProps,
   stackedPrimarySecondaryColumn,
   unqualifiedQuantityColumnProps,
@@ -69,6 +70,8 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { downloadFile } from '../../../services/common';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   buildQualityInspectionDocStatusValueEnum,
   buildQualityInspectionQualityStatusValueEnum,
@@ -77,7 +80,7 @@ import {
   resolveQualityInspectionListParams,
 } from '../../../utils/qualityInspectionListCore';
 import dayjs from 'dayjs';
-import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import {formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
 import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useGlobalStore } from '../../../../../stores/globalStore';
@@ -799,7 +802,7 @@ const ProcessInspectionPage: React.FC = () => {
 
   // 表格列定义
   const columns: ProColumns<ProcessInspection>[] = useMemo(
-    () => [
+    () => alignProColumns<ProcessInspection>([
     {
       title: t('app.kuaizhizao.quality.common.columns.inspectionTime'),
       dataIndex: 'inspection_time_range',
@@ -875,6 +878,7 @@ const ProcessInspectionPage: React.FC = () => {
     },
     { title: t('app.kuaizhizao.quality.common.columns.materialCode'), dataIndex: 'material_code', hideInTable: true },
     { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name', hideInTable: true },
+    buildInspectorTimeStackedColumn<ProcessInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
     {
       title: t('app.kuaizhizao.quality.common.columns.inspectionQty'),
       dataIndex: 'inspection_quantity',
@@ -906,25 +910,7 @@ const ProcessInspectionPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => renderQualityResultTag(t, r.inspection_result),
     },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.inspectionTime'),
-      dataIndex: 'inspection_time',
-      width: 132,
-      uniTableKeepWidth: true,
-      valueType: 'dateTime',
-      sorter: true,
-      hideInSearch: true,
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      sorter: true,
-      defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
+    ...buildDocumentAuditColumns<ProcessInspection>(t),
     ...inspectionCustomFieldColumns,
     ...(processAuditColumn ? [processAuditColumn] : []),
     {
@@ -957,7 +943,7 @@ const ProcessInspectionPage: React.FC = () => {
       render: (_, record) =>
         renderProcessRowActions(renderProcessRowNodes(record), `proc-${record.id ?? 'row'}`),
     },
-  ],
+  ], SALES_DOC_LIST_FIELD_RANK),
     [t, processAuditColumn, inspectionCustomFieldColumns, inspectionDocStatusValueEnum, inspectionQualityStatusValueEnum],
   );
 
@@ -1274,9 +1260,9 @@ const ProcessInspectionPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.quality.common.columns.operationCode'), dataIndex: 'operation_code', width: 120, ellipsis: true },
                   { title: t('app.kuaizhizao.quality.common.columns.operationName'), dataIndex: 'operation_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' , render: formatQuantity },
                 ]}
               />
             ) : (

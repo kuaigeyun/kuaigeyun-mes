@@ -63,9 +63,6 @@ class LaunchCountdown(BaseModel):
     # 备注
     notes = fields.TextField(null=True, description="备注")
     
-    # 创建人和更新人
-    created_by = fields.IntField(null=True, description="创建人ID")
-    updated_by = fields.IntField(null=True, description="更新人ID")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

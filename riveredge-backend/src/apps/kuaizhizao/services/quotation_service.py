@@ -386,7 +386,9 @@ class QuotationService:
             "notes": quotation.notes,
             "is_active": quotation.is_active,
             "created_by": quotation.created_by,
+            "created_by_name": getattr(quotation, "created_by_name", None),
             "updated_by": quotation.updated_by,
+            "updated_by_name": getattr(quotation, "updated_by_name", None),
             "created_at": quotation.created_at,
             "updated_at": quotation.updated_at,
         }
@@ -600,8 +602,11 @@ class QuotationService:
                 total_amount=getattr(quotation_data, "total_amount", None),
             )
             q_dict = quotation_data.model_dump(exclude={"items"})
+            operator_name = await self.get_user_name(created_by)
             q_dict["created_by"] = created_by
+            q_dict["created_by_name"] = operator_name
             q_dict["updated_by"] = created_by
+            q_dict["updated_by_name"] = operator_name
             q_dict["quotation_series_code"] = q_dict.get("quotation_series_code") or q_dict.get(
                 "quotation_code"
             )
@@ -1587,6 +1592,7 @@ class QuotationService:
         row_price_type = str(
             overrides.get("price_type", getattr(latest, "price_type", None) or DEFAULT_SALES_PRICE_TYPE)
         )
+        operator_name = await self.get_user_name(created_by)
 
         async with in_transaction():
             new_row = await Quotation.create(
@@ -1629,7 +1635,9 @@ class QuotationService:
                 notes=overrides.get("notes", latest.notes),
                 is_active=True,
                 created_by=created_by,
+                created_by_name=operator_name,
                 updated_by=created_by,
+                updated_by_name=operator_name,
             )
 
             await Quotation.filter(id=latest.id).update(

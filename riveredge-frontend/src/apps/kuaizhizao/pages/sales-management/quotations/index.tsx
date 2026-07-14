@@ -101,7 +101,7 @@ import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import dayjs from 'dayjs';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -148,8 +148,11 @@ import {
   SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../shared/DocumentPushProgressBar';
+import { quotationDownstreamPushPercent } from '../shared/pushProgress';
 import { buildDescriptionItemsFromColumns } from '../shared/descriptionItems';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 const QUOTATION_LIST_PATH = '/apps/kuaizhizao/sales-management/quotations';
@@ -1010,7 +1013,7 @@ const QuotationsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.quotation.colSalesman'),
       dataIndex: 'salesman_name',
-      width: 100,
+      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
@@ -1023,7 +1026,11 @@ const QuotationsPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
       order: 13,
-      render: (_, r) => t('app.kuaizhizao.quotation.versionDisplay', { n: r.version_no ?? 1 }),
+      render: (_, r) => (
+        <Tag color="blue" bordered={false}>
+          {t('app.kuaizhizao.quotation.versionDisplay', { n: r.version_no ?? 1 })}
+        </Tag>
+      ),
     },
     {
       title: t('app.kuaizhizao.quotation.colQuotationDate'),
@@ -1044,6 +1051,15 @@ const QuotationsPage: React.FC = () => {
       order: 30,
     },
     {
+      title: t('app.kuaizhizao.salesOrder.totalQuantity'),
+      dataIndex: 'total_quantity',
+      width: 100,
+      align: 'right',
+      sorter: true,
+      hideInSearch: true,
+      render: formatQuantity,
+    },
+    {
       title: t('app.kuaizhizao.quotation.colTotalAmount'),
       dataIndex: 'total_amount',
       width: 110,
@@ -1053,15 +1069,27 @@ const QuotationsPage: React.FC = () => {
       render: (_, r) => <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="total_amount" value={r.total_amount} />,
     },
     {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      valueType: 'dateTime',
-      width: 132,
+      title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+      dataIndex: 'downstream_push_progress',
+      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
       uniTableKeepWidth: true,
-      sorter: true,
       hideInSearch: true,
-      defaultSortOrder: 'descend',
+      render: (_, r) => {
+        const percent = quotationDownstreamPushPercent(r);
+        return (
+          <DocumentPushProgressBar
+            percent={percent}
+            tooltip={t('app.kuaizhizao.salesManagement.pushProgress.downstreamTooltip', {
+              percent,
+              status: percent >= 100
+                ? t('app.kuaizhizao.salesManagement.pushProgress.pushed')
+                : t('app.kuaizhizao.salesManagement.pushProgress.notPushed'),
+            })}
+          />
+        );
+      },
     },
+    ...buildDocumentAuditColumns<Quotation>(t),
     ...(quotationAuditColumn ? [quotationAuditColumn] : []),
     {
       title: t('app.kuaizhizao.quotation.colLifecycle'),
@@ -2485,6 +2513,11 @@ const QuotationsPage: React.FC = () => {
         ) : (
           '-'
         ),
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.totalQuantity'),
+      dataIndex: 'total_quantity',
+      render: formatQuantity,
     },
     {
       title: t('app.kuaizhizao.quotation.colTotalAmount'),
@@ -3934,9 +3967,9 @@ const QuotationsPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.quotation.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
                   { title: t('app.kuaizhizao.quotation.colMaterialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
-                  { title: t('app.kuaizhizao.quotation.colQuoteQuantity'), dataIndex: 'quantity', width: 88, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 88, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 88, align: 'right' },
+                  { title: t('app.kuaizhizao.quotation.colQuoteQuantity'), dataIndex: 'quantity', width: 88, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 88, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 88, align: 'right', render: formatQuantity },
                   {
                     title: t('app.kuaizhizao.quotation.colDeliveryDate'),
                     dataIndex: 'delivery_date',

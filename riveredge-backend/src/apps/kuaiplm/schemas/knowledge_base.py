@@ -42,6 +42,8 @@ class KbSpaceResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
 
 
 class KbArticleLinkBase(BaseModel):
@@ -104,6 +106,8 @@ class KbArticleResponse(BaseModel):
     links: List[KbArticleLinkResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
 
 
 class KbSearchResponse(BaseModel):

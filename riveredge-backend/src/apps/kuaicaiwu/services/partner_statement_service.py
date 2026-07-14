@@ -15,6 +15,7 @@ from openpyxl.styles import Alignment, Font
 from tortoise.expressions import Q
 from tortoise import timezone as tortoise_timezone
 
+from apps.common.audit_actor import apply_update_audit
 from apps.common.base_service import AppBaseService
 from apps.kuaicaiwu.models.partner_statement import PartnerStatement
 from apps.kuaicaiwu.models.payable import Payable
@@ -26,6 +27,7 @@ from apps.master_data.models.supplier import Supplier
 from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.tenant import Tenant
+from infra.models.user import User
 
 _APPROVED_REVIEW = ("已审核", "通过")
 _EXCLUDED_REVIEW = ("待审核", "驳回")
@@ -328,6 +330,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             "period_label": period_label,
         }
 
+        user_info = await self.get_user_info(created_by)
         return await PartnerStatement.create(
             tenant_id=tenant_id,
             statement_code=code,
@@ -347,6 +350,9 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             notes=notes,
             attachments=attachments,
             created_by=created_by,
+            created_by_name=user_info["name"],
+            updated_by=created_by,
+            updated_by_name=user_info["name"],
         )
 
     async def list_statements(
@@ -413,6 +419,8 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         obj.status = "Confirmed"
         obj.confirmed_at = tortoise_timezone.now()
         obj.confirmed_by = user_id
+        operator = await User.filter(id=user_id).first()
+        apply_update_audit(obj, operator)
         await obj.save()
         return obj
 
@@ -436,11 +444,13 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         obj.sent_channel = channel
         if notes:
             obj.notes = (obj.notes or "") + ("\n" if obj.notes else "") + notes
+        operator = await User.filter(id=user_id).first()
+        apply_update_audit(obj, operator)
         await obj.save()
         return obj
 
     async def dispute_statement(
-        self, tenant_id: int, statement_id: int, reason: str
+        self, tenant_id: int, statement_id: int, reason: str, user_id: Optional[int] = None
     ) -> PartnerStatement:
         obj = await self.get_statement(tenant_id, statement_id)
         if obj.status not in ("Sent", "Confirmed"):
@@ -448,6 +458,9 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         obj.status = "Disputed"
         obj.dispute_reason = reason.strip()
         obj.disputed_at = tortoise_timezone.now()
+        if user_id is not None:
+            operator = await User.filter(id=user_id).first()
+            apply_update_audit(obj, operator)
         await obj.save()
         return obj
 

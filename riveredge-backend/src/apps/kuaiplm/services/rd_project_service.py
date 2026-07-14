@@ -205,6 +205,7 @@ class RdProjectService(AppBaseService[RdProject]):
             tenant_id, project_type, gate_template_id
         )
         first_gate = gate_defs[0]["gate_key"] if gate_defs else None
+        user_info = await self.get_user_info(created_by)
         project = await RdProject.create(
             tenant_id=tenant_id,
             project_code=project_code,
@@ -225,7 +226,9 @@ class RdProjectService(AppBaseService[RdProject]):
             planned_end_date=planned_end_date,
             notes=notes,
             created_by=created_by,
+            created_by_name=user_info["name"],
             updated_by=created_by,
+            updated_by_name=user_info["name"],
         )
         created_gates: List[RdProjectGate] = []
         for gate_def in gate_defs:
@@ -537,7 +540,11 @@ class RdProjectService(AppBaseService[RdProject]):
         self, tenant_id: int, project_id: int, data: RdProjectUpdate, updated_by: int
     ) -> RdProjectResponse:
         project = await self._get_project_or_404(tenant_id, project_id)
-        update_fields = {"updated_by": updated_by}
+        user_info = await self.get_user_info(updated_by)
+        update_fields = {
+            "updated_by": updated_by,
+            "updated_by_name": user_info["name"],
+        }
         for field in (
             "project_name", "description", "status", "material_id", "material_code",
             "material_name", "current_gate_key", "owner_id", "owner_name", "priority",
@@ -553,7 +560,12 @@ class RdProjectService(AppBaseService[RdProject]):
         project = await self._get_project_or_404(tenant_id, project_id)
         if project.status not in (RdProjectStatus.DRAFT.value, RdProjectStatus.CANCELLED.value):
             raise BusinessLogicError("仅草稿或已取消项目可删除")
-        await project.update_from_dict({"deleted_at": datetime.now(), "updated_by": deleted_by}).save()
+        user_info = await self.get_user_info(deleted_by)
+        await project.update_from_dict({
+            "deleted_at": datetime.now(),
+            "updated_by": deleted_by,
+            "updated_by_name": user_info["name"],
+        }).save()
 
     # ---------- Gates ----------
 
@@ -580,7 +592,12 @@ class RdProjectService(AppBaseService[RdProject]):
             await gate.update_from_dict(update_fields).save()
         if data.status == RdGateStatus.PASSED.value:
             project = await RdProject.get(id=project_id)
-            await project.update_from_dict({"current_gate_key": gate.gate_key, "updated_by": user_id}).save()
+            user_info = await self.get_user_info(user_id)
+            await project.update_from_dict({
+                "current_gate_key": gate.gate_key,
+                "updated_by": user_id,
+                "updated_by_name": user_info["name"],
+            }).save()
         return RdProjectGateResponse.model_validate(gate)
 
     # ---------- Tasks ----------
@@ -652,7 +669,12 @@ class RdProjectService(AppBaseService[RdProject]):
         )
         if not task:
             raise NotFoundError(f"任务不存在: {task_id}")
-        await task.update_from_dict({"deleted_at": datetime.now(), "updated_by": deleted_by}).save()
+        user_info = await self.get_user_info(deleted_by)
+        await task.update_from_dict({
+            "deleted_at": datetime.now(),
+            "updated_by": deleted_by,
+            "updated_by_name": user_info["name"],
+        }).save()
 
     # ---------- Deliverables ----------
 
@@ -711,7 +733,12 @@ class RdProjectService(AppBaseService[RdProject]):
         )
         if not row:
             raise NotFoundError(f"交付物不存在: {deliverable_id}")
-        await row.update_from_dict({"deleted_at": datetime.now(), "updated_by": deleted_by}).save()
+        user_info = await self.get_user_info(deleted_by)
+        await row.update_from_dict({
+            "deleted_at": datetime.now(),
+            "updated_by": deleted_by,
+            "updated_by_name": user_info["name"],
+        }).save()
 
     # ---------- Links ----------
 

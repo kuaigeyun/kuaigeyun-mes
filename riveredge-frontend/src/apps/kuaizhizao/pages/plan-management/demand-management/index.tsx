@@ -74,6 +74,10 @@ import {
 } from '../../../utils/demandLifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar';
+import { demandComputationPushPercent } from '../../sales-management/shared/pushProgress';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
@@ -82,7 +86,7 @@ import { getDemandTypeTagProps, normalizeDemandTypeKey } from '../../../utils/de
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import dayjs from 'dayjs';
-import { formatDateTime as formatDateTimeValue } from '../../../../../utils/format';
+import {formatDateTime as formatDateTimeValue, formatQuantity} from '../../../../../utils/format';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
@@ -188,9 +192,9 @@ const DemandManagementPage: React.FC = () => {
   const formatBusinessModeLabel = useCallback(
     (mode: string | undefined | null) => {
       const m = (mode ?? '').trim();
-      if (m === 'MTS') return t('app.kuaizhizao.demandManagement.businessModeMtsShort');
-      if (m === 'MTO') return t('app.kuaizhizao.demandManagement.businessModeMtoShort');
-      if (m === 'ATO') return t('app.kuaizhizao.demandManagement.businessModeAtoShort');
+      if (m === 'MTS') return t('app.kuaizhizao.demandManagement.businessModeMts');
+      if (m === 'MTO') return t('app.kuaizhizao.demandManagement.businessModeMto');
+      if (m === 'ATO') return t('app.kuaizhizao.demandManagement.businessModeAto');
       return m || '-';
     },
     [t]
@@ -674,7 +678,7 @@ const DemandManagementPage: React.FC = () => {
   );
 
   const columns: ProColumns<Demand>[] = useMemo(
-    () => [
+    () => alignProColumns<Demand>([
     {
       title: t('app.kuaizhizao.salesForecast.startDate'),
       dataIndex: 'start_date_range',
@@ -739,6 +743,7 @@ const DemandManagementPage: React.FC = () => {
       title: t('app.kuaizhizao.demandManagement.demandType'),
       dataIndex: 'demand_type',
       width: 120,
+      hideInTable: true,
       hideInSearch: true,
       sorter: true,
       render: (_: unknown, record: Demand) => (
@@ -752,68 +757,66 @@ const DemandManagementPage: React.FC = () => {
       align: 'right',
       sorter: true,
       hideInSearch: true,
+      render: formatQuantity,
     },
     {
-      title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
-      dataIndex: 'total_amount',
-      width: 120,
-      align: 'right',
-      sorter: true,
+      title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+      dataIndex: 'computation_push_progress',
+      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+      uniTableKeepWidth: true,
       hideInSearch: true,
-      render: (_, record) =>
-        record.total_amount != null ? `¥${Number(record.total_amount).toFixed(2)}` : '-',
+      render: (_: unknown, record: Demand) => {
+        const percent = demandComputationPushPercent(record.pushed_to_computation);
+        return (
+          <DocumentPushProgressBar
+            percent={percent}
+            tooltip={t('app.kuaizhizao.salesManagement.pushProgress.computationTooltip', {
+              percent,
+              status: percent >= 100
+                ? t('app.kuaizhizao.salesManagement.pushProgress.pushed')
+                : t('app.kuaizhizao.salesManagement.pushProgress.notPushed'),
+            })}
+          />
+        );
+      },
     },
     {
       title: t('app.kuaizhizao.demandManagement.businessMode'),
       dataIndex: 'business_mode',
-      width: 100,
+      width: 140,
+      uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: false,
       valueEnum: {
-        MTS: { text: t('app.kuaizhizao.demandManagement.businessModeMtsShort'), status: 'Processing' },
-        MTO: { text: t('app.kuaizhizao.demandManagement.businessModeMtoShort'), status: 'Success' },
-        ATO: { text: t('app.kuaizhizao.demandManagement.businessModeAtoShort'), status: 'Warning' },
+        MTS: { text: t('app.kuaizhizao.demandManagement.businessModeMts'), status: 'Processing' },
+        MTO: { text: t('app.kuaizhizao.demandManagement.businessModeMto'), status: 'Success' },
+        ATO: { text: t('app.kuaizhizao.demandManagement.businessModeAto'), status: 'Warning' },
       },
     },
     {
       title: t('app.kuaizhizao.salesForecast.startDate'),
+      key: 'start_end_date_stacked',
       dataIndex: 'start_date',
-      valueType: 'date',
       width: 132,
       uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
+      render: (_: unknown, record: Demand) => {
+        const startDateText = record.start_date ? formatDateTimeValue(record.start_date, 'YYYY-MM-DD') : '-';
+        const endDateText = record.end_date ? formatDateTimeValue(record.end_date, 'YYYY-MM-DD') : '-';
+        return (
+          <UniTableStackedPrimaryCell
+            primary={startDateText}
+            secondary={endDateText}
+            secondaryCopyable={false}
+            uniformText
+            primaryBadge={t('common.start')}
+            secondaryBadge={t('common.end')}
+          />
+        );
+      },
     },
-    {
-      title: t('app.kuaizhizao.salesForecast.endDate'),
-      dataIndex: 'end_date',
-      valueType: 'date',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      hideInSearch: true,
-    },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      defaultSortOrder: 'descend',
-      hideInSearch: true,
-      render: (_, record) =>
-        record.created_at ? formatDateTimeValue(record.created_at, 'YYYY-MM-DD HH:mm') : '-',
-    },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      hideInSearch: true,
-      render: (_, record) =>
-        record.updated_at ? formatDateTimeValue(record.updated_at, 'YYYY-MM-DD HH:mm') : '-',
-    },
+    ...buildDocumentAuditColumns<Demand>(t),
     ...(demandAuditColumn ? [demandAuditColumn] : []),
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
@@ -910,7 +913,7 @@ const DemandManagementPage: React.FC = () => {
         return parts;
       },
     },
-  ],
+  ], SALES_DOC_LIST_FIELD_RANK),
     [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, demandCanWithdrawComputation, handleWithdrawFromComputation, demandAuditColumn, demandPlanLifecycleValueEnum]
   );
 
@@ -935,24 +938,12 @@ const DemandManagementPage: React.FC = () => {
         },
         { title: t('app.kuaizhizao.salesOrder.lifecycleAudited'), value: statistics.audited_count },
         { title: t('app.kuaizhizao.demandManagement.statPushed'), value: statistics.pushed_count },
-        {
-          title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
-          value: statistics.total_amount ?? 0,
-          prefix: '¥',
-          precision: 2,
-        },
       ]
     : [
         { title: t('app.kuaizhizao.demandManagement.statActive'), value: 0 },
         { title: t('app.kuaizhizao.salesOrder.lifecyclePendingReview'), value: 0 },
         { title: t('app.kuaizhizao.salesOrder.lifecycleAudited'), value: 0 },
         { title: t('app.kuaizhizao.demandManagement.statPushed'), value: 0 },
-        {
-          title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
-          value: 0,
-          prefix: '¥',
-          precision: 2,
-        },
       ],
     [statistics, t]
   );
@@ -974,8 +965,7 @@ const DemandManagementPage: React.FC = () => {
     [messageApi, t]
   );
 
-  const createPlanItemColumns = useMemo(
-    () => [
+  const createPlanItemColumns = [
       {
         title: t('app.kuaizhizao.salesOrder.material'),
         dataIndex: 'material_id',
@@ -1052,9 +1042,7 @@ const DemandManagementPage: React.FC = () => {
           </AntForm.Item>
         ),
       },
-    ],
-    [t]
-  );
+    ];
 
   const detailItemColumns = useMemo(
     () => (demandType: Demand['demand_type']) => [
@@ -1078,7 +1066,7 @@ const DemandManagementPage: React.FC = () => {
         width: 80,
         render: (v: string) => getDictLabel(dictLabelMap, 'MATERIAL_UNIT', v) || v || '-',
       },
-      { title: t('app.kuaizhizao.planReports.colRequirementQty'), dataIndex: 'required_quantity', width: 100, align: 'right' as const },
+      { title: t('app.kuaizhizao.planReports.colRequirementQty'), dataIndex: 'required_quantity', width: 100, align: 'right' as const , render: formatQuantity },
       ...(demandType === 'sales_forecast'
         ? [
             { title: t('app.kuaizhizao.salesForecast.forecastDate'), dataIndex: 'forecast_date', width: 120 },
@@ -1969,9 +1957,9 @@ const DemandManagementPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.quotation.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
                   { title: t('app.kuaizhizao.quotation.colMaterialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
-                  { title: t('app.kuaizhizao.demandComputation.colRequiredQty'), dataIndex: 'quantity', width: 88, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 88, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 88, align: 'right' },
+                  { title: t('app.kuaizhizao.demandComputation.colRequiredQty'), dataIndex: 'quantity', width: 88, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 88, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 88, align: 'right' , render: formatQuantity },
                   {
                     title: t('app.kuaizhizao.quotation.colDeliveryDate'),
                     dataIndex: 'delivery_date',

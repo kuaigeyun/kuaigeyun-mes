@@ -12,6 +12,14 @@ from typing import Optional, List, Any
 from pydantic import BaseModel, Field, ConfigDict
 
 
+class AuditActorFields(BaseModel):
+    """BaseModel 审计人字段（列表直接展示姓名）。"""
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
+
+
 # ---------- 模具保养项 ----------
 
 class MoldMaintenanceItemBase(BaseModel):
@@ -34,7 +42,7 @@ class MoldMaintenanceItemUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class MoldMaintenanceItemResponse(MoldMaintenanceItemBase):
+class MoldMaintenanceItemResponse(MoldMaintenanceItemBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -97,7 +105,7 @@ class MoldMaintenanceSchemeUpdate(BaseModel):
     lines: Optional[List[MoldMaintenanceSchemeLineCreate]] = None
 
 
-class MoldMaintenanceSchemeResponse(MoldMaintenanceSchemeBase):
+class MoldMaintenanceSchemeResponse(MoldMaintenanceSchemeBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -137,7 +145,7 @@ class MoldRepairItemUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class MoldRepairItemResponse(MoldRepairItemBase):
+class MoldRepairItemResponse(MoldRepairItemBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -194,7 +202,7 @@ class MoldRepairSchemeUpdate(BaseModel):
     lines: Optional[List[MoldRepairSchemeLineCreate]] = None
 
 
-class MoldRepairSchemeResponse(MoldRepairSchemeBase):
+class MoldRepairSchemeResponse(MoldRepairSchemeBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -230,7 +238,7 @@ class MoldSchemeBindingBulkReplace(BaseModel):
     scheme_ids: List[int] = Field(default_factory=list)
 
 
-class MoldSchemeBindingResponse(MoldSchemeBindingBase):
+class MoldSchemeBindingResponse(MoldSchemeBindingBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -260,7 +268,7 @@ class MoldTrialUpdate(BaseModel):
     remark: Optional[str] = None
 
 
-class MoldTrialResponse(BaseModel):
+class MoldTrialResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -311,7 +319,7 @@ class MoldBorrowUpdate(BaseModel):
     remark: Optional[str] = None
 
 
-class MoldBorrowResponse(BaseModel):
+class MoldBorrowResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -366,7 +374,7 @@ class MoldReturnUpdate(BaseModel):
     remark: Optional[str] = None
 
 
-class MoldReturnResponse(BaseModel):
+class MoldReturnResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -458,7 +466,7 @@ class MoldMaintenanceUpdate(BaseModel):
     lines: Optional[List[MoldMaintenanceLineInput]] = None
 
 
-class MoldMaintenanceResponse(BaseModel):
+class MoldMaintenanceResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -558,7 +566,7 @@ class MoldRepairUpdate(BaseModel):
     lines: Optional[List[MoldRepairLineInput]] = None
 
 
-class MoldRepairResponse(BaseModel):
+class MoldRepairResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -696,7 +704,7 @@ class MoldScrapApplicationReject(BaseModel):
     reject_reason: str = Field(..., min_length=1)
 
 
-class MoldScrapApplicationResponse(BaseModel):
+class MoldScrapApplicationResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str

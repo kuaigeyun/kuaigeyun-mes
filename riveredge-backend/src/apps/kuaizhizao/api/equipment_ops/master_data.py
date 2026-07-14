@@ -79,10 +79,11 @@ def _maint_scheme_response(scheme, lines) -> MaintenanceSchemeResponse:
 )
 async def create_inspection_item(
     data: InspectionItemCreate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.inspection_item_service.create(tenant_id, data)
+        row = await svc.inspection_item_service.create(tenant_id, data, current_user=current_user)
         return InspectionItemResponse.model_validate(row)
     except ValidationError as e:
         raise _validation_http(e)
@@ -135,10 +136,11 @@ async def get_inspection_item(row_id: int, tenant_id: int = Depends(get_current_
 async def update_inspection_item(
     row_id: int,
     data: InspectionItemUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.inspection_item_service.update(tenant_id, row_id, data)
+        row = await svc.inspection_item_service.update(tenant_id, row_id, data, current_user=current_user)
         return InspectionItemResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         if isinstance(e, NotFoundError):
@@ -168,10 +170,11 @@ async def delete_inspection_item(row_id: int, tenant_id: int = Depends(get_curre
 )
 async def create_inspection_scheme(
     data: InspectionSchemeCreate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        scheme = await svc.inspection_scheme_service.create(tenant_id, data)
+        scheme = await svc.inspection_scheme_service.create(tenant_id, data, current_user=current_user)
         _, lines = await svc.inspection_scheme_service.get_with_lines(tenant_id, scheme.id)
         return _scheme_response(scheme, lines)
     except ValidationError as e:
@@ -224,10 +227,11 @@ async def get_inspection_scheme(row_id: int, tenant_id: int = Depends(get_curren
 async def update_inspection_scheme(
     row_id: int,
     data: InspectionSchemeUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        scheme = await svc.inspection_scheme_service.update(tenant_id, row_id, data)
+        scheme = await svc.inspection_scheme_service.update(tenant_id, row_id, data, current_user=current_user)
         _, lines = await svc.inspection_scheme_service.get_with_lines(tenant_id, scheme.id)
         return _scheme_response(scheme, lines)
     except (ValidationError, NotFoundError) as e:
@@ -258,10 +262,11 @@ async def delete_inspection_scheme(row_id: int, tenant_id: int = Depends(get_cur
 )
 async def create_patrol_route(
     data: PatrolRouteCreate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        route = await svc.patrol_route_service.create(tenant_id, data)
+        route = await svc.patrol_route_service.create(tenant_id, data, current_user=current_user)
         _, steps = await svc.patrol_route_service.get_with_steps(tenant_id, route.id)
         return _route_response(route, steps)
     except ValidationError as e:
@@ -314,10 +319,11 @@ async def get_patrol_route(row_id: int, tenant_id: int = Depends(get_current_ten
 async def update_patrol_route(
     row_id: int,
     data: PatrolRouteUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        route = await svc.patrol_route_service.update(tenant_id, row_id, data)
+        route = await svc.patrol_route_service.update(tenant_id, row_id, data, current_user=current_user)
         _, steps = await svc.patrol_route_service.get_with_steps(tenant_id, route.id)
         return _route_response(route, steps)
     except (ValidationError, NotFoundError) as e:
@@ -348,10 +354,11 @@ async def delete_patrol_route(row_id: int, tenant_id: int = Depends(get_current_
 )
 async def create_maintenance_item(
     data: MaintenanceItemCreate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.maintenance_item_service.create(tenant_id, data)
+        row = await svc.maintenance_item_service.create(tenant_id, data, current_user=current_user)
         return MaintenanceItemResponse.model_validate(row)
     except ValidationError as e:
         raise _validation_http(e)
@@ -404,10 +411,11 @@ async def get_maintenance_item(row_id: int, tenant_id: int = Depends(get_current
 async def update_maintenance_item(
     row_id: int,
     data: MaintenanceItemUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.maintenance_item_service.update(tenant_id, row_id, data)
+        row = await svc.maintenance_item_service.update(tenant_id, row_id, data, current_user=current_user)
         return MaintenanceItemResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         if isinstance(e, NotFoundError):
@@ -437,10 +445,11 @@ async def delete_maintenance_item(row_id: int, tenant_id: int = Depends(get_curr
 )
 async def create_maintenance_scheme(
     data: MaintenanceSchemeCreate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        scheme = await svc.maintenance_scheme_service.create(tenant_id, data)
+        scheme = await svc.maintenance_scheme_service.create(tenant_id, data, current_user=current_user)
         _, lines = await svc.maintenance_scheme_service.get_with_lines(tenant_id, scheme.id)
         return _maint_scheme_response(scheme, lines)
     except ValidationError as e:
@@ -493,10 +502,11 @@ async def get_maintenance_scheme(row_id: int, tenant_id: int = Depends(get_curre
 async def update_maintenance_scheme(
     row_id: int,
     data: MaintenanceSchemeUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        scheme = await svc.maintenance_scheme_service.update(tenant_id, row_id, data)
+        scheme = await svc.maintenance_scheme_service.update(tenant_id, row_id, data, current_user=current_user)
         _, lines = await svc.maintenance_scheme_service.get_with_lines(tenant_id, scheme.id)
         return _maint_scheme_response(scheme, lines)
     except (ValidationError, NotFoundError) as e:

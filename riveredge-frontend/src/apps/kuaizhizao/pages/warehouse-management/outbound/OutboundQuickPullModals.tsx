@@ -15,8 +15,7 @@ import {
 } from '../../../services/shipment-notice';
 import { outsourceWorkOrderApi, outsourceMaterialIssueApi } from '../../../services/production';
 import { workOrderApi } from '../../../services/work-order';
-import { formatPullQty } from './outboundPullModalUtils';
-import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format';
 import {
   outboundOutsourceEntryPath,
   outboundSalesOrderEntryPath,
@@ -645,7 +644,7 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
         { title: t('app.kuaizhizao.warehouseOutbound.pull.colProduct'), dataIndex: 'product_name', ellipsis: true },
         { title: t('app.kuaizhizao.warehouseOutbound.pull.colSalesOrder'), dataIndex: 'sales_order_code', width: 120, render: (v: string) => v || '—' },
         { title: t('app.kuaizhizao.warehouseOutbound.col.status'), dataIndex: 'status', width: 90, align: 'center' as const },
-        { title: t('app.kuaizhizao.warehouseOutbound.field.quantity'), dataIndex: 'quantity', width: 80, align: 'right' as const, render: formatPullQty },
+        { title: t('app.kuaizhizao.warehouseOutbound.field.quantity'), dataIndex: 'quantity', width: 80, align: 'right' as const, render: formatQuantity },
         {
           title: t('app.kuaizhizao.warehouseOutbound.col.updatedAt'),
           dataIndex: 'updated_at',
@@ -661,7 +660,7 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
         { title: t('app.kuaizhizao.warehouseOutbound.pull.colOrderCode'), dataIndex: 'order_code', width: 140, ellipsis: true },
         { title: t('app.kuaizhizao.warehouseOutbound.col.customer'), dataIndex: 'customer_name', ellipsis: true },
         { title: t('app.kuaizhizao.warehouseOutbound.col.status'), dataIndex: 'status', width: 90, align: 'center' as const },
-        { title: t('app.kuaizhizao.warehouseOutbound.pull.colOrderQty'), dataIndex: 'total_quantity', width: 100, align: 'right' as const, render: formatPullQty },
+        { title: t('app.kuaizhizao.warehouseOutbound.pull.colOrderQty'), dataIndex: 'total_quantity', width: 100, align: 'right' as const, render: formatQuantity },
         {
           title: t('app.kuaizhizao.warehouseOutbound.col.updatedAt'),
           dataIndex: 'updated_at',
@@ -707,8 +706,8 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
         { title: t('app.kuaizhizao.warehouseOutbound.pull.colProduct'), dataIndex: 'product_name', width: 150, ellipsis: true },
         { title: t('app.kuaizhizao.warehouseOutbound.pull.colSupplier'), dataIndex: 'supplier_name', width: 150, ellipsis: true },
         { title: t('app.kuaizhizao.warehouseOutbound.col.status'), dataIndex: 'status', width: 90, align: 'center' as const },
-        { title: t('app.kuaizhizao.warehouseOutbound.pull.colPlannedQty'), dataIndex: 'quantity', width: 100, align: 'right' as const, render: formatPullQty },
-        { title: t('app.kuaizhizao.warehouseOutbound.pull.colIssuedQty'), dataIndex: 'issued_quantity', width: 100, align: 'right' as const, render: formatPullQty },
+        { title: t('app.kuaizhizao.warehouseOutbound.pull.colPlannedQty'), dataIndex: 'quantity', width: 100, align: 'right' as const, render: formatQuantity },
+        { title: t('app.kuaizhizao.warehouseOutbound.pull.colIssuedQty'), dataIndex: 'issued_quantity', width: 100, align: 'right' as const, render: formatQuantity },
         {
           title: t('app.kuaizhizao.warehouseOutbound.pull.colPendingIssue'),
           key: 'pending_issue',
@@ -716,7 +715,7 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
           align: 'right' as const,
           render: (_: unknown, r: PullOutsourceWoCandidate) => {
             const pending = Math.max(0, Number(r.quantity || 0) - Number(r.issued_quantity || 0));
-            return formatPullQty(pending);
+            return formatQuantity(pending);
           },
         },
       ],
@@ -844,9 +843,9 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
                   columns={[
                     { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                     { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                    { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                    { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                    { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                    { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                     {
                       title: (
                         <>
@@ -934,10 +933,10 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
                   columns={[
                     { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                     { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                    { title: t('app.kuaizhizao.purchaseOrder.col.noticeQty'), dataIndex: 'notice_quantity', width: 90, align: 'right' },
-                    { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                    { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                    { title: t('app.kuaizhizao.purchaseOrder.col.noticeQty'), dataIndex: 'notice_quantity', width: 90, align: 'right' , render: formatQuantity },
+                    { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                    { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                   ]}
                 />
               ) : (
@@ -994,9 +993,9 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
                   columns={[
                     { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                     { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                    { title: t('app.kuaizhizao.warehouseOutbound.pull.colPickedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                    { title: t('app.kuaizhizao.warehouseOutbound.pull.colPickableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                    { title: t('app.kuaizhizao.warehouseOutbound.pull.colPickedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                    { title: t('app.kuaizhizao.warehouseOutbound.pull.colPickableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                   ]}
                 />
               ) : (
@@ -1071,9 +1070,9 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
                   columns={[
                     { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                     { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                    { title: t('app.kuaizhizao.warehouseOutbound.pull.colIssuedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                    { title: t('app.kuaizhizao.warehouseOutbound.pull.colPendingIssue'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                    { title: t('app.kuaizhizao.warehouseOutbound.pull.colIssuedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                    { title: t('app.kuaizhizao.warehouseOutbound.pull.colPendingIssue'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                   ]}
                 />
               ) : (

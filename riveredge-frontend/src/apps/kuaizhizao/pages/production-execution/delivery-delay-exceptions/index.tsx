@@ -21,6 +21,8 @@ import { ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES } from '../../../constants/
 import { formatDateTime } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   buildProductionExceptionAlertLevelValueEnum,
   buildStandardProductionExceptionStatusValueEnum,
@@ -172,7 +174,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
   const alertLevelValueEnum = useMemo(() => buildProductionExceptionAlertLevelValueEnum(t), [t]);
   const exceptionStatusValueEnum = useMemo(() => buildStandardProductionExceptionStatusValueEnum(t), [t]);
 
-  const columns: ProColumns<DeliveryDelayException>[] = useMemo(() => [
+  const columns: ProColumns<DeliveryDelayException>[] = useMemo(() => alignProColumns<DeliveryDelayException>([
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at_range',
@@ -249,17 +251,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
         expedite: { text: t(`${P}.suggestedAction.expedite`), status: 'error' },
       },
     },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      defaultSortOrder: 'descend',
-      hideInSearch: true,
-      render: (_, record) =>
-        record.created_at ? formatDateTime(record.created_at, 'YYYY-MM-DD HH:mm') : '-',
-    },
+    ...buildDocumentAuditColumns<DeliveryDelayException>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -324,7 +316,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
           { keyPrefix: `delivery-delay-actions-${record.id ?? 'row'}` },
         ),
     },
-  ], [alertLevelValueEnum, exceptionStatusValueEnum, t]);
+  ], SALES_DOC_LIST_FIELD_RANK), [alertLevelValueEnum, exceptionStatusValueEnum, t]);
 
   return (
     <ListPageTemplate>

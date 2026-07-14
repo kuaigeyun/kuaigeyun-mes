@@ -56,6 +56,12 @@ class BaseModel(Model):
     created_at = fields.DatetimeField(auto_now_add=True, description="创建时间")
     updated_at = fields.DatetimeField(auto_now=True, description="更新时间")
 
+    # 审计操作人（列表直接展示姓名，免 join；DB 列由迁移 454 全库补齐）
+    created_by = fields.IntField(null=True, description="创建人ID")
+    created_by_name = fields.CharField(max_length=100, null=True, description="创建人姓名")
+    updated_by = fields.IntField(null=True, description="更新人ID")
+    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
+
     class Meta:
         """
         模型元数据

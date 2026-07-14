@@ -156,6 +156,8 @@ async def query_batch_inventory(
     include_summary: bool = Query(False, description="是否返回汇总指标（summary）"),
     group_by: Optional[str] = Query(None, description="分析分组维度（warehouse/material/status/aging_bucket）"),
     include_sales_commitment: bool = Query(False, description="是否扣减销售已承诺未交付数量（用于ATP动态可承诺）"),
+    ownership_type: Optional[str] = Query(None, description="库存归属过滤（company_owned/customer_provided）"),
+    customer_id: Optional[int] = Query(None, description="客供归属客户ID（自购传 0）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -170,6 +172,7 @@ async def query_batch_inventory(
     - **include_expired**: 是否包含过期批次（默认：否）
     - **summary_only**: 是否仅返回物料汇总（默认：否）
     - **include_sales_commitment**: 是否扣减销售承诺量（默认：否）
+    - **ownership_type** / **customer_id**: 库存归属过滤（出库预览与过账扣减对齐时传 company_owned + 0）
     
     返回每个批次的库存数量、生产日期、有效期等信息；
     summary_only 时返回 { material_totals: { material_id: quantity } }；
@@ -188,6 +191,8 @@ async def query_batch_inventory(
         include_summary=include_summary,
         group_by=group_by,
         include_sales_commitment=include_sales_commitment,
+        ownership_type=ownership_type,
+        customer_id=customer_id,
     )
 
 

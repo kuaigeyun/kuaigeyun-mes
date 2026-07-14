@@ -26,10 +26,6 @@ class Dashboard(BaseModel):
     share_expires_at = fields.DatetimeField(null=True, description="分享链接过期时间")
     thumbnail = fields.CharField(max_length=500, null=True, description="缩略图URL")
 
-    created_by = fields.IntField(null=True, description="创建人ID")
-    created_by_name = fields.CharField(max_length=100, null=True, description="创建人姓名")
-    updated_by = fields.IntField(null=True, description="更新人ID")
-    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
 
     class Meta:
         table = "apps_kuaireport_dashboards"

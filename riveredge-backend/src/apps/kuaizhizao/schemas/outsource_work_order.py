@@ -171,6 +171,8 @@ class OutsourceMaterialIssueResponse(OutsourceMaterialIssueBase):
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    total_quantity: Optional[float] = Field(None, description="总发料数量（与 quantity 对齐，供出库 Hub 列表）")
+    total_items: Optional[int] = Field(None, description="发料品种数（单行发料单为 1）")
 
 
 class OutsourceMaterialIssuePreviewLine(BaseModel):

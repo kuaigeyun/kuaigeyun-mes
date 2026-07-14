@@ -28,6 +28,7 @@ import { formatMaterialGroupLabel } from '../../../../master-data/types/material
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { formatDateTime } from '../../../../../utils/format';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import {
@@ -426,13 +427,7 @@ const InventoryAlertPage: React.FC = () => {
       sorter: true,
       render: (_, r) => (r.triggered_at ? formatDateTime(r.triggered_at) : '-'),
     },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
+    ...buildDocumentAuditColumns<InventoryAlert>(t),
     {
       title: t('app.kuaizhizao.warehouseCommon.colActions'),
       width: 200,
@@ -515,13 +510,7 @@ const InventoryAlertPage: React.FC = () => {
       width: 100,
       valueEnum: enabledEnum,
     },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
+    ...buildDocumentAuditColumns<InventoryAlertRule>(t),
     {
       title: t('app.kuaizhizao.warehouseCommon.colActions'),
       width: 200,

@@ -9,6 +9,8 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { maintenancePlanApi } from '../../../services/equipment';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   buildMaintenanceExecutionResultValueEnum,
   buildMaintenanceExecutionStatusValueEnum,
@@ -34,6 +36,8 @@ interface MaintenanceExecution {
   spare_parts_used?: { items?: Array<{ spare_part_id?: number; quantity?: number }> };
   created_at?: string;
   updated_at?: string;
+  created_by_name?: string;
+  updated_by_name?: string;
 }
 
 const RESULT_COLORS: Record<string, string> = {
@@ -166,6 +170,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
         sorter: true,
         hideInSearch: true,
       },
+      ...buildDocumentAuditColumns<MaintenanceExecution>(t),
       {
         title: t('common.actions'),
         valueType: 'option',
@@ -199,7 +204,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={perms.canDelete}
           onDelete={handleDelete}
-          columns={columns}
+          columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
           showAdvancedSearch={true}
           pinnedTabsField={MAINTENANCE_EXECUTION_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter

@@ -91,6 +91,8 @@ class BOMChangeResponse(BOMChangeBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     deleted_at: Optional[datetime] = Field(None, description="删除时间")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
 
     model_config = ConfigDict(from_attributes=True)
 

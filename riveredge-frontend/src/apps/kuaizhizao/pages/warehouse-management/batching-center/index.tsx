@@ -1,3 +1,4 @@
+import { formatQuantity } from '../../../../../utils/format';
 /**
  * 物料中心页面
  *
@@ -680,9 +681,9 @@ const BatchingCenterPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'), dataIndex: 'material_code', width: 130 },
                   { title: t('app.kuaizhizao.warehouseCommon.colMaterialName'), dataIndex: 'material_name', width: 160 },
-                  { title: t('app.kuaizhizao.batchingCenter.requiredQty'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.warehouseCommon.colPickedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.batchingCenter.batchableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.batchingCenter.requiredQty'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.warehouseCommon.colPickedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.batchingCenter.batchableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' , render: formatQuantity },
                 ]}
               />
             ) : (
@@ -745,7 +746,7 @@ const BatchingCenterPage: React.FC = () => {
               columns={[
                 { title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'), dataIndex: 'material_code', width: 120 },
                 { title: t('app.kuaizhizao.warehouseCommon.colMaterialName'), dataIndex: 'material_name', width: 150 },
-                { title: t('app.kuaizhizao.batchingCenter.requiredQty'), dataIndex: 'required_quantity', width: 100, align: 'right' },
+                { title: t('app.kuaizhizao.batchingCenter.requiredQty'), dataIndex: 'required_quantity', width: 100, align: 'right' , render: formatQuantity },
                 { title: t('app.kuaizhizao.warehouseCommon.colPickedQty'), dataIndex: 'picked_quantity', width: 100, align: 'right' },
                 {
                   title: t('app.kuaizhizao.warehouseCommon.colStatus'),

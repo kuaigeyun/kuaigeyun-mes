@@ -15,6 +15,8 @@ export interface Holiday {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  createdByName?: string;
+  updatedByName?: string;
   deletedAt?: string;
 }
 
@@ -53,6 +55,25 @@ export interface HolidayListParams {
   updated_end_date?: string;
 }
 
+/** 休息制度：双休 / 单休 / 自定义 */
+export type HolidayCnRestMode = 'double' | 'single' | 'custom';
+
+export interface HolidayCnImportRequest {
+  year: number;
+  restMode: HolidayCnRestMode;
+  /** Python weekday：周一=0 … 周日=6 */
+  restWeekdays?: number[];
+}
+
+export interface HolidayCnImportResult {
+  year: number;
+  created: number;
+  skipped: number;
+  failed: number;
+  legalCount: number;
+  weekendCount: number;
+}
+
 export interface PerformanceListResult<T> {
   items: T[];
   total: number;
@@ -69,6 +90,8 @@ export interface Skill {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  createdByName?: string;
+  updatedByName?: string;
   deletedAt?: string;
 }
 
@@ -121,6 +144,8 @@ export interface EmployeePerformanceConfig {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  created_by_name?: string;
+  updated_by_name?: string;
 }
 
 export interface EmployeePerformanceConfigCreate {
@@ -162,6 +187,8 @@ export interface HourlyRate {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  created_by_name?: string;
+  updated_by_name?: string;
 }
 
 export interface HourlyRateCreate {
@@ -198,6 +225,8 @@ export interface KPIDefinition {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  created_by_name?: string;
+  updated_by_name?: string;
 }
 
 export interface KPIDefinitionCreate {
@@ -235,6 +264,8 @@ export interface PerformanceSummary {
   status: string;
   created_at: string;
   updated_at: string;
+  created_by_name?: string;
+  updated_by_name?: string;
 }
 
 export interface PerformanceDetailItem {
@@ -273,6 +304,8 @@ export interface Shift {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  createdByName?: string;
+  updatedByName?: string;
 }
 
 export interface ShiftCreate {
@@ -323,6 +356,8 @@ export interface ShiftRoster {
   assignments?: ShiftAssignment[];
   createdAt: string;
   updatedAt: string;
+  createdByName?: string;
+  updatedByName?: string;
 }
 
 export interface ShiftRosterCreate {

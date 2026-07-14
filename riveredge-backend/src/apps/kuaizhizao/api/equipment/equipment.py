@@ -216,6 +216,7 @@ async def create_equipment_calibration_record(
             tenant_id=tenant_id,
             equipment_uuid=data.equipment_uuid,
             data=create_data,
+            current_user=current_user,
         )
         equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, data.equipment_uuid)
         resp = EquipmentCalibrationResponse.model_validate(calib)
@@ -594,7 +595,8 @@ async def create_equipment_calibration(
         calib = await EquipmentService.create_equipment_calibration(
             tenant_id=tenant_id,
             equipment_uuid=uuid,
-            data=data
+            data=data,
+            current_user=current_user,
         )
         equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
         resp = EquipmentCalibrationResponse.model_validate(calib)

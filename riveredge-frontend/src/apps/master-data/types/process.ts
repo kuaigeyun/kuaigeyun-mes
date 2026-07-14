@@ -15,6 +15,8 @@ export interface DefectType {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  createdByName?: string;
+  updatedByName?: string;
   deletedAt?: string;
 }
 
@@ -107,6 +109,8 @@ export interface Operation {
   defaultEquipmentIds?: number[];
   createdAt: string;
   updatedAt: string;
+  createdByName?: string;
+  updatedByName?: string;
   deletedAt?: string;
 }
 
@@ -198,6 +202,10 @@ export interface ProcessRoute {
   allowOperationJump?: boolean;
   created_at: string;
   updated_at: string;
+  created_by_name?: string;
+  updated_by_name?: string;
+  createdByName?: string;
+  updatedByName?: string;
   deleted_at?: string;
 }
 
@@ -310,6 +318,8 @@ export interface SOP {
   specificBomUuid?: string | null;
   createdAt: string;
   updatedAt: string;
+  createdByName?: string;
+  updatedByName?: string;
   deletedAt?: string;
 }
 

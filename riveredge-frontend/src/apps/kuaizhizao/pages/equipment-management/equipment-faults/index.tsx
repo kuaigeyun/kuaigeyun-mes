@@ -43,6 +43,8 @@ import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../.
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString, coerceFormDate } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   buildEquipmentFaultStatusValueEnum,
   EQUIPMENT_FAULT_PINNED_STATUS_FIELD,
@@ -509,7 +511,7 @@ const EquipmentFaultsPage: React.FC = () => {
    */
   const faultStatusValueEnum = useMemo(() => buildEquipmentFaultStatusValueEnum(t), [t]);
 
-  const columns: ProColumns<EquipmentFault>[] = useMemo(() => [
+  const columns: ProColumns<EquipmentFault>[] = useMemo(() => alignProColumns<EquipmentFault>([
     {
       title: t(`${P}.col.faultDate`),
       dataIndex: 'fault_date_range',
@@ -615,16 +617,7 @@ const EquipmentFaultsPage: React.FC = () => {
         </Tag>
       ),
     },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      sorter: true,
-      defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
       title: t(`${P}.col.lifecycle`),
       dataIndex: 'lifecycle_stage',
@@ -644,7 +637,7 @@ const EquipmentFaultsPage: React.FC = () => {
       render: (_, record) =>
         renderFaultRowActions(renderFaultRowNodes(record), `flt-${record.uuid ?? 'row'}`),
     },
-  ], [t, faultStatusValueEnum]);
+  ], SALES_DOC_LIST_FIELD_RANK), [t, faultStatusValueEnum]);
 
   return (
     <>

@@ -254,6 +254,7 @@ async def create_mold_calibration(
         calib = await MoldCalibrationService.create_calibration(
             tenant_id=tenant_id,
             data=data,
+            current_user=current_user,
         )
         return MoldCalibrationResponse.model_validate(calib)
     except NotFoundError as e:

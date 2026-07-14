@@ -216,10 +216,15 @@ class BatchingCenterTaskItem(BaseModel):
     material_name: Optional[str] = None
     material_code: Optional[str] = None
     requested_quantity: Optional[float] = None
+    delivered_quantity: Optional[float] = Field(None, description="已送达数量合计")
     material_unit: Optional[str] = None
     caller_name: Optional[str] = None
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    needed_at: Optional[datetime] = Field(None, description="期望送达时间")
+    target_warehouse_name: Optional[str] = Field(None, description="目标仓名称（通常为线边仓）")
     score_breakdown: Optional[dict] = None
     suggested_warehouse_id: Optional[int] = None
     suggested_warehouse_name: Optional[str] = None

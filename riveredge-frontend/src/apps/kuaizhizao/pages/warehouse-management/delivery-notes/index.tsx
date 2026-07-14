@@ -52,8 +52,11 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { resolveDeliveryNoticeQualityCertificates } from '../../../services/print';
 import { SafetyCertificateOutlined } from '@ant-design/icons';
-import { formatDateTime } from '../../../../../utils/format';
+import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildDeliveryNoticeStatusValueEnum,
@@ -164,7 +167,7 @@ const DeliveryNotesPage: React.FC = () => {
     [messageApi, t]
   );
 
-  const columns: ProColumns<DeliveryNotice>[] = useMemo(() => [
+  const columns: ProColumns<DeliveryNotice>[] = useMemo(() => alignProColumns<DeliveryNotice>([
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at_range',
@@ -228,6 +231,25 @@ const DeliveryNotesPage: React.FC = () => {
       ),
     },
     {
+      title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'),
+      dataIndex: 'total_quantity',
+      width: 100,
+      align: 'right',
+      sorter: true,
+      hideInSearch: true,
+      render: formatQuantity,
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colAmount'),
+      dataIndex: 'total_amount',
+      width: 110,
+      align: 'right',
+      sorter: true,
+      hideInSearch: true,
+      render: (v: number | null | undefined) =>
+        v != null && !Number.isNaN(Number(v)) ? Number(v).toFixed(2) : '-',
+    },
+    {
       title: t('app.kuaizhizao.deliveryNote.col.carrier'),
       dataIndex: 'carrier',
       width: 100,
@@ -260,16 +282,7 @@ const DeliveryNotesPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => (r.sent_at ? formatDateTime(r.sent_at) : '-'),
     },
-    {
-      title: t('app.kuaizhizao.warehouseOutbound.col.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      sorter: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
-    },
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -300,16 +313,7 @@ const DeliveryNotesPage: React.FC = () => {
           ...(record.status === '待发送'
             ? [{ key: 'send', label: t('app.kuaizhizao.deliveryNote.action.send'), icon: <SendOutlined />, onClick: () => handleSend(record) }]
             : []),
-          { key: 'print', label: t('app.kuaizhizao.materialBorrow.action.print'), icon: <PrinterOutlined />, onClick: () => handlePrint(record) },
-          ...(canPrintQualityCertificate
-            ? [{
-                key: 'print-certificate',
-                label: t('app.kuaizhizao.deliveryNote.action.printCertificate'),
-                icon: <SafetyCertificateOutlined />,
-                onClick: () => void handlePrintCertificate(record),
-              }]
-            : []),
-        ]
+        ];
         return (
           <Space>
             <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
@@ -319,16 +323,18 @@ const DeliveryNotesPage: React.FC = () => {
                 <Button {...rowActionKind('delete')} onClick={() => handleDelete(record)} />
               </>
             )}
-            <Dropdown menu={{ items: moreItems }} trigger={['click']}>
-              <Button {...rowActionKind('display')} {...rowActionLabelKeep()} icon={<MoreOutlined />}>
-                {t('app.kuaizhizao.deliveryNote.action.more')}
-              </Button>
-            </Dropdown>
+            {moreItems.length > 0 && (
+              <Dropdown menu={{ items: moreItems }} trigger={['click']}>
+                <Button {...rowActionKind('display')} {...rowActionLabelKeep()} icon={<MoreOutlined />}>
+                  {t('app.kuaizhizao.deliveryNote.action.more')}
+                </Button>
+              </Dropdown>
+            )}
           </Space>
-        )
+        );
       },
     },
-  ], [t, canPrintQualityCertificate]);
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t]);
 
   const handleDetail = async (record: DeliveryNotice) => {
     try {
@@ -481,6 +487,25 @@ const DeliveryNotesPage: React.FC = () => {
     if (!record.id) return;
     openPrint({ documentType: 'delivery_notice', documentId: record.id });
   };
+
+  const listRowsRef = useRef<Map<string, DeliveryNotice>>(new Map());
+  const isDeliveryNoticePrintable = (record: DeliveryNotice) => !!record.id;
+
+  const selectedDeliveryNoticeForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => listRowsRef.current.get(String(key)))
+        .filter((row): row is DeliveryNotice => row != null),
+    [selectedRowKeys],
+  );
+
+  const canToolbarPrint =
+    selectedRowKeys.length === 1 &&
+    !!selectedDeliveryNoticeForBatch[0] &&
+    isDeliveryNoticePrintable(selectedDeliveryNoticeForBatch[0]);
+
+  const canToolbarPrintCertificate =
+    canToolbarPrint && canPrintQualityCertificate;
 
   /** 参考销售订单：先打开弹窗，再执行其他逻辑 */
   const handleCreate = () => {
@@ -740,7 +765,7 @@ const DeliveryNotesPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 60 },
-      { title: t('app.kuaizhizao.warehouseOutbound.field.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseOutbound.field.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' as const , render: formatQuantity },
       { title: t('app.kuaizhizao.warehouseOutbound.field.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const },
       { title: t('app.kuaizhizao.warehouseOutbound.field.amount'), dataIndex: 'total_amount', width: 100, align: 'right' as const },
     ],
@@ -1045,7 +1070,7 @@ const DeliveryNotesPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle={t('app.kuaizhizao.deliveryNote.title')}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.delivery-notes"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.delivery-notes.v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -1073,12 +1098,41 @@ const DeliveryNotesPage: React.FC = () => {
             />,
           ]}
           enableRowSelection
+          selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.deliveryNote.msg.deleteConfirm', { count })}
           showImportButton={false}
           showExportButton
+          toolBarActionsAfterBatch={[
+            <Button
+              key="delivery-note-toolbar-print"
+              icon={<PrinterOutlined />}
+              disabled={!canToolbarPrint}
+              onClick={() => {
+                const row = selectedDeliveryNoticeForBatch[0];
+                if (row) handlePrint(row);
+              }}
+            >
+              {t('components.uniAction.print')}
+            </Button>,
+            ...(canPrintQualityCertificate
+              ? [
+                  <Button
+                    key="delivery-note-toolbar-print-certificate"
+                    icon={<SafetyCertificateOutlined />}
+                    disabled={!canToolbarPrintCertificate}
+                    onClick={() => {
+                      const row = selectedDeliveryNoticeForBatch[0];
+                      if (row) void handlePrintCertificate(row);
+                    }}
+                  >
+                    {t('app.kuaizhizao.deliveryNote.action.printCertificate')}
+                  </Button>,
+                ]
+              : []),
+          ]}
           onExport={async (type, keys, pageData) => {
             try {
               const chunkSize = 100;
@@ -1126,6 +1180,11 @@ const DeliveryNotesPage: React.FC = () => {
                 ...listParams,
               });
               const { data, total } = normalizeWarehouseListResponse(response);
+              const next = new Map<string, DeliveryNotice>();
+              for (const row of data as DeliveryNotice[]) {
+                if (row.id != null) next.set(String(row.id), row);
+              }
+              listRowsRef.current = next;
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.deliveryNote.msg.loadListFailed'));
@@ -1222,9 +1281,9 @@ const DeliveryNotesPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.warehouseOutbound.field.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.warehouseOutbound.field.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' , render: formatQuantity },
                 ]}
               />
             ) : (

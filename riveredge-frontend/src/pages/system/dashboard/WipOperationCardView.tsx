@@ -8,11 +8,7 @@ import type { TFunction } from 'i18next';
 import type { ProcessProgressItem } from '../../../services/dashboard';
 import { getQuickEntryHeaderColors } from '../../../components/quick-entry/quickEntryGradients';
 import { useThemeStore } from '../../../stores/themeStore';
-
-function formatQty(value: number): string {
-  if (Number.isInteger(value)) return String(value);
-  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-}
+import { formatQuantity } from '../../../utils/format';
 
 export interface WipOperationCardViewProps {
   item: ProcessProgressItem;
@@ -82,7 +78,7 @@ export function WipOperationCardView({
       <div className="dashboard-wip-operation-card__body">
         <div className="dashboard-wip-operation-card__main">
           <div className="dashboard-wip-operation-card__main-value">
-            {formatQty(item.planned_quantity)}
+            {formatQuantity(item.planned_quantity)}
           </div>
           <div className="dashboard-wip-operation-card__main-label">
             {t('pages.dashboard.wipOperationTaskQty')}
@@ -95,7 +91,7 @@ export function WipOperationCardView({
               {t('pages.dashboard.wipOperationCompletedQty')}
             </span>
             <span className="dashboard-wip-operation-card__metric-value dashboard-wip-operation-card__metric-value--primary">
-              {formatQty(completed)}
+              {formatQuantity(completed)}
             </span>
           </div>
           <div className="dashboard-wip-operation-card__metric-row">
@@ -103,7 +99,7 @@ export function WipOperationCardView({
               {t('pages.dashboard.wipOperationQualifiedQty')}
             </span>
             <span className="dashboard-wip-operation-card__metric-value dashboard-wip-operation-card__metric-value--success">
-              {formatQty(item.qualified_quantity)}
+              {formatQuantity(item.qualified_quantity)}
             </span>
           </div>
           <div className="dashboard-wip-operation-card__metric-row">
@@ -111,7 +107,7 @@ export function WipOperationCardView({
               {t('pages.dashboard.wipOperationUnqualifiedQty')}
             </span>
             <span className="dashboard-wip-operation-card__metric-value dashboard-wip-operation-card__metric-value--danger">
-              {formatQty(item.unqualified_quantity)}
+              {formatQuantity(item.unqualified_quantity)}
             </span>
           </div>
         </div>

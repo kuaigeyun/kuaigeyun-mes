@@ -12,6 +12,14 @@ from typing import Optional, List, Any
 from pydantic import BaseModel, Field, ConfigDict
 
 
+class AuditActorFields(BaseModel):
+    """BaseModel 审计人字段（列表直接展示姓名）。"""
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
+
+
 # ---------- 工装保养项 ----------
 
 class ToolMaintenanceItemBase(BaseModel):
@@ -34,7 +42,7 @@ class ToolMaintenanceItemUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class ToolMaintenanceItemResponse(ToolMaintenanceItemBase):
+class ToolMaintenanceItemResponse(ToolMaintenanceItemBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -97,7 +105,7 @@ class ToolMaintenanceSchemeUpdate(BaseModel):
     lines: Optional[List[ToolMaintenanceSchemeLineCreate]] = None
 
 
-class ToolMaintenanceSchemeResponse(ToolMaintenanceSchemeBase):
+class ToolMaintenanceSchemeResponse(ToolMaintenanceSchemeBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -137,7 +145,7 @@ class ToolRepairItemUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class ToolRepairItemResponse(ToolRepairItemBase):
+class ToolRepairItemResponse(ToolRepairItemBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -194,7 +202,7 @@ class ToolRepairSchemeUpdate(BaseModel):
     lines: Optional[List[ToolRepairSchemeLineCreate]] = None
 
 
-class ToolRepairSchemeResponse(ToolRepairSchemeBase):
+class ToolRepairSchemeResponse(ToolRepairSchemeBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -230,7 +238,7 @@ class ToolSchemeBindingBulkReplace(BaseModel):
     scheme_ids: List[int] = Field(default_factory=list)
 
 
-class ToolSchemeBindingResponse(ToolSchemeBindingBase):
+class ToolSchemeBindingResponse(ToolSchemeBindingBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -264,7 +272,7 @@ class ToolBorrowUpdate(BaseModel):
     remark: Optional[str] = None
 
 
-class ToolBorrowResponse(BaseModel):
+class ToolBorrowResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -319,7 +327,7 @@ class ToolReturnUpdate(BaseModel):
     remark: Optional[str] = None
 
 
-class ToolReturnResponse(BaseModel):
+class ToolReturnResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -411,7 +419,7 @@ class ToolMaintenanceUpdate(BaseModel):
     lines: Optional[List[ToolMaintenanceLineInput]] = None
 
 
-class ToolMaintenanceResponse(BaseModel):
+class ToolMaintenanceResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -511,7 +519,7 @@ class ToolRepairUpdate(BaseModel):
     lines: Optional[List[ToolRepairLineInput]] = None
 
 
-class ToolRepairResponse(BaseModel):
+class ToolRepairResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -655,7 +663,7 @@ class ToolOpsCalibrationUpdate(BaseModel):
     remark: Optional[str] = None
 
 
-class ToolOpsCalibrationResponse(BaseModel):
+class ToolOpsCalibrationResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -711,7 +719,7 @@ class ToolScrapApplicationReject(BaseModel):
     reject_reason: str = Field(..., min_length=1)
 
 
-class ToolScrapApplicationResponse(BaseModel):
+class ToolScrapApplicationResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str

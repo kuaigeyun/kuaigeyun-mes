@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from tortoise.expressions import Q
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit, audit_response_fields
 from apps.master_data.models.material_serial import MaterialSerial
 from apps.master_data.models.material import Material
 from apps.master_data.schemas.material_schemas import (
@@ -20,6 +21,7 @@ from apps.master_data.schemas.material_schemas import (
     MaterialSerialListResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 class MaterialSerialService:
@@ -52,12 +54,14 @@ class MaterialSerialService:
             created_at=serial.created_at,
             updated_at=serial.updated_at,
             deleted_at=serial.deleted_at,
+            **audit_response_fields(serial),
         )
 
     @staticmethod
     async def create_serial(
         tenant_id: int,
-        data: MaterialSerialCreate
+        data: MaterialSerialCreate,
+        current_user: Optional[User] = None,
     ) -> MaterialSerialResponse:
         """
         创建物料序列号
@@ -94,16 +98,18 @@ class MaterialSerialService:
             raise ValidationError(f"序列号 {data.serial_no} 已存在")
         
         # 创建序列号
-        serial = await MaterialSerial.create(
-            tenant_id=tenant_id,
-            material_id=material.id,
-            serial_no=data.serial_no,
-            production_date=data.production_date,
-            factory_date=data.factory_date,
-            supplier_serial_no=data.supplier_serial_no,
-            status=data.status,
-            remark=data.remark,
-        )
+        serial_payload = {
+            "tenant_id": tenant_id,
+            "material_id": material.id,
+            "serial_no": data.serial_no,
+            "production_date": data.production_date,
+            "factory_date": data.factory_date,
+            "supplier_serial_no": data.supplier_serial_no,
+            "status": data.status,
+            "remark": data.remark,
+        }
+        apply_create_audit(serial_payload, current_user)
+        serial = await MaterialSerial.create(**serial_payload)
         
         # 加载关联数据
         await serial.fetch_related("material")
@@ -242,7 +248,8 @@ class MaterialSerialService:
     async def update_serial(
         tenant_id: int,
         serial_uuid: str,
-        data: MaterialSerialUpdate
+        data: MaterialSerialUpdate,
+        current_user: Optional[User] = None,
     ) -> MaterialSerialResponse:
         """
         更新序列号
@@ -272,6 +279,7 @@ class MaterialSerialService:
         for key, value in update_data.items():
             setattr(serial, key, value)
         
+        apply_update_audit(serial, current_user)
         await serial.save()
         
         return MaterialSerialService._to_response(serial)

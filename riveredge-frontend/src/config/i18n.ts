@@ -1,21 +1,23 @@
 /**
  * i18n 配置文件
  *
- * 语言加载时序（结构对齐 themeStore，优先级：个人 language > 租户默认 > zh-CN）：
- * 1. 模块同步 init：resolveInitialLanguage()（个人缓存 || 租户默认缓存）
- * 2. initLanguageFromApi：先拉租户默认并应用，再 fetchPreferences，有个人 language 则覆盖
- * 3. syncLanguageFromPreferences：偏好变更时按 resolveLanguageFromCloud 同步
+ * UI 文案唯一真源：src/locales/*.ts。运行时只加载本地语言包，不拉取、不合并、不覆盖 core_languages。
+ * 语言管理页的「从本地同步」仅用于把 locales 写入库（管理/导出），不参与页面渲染。
  *
- * 租户默认来源：语言管理 is_default > 站点 settings.default_language
+ * 当前界面语言选择（与文案内容无关）：
+ * 1. 模块同步 init：resolveInitialLanguage()（个人缓存 || 租户默认缓存）
+ * 2. initLanguageFromApi：先拉租户默认语言码并切换，再 fetchPreferences，有个人 language 则覆盖
+ * 3. syncLanguageFromPreferences：偏好变更时按 resolveLanguageFromCloud 同步语言码
+ *
+ * 租户默认语言码来源：语言管理 is_default > 站点 settings.default_language
  */
 
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getSiteSetting } from '../services/siteSetting';
-import { getTranslations, getLanguageList, type Language } from '../services/language';
+import { getLanguageList, type Language } from '../services/language';
 import { getToken } from '../utils/auth';
 import {
-  getLanguageFromPreferenceCache,
   useUserPreferenceStore,
 } from '../stores/userPreferenceStore';
 import { useConfigStore } from '../stores/configStore';
@@ -51,46 +53,8 @@ const LANGUAGE_ALIASES: Record<string, SupportedUiLanguage> = {
 
 /** 最近一次云端租户默认语言（语言管理 is_default / 站点 default_language） */
 let tenantDefaultLanguage: SupportedUiLanguage | null = null;
-/** 最近一次站点 settings，供 sync 回退 */
+/** 最近一次站点 settings，供 sync 使用 */
 let siteLanguageSettings: Record<string, unknown> | null = null;
-
-function mergeTranslationsWithMenuPriority(
-  backendTranslations: Record<string, string>,
-  languageCode: string,
-): Record<string, string> {
-  const local = LOCALE_BUNDLES[languageCode] || {};
-  const merged = { ...backendTranslations };
-  for (const key of Object.keys(local)) {
-    if (!local[key]) continue;
-    const useLocal =
-      key.startsWith('path.') ||
-      (key.startsWith('app.') && key.includes('.menu.')) ||
-      key.startsWith('app.kuaizhizao.salesOrder.') ||
-      key.startsWith('app.kuaizhizao.salesContract.') ||
-      key.startsWith('app.kuaizhizao.salesForecast.') ||
-      key.startsWith('app.kuaizhizao.salesReturn.') ||
-      key.startsWith('app.kuaizhizao.shipmentNotice.') ||
-      key.startsWith('app.kuaizhizao.quotation.') ||
-      key.startsWith('app.kuaizhizao.sales.common.') ||
-      key.startsWith('app.kuaizhizao.warehouseOtherInbound.') ||
-      key.startsWith('app.kuaizhizao.warehouseOtherOutbound.') ||
-      key.startsWith('app.kuaizhizao.warehouseMaterialReturn.') ||
-      key.startsWith('pages.system.applications.') ||
-      key.startsWith('components.tenantSelection.') ||
-      key.startsWith('pages.personal.messages.') ||
-      key.startsWith('pages.system.files.') ||
-      key.startsWith('dashboard.businessBoard.') ||
-      key.startsWith('field.operation.') ||
-      key.startsWith('field.route.') ||
-      key.startsWith('app.master-data.manufacturing.') ||
-      key.startsWith('app.master-data.productProcess.') ||
-      key.startsWith('app.master-data.operationSequence.');
-    if (useLocal) {
-      merged[key] = local[key];
-    }
-  }
-  return merged;
-}
 
 export const LANGUAGE_MAP: Record<string, string> = {
   'zh-CN': '简体中文',
@@ -147,7 +111,6 @@ export function resolveLanguageFromPreferences(
 
 let languageInitialized = false;
 let languageLoading = false;
-let latestLanguageApplyRequestId = 0;
 
 export function isLanguageInitialized(): boolean {
   return languageInitialized;
@@ -174,7 +137,9 @@ async function ensureLanguageLoaded(languageCode: string): Promise<void> {
   };
 
   const load = loaders[languageCode];
-  if (!load) return;
+  if (!load) {
+    throw new Error(`Unsupported UI language (no locale bundle): ${languageCode}`);
+  }
 
   const { default: bundle } = await load();
   LOCALE_BUNDLES[languageCode] = bundle;
@@ -183,7 +148,7 @@ async function ensureLanguageLoaded(languageCode: string): Promise<void> {
   }
 }
 
-/** 首屏挂载前：确保初始语言包已加载（避免 en-US 异步 chunk 导致中文 fallback 闪烁） */
+/** 首屏挂载前：确保初始语言包已加载（避免 en-US 异步 chunk 未就绪） */
 export async function prepareInitialLanguageBundle(): Promise<void> {
   const lang = resolveInitialLanguage();
   await ensureLanguageLoaded(lang);
@@ -205,17 +170,6 @@ i18n.use(initReactI18next).init({
   keySeparator: false,
   nsSeparator: false,
   resources: buildInitResources(initialLang),
-  backend: {
-    loadTranslations: async (language: string) => {
-      try {
-        const response = await getTranslations(language);
-        return response.translations || {};
-      } catch (error) {
-        console.warn(`Failed to load translations for ${language}:`, error);
-        return {};
-      }
-    },
-  },
 });
 
 syncEnglishUiFont(initialLang);
@@ -228,32 +182,12 @@ i18n.changeLanguage = async (language: string) => {
   return result;
 };
 
-async function applyLanguage(
-  languageCode: string,
-  options?: { loadBackendTranslations?: boolean },
-): Promise<void> {
+async function applyLanguage(languageCode: string): Promise<void> {
   const normalizedLanguage =
     normalizeUiLanguage(languageCode) ??
     LANGUAGE_ALIASES[languageCode.toLowerCase()] ??
     languageCode;
-  const requestId = ++latestLanguageApplyRequestId;
-
   await i18n.changeLanguage(normalizedLanguage);
-
-  if (options?.loadBackendTranslations === false || !getToken()) return;
-
-  try {
-    const response = await getTranslations(normalizedLanguage);
-    // 仅允许最后一次切换请求写入资源，避免异步回包覆盖最新语言状态
-    if (requestId !== latestLanguageApplyRequestId) return;
-    if (response.translations) {
-      const merged = mergeTranslationsWithMenuPriority(response.translations, normalizedLanguage);
-      i18n.addResourceBundle(normalizedLanguage, 'translation', merged, true, true);
-    }
-  } catch (error) {
-    if (requestId !== latestLanguageApplyRequestId) return;
-    console.warn(`Failed to load translations from backend for ${normalizedLanguage}:`, error);
-  }
 }
 
 /** 偏好变更时同步；有个人 language 则覆盖租户默认 */
@@ -266,9 +200,6 @@ export async function syncLanguageFromPreferences(
     LANGUAGE_ALIASES[resolvedLanguage.toLowerCase()] ??
     resolvedLanguage;
   if (i18n.language === languageCode) {
-    if (getToken() && !i18n.hasResourceBundle(languageCode, 'translation')) {
-      await applyLanguage(languageCode);
-    }
     return;
   }
   await applyLanguage(languageCode);
@@ -278,14 +209,13 @@ let languageInitInFlight: Promise<void> | null = null;
 
 async function runInitLanguageFromApi(): Promise<void> {
   if (!getToken()) {
-    await applyLanguage(resolveInitialLanguage(), { loadBackendTranslations: false });
+    await applyLanguage(resolveInitialLanguage());
     languageInitialized = true;
     return;
   }
 
   languageLoading = true;
   try {
-    // 阶段 1：租户默认语言（语言管理 is_default + 站点 default_language）
     const [siteSetting, languageListResponse] = await Promise.all([
       getSiteSetting().catch(() => null),
       getLanguageList({ page_size: 20 }).catch(() => null),
@@ -314,7 +244,6 @@ async function runInitLanguageFromApi(): Promise<void> {
 
     await applyLanguage(tenantDefault);
 
-    // 阶段 2：个人偏好（有个人 language 时覆盖租户默认）
     await useUserPreferenceStore.getState().fetchPreferences();
     const prefs = useUserPreferenceStore.getState().preferences || {};
     const finalLanguage = resolveLanguageFromCloud(prefs, siteSettings, tenantDefault);
@@ -333,7 +262,8 @@ async function runInitLanguageFromApi(): Promise<void> {
 }
 
 /**
- * 登录后初始化语言：先租户默认，再个人偏好（与 themeStore.initFromApi 并行，供 App 壳层等待）
+ * 登录后初始化语言码：先租户默认，再个人偏好（与 themeStore.initFromApi 并行，供 App 壳层等待）
+ * 不加载后端翻译字典。
  */
 export async function initLanguageFromApi(): Promise<void> {
   if (languageInitialized) return;
@@ -351,7 +281,6 @@ export async function applyLanguageWithPersist(languageCode: string): Promise<vo
     LANGUAGE_ALIASES[languageCode.toLowerCase()] ??
     languageCode;
 
-  // 先更新内存偏好，避免并发偏好写入时带回旧 language 造成“切换后又被切回”
   const preferenceState = useUserPreferenceStore.getState();
   const currentPrefs = preferenceState.preferences || {};
   if (currentPrefs.language !== normalizedLanguage) {
@@ -380,7 +309,6 @@ export function clearLanguageForLogout(): void {
   tenantDefaultLanguage = null;
   const lang = resolveTenantDefaultFromCache() ?? FALLBACK_LANGUAGE;
   void i18n.changeLanguage(lang);
-  // 保持 languageInitialized，避免登出时 App 壳层全屏 Spin 阻塞跳转登录页（与 themeStore.clearForLogout 一致）
 }
 
 /** @deprecated 请使用 initLanguageFromApi */
@@ -388,18 +316,21 @@ export async function loadUserLanguage(): Promise<void> {
   await initLanguageFromApi();
 }
 
+/** 重新从本地 locales 装载当前语言包（不访问后端翻译） */
 export async function refreshTranslations(): Promise<void> {
   const currentLanguage = i18n.language;
-  await ensureLanguageLoaded(currentLanguage);
-  try {
-    const response = await getTranslations(currentLanguage);
-    if (response.translations) {
-      const merged = mergeTranslationsWithMenuPriority(response.translations, currentLanguage);
-      i18n.addResourceBundle(currentLanguage, 'translation', merged, true, true);
-    }
-  } catch (error) {
-    console.warn(`Failed to refresh translations for ${currentLanguage}:`, error);
+  if (currentLanguage === 'zh-CN') {
+    LOCALE_BUNDLES['zh-CN'] = zhCN;
+    i18n.addResourceBundle('zh-CN', 'translation', zhCN, true, true);
+    return;
   }
+  delete LOCALE_BUNDLES[currentLanguage];
+  await ensureLanguageLoaded(currentLanguage);
+  const bundle = LOCALE_BUNDLES[currentLanguage];
+  if (!bundle) {
+    throw new Error(`Locale bundle missing after reload: ${currentLanguage}`);
+  }
+  i18n.addResourceBundle(currentLanguage, 'translation', bundle, true, true);
 }
 
 export default i18n;

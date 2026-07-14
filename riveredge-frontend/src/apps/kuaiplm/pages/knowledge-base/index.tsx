@@ -5,7 +5,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { App, Button, Empty, Input, Select, Space, Spin, Tag, Tree, Typography } from 'antd';
 import type { DataNode, TreeProps } from 'antd/es/tree';
-import dayjs from 'dayjs';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -31,7 +30,8 @@ import {
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import { getKuaiplmKnowledgeStatusOptions, getKuaiplmKnowledgeStatusText } from '../../components/kuaiplmMeta';
-import { formatDateTime } from '../../../../utils/format';
+import { UniTableStackedPrimaryCell } from '../../../../components/uni-table/stackedPrimaryColumn';
+import { resolvePlmPreferredAudit } from '../../utils/plmListCore';
 
 const KB_QUERY_LIMIT = 100;
 
@@ -547,8 +547,18 @@ const KnowledgeBasePage: React.FC = () => {
                         <Typography.Text strong={active} ellipsis style={{ width: '100%' }}>
                           {item.title || unnamedDocument}
                         </Typography.Text>
-                        <div style={{ fontSize: 11, color: 'var(--ant-color-text-secondary)', marginTop: 2 }}>
-                          {item.updated_at ? formatDateTime(item.updated_at, 'YYYY-MM-DD HH:mm') : '-'}
+                        <div style={{ marginTop: 2 }}>
+                          {(() => {
+                            const preferred = resolvePlmPreferredAudit(item as Record<string, unknown>);
+                            return (
+                              <UniTableStackedPrimaryCell
+                                primary={preferred.operator}
+                                secondary={preferred.time}
+                                secondaryCopyable={false}
+                                primaryBold={false}
+                              />
+                            );
+                          })()}
                         </div>
                       </div>
                     );
@@ -632,11 +642,14 @@ const KnowledgeBasePage: React.FC = () => {
               </div>
               <Space size={8}>
                 <Tag>{getKuaiplmKnowledgeStatusText(t, activeArticle.status)}</Tag>
-                <Tag>{activeArticle.author_name || t('app.kuaiplm.knowledgeBase.unknownAuthor')}</Tag>
-                <Typography.Text type="secondary">
-                  {t('app.kuaiplm.common.columns.updatedAt')}{' '}
-                  {activeArticle.updated_at ? formatDateTime(activeArticle.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'}
-                </Typography.Text>
+                {(() => {
+                  const preferred = resolvePlmPreferredAudit(activeArticle as Record<string, unknown>);
+                  return (
+                    <Typography.Text type="secondary">
+                      {preferred.operator} · {preferred.time}
+                    </Typography.Text>
+                  );
+                })()}
               </Space>
               <div style={{ width: '100%' }}>
                 <div className="login-rich-text-editor-label-row login-rich-text-editor-label-row--spread">

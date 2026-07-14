@@ -6,6 +6,7 @@ import { ProColumns } from '@ant-design/pro-components';
 import { Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
+import { formatQuantity } from '../../../../../utils/format';
 
 const ProductSalesRanking: React.FC = () => {
   const { t } = useTranslation();
@@ -46,9 +47,10 @@ const ProductSalesRanking: React.FC = () => {
       {
         title: t('app.kuaizhizao.reports.salesTotalQuantity'),
         dataIndex: 'total_quantity',
-        valueType: 'digit',
         sorter: true,
         width: 120,
+        align: 'right',
+        render: formatQuantity,
       },
       {
         title: t('app.kuaizhizao.reports.salesTotalAmount'),

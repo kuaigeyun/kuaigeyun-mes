@@ -22,6 +22,32 @@ import {
 import { productProcessLineFromApi, productProcessLineToApi } from '../utils/manufacturingTimeUnits';
 import { searchUserDisplay } from '../../../services/user';
 import { resolveEffectiveProcessRouteUuid } from '../utils/productProcessMaterialUtils';
+import { formatDateTime } from '../../../utils/format';
+
+function resolveProductProcessAudit(data: {
+  updatedByName?: string;
+  updated_by_name?: string;
+  createdByName?: string;
+  created_by_name?: string;
+  updatedAt?: string;
+  updated_at?: string;
+  createdAt?: string;
+  created_at?: string;
+}): { operator: string; time: string } | null {
+  const operator = (
+    data.updatedByName ||
+    data.updated_by_name ||
+    data.createdByName ||
+    data.created_by_name ||
+    ''
+  ).trim();
+  const timeRaw = data.updatedAt || data.updated_at || data.createdAt || data.created_at;
+  if (!operator && !timeRaw) return null;
+  return {
+    operator: operator || '-',
+    time: timeRaw ? formatDateTime(timeRaw, 'YYYY-MM-DD HH:mm') : '-',
+  };
+}
 
 export type ProductProcessPanelProps = {
   material: Material;
@@ -55,6 +81,7 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
   const [saving, setSaving] = useState(false);
   const [routeFormOpen, setRouteFormOpen] = useState(false);
   const [routeFormEditUuid, setRouteFormEditUuid] = useState<string | null>(null);
+  const [auditHint, setAuditHint] = useState<{ operator: string; time: string } | null>(null);
 
   const baselineRef = useRef('');
   const routeImportRef = useRef<string | undefined>();
@@ -174,6 +201,7 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
       );
       const processRouteUuid = data.processRouteUuid;
       applyConfig(processRouteUuid, data.allowOperationJump, enriched);
+      setAuditHint(resolveProductProcessAudit(data));
     } catch (e: unknown) {
       messageApi.error((e as Error).message || t('common.loadFailed'));
       if (!isDirtyRef.current) {
@@ -233,6 +261,7 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
         saved.allowOperationJump,
         (saved.lines ?? []).map((ln) => productProcessLineFromApi(ln)),
       );
+      setAuditHint(resolveProductProcessAudit(saved));
       messageApi.success(t('app.master-data.productProcess.saved'));
       const refreshed = await materialApi.get(material.uuid);
       onMaterialUpdated?.(refreshed);
@@ -320,15 +349,22 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
               </Button>
             </Space>
           </Space>
-          <Button
-            type="primary"
-            icon={<SaveOutlined />}
-            loading={saving}
-            disabled={!canSave}
-            onClick={() => void handleSave()}
-          >
-            {t('app.master-data.productProcess.save')}
-          </Button>
+          <Space>
+            {auditHint ? (
+              <Typography.Text type="secondary">
+                {auditHint.operator} · {auditHint.time}
+              </Typography.Text>
+            ) : null}
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              loading={saving}
+              disabled={!canSave}
+              onClick={() => void handleSave()}
+            >
+              {t('app.master-data.productProcess.save')}
+            </Button>
+          </Space>
         </div>
       </Space>
 

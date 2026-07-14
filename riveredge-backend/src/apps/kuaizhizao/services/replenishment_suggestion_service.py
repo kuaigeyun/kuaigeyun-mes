@@ -40,7 +40,9 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
     async def generate_suggestions_from_alerts(
         self,
         tenant_id: int,
-        alert_ids: Optional[List[int]] = None
+        alert_ids: Optional[List[int]] = None,
+        *,
+        created_by: Optional[int] = None,
     ) -> List[ReplenishmentSuggestionResponse]:
         """
         基于库存预警生成补货建议
@@ -48,10 +50,12 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
         Args:
             tenant_id: 组织ID
             alert_ids: 预警ID列表（可选，如果不提供则处理所有待处理的低库存预警）
+            created_by: 生成人 ID（写入审计字段）
 
         Returns:
             List[ReplenishmentSuggestionResponse]: 生成的补货建议列表
         """
+        user_info = await self.get_user_info(created_by) if created_by else {"name": ""}
         async with in_transaction():
             # 获取待处理的低库存预警
             if alert_ids:
@@ -128,6 +132,10 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
                     related_demand_id=None,
                     related_demand_code=None,
                     remarks=f"基于库存预警生成：{alert.alert_message}",
+                    created_by=created_by,
+                    created_by_name=user_info.get("name") or None,
+                    updated_by=created_by,
+                    updated_by_name=user_info.get("name") or None,
                 )
 
                 suggestions.append(ReplenishmentSuggestionResponse.model_validate(suggestion))
@@ -293,6 +301,8 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
             suggestion.processed_by_name = user_info["name"]
             suggestion.processed_at = datetime.now()
             suggestion.processing_notes = process_data.processing_notes
+            suggestion.updated_by = processed_by
+            suggestion.updated_by_name = user_info["name"]
 
             await suggestion.save()
 

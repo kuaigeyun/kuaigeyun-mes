@@ -7,8 +7,12 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
-import { MaterialStackedCell, UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
+  MaterialStackedCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  buildInspectorTimeStackedColumn,
   qualifiedQuantityColumnProps,
   stackedPrimarySecondaryColumn,
   unqualifiedQuantityColumnProps,
@@ -30,7 +34,9 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { useTranslation } from 'react-i18next';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { formatDateTime } from '../../../../../utils/format';
+import {formatDateTime, formatQuantity} from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
 import {
   buildQualityInspectionDocStatusValueEnum,
@@ -312,7 +318,7 @@ const OQCInspectionPage: React.FC = () => {
   );
 
   const columns: ProColumns<OQCInspection>[] = useMemo(
-    () => [
+    () => alignProColumns<OQCInspection>([
       {
         title: t('app.kuaizhizao.quality.common.columns.inspectionTime'),
         dataIndex: 'inspection_time_range',
@@ -359,16 +365,14 @@ const OQCInspectionPage: React.FC = () => {
         ),
       },
       stackedPrimarySecondaryColumn<OQCInspection>(
-        t('app.kuaizhizao.quality.oqc.columns.shipmentNoticeSalesOrder'),
-        'noticeSalesOrder',
+        t('app.kuaizhizao.quality.oqc.columns.customer'),
+        'customerShipmentNotice',
+        ['customer_name'],
         ['shipment_notice_code', 'shipmentNoticeCode'],
-        ['sales_order_code', 'salesOrderCode'],
-        { dataIndex: 'shipment_notice_code' },
+        { dataIndex: 'customer_name' },
       ),
       { title: t('app.kuaizhizao.quality.oqc.columns.shipmentNotice'), dataIndex: 'shipment_notice_code', hideInTable: true },
-      { title: t('app.kuaizhizao.quality.oqc.columns.salesOrder'), dataIndex: 'sales_order_code', hideInTable: true },
-      { title: t('app.kuaizhizao.quality.oqc.columns.customer'), dataIndex: 'customer_name', width: 140, ellipsis: true, sorter: true, hideInSearch: true },
-      { title: t('app.kuaizhizao.quality.oqc.columns.sourceCode'), dataIndex: 'source_code', width: 130, sorter: true, hideInSearch: true },
+      { title: t('app.kuaizhizao.quality.oqc.columns.customer'), dataIndex: 'customer_name', hideInTable: true, hideInSearch: true },
       {
         title: t('app.kuaizhizao.quality.common.columns.material'),
         key: 'material',
@@ -380,6 +384,7 @@ const OQCInspectionPage: React.FC = () => {
       },
       { title: t('app.kuaizhizao.quality.common.columns.materialCode'), dataIndex: 'material_code', hideInTable: true },
       { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name', hideInTable: true },
+      buildInspectorTimeStackedColumn<OQCInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
       {
         title: t('app.kuaizhizao.quality.common.columns.inspectionQty'),
         dataIndex: 'inspection_quantity',
@@ -427,26 +432,7 @@ const OQCInspectionPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => renderQualityQualityStatusTag(t, r.quality_status),
       },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.inspectionTime'),
-        dataIndex: 'inspection_time',
-        width: 132,
-        uniTableKeepWidth: true,
-        valueType: 'dateTime',
-        sorter: true,
-        hideInSearch: true,
-        render: (_, r) => (r.inspection_time ? formatDateTime(r.inspection_time, 'YYYY-MM-DD HH:mm:ss') : '-'),
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
-        dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        sorter: true,
-        defaultSortOrder: 'descend',
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-      },
+      ...buildDocumentAuditColumns<OQCInspection>(t),
       ...(oqcAuditColumn ? [oqcAuditColumn] : []),
       {
         title: t('app.kuaizhizao.quality.common.columns.lifecycle'),
@@ -477,7 +463,7 @@ const OQCInspectionPage: React.FC = () => {
         hideInSearch: true,
         render: (_, record) => renderOqcRowActions(renderOqcRowNodes(record), `oqc-${record.id ?? 'row'}`),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, oqcAuditColumn, inspectionDocStatusValueEnum, inspectionQualityStatusValueEnum, renderOqcRowNodes],
   );
 
@@ -704,9 +690,9 @@ const OQCInspectionPage: React.FC = () => {
                   columns={[
                     { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                     { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                    { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                    { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
+                    { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' , render: formatQuantity },
+                    { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' , render: formatQuantity },
                   ]}
                 />
               ) : (

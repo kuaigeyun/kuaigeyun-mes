@@ -176,6 +176,17 @@ class ProductionControlService:
             
         return sorted(results, key=lambda x: x["load_rate"], reverse=True)
 
+    @staticmethod
+    def _normalize_delivery_risk_row(row: Dict[str, Any], **extra: Any) -> Dict[str, Any]:
+        normalized = {**row, **extra}
+        planned_end = normalized.get("planned_end_date")
+        if planned_end is not None and not isinstance(planned_end, str):
+            normalized["planned_end_date"] = to_api_isoformat(planned_end)
+        so_required = normalized.get("so_required_date")
+        if so_required is not None and not isinstance(so_required, str):
+            normalized["so_required_date"] = to_api_isoformat(so_required)
+        return normalized
+
     async def get_delivery_risk_orders(self, tenant_id: int) -> List[Dict[str, Any]]:
         """
         识别交期风险工单
@@ -203,11 +214,13 @@ class ProductionControlService:
         results = []
         # 先把已明确延期的加进来
         for d in delayed_orders:
-            results.append({
-                **d,
-                "risk_type": "delayed",
-                "risk_desc": f"已延期 {d['delay_days']} 天"
-            })
+            results.append(
+                self._normalize_delivery_risk_row(
+                    d,
+                    risk_type="delayed",
+                    risk_desc=f"已延期 {d['delay_days']} 天",
+                )
+            )
             
         # 检查 MTO 连带有无逾期于销售订单
         for wo in mto_orders:
@@ -224,17 +237,21 @@ class ProductionControlService:
                         diff = (wo.planned_end_date.date() - soi.delivery_date).days
                         # 避免重复加入
                         if not any(r["work_order_id"] == wo.id for r in results):
-                            results.append({
-                                "work_order_id": wo.id,
-                                "work_order_code": wo.code,
-                                "product_name": wo.product_name,
-                                "status": wo.status,
-                                "planned_end_date": to_api_isoformat(wo.planned_end_date),
-                                "so_required_date": to_api_isoformat(soi.delivery_date),
-                                "risk_type": "delivery_clash",
-                                "risk_desc": f"晚于订单交付 {diff} 天",
-                                "delay_days": diff
-                            })
+                            results.append(
+                                self._normalize_delivery_risk_row(
+                                    {
+                                        "work_order_id": wo.id,
+                                        "work_order_code": wo.code,
+                                        "product_name": wo.product_name,
+                                        "status": wo.status,
+                                        "planned_end_date": wo.planned_end_date,
+                                        "so_required_date": soi.delivery_date,
+                                        "delay_days": diff,
+                                    },
+                                    risk_type="delivery_clash",
+                                    risk_desc=f"晚于订单交付 {diff} 天",
+                                )
+                            )
                             
         if results:
             from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService

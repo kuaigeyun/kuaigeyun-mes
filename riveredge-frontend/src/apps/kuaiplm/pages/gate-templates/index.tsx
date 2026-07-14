@@ -46,6 +46,7 @@ import {
   type GateTemplateStage,
   type GateTemplateSummary,
 } from '../../services/gate-template';
+import { resolvePlmPreferredAudit } from '../../utils/plmListCore';
 
 const GATE_TEMPLATE_RESOURCE = 'kuaiplm.gate-template';
 
@@ -430,7 +431,10 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
                 }
                 description={
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {item.template_code} · {t('app.kuaiplm.gateTemplates.stageCount', { count: item.stage_count ?? 0 })}
+                    {(() => {
+                      const preferred = resolvePlmPreferredAudit(item as unknown as Record<string, unknown>);
+                      return `${item.template_code} · ${t('app.kuaiplm.gateTemplates.stageCount', { count: item.stage_count ?? 0 })} · ${preferred.operator} · ${preferred.time}`;
+                    })()}
                   </Typography.Text>
                 }
               />

@@ -27,6 +27,7 @@ import { costRuleApi } from '../../../services/cost';
 import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   COST_CRUD_PINNED_ACTIVE_FIELD,
   costDocCreatedUpdatedColumns,
@@ -186,7 +187,7 @@ const CostRulePage: React.FC = () => {
   };
 
   const columns: ProColumns<CostRule>[] = useMemo(
-    () => [
+    () => alignProColumns<CostRule>([
       ...costRuleSearchColumns({
         code: t('app.kuaicaiwu.costRule.col.code'),
         name: t('app.kuaicaiwu.costRule.col.name'),
@@ -297,7 +298,7 @@ const CostRulePage: React.FC = () => {
           </Space>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t],
   );
 

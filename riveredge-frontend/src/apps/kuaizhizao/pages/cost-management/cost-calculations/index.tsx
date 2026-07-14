@@ -19,8 +19,9 @@ import { ListPageTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } f
 import { costCalculationApi } from '../../../services/cost';
 import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import dayjs from 'dayjs';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   COST_CALCULATION_PINNED_STATUS_FIELD,
   costCalculationSearchColumns,
@@ -220,7 +221,7 @@ const CostCalculationPage: React.FC = () => {
   );
 
   const columns: ProColumns<CostCalculation>[] = useMemo(
-    () => [
+    () => alignProColumns<CostCalculation>([
       ...costCalculationSearchColumns({
         calculationNo: t('app.kuaicaiwu.costCalculation.col.calculationNo'),
         workOrderCode: t('app.kuaicaiwu.costCalculation.col.workOrderCode'),
@@ -279,7 +280,7 @@ const CostCalculationPage: React.FC = () => {
         width: 100,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => (r.quantity != null ? Number(r.quantity).toFixed(2) : '0.00'),
+        render: (_, r) => (formatQuantity(r.quantity)),
       },
       {
         title: t('app.kuaicaiwu.costCommon.col.materialCost'),
@@ -393,7 +394,7 @@ const CostCalculationPage: React.FC = () => {
           </Button>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, calculationStatusEnum],
   );
 
@@ -424,7 +425,7 @@ const CostCalculationPage: React.FC = () => {
     {
       title: '数量',
       dataIndex: 'quantity',
-      render: (_, entity) => (entity.quantity != null ? Number(entity.quantity).toFixed(2) : '0.00'),
+      render: (_, entity) => (formatQuantity(entity.quantity)),
     },
     {
       title: '材料成本',

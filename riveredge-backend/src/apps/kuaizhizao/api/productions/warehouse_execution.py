@@ -4613,7 +4613,8 @@ async def generate_replenishment_suggestions_from_alerts(
     alert_ids = request.get('alert_ids')
     return await ReplenishmentSuggestionService().generate_suggestions_from_alerts(
         tenant_id=tenant_id,
-        alert_ids=alert_ids
+        alert_ids=alert_ids,
+        created_by=current_user.id,
     )
 
 

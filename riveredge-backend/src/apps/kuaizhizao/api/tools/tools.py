@@ -66,7 +66,7 @@ async def create_tool(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        tool = await ToolService.create_tool(tenant_id, data)
+        tool = await ToolService.create_tool(tenant_id, data, current_user=current_user)
         return ToolResponse.model_validate(tool)
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=str(e))

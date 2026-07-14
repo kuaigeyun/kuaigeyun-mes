@@ -606,7 +606,9 @@ class SalesOrderService:
             "total_fee_amount": getattr(order, "total_fee_amount", None) or Decimal("0"),
             "is_active": order.is_active,
             "created_by": order.created_by,
+            "created_by_name": getattr(order, "created_by_name", None),
             "updated_by": getattr(order, "updated_by", None),
+            "updated_by_name": getattr(order, "updated_by_name", None),
             "created_at": order.created_at,
             "updated_at": order.updated_at,
         }
@@ -1181,6 +1183,8 @@ class SalesOrderService:
     ) -> SalesOrderResponse:
         """创建销售订单（事务内）。"""
         async with in_transaction():
+            from apps.common.base_service import AppBaseService
+            operator_name = await AppBaseService().get_user_name(created_by)
             self._validate_sales_order_non_negative(
                 discount_amount=getattr(sales_order_data, "discount_amount", Decimal("0")) or Decimal("0"),
                 total_quantity=getattr(sales_order_data, "total_quantity", None),
@@ -1191,7 +1195,9 @@ class SalesOrderService:
             order_dict["status"] = sales_order_data.status
             order_dict["review_status"] = sales_order_data.review_status
             order_dict["created_by"] = created_by
+            order_dict["created_by_name"] = operator_name
             order_dict["updated_by"] = created_by
+            order_dict["updated_by_name"] = operator_name
 
             # 自动带出归属业务员
             if not order_dict.get("salesman_id") and order_dict.get("customer_id"):
@@ -1843,6 +1849,8 @@ class SalesOrderService:
                 raise ValidationError("字段「订单明细」不允许在审核中修改")
 
         async with in_transaction():
+            from apps.common.base_service import AppBaseService
+            updater_name = await AppBaseService().get_user_name(updated_by)
             self._validate_sales_order_non_negative(
                 discount_amount=getattr(sales_order_data, "discount_amount", Decimal("0")) or Decimal("0"),
                 total_quantity=getattr(sales_order_data, "total_quantity", None),
@@ -1853,6 +1861,7 @@ class SalesOrderService:
                 exclude_unset=True, exclude=_SALES_ORDER_PERSIST_EXCLUDE
             )
             upd["updated_by"] = updated_by
+            upd["updated_by_name"] = updater_name
             # status/review_status 由工作流控制，禁止通过 update 修改，确保二者始终同步
             upd.pop("status", None)
             upd.pop("review_status", None)

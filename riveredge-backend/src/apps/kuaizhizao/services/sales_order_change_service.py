@@ -141,6 +141,10 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             delta_amount=doc.delta_amount,
             applied_at=doc.applied_at,
             created_at=doc.created_at,
+            created_by=doc.created_by,
+            created_by_name=doc.created_by_name,
+            updated_by=doc.updated_by,
+            updated_by_name=doc.updated_by_name,
             header_changes=doc.header_changes,
             attachments=doc.attachments,
             notes=doc.notes,
@@ -289,6 +293,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             })
 
         async with in_transaction():
+            user_info = await self.get_user_info(created_by)
             doc = await SalesOrderChangeOrder.create(
                 tenant_id=tenant_id,
                 change_code=code,
@@ -307,7 +312,9 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
                 after_total_amount=before_amt,
                 delta_amount=Decimal("0"),
                 created_by=created_by,
+                created_by_name=user_info["name"],
                 updated_by=created_by,
+                updated_by_name=user_info["name"],
             )
             for row in rows:
                 await SalesOrderChangeItem.create(tenant_id=tenant_id, change_order_id=doc.id, **row)
@@ -326,6 +333,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         rows, b_qty, a_qty, b_amt, a_amt, line_types = await self._build_items_from_payload(tenant_id, order, data.items)
 
         async with in_transaction():
+            user_info = await self.get_user_info(created_by)
             doc = await SalesOrderChangeOrder.create(
                 tenant_id=tenant_id,
                 change_code=prefilled_code or await self._generate_code(tenant_id),
@@ -348,7 +356,9 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
                 attachments=data.attachments,
                 notes=data.notes,
                 created_by=created_by,
+                created_by_name=user_info["name"],
                 updated_by=created_by,
+                updated_by_name=user_info["name"],
             )
             for row in rows:
                 await SalesOrderChangeItem.create(tenant_id=tenant_id, change_order_id=doc.id, **row)
@@ -418,7 +428,9 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             doc.header_changes = data.header_changes
             doc.attachments = data.attachments
             doc.notes = data.notes
+            user_info = await self.get_user_info(updated_by)
             doc.updated_by = updated_by
+            doc.updated_by_name = user_info["name"]
             await doc.save()
         if normalize_status(doc.status) == DocumentStatus.PENDING_REVIEW.value:
             audit_required = await self.business_config_service.check_audit_required(
@@ -481,6 +493,10 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
                 delta_amount=doc.delta_amount,
                 applied_at=doc.applied_at,
                 created_at=doc.created_at,
+                created_by=doc.created_by,
+                created_by_name=doc.created_by_name,
+                updated_by=doc.updated_by,
+                updated_by_name=doc.updated_by_name,
                 lifecycle=lifecycle,
                 customer_id=doc.customer_id,
                 customer_name=doc.customer_name,
@@ -586,7 +602,9 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         else:
             doc.status = DocumentStatus.AUDITED.value
             doc.review_status = ReviewStatus.APPROVED.value
+        user_info = await self.get_user_info(operator_id)
         doc.updated_by = operator_id
+        doc.updated_by_name = user_info["name"]
         await doc.save()
         if not audit_required:
             return await self.apply(tenant_id, change_id, operator_id)
@@ -609,7 +627,9 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         else:
             doc.status = DocumentStatus.REJECTED.value
             doc.review_status = ReviewStatus.REJECTED.value
+        user_info = await self.get_user_info(operator_id)
         doc.updated_by = operator_id
+        doc.updated_by_name = user_info["name"]
         await doc.save()
         if body.approved:
             return await self.apply(tenant_id, change_id, operator_id)
@@ -622,7 +642,9 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         assert_sales_order_change_capability(doc, "withdraw_submit")
         doc.status = DocumentStatus.DRAFT.value
         doc.review_status = ReviewStatus.PENDING.value
+        user_info = await self.get_user_info(operator_id)
         doc.updated_by = operator_id
+        doc.updated_by_name = user_info["name"]
         await doc.save()
         return await self._to_detail(doc)
 
@@ -721,7 +743,9 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             remaining_items = await SalesOrderItem.filter(tenant_id=tenant_id, sales_order_id=order.id).all()
             order.total_quantity = sum((Decimal(str(i.order_quantity or 0)) for i in remaining_items), Decimal("0"))
             order.total_amount = sum((Decimal(str(i.total_amount or 0)) for i in remaining_items), Decimal("0"))
+            user_info = await self.get_user_info(operator_id)
             order.updated_by = operator_id
+            order.updated_by_name = user_info["name"]
             await order.save()
 
             contract_id = getattr(order, "contract_id", None)
@@ -748,11 +772,13 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
                         contract.released_amount = new_released_amt
                         contract.released_quantity = new_released_qty
                         contract.updated_by = operator_id
+                        contract.updated_by_name = user_info["name"]
                         await contract.save(
                             update_fields=[
                                 "released_amount",
                                 "released_quantity",
                                 "updated_by",
+                                "updated_by_name",
                                 "updated_at",
                             ]
                         )
@@ -761,6 +787,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             doc.applied_at = datetime.now()
             doc.applied_by = operator_id
             doc.updated_by = operator_id
+            doc.updated_by_name = user_info["name"]
             await doc.save()
 
         from apps.kuaizhizao.services.sales_order_service import SalesOrderService

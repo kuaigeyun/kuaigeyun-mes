@@ -23,7 +23,9 @@ from apps.kuaiplm.services.engineering_change_audit import (
     is_audit_required,
     start_change_approval_flow,
 )
+from apps.common.audit_actor import apply_create_audit, apply_update_audit, audit_response_fields
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 from loguru import logger
 
 
@@ -32,6 +34,7 @@ def _to_process_route_change_response(change: ProcessRouteChange) -> ProcessRout
     process_route = getattr(change, "process_route", None)
     if not process_route:
         raise ValidationError(f"工艺路线变更 {change.uuid} 缺少关联路线，无法返回")
+    audit = audit_response_fields(change)
     return ProcessRouteChangeResponse(
         id=change.id,
         uuid=change.uuid,
@@ -47,11 +50,16 @@ def _to_process_route_change_response(change: ProcessRouteChange) -> ProcessRout
         status=change.status,
         approval_comment=change.approval_comment,
         applicant_id=change.applicant_id,
+        applicant_name=audit.get("created_by_name"),
         approver_id=change.approver_id,
         applied_at=change.applied_at,
         created_at=change.created_at,
         updated_at=change.updated_at,
         deleted_at=change.deleted_at,
+        created_by=audit.get("created_by"),
+        created_by_name=audit.get("created_by_name"),
+        updated_by=audit.get("updated_by"),
+        updated_by_name=audit.get("updated_by_name"),
     )
 
 
@@ -93,17 +101,22 @@ class ProcessRouteChangeService:
             raise NotFoundError("工艺路线", data.process_route_uuid)
         
         # 创建变更记录
-        change = await ProcessRouteChange.create(
-            tenant_id=tenant_id,
-            process_route_id=process_route.id,
-            change_type=data.change_type,
-            change_content=data.change_content,
-            change_reason=data.change_reason,
-            change_impact=data.change_impact,
-            status="draft",
-            approval_comment=data.approval_comment,
-            applicant_id=applicant_id,
-        )
+        create_payload = {
+            "tenant_id": tenant_id,
+            "process_route_id": process_route.id,
+            "change_type": data.change_type,
+            "change_content": data.change_content,
+            "change_reason": data.change_reason,
+            "change_impact": data.change_impact,
+            "status": "draft",
+            "approval_comment": data.approval_comment,
+            "applicant_id": applicant_id,
+        }
+        from infra.services.user_service import UserService
+
+        applicant = await UserService().get_user_by_id(applicant_id)
+        apply_create_audit(create_payload, applicant)
+        change = await ProcessRouteChange.create(**create_payload)
         
         await change.fetch_related("process_route")
         if data.status in ("pending", "draft"):
@@ -249,6 +262,10 @@ class ProcessRouteChangeService:
         keyword: Optional[str] = None,
         change_code: Optional[str] = None,
         target_name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         page: int = 1,
         page_size: int = 20,
     ) -> ProcessRouteChangeListResponse:
@@ -266,6 +283,11 @@ class ProcessRouteChangeService:
         Returns:
             ProcessRouteChangeListResponse: 变更记录列表响应
         """
+        from apps.master_data.services.master_data_list_core import (
+            apply_master_crud_created_date_range,
+            apply_master_crud_updated_date_range,
+        )
+
         query = ProcessRouteChange.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
@@ -304,6 +326,13 @@ class ProcessRouteChangeService:
                 query = query.filter(process_route__code__icontains=code)
             if name:
                 query = query.filter(process_route__name__icontains=name)
+
+        query = apply_master_crud_created_date_range(
+            query, start_date=created_start_date, end_date=created_end_date
+        )
+        query = apply_master_crud_updated_date_range(
+            query, start_date=updated_start_date, end_date=updated_end_date
+        )
         
         # 总数
         total = await query.count()
@@ -324,14 +353,15 @@ class ProcessRouteChangeService:
                     tenant_id, "process_route", change
                 )
             items.append(_to_process_route_change_response(change))
-        
+
         return ProcessRouteChangeListResponse(items=items, total=total)
     
     @staticmethod
     async def update_change(
         tenant_id: int,
         change_uuid: str,
-        data: ProcessRouteChangeUpdate
+        data: ProcessRouteChangeUpdate,
+        current_user: Optional[User] = None,
     ) -> ProcessRouteChangeResponse:
         """
         更新变更记录
@@ -360,7 +390,7 @@ class ProcessRouteChangeService:
         update_data = data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(change, key, value)
-        
+        apply_update_audit(change, current_user)
         await change.save()
         
         return _to_process_route_change_response(change)

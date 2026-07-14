@@ -28,6 +28,7 @@ import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../.
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   normalizeEquipmentListResponse,
   resolveReminderListParams,
@@ -569,7 +570,7 @@ const MaintenanceRemindersPage: React.FC = () => {
             total,
           };
         }}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         rowKey="uuid"
         search={{
           labelWidth: 'auto',

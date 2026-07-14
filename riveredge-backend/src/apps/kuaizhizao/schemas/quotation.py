@@ -177,7 +177,9 @@ class QuotationResponse(QuotationBase):
     contract_code: Optional[str] = Field(None, max_length=50, description="关联销售合同编码")
     is_active: bool = Field(True, description="是否有效")
     created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
     updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     items: Optional[List[QuotationItemResponse]] = Field(None, description="报价明细")

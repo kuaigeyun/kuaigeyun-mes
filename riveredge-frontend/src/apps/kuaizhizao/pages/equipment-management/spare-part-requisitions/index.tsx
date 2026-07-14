@@ -18,6 +18,8 @@ import { equipmentApi, sparePartApi } from '../../../services/equipment';
 import { sparePartRequisitionsApi } from '../../../services/equipmentOps';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   APPROVAL_DOC_PINNED_STATUS_FIELD,
   buildApprovalDocStatusValueEnum,
@@ -168,8 +170,7 @@ const SparePartRequisitionsPage: React.FC = () => {
 
   const approvalStatusValueEnum = useMemo(() => buildApprovalDocStatusValueEnum(), []);
 
-  const columns: ProColumns<SparePartRequisition>[] = useMemo(
-    () => [
+  const columns: ProColumns<SparePartRequisition>[] = useMemo(() => alignProColumns<SparePartRequisition>([
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at_range',
@@ -227,13 +228,10 @@ const SparePartRequisitionsPage: React.FC = () => {
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
+        hideInTable: true,
         hideInSearch: true,
-        defaultSortOrder: 'descend',
-        sorter: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
+      ...buildDocumentAuditColumns<SparePartRequisition>(t),
       {
         title: t('common.actions'),
         key: 'action',
@@ -301,7 +299,7 @@ const SparePartRequisitionsPage: React.FC = () => {
           </>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, perms, messageApi, approvalStatusValueEnum],
   );
 

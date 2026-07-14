@@ -1,5 +1,6 @@
 """物料产品工艺 API Schema"""
 
+from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 
@@ -37,6 +38,12 @@ class MaterialProductProcessResponse(BaseModel):
     process_route_id: Optional[int] = Field(None, alias="processRouteId")
     allow_operation_jump: bool = Field(False, alias="allowOperationJump")
     lines: List[ProductProcessLineSchema] = Field(default_factory=list)
+    created_at: Optional[datetime] = Field(None, alias="createdAt")
+    updated_at: Optional[datetime] = Field(None, alias="updatedAt")
+    created_by: Optional[int] = Field(None, alias="createdBy")
+    created_by_name: Optional[str] = Field(None, alias="createdByName")
+    updated_by: Optional[int] = Field(None, alias="updatedBy")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName")
 
 
 class MaterialProductProcessSave(BaseModel):

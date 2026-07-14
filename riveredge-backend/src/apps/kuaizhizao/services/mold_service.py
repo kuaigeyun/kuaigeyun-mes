@@ -20,8 +20,10 @@ from apps.kuaizhizao.schemas.mold import (
     MoldUpdate,
     MoldCalibrationCreate,
 )
+from apps.common.audit_actor import apply_create_audit
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 class MoldService:
@@ -69,6 +71,10 @@ class MoldService:
                 tenant_id=tenant_id,
                 **data.model_dump(exclude_none=True)
             )
+            actor = None
+            if created_by is not None:
+                actor = await User.filter(id=created_by, tenant_id=tenant_id).first()
+            apply_create_audit(mold, actor)
             await mold.save()
             return mold
         except IntegrityError:
@@ -266,6 +272,7 @@ class MoldCalibrationService:
     async def create_calibration(
         tenant_id: int,
         data: MoldCalibrationCreate,
+        current_user: Optional[User] = None,
     ) -> MoldCalibration:
         """
         创建模具校验记录
@@ -273,6 +280,7 @@ class MoldCalibrationService:
         Args:
             tenant_id: 组织ID
             data: 校验记录创建数据
+            current_user: 当前用户（写入审计字段）
 
         Returns:
             MoldCalibration: 创建的校验记录对象
@@ -291,6 +299,7 @@ class MoldCalibrationService:
             expiry_date=data.expiry_date,
             remark=data.remark,
         )
+        apply_create_audit(calib, current_user)
         await calib.save()
 
         # 更新模具上次/下次校验日期

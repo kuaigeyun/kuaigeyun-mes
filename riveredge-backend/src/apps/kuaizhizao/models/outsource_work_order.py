@@ -145,10 +145,6 @@ class OutsourceWorkOrder(BaseModel):
     attachments = fields.JSONField(null=True, description="附件列表")
 
     # 创建更新信息
-    created_by = fields.IntField(description="创建人ID")
-    created_by_name = fields.CharField(max_length=100, description="创建人姓名")
-    updated_by = fields.IntField(null=True, description="更新人ID")
-    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -249,10 +245,6 @@ class OutsourceMaterialIssue(BaseModel):
     remarks = fields.TextField(null=True, description="备注")
 
     # 创建更新信息
-    created_by = fields.IntField(description="创建人ID")
-    created_by_name = fields.CharField(max_length=100, description="创建人姓名")
-    updated_by = fields.IntField(null=True, description="更新人ID")
-    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -348,10 +340,6 @@ class OutsourceMaterialReceipt(BaseModel):
     remarks = fields.TextField(null=True, description="备注")
 
     # 创建更新信息
-    created_by = fields.IntField(description="创建人ID")
-    created_by_name = fields.CharField(max_length=100, description="创建人姓名")
-    updated_by = fields.IntField(null=True, description="更新人ID")
-    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -408,10 +396,6 @@ class OutsourceMaterialReturn(BaseModel):
     returned_by = fields.IntField(null=True, description="退料人ID")
     returned_by_name = fields.CharField(max_length=100, null=True, description="退料人姓名")
     remarks = fields.TextField(null=True, description="备注")
-    created_by = fields.IntField(description="创建人ID")
-    created_by_name = fields.CharField(max_length=100, description="创建人姓名")
-    updated_by = fields.IntField(null=True, description="更新人ID")
-    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     def __str__(self):
@@ -458,10 +442,6 @@ class OutsourceProductReturn(BaseModel):
     returned_by = fields.IntField(null=True, description="退货人ID")
     returned_by_name = fields.CharField(max_length=100, null=True, description="退货人姓名")
     remarks = fields.TextField(null=True, description="备注")
-    created_by = fields.IntField(description="创建人ID")
-    created_by_name = fields.CharField(max_length=100, description="创建人姓名")
-    updated_by = fields.IntField(null=True, description="更新人ID")
-    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     def __str__(self):

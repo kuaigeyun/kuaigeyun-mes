@@ -15,6 +15,7 @@ from apps.master_data.schemas.drawing_schemas import (
     EngineeringDrawingObsoleteRequest,
     EngineeringDrawingResponse,
     EngineeringDrawingRevisionCreate,
+    EngineeringDrawingRevisionsResponse,
     EngineeringDrawingUpdate,
 )
 from apps.master_data.services.drawing_service import DrawingService
@@ -77,6 +78,7 @@ async def list_drawings(
     operation_uuid: Optional[str] = Query(None, alias="operationUuid"),
     sort_by: Optional[str] = Query(None, alias="sortBy"),
     sort_order: Optional[str] = Query(None, alias="sortOrder"),
+    view: str = Query("current", description="current=现行有效版, all=全部修订版"),
 ):
     items, total = await DrawingService.list_drawings(
         tenant_id,
@@ -90,6 +92,7 @@ async def list_drawings(
         operation_uuid=operation_uuid,
         sort_by=sort_by,
         sort_order=sort_order,
+        view=view,
     )
     return EngineeringDrawingListResponse(data=items, total=total)
 
@@ -101,9 +104,21 @@ async def create_drawing(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     try:
-        return await DrawingService.create_drawing(tenant_id, data, created_by=current_user.id)
+        return await DrawingService.create_drawing(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.get("/{drawing_uuid}/revisions", response_model=EngineeringDrawingRevisionsResponse, response_model_by_alias=True, summary="List revisions for drawing code")
+async def list_drawing_revisions(
+    drawing_uuid: str,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        code, revisions = await DrawingService.list_revisions(tenant_id, drawing_uuid)
+        return EngineeringDrawingRevisionsResponse(code=code, revisions=revisions)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
 
 
 @router.get("/{drawing_uuid}", response_model=EngineeringDrawingResponse, response_model_by_alias=True, summary="Get drawing detail")
@@ -122,9 +137,12 @@ async def update_drawing(
     drawing_uuid: str,
     data: EngineeringDrawingUpdate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ):
     try:
-        return await DrawingService.update_drawing(tenant_id, drawing_uuid, data)
+        return await DrawingService.update_drawing(
+            tenant_id, drawing_uuid, data, current_user=current_user
+        )
     except NotFoundError as e:
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
     except ValidationError as e:
@@ -180,7 +198,9 @@ async def create_revision(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     try:
-        return await DrawingService.create_revision(tenant_id, drawing_uuid, body, created_by=current_user.id)
+        return await DrawingService.create_revision(
+            tenant_id, drawing_uuid, body, current_user=current_user
+        )
     except NotFoundError as e:
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
     except ValidationError as e:

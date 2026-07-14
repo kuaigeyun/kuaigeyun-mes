@@ -68,7 +68,9 @@ from apps.kuaizhizao.schemas.equipment_ops import (
 )
 from apps.kuaizhizao.services.equipment_fault_service import EquipmentFaultService
 from core.services.business.code_generation_service import CodeGenerationService
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 T = TypeVar("T")
 
@@ -254,7 +256,7 @@ class _MasterCRUDMixin:
 class EquipmentInspectionItemService(_MasterCRUDMixin):
     model = EquipmentInspectionItem
 
-    async def create(self, tenant_id: int, data: InspectionItemCreate) -> EquipmentInspectionItem:
+    async def create(self, tenant_id: int, data: InspectionItemCreate, current_user: Optional[User] = None) -> EquipmentInspectionItem:
         existing = await EquipmentInspectionItem.filter(
             tenant_id=tenant_id,
             code=data.code,
@@ -262,9 +264,11 @@ class EquipmentInspectionItemService(_MasterCRUDMixin):
         ).first()
         if existing:
             raise ValidationError(f"点检项编码已存在: {data.code}")
+        payload = data.model_dump()
+        apply_create_audit(payload, current_user)
         return await EquipmentInspectionItem.create(
             tenant_id=tenant_id,
-            **data.model_dump(),
+            **payload,
         )
 
     async def update(
@@ -272,6 +276,7 @@ class EquipmentInspectionItemService(_MasterCRUDMixin):
         tenant_id: int,
         row_id: int,
         data: InspectionItemUpdate,
+        current_user: Optional[User] = None,
     ) -> EquipmentInspectionItem:
         row = await self._get(tenant_id, row_id)
         update_data = data.model_dump(exclude_unset=True)
@@ -285,6 +290,7 @@ class EquipmentInspectionItemService(_MasterCRUDMixin):
                 raise ValidationError(f"点检项编码已存在: {update_data['code']}")
         for k, v in update_data.items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -326,7 +332,7 @@ class EquipmentInspectionSchemeService(_MasterCRUDMixin):
                 numeric_max=line.numeric_max or snap["numeric_max"],
             )
 
-    async def create(self, tenant_id: int, data: InspectionSchemeCreate) -> EquipmentInspectionScheme:
+    async def create(self, tenant_id: int, data: InspectionSchemeCreate, current_user: Optional[User] = None) -> EquipmentInspectionScheme:
         async with in_transaction():
             dup = await EquipmentInspectionScheme.filter(
                 tenant_id=tenant_id,
@@ -335,13 +341,15 @@ class EquipmentInspectionSchemeService(_MasterCRUDMixin):
             ).first()
             if dup:
                 raise ValidationError(f"点检方案编码已存在: {data.code}")
-            scheme = await EquipmentInspectionScheme.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 code=data.code,
                 name=data.name,
                 description=data.description,
                 is_active=data.is_active,
             )
+            apply_create_audit(payload, current_user)
+            scheme = await EquipmentInspectionScheme.create(**payload)
             if data.lines:
                 await self._replace_lines(tenant_id, scheme.id, data.lines)
             return scheme
@@ -351,6 +359,7 @@ class EquipmentInspectionSchemeService(_MasterCRUDMixin):
         tenant_id: int,
         row_id: int,
         data: InspectionSchemeUpdate,
+        current_user: Optional[User] = None,
     ) -> EquipmentInspectionScheme:
         async with in_transaction():
             scheme = await self._get(tenant_id, row_id)
@@ -365,6 +374,7 @@ class EquipmentInspectionSchemeService(_MasterCRUDMixin):
                     raise ValidationError(f"点检方案编码已存在: {update_data['code']}")
             for k, v in update_data.items():
                 setattr(scheme, k, v)
+            apply_update_audit(scheme, current_user)
             await scheme.save()
             if data.lines is not None:
                 await self._replace_lines(tenant_id, scheme.id, data.lines)
@@ -410,7 +420,7 @@ class EquipmentPatrolRouteService(_MasterCRUDMixin):
                 scheme_id=step.scheme_id,
             )
 
-    async def create(self, tenant_id: int, data: PatrolRouteCreate) -> EquipmentPatrolRoute:
+    async def create(self, tenant_id: int, data: PatrolRouteCreate, current_user: Optional[User] = None) -> EquipmentPatrolRoute:
         async with in_transaction():
             dup = await EquipmentPatrolRoute.filter(
                 tenant_id=tenant_id,
@@ -419,7 +429,7 @@ class EquipmentPatrolRouteService(_MasterCRUDMixin):
             ).first()
             if dup:
                 raise ValidationError(f"巡检路线编码已存在: {data.code}")
-            route = await EquipmentPatrolRoute.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 code=data.code,
                 name=data.name,
@@ -428,6 +438,8 @@ class EquipmentPatrolRouteService(_MasterCRUDMixin):
                 description=data.description,
                 is_active=data.is_active,
             )
+            apply_create_audit(payload, current_user)
+            route = await EquipmentPatrolRoute.create(**payload)
             if data.steps:
                 await self._replace_steps(tenant_id, route.id, data.steps)
             return route
@@ -437,6 +449,7 @@ class EquipmentPatrolRouteService(_MasterCRUDMixin):
         tenant_id: int,
         row_id: int,
         data: PatrolRouteUpdate,
+        current_user: Optional[User] = None,
     ) -> EquipmentPatrolRoute:
         async with in_transaction():
             route = await self._get(tenant_id, row_id)
@@ -451,6 +464,7 @@ class EquipmentPatrolRouteService(_MasterCRUDMixin):
                     raise ValidationError(f"巡检路线编码已存在: {update_data['code']}")
             for k, v in update_data.items():
                 setattr(route, k, v)
+            apply_update_audit(route, current_user)
             await route.save()
             if data.steps is not None:
                 await self._replace_steps(tenant_id, route.id, data.steps)
@@ -469,7 +483,7 @@ class EquipmentPatrolRouteService(_MasterCRUDMixin):
 class EquipmentMaintenanceItemService(_MasterCRUDMixin):
     model = EquipmentMaintenanceItem
 
-    async def create(self, tenant_id: int, data: MaintenanceItemCreate) -> EquipmentMaintenanceItem:
+    async def create(self, tenant_id: int, data: MaintenanceItemCreate, current_user: Optional[User] = None) -> EquipmentMaintenanceItem:
         dup = await EquipmentMaintenanceItem.filter(
             tenant_id=tenant_id,
             code=data.code,
@@ -477,9 +491,11 @@ class EquipmentMaintenanceItemService(_MasterCRUDMixin):
         ).first()
         if dup:
             raise ValidationError(f"保养项编码已存在: {data.code}")
+        payload = data.model_dump()
+        apply_create_audit(payload, current_user)
         return await EquipmentMaintenanceItem.create(
             tenant_id=tenant_id,
-            **data.model_dump(),
+            **payload,
         )
 
     async def update(
@@ -487,6 +503,7 @@ class EquipmentMaintenanceItemService(_MasterCRUDMixin):
         tenant_id: int,
         row_id: int,
         data: MaintenanceItemUpdate,
+        current_user: Optional[User] = None,
     ) -> EquipmentMaintenanceItem:
         row = await self._get(tenant_id, row_id)
         update_data = data.model_dump(exclude_unset=True)
@@ -500,6 +517,7 @@ class EquipmentMaintenanceItemService(_MasterCRUDMixin):
                 raise ValidationError(f"保养项编码已存在: {update_data['code']}")
         for k, v in update_data.items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -538,7 +556,7 @@ class EquipmentMaintenanceSchemeService(_MasterCRUDMixin):
                 standard_hours=line.standard_hours or snap["standard_hours"],
             )
 
-    async def create(self, tenant_id: int, data: MaintenanceSchemeCreate) -> EquipmentMaintenanceScheme:
+    async def create(self, tenant_id: int, data: MaintenanceSchemeCreate, current_user: Optional[User] = None) -> EquipmentMaintenanceScheme:
         async with in_transaction():
             dup = await EquipmentMaintenanceScheme.filter(
                 tenant_id=tenant_id,
@@ -547,13 +565,15 @@ class EquipmentMaintenanceSchemeService(_MasterCRUDMixin):
             ).first()
             if dup:
                 raise ValidationError(f"保养方案编码已存在: {data.code}")
-            scheme = await EquipmentMaintenanceScheme.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 code=data.code,
                 name=data.name,
                 description=data.description,
                 is_active=data.is_active,
             )
+            apply_create_audit(payload, current_user)
+            scheme = await EquipmentMaintenanceScheme.create(**payload)
             if data.lines:
                 await self._replace_lines(tenant_id, scheme.id, data.lines)
             return scheme
@@ -563,6 +583,7 @@ class EquipmentMaintenanceSchemeService(_MasterCRUDMixin):
         tenant_id: int,
         row_id: int,
         data: MaintenanceSchemeUpdate,
+        current_user: Optional[User] = None,
     ) -> EquipmentMaintenanceScheme:
         async with in_transaction():
             scheme = await self._get(tenant_id, row_id)
@@ -577,6 +598,7 @@ class EquipmentMaintenanceSchemeService(_MasterCRUDMixin):
                     raise ValidationError(f"保养方案编码已存在: {update_data['code']}")
             for k, v in update_data.items():
                 setattr(scheme, k, v)
+            apply_update_audit(scheme, current_user)
             await scheme.save()
             if data.lines is not None:
                 await self._replace_lines(tenant_id, scheme.id, data.lines)
@@ -608,17 +630,19 @@ class EquipmentSchemeBindingService:
             qs = qs.filter(scheme_type=scheme_type)
         return await qs.order_by("id").all()
 
-    async def create(self, tenant_id: int, data: SchemeBindingCreate) -> EquipmentSchemeBinding:
+    async def create(self, tenant_id: int, data: SchemeBindingCreate, current_user: Optional[User] = None) -> EquipmentSchemeBinding:
         equipment = await _get_equipment_or_raise(tenant_id, data.equipment_id)
-        return await EquipmentSchemeBinding.create(
+        payload = dict(
             tenant_id=tenant_id,
             equipment_id=equipment.id,
             equipment_uuid=equipment.uuid,
             scheme_id=data.scheme_id,
             scheme_type=data.scheme_type,
         )
+        apply_create_audit(payload, current_user)
+        return await EquipmentSchemeBinding.create(**payload)
 
-    async def bulk_replace(self, tenant_id: int, data: SchemeBindingBulkReplace) -> List[EquipmentSchemeBinding]:
+    async def bulk_replace(self, tenant_id: int, data: SchemeBindingBulkReplace, current_user: Optional[User] = None) -> List[EquipmentSchemeBinding]:
         equipment = await _get_equipment_or_raise(tenant_id, data.equipment_id)
         async with in_transaction():
             await EquipmentSchemeBinding.filter(
@@ -629,13 +653,15 @@ class EquipmentSchemeBindingService:
             ).update(deleted_at=datetime.now())
             bindings = []
             for scheme_id in data.scheme_ids:
-                binding = await EquipmentSchemeBinding.create(
+                payload = dict(
                     tenant_id=tenant_id,
                     equipment_id=equipment.id,
                     equipment_uuid=equipment.uuid,
                     scheme_id=scheme_id,
                     scheme_type=data.scheme_type,
                 )
+                apply_create_audit(payload, current_user)
+                binding = await EquipmentSchemeBinding.create(**payload)
                 bindings.append(binding)
             return bindings
 
@@ -728,6 +754,7 @@ class EquipmentSpotCheckService:
         data: SpotCheckCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> EquipmentSpotCheck:
         equipment = await _get_equipment_or_raise(tenant_id, data.equipment_id)
         _reject_scrapped_equipment(equipment)
@@ -742,7 +769,7 @@ class EquipmentSpotCheckService:
 
         async with in_transaction():
             document_no = await _generate_code(tenant_id, "equipment_spot_check_code", "SC")
-            header = await EquipmentSpotCheck.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 document_no=document_no,
                 equipment_id=equipment.id,
@@ -755,6 +782,8 @@ class EquipmentSpotCheckService:
                 inspector_name=data.inspector_name or operator_name,
                 remark=data.remark,
             )
+            apply_create_audit(payload, current_user)
+            header = await EquipmentSpotCheck.create(**payload)
 
             if data.lines:
                 line_inputs = data.lines
@@ -885,12 +914,13 @@ class EquipmentSpotCheckService:
         rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
-    async def update(self, tenant_id: int, row_id: int, data: SpotCheckUpdate) -> EquipmentSpotCheck:
+    async def update(self, tenant_id: int, row_id: int, data: SpotCheckUpdate, current_user: Optional[User] = None) -> EquipmentSpotCheck:
         async with in_transaction():
             header = await self.get(tenant_id, row_id)
             update_data = data.model_dump(exclude_unset=True, exclude={"lines"})
             for k, v in update_data.items():
                 setattr(header, k, v)
+            apply_update_audit(header, current_user)
             await header.save()
             if data.lines is not None:
                 await EquipmentSpotCheckLine.filter(
@@ -987,6 +1017,7 @@ class EquipmentRoutePatrolService:
         data: RoutePatrolCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> EquipmentRoutePatrol:
         route, steps = await self.route_service.get_with_steps(tenant_id, data.route_id)
         if not steps:
@@ -994,7 +1025,7 @@ class EquipmentRoutePatrolService:
 
         async with in_transaction():
             document_no = await _generate_code(tenant_id, "equipment_route_patrol_code", "RP")
-            header = await EquipmentRoutePatrol.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 document_no=document_no,
                 route_id=route.id,
@@ -1005,6 +1036,8 @@ class EquipmentRoutePatrolService:
                 inspector_name=data.inspector_name or operator_name,
                 remark=data.remark,
             )
+            apply_create_audit(payload, current_user)
+            header = await EquipmentRoutePatrol.create(**payload)
 
             if data.lines:
                 line_inputs = data.lines
@@ -1129,12 +1162,13 @@ class EquipmentRoutePatrolService:
         rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
-    async def update(self, tenant_id: int, row_id: int, data: RoutePatrolUpdate) -> EquipmentRoutePatrol:
+    async def update(self, tenant_id: int, row_id: int, data: RoutePatrolUpdate, current_user: Optional[User] = None) -> EquipmentRoutePatrol:
         async with in_transaction():
             header = await self.get(tenant_id, row_id)
             update_data = data.model_dump(exclude_unset=True, exclude={"lines"})
             for k, v in update_data.items():
                 setattr(header, k, v)
+            apply_update_audit(header, current_user)
             await header.save()
             if data.lines is not None:
                 await EquipmentRoutePatrolLine.filter(
@@ -1188,12 +1222,13 @@ class EquipmentScrapApplicationService:
         data: ScrapApplicationCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> EquipmentScrapApplication:
         equipment = await _get_equipment_or_raise(tenant_id, data.equipment_id)
         if equipment.status == "报废":
             raise ValidationError("设备已报废，不能重复申请")
         application_no = await _generate_code(tenant_id, "equipment_scrap_application_code", "SA")
-        return await EquipmentScrapApplication.create(
+        payload = dict(
             tenant_id=tenant_id,
             application_no=application_no,
             equipment_id=equipment.id,
@@ -1208,6 +1243,8 @@ class EquipmentScrapApplicationService:
             attachments=data.attachments,
             status="草稿",
         )
+        apply_create_audit(payload, current_user)
+        return await EquipmentScrapApplication.create(**payload)
 
     async def get(self, tenant_id: int, row_id: int) -> EquipmentScrapApplication:
         row = await EquipmentScrapApplication.filter(
@@ -1286,20 +1323,28 @@ class EquipmentScrapApplicationService:
         tenant_id: int,
         row_id: int,
         data: ScrapApplicationUpdate,
+        current_user: Optional[User] = None,
     ) -> EquipmentScrapApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "草稿":
             raise ValidationError("仅草稿状态可编辑")
         for k, v in data.model_dump(exclude_unset=True).items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
-    async def submit(self, tenant_id: int, row_id: int) -> EquipmentScrapApplication:
+    async def submit(
+        self,
+        tenant_id: int,
+        row_id: int,
+        current_user: Optional[User] = None,
+    ) -> EquipmentScrapApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "草稿":
             raise ValidationError("仅草稿状态可提交")
         row.status = "已提交"
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -1309,6 +1354,7 @@ class EquipmentScrapApplicationService:
         row_id: int,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> EquipmentScrapApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1321,6 +1367,7 @@ class EquipmentScrapApplicationService:
             row.approved_at = datetime.now()
             if not row.scrap_date:
                 row.scrap_date = date.today()
+            apply_update_audit(row, current_user)
             await row.save()
             equipment.status = "报废"
             await equipment.save()
@@ -1333,6 +1380,7 @@ class EquipmentScrapApplicationService:
         reject_reason: str,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> EquipmentScrapApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1342,6 +1390,7 @@ class EquipmentScrapApplicationService:
         row.approver_id = approver_id
         row.approver_name = approver_name
         row.approved_at = datetime.now()
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -1360,10 +1409,11 @@ class EquipmentTransferApplicationService:
         data: TransferApplicationCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> EquipmentTransferApplication:
         equipment = await _get_equipment_or_raise(tenant_id, data.equipment_id)
         application_no = await _generate_code(tenant_id, "equipment_transfer_application_code", "TA")
-        return await EquipmentTransferApplication.create(
+        payload = dict(
             tenant_id=tenant_id,
             application_no=application_no,
             equipment_id=equipment.id,
@@ -1386,6 +1436,8 @@ class EquipmentTransferApplicationService:
             remark=data.remark,
             status="草稿",
         )
+        apply_create_audit(payload, current_user)
+        return await EquipmentTransferApplication.create(**payload)
 
     async def get(self, tenant_id: int, row_id: int) -> EquipmentTransferApplication:
         row = await EquipmentTransferApplication.filter(
@@ -1471,20 +1523,28 @@ class EquipmentTransferApplicationService:
         tenant_id: int,
         row_id: int,
         data: TransferApplicationUpdate,
+        current_user: Optional[User] = None,
     ) -> EquipmentTransferApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "草稿":
             raise ValidationError("仅草稿状态可编辑")
         for k, v in data.model_dump(exclude_unset=True).items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
-    async def submit(self, tenant_id: int, row_id: int) -> EquipmentTransferApplication:
+    async def submit(
+        self,
+        tenant_id: int,
+        row_id: int,
+        current_user: Optional[User] = None,
+    ) -> EquipmentTransferApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "草稿":
             raise ValidationError("仅草稿状态可提交")
         row.status = "已提交"
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -1494,6 +1554,7 @@ class EquipmentTransferApplicationService:
         row_id: int,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> EquipmentTransferApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1506,6 +1567,7 @@ class EquipmentTransferApplicationService:
             row.approved_at = datetime.now()
             if not row.transfer_date:
                 row.transfer_date = date.today()
+            apply_update_audit(row, current_user)
             await row.save()
             if row.to_workshop_id is not None:
                 equipment.workshop_id = row.to_workshop_id
@@ -1527,6 +1589,7 @@ class EquipmentTransferApplicationService:
         reject_reason: str,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> EquipmentTransferApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1536,6 +1599,7 @@ class EquipmentTransferApplicationService:
         row.approver_id = approver_id
         row.approver_name = approver_name
         row.approved_at = datetime.now()
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 

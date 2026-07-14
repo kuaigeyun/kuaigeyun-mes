@@ -29,8 +29,6 @@ class SalesContractChange(BaseModel):
     reason = fields.TextField(null=True, description="变更原因")
     new_contract_id = fields.IntField(null=True, description="变更生效后新版本合同ID")
 
-    created_by = fields.IntField(null=True, description="创建人ID")
-    updated_by = fields.IntField(null=True, description="更新人ID")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     class Meta:

@@ -22,9 +22,11 @@ export interface Payable {
     review_status: '待审核' | '已审核' | '已驳回';
     review_remarks?: string;
     notes?: string;
-    created_at: string;
-    updated_at: string;
-    capabilities?: { push_payment?: { allowed?: boolean; reason?: string } };
+  created_at: string;
+  updated_at: string;
+  created_by_name?: string;
+  updated_by_name?: string;
+  capabilities?: { push_payment?: { allowed?: boolean; reason?: string } };
 }
 
 export interface PayableListParams {

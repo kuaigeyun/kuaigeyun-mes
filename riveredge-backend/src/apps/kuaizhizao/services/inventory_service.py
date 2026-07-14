@@ -447,9 +447,11 @@ class InventoryService:
         扣减库存（不开启独立事务）。见 `_increase_stock_no_atomic` 说明。
         """
         try:
+            from infra.exceptions.exceptions import BusinessLogicError
+
             quantity = Decimal(str(quantity or 0))
             if quantity <= 0:
-                raise ValueError(f"扣减数量必须大于0: {quantity}")
+                raise BusinessLogicError(f"扣减数量必须大于0: {quantity}")
 
             # 根据 warehouse_type 决定扣减目标：line_side → LineSideInventory，否则 → MaterialBatch
             use_line_side = False
@@ -462,31 +464,40 @@ class InventoryService:
             if not use_line_side:
                 from apps.master_data.models.material_batch import MaterialBatch
                 from apps.master_data.models.material import Material
-                from infra.exceptions.exceptions import BusinessLogicError
 
                 batch_management_enabled, _ = await InventoryService._get_warehouse_management_flags(tenant_id)
                 cfg = await BusinessConfigService().get_business_config(tenant_id)
                 wh_cfg = cfg.get("parameters", {}).get("warehouse", {})
                 lifo_enabled = bool(wh_cfg.get("lifo", False))
-                if batch_management_enabled:
-                    material = await Material.get_or_none(
-                        tenant_id=tenant_id,
-                        id=material_id,
-                        deleted_at__isnull=True,
+                material = await Material.get_or_none(
+                    tenant_id=tenant_id,
+                    id=material_id,
+                    deleted_at__isnull=True,
+                )
+                is_batch_managed = bool(
+                    batch_management_enabled
+                    and material
+                    and getattr(material, "batch_managed", False)
+                )
+                raw_batch = str(batch_no or "").strip()
+                if is_batch_managed and not raw_batch:
+                    material_code = getattr(material, "main_code", None) or getattr(material, "code", "")
+                    raise BusinessLogicError(
+                        f"物料 {material.name}（{material_code}）启用了批号管理，出库必须指定批号"
                     )
-                    if material and getattr(material, "batch_managed", False) and not (batch_no and str(batch_no).strip()):
-                        material_code = getattr(material, "main_code", None) or getattr(material, "code", "")
-                        raise BusinessLogicError(
-                            f"物料 {material.name}（{material_code}）启用了批号管理，出库必须指定批号"
-                        )
 
                 own = InventoryService._ownership_filter(ownership_type, customer_id)
-                if batch_no:
-                    ledger_bn = InventoryService._normalize_batch_no_for_ledger(batch_no)
+                # 非批号管理物料：空批号或 DEFAULT 表示未指定，按 FIFO/LIFO 跨批扣减。
+                # 禁止把 DEFAULT 当成真实批号去查（前端曾把空串 normalize 成 DEFAULT 导致误报库存不足）。
+                ledger_bn = InventoryService._normalize_batch_no_for_ledger(raw_batch) if raw_batch else ""
+                use_specific_batch = bool(raw_batch) and (
+                    is_batch_managed or ledger_bn != "DEFAULT"
+                )
+                if use_specific_batch:
                     batch = await InventoryService._find_in_stock_material_batch(
                         tenant_id=tenant_id,
                         material_id=material_id,
-                        batch_no=batch_no,
+                        batch_no=raw_batch,
                         ownership_type=ownership_type,
                         customer_id=customer_id,
                         for_update=True,
@@ -504,10 +515,9 @@ class InventoryService:
                             f"{InventoryService._normalize_batch_no_for_ledger(str(bn))}({qty})"
                             for bn, qty in available_rows
                         ) or "无"
-                        raise ValueError(
-                            f"库存不足: material={material_id} batch={ledger_bn} "
-                            f"need={quantity} have={batch.quantity if batch else 0}；"
-                            f"可用批号: {available_hint}"
+                        raise BusinessLogicError(
+                            f"库存不足：批号 {ledger_bn} 需求 {quantity}，可用 "
+                            f"{batch.quantity if batch else 0}；其他可用：{available_hint}"
                         )
                         
                     # 阶段2：强制先进先出 (FIFO Strict Enforcement) 拦截网
@@ -522,7 +532,6 @@ class InventoryService:
                             id__lt=batch.id
                         ).order_by("id").first()
                         if older_batch:
-                            from infra.exceptions.exceptions import BusinessLogicError
                             raise BusinessLogicError(
                                 f"【防呆拦截】当前物料不符合先入先出！"
                                 f"系统内仍存在早期旧批次 (批号:{older_batch.batch_no}) 未用完！"
@@ -546,7 +555,7 @@ class InventoryService:
                             )
                     next_qty = (batch.quantity or Decimal(0)) - quantity
                     if next_qty < 0:
-                        raise ValueError(
+                        raise BusinessLogicError(
                             f"并发扣减导致库存不足: material={material_id} batch={ledger_bn} "
                             f"need={quantity} have={batch.quantity or 0}"
                         )
@@ -571,6 +580,11 @@ class InventoryService:
                         .all()
                     )
                     remaining = quantity
+                    have_before = sum((b.quantity or Decimal(0)) for b in batches)
+                    available_hint = "、".join(
+                        f"{InventoryService._normalize_batch_no_for_ledger(str(b.batch_no))}({b.quantity})"
+                        for b in batches
+                    ) or "无"
                     for b in batches:
                         if remaining <= 0:
                             break
@@ -582,8 +596,9 @@ class InventoryService:
                             await b.save()
                             remaining -= deduct
                     if remaining > 0:
-                        raise ValueError(
-                            f"库存不足: material={material_id} need={quantity}"
+                        raise BusinessLogicError(
+                            f"库存不足：需求 {quantity}，可用 {have_before}"
+                            + (f"（{available_hint}）" if available_hint != "无" else "")
                         )
                 logger.info(
                     f"InventoryService.decrease_stock: tenant={tenant_id} material={material_id} "
@@ -604,20 +619,20 @@ class InventoryService:
                     inv_filter["batch_no"] = batch_no
                 inv = await LineSideInventory.filter(**inv_filter).select_for_update().first()
                 if not inv:
-                    raise ValueError(
+                    raise BusinessLogicError(
                         f"线边仓无库存: warehouse={warehouse_id} material={material_id}"
                     )
                 available = (inv.quantity or Decimal(0)) - (
                     inv.reserved_quantity or Decimal(0)
                 )
                 if available < quantity:
-                    raise ValueError(
+                    raise BusinessLogicError(
                         f"线边仓库存不足: warehouse={warehouse_id} material={material_id} "
                         f"need={quantity} available={available}"
                     )
                 next_qty = (inv.quantity or Decimal(0)) - quantity
                 if next_qty < 0:
-                    raise ValueError(
+                    raise BusinessLogicError(
                         f"并发扣减导致线边仓负库存: warehouse={warehouse_id} material={material_id} "
                         f"need={quantity} have={inv.quantity or 0}"
                     )

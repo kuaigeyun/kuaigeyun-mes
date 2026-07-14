@@ -27,6 +27,9 @@ import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleSt
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -65,7 +68,7 @@ import {
 } from '../../../utils/purchaseInquiryLifecycle';
 import { listPurchaseRequisitions, previewPushToInquiry, type PurchaseRequisition, type DocumentPushPreview } from '../../../services/purchase-requisition';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatNumber, formatQuantity } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -87,6 +90,10 @@ type PullPurchaseRequisitionCandidate = {
 };
 
 const PURCHASE_INQUIRY_RESOURCE = 'kuaizhizao:purchase-inquiry';
+const PURCHASE_INQUIRY_LIST_FIELD_RANK = {
+  ...SALES_DOC_LIST_FIELD_RANK,
+  buyer_name: 59.4,
+};
 
 const PurchaseInquiriesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -607,9 +614,15 @@ const PurchaseInquiriesPage: React.FC = () => {
     () => createListAuditPhaseColumn<PurchaseInquiry>({ t, auditEnabled }),
     [t, auditEnabled],
   );
+  const resolveInquiryPushPercent = useCallback((record: PurchaseInquiry): number => {
+    const stageName = String(getPurchaseInquiryLifecycle(record as Record<string, unknown>).stageName ?? '').trim();
+    const status = String(record.status ?? '').trim();
+    if (stageName === '已转单' || status === '已转单' || status === 'CONVERTED') return 100;
+    return 0;
+  }, []);
 
   const columns: ProColumns<PurchaseInquiry>[] = useMemo(
-    () => [
+    () => alignProColumns<PurchaseInquiry>([
     {
       title: t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline'),
       dataIndex: 'quote_deadline_range',
@@ -648,15 +661,30 @@ const PurchaseInquiriesPage: React.FC = () => {
       render: (_, r) => (r.quote_deadline ? formatDateTime(r.quote_deadline, 'YYYY-MM-DD') : '-'),
     },
     {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 132,
+      title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+      dataIndex: 'downstream_push_progress',
+      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
       uniTableKeepWidth: true,
-      sorter: true,
-      defaultSortOrder: 'descend',
       hideInSearch: true,
-      render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm') : '-'),
+      render: (_, r) => <DocumentPushProgressBar percent={resolveInquiryPushPercent(r)} />,
     },
+    {
+      title: t('app.kuaizhizao.purchaseOrder.col.totalQuantity'),
+      dataIndex: 'total_quantity',
+      width: 100,
+      align: 'right' as const,
+      hideInSearch: true,
+      render: (_, r) => (formatQuantity(r.total_quantity)),
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+      dataIndex: 'total_amount',
+      width: 120,
+      align: 'right' as const,
+      hideInSearch: true,
+      render: (_, r) => (r.total_amount != null ? `¥${formatNumber(r.total_amount, 2)}` : '-'),
+    },
+    ...buildDocumentAuditColumns<PurchaseInquiry>(t),
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at_range',
@@ -802,8 +830,8 @@ const PurchaseInquiriesPage: React.FC = () => {
         return parts;
       },
     },
-  ],
-    [auditEnabled, message, modal, openCompare, purchaseInquiryAuditColumn, purchaseInquiryLifecycleValueEnum, purchaseInquiryPerms.canDelete, purchaseInquiryPerms.canUpdate, t],
+  ], PURCHASE_INQUIRY_LIST_FIELD_RANK),
+    [auditEnabled, message, modal, openCompare, purchaseInquiryAuditColumn, purchaseInquiryLifecycleValueEnum, purchaseInquiryPerms.canDelete, purchaseInquiryPerms.canUpdate, resolveInquiryPushPercent, t],
   );
 
   const request = useCallback(
@@ -1060,7 +1088,7 @@ const PurchaseInquiriesPage: React.FC = () => {
     () => [
       { title: t('app.kuaizhizao.purchaseInquiry.colMaterialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.purchaseInquiry.colMaterialName'), dataIndex: 'material_name' },
-      { title: t('app.kuaizhizao.purchaseInquiry.quantity'), dataIndex: 'quantity', width: 90 },
+      { title: t('app.kuaizhizao.purchaseInquiry.quantity'), dataIndex: 'quantity', width: 90, render: formatQuantity },
       { title: t('app.kuaizhizao.purchaseInquiry.colUnit'), dataIndex: 'unit', width: 60 },
       { title: t('app.kuaizhizao.purchaseInquiry.requiredDate'), dataIndex: 'required_date', width: 110, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
     ],
@@ -1119,7 +1147,7 @@ const PurchaseInquiriesPage: React.FC = () => {
   const compareColumns = useMemo(
     () => [
       { title: t('app.kuaizhizao.purchaseInquiry.material'), width: 220, render: (_: unknown, r: ComparisonRow) => `${r.material_code} ${r.material_name}` },
-      { title: t('app.kuaizhizao.purchaseInquiry.quantity'), dataIndex: 'quantity', width: 80, align: 'right' as const },
+      { title: t('app.kuaizhizao.purchaseInquiry.quantity'), dataIndex: 'quantity', width: 80, align: 'right' as const, render: formatQuantity },
       ...(compareRows[0]?.cells ?? []).map((cell, idx) => ({
         title: cell.supplier_name ?? t('app.kuaizhizao.purchaseInquiry.supplierFallback', { index: idx + 1 }),
         width: 148,
@@ -1199,7 +1227,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows;
         }}
-        columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-inquiries"
+        columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-inquiries.v2"
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
         pinnedTabsValueEnum={purchaseInquiryLifecycleValueEnum}
         showAdvancedSearch={true}
@@ -1690,9 +1718,9 @@ const PurchaseInquiriesPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                 ]}
               />
             ) : (
@@ -1775,9 +1803,9 @@ const PurchaseInquiriesPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                 ]}
               />
             ) : (

@@ -19,7 +19,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Select, Typography, Descriptions } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ShoppingOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
@@ -45,8 +45,11 @@ import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildOtherOutboundStatusValueEnum,
@@ -97,6 +100,7 @@ interface OtherOutbound {
   deliverer_name?: string;
   delivery_time?: string;
   total_quantity?: number;
+  total_items?: number;
   total_amount?: number;
   notes?: string;
   created_at?: string;
@@ -237,7 +241,7 @@ const OtherOutboundPage: React.FC = () => {
   const otherOutboundCustomFieldColumns = generateOtherOutboundCustomFieldColumns();
   const otherOutboundStatusValueEnum = useMemo(() => buildOtherOutboundStatusValueEnum(t), [t]);
 
-  const columns: ProColumns<OtherOutbound>[] = useMemo(() => [
+  const columns: ProColumns<OtherOutbound>[] = useMemo(() => alignProColumns<OtherOutbound>([
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at_range',
@@ -301,6 +305,24 @@ const OtherOutboundPage: React.FC = () => {
       render: (v) => <Tag>{translateReasonTypeLabel(t, v as string | undefined)}</Tag>,
     },
     {
+      title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'),
+      dataIndex: 'total_quantity',
+      width: 100,
+      align: 'right',
+      sorter: true,
+      hideInSearch: true,
+      render: formatQuantity,
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colMaterialKindCount'),
+      dataIndex: 'total_items',
+      width: 90,
+      align: 'right',
+      sorter: true,
+      hideInSearch: true,
+      render: (v: number | null | undefined) => (v != null ? v : '-'),
+    },
+    {
       title: t('app.kuaizhizao.otherOutbound.col.deliverer'),
       dataIndex: 'deliverer_name',
       width: 100,
@@ -316,16 +338,7 @@ const OtherOutboundPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => (r.delivery_time ? formatDateTime(r.delivery_time) : '-'),
     },
-    {
-      title: t('app.kuaizhizao.warehouseOutbound.col.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      sorter: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
-    },
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -377,14 +390,11 @@ const OtherOutboundPage: React.FC = () => {
               {t('app.kuaizhizao.warehouseOutbound.action.withdraw')}
             </Button>,
           );
-          actions.push(
-            <Button key="print" {...rowActionKind('print')} onClick={() => void handlePrint(record)} />,
-          );
         }
         return <Space>{actions}</Space>;
       },
     },
-  ], [t, otherOutboundCustomFieldColumns, otherOutboundStatusValueEnum, reasonTypeOptions, reasonTypeLoading]);
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, otherOutboundCustomFieldColumns, otherOutboundStatusValueEnum, reasonTypeOptions, reasonTypeLoading]);
 
   const handleDetail = async (record: OtherOutbound) => {
     try {
@@ -455,6 +465,45 @@ const OtherOutboundPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const listRowsRef = useRef<Map<string, OtherOutbound>>(new Map());
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const isOtherOutboundDeletable = (record: OtherOutbound) => record.status === '待出库' && !!record.id;
+  const isOtherOutboundPrintable = (record: OtherOutbound) =>
+    record.status === '已出库' && !!record.id;
+
+  const selectedOtherOutboundForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => listRowsRef.current.get(String(key)))
+        .filter((row): row is OtherOutbound => row != null),
+    [selectedRowKeys],
+  );
+
+  const canToolbarPrint =
+    selectedRowKeys.length === 1 &&
+    !!selectedOtherOutboundForBatch[0] &&
+    isOtherOutboundPrintable(selectedOtherOutboundForBatch[0]);
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const rows = keys
+      .map((k) => listRowsRef.current.get(String(k)))
+      .filter((r): r is OtherOutbound => !!r && isOtherOutboundDeletable(r));
+    if (rows.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.warehouseCommon.batchDeleteNoneDeletable'));
+      return;
+    }
+    try {
+      for (const row of rows) {
+        await warehouseApi.otherOutbound.delete(String(row.id));
+      }
+      messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: rows.length }));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.batchDeleteFailed'));
+    }
   };
 
   const appendOtherOutboundItemsFromMaterials = useCallback(
@@ -569,7 +618,7 @@ const OtherOutboundPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle={t('app.kuaizhizao.otherOutbound.title')}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-outbound"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-outbound.v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -579,6 +628,20 @@ const OtherOutboundPage: React.FC = () => {
           showCreateButton
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          rowSelectionGetCheckboxProps={(record) => ({
+            disabled: !isOtherOutboundDeletable(record) && !isOtherOutboundPrintable(record),
+          })}
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) =>
+            t('app.kuaizhizao.warehouseCommon.batchDeleteConfirm', {
+              count,
+              noun: t('app.kuaizhizao.otherOutbound.title'),
+            })
+          }
           request={async (params, sort, _filter, searchFormValues) => {
             try {
               const listParams = resolveWarehouseDocListParams(searchFormValues, sort, {
@@ -591,12 +654,30 @@ const OtherOutboundPage: React.FC = () => {
               });
               const { data: raw, total } = normalizeWarehouseListResponse(response);
               const data = await enrichOtherOutboundRecordsWithCustomFields(raw);
+              const next = new Map<string, OtherOutbound>();
+              for (const row of data) {
+                if (row.id != null) next.set(String(row.id), row);
+              }
+              listRowsRef.current = next;
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.otherOutbound.msg.loadListFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
+          toolBarActionsAfterBatch={[
+            <Button
+              key="other-outbound-toolbar-print"
+              icon={<PrinterOutlined />}
+              disabled={!canToolbarPrint}
+              onClick={() => {
+                const row = selectedOtherOutboundForBatch[0];
+                if (row) handlePrint(row);
+              }}
+            >
+              {t('components.uniAction.print')}
+            </Button>,
+          ]}
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>

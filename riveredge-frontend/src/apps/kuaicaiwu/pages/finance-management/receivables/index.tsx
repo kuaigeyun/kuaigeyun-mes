@@ -40,6 +40,12 @@ import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  DocumentPushProgressBar,
+  DOCUMENT_PROGRESS_COLUMN_WIDTH,
+} from '../../../../kuaizhizao/pages/sales-management/shared/DocumentPushProgressBar';
+import { receivableReceiptPushPercent } from '../../../../kuaizhizao/pages/sales-management/shared/pushProgress';
 import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
   financeDocCodePartnerSearchColumns,
@@ -461,6 +467,24 @@ const ReceivableList: React.FC = () => {
             order: 23,
             valueEnum: buildReviewStatusEnum(t),
         },
+        {
+            title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+            dataIndex: 'receipt_push_progress',
+            width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+            uniTableKeepWidth: true,
+            hideInSearch: true,
+            render: (_, record) => {
+                const percent = receivableReceiptPushPercent(record.received_amount, record.total_amount);
+                return (
+                    <DocumentPushProgressBar
+                        percent={percent}
+                        tooltip={t('app.kuaizhizao.salesManagement.pushProgress.percentOnly', {
+                            percent: Math.round(percent),
+                        })}
+                    />
+                );
+            },
+        },
         ...financeDocCreatedUpdatedColumns<Receivable>(t),
         {
             title: t('app.kuaicaiwu.common.lifecycle'),
@@ -534,7 +558,7 @@ const ReceivableList: React.FC = () => {
             <UniTable<Receivable>
                 headerTitle={t(`${P}.pageTitle`)}
                 actionRef={actionRef}
-                columns={columns}
+                columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
                 columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receivables"
                 scroll={{ x: 1680 }}
                 request={async (params, sort, _filter, searchFormValues) => {

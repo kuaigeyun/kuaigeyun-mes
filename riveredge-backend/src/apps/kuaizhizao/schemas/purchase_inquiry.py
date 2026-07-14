@@ -159,9 +159,15 @@ class PurchaseInquiryResponse(BaseSchema):
     review_time: Optional[datetime] = None
     review_status: str
     review_remarks: Optional[str] = None
+    items_count: Optional[int] = None
     total_quantity: Decimal
+    total_amount: Decimal = Field(default=Decimal(0), ge=0)
     notes: Optional[str] = None
     attachments: Optional[list] = None
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     items: List[PurchaseInquiryItemResponse] = Field(default_factory=list)

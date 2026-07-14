@@ -30,6 +30,7 @@ import { costRuleApi } from '../../../services/cost';
 import { getRuleTypeSelectOptions, getRuleTypeTag } from '../../../utils/costUiLabels';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   COST_CRUD_PINNED_ACTIVE_FIELD,
   costDocCreatedUpdatedColumns,
@@ -445,7 +446,7 @@ const CostRulePage: React.FC = () => {
             return { data: [], success: false, total: 0 };
           }
         }}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         rowKey="uuid"
         showCreateButton
         createButtonText={t('app.kuaicaiwu.costRule.create')}

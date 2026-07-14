@@ -11,8 +11,8 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, Descriptions, Dropdown, Form, Input, InputNumber, Modal, Row, Space, Table, Typography } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined, MoreOutlined } from '@ant-design/icons';
+import { App, Button, Col, Descriptions, Form, Input, InputNumber, Modal, Row, Space, Table, Typography } from 'antd';
+import { EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -26,8 +26,11 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
-import { formatDateTime } from '../../../../../utils/format';
+import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildMaterialReturnStatusValueEnum,
@@ -50,6 +53,7 @@ interface MaterialReturn {
   return_time?: string;
   status?: string;
   total_quantity?: number;
+  total_items?: number;
   notes?: string;
   created_at?: string;
   updated_at?: string;
@@ -210,6 +214,45 @@ const MaterialReturnsPage: React.FC = () => {
     });
   };
 
+  const listRowsRef = useRef<Map<string, MaterialReturn>>(new Map());
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const isMaterialReturnDeletable = (record: MaterialReturn) => record.status === '待归还' && !!record.id;
+  const isMaterialReturnPrintable = (record: MaterialReturn) =>
+    (record.status === '待归还' || record.status === '已归还') && !!record.id;
+
+  const selectedMaterialReturnForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => listRowsRef.current.get(String(key)))
+        .filter((row): row is MaterialReturn => row != null),
+    [selectedRowKeys],
+  );
+
+  const canToolbarPrint =
+    selectedRowKeys.length === 1 &&
+    !!selectedMaterialReturnForBatch[0] &&
+    isMaterialReturnPrintable(selectedMaterialReturnForBatch[0]);
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const rows = keys
+      .map((k) => listRowsRef.current.get(String(k)))
+      .filter((r): r is MaterialReturn => !!r && isMaterialReturnDeletable(r));
+    if (rows.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.warehouseCommon.batchDeleteNoneDeletable'));
+      return;
+    }
+    try {
+      for (const row of rows) {
+        await warehouseApi.materialReturn.delete(String(row.id));
+      }
+      messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: rows.length }));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.batchDeleteFailed'));
+    }
+  };
+
   const handlePrint = (record: MaterialReturn) => {
     if (!record.id) return;
     openPrint({ documentType: 'material_return', documentId: record.id });
@@ -273,7 +316,7 @@ const MaterialReturnsPage: React.FC = () => {
   const materialReturnStatusValueEnum = useMemo(() => buildMaterialReturnStatusValueEnum(t), [t]);
 
   const columns: ProColumns<MaterialReturn>[] = useMemo(
-    () => [
+    () => alignProColumns<MaterialReturn>([
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at_range',
@@ -334,6 +377,24 @@ const MaterialReturnsPage: React.FC = () => {
         hideInSearch: true,
       },
       {
+        title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'),
+        dataIndex: 'total_quantity',
+        width: 100,
+        align: 'right',
+        sorter: true,
+        hideInSearch: true,
+        render: formatQuantity,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colMaterialKindCount'),
+        dataIndex: 'total_items',
+        width: 90,
+        align: 'right',
+        sorter: true,
+        hideInSearch: true,
+        render: (v: number | null | undefined) => (v != null ? v : '-'),
+      },
+      {
         title: t('app.kuaizhizao.warehouseMaterialReturn.col.returner'),
         dataIndex: 'returner_name',
         width: 100,
@@ -349,16 +410,7 @@ const MaterialReturnsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => (r.return_time ? formatDateTime(r.return_time) : '-'),
       },
-      {
-        title: t('app.kuaizhizao.warehouseMaterialReturn.col.updatedAt'),
-        dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        defaultSortOrder: 'descend',
-        sorter: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
-      },
+      ...buildDocumentAuditColumns<Record<string, unknown>>(t),
       {
         title: t('app.kuaizhizao.warehouseMaterialReturn.col.lifecycle'),
         dataIndex: 'lifecycle_stage',
@@ -385,8 +437,6 @@ const MaterialReturnsPage: React.FC = () => {
         width: 220,
         fixed: 'right',
         render: (_, record) => {
-          const showPrint = record.status === '待归还' || record.status === '已归还';
-          const printInMore = record.status === '待归还';
           return (
             <Space size="small" wrap>
               <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
@@ -402,32 +452,11 @@ const MaterialReturnsPage: React.FC = () => {
                   <Button {...rowActionKind('delete')} onClick={() => handleDelete(record)} />
                 </>
               )}
-              {printInMore ? (
-                <Dropdown
-                  menu={{
-                    items: [
-                      {
-                        key: 'print',
-                        icon: <PrinterOutlined />,
-                        label: t('app.kuaizhizao.warehouseMaterialReturn.action.print'),
-                        onClick: () => handlePrint(record),
-                      },
-                    ],
-                  }}
-                  trigger={['click']}
-                >
-                  <Button {...rowActionKind('display')} {...rowActionLabelKeep()} icon={<MoreOutlined />}>
-                    {t('app.kuaizhizao.warehouseMaterialReturn.action.more')}
-                  </Button>
-                </Dropdown>
-              ) : (
-                showPrint && <Button {...rowActionKind('print')} onClick={() => handlePrint(record)} />
-              )}
             </Space>
           );
         },
       },
-    ],
+    ], WAREHOUSE_DOC_LIST_FIELD_RANK),
     [t, materialReturnStatusValueEnum],
   );
 
@@ -466,7 +495,7 @@ const MaterialReturnsPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.materialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.materialName'), dataIndex: 'material_name', width: 150 },
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.unit'), dataIndex: 'material_unit', width: 60 },
-      { title: t('app.kuaizhizao.warehouseMaterialReturn.col.returnQty'), dataIndex: 'return_quantity', width: 100, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseMaterialReturn.col.returnQty'), dataIndex: 'return_quantity', width: 100, align: 'right' as const , render: formatQuantity },
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.status'), dataIndex: 'status', width: 80 },
     ],
     [t],
@@ -507,13 +536,27 @@ const MaterialReturnsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-returns"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-returns.v2"
           showAdvancedSearch
           pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
           showCreateButton
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          rowSelectionGetCheckboxProps={(record) => ({
+            disabled: !isMaterialReturnDeletable(record) && !isMaterialReturnPrintable(record),
+          })}
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) =>
+            t('app.kuaizhizao.warehouseCommon.batchDeleteConfirm', {
+              count,
+              noun: t('app.kuaizhizao.warehouseMaterialReturn.title'),
+            })
+          }
           request={async (params, sort, _filter, searchFormValues) => {
             try {
               const listParams = resolveWarehouseDocListParams(searchFormValues, sort, {
@@ -525,12 +568,30 @@ const MaterialReturnsPage: React.FC = () => {
                 ...listParams,
               });
               const { data, total } = normalizeWarehouseListResponse(response);
+              const next = new Map<string, MaterialReturn>();
+              for (const row of data as MaterialReturn[]) {
+                if (row.id != null) next.set(String(row.id), row);
+              }
+              listRowsRef.current = next;
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.warehouseMaterialReturn.msg.loadListFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
+          toolBarActionsAfterBatch={[
+            <Button
+              key="material-return-toolbar-print"
+              icon={<PrinterOutlined />}
+              disabled={!canToolbarPrint}
+              onClick={() => {
+                const row = selectedMaterialReturnForBatch[0];
+                if (row) handlePrint(row);
+              }}
+            >
+              {t('components.uniAction.print')}
+            </Button>,
+          ]}
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>

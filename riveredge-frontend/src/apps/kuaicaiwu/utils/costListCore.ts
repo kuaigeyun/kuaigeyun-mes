@@ -1,9 +1,11 @@
 import type { TFunction } from 'i18next';
 import type { ProColumns } from '@ant-design/pro-components';
+import React from 'react';
 import { extractProTableSort } from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../../kuaizhizao/services/reports';
 import { formatDateTime } from '../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../utils/formDate';
+import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
 
 export const COST_CALCULATION_PINNED_STATUS_FIELD = 'calculation_status';
 export const COST_CRUD_PINNED_ACTIVE_FIELD = 'isActive';
@@ -36,19 +38,62 @@ export function formatCostDateTimeCell(value: unknown): string {
   return formatDateTime(value as string | Date, 'YYYY-MM-DD HH:mm');
 }
 
-export function costDocCreatedUpdatedColumns<
-  T extends { created_at?: string; updated_at?: string },
->(t: TFunction): ProColumns<T>[] {
+function resolveCostOperatorName(record: Record<string, unknown>, key: 'created' | 'updated'): string {
+  const candidates =
+    key === 'created'
+      ? ['created_by_name', 'creator_name', 'created_user_name', 'createdByName', 'creatorName']
+      : ['updated_by_name', 'updater_name', 'updated_user_name', 'updatedByName', 'updaterName'];
+  for (const candidate of candidates) {
+    const value = String(record[candidate] ?? '').trim();
+    if (value) return value;
+  }
+  return '-';
+}
+
+function resolveCostAuditTime(record: Record<string, unknown>, key: 'created' | 'updated'): string {
+  const value =
+    key === 'created'
+      ? (record.created_at ?? record.createdAt)
+      : (record.updated_at ?? record.updatedAt);
+  return formatCostDateTimeCell(value);
+}
+
+function resolveCostPreferredAudit(record: Record<string, unknown>): { operator: string; time: string } {
+  const updatedOperator = resolveCostOperatorName(record, 'updated');
+  const updatedTime = resolveCostAuditTime(record, 'updated');
+  if (updatedOperator !== '-' && updatedTime !== '-') {
+    return { operator: updatedOperator, time: updatedTime };
+  }
+  const createdOperator = resolveCostOperatorName(record, 'created');
+  const createdTime = resolveCostAuditTime(record, 'created');
+  if (createdOperator !== '-' && createdTime !== '-') {
+    return { operator: createdOperator, time: createdTime };
+  }
+  if (updatedTime !== '-') {
+    return { operator: updatedOperator, time: updatedTime };
+  }
+  return { operator: createdOperator, time: createdTime };
+}
+
+export function costDocCreatedUpdatedColumns<T extends object>(t: TFunction): ProColumns<T>[] {
   return [
     {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 132,
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at',
+      width: 148,
       uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
-      render: (_, r) => formatCostDateTimeCell(r.created_at),
-    },
+      render: (_, r) => {
+        const preferred = resolveCostPreferredAudit(r as Record<string, unknown>);
+        return React.createElement(UniTableStackedPrimaryCell, {
+          primary: preferred.operator,
+          secondary: preferred.time,
+          secondaryCopyable: false,
+          primaryBold: false,
+        });
+      },
+    } as ProColumns<T>,
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at_range',
@@ -56,15 +101,6 @@ export function costDocCreatedUpdatedColumns<
       hideInTable: true,
       order: 30,
       formItemProps: formDateRangeFormItemProps,
-    },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      hideInSearch: true,
-      render: (_, r) => formatCostDateTimeCell(r.updated_at),
     },
     {
       title: t('common.updatedAt'),

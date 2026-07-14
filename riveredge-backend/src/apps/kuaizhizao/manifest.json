@@ -3655,10 +3655,10 @@
         },
         {
             "page_code": "kuaizhizao-production-rework-order",
-            "page_name": "返工工单",
+            "page_name": "返工单",
             "page_path": "/apps/kuaizhizao/production-execution/rework-orders",
             "code_field": "code",
-            "code_field_label": "返工工单编码",
+            "code_field_label": "返工单编码",
             "module": "快制造",
             "module_icon": "tool",
             "auto_generate": true,
@@ -3668,25 +3668,13 @@
         {
             "page_code": "kuaizhizao-production-outsource-order",
             "page_name": "委外单",
-            "page_path": "/apps/kuaizhizao/production-execution/outsource-orders",
+            "page_path": "/apps/kuaizhizao/production-execution/outsource-management",
             "code_field": "code",
             "code_field_label": "委外单编码",
             "module": "快制造",
             "module_icon": "tool",
             "auto_generate": true,
             "rule_code": "OUTSOURCE_ORDER_CODE",
-            "allow_manual_edit": true
-        },
-        {
-            "page_code": "kuaizhizao-production-outsource-work-order",
-            "page_name": "委外工单",
-            "page_path": "/apps/kuaizhizao/production-execution/outsource-work-orders",
-            "code_field": "code",
-            "code_field_label": "委外工单编码",
-            "module": "快制造",
-            "module_icon": "tool",
-            "auto_generate": true,
-            "rule_code": "OUTSOURCE_WORK_ORDER_CODE",
             "allow_manual_edit": true
         },
         {
@@ -3714,8 +3702,32 @@
             "allow_manual_edit": true
         },
         {
+            "page_code": "kuaizhizao-purchase-requisition",
+            "page_name": "采购申请",
+            "page_path": "/apps/kuaizhizao/purchase-management/purchase-requisitions",
+            "code_field": "requisition_code",
+            "code_field_label": "采购申请编号",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "PURCHASE_REQUISITION_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-purchase-inquiry",
+            "page_name": "采购询价单",
+            "page_path": "/apps/kuaizhizao/purchase-management/purchase-inquiries",
+            "code_field": "inquiry_code",
+            "code_field_label": "询价单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "PURCHASE_INQUIRY_CODE",
+            "allow_manual_edit": true
+        },
+        {
             "page_code": "kuaizhizao-purchase-receipt",
-            "page_name": "采购收货",
+            "page_name": "采购入库",
             "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
             "code_field": "receipt_code",
             "code_field_label": "采购收货单编码",
@@ -3723,18 +3735,6 @@
             "module_icon": "tool",
             "auto_generate": true,
             "rule_code": "PURCHASE_RECEIPT_CODE",
-            "allow_manual_edit": true
-        },
-        {
-            "page_code": "kuaizhizao-purchase-return",
-            "page_name": "采购退货",
-            "page_path": "/apps/kuaizhizao/purchase-management/purchase-returns",
-            "code_field": "return_code",
-            "code_field_label": "采购退货单编码",
-            "module": "快制造",
-            "module_icon": "tool",
-            "auto_generate": true,
-            "rule_code": "PURCHASE_RETURN_CODE",
             "allow_manual_edit": true
         },
         {
@@ -3759,6 +3759,18 @@
             "module_icon": "tool",
             "auto_generate": true,
             "rule_code": "KUAIZHIZAO_SALES_CONTRACT",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-sales-contract-change",
+            "page_name": "销售合同变更",
+            "page_path": "/apps/kuaizhizao/sales-management/sales-contracts",
+            "code_field": "change_code",
+            "code_field_label": "合同变更编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "KUAIZHIZAO_SALES_CONTRACT_CHANGE",
             "allow_manual_edit": true
         },
         {
@@ -3798,26 +3810,63 @@
             "allow_manual_edit": true
         },
         {
-            "page_code": "kuaizhizao-sales-forecast",
-            "page_name": "销售预测",
-            "page_path": "/apps/kuaizhizao/sales-management/sales-forecasts",
-            "code_field": "code",
-            "code_field_label": "销售预测编码",
-            "module": "快制造",
-            "module_icon": "tool",
-            "auto_generate": false,
-            "rule_code": "SALES_FORECAST_CODE"
-        },
-        {
-            "page_code": "kuaizhizao-sales-return",
-            "page_name": "销售退货",
-            "page_path": "/apps/kuaizhizao/sales-management/sales-returns",
-            "code_field": "return_code",
-            "code_field_label": "销售退货单编码",
+            "page_code": "kuaizhizao-delivery-notice",
+            "page_name": "送货单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/delivery-notes",
+            "code_field": "notice_code",
+            "code_field_label": "送货单编码",
             "module": "快制造",
             "module_icon": "tool",
             "auto_generate": true,
-            "rule_code": "SALES_RETURN_CODE",
+            "rule_code": "DELIVERY_NOTICE_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-shipment-notice",
+            "page_name": "发货通知单",
+            "page_path": "/apps/kuaizhizao/sales-management/shipment-notices",
+            "code_field": "notice_code",
+            "code_field_label": "发货通知单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "SHIPMENT_NOTICE_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-receipt-notice",
+            "page_name": "收货通知单",
+            "page_path": "/apps/kuaizhizao/purchase-management/receipt-notices",
+            "code_field": "notice_code",
+            "code_field_label": "收货通知单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "RECEIPT_NOTICE_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-sales-forecast",
+            "page_name": "销售预测",
+            "page_path": "/apps/kuaizhizao/sales-management/sales-forecasts",
+            "code_field": "forecast_code",
+            "code_field_label": "销售预测编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "SALES_FORECAST_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-demand-plan",
+            "page_name": "需求计划",
+            "page_path": "/apps/kuaizhizao/plan-management/demand-management",
+            "code_field": "demand_code",
+            "code_field_label": "需求计划编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "DEMAND_PLAN_CODE",
             "allow_manual_edit": true
         },
         {
@@ -3835,7 +3884,7 @@
         {
             "page_code": "kuaizhizao-warehouse-production-return",
             "page_name": "生产退料",
-            "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
+            "page_path": "/apps/kuaizhizao/warehouse-management/production-returns",
             "code_field": "return_code",
             "code_field_label": "退料单编码",
             "module": "快制造",
@@ -3881,15 +3930,135 @@
             "allow_manual_edit": true
         },
         {
+            "page_code": "kuaizhizao-warehouse-material-borrow",
+            "page_name": "借料单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/material-borrows",
+            "code_field": "borrow_code",
+            "code_field_label": "借料单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "MATERIAL_BORROW_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-material-return",
+            "page_name": "还料单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/material-returns",
+            "code_field": "return_code",
+            "code_field_label": "还料单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "MATERIAL_RETURN_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-material-call",
+            "page_name": "产线叫料",
+            "page_path": "/apps/kuaizhizao/warehouse-management/material-calls",
+            "code_field": "code",
+            "code_field_label": "叫料单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "MATERIAL_CALL_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-assembly-order",
+            "page_name": "组装单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/assembly-orders",
+            "code_field": "code",
+            "code_field_label": "组装单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "ASSEMBLY_ORDER_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-assembly-template",
+            "page_name": "组装模板",
+            "page_path": "/apps/kuaizhizao/warehouse-management/assembly-orders",
+            "code_field": "template_code",
+            "code_field_label": "组装模板编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "ASSEMBLY_TEMPLATE_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-disassembly-order",
+            "page_name": "拆卸单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/disassembly-orders",
+            "code_field": "code",
+            "code_field_label": "拆卸单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "DISASSEMBLY_ORDER_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-batching-order",
+            "page_name": "配料单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+            "code_field": "code",
+            "code_field_label": "配料单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "BATCHING_ORDER_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-stocktaking",
+            "page_name": "盘点单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/stocktaking",
+            "code_field": "code",
+            "code_field_label": "盘点单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "STOCKTAKING_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-inventory-transfer",
+            "page_name": "调拨单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/inventory-transfer",
+            "code_field": "code",
+            "code_field_label": "调拨单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "INVENTORY_TRANSFER_CODE",
+            "allow_manual_edit": true
+        },
+        {
             "page_code": "kuaizhizao-warehouse-finished-goods-inbound",
             "page_name": "成品入库",
-            "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
+            "page_path": "/apps/kuaizhizao/warehouse-management/product-inbound",
             "code_field": "receipt_code",
             "code_field_label": "成品入库单编码",
             "module": "快制造",
             "module_icon": "tool",
             "auto_generate": true,
             "rule_code": "FINISHED_GOODS_RECEIPT_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-semi-finished-inbound",
+            "page_name": "半成品入库",
+            "page_path": "/apps/kuaizhizao/warehouse-management/product-inbound",
+            "code_field": "receipt_code",
+            "code_field_label": "半成品入库单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "SEMI_FINISHED_GOODS_RECEIPT_CODE",
             "allow_manual_edit": true
         },
         {
@@ -3917,6 +4086,32 @@
             "allow_manual_edit": true
         },
         {
+            "page_code": "kuaizhizao-quality-inspection-plan",
+            "page_name": "质检方案",
+            "page_path": "/apps/kuaizhizao/quality-management/inspection-plans",
+            "code_field": "plan_code",
+            "code_field_label": "质检方案编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "INSPECTION_PLAN_CODE",
+            "allow_manual_edit": true,
+            "available_fields": [
+                {
+                    "field_name": "plan_type",
+                    "field_label": "方案类型",
+                    "field_type": "string",
+                    "description": "方案类型（incoming/process/finished）"
+                },
+                {
+                    "field_name": "material_code",
+                    "field_label": "物料编码",
+                    "field_type": "string",
+                    "description": "适用物料编码"
+                }
+            ]
+        },
+        {
             "page_code": "kuaizhizao-quality-finished-goods-inspection",
             "page_name": "成品检验",
             "page_path": "/apps/kuaizhizao/quality-management/finished-goods-inspection",
@@ -3929,8 +4124,80 @@
             "allow_manual_edit": true
         },
         {
+            "page_code": "kuaizhizao-quality-oqc-inspection",
+            "page_name": "出货检验",
+            "page_path": "/apps/kuaizhizao/quality-management/oqc-inspection",
+            "code_field": "inspection_code",
+            "code_field_label": "出货检验单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "OQC_INSPECTION_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-quality-eight-d-report",
+            "page_name": "8D报告",
+            "page_path": "/apps/kuaizhizao/quality-management/eight-d-reports",
+            "code_field": "report_code",
+            "code_field_label": "8D报告编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "EIGHT_D_REPORT_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-quality-defect-record",
+            "page_name": "不合格品记录",
+            "page_path": "/apps/kuaizhizao/quality-management/nonconforming-ledger",
+            "code_field": "code",
+            "code_field_label": "不合格品记录编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "DEFECT_RECORD_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-quality-scrap-record",
+            "page_name": "报废记录",
+            "page_path": "/apps/kuaizhizao/production-execution/reporting",
+            "code_field": "code",
+            "code_field_label": "报废单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "SCRAP_RECORD_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-purchase-return",
+            "page_name": "采购退货",
+            "page_path": "/apps/kuaizhizao/purchase-management/purchase-returns",
+            "code_field": "return_code",
+            "code_field_label": "采购退货单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "PURCHASE_RETURN_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-sales-return",
+            "page_name": "销售退货",
+            "page_path": "/apps/kuaizhizao/sales-management/sales-returns",
+            "code_field": "return_code",
+            "code_field_label": "销售退货单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "SALES_RETURN_CODE",
+            "allow_manual_edit": true
+        },
+        {
             "page_code": "kuaizhizao-equipment-management-equipment",
-            "page_name": "设备台账",
+            "page_name": "设备管理",
             "page_path": "/apps/kuaizhizao/equipment-management/equipment",
             "code_field": "code",
             "code_field_label": "设备编码",
@@ -3938,11 +4205,12 @@
             "module_icon": "tool",
             "auto_generate": true,
             "rule_code": "EQUIPMENT_CODE",
-            "allow_manual_edit": true
+            "allow_manual_edit": true,
+            "skip_date": true
         },
         {
             "page_code": "kuaizhizao-equipment-management-mold",
-            "page_name": "模具台账",
+            "page_name": "模具管理",
             "page_path": "/apps/kuaizhizao/equipment-management/molds",
             "code_field": "code",
             "code_field_label": "模具编码",
@@ -3950,7 +4218,8 @@
             "module_icon": "tool",
             "auto_generate": true,
             "rule_code": "MOLD_CODE",
-            "allow_manual_edit": true
+            "allow_manual_edit": true,
+            "skip_date": true
         },
         {
             "page_code": "kuaizhizao-equipment-management-tool",
@@ -3962,70 +4231,101 @@
             "module_icon": "tool",
             "auto_generate": true,
             "rule_code": "TOOL_CODE",
+            "allow_manual_edit": true,
+            "skip_date": true
+        },
+        {
+            "page_code": "kuaizhizao-production-outsource-work-order",
+            "page_name": "委外工单",
+            "page_path": "/apps/kuaizhizao/production-execution/outsource-management",
+            "code_field": "code",
+            "code_field_label": "委外工单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "OUTSOURCE_WORK_ORDER_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-production-outsource-material-receipt",
+            "page_name": "委外收货",
+            "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+            "code_field": "code",
+            "code_field_label": "委外收货单编号",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "OUTSOURCE_MATERIAL_RECEIPT_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-production-outsource-material-return",
+            "page_name": "委外退料",
+            "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+            "code_field": "code",
+            "code_field_label": "委外退料单编号",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "OUTSOURCE_MATERIAL_RETURN_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-production-outsource-product-return",
+            "page_name": "委外退货",
+            "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+            "code_field": "code",
+            "code_field_label": "委外退货单编号",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "OUTSOURCE_PRODUCT_RETURN_CODE",
             "allow_manual_edit": true
         }
     ],
     "custom_field_pages": [
         {
-            "page_code": "kuaizhizao-production-work-order",
-            "page_name": "工单管理",
-            "page_path": "/apps/kuaizhizao/production-execution/work-orders",
-            "table_name": "apps_kuaizhizao_work_orders",
-            "table_name_label": "工单表",
+            "page_code": "kuaizhizao-quotation",
+            "page_name": "报价单",
+            "page_path": "/apps/kuaizhizao/sales-management/quotations",
+            "table_name": "apps_kuaizhizao_quotations",
+            "table_name_label": "报价单表",
             "module": "快制造",
             "module_icon": "tool"
         },
         {
-            "page_code": "kuaizhizao-production-rework-order",
-            "page_name": "返工工单",
-            "page_path": "/apps/kuaizhizao/production-execution/rework-orders",
-            "table_name": "apps_kuaizhizao_rework_orders",
-            "table_name_label": "返工工单表",
+            "page_code": "kuaizhizao-customer-follow-up",
+            "page_name": "客户跟进",
+            "page_path": "/apps/kuaizhizao/sales-management/customer-follow-ups",
+            "table_name": "apps_kuaizhizao_customer_follow_ups",
+            "table_name_label": "客户跟进表",
             "module": "快制造",
             "module_icon": "tool"
         },
         {
-            "page_code": "kuaizhizao-production-outsource-order",
-            "page_name": "委外单",
-            "page_path": "/apps/kuaizhizao/production-execution/outsource-orders",
-            "table_name": "apps_kuaizhizao_outsource_orders",
-            "table_name_label": "委外单表",
+            "page_code": "kuaizhizao-sales-contract",
+            "page_name": "销售合同",
+            "page_path": "/apps/kuaizhizao/sales-management/sales-contracts",
+            "table_name": "apps_kuaizhizao_sales_contracts",
+            "table_name_label": "销售合同表",
             "module": "快制造",
             "module_icon": "tool"
         },
         {
-            "page_code": "kuaizhizao-production-outsource-work-order",
-            "page_name": "委外工单",
-            "page_path": "/apps/kuaizhizao/production-execution/outsource-work-orders",
-            "table_name": "apps_kuaizhizao_outsource_work_orders",
-            "table_name_label": "委外工单表",
+            "page_code": "kuaizhizao-sales-contract-change",
+            "page_name": "销售合同变更",
+            "page_path": "/apps/kuaizhizao/sales-management/sales-contracts",
+            "table_name": "apps_kuaizhizao_sales_contract_changes",
+            "table_name_label": "销售合同变更表",
             "module": "快制造",
             "module_icon": "tool"
         },
         {
-            "page_code": "kuaizhizao-purchase-order",
-            "page_name": "采购订单",
-            "page_path": "/apps/kuaizhizao/purchase-management/purchase-orders",
-            "table_name": "apps_kuaizhizao_purchase_orders",
-            "table_name_label": "采购订单表",
-            "module": "快制造",
-            "module_icon": "tool"
-        },
-        {
-            "page_code": "kuaizhizao-purchase-receipt",
-            "page_name": "采购收货",
-            "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
-            "table_name": "apps_kuaizhizao_purchase_receipts",
-            "table_name_label": "采购收货表",
-            "module": "快制造",
-            "module_icon": "tool"
-        },
-        {
-            "page_code": "kuaizhizao-purchase-return",
-            "page_name": "采购退货",
-            "page_path": "/apps/kuaizhizao/purchase-management/purchase-returns",
-            "table_name": "apps_kuaizhizao_purchase_returns",
-            "table_name_label": "采购退货表",
+            "page_code": "kuaizhizao-sales-forecast",
+            "page_name": "销售预测",
+            "page_path": "/apps/kuaizhizao/sales-management/sales-forecasts",
+            "table_name": "apps_kuaizhizao_sales_forecasts",
+            "table_name_label": "销售预测表",
             "module": "快制造",
             "module_icon": "tool"
         },
@@ -4039,11 +4339,20 @@
             "module_icon": "tool"
         },
         {
-            "page_code": "kuaizhizao-sales-delivery",
-            "page_name": "销售发货",
-            "page_path": "/apps/kuaizhizao/warehouse-management/outbound",
-            "table_name": "apps_kuaizhizao_sales_deliveries",
-            "table_name_label": "销售发货表",
+            "page_code": "kuaizhizao-sales-order-change",
+            "page_name": "销售变更单",
+            "page_path": "/apps/kuaizhizao/sales-management/sales-order-changes",
+            "table_name": "apps_kuaizhizao_sales_order_change_orders",
+            "table_name_label": "销售变更单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-shipment-notice",
+            "page_name": "发货通知单",
+            "page_path": "/apps/kuaizhizao/sales-management/shipment-notices",
+            "table_name": "apps_kuaizhizao_shipment_notices",
+            "table_name_label": "发货通知单表",
             "module": "快制造",
             "module_icon": "tool"
         },
@@ -4057,47 +4366,119 @@
             "module_icon": "tool"
         },
         {
-            "page_code": "kuaizhizao-warehouse-inbound",
-            "page_name": "生产领料",
-            "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
-            "table_name": "apps_kuaizhizao_production_pickings",
-            "table_name_label": "生产领料表",
+            "page_code": "kuaizhizao-demand-plan",
+            "page_name": "需求计划",
+            "page_path": "/apps/kuaizhizao/plan-management/demand-management",
+            "table_name": "apps_kuaizhizao_demands",
+            "table_name_label": "需求计划表",
             "module": "快制造",
             "module_icon": "tool"
         },
         {
-            "page_code": "kuaizhizao-warehouse-production-return",
-            "page_name": "生产退料",
-            "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
-            "table_name": "apps_kuaizhizao_production_returns",
-            "table_name_label": "生产退料表",
+            "page_code": "kuaizhizao-purchase-requisition",
+            "page_name": "采购申请",
+            "page_path": "/apps/kuaizhizao/purchase-management/purchase-requisitions",
+            "table_name": "apps_kuaizhizao_purchase_requisitions",
+            "table_name_label": "采购申请表",
             "module": "快制造",
             "module_icon": "tool"
         },
         {
-            "page_code": "kuaizhizao-warehouse-other-inbound",
-            "page_name": "其他入库",
-            "page_path": "/apps/kuaizhizao/warehouse-management/other-inbound",
-            "table_name": "apps_kuaizhizao_other_inbounds",
-            "table_name_label": "其他入库表",
+            "page_code": "kuaizhizao-purchase-inquiry",
+            "page_name": "采购询价单",
+            "page_path": "/apps/kuaizhizao/purchase-management/purchase-inquiries",
+            "table_name": "apps_kuaizhizao_purchase_inquiries",
+            "table_name_label": "采购询价单表",
             "module": "快制造",
             "module_icon": "tool"
         },
         {
-            "page_code": "kuaizhizao-warehouse-other-outbound",
-            "page_name": "其他出库",
-            "page_path": "/apps/kuaizhizao/warehouse-management/other-outbound",
-            "table_name": "apps_kuaizhizao_other_outbounds",
-            "table_name_label": "其他出库表",
+            "page_code": "kuaizhizao-purchase-order",
+            "page_name": "采购订单",
+            "page_path": "/apps/kuaizhizao/purchase-management/purchase-orders",
+            "table_name": "apps_kuaizhizao_purchase_orders",
+            "table_name_label": "采购订单表",
             "module": "快制造",
             "module_icon": "tool"
         },
         {
-            "page_code": "kuaizhizao-warehouse-finished-goods-inbound",
-            "page_name": "成品入库",
-            "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
-            "table_name": "apps_kuaizhizao_finished_goods_receipts",
-            "table_name_label": "成品入库表",
+            "page_code": "kuaizhizao-purchase-order-change",
+            "page_name": "采购变更单",
+            "page_path": "/apps/kuaizhizao/purchase-management/purchase-order-changes",
+            "table_name": "apps_kuaizhizao_purchase_order_change_orders",
+            "table_name_label": "采购变更单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-receipt-notice",
+            "page_name": "收货通知单",
+            "page_path": "/apps/kuaizhizao/purchase-management/receipt-notices",
+            "table_name": "apps_kuaizhizao_receipt_notices",
+            "table_name_label": "收货通知单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-purchase-return",
+            "page_name": "采购退货",
+            "page_path": "/apps/kuaizhizao/purchase-management/purchase-returns",
+            "table_name": "apps_kuaizhizao_purchase_returns",
+            "table_name_label": "采购退货表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-production-work-order",
+            "page_name": "工单管理",
+            "page_path": "/apps/kuaizhizao/production-execution/work-orders",
+            "table_name": "apps_kuaizhizao_work_orders",
+            "table_name_label": "工单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-production-reporting",
+            "page_name": "报工管理",
+            "page_path": "/apps/kuaizhizao/production-execution/reporting",
+            "table_name": "apps_kuaizhizao_reporting_records",
+            "table_name_label": "报工记录表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-production-rework-order",
+            "page_name": "返工单",
+            "page_path": "/apps/kuaizhizao/production-execution/rework-orders",
+            "table_name": "apps_kuaizhizao_rework_orders",
+            "table_name_label": "返工单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-production-outsource-order",
+            "page_name": "委外单",
+            "page_path": "/apps/kuaizhizao/production-execution/outsource-management",
+            "table_name": "apps_kuaizhizao_outsource_orders",
+            "table_name_label": "委外单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-production-outsource-work-order",
+            "page_name": "委外工单",
+            "page_path": "/apps/kuaizhizao/production-execution/outsource-management",
+            "table_name": "apps_kuaizhizao_outsource_work_orders",
+            "table_name_label": "委外工单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-production-packing-binding",
+            "page_name": "装箱绑定",
+            "page_path": "/apps/kuaizhizao/production-execution/packing-binding",
+            "table_name": "apps_kuaizhizao_packing_bindings",
+            "table_name_label": "装箱绑定表",
             "module": "快制造",
             "module_icon": "tool"
         },
@@ -4129,6 +4510,33 @@
             "module_icon": "tool"
         },
         {
+            "page_code": "kuaizhizao-quality-inspection-plan",
+            "page_name": "质检方案",
+            "page_path": "/apps/kuaizhizao/quality-management/inspection-plans",
+            "table_name": "apps_kuaizhizao_inspection_plans",
+            "table_name_label": "质检方案表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-quality-eight-d-report",
+            "page_name": "8D报告",
+            "page_path": "/apps/kuaizhizao/quality-management/eight-d-reports",
+            "table_name": "apps_kuaizhizao_quality_8d_reports",
+            "table_name_label": "8D报告表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-quality-oqc-inspection",
+            "page_name": "出货检验",
+            "page_path": "/apps/kuaizhizao/quality-management/oqc-inspection",
+            "table_name": "apps_kuaizhizao_oqc_inspections",
+            "table_name_label": "出货检验表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
             "page_code": "kuaizhizao-equipment",
             "page_name": "设备台账",
             "page_path": "/apps/kuaizhizao/equipment-management/equipment",
@@ -4143,6 +4551,177 @@
             "page_path": "/apps/kuaizhizao/equipment-management/molds",
             "table_name": "apps_kuaizhizao_molds",
             "table_name_label": "模具表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-tool",
+            "page_name": "工装台账",
+            "page_path": "/apps/kuaizhizao/equipment-management/tool-ledger",
+            "table_name": "apps_kuaizhizao_tools",
+            "table_name_label": "工装表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-batching-order",
+            "page_name": "配料单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+            "table_name": "apps_kuaizhizao_batching_orders",
+            "table_name_label": "配料单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-purchase-receipt",
+            "page_name": "采购入库",
+            "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
+            "table_name": "apps_kuaizhizao_purchase_receipts",
+            "table_name_label": "采购收货表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-inbound",
+            "page_name": "生产领料",
+            "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
+            "table_name": "apps_kuaizhizao_production_pickings",
+            "table_name_label": "生产领料表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-production-return",
+            "page_name": "生产退料",
+            "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
+            "table_name": "apps_kuaizhizao_production_returns",
+            "table_name_label": "生产退料表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-finished-goods-inbound",
+            "page_name": "成品入库",
+            "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
+            "table_name": "apps_kuaizhizao_finished_goods_receipts",
+            "table_name_label": "成品入库表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-semi-finished-inbound",
+            "page_name": "半成品入库",
+            "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
+            "table_name": "apps_kuaizhizao_semi_finished_goods_receipts",
+            "table_name_label": "半成品入库表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-other-inbound",
+            "page_name": "其他入库",
+            "page_path": "/apps/kuaizhizao/warehouse-management/other-inbound",
+            "table_name": "apps_kuaizhizao_other_inbounds",
+            "table_name_label": "其他入库表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-customer-material-registration",
+            "page_name": "代工来料",
+            "page_path": "/apps/kuaizhizao/warehouse-management/customer-material-registration",
+            "table_name": "apps_kuaizhizao_customer_material_registrations",
+            "table_name_label": "代工来料表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-sales-delivery",
+            "page_name": "销售发货",
+            "page_path": "/apps/kuaizhizao/warehouse-management/outbound",
+            "table_name": "apps_kuaizhizao_sales_deliveries",
+            "table_name_label": "销售发货表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-other-outbound",
+            "page_name": "其他出库",
+            "page_path": "/apps/kuaizhizao/warehouse-management/other-outbound",
+            "table_name": "apps_kuaizhizao_other_outbounds",
+            "table_name_label": "其他出库表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-material-borrow",
+            "page_name": "借料单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/material-borrows",
+            "table_name": "apps_kuaizhizao_material_borrows",
+            "table_name_label": "借料单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-material-return",
+            "page_name": "还料单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/material-returns",
+            "table_name": "apps_kuaizhizao_material_returns",
+            "table_name_label": "还料单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-delivery-notice",
+            "page_name": "送货单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/delivery-notes",
+            "table_name": "apps_kuaizhizao_delivery_notices",
+            "table_name_label": "送货单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-material-call",
+            "page_name": "产线叫料",
+            "page_path": "/apps/kuaizhizao/warehouse-management/material-calls",
+            "table_name": "apps_kuaizhizao_material_call_requests",
+            "table_name_label": "产线叫料表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-stocktaking",
+            "page_name": "盘点单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/stocktaking",
+            "table_name": "apps_kuaizhizao_stocktakings",
+            "table_name_label": "盘点单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-inventory-transfer",
+            "page_name": "调拨单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/inventory-transfer",
+            "table_name": "apps_kuaizhizao_inventory_transfers",
+            "table_name_label": "调拨单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-assembly-order",
+            "page_name": "组装单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/assembly-orders",
+            "table_name": "apps_kuaizhizao_assembly_orders",
+            "table_name_label": "组装单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-disassembly-order",
+            "page_name": "拆卸单",
+            "page_path": "/apps/kuaizhizao/warehouse-management/disassembly-orders",
+            "table_name": "apps_kuaizhizao_disassembly_orders",
+            "table_name_label": "拆卸单表",
             "module": "快制造",
             "module_icon": "tool"
         }

@@ -63,8 +63,6 @@ class Invoice(BaseModel):
     original_invoice_id = fields.IntField(null=True, description="红字发票对应的蓝字发票ID")
     red_flush_invoice_id = fields.IntField(null=True, description="蓝字发票被红冲后生成的红字发票ID")
 
-    created_by = fields.IntField(null=True, description="创建人ID")
-    updated_by = fields.IntField(null=True, description="更新人ID")
 
     class Meta:
         table = "apps_kuaicaiwu_invoices"

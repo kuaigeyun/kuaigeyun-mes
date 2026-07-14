@@ -15,6 +15,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { exceptionApi } from '../../../services/production';
 import { ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES } from '../../../constants/exceptionStatuses';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 
 interface DeliveryDelayException {
   id?: number;
@@ -225,7 +226,7 @@ const DeliveryDelayExceptionPage: React.FC = () => {
         headerTitle="交期延期异常管理"
         actionRef={actionRef}
         rowKey="id"
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         showAdvancedSearch={true}
         request={async (params, _sort, _filter, searchFormValues) => {
           try {

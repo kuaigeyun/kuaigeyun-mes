@@ -55,6 +55,7 @@ class Plant(BaseModel):
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
 
+
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
 
@@ -116,6 +117,7 @@ class Workshop(BaseModel):
 
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
+
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -178,6 +180,7 @@ class ProductionLine(BaseModel):
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
+
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -244,6 +247,7 @@ class Workstation(BaseModel):
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
+
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -295,6 +299,7 @@ class WorkCenter(BaseModel):
 
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
+
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

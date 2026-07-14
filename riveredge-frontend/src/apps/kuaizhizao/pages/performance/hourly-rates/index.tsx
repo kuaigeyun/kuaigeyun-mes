@@ -4,27 +4,36 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, Typography } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Space, Typography, Descriptions, Spin, theme as AntdTheme } from 'antd';
+import { DeleteOutlined } from '@ant-design/icons';
 import { ProFormSelect, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { rowActionKind } from '../../../../../components/uni-action';
+import {
+  ListPageTemplate,
+  FormModalTemplate,
+  DetailDrawerTemplate,
+  DetailDrawerSection,
+  MODAL_CONFIG,
+  DRAWER_CONFIG,
+} from '../../../../../components/layout-templates';
 import { employeePerformanceApi } from '../../../services/performance';
 import type { HourlyRate } from '../../../types/performance';
-import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
-import { getPerformanceYesNoValueEnum } from '../components/performanceMeta';
-import { formatDateTime } from '../../../../../utils/format';
+import { getPerformanceYesNoValueEnum, renderActiveTag } from '../components/performanceMeta';
+import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   normalizePerformanceListResponse,
   PERFORMANCE_PINNED_IS_ACTIVE_FIELD,
   resolveHourlyRateListParams,
 } from '../../../utils/performanceListCore';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 
 const HourlyRatesPage: React.FC = () => {
   const { t } = useTranslation();
+  const { token } = AntdTheme.useToken();
+  const detailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
@@ -32,6 +41,9 @@ const HourlyRatesPage: React.FC = () => {
   const [editId, setEditId] = useState<number | null>(null);
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
   const [positions, setPositions] = useState<{ id: number; name: string }[]>([]);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detail, setDetail] = useState<HourlyRate | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([employeePerformanceApi.listDepartments(), employeePerformanceApi.listPositions()])
@@ -59,6 +71,22 @@ const HourlyRatesPage: React.FC = () => {
     }).catch((e: any) => messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed')));
   }, [modalVisible, editId, messageApi, t]);
 
+  const detailColumns: ProDescriptionsItemProps<HourlyRate>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.performance.common.columns.department'), dataIndex: 'department_name' },
+      { title: t('app.kuaizhizao.performance.common.columns.position'), dataIndex: 'position_name' },
+      { title: t('app.kuaizhizao.performance.hourlyRates.columns.rate'), dataIndex: 'rate' },
+      {
+        title: t('app.kuaizhizao.performance.common.form.active'),
+        dataIndex: 'is_active',
+        render: (_, r) => renderActiveTag(t, r?.is_active !== false),
+      },
+      { title: t('app.kuaizhizao.performance.common.columns.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('app.kuaizhizao.performance.common.columns.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    ],
+    [t],
+  );
+
   const handleCreate = () => {
     setEditId(null);
     setModalVisible(true);
@@ -76,9 +104,22 @@ const HourlyRatesPage: React.FC = () => {
       messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
     }
   };
+  const handleOpenDetail = async (r: HourlyRate) => {
+    try {
+      setDrawerVisible(true);
+      setDetail(null);
+      setDetailLoading(true);
+      setDetail(await employeePerformanceApi.getHourlyRate(r.id));
+    } catch (e: any) {
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
+      setDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const columns: ProColumns<HourlyRate>[] = useMemo(
-    () => [
+    () => alignProColumns<HourlyRate>([
       {
         title: t('app.kuaizhizao.performance.common.columns.department'),
         dataIndex: 'department_name',
@@ -110,46 +151,21 @@ const HourlyRatesPage: React.FC = () => {
         hideInTable: true,
         valueEnum: getPerformanceYesNoValueEnum(t),
       },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
-        dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        sorter: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-      },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.lifecycle'),
-        dataIndex: 'lifecycle_stage',
-        fixed: 'right',
-        align: 'left',
-        hideInSearch: true,
-        render: (_, record) => {
-          const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>, t);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
-        },
-      },
+      ...buildDocumentAuditColumns<HourlyRate>(t),
       {
         title: t('app.kuaizhizao.performance.common.columns.actions'),
-        width: 150,
+        valueType: 'option',
+        width: 160,
         fixed: 'right',
         render: (_, record) => (
           <Space>
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
+              {t('app.kuaizhizao.performance.common.actions.detail')}
+            </Button>
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
               {t('app.kuaizhizao.performance.common.actions.edit')}
             </Button>
-            <Popconfirm title={t('app.kuaizhizao.performance.hourlyRates.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.hourlyRates.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
               <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                 {t('app.kuaizhizao.performance.common.actions.delete')}
               </Button>
@@ -157,7 +173,7 @@ const HourlyRatesPage: React.FC = () => {
           </Space>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t],
   );
 
@@ -220,9 +236,17 @@ const HourlyRatesPage: React.FC = () => {
         }}
         formRef={formRef as React.RefObject<ProFormInstance>}
         onFinish={async (values) => {
+          const deptId = values.department_id || undefined;
+          const posId = values.position_id || undefined;
           const payload = {
-            department_id: values.department_id || undefined,
-            position_id: values.position_id || undefined,
+            department_id: deptId,
+            department_name: deptId
+              ? departments.find((d) => d.id === deptId)?.name
+              : undefined,
+            position_id: posId,
+            position_name: posId
+              ? positions.find((p) => p.id === posId)?.name
+              : undefined,
             rate: values.rate,
             is_active: values.is_active !== false,
           };
@@ -257,6 +281,30 @@ const HourlyRatesPage: React.FC = () => {
         <ProFormDigit name="rate" label={t('app.kuaizhizao.performance.hourlyRates.form.rate')} rules={[{ required: true }]} min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
         <ProFormSwitch name="is_active" label={t('app.kuaizhizao.performance.common.form.active')} colProps={{ span: 12 }} />
       </FormModalTemplate>
+
+      <DetailDrawerTemplate
+        title={t('app.kuaizhizao.performance.hourlyRates.detailTitle')}
+        open={drawerVisible}
+        zIndex={detailDrawerZIndex}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetail(null);
+        }}
+        width={DRAWER_CONFIG.HALF_WIDTH}
+        loading={detailLoading}
+        columns={[]}
+        customContent={
+          detailLoading && !detail ? (
+            <div style={{ textAlign: 'center', padding: 48 }}>
+              <Spin />
+            </div>
+          ) : detail ? (
+            <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.basicInfo')}>
+              <Descriptions column={2} size="small" items={buildMasterDetailDescriptionItems(detail, detailColumns)} />
+            </DetailDrawerSection>
+          ) : null
+        }
+      />
     </>
   );
 };

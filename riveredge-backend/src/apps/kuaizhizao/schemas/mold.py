@@ -134,6 +134,10 @@ class MoldResponse(MoldBase):
     calibration_period: Optional[int] = Field(None, description="校验周期（天）")
     last_calibration_date: Optional[date] = Field(None, description="上次校验日期")
     next_calibration_date: Optional[date] = Field(None, description="下次校验日期")
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     deleted_at: Optional[datetime] = Field(None, description="删除时间（软删除）")
@@ -187,6 +191,11 @@ class MoldCalibrationResponse(BaseModel):
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     remark: Optional[str] = Field(None, description="备注")
     created_at: datetime = Field(..., description="创建时间")
+    updated_at: Optional[datetime] = Field(None, description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
 
 
 class MoldMaintenanceReminderResponse(BaseModel):

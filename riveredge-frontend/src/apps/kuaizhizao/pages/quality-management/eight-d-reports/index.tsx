@@ -27,6 +27,8 @@ import { useTranslation } from 'react-i18next';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   buildEightDSeverityValueEnum,
   buildEightDStatusValueEnum,
@@ -80,7 +82,7 @@ const EightDReportsPage: React.FC = () => {
   }, [searchParams]);
 
   const columns: ProColumns<Quality8DReport>[] = useMemo(
-    () => [
+    () => alignProColumns<Quality8DReport>([
     {
       title: t('app.kuaizhizao.eightD.columns.createdAt'),
       dataIndex: 'created_at_range',
@@ -210,17 +212,7 @@ const EightDReportsPage: React.FC = () => {
       render: (_, row) =>
         row.due_date ? formatDateTime(row.due_date, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
-    {
-      title: t('app.kuaizhizao.eightD.columns.createdAt'),
-      dataIndex: 'created_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      render: (_, row) =>
-        row.created_at ? formatDateTime(row.created_at, 'YYYY-MM-DD HH:mm:ss') : '-',
-    },
+    ...buildDocumentAuditColumns<Quality8DReport>(t),
     {
       title: t('app.kuaizhizao.eightD.columns.stage'),
       dataIndex: 'status',
@@ -324,7 +316,7 @@ const EightDReportsPage: React.FC = () => {
         );
       },
     },
-  ],
+  ], SALES_DOC_LIST_FIELD_RANK),
     [t, canUpdate, canDelete, canClose, eightDStatusValueEnum, eightDSeverityValueEnum, messageApi, modalApi],
   );
 

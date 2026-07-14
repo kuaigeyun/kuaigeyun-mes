@@ -22,8 +22,10 @@ from apps.kuaizhizao.schemas.equipment import (
     EquipmentCalibrationCreate,
     EquipmentCalibrationCreateWithEquipment,
 )
+from apps.common.audit_actor import apply_create_audit
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 class EquipmentService:
@@ -56,6 +58,10 @@ class EquipmentService:
                 tenant_id=tenant_id,
                 **data.model_dump(exclude_none=True)
             )
+            actor = None
+            if created_by is not None:
+                actor = await User.filter(id=created_by, tenant_id=tenant_id).first()
+            apply_create_audit(equipment, actor)
             await equipment.save()
             return equipment
         except IntegrityError:
@@ -215,7 +221,8 @@ class EquipmentService:
     async def create_equipment_calibration(
         tenant_id: int,
         equipment_uuid: str,
-        data: EquipmentCalibrationCreate
+        data: EquipmentCalibrationCreate,
+        current_user: Optional[User] = None,
     ) -> EquipmentCalibration:
         """创建设备校验记录"""
         equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, equipment_uuid)
@@ -231,6 +238,7 @@ class EquipmentService:
             attachments=data.attachments,
             remark=data.remark,
         )
+        apply_create_audit(calib, current_user)
         await calib.save()
         await EquipmentService._apply_calibration_to_equipment(
             equipment, data.calibration_date, data.expiry_date

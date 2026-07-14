@@ -11,6 +11,7 @@ import { Tag, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { moldApi } from '../../../services/equipment';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   normalizeEquipmentListResponse,
   resolveReminderListParams,
@@ -88,7 +89,7 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="mold_uuid"
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         request={async (params, sort, _filter, searchFormValues) => {

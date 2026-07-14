@@ -6,6 +6,7 @@ import { MultiTabListPageTemplate } from '../../../../../components/layout-templ
 import { UniTable } from '../../../../../components/uni-table';
 import { managementReportService } from '../../../services/management-report';
 import type { MarginReportRow } from '../../../types/management-report';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   marginReportCustomerSearchColumns,
   marginReportOrderSearchColumns,
@@ -126,7 +127,7 @@ const MarginTable: React.FC<{ dimension: Dimension; days: number }> = ({ dimensi
       actionRef={actionRef}
       rowKey={(r, i) => String(r.product_id ?? r.customer_id ?? r.delivery_id ?? i)}
       columnPersistenceId={`apps.kuaicaiwu.pages.management-analysis.margin-report.${dimension}`}
-      columns={columns}
+      columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
       showAdvancedSearch
       skipFuzzyPinyinClientFilter
       toolBarRender={false}

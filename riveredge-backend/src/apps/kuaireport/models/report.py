@@ -33,10 +33,6 @@ class Report(BaseModel):
     share_token = fields.CharField(max_length=64, null=True, description="分享令牌（用于公开链接）")
     share_expires_at = fields.DatetimeField(null=True, description="分享链接过期时间")
 
-    created_by = fields.IntField(null=True, description="创建人ID")
-    created_by_name = fields.CharField(max_length=100, null=True, description="创建人姓名")
-    updated_by = fields.IntField(null=True, description="更新人ID")
-    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
 
     class Meta:
         table = "apps_kuaireport_reports"

@@ -59,8 +59,6 @@ class DemandComputation(BaseModel):
     notes = fields.TextField(null=True, description="备注")
     
     # 创建信息
-    created_by = fields.IntField(null=True, description="创建人ID")
-    updated_by = fields.IntField(null=True, description="更新人ID")
     
     class Meta:
         table = "apps_kuaizhizao_demand_computations"

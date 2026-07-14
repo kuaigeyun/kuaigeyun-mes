@@ -96,6 +96,8 @@ class InvoiceResponse(InvoiceBase):
     updated_at: datetime
     created_by: Optional[int]
     updated_by: Optional[int]
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 

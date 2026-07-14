@@ -10,7 +10,7 @@ const DisassemblyOrdersPage: React.FC = () => {
   const disassemblyConfig = useMemo(
     () => ({
       headerTitle: t('app.kuaizhizao.disassemblyOrder.headerTitle'),
-      persistenceId: 'apps.kuaizhizao.pages.warehouse-management.disassembly-orders',
+      persistenceId: 'apps.kuaizhizao.pages.warehouse-management.disassembly-orders.v2',
       createButtonText: t('app.kuaizhizao.disassemblyOrder.createButton'),
       createModalTitle: t('app.kuaizhizao.disassemblyOrder.createModalTitle'),
       detailTitlePrefix: t('app.kuaizhizao.disassemblyOrder.detailTitlePrefix'),

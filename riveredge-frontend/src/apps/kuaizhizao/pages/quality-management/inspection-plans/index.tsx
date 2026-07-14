@@ -55,6 +55,8 @@ import {
 } from '../../../utils/qualityImprovementListCore';
 import { formatDateTime } from '../../../../../utils/format';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -315,7 +317,7 @@ const InspectionPlansPage: React.FC = () => {
   );
 
   const columns: ProColumns<InspectionPlan>[] = useMemo(
-    () => [
+    () => alignProColumns<InspectionPlan>([
       {
         title: t('app.kuaizhizao.quality.plans.columns.planCode'),
         dataIndex: 'plan_code',
@@ -371,15 +373,7 @@ const InspectionPlansPage: React.FC = () => {
         sorter: true,
         hideInSearch: true,
       },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.createdAt'),
-        dataIndex: 'created_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, r) => formatQualityDateTimeCell(r.created_at),
-      },
+      ...buildDocumentAuditColumns<InspectionPlan>(t),
       {
         title: t('app.kuaizhizao.quality.common.columns.createdAt'),
         dataIndex: 'created_at_range',
@@ -387,16 +381,6 @@ const InspectionPlansPage: React.FC = () => {
         hideInTable: true,
         order: 30,
         formItemProps: formDateRangeFormItemProps,
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
-        dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        defaultSortOrder: 'descend',
-        hideInSearch: true,
-        render: (_, r) => formatQualityDateTimeCell(r.updated_at),
       },
       {
         title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
@@ -464,7 +448,7 @@ const InspectionPlansPage: React.FC = () => {
           </Space>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [planActiveValueEnum, planTypeOptions, planTypeValueEnum, t],
   );
 

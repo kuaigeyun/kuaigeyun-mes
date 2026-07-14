@@ -157,6 +157,184 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             deleted_at__isnull=True,
         ).all()
 
+    @staticmethod
+    async def _resolve_customer_name(
+        tenant_id: int,
+        customer_id: int,
+        preferred_name: Optional[str] = None,
+    ) -> str:
+        preferred = str(preferred_name or "").strip()
+        if preferred:
+            return preferred
+        from apps.master_data.models.customer import Customer
+
+        customer = await Customer.get_or_none(
+            tenant_id=tenant_id,
+            id=customer_id,
+            deleted_at__isnull=True,
+        )
+        if not customer:
+            raise ValidationError(f"客户不存在: {customer_id}")
+        name = str(getattr(customer, "name", "") or "").strip()
+        if not name:
+            raise ValidationError(f"客户名称未配置: {customer_id}")
+        return name
+
+    @staticmethod
+    async def _material_snapshot_map(
+        tenant_id: int,
+        material_ids: List[int],
+    ) -> Dict[int, Dict[str, Optional[str]]]:
+        if not material_ids:
+            return {}
+        from apps.master_data.models.material import Material
+
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=list(set(material_ids)),
+            deleted_at__isnull=True,
+        ).all()
+        result: Dict[int, Dict[str, Optional[str]]] = {}
+        for mat in materials:
+            code = (
+                str(getattr(mat, "main_code", None) or getattr(mat, "code", None) or "").strip()
+            )
+            name = str(getattr(mat, "name", None) or "").strip()
+            spec = str(getattr(mat, "specification", None) or "").strip() or None
+            unit = str(getattr(mat, "base_unit", None) or "").strip() or None
+            result[int(mat.id)] = {
+                "material_code": code,
+                "material_name": name,
+                "material_spec": spec,
+                "material_unit": unit,
+            }
+        return result
+
+    async def _normalize_item_creates(
+        self,
+        tenant_id: int,
+        items_data: List[CustomerMaterialRegistrationItemCreate],
+    ) -> List[CustomerMaterialRegistrationItemCreate]:
+        """按物料主数据补齐明细编码/名称（前端未登记隐藏字段时常见为空）。"""
+        snapshots = await self._material_snapshot_map(
+            tenant_id,
+            [int(row.material_id) for row in items_data if row.material_id],
+        )
+        normalized: List[CustomerMaterialRegistrationItemCreate] = []
+        for row in items_data:
+            snap = snapshots.get(int(row.material_id))
+            if not snap:
+                raise ValidationError(f"物料不存在: {row.material_id}")
+            code = str(row.material_code or "").strip() or snap["material_code"] or ""
+            name = str(row.material_name or "").strip() or snap["material_name"] or ""
+            if not code or not name:
+                raise ValidationError(f"物料编码/名称缺失: {row.material_id}")
+            payload = row.model_dump()
+            payload["material_code"] = code
+            payload["material_name"] = name
+            if not str(payload.get("material_spec") or "").strip():
+                payload["material_spec"] = snap.get("material_spec")
+            if not str(payload.get("material_unit") or "").strip():
+                payload["material_unit"] = snap.get("material_unit")
+            normalized.append(CustomerMaterialRegistrationItemCreate.model_validate(payload))
+        return normalized
+
+    async def _enrich_list_display_fields(
+        self,
+        tenant_id: int,
+        registrations: List[CustomerMaterialRegistration],
+        responses: List[CustomerMaterialRegistrationResponse],
+    ) -> None:
+        """列表补齐仓库/客户/物料展示字段（兼容历史空快照）。"""
+        if not registrations:
+            return
+
+        customer_ids = [
+            int(r.customer_id)
+            for r, resp in zip(registrations, responses)
+            if r.customer_id and not str(resp.customer_name or "").strip()
+        ]
+        warehouse_ids = [
+            int(r.warehouse_id)
+            for r, resp in zip(registrations, responses)
+            if r.warehouse_id and not str(resp.warehouse_name or "").strip()
+        ]
+        need_material_reg_ids = [
+            int(r.id)
+            for r, resp in zip(registrations, responses)
+            if r.id and not str(resp.mapped_material_name or "").strip()
+        ]
+
+        customer_name_map: Dict[int, str] = {}
+        if customer_ids:
+            from apps.master_data.models.customer import Customer
+
+            customers = await Customer.filter(
+                tenant_id=tenant_id,
+                id__in=list(set(customer_ids)),
+                deleted_at__isnull=True,
+            ).all()
+            customer_name_map = {
+                int(c.id): str(c.name or "").strip() for c in customers if c.name
+            }
+
+        warehouse_name_map: Dict[int, str] = {}
+        if warehouse_ids:
+            from apps.master_data.models.warehouse import Warehouse
+
+            warehouses = await Warehouse.filter(
+                tenant_id=tenant_id,
+                id__in=list(set(warehouse_ids)),
+                deleted_at__isnull=True,
+            ).all()
+            warehouse_name_map = {
+                int(w.id): str(w.name or "").strip() for w in warehouses if w.name
+            }
+
+        first_item_by_reg: Dict[int, CustomerMaterialRegistrationItem] = {}
+        if need_material_reg_ids:
+            items = await CustomerMaterialRegistrationItem.filter(
+                tenant_id=tenant_id,
+                registration_id__in=need_material_reg_ids,
+                deleted_at__isnull=True,
+            ).order_by("id")
+            for item in items:
+                rid = int(item.registration_id)
+                if rid not in first_item_by_reg:
+                    first_item_by_reg[rid] = item
+
+            empty_name_material_ids = [
+                int(it.material_id)
+                for it in first_item_by_reg.values()
+                if it.material_id and not str(it.material_name or "").strip()
+            ]
+            material_snaps = await self._material_snapshot_map(
+                tenant_id, empty_name_material_ids
+            )
+        else:
+            material_snaps = {}
+
+        for reg, resp in zip(registrations, responses):
+            if not str(resp.customer_name or "").strip() and reg.customer_id:
+                resp.customer_name = customer_name_map.get(int(reg.customer_id), resp.customer_name)
+            if not str(resp.warehouse_name or "").strip() and reg.warehouse_id:
+                resp.warehouse_name = warehouse_name_map.get(int(reg.warehouse_id)) or resp.warehouse_name
+            if str(resp.mapped_material_name or "").strip():
+                continue
+            item = first_item_by_reg.get(int(reg.id)) if reg.id else None
+            if not item:
+                continue
+            code = str(item.material_code or "").strip()
+            name = str(item.material_name or "").strip()
+            if (not code or not name) and item.material_id:
+                snap = material_snaps.get(int(item.material_id)) or {}
+                code = code or str(snap.get("material_code") or "")
+                name = name or str(snap.get("material_name") or "")
+            if name:
+                resp.mapped_material_id = item.material_id
+                resp.mapped_material_code = code or resp.mapped_material_code
+                resp.mapped_material_name = name
+
     async def _effective_items(
         self, registration: CustomerMaterialRegistration
     ) -> List[CustomerMaterialRegistrationItem]:
@@ -263,6 +441,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
         registration_id: int,
         items_data: List[CustomerMaterialRegistrationItemCreate],
     ) -> List[CustomerMaterialRegistrationItem]:
+        items_data = await self._normalize_item_creates(tenant_id, items_data)
         created: List[CustomerMaterialRegistrationItem] = []
         for row in items_data:
             serial_numbers = row.serial_numbers
@@ -340,6 +519,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 mapped_material_name = registration_data.material_name or mat.name
 
             from core.services.default.default_values_service import DefaultValuesService
+            from apps.kuaizhizao.services.warehouse_service import _resolve_warehouse_name_by_id
 
             await DefaultValuesService.ensure_code_rule_for_page(
                 tenant_id, "kuaizhizao-warehouse-customer-material-registration"
@@ -351,9 +531,32 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             )
             user_info = await self.get_user_info(registered_by)
 
-            total_qty = Decimal("0")
+            customer_name = await self._resolve_customer_name(
+                tenant_id,
+                registration_data.customer_id,
+                registration_data.customer_name,
+            )
+            warehouse_id = registration_data.warehouse_id
+            warehouse_name = registration_data.warehouse_name
+            if warehouse_id is not None:
+                warehouse_name = await _resolve_warehouse_name_by_id(
+                    tenant_id, warehouse_id, warehouse_name
+                )
+
+            normalized_items: Optional[List[CustomerMaterialRegistrationItemCreate]] = None
             if registration_data.items:
-                total_qty = sum((row.quantity for row in registration_data.items), Decimal("0"))
+                normalized_items = await self._normalize_item_creates(
+                    tenant_id, registration_data.items
+                )
+                if not mapped_material_id and normalized_items:
+                    first = normalized_items[0]
+                    mapped_material_id = first.material_id
+                    mapped_material_code = first.material_code
+                    mapped_material_name = first.material_name
+
+            total_qty = Decimal("0")
+            if normalized_items:
+                total_qty = sum((row.quantity for row in normalized_items), Decimal("0"))
             elif registration_data.quantity:
                 total_qty = registration_data.quantity
 
@@ -362,7 +565,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 uuid=str(uuid.uuid4()),
                 registration_code=code,
                 customer_id=registration_data.customer_id,
-                customer_name=registration_data.customer_name,
+                customer_name=customer_name,
                 barcode=registration_data.barcode or "",
                 barcode_type=registration_data.barcode_type,
                 parsed_data=parsed_data,
@@ -375,8 +578,12 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 registration_date=registration_data.registration_date or datetime.now(),
                 registered_by=registered_by,
                 registered_by_name=user_info["name"],
-                warehouse_id=registration_data.warehouse_id,
-                warehouse_name=registration_data.warehouse_name,
+                created_by=registered_by,
+                created_by_name=user_info["name"],
+                updated_by=registered_by,
+                updated_by_name=user_info["name"],
+                warehouse_id=warehouse_id,
+                warehouse_name=warehouse_name,
                 sales_order_id=registration_data.sales_order_id,
                 sales_order_code=registration_data.sales_order_code,
                 work_order_id=registration_data.work_order_id,
@@ -386,12 +593,12 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 remarks=registration_data.remarks,
             )
 
-            if not registration_data.items and not mapped_material_id:
+            if not normalized_items and not mapped_material_id:
                 raise ValidationError("请指定来料物料（选择已有物料或快速新建）")
 
             items: List[CustomerMaterialRegistrationItem] = []
-            if registration_data.items:
-                items = await self._create_items(tenant_id, registration.id, registration_data.items)
+            if normalized_items:
+                items = await self._create_items(tenant_id, registration.id, normalized_items)
             elif mapped_material_id and registration_data.quantity:
                 items = await self._create_items(
                     tenant_id,
@@ -430,6 +637,16 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 raise BusinessLogicError("仅待入库状态的代工来料单可编辑")
 
             fields = update_data.model_dump(exclude_unset=True, exclude={"items"})
+            if "warehouse_id" in fields or "warehouse_name" in fields:
+                from apps.kuaizhizao.services.warehouse_service import _resolve_warehouse_name_by_id
+
+                wid = fields.get("warehouse_id", registration.warehouse_id)
+                wname = fields.get("warehouse_name", registration.warehouse_name)
+                if wid is not None:
+                    fields["warehouse_id"] = wid
+                    fields["warehouse_name"] = await _resolve_warehouse_name_by_id(
+                        tenant_id, wid, wname
+                    )
             if fields:
                 for k, v in fields.items():
                     setattr(registration, k, v)
@@ -441,6 +658,10 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 ).update(deleted_at=datetime.now())
                 items = await self._create_items(tenant_id, registration_id, update_data.items)
                 registration.total_quantity = sum((it.quantity for it in items), Decimal("0"))
+                if items and not registration.mapped_material_id:
+                    registration.mapped_material_id = items[0].material_id
+                    registration.mapped_material_code = items[0].material_code
+                    registration.mapped_material_name = items[0].material_name
                 await registration.save()
             else:
                 items = await self._load_items(tenant_id, registration_id)
@@ -494,6 +715,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             get_customer_material_registration_lifecycle,
         )
 
+        await self._enrich_list_display_fields(tenant_id, list(registrations), responses)
         for registration, resp in zip(registrations, responses):
             resp.lifecycle = get_customer_material_registration_lifecycle(registration, milestones=[])
         enriched = enrich_customer_material_registration_list_capabilities(registrations, responses)
@@ -510,7 +732,27 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
         if not registration:
             raise NotFoundError(f"代工来料单不存在: {registration_id}")
         items = await self._load_items(tenant_id, registration_id)
-        return self._to_response(registration, items)
+        resp = self._to_response(registration, items)
+        await self._enrich_list_display_fields(tenant_id, [registration], [resp])
+        # 明细编码/名称空快照时按主数据补齐（仅响应，不改库）
+        need_ids = [
+            int(it.material_id)
+            for it in (resp.items or [])
+            if it.material_id and not str(it.material_name or "").strip()
+        ]
+        if need_ids:
+            snaps = await self._material_snapshot_map(tenant_id, need_ids)
+            for it in resp.items or []:
+                if str(it.material_name or "").strip():
+                    continue
+                snap = snaps.get(int(it.material_id)) or {}
+                it.material_code = str(it.material_code or "").strip() or snap.get("material_code") or it.material_code
+                it.material_name = snap.get("material_name") or it.material_name
+                if not str(it.material_spec or "").strip():
+                    it.material_spec = snap.get("material_spec")
+                if not str(it.material_unit or "").strip():
+                    it.material_unit = snap.get("material_unit")
+        return resp
 
     async def _post_inventory_for_registration(
         self,
@@ -617,6 +859,8 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             registration.processed_at = now
             registration.processed_by = processed_by
             registration.processed_by_name = user_info
+            registration.updated_by = processed_by
+            registration.updated_by_name = user_info
             await registration.save()
 
             for item in items:

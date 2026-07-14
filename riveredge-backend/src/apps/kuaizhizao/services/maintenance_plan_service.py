@@ -21,8 +21,10 @@ from apps.kuaizhizao.schemas.maintenance_plan import (
     MaintenanceExecutionCreate,
     MaintenanceExecutionUpdate,
 )
+from apps.common.audit_actor import apply_create_audit
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 class MaintenancePlanService:
@@ -83,6 +85,10 @@ class MaintenancePlanService:
                 equipment_name=equipment.name,
                 **data.model_dump(exclude_none=True, exclude={'equipment_uuid'})
             )
+            actor = None
+            if created_by is not None:
+                actor = await User.filter(id=created_by, tenant_id=tenant_id).first()
+            apply_create_audit(plan, actor)
             await plan.save()
             return plan
         except IntegrityError:
@@ -340,6 +346,9 @@ class MaintenanceExecutionService:
                 maintenance_plan_uuid=maintenance_plan.uuid if maintenance_plan else None,
                 **data.model_dump(exclude_none=True, exclude={'equipment_uuid', 'maintenance_plan_uuid'})
             )
+            if created_by is not None:
+                actor = await User.filter(id=created_by).first()
+                apply_create_audit(execution, actor)
             await execution.save()
             if data.spare_parts_used:
                 await SparePartService().apply_parts_usage(

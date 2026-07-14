@@ -5532,7 +5532,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                       !menuPath.includes('/kiosk')
                     ) {
                       void import('../apps/kuaizhizao/pages/production-execution/work-orders/workOrderListTable').then(
-                        (m) => m.prefetchDefaultWorkOrderList(queryClient, 20)
+                        (m) => {
+                          const pageSize = useUserPreferenceStore
+                            .getState()
+                            .getPreference('ui.default_page_size', 20)
+                          m.prefetchDefaultWorkOrderList(queryClient, pageSize)
+                        }
                       );
                     }
                   } else {

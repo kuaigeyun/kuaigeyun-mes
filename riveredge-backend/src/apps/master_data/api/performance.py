@@ -17,6 +17,7 @@ from infra.models.user import User
 from apps.master_data.services.performance_service import PerformanceService
 from apps.master_data.schemas.performance_schemas import (
     HolidayCreate, HolidayUpdate, HolidayResponse,
+    HolidayCnImportRequest, HolidayCnImportResult,
     SkillCreate, SkillUpdate, SkillResponse
 )
 from apps.master_data.services.employee_performance_service import (
@@ -101,7 +102,30 @@ async def create_holiday(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await PerformanceService.create_holiday(tenant_id, data)
+        return await PerformanceService.create_holiday(tenant_id, data, operator=current_user)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/holidays/import-cn",
+    response_model=HolidayCnImportResult,
+    response_model_by_alias=True,
+    summary="Import CN legal holidays and weekly rest days",
+)
+async def import_cn_holidays(
+    data: HolidayCnImportRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从 holiday-cn 导入指定公历年的中国法定休息日，并按单休/双休/自定义周休生成休息日。
+    调休上班日不写入；同日已有假期则跳过。
+    """
+    try:
+        return await PerformanceService.import_cn_holidays(
+            tenant_id, data, operator=current_user
+        )
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -175,7 +199,7 @@ async def update_holiday(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await PerformanceService.update_holiday(tenant_id, holiday_uuid, data)
+        return await PerformanceService.update_holiday(tenant_id, holiday_uuid, data, operator=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -218,7 +242,7 @@ async def create_skill(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await PerformanceService.create_skill(tenant_id, data)
+        return await PerformanceService.create_skill(tenant_id, data, operator=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -288,7 +312,7 @@ async def update_skill(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await PerformanceService.update_skill(tenant_id, skill_uuid, data)
+        return await PerformanceService.update_skill(tenant_id, skill_uuid, data, operator=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -379,7 +403,7 @@ async def create_employee_config(
 ):
     """创建员工绩效配置（计算模式、工时/计件单价、月保障工资）"""
     try:
-        return await EmployeePerformanceConfigService.create(tenant_id, data)
+        return await EmployeePerformanceConfigService.create(tenant_id, data, operator=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -436,7 +460,7 @@ async def update_employee_config(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await EmployeePerformanceConfigService.update(tenant_id, config_id, data)
+        return await EmployeePerformanceConfigService.update(tenant_id, config_id, data, operator=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -465,7 +489,7 @@ async def create_hourly_rate(
     tenant_id: int = Depends(get_current_tenant)
 ):
     try:
-        return await HourlyRateService.create(tenant_id, data)
+        return await HourlyRateService.create(tenant_id, data, operator=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -518,7 +542,7 @@ async def update_hourly_rate(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await HourlyRateService.update(tenant_id, rate_id, data)
+        return await HourlyRateService.update(tenant_id, rate_id, data, operator=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -545,7 +569,7 @@ async def create_kpi_definition(
     tenant_id: int = Depends(get_current_tenant)
 ):
     try:
-        return await KPIDefinitionService.create(tenant_id, data)
+        return await KPIDefinitionService.create(tenant_id, data, operator=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -600,7 +624,7 @@ async def update_kpi_definition(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await KPIDefinitionService.update(tenant_id, kpi_id, data)
+        return await KPIDefinitionService.update(tenant_id, kpi_id, data, operator=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -671,7 +695,7 @@ async def calculate_performance(
 ):
     """触发指定周期的绩效计算，汇总报工并计算应发金额"""
     try:
-        return await PerformanceCalcService.calculate_period(tenant_id, period)
+        return await PerformanceCalcService.calculate_period(tenant_id, period, operator=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -723,7 +747,7 @@ async def confirm_performance_summary(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await PerformanceCalcService.confirm_summary(tenant_id, summary_id)
+        return await PerformanceCalcService.confirm_summary(tenant_id, summary_id, operator=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -737,7 +761,7 @@ async def reopen_performance_summary(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await PerformanceCalcService.reopen_summary(tenant_id, summary_id)
+        return await PerformanceCalcService.reopen_summary(tenant_id, summary_id, operator=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -750,7 +774,7 @@ async def batch_confirm_summaries(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    return await PerformanceCalcService.batch_confirm_period(tenant_id, period)
+    return await PerformanceCalcService.batch_confirm_period(tenant_id, period, operator=current_user)
 
 
 @router.get("/summaries/payroll-total", summary="Confirmed payroll total for finance import")
@@ -826,7 +850,7 @@ async def create_shift(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await ShiftSchedulingService.create_shift(tenant_id, data)
+        return await ShiftSchedulingService.create_shift(tenant_id, data, operator=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -879,7 +903,7 @@ async def update_shift(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await ShiftSchedulingService.update_shift(tenant_id, shift_uuid, data)
+        return await ShiftSchedulingService.update_shift(tenant_id, shift_uuid, data, operator=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -909,7 +933,7 @@ async def create_shift_roster(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await ShiftSchedulingService.create_roster(tenant_id, data)
+        return await ShiftSchedulingService.create_roster(tenant_id, data, operator=current_user)
     except (NotFoundError, ValidationError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=code, detail=str(e))
@@ -983,7 +1007,9 @@ async def save_shift_roster_assignments(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await ShiftSchedulingService.save_assignments(tenant_id, roster_uuid, data)
+        return await ShiftSchedulingService.save_assignments(
+            tenant_id, roster_uuid, data, operator=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -1001,7 +1027,7 @@ async def publish_shift_roster(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await ShiftSchedulingService.publish_roster(tenant_id, roster_uuid)
+        return await ShiftSchedulingService.publish_roster(tenant_id, roster_uuid, operator=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:

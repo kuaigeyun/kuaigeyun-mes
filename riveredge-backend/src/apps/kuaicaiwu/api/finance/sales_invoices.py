@@ -14,6 +14,7 @@ from loguru import logger
 from tortoise.transactions import in_transaction
 from tortoise import timezone as tortoise_timezone
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit, audit_response_fields
 from apps.kuaicaiwu.schemas.finance import (
     SalesInvoiceCreate,
     SalesInvoiceUpdate,
@@ -94,6 +95,7 @@ def _derive_sales_invoice_review_status(inv: Invoice) -> str:
 
 async def _serialize(tenant_id: int, user_id: int, obj: Invoice) -> SalesInvoiceResponse:
     """将 Invoice 模型转换为 SalesInvoiceResponse"""
+    audit = audit_response_fields(obj)
     payload = SalesInvoiceResponse(
         id=obj.id,
         tenant_id=obj.tenant_id,
@@ -126,6 +128,10 @@ async def _serialize(tenant_id: int, user_id: int, obj: Invoice) -> SalesInvoice
         review_remarks=None,
         created_at=obj.created_at,
         updated_at=obj.updated_at,
+        created_by=audit.get("created_by"),
+        created_by_name=audit.get("created_by_name"),
+        updated_by=audit.get("updated_by"),
+        updated_by_name=audit.get("updated_by_name"),
     ).model_dump()
     masked = await PermissionPolicyService.apply_field_masks_to_dict(
         tenant_id=tenant_id,
@@ -254,26 +260,27 @@ async def create_sales_invoice(
             source_document_code = str(pull_preview.get("source_code") or source_document_code or "")
 
         code = await _generate_sales_invoice_code(tenant_id)
-        invoice = await Invoice.create(
-            tenant_id=tenant_id,
-            invoice_code=code,
-            category="OUT",
-            invoice_number=data.invoice_number,
-            invoice_date=data.invoice_date,
-            invoice_type=data.invoice_type or "增值税专用发票",
-            partner_id=data.customer_id,
-            partner_name=data.customer_name,
-            tax_rate=data.tax_rate / 100,  # convert 13 -> 0.13
-            amount_excluding_tax=data.invoice_amount,
-            tax_amount=data.tax_amount,
-            total_amount=data.total_amount,
-            source_document_code=source_document_code,
-            attachment_uuid=data.attachment_path,
-            attachments=data.attachments,
-            description=data.notes,
-            status="未审核",
-            created_by=current_user.id,
-        )
+        create_payload = {
+            "tenant_id": tenant_id,
+            "invoice_code": code,
+            "category": "OUT",
+            "invoice_number": data.invoice_number,
+            "invoice_date": data.invoice_date,
+            "invoice_type": data.invoice_type or "增值税专用发票",
+            "partner_id": data.customer_id,
+            "partner_name": data.customer_name,
+            "tax_rate": data.tax_rate / 100,  # convert 13 -> 0.13
+            "amount_excluding_tax": data.invoice_amount,
+            "tax_amount": data.tax_amount,
+            "total_amount": data.total_amount,
+            "source_document_code": source_document_code,
+            "attachment_uuid": data.attachment_path,
+            "attachments": data.attachments,
+            "description": data.notes,
+            "status": "未审核",
+        }
+        apply_create_audit(create_payload, current_user)
+        invoice = await Invoice.create(**create_payload)
         if pull_preview and data.source_type and data.source_id:
             await sales_invoice_service.create_pull_relation(
                 tenant_id=tenant_id,
@@ -474,6 +481,7 @@ async def update_sales_invoice(
     if data.attachments is not None:
         update_data["attachments"] = data.attachments
     if update_data:
+        apply_update_audit(update_data, current_user)
         await Invoice.filter(id=id).update(**update_data)
     return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
 
@@ -496,7 +504,9 @@ async def approve_sales_invoice(
             tenant_id,
         )
     new_status = "已驳回" if rejection_reason else "已审核"
-    await Invoice.filter(id=id).update(status=new_status)
+    approve_payload = {"status": new_status}
+    apply_update_audit(approve_payload, current_user)
+    await Invoice.filter(id=id).update(**approve_payload)
     return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
 
 
@@ -551,11 +561,13 @@ async def void_sales_invoice(
             400, "当前状态不允许作废", "/sales-invoices/{id}/void", tenant_id
         )
     reason = body.reason.strip()
-    await Invoice.filter(tenant_id=tenant_id, id=id).update(
-        status="已作废",
-        void_reason=reason,
-        voided_at=tortoise_timezone.now(),
-    )
+    void_payload: dict = {
+        "status": "已作废",
+        "void_reason": reason,
+        "voided_at": tortoise_timezone.now(),
+    }
+    apply_update_audit(void_payload, current_user)
+    await Invoice.filter(tenant_id=tenant_id, id=id).update(**void_payload)
     return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
 
 
@@ -595,26 +607,27 @@ async def create_red_letter_sales_invoice(
         code = await _generate_sales_invoice_code(tenant_id)
         desc = (orig.description or "").strip()
         tail = f"\n红冲原发票#{orig.id}（{orig.invoice_code}）：{reason}"
-        new_inv = await Invoice.create(
-            tenant_id=tenant_id,
-            invoice_code=code,
-            category="OUT",
-            invoice_number="",
-            invoice_date=orig.invoice_date,
-            invoice_type=orig.invoice_type or "VAT_SPECIAL",
-            partner_id=orig.partner_id,
-            partner_name=orig.partner_name,
-            tax_rate=orig.tax_rate,
-            amount_excluding_tax=-excl,
-            tax_amount=-tax,
-            total_amount=-tot,
-            source_document_code=orig.source_document_code,
-            attachment_uuid=orig.attachment_uuid,
-            description=(desc + tail) if desc else tail.strip(),
-            status="未审核",
-            original_invoice_id=orig.id,
-            created_by=current_user.id,
-        )
+        red_create_payload: dict = {
+            "tenant_id": tenant_id,
+            "invoice_code": code,
+            "category": "OUT",
+            "invoice_number": "",
+            "invoice_date": orig.invoice_date,
+            "invoice_type": orig.invoice_type or "VAT_SPECIAL",
+            "partner_id": orig.partner_id,
+            "partner_name": orig.partner_name,
+            "tax_rate": orig.tax_rate,
+            "amount_excluding_tax": -excl,
+            "tax_amount": -tax,
+            "total_amount": -tot,
+            "source_document_code": orig.source_document_code,
+            "attachment_uuid": orig.attachment_uuid,
+            "description": (desc + tail) if desc else tail.strip(),
+            "status": "未审核",
+            "original_invoice_id": orig.id,
+        }
+        apply_create_audit(red_create_payload, current_user)
+        new_inv = await Invoice.create(**red_create_payload)
 
         item_rows = list(orig.items) if orig.items else []
         if item_rows:
@@ -649,10 +662,12 @@ async def create_red_letter_sales_invoice(
                 tax_amount=-tax,
             )
 
-        await Invoice.filter(tenant_id=tenant_id, id=orig.id).update(
-            status="已红冲",
-            red_flush_invoice_id=new_inv.id,
-        )
+        red_orig_payload: dict = {
+            "status": "已红冲",
+            "red_flush_invoice_id": new_inv.id,
+        }
+        apply_update_audit(red_orig_payload, current_user)
+        await Invoice.filter(tenant_id=tenant_id, id=orig.id).update(**red_orig_payload)
 
         fresh = await Invoice.get_or_none(tenant_id=tenant_id, id=new_inv.id, category="OUT")
         if not fresh:

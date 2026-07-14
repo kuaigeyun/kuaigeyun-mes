@@ -26,6 +26,8 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { formatDateTime } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   buildQualityExceptionStatusValueEnum,
   resolveProductionExceptionListStatusParams,
@@ -194,7 +196,7 @@ const QualityExceptionsPage: React.FC = () => {
 
   const qualityStatusValueEnum = useMemo(() => buildQualityExceptionStatusValueEnum(t), [t]);
 
-  const columns: ProColumns<QualityException>[] = useMemo(() => [
+  const columns: ProColumns<QualityException>[] = useMemo(() => alignProColumns<QualityException>([
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at_range',
@@ -281,17 +283,7 @@ const QualityExceptionsPage: React.FC = () => {
       dataIndex: 'responsible_person_name',
       width: 100,
     },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      defaultSortOrder: 'descend',
-      hideInSearch: true,
-      render: (_, record) =>
-        record.created_at ? formatDateTime(record.created_at, 'YYYY-MM-DD HH:mm') : '-',
-    },
+    ...buildDocumentAuditColumns<QualityException>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -371,7 +363,7 @@ const QualityExceptionsPage: React.FC = () => {
           { keyPrefix: `quality-exception-actions-${record.id ?? 'row'}` },
         ),
     },
-  ], [qualityStatusValueEnum, t, canCreate8D, navigate, messageApi]);
+  ], SALES_DOC_LIST_FIELD_RANK), [qualityStatusValueEnum, t, canCreate8D, navigate, messageApi]);
 
   return (
     <ListPageTemplate>

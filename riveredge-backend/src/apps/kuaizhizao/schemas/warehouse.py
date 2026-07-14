@@ -57,6 +57,10 @@ class ProductionPickingResponse(ProductionPickingBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     capabilities: Optional[OutboundHubCapabilities] = Field(
         None, description="业务态 capabilities（出库 Hub，document_action_policy）",
     )
@@ -70,6 +74,10 @@ class ProductionPickingListResponse(ProductionPickingResponse):
     picking_score: Optional[float] = Field(None, description="备料场景综合分")
     picking_rank_band: Optional[str] = Field(None, description="备料等级带 A/B/C")
     picking_score_breakdown: Optional[dict] = Field(None, description="备料打分明细")
+    total_quantity: Optional[float] = Field(None, ge=0, description="总数量（明细应领合计）")
+    total_items: Optional[int] = Field(None, description="出库品种数（明细行数）")
+    required_quantity_total: Optional[float] = Field(None, ge=0, description="应领数量合计（明细 required_quantity 之和）")
+    picked_quantity_total: Optional[float] = Field(None, ge=0, description="已领数量合计（明细 picked_quantity 之和）")
 
 
 class ProductionPickingWithItemsResponse(ProductionPickingResponse):
@@ -182,6 +190,10 @@ class ProductionReturnResponse(ProductionReturnBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",
     )
@@ -337,6 +349,10 @@ class FinishedGoodsReceiptResponse(FinishedGoodsReceiptBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",
     )
@@ -440,6 +456,10 @@ class SemiFinishedGoodsReceiptResponse(SemiFinishedGoodsReceiptBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",
     )
@@ -558,10 +578,15 @@ class SalesDeliveryResponse(SalesDeliveryBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
     capabilities: Optional[OutboundHubCapabilities] = Field(
         None, description="业务态 capabilities（出库 Hub，document_action_policy）",
     )
+    total_items: Optional[int] = Field(None, description="出库品种数（明细行数）")
 
     class Config:
         from_attributes = True
@@ -725,6 +750,10 @@ class PurchaseReceiptItemResponse(PurchaseReceiptItemBase):
     receipt_id: int = Field(..., description="入库单ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
 
     class Config:
         from_attributes = True
@@ -833,6 +862,10 @@ class SalesReturnResponse(SalesReturnBase):
     items: Optional[List["SalesReturnItemResponse"]] = Field(None, description="退货明细列表")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
 
     class Config:
         from_attributes = True
@@ -954,6 +987,10 @@ class PurchaseReturnResponse(PurchaseReturnBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     capabilities: Optional[PurchaseReturnCapabilities] = Field(
         None,
         description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
@@ -1066,6 +1103,10 @@ class OtherInboundResponse(OtherInboundBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",
@@ -1174,10 +1215,15 @@ class OtherOutboundResponse(OtherOutboundBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
     capabilities: Optional[OutboundHubCapabilities] = Field(
         None, description="业务态 capabilities（出库 Hub，document_action_policy）",
     )
+    total_items: Optional[int] = Field(None, description="出库品种数（明细行数）")
 
     class Config:
         from_attributes = True
@@ -1278,10 +1324,15 @@ class MaterialBorrowResponse(MaterialBorrowBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
     capabilities: Optional[OutboundHubCapabilities] = Field(
         None, description="业务态 capabilities（出库 Hub，document_action_policy）",
     )
+    total_items: Optional[int] = Field(None, description="出库品种数（明细行数）")
 
     class Config:
         from_attributes = True
@@ -1382,6 +1433,11 @@ class MaterialReturnResponse(MaterialReturnBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",
     )

@@ -1,7 +1,8 @@
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, renderRowActionsOverflow } from '../../../../../components/uni-action';
 /**
  * 物料中心 - 委外发料 / 收货 / 退料 / 退货列表与新建
  */
+import { formatQuantity } from '../../../../../utils/format';
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -32,7 +33,7 @@ import OutsourceReceiptFormContent, {
   type OutsourceReceiptLine,
 } from '../../../components/OutsourceReceiptFormContent';
 import type { OutsourceMaterialTabKey } from './materialCenterTabs';
-import { formatDateTime } from '../../../../../utils/format';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 
 function unwrapList<T>(response: unknown): T[] {
   if (Array.isArray(response)) return response;
@@ -60,9 +61,24 @@ type OutsourceMaterialRow = {
   returnReason?: string;
   return_reason?: string;
   status?: string;
+  createdByName?: string;
+  created_by_name?: string;
+  updatedByName?: string;
+  updated_by_name?: string;
+  updatedAt?: string;
+  updated_at?: string;
   createdAt?: string;
   created_at?: string;
 };
+
+function resolveOutsourceStatusTagColor(status?: string): string {
+  const normalized = String(status ?? '').trim().toLowerCase();
+  if (normalized === 'completed' || normalized === '已完成') return 'success';
+  if (normalized === 'draft' || normalized === '草稿') return 'warning';
+  if (normalized === 'processing' || normalized === '执行中') return 'processing';
+  if (normalized === 'cancelled' || normalized === '已取消') return 'default';
+  return 'default';
+}
 
 interface OutsourceMaterialPanelProps {
   mode: OutsourceMaterialTabKey;
@@ -168,7 +184,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
       dataIndex: 'quantity',
       width: 90,
       align: 'right',
-      render: (_, r) => (r.quantity != null ? `${Number(r.quantity).toFixed(2)} ${r.unit || ''}` : '-'),
+      render: (_, r) => (r.quantity != null ? `${formatQuantity(r.quantity)} ${r.unit || ''}`.trim() : '—'),
     },
     ...(!isProductReturn
       ? [
@@ -191,19 +207,11 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
             : r.status === 'completed'
               ? t('app.kuaizhizao.warehouseCommon.statusCompleted')
               : r.status || '-';
-        const color = r.status === 'completed' ? 'success' : 'default';
+        const color = resolveOutsourceStatusTagColor(r.status);
         return <Tag color={color}>{statusKey}</Tag>;
       },
     },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colCreatedAt'),
-      dataIndex: ['createdAt', 'created_at'],
-      width: 160,
-      render: (_, r) => {
-        const createdAt = r.createdAt || r.created_at;
-        return createdAt ? formatDateTime(createdAt, 'YYYY-MM-DD HH:mm') : '-';
-      },
-    },
+    ...buildDocumentAuditColumns<OutsourceMaterialRow>(t),
     {
       title: t('app.kuaizhizao.warehouseCommon.colActions'),
       valueType: 'option',
@@ -211,9 +219,19 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
       fixed: 'right',
       render: (_, record) =>
         isReceipt && record.status === 'draft' && record.id ? (
-          <Button type="link" size="small" onClick={() => handleComplete(record)}>
-            {t('app.kuaizhizao.warehouseCommon.complete')}
-          </Button>
+          renderRowActionsOverflow(
+            [
+              <Button
+                key="complete"
+                {...rowActionKind('complete')}
+                size="small"
+                onClick={() => handleComplete(record)}
+              >
+                {t('app.kuaizhizao.warehouseCommon.complete')}
+              </Button>,
+            ],
+            { keyPrefix: `outsource-${mode}-${record.id ?? 'row'}` },
+          )
         ) : (
           '-'
         ),

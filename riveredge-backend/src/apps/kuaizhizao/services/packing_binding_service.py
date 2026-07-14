@@ -31,6 +31,8 @@ from apps.kuaizhizao.schemas.packing_binding import (
 )
 
 from apps.common.base_service import AppBaseService
+from apps.common.audit_actor import apply_create_audit, operator_name_from_user
+from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from loguru import logger
 from apps.kuaizhizao.services.document_action_policy.packing_binding import (
@@ -115,7 +117,8 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                 packing_material_name = packing_material_name or f"包装物料{binding_data.packing_material_id}"
 
             # 获取绑定人信息
-            user_info = await self.get_user_info(bound_by)
+            user = await User.get_or_none(id=bound_by)
+            bound_by_name = operator_name_from_user(user)
 
             # 如果未提供箱号，自动生成箱号
             box_no = binding_data.box_no
@@ -139,7 +142,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                     box_no = f"BOX{today}{str(existing_count + 1).zfill(4)}"
 
             # 创建装箱绑定记录
-            packing_binding = await PackingBinding.create(
+            create_payload = dict(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
                 finished_goods_receipt_id=receipt_id,
@@ -156,10 +159,12 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                 binding_method=binding_data.binding_method,
                 barcode=binding_data.barcode,
                 bound_by=bound_by,
-                bound_by_name=user_info["name"],
+                bound_by_name=bound_by_name,
                 bound_at=binding_data.bound_at or datetime.now(),
                 remarks=binding_data.remarks,
             )
+            apply_create_audit(create_payload, user)
+            packing_binding = await PackingBinding.create(**create_payload)
 
             # 建立成品入库→装箱绑定 的 DocumentRelation
             try:
@@ -216,7 +221,8 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                 packing_material_code = f"PACK{binding_data.packing_material_id}"
                 packing_material_name = packing_material_name or f"包装物料{binding_data.packing_material_id}"
 
-            user_info = await self.get_user_info(bound_by)
+            user = await User.get_or_none(id=bound_by)
+            bound_by_name = operator_name_from_user(user)
             box_no = binding_data.box_no
             if not box_no:
                 today = datetime.now().strftime("%Y%m%d")
@@ -234,7 +240,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                     ).count()
                     box_no = f"BOX{today}{str(existing_count + 1).zfill(4)}"
 
-            packing_binding = await PackingBinding.create(
+            create_payload = dict(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
                 finished_goods_receipt_id=None,
@@ -251,10 +257,12 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                 binding_method=binding_data.binding_method,
                 barcode=binding_data.barcode,
                 bound_by=bound_by,
-                bound_by_name=user_info["name"],
+                bound_by_name=bound_by_name,
                 bound_at=binding_data.bound_at or datetime.now(),
                 remarks=binding_data.remarks,
             )
+            apply_create_audit(create_payload, user)
+            packing_binding = await PackingBinding.create(**create_payload)
 
             # 建立销售出库→装箱绑定 的 DocumentRelation
             try:

@@ -30,6 +30,8 @@ import { moldApi } from '../../../services/equipment';
 import { maintenanceSchemesApi, maintenancesApi } from '../../../services/moldOps';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   APPROVAL_DOC_PINNED_STATUS_FIELD,
   buildApprovalDocStatusValueEnum,
@@ -273,8 +275,7 @@ const MoldMaintenancesPage: React.FC = () => {
     [],
   );
 
-  const columns: ProColumns<MoldMaintenance>[] = useMemo(
-    () => [
+  const columns: ProColumns<MoldMaintenance>[] = useMemo(() => alignProColumns<MoldMaintenance>([
       {
         title: t(`${P}.col.maintenanceDate`),
         dataIndex: 'doc_date_range',
@@ -329,13 +330,10 @@ const MoldMaintenancesPage: React.FC = () => {
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
+        hideInTable: true,
         hideInSearch: true,
-        defaultSortOrder: 'descend',
-        sorter: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
+      ...buildDocumentAuditColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
         key: 'action',
@@ -450,7 +448,7 @@ const MoldMaintenancesPage: React.FC = () => {
           </>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, perms, canAudit, workflowStatusValueEnum],
   );
 

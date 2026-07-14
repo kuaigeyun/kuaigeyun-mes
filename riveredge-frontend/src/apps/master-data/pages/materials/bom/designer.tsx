@@ -14,6 +14,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Button, Space, Form, Select, InputNumber, Input, Switch, Tag, Modal, theme, Row, Col, List, Descriptions, Spin, App, Alert } from 'antd';
 import { EditOutlined, LeftOutlined, SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined, CloseCircleOutlined, SettingOutlined, ClusterOutlined, ReloadOutlined, CopyOutlined, DiffOutlined } from '@ant-design/icons';
 import { MindMap, RCNode, getNodeSide } from '@ant-design/graphs';
+import { formatQuantity } from '../../../../../utils/format';
 
 const { TextNode: G6TextNode } = RCNode;
 
@@ -122,8 +123,7 @@ const SOURCE_TYPE_NODE_COLORS: Record<string, { bg: string; border: string }> = 
 function formatBomNodeQuantity(qty: unknown): string {
   const n = Number(qty ?? 1);
   if (!Number.isFinite(n) || n <= 0) return '1';
-  if (Number.isInteger(n)) return String(n);
-  return String(parseFloat(n.toFixed(4)));
+  return formatQuantity(n);
 }
 
 function resolveBomNodeDisplayLabel(data: Record<string, unknown> | undefined | null): string {

@@ -46,6 +46,7 @@ import {
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import { formatDateTime } from '../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const PAGE_CODE_RD = 'kuaiplm-rd-project';
 const PAGE_CODE_DELIVERY = 'kuaiplm-delivery-project';
@@ -348,7 +349,7 @@ const RdProjectsListPage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         columnPersistenceId="apps.kuaiplm.pages.rd-projects"
         scroll={{ x: 1400 }}
         showAdvancedSearch

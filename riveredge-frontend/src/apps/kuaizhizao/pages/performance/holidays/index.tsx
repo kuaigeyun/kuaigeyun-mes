@@ -10,30 +10,36 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Space, Typography, Descriptions, Empty, Spin, theme as AntdTheme } from 'antd';
-import { DeleteOutlined } from '@ant-design/icons';
+import { DeleteOutlined, CalendarOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { PerformanceTraceBriefPrimaryActions } from '../PerformanceTraceBriefFooter';
 import { holidayApi } from '../../../services/performance';
 import { HolidayFormModal } from '../../../components/HolidayFormModal';
+import { HolidayCnImportModal } from '../../../components/HolidayCnImportModal';
 import type { Holiday } from '../../../types/performance';
 import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
 import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { getPerformanceActiveValueEnum, renderActiveTag } from '../components/performanceMeta';
 import { formatDateTime } from '../../../../../utils/format';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   normalizePerformanceListResponse,
   PERFORMANCE_PINNED_ACTIVE_FIELD,
   resolveHolidayListParams,
 } from '../../../utils/performanceListCore';
+
+const HOLIDAY_RESOURCE = 'kuaizhizao:performance-holidays';
 
 const HolidaysPage: React.FC = () => {
   const { t } = useTranslation();
@@ -41,6 +47,7 @@ const HolidaysPage: React.FC = () => {
   const { token } = AntdTheme.useToken();
   const holidayDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
+  const holidayPerms = useResourcePermissions(HOLIDAY_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -48,6 +55,7 @@ const HolidaysPage: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [holidayTrackingRefreshKey, setHolidayTrackingRefreshKey] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
+  const [importModalVisible, setImportModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
 
   const {
@@ -154,7 +162,7 @@ const HolidaysPage: React.FC = () => {
 
   const columns: ProColumns<Holiday>[] = useMemo(() => {
     const customFieldColumns = generateCustomFieldColumns();
-    return [
+    return alignProColumns<Holiday>([
     {
       title: t('app.kuaizhizao.performance.holidays.columns.holidayName'),
       dataIndex: 'name',
@@ -178,36 +186,7 @@ const HolidaysPage: React.FC = () => {
       valueType: 'select',
       valueEnum: getPerformanceActiveValueEnum(t),
     },
-    {
-      title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
-      dataIndex: 'updatedAt',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      sorter: true,
-      render: (_, r) => (r.updatedAt ? formatDateTime(r.updatedAt, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: t('app.kuaizhizao.performance.common.columns.lifecycle'),
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>, t);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
-    },
+    ...buildDocumentAuditColumns<Holiday>(t),
     {
       title: t('app.kuaizhizao.performance.common.columns.actions'),
       valueType: 'option',
@@ -229,7 +208,7 @@ const HolidaysPage: React.FC = () => {
         </Space>
       ),
     },
-    ];
+    ], SALES_DOC_LIST_FIELD_RANK);
   }, [t, customFields]);
 
   return (
@@ -263,6 +242,19 @@ const HolidaysPage: React.FC = () => {
           showCreateButton
           createButtonText={t('app.kuaizhizao.performance.holidays.createButton')}
           onCreate={handleCreate}
+          toolBarRender={() =>
+            holidayPerms.canCreate
+              ? [
+                  <Button
+                    key="import-cn"
+                    icon={<CalendarOutlined />}
+                    onClick={() => setImportModalVisible(true)}
+                  >
+                    {t('app.kuaizhizao.performance.holidays.importCn.button')}
+                  </Button>,
+                ]
+              : []
+          }
           enableRowSelection
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
@@ -357,6 +349,11 @@ const HolidaysPage: React.FC = () => {
         }
       />
       <HolidayFormModal open={modalVisible} onClose={() => { setModalVisible(false); setEditUuid(null); }} editUuid={editUuid} onSuccess={handleModalSuccess} />
+      <HolidayCnImportModal
+        open={importModalVisible}
+        onClose={() => setImportModalVisible(false)}
+        onSuccess={() => actionRef.current?.reload()}
+      />
     </>
   );
 };

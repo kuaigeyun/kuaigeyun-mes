@@ -50,8 +50,6 @@ class PurchaseInquiry(BaseModel):
     total_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总数量")
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
-    created_by = fields.IntField(null=True, description="创建人ID")
-    updated_by = fields.IntField(null=True, description="更新人ID")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     class Meta:
@@ -147,8 +145,6 @@ class PurchaseSupplierQuote(BaseModel):
     entered_by = fields.IntField(null=True, description="录入人ID")
     total_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="报价总金额")
     notes = fields.TextField(null=True, description="备注")
-    created_by = fields.IntField(null=True)
-    updated_by = fields.IntField(null=True)
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:

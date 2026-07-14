@@ -29,7 +29,9 @@ from apps.master_data.services.master_data_list_core import (
     apply_master_crud_updated_date_range,
     resolve_master_crud_order_clause,
 )
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 class PartnerPriceBookService:
@@ -401,6 +403,8 @@ class PartnerPriceBookService:
             "is_active": row.is_active,
             "created_at": row.created_at,
             "updated_at": row.updated_at,
+            "created_by_name": getattr(row, "created_by_name", None),
+            "updated_by_name": getattr(row, "updated_by_name", None),
         }
         return PartnerPriceBookResponse.model_validate(data)
 
@@ -410,6 +414,7 @@ class PartnerPriceBookService:
         tenant_id: int,
         partner_type: str,
         data: PartnerPriceBookCreate,
+        current_user: Optional[User] = None,
     ) -> PartnerPriceBookResponse:
         if partner_type not in cls.PARTNER_TYPES:
             raise ValidationError(f"无效的伙伴类型: {partner_type}")
@@ -436,6 +441,7 @@ class PartnerPriceBookService:
         if not payload.get("unit") and material.base_unit:
             payload["unit"] = material.base_unit
         payload["variant_prices"] = cls._serialize_variant_prices_for_storage(payload.get("variant_prices"))
+        apply_create_audit(payload, current_user)
 
         async with in_transaction():
             row = await PartnerPriceBook.create(
@@ -586,6 +592,7 @@ class PartnerPriceBookService:
         partner_type: str,
         uuid: str,
         data: PartnerPriceBookUpdate,
+        current_user: Optional[User] = None,
     ) -> PartnerPriceBookResponse:
         row = await PartnerPriceBook.filter(
             tenant_id=tenant_id,
@@ -622,6 +629,7 @@ class PartnerPriceBookService:
                 payload["variant_prices"] = cls._serialize_variant_prices_for_storage(payload.get("variant_prices"))
             for key, value in payload.items():
                 setattr(row, key, value)
+            apply_update_audit(row, current_user)
             await row.save()
             await cls._sync_alias_if_needed(
                 tenant_id, partner_type, partner_id, material_id, alias_code, alias_name, sync_alias

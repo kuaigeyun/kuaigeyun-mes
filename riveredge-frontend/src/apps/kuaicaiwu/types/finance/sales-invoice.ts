@@ -17,6 +17,8 @@ export interface SalesInvoice {
   notes?: string;
   created_at: string;
   updated_at?: string;
+  created_by_name?: string;
+  updated_by_name?: string;
   receivable_id?: number | null;
   receivable_code?: string | null;
 }

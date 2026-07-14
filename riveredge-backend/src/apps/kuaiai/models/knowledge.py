@@ -21,8 +21,6 @@ class KuaiKnowledgeDocument(BaseModel):
     chunk_count = fields.IntField(default=0, description="分块数量")
     error_message = fields.TextField(null=True, description="索引失败原因")
     is_active = fields.BooleanField(default=True, description="是否启用")
-    created_by = fields.IntField(null=True)
-    updated_by = fields.IntField(null=True)
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:
@@ -68,8 +66,6 @@ class KuaiTrainingSample(BaseModel):
     answer = fields.TextField(description="答案")
     source = fields.CharField(max_length=30, default="manual", description="manual | faq | chat")
     is_active = fields.BooleanField(default=True, description="是否纳入导出")
-    created_by = fields.IntField(null=True)
-    updated_by = fields.IntField(null=True)
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:

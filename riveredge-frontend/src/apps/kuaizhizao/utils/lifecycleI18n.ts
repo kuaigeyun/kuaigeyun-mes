@@ -53,11 +53,18 @@ export function applyLifecycleI18n(
     const stages = mainStages ?? result.mainStages ?? [];
     const done = stages.filter((s) => s.status === 'done');
     if (done.length) return done[done.length - 1]?.key;
-    return stages[stages.length - 1]?.key;
+    // 模式 A 预生效：主轴全 pending、后端 stageName 为 — 时，禁止用末节点冒充当前阶段
+    return undefined;
   })();
 
+  const backendStageName = (result.stageName ?? '').trim();
+  const isPreEffective =
+    !backendStageName || backendStageName === '-' || backendStageName === '—';
+
   let stageName = result.stageName;
-  if (terminalKey && mergedKeys[terminalKey]) {
+  if (isPreEffective) {
+    stageName = backendStageName || '—';
+  } else if (terminalKey && mergedKeys[terminalKey]) {
     stageName = requireI18nText(t, mergedKeys[terminalKey]!);
   } else if (terminalKey) {
     const globalKey = resolveLifecycleStageI18nKey(terminalKey);

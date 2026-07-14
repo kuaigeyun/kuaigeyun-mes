@@ -19,6 +19,8 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.master_data.models.warehouse import Warehouse
 from apps.common.base_service import AppBaseService
+from apps.common.audit_actor import apply_create_audit, apply_update_audit, operator_name_from_user
+from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
@@ -31,6 +33,20 @@ class BackflushService(AppBaseService[BackflushRecord]):
 
     def __init__(self):
         super().__init__(BackflushRecord)
+
+    async def _audit_kwargs_for_operator(self, processed_by: Optional[int]) -> Dict[str, Any]:
+        if not processed_by:
+            return {}
+        user = await User.get_or_none(id=processed_by)
+        if not user:
+            return {"processed_by": processed_by}
+        name = operator_name_from_user(user)
+        audit: Dict[str, Any] = {
+            "processed_by": processed_by,
+            "processed_by_name": name or None,
+        }
+        apply_create_audit(audit, user)
+        return audit
 
     async def calculate_consumption(
         self,
@@ -298,6 +314,7 @@ class BackflushService(AppBaseService[BackflushRecord]):
 
         warehouse_ids = [w.id for w in line_side_warehouses]
         warehouse_map = {w.id: w for w in line_side_warehouses}
+        audit_kwargs = await self._audit_kwargs_for_operator(processed_by)
 
         records = []
         async with in_transaction():
@@ -336,7 +353,7 @@ class BackflushService(AppBaseService[BackflushRecord]):
                         status="failed",
                         error_message=f"线边仓库存不足，需 {required}，可用 {total_picked}",
                         processed_at=datetime.utcnow(),
-                        processed_by=processed_by,
+                        **audit_kwargs,
                     )
                     records.append(record)
                     logger.warning(
@@ -374,7 +391,7 @@ class BackflushService(AppBaseService[BackflushRecord]):
                         backflush_quantity=pick["pick_quantity"],
                         status="completed",
                         processed_at=datetime.utcnow(),
-                        processed_by=processed_by,
+                        **audit_kwargs,
                     )
                     records.append(record)
 
@@ -424,6 +441,7 @@ class BackflushService(AppBaseService[BackflushRecord]):
 
         warehouse_ids = [w.id for w in line_side_warehouses]
         warehouse_map = {w.id: w for w in line_side_warehouses}
+        audit_kwargs = await self._audit_kwargs_for_operator(processed_by)
 
         required = failed.backflush_quantity
         pick_list = await self.auto_pick_batches(
@@ -437,6 +455,8 @@ class BackflushService(AppBaseService[BackflushRecord]):
         total_picked = sum(p["pick_quantity"] for p in pick_list)
         if total_picked < required:
             failed.error_message = f"重试仍失败：库存不足，需 {required}，可用 {total_picked}"
+            user = await User.get_or_none(id=processed_by) if processed_by else None
+            apply_update_audit(failed, user)
             await failed.save()
             return None
 
@@ -471,7 +491,7 @@ class BackflushService(AppBaseService[BackflushRecord]):
                     backflush_quantity=pick["pick_quantity"],
                     status="completed",
                     processed_at=datetime.utcnow(),
-                    processed_by=processed_by,
+                    **audit_kwargs,
                 )
                 if record is None:
                     record = rec

@@ -13,6 +13,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from apps.common.audit_actor import apply_create_audit, apply_update_audit, audit_response_fields
 from apps.master_data.models.material import Material, MaterialGroup
 from apps.master_data.models.material_product_process import MaterialProductProcess
 from apps.master_data.models.process import Operation, ProcessRoute
@@ -22,6 +23,7 @@ from apps.master_data.schemas.material_product_process_schemas import (
     MaterialProductProcessSave,
     ProductProcessLineSchema,
 )
+from infra.models.user import User
 
 
 def _first_id(ids: Optional[List[int]]) -> Optional[int]:
@@ -445,6 +447,9 @@ class MaterialProductProcessService:
             process_route_id=process_route.id if process_route else None,
             allow_operation_jump=allow_jump,
             lines=lines,
+            created_at=getattr(record, "created_at", None) if record else None,
+            updated_at=getattr(record, "updated_at", None) if record else None,
+            **(audit_response_fields(record) if record else {}),
         )
 
     @staticmethod
@@ -601,6 +606,7 @@ class MaterialProductProcessService:
         tenant_id: int,
         material_uuid: str,
         data: MaterialProductProcessSave,
+        current_user: Optional[User] = None,
     ) -> MaterialProductProcessResponse:
         material = await MaterialProductProcessService._get_material(tenant_id, material_uuid)
         process_route = await MaterialProductProcessService._resolve_route(
@@ -642,18 +648,28 @@ class MaterialProductProcessService:
             record.process_route_id = pr_id
             record.allow_operation_jump = data.allow_operation_jump
             record.lines = lines_json
+            apply_update_audit(record, current_user)
             await record.save(
-                update_fields=["process_route_id", "allow_operation_jump", "lines", "updated_at"]
+                update_fields=[
+                    "process_route_id",
+                    "allow_operation_jump",
+                    "lines",
+                    "updated_at",
+                    "updated_by",
+                    "updated_by_name",
+                ]
             )
         else:
-            record = await MaterialProductProcess.create(
-                tenant_id=tenant_id,
-                uuid=str(uuid_mod.uuid4()),
-                material_id=material.id,
-                process_route_id=pr_id,
-                allow_operation_jump=data.allow_operation_jump,
-                lines=lines_json,
-            )
+            create_payload = {
+                "tenant_id": tenant_id,
+                "uuid": str(uuid_mod.uuid4()),
+                "material_id": material.id,
+                "process_route_id": pr_id,
+                "allow_operation_jump": data.allow_operation_jump,
+                "lines": lines_json,
+            }
+            apply_create_audit(create_payload, current_user)
+            record = await MaterialProductProcess.create(**create_payload)
 
         # 同步物料指派
         defaults = material.defaults if isinstance(material.defaults, dict) else {}

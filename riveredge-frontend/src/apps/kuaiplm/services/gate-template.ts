@@ -42,6 +42,8 @@ export interface GateTemplateSummary {
   stage_count?: number;
   created_at?: string;
   updated_at?: string;
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
 }
 
 export interface GateTemplateDetail extends GateTemplateSummary {

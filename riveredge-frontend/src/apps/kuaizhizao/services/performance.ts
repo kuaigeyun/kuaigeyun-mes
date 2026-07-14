@@ -11,6 +11,8 @@ import type {
   HolidayCreate,
   HolidayUpdate,
   HolidayListParams,
+  HolidayCnImportRequest,
+  HolidayCnImportResult,
   Shift,
   ShiftCreate,
   ShiftUpdate,
@@ -100,6 +102,9 @@ export const holidayApi = {
   },
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/performance/holidays/${uuid}`);
+  },
+  importCn: async (data: HolidayCnImportRequest): Promise<HolidayCnImportResult> => {
+    return api.post('/apps/master-data/performance/holidays/import-cn', data);
   },
 };
 

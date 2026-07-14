@@ -28,8 +28,11 @@ import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLi
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
-import { formatDateTime } from '../../../../../utils/format';
+import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildInventoryTransferModeValueEnum,
@@ -427,7 +430,7 @@ const InventoryTransferPage: React.FC = () => {
   const workflowStatusValueEnum = useMemo(() => buildWarehouseWorkflowStatusValueEnum(t), [t]);
   const transferModeValueEnum = useMemo(() => buildInventoryTransferModeValueEnum(t), [t]);
 
-  const columns: ProColumns<InventoryTransfer>[] = useMemo(() => [
+  const columns: ProColumns<InventoryTransfer>[] = useMemo(() => alignProColumns<InventoryTransfer>([
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at_range',
@@ -528,6 +531,7 @@ const InventoryTransferPage: React.FC = () => {
       align: 'right',
       sorter: true,
       hideInSearch: true,
+      render: formatQuantity,
     },
     {
       title: t('app.kuaizhizao.inventoryTransfer.colTotalAmount'),
@@ -541,13 +545,10 @@ const InventoryTransferPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
       dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
+      hideInTable: true,
       hideInSearch: true,
-      defaultSortOrder: 'descend',
-      sorter: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
     },
+    ...buildDocumentAuditColumns<InventoryTransfer>(t),
     {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -598,7 +599,7 @@ const InventoryTransferPage: React.FC = () => {
         </Space>
       ),
     },
-  ], [t, workflowStatusValueEnum, transferModeValueEnum]);
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, workflowStatusValueEnum, transferModeValueEnum]);
 
   const getAreaOptions = (warehouseId?: number) =>
     storageAreaList
@@ -614,7 +615,7 @@ const InventoryTransferPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle={t('app.kuaizhizao.inventoryTransfer.headerTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-transfer"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-transfer.v2"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -1161,6 +1162,7 @@ const InventoryTransferPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.inventoryTransfer.colTotalQty'),
             dataIndex: 'total_quantity',
+            render: formatQuantity,
           },
           {
             title: t('app.kuaizhizao.inventoryTransfer.colTotalAmount'),
@@ -1198,6 +1200,7 @@ const InventoryTransferPage: React.FC = () => {
                   dataIndex: 'quantity',
                   width: 100,
                   align: 'right',
+      render: formatQuantity,
                 },
                 {
                   title: t('app.kuaizhizao.inventoryTransfer.colFromAreaLocation'),

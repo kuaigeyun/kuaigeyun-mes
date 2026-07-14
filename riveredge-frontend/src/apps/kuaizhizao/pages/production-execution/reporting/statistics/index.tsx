@@ -12,6 +12,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import type { NoUndefinedRangeValueType } from 'rc-picker/lib/PickerInput/RangePicker';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate } from '../../../../../../components/layout-templates';
+import { formatQuantity } from '../../../../../../utils/format';
 
 const { RangePicker } = DatePicker;
 
@@ -96,14 +97,14 @@ const ReportingStatisticsPage: React.FC = () => {
         dataIndex: 'reported_quantity',
         key: 'reported_quantity',
         align: 'right' as const,
-        render: (value: number) => value.toFixed(2),
+        render: (value: number) => formatQuantity(value),
       },
       {
         title: t('app.kuaizhizao.workReporting.statistics.colQualifiedQty'),
         dataIndex: 'qualified_quantity',
         key: 'qualified_quantity',
         align: 'right' as const,
-        render: (value: number) => value.toFixed(2),
+        render: (value: number) => formatQuantity(value),
       },
       {
         title: t('app.kuaizhizao.workReporting.statistics.colWorkHours'),
@@ -145,14 +146,14 @@ const ReportingStatisticsPage: React.FC = () => {
         dataIndex: 'reported_quantity',
         key: 'reported_quantity',
         align: 'right' as const,
-        render: (value: number) => value.toFixed(2),
+        render: (value: number) => formatQuantity(value),
       },
       {
         title: t('app.kuaizhizao.workReporting.statistics.colQualifiedQty'),
         dataIndex: 'qualified_quantity',
         key: 'qualified_quantity',
         align: 'right' as const,
-        render: (value: number) => value.toFixed(2),
+        render: (value: number) => formatQuantity(value),
       },
       {
         title: t('app.kuaizhizao.workReporting.statistics.colWorkHours'),

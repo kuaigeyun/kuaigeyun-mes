@@ -20,6 +20,7 @@ import {
 } from '../../../services/phase2';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   plmCodeTitleSearchColumns,
   plmCreatedUpdatedColumns,
@@ -236,7 +237,7 @@ const FmeaPage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         columnPersistenceId="apps.kuaiplm.pages.phase2.fmea"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter

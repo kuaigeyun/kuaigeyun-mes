@@ -32,6 +32,8 @@ export interface RdProject {
   notes?: string | null;
   created_at?: string;
   updated_at?: string;
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
 }
 
 export interface RdProjectGate {

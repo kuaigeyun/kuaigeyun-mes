@@ -29,6 +29,7 @@ import CodeRuleComponentBuilder from '../../../../../components/code-rule-compon
 import { BATCH_RULE_AVAILABLE_FIELDS, DEFAULT_BATCH_RULE_COMPONENTS } from '../../../constants/batchRuleConstants';
 import type { BatchRule, BatchRuleCreate, BatchRuleUpdate } from '../../../services/batchSerialRules';
 import type { CodeRuleComponent } from '../../../../../types/codeRuleComponent';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const BatchRulesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -241,7 +242,7 @@ const BatchRulesPage: React.FC = () => {
         headerTitle={t('app.master-data.batchRules.headerTitle')}
         actionRef={actionRef}
         rowKey="uuid"
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const { current = 1, pageSize = 20 } = params;
           const listParams = resolveRuleListParams(searchFormValues, sort);

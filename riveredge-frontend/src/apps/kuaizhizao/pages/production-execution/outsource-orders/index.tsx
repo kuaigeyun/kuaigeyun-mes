@@ -43,6 +43,7 @@ import {
 } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import {
@@ -67,9 +68,11 @@ import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/Wa
 import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
-import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import {formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
@@ -85,6 +88,20 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_orders';
+
+const OUTSOURCE_ORDER_LIST_FIELD_RANK = {
+  ...SALES_DOC_LIST_FIELD_RANK,
+  supplier_name: 9.9,
+  planned_start_date: 10.0,
+  planned_end_date: 10.1,
+  operation_name: 10.2,
+  work_order_code: 10.3,
+  unit_price: 59.8,
+  outsource_quantity: 59.9,
+  total_amount: 60.0,
+  received_quantity: 60.1,
+  qualified_quantity: 60.2,
+};
 
 interface OutsourceOrder {
   id?: number;
@@ -558,12 +575,12 @@ export const OutsourceOrdersTable: React.FC = () => {
         dataIndex: 'status',
         render: (_, record) => getOoStatusTag(record.status),
       },
+      { title: t('app.kuaizhizao.outsourceOrder.colUnitPrice'), dataIndex: 'unit_price', valueType: 'money' },
       { title: t('app.kuaizhizao.outsourceOrder.colOutsourceQty'), dataIndex: 'outsource_quantity', valueType: 'digit' },
+      { title: t('app.kuaizhizao.outsourceOrder.colTotalAmount'), dataIndex: 'total_amount', valueType: 'money' },
       { title: t('app.kuaizhizao.outsourceOrder.colReceivedQty'), dataIndex: 'received_quantity', valueType: 'digit' },
       { title: t('app.kuaizhizao.outsourceOrder.colQualifiedQty'), dataIndex: 'qualified_quantity', valueType: 'digit' },
       { title: t('app.kuaizhizao.outsourceOrder.colUnqualifiedQty'), dataIndex: 'unqualified_quantity', valueType: 'digit' },
-      { title: t('app.kuaizhizao.outsourceOrder.colUnitPrice'), dataIndex: 'unit_price', valueType: 'money' },
-      { title: t('app.kuaizhizao.outsourceOrder.colTotalAmount'), dataIndex: 'total_amount', valueType: 'money' },
       { title: t('app.kuaizhizao.outsourceOrder.colPlannedStart'), dataIndex: 'planned_start_date', valueType: 'dateTime' },
       { title: t('app.kuaizhizao.outsourceOrder.colPlannedEnd'), dataIndex: 'planned_end_date', valueType: 'dateTime' },
       {
@@ -824,7 +841,7 @@ export const OutsourceOrdersTable: React.FC = () => {
 
   const outsourceCustomFieldColumns = generateOutsourceCustomFieldColumns();
   const columns: ProColumns<OutsourceOrder>[] = useMemo(
-    () => [
+    () => alignProColumns<OutsourceOrder>([
       {
         title: t('app.kuaizhizao.outsourceOrder.colPlannedStart'),
         dataIndex: 'planned_start_date_range',
@@ -851,9 +868,9 @@ export const OutsourceOrdersTable: React.FC = () => {
         title: t('app.kuaizhizao.outsourceOrder.colCode'),
         dataIndex: 'code',
         width: 168,
-        fixed: 'left',
         ellipsis: true,
         sorter: true,
+        hideInTable: true,
         hideInSearch: false,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
@@ -862,11 +879,65 @@ export const OutsourceOrdersTable: React.FC = () => {
         ),
       },
       {
+        title: `${t('app.kuaizhizao.outsourceOrder.colSupplierName')} / ${t('app.kuaizhizao.outsourceOrder.colCode')}`,
+        key: 'supplier_code_stacked',
+        dataIndex: 'supplier_name',
+        fixed: 'left',
+        minWidth: 180,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: false,
+        hideInSearch: true,
+        render: (_, record) => (
+          <UniTableStackedPrimaryCell
+            primary={String(record.supplier_name ?? '-')}
+            secondary={String(record.code ?? '-')}
+          />
+        ),
+      },
+      {
+        title: `${t('app.kuaizhizao.outsourceOrder.colPlannedStart')} / ${t('app.kuaizhizao.outsourceOrder.colPlannedEnd')}`,
+        key: 'planned_range_stacked',
+        dataIndex: 'planned_start_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, record) => (
+          <UniTableStackedPrimaryCell
+            primary={record.planned_start_date ? formatDateTimeBySiteSetting(record.planned_start_date) : '-'}
+            secondary={record.planned_end_date ? formatDateTimeBySiteSetting(record.planned_end_date) : '-'}
+            secondaryCopyable={false}
+            uniformText
+            primaryBadge={t('common.start')}
+            secondaryBadge={t('common.end')}
+          />
+        ),
+      },
+      {
+        title: `${t('app.kuaizhizao.outsourceOrder.colOperationName')} / ${t('app.kuaizhizao.outsourceOrder.colWorkOrderCode')}`,
+        key: 'operation_work_order_stacked',
+        dataIndex: 'operation_name',
+        minWidth: 180,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: false,
+        hideInSearch: true,
+        render: (_, r) => (
+          <UniTableStackedPrimaryCell
+            primary={String(r.operation_name ?? '-')}
+            secondary={String(r.work_order_code ?? '-')}
+            secondaryCopyable={false}
+          />
+        ),
+      },
+      {
         title: t('app.kuaizhizao.outsourceOrder.colWorkOrderCode'),
         dataIndex: 'work_order_code',
         width: 148,
         ellipsis: true,
         sorter: true,
+        hideInTable: true,
         hideInSearch: false,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }} ellipsis>
@@ -880,6 +951,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         width: 150,
         ellipsis: true,
         sorter: true,
+        hideInTable: true,
         hideInSearch: false,
       },
       {
@@ -887,16 +959,33 @@ export const OutsourceOrdersTable: React.FC = () => {
         dataIndex: 'supplier_id',
         width: 150,
         ellipsis: true,
+        hideInTable: true,
         hideInSearch: false,
         valueType: 'select',
         valueEnum: supplierSearchValueEnum,
         render: (_, record) => record.supplier_name ?? '-',
       },
       {
+        title: t('app.kuaizhizao.outsourceOrder.colUnitPrice'),
+        dataIndex: 'unit_price',
+        width: 100,
+        valueType: 'money',
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
         title: t('app.kuaizhizao.outsourceOrder.colOutsourceQty'),
         dataIndex: 'outsource_quantity',
         width: 100,
         valueType: 'digit',
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.outsourceOrder.colTotalAmount'),
+        dataIndex: 'total_amount',
+        width: 120,
+        valueType: 'money',
         sorter: true,
         hideInSearch: true,
       },
@@ -917,28 +1006,13 @@ export const OutsourceOrdersTable: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t('app.kuaizhizao.outsourceOrder.colUnitPrice'),
-        dataIndex: 'unit_price',
-        width: 100,
-        valueType: 'money',
-        sorter: true,
-        hideInSearch: true,
-      },
-      {
-        title: t('app.kuaizhizao.outsourceOrder.colTotalAmount'),
-        dataIndex: 'total_amount',
-        width: 120,
-        valueType: 'money',
-        sorter: true,
-        hideInSearch: true,
-      },
-      {
         title: t('app.kuaizhizao.outsourceOrder.colPlannedStart'),
         dataIndex: 'planned_start_date',
         valueType: 'dateTime',
         width: 132,
         uniTableKeepWidth: true,
         sorter: true,
+        hideInTable: true,
         hideInSearch: true,
         render: (_, record) =>
           record.planned_start_date ? formatDateTimeBySiteSetting(record.planned_start_date) : '-',
@@ -950,21 +1024,12 @@ export const OutsourceOrdersTable: React.FC = () => {
         width: 132,
         uniTableKeepWidth: true,
         sorter: true,
+        hideInTable: true,
         hideInSearch: true,
         render: (_, record) =>
           record.planned_end_date ? formatDateTimeBySiteSetting(record.planned_end_date) : '-',
       },
-      {
-        title: t('app.kuaizhizao.outsourceOrder.colUpdatedAt'),
-        dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        defaultSortOrder: 'descend',
-        hideInSearch: true,
-        render: (_, record) =>
-          record.updated_at ? formatDateTime(record.updated_at, 'YYYY-MM-DD HH:mm') : '-',
-      },
+      ...buildDocumentAuditColumns<OutsourceOrder>(t),
       {
         title: t('app.kuaizhizao.outsourceOrder.colLifecycle'),
         dataIndex: 'status',
@@ -997,7 +1062,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         render: (_, record) =>
           renderOoRowActions(renderOoRowActionNodes(record), `oo-${record.id ?? 'row'}`),
       },
-    ],
+    ], OUTSOURCE_ORDER_LIST_FIELD_RANK),
     [outsourceCustomFieldColumns, outsourceOrderLifecycleValueEnum, supplierSearchValueEnum, t],
   );
 
@@ -1107,7 +1172,7 @@ export const OutsourceOrdersTable: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
       <UniTable<OutsourceOrder>
         headerTitle={t('app.kuaizhizao.outsourceOrder.title')}
-        columnPersistenceId="apps.kuaizhizao.pages.production-execution.outsource-orders"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.outsource-orders.v4"
         actionRef={actionRef}
         columns={columns}
         request={handleRequest}
@@ -1212,9 +1277,9 @@ export const OutsourceOrdersTable: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' , render: formatQuantity },
                 ]}
               />
             ) : (

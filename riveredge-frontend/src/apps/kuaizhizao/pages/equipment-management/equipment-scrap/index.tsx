@@ -21,6 +21,8 @@ import { equipmentApi } from '../../../services/equipment';
 import { scrapApplicationsApi } from '../../../services/equipmentOps';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   APPROVAL_DOC_PINNED_STATUS_FIELD,
@@ -175,8 +177,7 @@ const EquipmentScrapPage: React.FC = () => {
 
   const approvalStatusValueEnum = useMemo(() => buildApprovalDocStatusValueEnum(), []);
 
-  const columns: ProColumns<ScrapApplication>[] = useMemo(
-    () => [
+  const columns: ProColumns<ScrapApplication>[] = useMemo(() => alignProColumns<ScrapApplication>([
       {
         title: t(`${P}.col.scrapDate`),
         dataIndex: 'scrap_date_range',
@@ -251,13 +252,10 @@ const EquipmentScrapPage: React.FC = () => {
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
+        hideInTable: true,
         hideInSearch: true,
-        defaultSortOrder: 'descend',
-        sorter: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
+      ...buildDocumentAuditColumns<ScrapApplication>(t),
       {
         title: t('common.actions'),
         key: 'action',
@@ -358,7 +356,7 @@ const EquipmentScrapPage: React.FC = () => {
           </>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, perms, approvalStatusValueEnum],
   );
 

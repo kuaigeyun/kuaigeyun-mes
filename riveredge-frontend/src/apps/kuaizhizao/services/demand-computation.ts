@@ -34,6 +34,11 @@ export interface DemandComputation {
   notes?: string;
   created_at?: string;
   updated_at?: string;
+  created_by?: number;
+  created_by_name?: string;
+  updated_by?: number;
+  updated_by_name?: string;
+  downstream_push_progress?: number;
   items?: DemandComputationItem[];
   capabilities?: {
     execute?: { allowed: boolean; reason?: string | null };

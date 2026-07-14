@@ -43,6 +43,7 @@ import {
 } from '../../../utils/financeListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import type { PurchaseInvoiceListParams } from '../../../types/finance/purchase-invoice';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const P = 'app.kuaicaiwu.purchaseInvoice';
 const PURCHASE_INVOICE_RESOURCE = 'kuaicaiwu:purchase-invoice';
@@ -521,7 +522,7 @@ const PurchaseInvoiceList: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         onTableDataChange={setTableRows}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices"
         scroll={{ x: 1600 }}
         showAdvancedSearch

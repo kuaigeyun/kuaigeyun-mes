@@ -10,8 +10,8 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, DatePicker, Descriptions, Dropdown, Form as AntForm, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined, ShoppingOutlined, MoreOutlined } from '@ant-design/icons';
+import { App, Button, Col, DatePicker, Descriptions, Form as AntForm, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined, ShoppingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -36,8 +36,11 @@ import { useTranslation } from 'react-i18next';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { getDepartmentTree } from '../../../../../services/department';
 import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildMaterialBorrowStatusValueEnum,
@@ -60,6 +63,7 @@ interface MaterialBorrow {
   borrow_time?: string;
   status?: string;
   total_quantity?: number;
+  total_items?: number;
   notes?: string;
   created_at?: string;
   updated_at?: string;
@@ -169,7 +173,7 @@ const MaterialBorrowsPage: React.FC = () => {
 
   const materialBorrowStatusValueEnum = useMemo(() => buildMaterialBorrowStatusValueEnum(t), [t]);
 
-  const columns: ProColumns<MaterialBorrow>[] = useMemo(() => [
+  const columns: ProColumns<MaterialBorrow>[] = useMemo(() => alignProColumns<MaterialBorrow>([
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at_range',
@@ -217,6 +221,24 @@ const MaterialBorrowsPage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'),
+      dataIndex: 'total_quantity',
+      width: 100,
+      align: 'right',
+      sorter: true,
+      hideInSearch: true,
+      render: formatQuantity,
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colMaterialKindCount'),
+      dataIndex: 'total_items',
+      width: 90,
+      align: 'right',
+      sorter: true,
+      hideInSearch: true,
+      render: (v: number | null | undefined) => (v != null ? v : '-'),
+    },
+    {
       title: t('app.kuaizhizao.materialBorrow.col.borrower'),
       dataIndex: 'borrower_name',
       width: 100,
@@ -248,16 +270,7 @@ const MaterialBorrowsPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => (r.borrow_time ? formatDateTime(r.borrow_time) : '-'),
     },
-    {
-      title: t('app.kuaizhizao.warehouseOutbound.col.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      sorter: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
-    },
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -284,8 +297,6 @@ const MaterialBorrowsPage: React.FC = () => {
       width: 220,
       fixed: 'right',
       render: (_, record) => {
-        const showPrint = record.status === '待借出' || record.status === '已借出';
-        const printInMore = record.status === '待借出';
         return (
           <Space size="small" wrap>
             <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
@@ -306,32 +317,11 @@ const MaterialBorrowsPage: React.FC = () => {
                 {t('app.kuaizhizao.materialBorrow.action.withdrawBorrow')}
               </Button>
             )}
-            {printInMore ? (
-              <Dropdown
-                menu={{
-                  items: [
-                    {
-                      key: 'print',
-                      icon: <PrinterOutlined />,
-                      label: t('app.kuaizhizao.materialBorrow.action.print'),
-                      onClick: () => handlePrint(record),
-                    },
-                  ],
-                }}
-                trigger={['click']}
-              >
-                <Button {...rowActionKind('display')} {...rowActionLabelKeep()} icon={<MoreOutlined />}>
-                  {t('app.kuaizhizao.materialBorrow.action.more')}
-                </Button>
-              </Dropdown>
-            ) : (
-              showPrint && <Button {...rowActionKind('print')} onClick={() => handlePrint(record)} />
-            )}
           </Space>
         );
       },
     },
-  ], [t, materialBorrowStatusValueEnum]);
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, materialBorrowStatusValueEnum]);
 
   const handleDetail = async (record: MaterialBorrow) => {
     try {
@@ -394,6 +384,45 @@ const MaterialBorrowsPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const listRowsRef = useRef<Map<string, MaterialBorrow>>(new Map());
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const isMaterialBorrowDeletable = (record: MaterialBorrow) => record.status === '待借出' && !!record.id;
+  const isMaterialBorrowPrintable = (record: MaterialBorrow) =>
+    (record.status === '待借出' || record.status === '已借出') && !!record.id;
+
+  const selectedMaterialBorrowForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => listRowsRef.current.get(String(key)))
+        .filter((row): row is MaterialBorrow => row != null),
+    [selectedRowKeys],
+  );
+
+  const canToolbarPrint =
+    selectedRowKeys.length === 1 &&
+    !!selectedMaterialBorrowForBatch[0] &&
+    isMaterialBorrowPrintable(selectedMaterialBorrowForBatch[0]);
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const rows = keys
+      .map((k) => listRowsRef.current.get(String(k)))
+      .filter((r): r is MaterialBorrow => !!r && isMaterialBorrowDeletable(r));
+    if (rows.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.warehouseCommon.batchDeleteNoneDeletable'));
+      return;
+    }
+    try {
+      for (const row of rows) {
+        await warehouseApi.materialBorrow.delete(String(row.id));
+      }
+      messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: rows.length }));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.batchDeleteFailed'));
+    }
   };
 
   const handleSyncConfirm = async (rows: Record<string, any>[]) => {
@@ -522,7 +551,7 @@ const MaterialBorrowsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle={t('app.kuaizhizao.materialBorrow.title')}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-borrows"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-borrows.v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -532,6 +561,20 @@ const MaterialBorrowsPage: React.FC = () => {
           showCreateButton
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          rowSelectionGetCheckboxProps={(record) => ({
+            disabled: !isMaterialBorrowDeletable(record) && !isMaterialBorrowPrintable(record),
+          })}
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) =>
+            t('app.kuaizhizao.warehouseCommon.batchDeleteConfirm', {
+              count,
+              noun: t('app.kuaizhizao.materialBorrow.title'),
+            })
+          }
           showImportButton={false}
           showExportButton
           onExport={async (type, keys, pageData) => {
@@ -542,7 +585,7 @@ const MaterialBorrowsPage: React.FC = () => {
               if (type === 'currentPage' && pageData?.length) {
                 items = pageData;
               } else if (type === 'selected' && keys?.length) {
-                items = rawData.filter((d: MaterialBorrow) => d.id != null && keys.includes(d.id));
+                items = rawData.filter((d: MaterialBorrow) => d.id != null && keys.map(String).includes(String(d.id)));
               }
               if (items.length === 0) {
                 messageApi.warning(t('app.kuaizhizao.materialBorrow.msg.noExportData'));
@@ -573,12 +616,30 @@ const MaterialBorrowsPage: React.FC = () => {
                 ...listParams,
               });
               const { data, total } = normalizeWarehouseListResponse(response);
+              const next = new Map<string, MaterialBorrow>();
+              for (const row of data as MaterialBorrow[]) {
+                if (row.id != null) next.set(String(row.id), row);
+              }
+              listRowsRef.current = next;
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.materialBorrow.msg.loadListFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
+          toolBarActionsAfterBatch={[
+            <Button
+              key="material-borrow-toolbar-print"
+              icon={<PrinterOutlined />}
+              disabled={!canToolbarPrint}
+              onClick={() => {
+                const row = selectedMaterialBorrowForBatch[0];
+                if (row) handlePrint(row);
+              }}
+            >
+              {t('components.uniAction.print')}
+            </Button>,
+          ]}
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>

@@ -66,6 +66,10 @@ class SparePartRequisitionResponse(SparePartRequisitionBase):
     approver_name: Optional[str] = None
     approved_at: Optional[datetime] = None
     reject_reason: Optional[str] = None
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     lines: List[SparePartRequisitionLineResponse] = Field(default_factory=list)

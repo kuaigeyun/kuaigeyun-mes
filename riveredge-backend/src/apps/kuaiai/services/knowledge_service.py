@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from apps.common.audit_actor import audit_response_fields
 from apps.kuaiai.models.knowledge import KuaiKnowledgeChunk, KuaiKnowledgeDocument, KuaiTrainingSample
 from apps.kuaiai.services.embedding_service import EmbeddingService
 from apps.kuaiai.services.text_chunker import split_text_chunks
@@ -31,6 +32,7 @@ def _document_to_dict(doc: KuaiKnowledgeDocument) -> dict[str, Any]:
         "faq_question": doc.faq_question,
         "created_at": to_api_isoformat(doc.created_at) if doc.created_at else None,
         "updated_at": to_api_isoformat(doc.updated_at) if doc.updated_at else None,
+        **audit_response_fields(doc),
     }
 
 

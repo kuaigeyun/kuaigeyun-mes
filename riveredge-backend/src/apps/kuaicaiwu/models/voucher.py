@@ -34,7 +34,6 @@ class Voucher(BaseModel):
     total_credit = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="贷方合计")
     posted_at = fields.DatetimeField(null=True, description="过账时间")
     posted_by = fields.IntField(null=True, description="过账人")
-    created_by = fields.IntField(null=True, description="创建人")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     def __str__(self):

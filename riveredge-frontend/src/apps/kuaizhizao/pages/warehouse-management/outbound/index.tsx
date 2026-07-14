@@ -44,7 +44,15 @@ import { outboundTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintC
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import OutboundQuickPullModals, { type OutboundQuickPullModalsRef } from './OutboundQuickPullModals';
 import OutboundConfirmPreviewModal from './OutboundConfirmPreviewModal';
-import { formatDateTime } from '../../../../../utils/format';
+import {formatDateTime, formatQuantity} from '../../../../../utils/format';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import {
+  DocumentPushProgressBar,
+  DOCUMENT_PROGRESS_COLUMN_WIDTH,
+  ratioToPushProgressPercent,
+} from '../../sales-management/shared/DocumentPushProgressBar';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildOutboundHubStatusValueEnum,
@@ -148,6 +156,7 @@ const OutboundPage: React.FC = () => {
 
   const [executionConfig, setExecutionConfig] = useState<any>(null);
   const outboundPerms = useResourcePermissions('kuaizhizao:outbound');
+  const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
 
   const [confirmPreviewOpen, setConfirmPreviewOpen] = useState(false);
   const [confirmPreviewRecord, setConfirmPreviewRecord] = useState<OutboundOrder | null>(null);
@@ -335,12 +344,39 @@ const OutboundPage: React.FC = () => {
     openPrint({ documentType: docType, documentId: record.id });
   };
 
+  const listRowsRef = useRef<Map<string, OutboundOrder>>(new Map());
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const outboundRowKey = (record: OutboundOrder) => `${record.outbound_type}::${record.id}`;
+
   const isOutboundDeletable = (record: OutboundOrder) =>
     isOutboundConfirmable(record) &&
     (record.outbound_type === 'production_picking' ||
       record.outbound_type === 'sales_delivery' ||
       record.outbound_type === 'other_outbound' ||
       record.outbound_type === 'material_borrow');
+
+  const isOutboundPrintable = useCallback(
+    (record: OutboundOrder) =>
+      !!record.id &&
+      !!outboundTypeToPrintDocumentType(record.outbound_type) &&
+      outboundPerms.canPrint &&
+      record.capabilities?.print?.allowed !== false,
+    [outboundPerms.canPrint],
+  );
+
+  const selectedOutboundForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => listRowsRef.current.get(String(key)))
+        .filter((row): row is OutboundOrder => row != null),
+    [selectedRowKeys],
+  );
+
+  const canToolbarPrint =
+    selectedRowKeys.length === 1 &&
+    !!selectedOutboundForBatch[0] &&
+    isOutboundPrintable(selectedOutboundForBatch[0]);
 
   const handleDelete = (record: OutboundOrder) => {
     const code = outboundDocumentCode(record);
@@ -364,6 +400,27 @@ const OutboundPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const rows = keys
+      .map((k) => listRowsRef.current.get(String(k)))
+      .filter((r): r is OutboundOrder => !!r && isOutboundDeletable(r));
+    if (rows.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.warehouseCommon.batchDeleteNoneDeletable'));
+      return;
+    }
+    try {
+      for (const row of rows) {
+        await deleteOutboundDocument(row);
+      }
+      messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: rows.length }));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (e: unknown) {
+      const err = e as { message?: string; response?: { data?: { detail?: string } } };
+      messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseCommon.batchDeleteFailed'));
+    }
   };
 
   const handleConfirm = async (record: OutboundOrder) => {
@@ -397,7 +454,7 @@ const OutboundPage: React.FC = () => {
     () => [
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.requiredQty'), dataIndex: 'required_quantity', width: 100, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.requiredQty'), dataIndex: 'required_quantity', width: 100, align: 'right' as const , render: formatQuantity },
       { title: t('app.kuaizhizao.warehouseOutbound.col.pickedQty'), dataIndex: 'picked_quantity', width: 100, align: 'right' as const },
       { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 60 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.warehouseName'), dataIndex: 'warehouse_name', width: 120 },
@@ -418,7 +475,7 @@ const OutboundPage: React.FC = () => {
   );
 
   const columns: ProColumns<OutboundOrder>[] = useMemo(
-    () => [
+    () => alignProColumns<OutboundOrder>([
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.subjectDocNo'),
       key: 'delivery_code',
@@ -479,6 +536,7 @@ const OutboundPage: React.FC = () => {
       width: 100,
       align: 'right',
       sorter: true,
+      render: formatQuantity,
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.totalItems'),
@@ -486,6 +544,30 @@ const OutboundPage: React.FC = () => {
       width: 100,
       align: 'right',
       sorter: true,
+    },
+    {
+      title: t('app.kuaizhizao.warehouseOutbound.col.pickingProgress'),
+      dataIndex: 'fulfillment_progress',
+      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+      uniTableKeepWidth: true,
+      hideInSearch: true,
+      render: (_, record) => {
+        if (record.outbound_type !== 'production_picking') return '-';
+        const required = Number(record.required_quantity_total ?? record.total_quantity ?? 0);
+        const picked = Number(record.picked_quantity_total ?? 0);
+        if (!(required > 0) && !(picked > 0)) return '-';
+        const percent = ratioToPushProgressPercent(picked, required);
+        return (
+          <DocumentPushProgressBar
+            percent={percent}
+            tooltip={t('app.kuaizhizao.warehouseOutbound.col.pickingProgressTip', {
+              picked: formatQuantity(picked),
+              required: formatQuantity(required),
+              percent,
+            })}
+          />
+        );
+      },
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.warehouse'),
@@ -508,16 +590,7 @@ const OutboundPage: React.FC = () => {
       uniTableKeepWidth: true,
       sorter: true,
     },
-    {
-      title: t('app.kuaizhizao.warehouseOutbound.col.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      sorter: true,
-      defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -548,6 +621,19 @@ const OutboundPage: React.FC = () => {
       render: (_, record) => (
         <Space wrap>
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
+          {record.outbound_type === 'sales_delivery' && record.id && packingBindingPerms.canRead && (
+            <Button
+              {...rowActionKind('execute')}
+              {...rowActionLabelKeep()}
+              onClick={() =>
+                navigate(
+                  `/apps/kuaizhizao/production-execution/packing-binding?action=bind&source_type=sales_delivery&source_id=${record.id}`,
+                )
+              }
+            >
+              {t('app.kuaizhizao.packingBinding.title')}
+            </Button>
+          )}
           {isOutboundConfirmable(record) && record.outbound_type !== 'outsource_issue' && (
             <Tooltip
               title={
@@ -580,16 +666,10 @@ const OutboundPage: React.FC = () => {
           {isOutboundDeletable(record) && outboundPerms.canDelete && (
             <Button {...rowActionKind('delete')} onClick={() => handleDelete(record)} />
           )}
-          {(() => {
-            const printDocType = outboundTypeToPrintDocumentType(record.outbound_type);
-            return printDocType && record.id ? (
-              <Button {...rowActionKind('print')} onClick={() => handlePrint(record)} />
-            ) : null;
-          })()}
         </Space>
       ),
     },
-  ],
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK),
     [
       t,
       executionConfig,
@@ -597,8 +677,9 @@ const OutboundPage: React.FC = () => {
       handleConfirm,
       handleWithdraw,
       handleDelete,
-      handlePrint,
+      navigate,
       outboundPerms,
+      packingBindingPerms.canRead,
       salesDeliveryCustomFieldColumns,
       productionPickingCustomFieldColumns,
     ],
@@ -608,13 +689,27 @@ const OutboundPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle={t('app.kuaizhizao.warehouseOutbound.title')}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound.v2"
         actionRef={actionRef}
-        rowKey={(record) => `${record.outbound_type}::${record.id}`}
+        rowKey={outboundRowKey}
         columns={columns}
         showAdvancedSearch={true}
         pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
         skipFuzzyPinyinClientFilter
+        enableRowSelection={outboundPerms.canDelete || outboundPerms.canPrint}
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+        showDeleteButton={outboundPerms.canDelete}
+        rowSelectionGetCheckboxProps={(record) => ({
+          disabled: !isOutboundDeletable(record) && !isOutboundPrintable(record),
+        })}
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) =>
+          t('app.kuaizhizao.warehouseCommon.batchDeleteConfirm', {
+            count,
+            noun: t('app.kuaizhizao.warehouseOutbound.title'),
+          })
+        }
         request={async (params, sort, _filter, searchFormValues) => {
           try {
             const listParams = resolveOutboundHubListParams(searchFormValues, sort);
@@ -627,6 +722,11 @@ const OutboundPage: React.FC = () => {
               enrichProductionPickingRecordsWithCustomFields,
               enrichSalesDeliveryRecordsWithCustomFields,
             });
+            const next = new Map<string, OutboundOrder>();
+            for (const row of result.data ?? []) {
+              next.set(outboundRowKey(row), row);
+            }
+            listRowsRef.current = next;
             return result;
           } catch {
             messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadListFailed'));
@@ -662,6 +762,23 @@ const OutboundPage: React.FC = () => {
             ])}
           />,
         ]}
+        toolBarActionsAfterBatch={
+          outboundPerms.canPrint
+            ? [
+                <Button
+                  key="outbound-toolbar-print"
+                  icon={<PrinterOutlined />}
+                  disabled={!canToolbarPrint}
+                  onClick={() => {
+                    const row = selectedOutboundForBatch[0];
+                    if (row) handlePrint(row);
+                  }}
+                >
+                  {t('components.uniAction.print')}
+                </Button>,
+              ]
+            : []
+        }
         scroll={{ x: 2000 }}
       />
 

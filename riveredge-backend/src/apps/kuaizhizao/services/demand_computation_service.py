@@ -48,6 +48,14 @@ from apps.kuaizhizao.utils.mrp_scheduling_helper import (
     planning_date_to_work_order_start,
     resolve_demand_item_delivery_date,
 )
+from apps.common.base_service import AppBaseService
+from apps.common.audit_actor import (
+    apply_create_audit,
+    apply_update_audit,
+    audit_response_fields,
+    operator_name_from_user,
+)
+from infra.models.user import User
 from apps.kuaizhizao.utils.inventory_helper import (
     get_material_inventory_info,
     batch_sum_open_supply_quantities,
@@ -411,8 +419,11 @@ DEMAND_COMPUTATION_SORTABLE_FIELDS = frozenset({
 })
 
 
-class DemandComputationService:
+class DemandComputationService(AppBaseService):
     """统一需求计算服务"""
+
+    def __init__(self) -> None:
+        super().__init__(DemandComputation)
     
     async def create_computation(
         self,
@@ -489,21 +500,24 @@ class DemandComputationService:
             if len(demands) > 3:
                 demand_codes += f"等{len(demands)}个"
 
-            computation = await DemandComputation.create(
-                tenant_id=tenant_id,
-                computation_code=computation_code,
-                demand_id=demand.id,
-                demand_ids=demand_id_list,
-                demand_code=demand_codes,
-                demand_type=demand.demand_type,
-                business_mode=merged_business_mode,
-                computation_type=persist_computation_type,
-                computation_params=computation_data.computation_params,
-                computation_status="进行中",
-                computation_start_time=datetime.now(),
-                notes=computation_data.notes,
-                created_by=created_by,
-            )
+            user = await User.get_or_none(id=created_by)
+            create_data: Dict[str, Any] = {
+                "tenant_id": tenant_id,
+                "computation_code": computation_code,
+                "demand_id": demand.id,
+                "demand_ids": demand_id_list,
+                "demand_code": demand_codes,
+                "demand_type": demand.demand_type,
+                "business_mode": merged_business_mode,
+                "computation_type": persist_computation_type,
+                "computation_params": computation_data.computation_params,
+                "computation_status": "进行中",
+                "computation_start_time": datetime.now(),
+                "notes": computation_data.notes,
+                "created_by": created_by,
+            }
+            apply_create_audit(create_data, user)
+            computation = await DemandComputation.create(**create_data)
             
             # 2. 创建需求计算结果明细 (若创建时带了已计算好的明细)
             items = []
@@ -520,13 +534,14 @@ class DemandComputationService:
             from apps.kuaizhizao.services.demand_service import DemandService
 
             # 3.1 批量更新下推标记 (确保所有参与工作的需求都被标记)
-            await Demand.filter(tenant_id=tenant_id, id__in=demand_id_list).update(
-                pushed_to_computation=True,
-                computation_id=computation.id,
-                computation_code=computation_code,
-                updated_by=created_by,
-                updated_at=datetime.now()
-            )
+            push_audit: Dict[str, Any] = {
+                "pushed_to_computation": True,
+                "computation_id": computation.id,
+                "computation_code": computation_code,
+                "updated_at": datetime.now(),
+            }
+            apply_update_audit(push_audit, user)
+            await Demand.filter(tenant_id=tenant_id, id__in=demand_id_list).update(**push_audit)
 
             demand_svc = DemandService()
             for d in demands:
@@ -622,6 +637,10 @@ class DemandComputationService:
             item_responses.append(resp)
 
         lifecycle = get_demand_computation_lifecycle(computation)
+        exclusions = await self._get_already_pushed_exclusions(computation.tenant_id, computation.id)
+        downstream_push_progress = self._compute_downstream_push_progress(
+            computation, items, exclusions
+        )
 
         response = DemandComputationResponse(
             id=computation.id,
@@ -642,10 +661,10 @@ class DemandComputationService:
             notes=computation.notes,
             created_at=computation.created_at,
             updated_at=computation.updated_at,
-            created_by=computation.created_by,
-            updated_by=computation.updated_by,
+            **audit_response_fields(computation),
             items=item_responses,
-            lifecycle=lifecycle
+            lifecycle=lifecycle,
+            downstream_push_progress=downstream_push_progress,
         )
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_demand_computation_capabilities_on_response,
@@ -802,6 +821,8 @@ class DemandComputationService:
         tenant_id: int,
         computation_id: int,
         computation_params_override: Optional[Dict[str, Any]] = None,
+        *,
+        operator_id: Optional[int] = None,
     ) -> DemandComputationResponse:
         """
         执行需求计算
@@ -810,6 +831,7 @@ class DemandComputationService:
             tenant_id: 租户ID
             computation_id: 计算ID
             computation_params_override: 临时覆盖的计算参数，仅本次执行生效，不持久化
+            operator_id: 执行人 ID（写入 updated_by / updated_by_name）
             
         Returns:
             DemandComputationResponse: 计算响应
@@ -835,6 +857,8 @@ class DemandComputationService:
             base_params = computation.computation_params or {}
             computation.computation_params = {**base_params, **computation_params_override}
 
+        operator = await User.get_or_none(id=operator_id) if operator_id else None
+
         try:
             async with in_transaction():
                 # 失败重试时清理旧明细：理论上事务回滚已清理，此处为防御性保证重试从干净状态开始
@@ -845,9 +869,13 @@ class DemandComputationService:
                     ).delete()
 
                 # 更新计算状态为计算中
+                start_audit: Dict[str, Any] = {
+                    "computation_status": "计算中",
+                    "computation_start_time": datetime.now(),
+                }
+                apply_update_audit(start_audit, operator)
                 await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
-                    computation_status="计算中",
-                    computation_start_time=datetime.now()
+                    **start_audit
                 )
 
                 # 统一需求计算（原 MRP/LRP 合并为单一实现，类型字段恒为 MRP）
@@ -874,11 +902,15 @@ class DemandComputationService:
                 summary["item_count"] = len(items)
 
                 # 更新计算状态为完成，清除失败时的错误信息
+                done_audit: Dict[str, Any] = {
+                    "computation_status": "完成",
+                    "computation_end_time": datetime.now(),
+                    "computation_summary": summary,
+                    "error_message": None,
+                }
+                apply_update_audit(done_audit, operator)
                 await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
-                    computation_status="完成",
-                    computation_end_time=datetime.now(),
-                    computation_summary=summary,
-                    error_message=None,
+                    **done_audit
                 )
 
             return await self.get_computation_by_id(tenant_id, computation_id)
@@ -893,12 +925,28 @@ class DemandComputationService:
                 try:
                     now = datetime.now()
                     err_msg = str(e).replace("'", "''")[:2000]  # 转义并截断
-                    await conn.execute(
-                        """UPDATE apps_kuaizhizao_demand_computations
-                           SET computation_status=$1, computation_end_time=$2, error_message=$3
-                           WHERE tenant_id=$4 AND id=$5""",
-                        "失败", now, err_msg, tenant_id, computation_id
-                    )
+                    if operator is not None:
+                        await conn.execute(
+                            """UPDATE apps_kuaizhizao_demand_computations
+                               SET computation_status=$1, computation_end_time=$2, error_message=$3,
+                                   updated_by=$4, updated_by_name=$5, updated_at=$6
+                               WHERE tenant_id=$7 AND id=$8""",
+                            "失败",
+                            now,
+                            err_msg,
+                            int(operator.id),
+                            operator_name_from_user(operator) or None,
+                            now,
+                            tenant_id,
+                            computation_id,
+                        )
+                    else:
+                        await conn.execute(
+                            """UPDATE apps_kuaizhizao_demand_computations
+                               SET computation_status=$1, computation_end_time=$2, error_message=$3
+                               WHERE tenant_id=$4 AND id=$5""",
+                            "失败", now, err_msg, tenant_id, computation_id
+                        )
                 finally:
                     await conn.close()
             except Exception as update_err:
@@ -1127,15 +1175,24 @@ class DemandComputationService:
                 computation_id=computation_id
             ).delete()
             # 重置状态与错误信息，便于走执行逻辑
+            reset_audit: Dict[str, Any] = {
+                "computation_status": "进行中",
+                "computation_end_time": None,
+                "error_message": None,
+                "computation_summary": None,
+            }
+            operator = await User.get_or_none(id=operator_id) if operator_id else None
+            apply_update_audit(reset_audit, operator)
             await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
-                computation_status="进行中",
-                computation_end_time=None,
-                error_message=None,
-                computation_summary=None,
+                **reset_audit
             )
         # 在事务外调用 execute，避免嵌套事务导致 TransactionManagementError
         try:
-            result = await self.execute_computation(tenant_id=tenant_id, computation_id=computation_id)
+            result = await self.execute_computation(
+                tenant_id=tenant_id,
+                computation_id=computation_id,
+                operator_id=operator_id,
+            )
             diff_summary = await self._build_recompute_diff_summary(
                 tenant_id=tenant_id,
                 computation_id=computation_id,
@@ -2005,7 +2062,8 @@ class DemandComputationService:
             
             # 准备更新数据
             update_data = computation_data.model_dump(exclude_unset=True)
-            update_data['updated_by'] = updated_by
+            user = await User.get_or_none(id=updated_by)
+            apply_update_audit(update_data, user)
             
             # 更新计算
             await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(**update_data)
@@ -2746,6 +2804,61 @@ class DemandComputationService:
             "po_material_ids": po_material_ids,
             "has_purchase_requisition": has_purchase_requisition,
         }
+
+    def _compute_downstream_push_progress(
+        self,
+        computation: DemandComputation,
+        items: List[DemandComputationItem],
+        exclusions: Dict[str, Any],
+    ) -> float:
+        """按建议数量加权计算需求计算下推进度（0-100）。"""
+        if getattr(computation, "computation_status", None) != "完成":
+            return 0.0
+
+        wo_material_ids = exclusions.get("wo_material_ids") or set()
+        outsource_material_ids = exclusions.get("outsource_material_ids") or set()
+        po_material_ids = exclusions.get("po_material_ids") or set()
+        has_purchase_requisition = bool(exclusions.get("has_purchase_requisition"))
+
+        pushable = 0.0
+        pushed = 0.0
+        for item in items:
+            st = item.material_source_type
+            if st == SOURCE_TYPE_PHANTOM:
+                continue
+            mid = item.material_id
+            if mid is None:
+                continue
+            if st in (SOURCE_TYPE_MAKE, SOURCE_TYPE_CONFIGURE):
+                qty = float(item.suggested_work_order_quantity or 0)
+                if qty <= 0:
+                    continue
+                pushable += qty
+                if mid in wo_material_ids:
+                    pushed += qty
+            elif st == SOURCE_TYPE_OUTSOURCE:
+                qty = float(item.suggested_work_order_quantity or 0)
+                if qty <= 0:
+                    continue
+                pushable += qty
+                if mid in outsource_material_ids:
+                    pushed += qty
+            elif st == SOURCE_TYPE_BUY:
+                qty = float(item.suggested_purchase_order_quantity or 0)
+                if qty <= 0:
+                    continue
+                pushable += qty
+                if has_purchase_requisition or mid in po_material_ids:
+                    pushed += qty
+
+        if pushable <= 0:
+            return 0.0
+        progress = (pushed / pushable) * 100.0
+        if progress < 0:
+            return 0.0
+        if progress > 100:
+            return 100.0
+        return round(progress, 1)
 
     async def get_push_options(
         self,
@@ -3771,43 +3884,48 @@ class DemandComputationService:
                     lead_time_days = source_config.get("purchase_lead_time", 7)
                 delivery_date = date.today() + timedelta(days=lead_time_days)
             
-            # 创建采购订单
-            purchase_order = await PurchaseOrder.create(
-                tenant_id=tenant_id,
-                order_code=order_code,
-                supplier_id=supplier_id,
-                supplier_name=supplier_name,
-                order_date=date.today(),
-                delivery_date=delivery_date,
-                order_type="标准采购",
-                status="草稿",
-                source_type="demand_computation",
-                source_id=computation.id,
-                notes=f"从需求计算 {computation.computation_code} 自动生成",
-            )
+            # 创建采购订单（须写 created/updated_by_name，列表「更新时间」列依赖反范式姓名）
+            user = await User.get_or_none(id=created_by)
+            order_data: Dict[str, Any] = {
+                "tenant_id": tenant_id,
+                "order_code": order_code,
+                "supplier_id": supplier_id,
+                "supplier_name": supplier_name,
+                "order_date": date.today(),
+                "delivery_date": delivery_date,
+                "order_type": "标准采购",
+                "status": "草稿",
+                "source_type": "demand_computation",
+                "source_id": computation.id,
+                "notes": f"从需求计算 {computation.computation_code} 自动生成",
+            }
+            apply_create_audit(order_data, user)
+            purchase_order = await PurchaseOrder.create(**order_data)
             
             # 计算总价
             quantity = float(item.suggested_purchase_order_quantity or 0)
             total_price = float(unit_price) * quantity
             
             # 创建采购订单行
-            await PurchaseOrderItem.create(
-                tenant_id=tenant_id,
-                order_id=purchase_order.id,
-                material_id=item.material_id,
-                material_code=item.material_code,
-                material_name=item.material_name,
-                material_spec=item.material_spec,
-                ordered_quantity=Decimal(str(quantity)),
-                outstanding_quantity=Decimal(str(quantity)),
-                unit=item.material_unit,
-                unit_price=unit_price,
-                total_price=Decimal(str(total_price)),
-                required_date=delivery_date,
-                inspection_required=True,
-                source_type="demand_computation",
-                source_id=computation.id,
-            )
+            item_data: Dict[str, Any] = {
+                "tenant_id": tenant_id,
+                "order_id": purchase_order.id,
+                "material_id": item.material_id,
+                "material_code": item.material_code,
+                "material_name": item.material_name,
+                "material_spec": item.material_spec,
+                "ordered_quantity": Decimal(str(quantity)),
+                "outstanding_quantity": Decimal(str(quantity)),
+                "unit": item.material_unit,
+                "unit_price": unit_price,
+                "total_price": Decimal(str(total_price)),
+                "required_date": delivery_date,
+                "inspection_required": True,
+                "source_type": "demand_computation",
+                "source_id": computation.id,
+            }
+            apply_create_audit(item_data, user)
+            await PurchaseOrderItem.create(**item_data)
             
             return {
                 "id": purchase_order.id,
@@ -3891,22 +4009,23 @@ class DemandComputationService:
                     lead_time_days = source_config.get("purchase_lead_time", 7)
                 delivery_date = date.today() + timedelta(days=lead_time_days)
             
-            # 创建采购订单
-            purchase_order = await PurchaseOrder.create(
-                tenant_id=tenant_id,
-                order_code=order_code,
-                supplier_id=supplier_id,
-                supplier_name=supplier_name,
-                order_date=date.today(),
-                delivery_date=delivery_date,
-                order_type="标准采购",
-                status="草稿",
-                source_type="demand_computation",
-                source_id=computation.id,
-                notes=f"从需求计算 {computation.computation_code} 自动生成（按供应商分组）",
-                created_by=created_by,
-                updated_by=created_by
-            )
+            # 创建采购订单（须写 created/updated_by_name，列表「更新时间」列依赖反范式姓名）
+            user = await User.get_or_none(id=created_by)
+            order_data: Dict[str, Any] = {
+                "tenant_id": tenant_id,
+                "order_code": order_code,
+                "supplier_id": supplier_id,
+                "supplier_name": supplier_name,
+                "order_date": date.today(),
+                "delivery_date": delivery_date,
+                "order_type": "标准采购",
+                "status": "草稿",
+                "source_type": "demand_computation",
+                "source_id": computation.id,
+                "notes": f"从需求计算 {computation.computation_code} 自动生成（按供应商分组）",
+            }
+            apply_create_audit(order_data, user)
+            purchase_order = await PurchaseOrder.create(**order_data)
             
             # 创建采购订单明细并计算总金额
             total_quantity = Decimal(0)
@@ -3924,37 +4043,38 @@ class DemandComputationService:
                 total_price = unit_price * quantity
                 
                 # 创建采购订单行
-                await PurchaseOrderItem.create(
-                    tenant_id=tenant_id,
-                    order_id=purchase_order.id,
-                    material_id=item.material_id,
-                    material_code=item.material_code,
-                    material_name=item.material_name,
-                    material_spec=item.material_spec,
-                    ordered_quantity=quantity,
-                    outstanding_quantity=quantity,
-                    unit=item.material_unit,
-                    unit_price=unit_price,
-                    total_price=total_price,
-                    required_date=delivery_date,
-                    inspection_required=True,
-                    source_type="demand_computation",
-                    source_id=computation.id,
-                    created_by=created_by,
-                    updated_by=created_by
-                )
+                item_data: Dict[str, Any] = {
+                    "tenant_id": tenant_id,
+                    "order_id": purchase_order.id,
+                    "material_id": item.material_id,
+                    "material_code": item.material_code,
+                    "material_name": item.material_name,
+                    "material_spec": item.material_spec,
+                    "ordered_quantity": quantity,
+                    "outstanding_quantity": quantity,
+                    "unit": item.material_unit,
+                    "unit_price": unit_price,
+                    "total_price": total_price,
+                    "required_date": delivery_date,
+                    "inspection_required": True,
+                    "source_type": "demand_computation",
+                    "source_id": computation.id,
+                }
+                apply_create_audit(item_data, user)
+                await PurchaseOrderItem.create(**item_data)
                 
                 total_quantity += quantity
                 total_amount += total_price
             
             # 更新订单头金额信息
-            await purchase_order.update_from_dict({
-                'total_quantity': total_quantity,
-                'total_amount': total_amount,
-                'tax_amount': Decimal(0),  # 默认税率为0
-                'net_amount': total_amount,
-                'updated_by': created_by
-            }).save()
+            amount_update: Dict[str, Any] = {
+                "total_quantity": total_quantity,
+                "total_amount": total_amount,
+                "tax_amount": Decimal(0),  # 默认税率为0
+                "net_amount": total_amount,
+            }
+            apply_update_audit(amount_update, user)
+            await purchase_order.update_from_dict(amount_update).save()
             
             return {
                 "id": purchase_order.id,

@@ -23,6 +23,8 @@ import { moldApi } from '../../../services/equipment';
 import { trialsApi } from '../../../services/moldOps';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   normalizeEquipmentListResponse,
@@ -161,8 +163,7 @@ const MoldTrialsPage: React.FC = () => {
     }
   };
 
-  const columns: ProColumns<MoldTrial>[] = useMemo(
-    () => [
+  const columns: ProColumns<MoldTrial>[] = useMemo(() => alignProColumns<MoldTrial>([
       {
         title: t(`${P}.col.trialDate`),
         dataIndex: 'doc_date_range',
@@ -211,13 +212,10 @@ const MoldTrialsPage: React.FC = () => {
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
+        hideInTable: true,
         hideInSearch: true,
-        defaultSortOrder: 'descend',
-        sorter: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
+      ...buildDocumentAuditColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
         key: 'action',
@@ -273,7 +271,7 @@ const MoldTrialsPage: React.FC = () => {
           </>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, perms],
   );
 

@@ -12,6 +12,7 @@ from tortoise.transactions import in_transaction
 from loguru import logger
 
 from apps.common.base_service import AppBaseService
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from infra.models.user import User
 from apps.kuaizhizao.models.material_call_request import MaterialCallRequest
 from apps.kuaizhizao.models.material_call_request_item import MaterialCallRequestItem
@@ -54,6 +55,119 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
     def _next_material_call_code(self) -> str:
         return f"MC{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:4].upper()}"
 
+    @staticmethod
+    def _needs_material_name(value: Optional[str]) -> bool:
+        return not (value and str(value).strip() and str(value).strip() not in {"-", "—"})
+
+    @staticmethod
+    def _needs_material_code(value: Optional[str]) -> bool:
+        return not (value and str(value).strip())
+
+    @staticmethod
+    def _is_placeholder_material_code(value: Optional[str], material_id: Optional[int]) -> bool:
+        code = str(value or "").strip()
+        if not code:
+            return True
+        if material_id is not None and code == str(material_id):
+            return True
+        return False
+
+    async def _hydrate_line_material_identity(
+        self,
+        *,
+        tenant_id: int,
+        lines: List[MaterialCallLineCreate],
+    ) -> List[MaterialCallLineCreate]:
+        from apps.master_data.models.material import Material
+
+        material_ids = list({int(line.material_id) for line in lines if int(line.material_id) > 0})
+        if not material_ids:
+            return lines
+
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=material_ids,
+            deleted_at__isnull=True,
+        ).all()
+        by_id = {int(m.id): m for m in materials}
+
+        hydrated: List[MaterialCallLineCreate] = []
+        for line in lines:
+            material = by_id.get(int(line.material_id))
+            code = (line.material_code or "").strip()
+            name = (line.material_name or "").strip()
+            unit = (line.material_unit or "").strip() if line.material_unit else None
+
+            if material:
+                if self._is_placeholder_material_code(code, int(line.material_id)):
+                    code = str(getattr(material, "main_code", None) or getattr(material, "code", "") or "").strip()
+                if self._needs_material_name(name):
+                    name = str(getattr(material, "name", "") or "").strip()
+                if not unit:
+                    unit = str(getattr(material, "base_unit", "") or "").strip() or None
+
+            hydrated.append(
+                MaterialCallLineCreate(
+                    material_id=line.material_id,
+                    material_code=code,
+                    material_name=name,
+                    material_unit=unit,
+                    requested_quantity=line.requested_quantity,
+                )
+            )
+        return hydrated
+
+    async def _enrich_response_items_material_identity(
+        self,
+        *,
+        tenant_id: int,
+        items: List[MaterialCallRequestItem],
+    ) -> List[MaterialCallLineResponse]:
+        from apps.master_data.models.material import Material
+
+        if not items:
+            return []
+        material_ids = list({int(i.material_id) for i in items if int(i.material_id or 0) > 0})
+        by_id: Dict[int, Material] = {}
+        if material_ids:
+            materials = await Material.filter(
+                tenant_id=tenant_id,
+                id__in=material_ids,
+                deleted_at__isnull=True,
+            ).all()
+            by_id = {int(m.id): m for m in materials}
+
+        lines: List[MaterialCallLineResponse] = []
+        for item in items:
+            material = by_id.get(int(item.material_id))
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_unit = str(item.material_unit or "").strip() if item.material_unit else None
+
+            if material:
+                if self._is_placeholder_material_code(material_code, int(item.material_id)):
+                    material_code = str(
+                        getattr(material, "main_code", None) or getattr(material, "code", "") or ""
+                    ).strip()
+                if self._needs_material_name(material_name):
+                    material_name = str(getattr(material, "name", "") or "").strip()
+                if not material_unit:
+                    material_unit = str(getattr(material, "base_unit", "") or "").strip() or None
+
+            lines.append(
+                MaterialCallLineResponse(
+                    id=item.id,
+                    line_no=item.line_no,
+                    material_id=item.material_id,
+                    material_code=material_code or str(item.material_id),
+                    material_name=material_name or "—",
+                    material_unit=material_unit,
+                    requested_quantity=item.requested_quantity,
+                    delivered_quantity=item.delivered_quantity,
+                )
+            )
+        return lines
+
     async def _sync_header_from_items(self, tenant_id: int, request_id: int) -> None:
         items = await MaterialCallRequestItem.filter(
             tenant_id=tenant_id, request_id=request_id
@@ -87,7 +201,10 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             items = await MaterialCallRequestItem.filter(
                 tenant_id=header.tenant_id, request_id=header.id
             ).order_by("line_no", "id").all()
-        line_res = [MaterialCallLineResponse.model_validate(i) for i in items]
+        line_res = await self._enrich_response_items_material_identity(
+            tenant_id=header.tenant_id,
+            items=items,
+        )
         return MaterialCallRequestResponse(
             id=header.id,
             code=header.code,
@@ -163,13 +280,17 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
                 raise ValidationError("单独叫料须选择叫料原因")
         if norm_ct == "FULL_ORDER" and len(create_data.items) < 1:
             raise ValidationError("叫料明细不能为空")
-        for line in create_data.items:
+        hydrated_items = await self._hydrate_line_material_identity(
+            tenant_id=tenant_id,
+            lines=create_data.items,
+        )
+        for line in hydrated_items:
             if line.requested_quantity is None or line.requested_quantity <= Decimal("0"):
                 raise ValidationError("各明细需求数量须大于 0")
 
         async with in_transaction():
             code = self._next_material_call_code()
-            call_req = await MaterialCallRequest.create(
+            create_payload = dict(
                 tenant_id=tenant_id,
                 code=code,
                 caller_id=user.id,
@@ -191,7 +312,9 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
                 delivered_quantity=Decimal("0"),
                 status="pending",
             )
-            for idx, line in enumerate(create_data.items, start=1):
+            apply_create_audit(create_payload, user)
+            call_req = await MaterialCallRequest.create(**create_payload)
+            for idx, line in enumerate(hydrated_items, start=1):
                 await MaterialCallRequestItem.create(
                     tenant_id=tenant_id,
                     request_id=call_req.id,
@@ -408,7 +531,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
         picking_code = await self.generate_code(tenant_id, "PRODUCTION_PICKING_CODE", prefix=f"PP{today}")
         picker_name = _user_display_name(user)
 
-        picking = await ProductionPicking.create(
+        picking_payload = dict(
             tenant_id=tenant_id,
             picking_code=picking_code,
             work_order_id=wo.id,
@@ -419,10 +542,10 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             picker_id=user.id,
             picker_name=picker_name,
             picking_time=datetime.now(),
-            created_by=user.id,
-            updated_by=user.id,
             notes=f"由叫料单 {call_req.code} 完成自动生成（主仓→线边）",
         )
+        apply_create_audit(picking_payload, user)
+        picking = await ProductionPicking.create(**picking_payload)
 
         batch_map = batch_by_item_id or {}
         for it, dq in lines_to_move:
@@ -590,6 +713,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             for key, value in data.items():
                 setattr(call_req, key, value)
 
+            apply_update_audit(call_req, user)
             await call_req.save()
             await self._sync_header_from_items(tenant_id, call_id)
             call_req = await MaterialCallRequest.get(id=call_id, tenant_id=tenant_id)

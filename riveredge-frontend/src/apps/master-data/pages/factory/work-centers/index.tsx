@@ -40,6 +40,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
@@ -574,7 +575,7 @@ const WorkCentersPage: React.FC = () => {
         <UniTable<WorkCenter>
           columnPersistenceId="apps.master-data.pages.factory.work-centers"
           actionRef={actionRef}
-          columns={columns}
+          columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
           viewTypes={['table', 'help']}
           defaultViewType="table"
           loadingDelay={200}

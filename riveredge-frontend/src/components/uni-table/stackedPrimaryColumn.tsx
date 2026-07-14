@@ -9,7 +9,7 @@
 
 import React from 'react';
 import { CopyOutlined } from '@ant-design/icons';
-import { Space, Typography, theme } from 'antd';
+import { Typography, theme } from 'antd';
 
 /** 文档文件夹风格复制图标色（固定淡黄，不随主题色漂移） */
 const DOC_FOLDER_COPY_ICON_COLOR = '#d48806';
@@ -37,6 +37,12 @@ export interface UniTableStackedPrimaryCellProps {
   primaryExtra?: React.ReactNode;
   /** 两行使用相同字号与字重（如计划开始/结束时间） */
   uniformText?: boolean;
+  /** 主行是否强调字重（非 uniformText 时生效），默认 true */
+  primaryBold?: boolean;
+  /** 主行行前徽章（如“开始”） */
+  primaryBadge?: React.ReactNode;
+  /** 次行行前徽章（如“结束”） */
+  secondaryBadge?: React.ReactNode;
 }
 
 export function UniTableStackedPrimaryCell({
@@ -47,18 +53,37 @@ export function UniTableStackedPrimaryCell({
   secondaryExtra,
   primaryExtra,
   uniformText = false,
+  primaryBold = true,
+  primaryBadge,
+  secondaryBadge,
 }: UniTableStackedPrimaryCellProps) {
   const { token } = theme.useToken();
   const primaryText = primary?.trim() ? primary.trim() : '-';
   const secondaryText = secondary?.trim() ? secondary.trim() : '-';
+  const rowGap = 6;
   const copyIconStyle: React.CSSProperties = { color: DOC_FOLDER_COPY_ICON_COLOR, fontSize: 11 };
   const primaryLineStyle: React.CSSProperties = uniformText
     ? { fontSize: token.fontSize, fontWeight: 400, lineHeight: 1.25, maxWidth: '100%' }
-    : { fontSize: token.fontSize, fontWeight: 500, lineHeight: 1.25, maxWidth: '100%' };
+    : { fontSize: token.fontSize, fontWeight: primaryBold ? 500 : 400, lineHeight: 1.25, maxWidth: '100%' };
   const primaryRowHeight = Math.round(token.fontSize * 1.25);
   const secondaryLineStyle: React.CSSProperties = uniformText
     ? { fontSize: token.fontSize, fontWeight: 400, lineHeight: 1.25, whiteSpace: 'nowrap' }
     : { fontSize: token.fontSizeSM, lineHeight: 1.2, whiteSpace: 'nowrap' };
+  const lineBadgeStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 6px',
+    width: 36,
+    borderRadius: 10,
+    border: `1px solid ${token.colorBorderSecondary}`,
+    color: token.colorTextSecondary,
+    background: token.colorFillTertiary,
+    fontSize: 10,
+    lineHeight: '16px',
+    height: 16,
+    flexShrink: 0,
+  };
 
   const primaryTextStyle: React.CSSProperties = {
     ...primaryLineStyle,
@@ -79,7 +104,7 @@ export function UniTableStackedPrimaryCell({
         style={{
           display: 'flex',
           alignItems: 'center',
-          columnGap: 6,
+          columnGap: rowGap,
           flexWrap: 'nowrap',
           maxWidth: '100%',
           minWidth: 0,
@@ -87,12 +112,24 @@ export function UniTableStackedPrimaryCell({
           width: '100%',
         }}
       >
+        {primaryBadge ? <span style={lineBadgeStyle}>{primaryBadge}</span> : null}
         <span title={primaryText} style={primaryTextStyle}>
           {primaryText}
         </span>
         {primaryExtra}
       </div>
-      <Space size={2} align="center" style={{ maxWidth: '100%', minWidth: 0, marginTop: 1 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          columnGap: rowGap,
+          maxWidth: '100%',
+          minWidth: 0,
+          marginTop: 1,
+          flexWrap: 'nowrap',
+        }}
+      >
+        {secondaryBadge ? <span style={lineBadgeStyle}>{secondaryBadge}</span> : null}
         <Typography.Text
           {...(uniformText ? {} : { type: 'secondary' as const })}
           style={secondaryLineStyle}
@@ -100,7 +137,7 @@ export function UniTableStackedPrimaryCell({
           {secondaryText}
         </Typography.Text>
         {secondaryLeadingExtra}
-        {secondaryCopyable ? (
+        {secondaryCopyable && secondaryText !== '-' ? (
           <Typography.Text
             copyable={{
               text: secondaryText,
@@ -114,7 +151,7 @@ export function UniTableStackedPrimaryCell({
           />
         ) : null}
         {secondaryExtra}
-      </Space>
+      </div>
     </div>
   );
 }

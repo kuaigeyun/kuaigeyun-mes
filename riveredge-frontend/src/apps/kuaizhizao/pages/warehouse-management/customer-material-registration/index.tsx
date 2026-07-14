@@ -39,7 +39,10 @@ import { CustomerSelectDropdown } from '../../../../master-data/components/Custo
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import dayjs from 'dayjs';
 import { coerceFormDate, formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { formatDateTime } from '../../../../../utils/format';
+import {formatDateTime, formatQuantity} from '../../../../../utils/format';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildCustomerMaterialRegistrationStatusValueEnum,
@@ -549,9 +552,32 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     }
   };
 
+  const listRowsRef = useRef<Map<string, CustomerMaterialRegistration>>(new Map());
+  const isCustomerMaterialDeletable = (record: CustomerMaterialRegistration) =>
+    !!record.id && record.capabilities?.delete?.allowed === true;
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const ids = keys
+      .map((k) => listRowsRef.current.get(String(k)))
+      .filter((r): r is CustomerMaterialRegistration => !!r && isCustomerMaterialDeletable(r))
+      .map((r) => r.id!);
+    if (ids.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.warehouseCommon.batchDeleteNoneDeletable'));
+      return;
+    }
+    try {
+      await customerMaterialRegistrationApi.batchDelete(ids);
+      messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: ids.length }));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.batchDeleteFailed'));
+    }
+  };
+
   const registrationStatusValueEnum = useMemo(() => buildCustomerMaterialRegistrationStatusValueEnum(t), [t]);
 
-  const columns: ProColumns<CustomerMaterialRegistration>[] = useMemo(() => [
+  const columns: ProColumns<CustomerMaterialRegistration>[] = useMemo(() => alignProColumns<CustomerMaterialRegistration>([
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at_range',
@@ -619,7 +645,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       width: 90,
       align: 'right',
       hideInSearch: true,
-      render: (_, r) => r.total_quantity ?? r.quantity ?? '-',
+      render: (_, r) => formatQuantity(r.total_quantity ?? r.quantity),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colWarehouse'),
@@ -641,13 +667,10 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
+      hideInTable: true,
       hideInSearch: true,
-      defaultSortOrder: 'descend',
-      sorter: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
     },
+    ...buildDocumentAuditColumns<CustomerMaterialRegistration>(t),
     {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -704,7 +727,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         </Space>
       ),
     },
-  ], [t, resourcePerms, registrationStatusValueEnum]);
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, resourcePerms, registrationStatusValueEnum]);
 
   const detailColumns = useMemo(() => [
     { title: t('app.kuaizhizao.warehouseCommon.colCode'), dataIndex: 'registration_code' },
@@ -712,7 +735,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     { title: t('app.kuaizhizao.warehouseCommon.colWorkOrder'), dataIndex: 'work_order_code' },
     { title: t('app.kuaizhizao.warehouseCommon.colSalesOrder'), dataIndex: 'sales_order_code' },
     { title: t('app.kuaizhizao.warehouseCommon.colWarehouse'), dataIndex: 'warehouse_name' },
-    { title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'), dataIndex: 'total_quantity' },
+    { title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'), dataIndex: 'total_quantity', render: formatQuantity },
     {
       title: t('app.kuaizhizao.warehouseCommon.colStatus'),
       dataIndex: 'status',
@@ -731,7 +754,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     { title: t('app.kuaizhizao.warehouseCommon.colMaterialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
     { title: t('app.kuaizhizao.warehouseCommon.colSpec'), dataIndex: 'material_spec', width: 100, ellipsis: true },
     { title: t('app.kuaizhizao.warehouseCommon.colUnit'), dataIndex: 'material_unit', width: 70 },
-    { title: t('app.kuaizhizao.warehouseCommon.colQuantity'), dataIndex: 'quantity', width: 90, align: 'right' as const },
+    { title: t('app.kuaizhizao.warehouseCommon.colQuantity'), dataIndex: 'quantity', width: 90, align: 'right' as const , render: formatQuantity },
     { title: t('app.kuaizhizao.warehouseCommon.colBatchNo'), dataIndex: 'batch_number', width: 120, ellipsis: true },
     {
       title: t('app.kuaizhizao.warehouseCommon.colSerialNo'),
@@ -787,6 +810,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
                   showAdvancedSearch
                   onChange={(v, m) => void onMaterialSelectForBatchSerial(index, v, m as Material | undefined)}
                 />
+                <AntForm.Item name={[index, 'material_code']} hidden />
+                <AntForm.Item name={[index, 'material_name']} hidden />
               </div>
             );
           }}
@@ -918,6 +943,18 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         showCreateButton
         createButtonText={createButtonLabel}
         onCreate={handleCreate}
+        enableRowSelection={resourcePerms.canDelete}
+        showDeleteButton={resourcePerms.canDelete}
+        rowSelectionGetCheckboxProps={(record) => ({
+          disabled: !isCustomerMaterialDeletable(record),
+        })}
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) =>
+          t('app.kuaizhizao.warehouseCommon.batchDeleteConfirm', {
+            count,
+            noun: t('app.kuaizhizao.customerMaterialRegistration.headerTitle'),
+          })
+        }
         request={async (params, sort, _filter, searchFormValues) => {
           const pageSize = params.pageSize || 20;
           const skip = ((params.current ?? 1) - 1) * pageSize;
@@ -928,6 +965,11 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             ...listParams,
           });
           const { data, total } = normalizeWarehouseListResponse(result);
+          const next = new Map<string, CustomerMaterialRegistration>();
+          for (const row of data as CustomerMaterialRegistration[]) {
+            if (row.id != null) next.set(String(row.id), row);
+          }
+          listRowsRef.current = next;
           return { data, success: true, total };
         }}
         scroll={{ x: 1500 }}
@@ -970,7 +1012,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           style={{ marginBottom: 16 }}
         />
         <Row gutter={16}>
-          <Col span={12}>
+            <Col span={12}>
             <ProForm.Item
               name="customer_id"
               label={t('app.kuaizhizao.warehouseCommon.colCustomer')}
@@ -987,6 +1029,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
                 }}
               />
             </ProForm.Item>
+            <AntForm.Item name="customer_name" hidden />
           </Col>
           <Col span={12}>
             <UniWarehouseSelect
@@ -996,6 +1039,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
               required
               onChange={(_val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
             />
+            <AntForm.Item name="warehouse_name" hidden />
           </Col>
         </Row>
         <Row gutter={16}>
@@ -1047,6 +1091,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
               }}
               onChange={(v, m) => void onScanMaterialSelect(v, m as Material | undefined)}
             />
+            <AntForm.Item name="material_code" hidden />
+            <AntForm.Item name="material_name" hidden />
             <Row gutter={16}>
               <Col span={12}>
                 <ProFormDigit name="quantity" label={t('app.kuaizhizao.customerMaterialRegistration.incomingQty')} rules={[{ required: true }]} min={0} fieldProps={{ precision: 2 }} />

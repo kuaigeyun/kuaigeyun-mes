@@ -32,8 +32,11 @@ import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildStocktakingTypeValueEnum,
@@ -426,7 +429,7 @@ const StocktakingPage: React.FC = () => {
   const workflowStatusValueEnum = useMemo(() => buildWarehouseWorkflowStatusValueEnum(t), [t]);
   const stocktakingTypeValueEnum = useMemo(() => buildStocktakingTypeValueEnum(t), [t]);
 
-  const columns: ProColumns<Stocktaking>[] = useMemo(() => [
+  const columns: ProColumns<Stocktaking>[] = useMemo(() => alignProColumns<Stocktaking>([
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at_range',
@@ -543,16 +546,7 @@ const StocktakingPage: React.FC = () => {
         );
       },
     },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      sorter: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
-    },
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -609,7 +603,7 @@ const StocktakingPage: React.FC = () => {
         </Space>
       ),
     },
-  ], [t, canUpdate, canCreate, canRevoke, workflowStatusValueEnum, stocktakingTypeValueEnum]);
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, canUpdate, canCreate, canRevoke, workflowStatusValueEnum, stocktakingTypeValueEnum]);
 
   const detailColumns = useMemo(() => [
     {
@@ -681,7 +675,7 @@ const StocktakingPage: React.FC = () => {
       dataIndex: 'quantity',
       width: 100,
       align: 'right' as const,
-      render: (v: number) => Number(v ?? 0).toFixed(2),
+      render: (v: number) => formatQuantity(v),
     },
   ], [t]);
 
@@ -707,7 +701,7 @@ const StocktakingPage: React.FC = () => {
       dataIndex: 'book_quantity',
       width: 100,
       align: 'right' as const,
-      render: (v: number) => Number(v ?? 0).toFixed(2),
+      render: (v: number) => formatQuantity(v),
     },
     {
       title: t('app.kuaizhizao.warehouseReports.colActualQty'),
@@ -716,7 +710,7 @@ const StocktakingPage: React.FC = () => {
       align: 'right' as const,
       render: (_: unknown, item: StocktakingItem) => {
         if (currentStocktaking?.status !== 'in_progress' || item.status !== 'pending') {
-          return Number(item.actual_quantity ?? 0).toFixed(2);
+          return formatQuantity(item.actual_quantity);
         }
         const itemId = item.id!;
         return (
@@ -742,7 +736,7 @@ const StocktakingPage: React.FC = () => {
         const qty = Number(value ?? 0);
         return (
           <span style={{ color: qty > 0 ? '#ff4d4f' : qty < 0 ? '#1890ff' : '#52c41a' }}>
-            {qty > 0 ? '+' : ''}{qty.toFixed(2)}
+            {qty > 0 ? '+' : ''}{formatQuantity(qty)}
           </span>
         );
       },
@@ -797,7 +791,7 @@ const StocktakingPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle={t('app.kuaizhizao.stocktaking.headerTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.stocktaking"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.stocktaking.v2"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

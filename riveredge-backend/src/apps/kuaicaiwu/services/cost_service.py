@@ -210,6 +210,7 @@ class CostRuleService(AppBaseService[CostRule]):
             },
         ]
 
+        user_info = await self.get_user_info(created_by)
         for p in presets:
             code = p["code"]
             exists = await CostRule.filter(
@@ -235,6 +236,10 @@ class CostRuleService(AppBaseService[CostRule]):
                     rule_parameters=None,
                     is_active=p.get("is_active", True),
                     description=p.get("description"),
+                    created_by=created_by,
+                    created_by_name=user_info["name"],
+                    updated_by=created_by,
+                    updated_by_name=user_info["name"],
                 )
             except IntegrityError:
                 # 并发插入或历史软删记录仍占唯一键时，视为已存在

@@ -1,10 +1,12 @@
 import type { TFunction } from 'i18next';
 import type { ProColumns } from '@ant-design/pro-components';
+import React from 'react';
 import type { FactoryPaginatedList } from '../types/factory';
 import { extractProTableSort } from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../../kuaizhizao/services/reports';
 import { formatDateTime } from '../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../utils/formDate';
+import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
 
 export const MASTER_CRUD_PINNED_ACTIVE_FIELD = 'isActive';
 
@@ -80,17 +82,25 @@ export function masterCrudCodeNameSearchColumns(
 }
 
 export function masterCrudCreatedUpdatedColumns<
-  T extends { createdAt?: string; updatedAt?: string },
+  T extends Record<string, unknown>,
 >(t: TFunction): ProColumns<T>[] {
   return [
     {
-      title: t('common.createdAt'),
-      dataIndex: 'createdAt',
-      width: 132,
+      title: t('common.updatedAt'),
+      dataIndex: 'updatedAt',
+      width: 148,
       uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
-      render: (_, r) => formatMasterDateTimeCell(r.createdAt),
+      render: (_, r) => {
+        const preferred = resolveMasterPreferredAudit(r as Record<string, unknown>);
+        return React.createElement(UniTableStackedPrimaryCell, {
+          primary: preferred.operator,
+          secondary: preferred.time,
+          secondaryCopyable: false,
+          primaryBold: false,
+        });
+      },
     },
     {
       title: t('common.createdAt'),
@@ -102,15 +112,6 @@ export function masterCrudCreatedUpdatedColumns<
     },
     {
       title: t('common.updatedAt'),
-      dataIndex: 'updatedAt',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      hideInSearch: true,
-      render: (_, r) => formatMasterDateTimeCell(r.updatedAt),
-    },
-    {
-      title: t('common.updatedAt'),
       dataIndex: 'updated_at_range',
       valueType: 'dateRange',
       hideInTable: true,
@@ -118,6 +119,29 @@ export function masterCrudCreatedUpdatedColumns<
       formItemProps: formDateRangeFormItemProps,
     },
   ];
+}
+
+function resolveMasterPreferredAudit(record: Record<string, unknown>): { operator: string; time: string } {
+  const updatedOperator = resolveMasterOperatorName(record, 'updated');
+  const updatedTime = resolveMasterAuditTime(record, 'updated');
+  if (updatedOperator !== '-' && updatedTime !== '-') {
+    return {
+      operator: updatedOperator,
+      time: updatedTime,
+    };
+  }
+  const createdOperator = resolveMasterOperatorName(record, 'created');
+  const createdTime = resolveMasterAuditTime(record, 'created');
+  if (createdOperator !== '-' && createdTime !== '-') {
+    return { operator: createdOperator, time: createdTime };
+  }
+  if (updatedTime !== '-') {
+    return { operator: updatedOperator, time: updatedTime };
+  }
+  return {
+    operator: createdOperator,
+    time: createdTime,
+  };
 }
 
 export function buildMasterCrudActiveValueEnum(
@@ -134,6 +158,26 @@ export function buildMasterCrudActiveValueEnum(
 export function formatMasterDateTimeCell(value: unknown): string {
   if (!value) return '-';
   return formatDateTime(value as string | Date, 'YYYY-MM-DD HH:mm');
+}
+
+function resolveMasterOperatorName(record: Record<string, unknown>, key: 'created' | 'updated'): string {
+  const candidates =
+    key === 'created'
+      ? ['created_by_name', 'creator_name', 'created_user_name', 'createdByName', 'creatorName']
+      : ['updated_by_name', 'updater_name', 'updated_user_name', 'updatedByName', 'updaterName'];
+  for (const candidate of candidates) {
+    const value = String(record[candidate] ?? '').trim();
+    if (value) return value;
+  }
+  return '-';
+}
+
+function resolveMasterAuditTime(record: Record<string, unknown>, key: 'created' | 'updated'): string {
+  const value =
+    key === 'created'
+      ? (record.createdAt ?? record.created_at)
+      : (record.updatedAt ?? record.updated_at);
+  return formatMasterDateTimeCell(value);
 }
 
 export function resolveMasterCrudListParams(

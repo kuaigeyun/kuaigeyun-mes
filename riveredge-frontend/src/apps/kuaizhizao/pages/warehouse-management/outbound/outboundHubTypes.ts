@@ -32,6 +32,8 @@ export interface OutboundHubOrder {
   warehouse_name?: string;
   total_quantity?: number;
   total_items?: number;
+  required_quantity_total?: number;
+  picked_quantity_total?: number;
   delivered_by?: string;
   picker_name?: string;
   deliverer_name?: string;
@@ -143,8 +145,8 @@ export function mapOutsourceIssueToOutbound(item: Record<string, unknown>): Outb
     work_order_code: String(item.outsource_work_order_code ?? item.outsourceWorkOrderCode ?? ''),
     warehouse_id: item.warehouse_id as number | undefined,
     warehouse_name: String(item.warehouse_name ?? item.warehouseName ?? ''),
-    total_quantity: Number(item.quantity ?? 0),
-    total_items: 1,
+    total_quantity: Number(item.total_quantity ?? item.quantity ?? 0),
+    total_items: Number(item.total_items ?? 1),
     delivered_by: String(
       item.issued_by_name ?? item.issuedByName ?? item.created_by_name ?? item.createdByName ?? '',
     ),

@@ -78,6 +78,8 @@ class SalesOpportunityResponse(SalesOpportunityBase):
     updated_at: datetime = Field(..., description="更新时间")
     created_by: Optional[int] = Field(None, description="创建人ID")
     updated_by: Optional[int] = Field(None, description="更新人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
 
 
 class SalesOpportunityListEnvelope(BaseSchema):

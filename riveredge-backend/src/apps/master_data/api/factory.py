@@ -89,7 +89,7 @@ async def create_plant(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await FactoryService.create_plant(tenant_id, data)
+        return await FactoryService.create_plant(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -171,7 +171,12 @@ async def update_plant(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await FactoryService.update_plant(tenant_id, plant_uuid, data)
+        return await FactoryService.update_plant(
+            tenant_id,
+            plant_uuid,
+            data,
+            current_user=current_user,
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -246,7 +251,7 @@ async def create_workshop(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await FactoryService.create_workshop(tenant_id, data)
+        return await FactoryService.create_workshop(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -339,7 +344,12 @@ async def update_workshop(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await FactoryService.update_workshop(tenant_id, workshop_uuid, data)
+        return await FactoryService.update_workshop(
+            tenant_id,
+            workshop_uuid,
+            data,
+            current_user=current_user,
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -415,7 +425,7 @@ async def create_production_line(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await FactoryService.create_production_line(tenant_id, data)
+        return await FactoryService.create_production_line(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -499,7 +509,12 @@ async def update_production_line(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await FactoryService.update_production_line(tenant_id, production_line_uuid, data)
+        return await FactoryService.update_production_line(
+            tenant_id,
+            production_line_uuid,
+            data,
+            current_user=current_user,
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -575,7 +590,7 @@ async def create_workstation(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await FactoryService.create_workstation(tenant_id, data)
+        return await FactoryService.create_workstation(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -659,7 +674,12 @@ async def update_workstation(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await FactoryService.update_workstation(tenant_id, workstation_uuid, data)
+        return await FactoryService.update_workstation(
+            tenant_id,
+            workstation_uuid,
+            data,
+            current_user=current_user,
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -728,7 +748,7 @@ async def create_work_center(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await FactoryService.create_work_center(tenant_id, data)
+        return await FactoryService.create_work_center(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -819,7 +839,12 @@ async def update_work_center(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await FactoryService.update_work_center(tenant_id, work_center_uuid, data)
+        return await FactoryService.update_work_center(
+            tenant_id,
+            work_center_uuid,
+            data,
+            current_user=current_user,
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -889,7 +914,7 @@ async def create_work_group(
     - **members**: 成员列表（含绩效权重）
     """
     try:
-        return await WorkGroupService.create_work_group(tenant_id, data)
+        return await WorkGroupService.create_work_group(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -981,7 +1006,12 @@ async def update_work_group(
     - **members**: 成员列表（可选）
     """
     try:
-        return await WorkGroupService.update_work_group(tenant_id, work_group_uuid, data)
+        return await WorkGroupService.update_work_group(
+            tenant_id,
+            work_group_uuid,
+            data,
+            current_user=current_user,
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:

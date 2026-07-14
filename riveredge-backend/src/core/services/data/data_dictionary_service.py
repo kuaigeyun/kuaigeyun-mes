@@ -665,6 +665,8 @@ class DataDictionaryService:
             if existing_item:
                 existing_item.label = item_config["label"]
                 existing_item.description = item_config.get("description")
+                existing_item.color = item_config.get("color")
+                existing_item.icon = item_config.get("icon")
                 existing_item.sort_order = item_config["sort_order"]
                 existing_item.is_active = True
                 await existing_item.save()
@@ -675,6 +677,8 @@ class DataDictionaryService:
                     label=item_config["label"],
                     value=item_config["value"],
                     description=item_config.get("description"),
+                    color=item_config.get("color"),
+                    icon=item_config.get("icon"),
                     sort_order=item_config["sort_order"],
                     is_active=True,
                 )

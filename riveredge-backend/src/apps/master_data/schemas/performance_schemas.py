@@ -5,7 +5,7 @@
 """
 
 from pydantic import BaseModel, Field, validator, ConfigDict
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, date
 
 
@@ -60,9 +60,42 @@ class HolidayResponse(HolidayBase):
     tenant_id: int = Field(..., description="租户ID", alias="tenantId")
     created_at: datetime = Field(..., description="创建时间", alias="createdAt")
     updated_at: datetime = Field(..., description="更新时间", alias="updatedAt")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名", alias="createdByName")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名", alias="updatedByName")
     deleted_at: Optional[datetime] = Field(None, description="删除时间", alias="deletedAt")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
+
+
+class HolidayCnImportRequest(BaseModel):
+    """中国法定节假日 + 周休导入请求"""
+
+    year: int = Field(..., ge=2007, le=2100, description="公历年份")
+    rest_mode: str = Field(
+        "double",
+        description="休息制度：double=双休 / single=单休 / custom=自定义",
+        alias="restMode",
+    )
+    rest_weekdays: Optional[List[int]] = Field(
+        None,
+        description="休息星期（Python weekday：周一=0 … 周日=6）；custom 必填",
+        alias="restWeekdays",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class HolidayCnImportResult(BaseModel):
+    """中国法定节假日导入结果"""
+
+    year: int = Field(..., description="导入年份")
+    created: int = Field(0, description="新建条数")
+    skipped: int = Field(0, description="因同日已存在而跳过条数")
+    failed: int = Field(0, description="写入失败条数")
+    legal_count: int = Field(0, description="法定休息候选数", alias="legalCount")
+    weekend_count: int = Field(0, description="周休候选数", alias="weekendCount")
+
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
 
 class SkillBase(BaseModel):
@@ -130,6 +163,8 @@ class SkillResponse(SkillBase):
     tenant_id: int = Field(..., description="租户ID", alias="tenantId")
     created_at: datetime = Field(..., description="创建时间", alias="createdAt")
     updated_at: datetime = Field(..., description="更新时间", alias="updatedAt")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名", alias="createdByName")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名", alias="updatedByName")
     deleted_at: Optional[datetime] = Field(None, description="删除时间", alias="deletedAt")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)

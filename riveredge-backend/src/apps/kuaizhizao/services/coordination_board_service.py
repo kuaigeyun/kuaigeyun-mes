@@ -30,7 +30,7 @@ from apps.kuaizhizao.services.demand_computation_service import (
     SOURCE_TYPE_PHANTOM,
 )
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
-from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
+from apps.kuaizhizao.constants import ReviewStatus
 from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError
 
@@ -43,6 +43,14 @@ def _empty_documents() -> Dict[str, List[Dict[str, Any]]]:
         "purchase_orders": [],
         "purchase_requisitions": [],
     }
+
+
+_TERMINAL_WORK_ORDER_STATUSES = frozenset({"completed", "cancelled"})
+_CLOSED_SALES_ORDER_STATUSES = frozenset({
+    "cancelled", "CANCELLED", "已取消",
+    "completed", "COMPLETED", "已完成",
+    "finished", "FINISHED", "已出库", "closed", "CLOSED",
+})
 
 
 STAGE_DEFS = [
@@ -117,6 +125,55 @@ class CoordinationBoardService:
             receipt_done = False
         return ordered_total, recv_total, receipt_done
 
+    async def _resolve_latest_computation(
+        self,
+        tenant_id: int,
+        demand_id: Optional[int],
+        planning_computation_id: Optional[int],
+    ) -> Optional[DemandComputation]:
+        comp = None
+        if demand_id:
+            comp = (
+                await DemandComputation.filter(
+                    tenant_id=tenant_id,
+                    demand_id=demand_id,
+                    computation_status="完成",
+                )
+                .order_by("-id")
+                .first()
+            )
+        if not comp and planning_computation_id:
+            comp = await DemandComputation.get_or_none(
+                tenant_id=tenant_id,
+                id=planning_computation_id,
+                computation_status="完成",
+            )
+        return comp
+
+    async def _count_incomplete_work_orders_for_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        computation_id: Optional[int],
+    ) -> int:
+        """统计销售订单下未完工工单（MRP 关联 + 工单直挂 sales_order_id）。"""
+        incomplete_ids: Set[int] = set()
+
+        if computation_id:
+            docs = await self._load_documents(tenant_id, computation_id)
+            for wo in docs["work_orders"]:
+                if wo.get("status") not in _TERMINAL_WORK_ORDER_STATUSES:
+                    incomplete_ids.add(int(wo["id"]))
+
+        direct_wos = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            deleted_at__isnull=True,
+        ).exclude(status__in=list(_TERMINAL_WORK_ORDER_STATUSES)).values_list("id", flat=True)
+        incomplete_ids.update(int(wo_id) for wo_id in direct_wos)
+
+        return len(incomplete_ids)
+
     async def list_active_computations(self, tenant_id: int, limit: int = 20) -> Dict[str, Any]:
         """返回进行中（存在未完工下游工单）的已完成 MRP 列表。"""
         computations = (
@@ -176,7 +233,6 @@ class CoordinationBoardService:
         from apps.kuaizhizao.models.demand import Demand
         from apps.kuaizhizao.models.sales_order import SalesOrder
 
-        cancelled_statuses = {"cancelled", "已取消", "completed", "已完成"}
         approved_review_statuses = [
             ReviewStatus.APPROVED.value,
             "APPROVED",
@@ -184,30 +240,20 @@ class CoordinationBoardService:
             "通过",
             "已通过",
         ]
-        audited_order_statuses = [
-            DemandStatus.AUDITED.value,
-            DemandStatus.CONFIRMED.value,
-            "AUDITED",
-            "已审核",
-            "CONFIRMED",
-            "已确认",
-            "IN_PROGRESS",
-            "进行中",
-        ]
+        scan_limit = min(max(limit * 10, limit), 200)
         orders = (
             await SalesOrder.filter(
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
                 review_status__in=approved_review_statuses,
-                status__in=audited_order_statuses,
             )
-            .exclude(status__in=list(cancelled_statuses))
+            .exclude(status__in=list(_CLOSED_SALES_ORDER_STATUSES))
             .order_by("-updated_at")
-            .limit(limit * 4)
+            .limit(scan_limit)
             .all()
         )
 
-        items: List[Dict[str, Any]] = []
+        candidates: List[Dict[str, Any]] = []
         for so in orders:
             demand = await Demand.get_or_none(
                 tenant_id=tenant_id,
@@ -219,34 +265,19 @@ class CoordinationBoardService:
                 tenant_id, so.id, demand
             )
 
-            comp = None
-            incomplete_wo = 0
-            if demand:
-                comp = (
-                    await DemandComputation.filter(
-                        tenant_id=tenant_id,
-                        demand_id=demand.id,
-                        computation_status="完成",
-                    )
-                    .order_by("-id")
-                    .first()
-                )
-            if not comp and so.planning_computation_id:
-                comp = await DemandComputation.get_or_none(
-                    tenant_id=tenant_id,
-                    id=so.planning_computation_id,
-                    computation_status="完成",
-                )
-            if comp:
-                docs = await self._load_documents(tenant_id, comp.id)
-                incomplete_wo = sum(
-                    1
-                    for wo in docs["work_orders"]
-                    if wo.get("status") not in ("completed", "cancelled")
-                )
+            comp = await self._resolve_latest_computation(
+                tenant_id,
+                demand.id if demand else None,
+                so.planning_computation_id,
+            )
+            incomplete_wo = await self._count_incomplete_work_orders_for_sales_order(
+                tenant_id,
+                so.id,
+                comp.id if comp else None,
+            )
 
             delivery = getattr(so, "delivery_date", None)
-            items.append(
+            candidates.append(
                 {
                     "sales_order_id": so.id,
                     "sales_order_code": so.order_code,
@@ -259,10 +290,20 @@ class CoordinationBoardService:
                     "updated_at": to_api_isoformat(so.updated_at),
                 }
             )
-            if len(items) >= limit:
-                break
 
-        if not items and orders:
+        incomplete_candidates = [row for row in candidates if row["incomplete_work_orders"] > 0]
+        incomplete_candidates.sort(
+            key=lambda row: (
+                -int(row["incomplete_work_orders"]),
+                row.get("delivery_date") or "",
+            )
+        )
+
+        if incomplete_candidates:
+            items = incomplete_candidates[:limit]
+        elif candidates:
+            items = candidates[:limit]
+        elif orders:
             so = orders[0]
             demand = await Demand.get_or_none(
                 tenant_id=tenant_id,
@@ -271,19 +312,13 @@ class CoordinationBoardService:
                 deleted_at__isnull=True,
             )
             bom_status, _, _ = await self._check_bom_for_order(tenant_id, so.id, demand)
-            comp = None
-            if demand:
-                comp = (
-                    await DemandComputation.filter(
-                        tenant_id=tenant_id,
-                        demand_id=demand.id,
-                        computation_status="完成",
-                    )
-                    .order_by("-id")
-                    .first()
-                )
+            comp = await self._resolve_latest_computation(
+                tenant_id,
+                demand.id if demand else None,
+                so.planning_computation_id,
+            )
             delivery = getattr(so, "delivery_date", None)
-            items.append(
+            items = [
                 {
                     "sales_order_id": so.id,
                     "sales_order_code": so.order_code,
@@ -295,7 +330,9 @@ class CoordinationBoardService:
                     "incomplete_work_orders": 0,
                     "updated_at": to_api_isoformat(so.updated_at),
                 }
-            )
+            ]
+        else:
+            items = []
 
         return {"items": items}
 

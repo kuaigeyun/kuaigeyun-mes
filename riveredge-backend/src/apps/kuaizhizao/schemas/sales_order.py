@@ -190,7 +190,9 @@ class SalesOrderResponse(SalesOrderBase):
     planning_computation_pushed_at: Optional[datetime] = Field(None, description="计划侧下推需求计算时间")
     is_active: bool = Field(True, description="是否启用")
     created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
     updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     items: Optional[List[SalesOrderItemResponse]] = Field(None, description="订单明细")

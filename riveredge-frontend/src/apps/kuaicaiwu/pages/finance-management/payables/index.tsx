@@ -47,6 +47,12 @@ import {
   resolvePayableListParams,
 } from '../../../utils/financeListCore';
 import type { PayableListParams } from '../../../types/finance/payable';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  DocumentPushProgressBar,
+  DOCUMENT_PROGRESS_COLUMN_WIDTH,
+} from '../../../../kuaizhizao/pages/sales-management/shared/DocumentPushProgressBar';
+import { payablePaymentPushPercent } from '../../../../kuaizhizao/pages/sales-management/shared/pushProgress';
 
 const P = 'app.kuaicaiwu.payable';
 const PAYABLE_RESOURCE = 'kuaicaiwu:payable';
@@ -462,6 +468,24 @@ const PayableList: React.FC = () => {
             order: 23,
             valueEnum: buildReviewStatusEnum(t),
         },
+        {
+            title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+            dataIndex: 'payment_push_progress',
+            width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+            uniTableKeepWidth: true,
+            hideInSearch: true,
+            render: (_, record) => {
+                const percent = payablePaymentPushPercent(record.paid_amount, record.total_amount);
+                return (
+                    <DocumentPushProgressBar
+                        percent={percent}
+                        tooltip={t('app.kuaizhizao.salesManagement.pushProgress.percentOnly', {
+                            percent: Math.round(percent),
+                        })}
+                    />
+                );
+            },
+        },
         ...financeDocCreatedUpdatedColumns<Payable>(t),
         {
             title: t('app.kuaicaiwu.common.lifecycle'),
@@ -535,7 +559,7 @@ const PayableList: React.FC = () => {
             <UniTable<Payable>
                 headerTitle={t(`${P}.pageTitle`)}
                 actionRef={actionRef}
-                columns={columns}
+                columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
                 columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payables"
                 scroll={{ x: 1680 }}
                 request={async (params, sort, _filter, searchFormValues) => {

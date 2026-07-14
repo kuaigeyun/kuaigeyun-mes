@@ -89,13 +89,22 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
-import { formatDateTime } from '../../../../../utils/format';
+import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 const REPORTING_RESOURCE = 'kuaizhizao:production-execution-reporting';
+const REPORTING_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_reporting_records';
 
 /** 报工记录（后端返回 snake_case） */
 interface ReportingRecord {
@@ -412,6 +421,29 @@ const ReportingPage: React.FC = () => {
   // 报工Modal状态
   const [reportingModalVisible, setReportingModalVisible] = useState(false);
   const formRef = useRef<any>(null);
+
+  const {
+    customFields: reportingFormCustomFields,
+    customFieldValues: reportingFormCustomFieldValues,
+    extractFormValues: extractReportingFormValues,
+    saveCustomFieldValues: saveReportingCustomFieldValues,
+    resetFieldValues: resetReportingFormFieldValues,
+  } = useCustomFields({
+    tableName: REPORTING_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: reportingModalVisible,
+  });
+
+  const {
+    customFields: reportingListCustomFields,
+    generateCustomFieldColumns: generateReportingCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichReportingRecordsWithCustomFields,
+    customFieldValues: reportingDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadReportingFieldValuesForDetail,
+    resetDetailFieldValues: resetReportingDetailFieldValues,
+  } = useCustomFieldsForList<ReportingRecord>({ tableName: REPORTING_CUSTOM_FIELD_TABLE });
+
+  const reportingCustomFieldColumns = generateReportingCustomFieldColumns();
 
   // 报废记录Modal状态
   const [scrapModalVisible, setScrapModalVisible] = useState(false);
@@ -736,6 +768,7 @@ const ReportingPage: React.FC = () => {
    */
   const handleReportingSubmit = async (values: any) => {
     try {
+      const { standardValues, customData } = extractReportingFormValues(values);
       const ensurePickingGate = async (workOrderId: number) => {
         if (!executionConfig?.require_confirmed_picking_before_reporting) return true;
         const status = await workOrderApi.getPickingConfirmationStatus(workOrderId.toString());
@@ -747,8 +780,8 @@ const ReportingPage: React.FC = () => {
       };
 
       // 新建报工：从工单+工序构建完整 payload
-      const workOrder = (Array.isArray(reportWorkOrders) ? reportWorkOrders : []).find((wo: any) => wo.id === values.work_order_id);
-      const operation = (Array.isArray(reportOperations) ? reportOperations : []).find((op: any) => op.operation_id === values.operation_id);
+      const workOrder = (Array.isArray(reportWorkOrders) ? reportWorkOrders : []).find((wo: any) => wo.id === standardValues.work_order_id);
+      const operation = (Array.isArray(reportOperations) ? reportOperations : []).find((op: any) => op.operation_id === standardValues.operation_id);
       if (!workOrder || !operation) {
         messageApi.error(t('app.kuaizhizao.workReporting.workOrderOrOperationMissing'));
         throw new Error(t('app.kuaizhizao.workReporting.workOrderOrOperationMissing'));
@@ -767,17 +800,17 @@ const ReportingPage: React.FC = () => {
         worker_name,
         status: 'pending',
         reported_at: new Date().toISOString(),
-        remarks: values.remarks,
-        work_hours: values.work_hours || 0,
+        remarks: standardValues.remarks,
+        work_hours: standardValues.work_hours || 0,
       };
       if (operation.reporting_type === 'status') {
         const planQty = parseFloat(workOrder.quantity?.toString() || '0') || 0;
         const completeQty = getStatusReportingCompleteQuantity(operation, planQty);
-        reportingData.reported_quantity = values.completed_status === 'completed' ? completeQty : 0;
-        reportingData.qualified_quantity = values.completed_status === 'completed' ? completeQty : 0;
+        reportingData.reported_quantity = standardValues.completed_status === 'completed' ? completeQty : 0;
+        reportingData.qualified_quantity = standardValues.completed_status === 'completed' ? completeQty : 0;
         reportingData.unqualified_quantity = 0;
       } else {
-        const rq = Number(values.reported_quantity) || 0;
+        const rq = Number(standardValues.reported_quantity) || 0;
         if (rq <= 0) {
           messageApi.warning(t('app.kuaizhizao.workReporting.quantityMustBePositive'));
           return;
@@ -793,25 +826,30 @@ const ReportingPage: React.FC = () => {
           return;
         }
         reportingData.reported_quantity = rq;
-        reportingData.qualified_quantity = values.qualified_quantity ?? rq ?? 0;
-        reportingData.unqualified_quantity = rq - (values.qualified_quantity ?? rq ?? 0);
+        reportingData.qualified_quantity = standardValues.qualified_quantity ?? rq ?? 0;
+        reportingData.unqualified_quantity = rq - (standardValues.qualified_quantity ?? rq ?? 0);
       }
       if (reportIsLastOperation) {
-        if (reportWarehouseRequired && !values.inbound_warehouse_id) {
+        if (reportWarehouseRequired && !standardValues.inbound_warehouse_id) {
           messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.workOrder.selectWarehouse'));
           return;
         }
-        if (values.inbound_warehouse_id) {
-          reportingData.inbound_warehouse_id = Number(values.inbound_warehouse_id);
-          reportingData.inbound_warehouse_name = values.inbound_warehouse_name
-            ? String(values.inbound_warehouse_name)
+        if (standardValues.inbound_warehouse_id) {
+          reportingData.inbound_warehouse_id = Number(standardValues.inbound_warehouse_id);
+          reportingData.inbound_warehouse_name = standardValues.inbound_warehouse_name
+            ? String(standardValues.inbound_warehouse_name)
             : undefined;
         }
       }
-      await reportingApi.create(coerceReportingCreateStrings(reportingData, workOrder));
+      const created = await reportingApi.create(coerceReportingCreateStrings(reportingData, workOrder));
+      const createdId = Number((created as { id?: number } | null)?.id);
+      if (createdId && Object.keys(customData).length > 0) {
+        await saveReportingCustomFieldValues(createdId, customData);
+      }
       messageApi.success(t('app.kuaizhizao.workReporting.createSuccess'));
       setReportingModalVisible(false);
       formRef.current?.resetFields();
+      resetReportingFormFieldValues();
       setReportWorkOrders([]);
       setReportOperations([]);
       setReportWorkOrderId(null);
@@ -994,6 +1032,9 @@ const ReportingPage: React.FC = () => {
       setReportingDetail(detail as ReportingRecord);
       setDetailDrawerVisible(true);
       setRpTrackingRefreshKey((k) => k + 1);
+      if (record.id != null) {
+        await loadReportingFieldValuesForDetail(record.id);
+      }
       try {
         const bindings = await materialBindingApi.getByReportingRecord(String(record.id));
         setDetailMaterialBindings(Array.isArray(bindings) ? bindings : []);
@@ -1227,18 +1268,6 @@ const ReportingPage: React.FC = () => {
       hideInSearch: false,
     },
     {
-      title: t('app.kuaizhizao.workReporting.colRecordedBy'),
-      dataIndex: 'recorded_by_name',
-      width: 100,
-      ellipsis: true,
-      hideInSearch: true,
-      render: (_, r) => {
-        const rec = (r as ReportingRecord).recorded_by_name;
-        if (rec) return rec;
-        return (r as ReportingRecord).worker_name ?? '—';
-      },
-    },
-    {
       title: t('app.kuaizhizao.workReporting.colReportedQty'),
       dataIndex: 'reported_quantity',
       width: 100,
@@ -1253,10 +1282,11 @@ const ReportingPage: React.FC = () => {
       align: 'right',
       sorter: true,
       hideInSearch: true,
-      render: (_, record) => {
-        const val = Number(record.qualified_quantity ?? record.qualifiedQuantity ?? 0);
-        return <Typography.Text type="success">{val.toFixed(2)}</Typography.Text>;
-      },
+      render: (_, record) => (
+        <Typography.Text type="success">
+          {formatQuantity(record.qualified_quantity ?? record.qualifiedQuantity)}
+        </Typography.Text>
+      ),
     },
     {
       title: t('app.kuaizhizao.workReporting.colUnqualifiedQty'),
@@ -1265,10 +1295,11 @@ const ReportingPage: React.FC = () => {
       align: 'right',
       sorter: true,
       hideInSearch: true,
-      render: (_, record) => {
-        const val = Number(record.unqualified_quantity ?? record.unqualifiedQuantity ?? 0);
-        return <Typography.Text type="danger">{val.toFixed(2)}</Typography.Text>;
-      },
+      render: (_, record) => (
+        <Typography.Text type="danger">
+          {formatQuantity(record.unqualified_quantity ?? record.unqualifiedQuantity)}
+        </Typography.Text>
+      ),
     },
     {
       title: t('app.kuaizhizao.workReporting.colWorkHours'),
@@ -1281,13 +1312,28 @@ const ReportingPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.workReporting.colReportedAt'),
       dataIndex: 'reported_at',
-      width: 132,
+      width: 148,
       uniTableKeepWidth: true,
       sorter: true,
       defaultSortOrder: 'descend',
       hideInSearch: true,
-      render: (_, record) =>
-        record.reported_at ? formatDateTime(record.reported_at, 'YYYY-MM-DD HH:mm') : '-',
+      render: (_, record) => {
+        const operator =
+          String(record.recorded_by_name ?? '').trim() ||
+          String(record.worker_name ?? '').trim() ||
+          '-';
+        const time = record.reported_at
+          ? formatDateTime(record.reported_at, 'YYYY-MM-DD HH:mm')
+          : '-';
+        return (
+          <UniTableStackedPrimaryCell
+            primary={operator}
+            secondary={time}
+            secondaryCopyable={false}
+            primaryBold={false}
+          />
+        );
+      },
     },
     {
       title: t('app.kuaizhizao.workReporting.colReviewStatus'),
@@ -1298,6 +1344,7 @@ const ReportingPage: React.FC = () => {
       hideInSearch: false,
     },
     ...(reportingAuditColumn ? [reportingAuditColumn] : []),
+    ...reportingCustomFieldColumns,
     {
       title: t('common.actions'),
       width: 200,
@@ -1306,7 +1353,7 @@ const ReportingPage: React.FC = () => {
       render: (_, record) =>
         renderReportingRowActions(renderReportingRowActionNodes(record), `rr-${record.id}`),
     },
-  ], [t, reportingAuditColumn, reportingStatusValueEnum]);
+  ], [t, reportingAuditColumn, reportingStatusValueEnum, reportingCustomFieldColumns]);
 
 
   const reportingDetailBaseColumns: ProDescriptionsItemProps<ReportingRecord>[] = useMemo(
@@ -1366,7 +1413,7 @@ const ReportingPage: React.FC = () => {
         columnPersistenceId="apps.kuaizhizao.pages.production-execution.reporting"
         actionRef={actionRef}
         rowKey="id"
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         showAdvancedSearch={true}
         skipFuzzyPinyinClientFilter
         pinnedTabsField="status"
@@ -1409,8 +1456,10 @@ const ReportingPage: React.FC = () => {
             }
 
             const result = await reportingApi.list(apiParams);
+            const raw = (result.data || []) as ReportingRecord[];
+            const data = await enrichReportingRecordsWithCustomFields(raw);
             return {
-              data: result.data || [],
+              data,
               success: result.success,
               total: result.total || 0,
             };
@@ -1473,6 +1522,8 @@ const ReportingPage: React.FC = () => {
         open={reportingModalVisible}
         onClose={() => {
           setReportingModalVisible(false);
+          formRef.current?.resetFields();
+          resetReportingFormFieldValues();
           setReportWorkOrders([]);
           setReportOperations([]);
           setReportWorkOrderId(null);
@@ -1594,6 +1645,11 @@ const ReportingPage: React.FC = () => {
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
+        <CustomFieldsFormSection
+          customFields={reportingFormCustomFields}
+          customFieldValues={reportingFormCustomFieldValues}
+          gridColumns={3}
+        />
       </FormModalTemplate>
 
       <UniPullQueryModal<PullReportingOperationCandidate>
@@ -1613,7 +1669,7 @@ const ReportingPage: React.FC = () => {
             ellipsis: true,
             render: (_, row) => `${row.operation_name || '-'} (${row.operation_code || '-'})`,
           },
-          { title: t('app.kuaizhizao.workOrder.colPlannedQty'), dataIndex: 'quantity', width: 100, align: 'right' },
+          { title: t('app.kuaizhizao.workOrder.colPlannedQty'), dataIndex: 'quantity', width: 100, align: 'right' , render: formatQuantity },
           { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'reportable_quantity_cap', width: 90, align: 'right' },
           { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'reportable_quantity_pushed', width: 90, align: 'right' },
           { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'reportable_quantity_max', width: 90, align: 'right' },
@@ -1682,9 +1738,9 @@ const ReportingPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.workReporting.formOperation'), dataIndex: 'material_code', width: 120, ellipsis: true },
                   { title: t('app.kuaizhizao.workReporting.colOperation'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' , render: formatQuantity },
                 ]}
               />
             ) : (
@@ -1953,6 +2009,7 @@ const ReportingPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setReportingDetail(null);
           setDetailMaterialBindings([]);
+          resetReportingDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -1990,6 +2047,15 @@ const ReportingPage: React.FC = () => {
                   </div>
                 )}
               </DetailDrawerSection>
+
+              {hasCustomFieldsDetailContent(reportingListCustomFields, reportingDetailCustomFieldValues) && (
+                <DetailDrawerSection title={t('app.master-data.customFields')}>
+                  <CustomFieldsDetailSection
+                    customFields={reportingListCustomFields}
+                    customFieldValues={reportingDetailCustomFieldValues}
+                  />
+                </DetailDrawerSection>
+              )}
 
               <DetailDrawerSection title={t('app.kuaizhizao.workReporting.sectionLifecycle')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -2050,7 +2116,7 @@ const ReportingPage: React.FC = () => {
                         { title: t('app.kuaizhizao.workReporting.bindingColType'), dataIndex: 'binding_type', width: 100, ellipsis: true },
                         { title: t('app.kuaizhizao.workReporting.bindingColMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
                         { title: t('app.kuaizhizao.workReporting.bindingColMaterialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                        { title: t('app.kuaizhizao.workReporting.bindingColQuantity'), dataIndex: 'quantity', width: 100, align: 'right' as const },
+                        { title: t('app.kuaizhizao.workReporting.bindingColQuantity'), dataIndex: 'quantity', width: 100, align: 'right' as const , render: formatQuantity },
                         { title: t('app.kuaizhizao.workReporting.bindingColWarehouse'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
                         { title: t('app.kuaizhizao.workReporting.bindingColMethod'), dataIndex: 'binding_method', width: 100 },
                       ]}

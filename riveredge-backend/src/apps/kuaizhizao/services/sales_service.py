@@ -112,6 +112,14 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         ).annotate(cnt=Count("id")).group_by("forecast_id").values("forecast_id", "cnt")
         return {int(r["forecast_id"]): int(r["cnt"] or 0) > 0 for r in rows}
 
+    async def _audit_update_fields(self, updated_by: int) -> Dict[str, Any]:
+        """状态流转等 .update() 必须同时写 updated_by / updated_by_name。"""
+        user_info = await self.get_user_info(updated_by)
+        return {
+            "updated_by": updated_by,
+            "updated_by_name": user_info["name"],
+        }
+
     async def delete_sales_forecast(self, tenant_id: int, forecast_id: int) -> None:
         forecast = await SalesForecast.get_or_none(
             tenant_id=tenant_id, id=forecast_id, deleted_at__isnull=True
@@ -157,6 +165,8 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             create_data['forecast_code'] = code
             create_data['created_by'] = created_by
             create_data['created_by_name'] = user_info["name"]
+            create_data['updated_by'] = created_by
+            create_data['updated_by_name'] = user_info["name"]
             
             forecast = await SalesForecast.create(
                 tenant_id=tenant_id,
@@ -187,7 +197,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 await SalesForecast.filter(tenant_id=tenant_id, id=forecast.id).update(
                     status=DocumentStatus.AUDITED.value,
                     review_status=ReviewStatus.APPROVED.value,
-                    updated_by=created_by
+                    **(await self._audit_update_fields(created_by)),
                 )
                 await self._try_auto_push_forecast_to_computation(
                     tenant_id=tenant_id,
@@ -488,7 +498,9 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             dumped = forecast_data.model_dump(exclude_unset=True, exclude={'updated_by'})
             items_data = dumped.pop('items', None)
             update_data = {k: v for k, v in dumped.items() if k != 'items'}
+            user_info = await self.get_user_info(updated_by)
             update_data['updated_by'] = updated_by
+            update_data['updated_by_name'] = user_info["name"]
 
             await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(**update_data)
 
@@ -665,7 +677,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 status=status,
-                updated_by=approved_by
+                **(await self._audit_update_fields(approved_by)),
             )
 
             demand_synced = False
@@ -724,7 +736,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 reviewer_id=None,
                 reviewer_name=None,
                 review_time=None,
-                updated_by=withdrawn_by,
+                **(await self._audit_update_fields(withdrawn_by)),
             )
             return await self.get_sales_forecast_by_id(tenant_id, forecast_id)
 
@@ -808,7 +820,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
                     status=DocumentStatus.CONFIRMED.value,
                     review_status=ReviewStatus.APPROVED.value,
-                    updated_by=submitted_by
+                    **(await self._audit_update_fields(submitted_by)),
                 )
                 # 无需审核时不再自动创建 Demand，保持链路为「销售预测→需求计算（显式下推）」。
                 await self._try_auto_push_forecast_to_computation(
@@ -820,7 +832,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
                     status=DocumentStatus.PENDING_REVIEW.value,
                     review_status=ReviewStatus.PENDING.value,
-                    updated_by=submitted_by
+                    **(await self._audit_update_fields(submitted_by)),
                 )
             
             updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
@@ -861,7 +873,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             reviewer_name=None,
             review_time=None,
             review_remarks=None,
-            updated_by=withdrawn_by,
+            **(await self._audit_update_fields(withdrawn_by)),
         )
         return await self.get_sales_forecast_by_id(tenant_id, forecast_id)
 

@@ -9,6 +9,7 @@ from typing import List, Optional, Tuple
 
 from tortoise.transactions import in_transaction
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit, operator_name_from_user
 from apps.kuaizhizao.models.quotation import Quotation
 from apps.kuaizhizao.models.sales_opportunity import SalesOpportunity
 from apps.kuaizhizao.models.sales_order import SalesOrder
@@ -162,6 +163,8 @@ class SalesOpportunityService:
             if next_follow_up_at is not None:
                 opp.next_follow_up_at = next_follow_up_at
             opp.updated_by = updated_by
+            user = await User.filter(id=updated_by).first()
+            opp.updated_by_name = operator_name_from_user(user)
             await opp.save()
             return None, None
 
@@ -174,6 +177,8 @@ class SalesOpportunityService:
         if next_follow_up_at is not None:
             opp.next_follow_up_at = next_follow_up_at
         opp.updated_by = updated_by
+        user = await User.filter(id=updated_by).first()
+        opp.updated_by_name = operator_name_from_user(user)
         await opp.save()
         return stage_before, stage_code_after
 
@@ -190,6 +195,8 @@ class SalesOpportunityService:
         if next_follow_up_at is not None:
             opp.next_follow_up_at = next_follow_up_at
         opp.updated_by = updated_by
+        user = await User.filter(id=updated_by).first()
+        opp.updated_by_name = operator_name_from_user(user)
         await opp.save()
 
     @classmethod
@@ -220,9 +227,9 @@ class SalesOpportunityService:
             quotation_code=qcode,
             sales_order_id=sid,
             sales_order_code=scode,
-            created_by=current_user.id,
-            updated_by=current_user.id,
         )
+        apply_create_audit(row, current_user)
+        await row.save()
         return SalesOpportunityResponse.model_validate(row)
 
     @classmethod
@@ -273,9 +280,9 @@ class SalesOpportunityService:
             stage_code="INITIAL",
             status="open",
             owner_id=customer.salesman_id,
-            created_by=current_user.id,
-            updated_by=current_user.id,
         )
+        apply_create_audit(row, current_user)
+        await row.save()
         return SalesOpportunityResponse.model_validate(row)
 
     @classmethod
@@ -322,9 +329,9 @@ class SalesOpportunityService:
             quotation_code=qcode,
             sales_order_id=sid,
             sales_order_code=scode,
-            created_by=current_user.id,
-            updated_by=current_user.id,
         )
+        apply_create_audit(row, current_user)
+        await row.save()
         return SalesOpportunityResponse.model_validate(row)
 
     @classmethod
@@ -374,6 +381,7 @@ class SalesOpportunityService:
             dump["title"] = dump["title"].strip()
 
         dump["updated_by"] = current_user.id
+        apply_update_audit(dump, current_user)
         await SalesOpportunity.filter(id=opportunity_id, tenant_id=tenant_id).update(**dump)
         row = await SalesOpportunity.get(id=opportunity_id, tenant_id=tenant_id)
         return SalesOpportunityResponse.model_validate(row)

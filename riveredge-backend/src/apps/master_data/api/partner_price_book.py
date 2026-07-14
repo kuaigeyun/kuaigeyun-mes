@@ -54,7 +54,9 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
         _partner_type: str = partner_type,
     ):
         try:
-            return await PartnerPriceBookService.create(tenant_id, _partner_type, data)
+            return await PartnerPriceBookService.create(
+                tenant_id, _partner_type, data, current_user=current_user
+            )
         except ValidationError as e:
             raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
@@ -178,7 +180,9 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
         _partner_type: str = partner_type,
     ):
         try:
-            return await PartnerPriceBookService.update(tenant_id, _partner_type, book_uuid, data)
+            return await PartnerPriceBookService.update(
+                tenant_id, _partner_type, book_uuid, data, current_user=current_user
+            )
         except NotFoundError as e:
             raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
         except ValidationError as e:

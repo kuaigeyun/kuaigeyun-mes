@@ -199,10 +199,6 @@ class WorkOrder(BaseModel):
     attachments = fields.JSONField(null=True, description="附件列表")
 
     # 创建更新信息
-    created_by = fields.IntField(description="创建人ID")
-    created_by_name = fields.CharField(max_length=100, description="创建人姓名")
-    updated_by = fields.IntField(null=True, description="更新人ID")
-    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

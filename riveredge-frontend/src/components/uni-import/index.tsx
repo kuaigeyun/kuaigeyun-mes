@@ -913,9 +913,9 @@ export const UniImport: React.FC<UniImportProps> = ({
                 // @ts-ignore
                 const columnCount = worksheet.getColumnCount?.() || worksheet.columnCount || 100;
 
-                // 遍历单元格获取数据（最多1000行，100列）
-                const maxRows = Math.min(rowCount, 1000);
-                const maxCols = Math.min(columnCount, 100);
+                // 按工作表实际行列遍历（粘贴超 100 行后已扩容）
+                const maxRows = Math.max(1, Number(rowCount) || 100);
+                const maxCols = Math.max(1, Number(columnCount) || 100);
 
                 for (let r = 0; r < maxRows; r++) {
                   const rowData: any[] = [];

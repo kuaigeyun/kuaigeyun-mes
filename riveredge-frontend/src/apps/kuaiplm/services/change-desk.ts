@@ -19,6 +19,7 @@ export interface UnifiedChangeRow {
   status?: string;
   change_reason?: string;
   created_by_name?: string;
+  updated_by_name?: string;
   created_at?: string;
   updated_at?: string;
   source?: 'master_data' | 'kuaiplm';
@@ -44,6 +45,10 @@ export interface ChangeListParams {
   keyword?: string;
   change_code?: string;
   target_name?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
 }
 
 function unwrapList<T>(res: unknown): { items: T[]; total: number } {
@@ -73,7 +78,10 @@ function mapDeskItem(row: Record<string, unknown>): UnifiedChangeRow {
     target_name: (row.entity_name ?? row.target_name) as string | undefined,
     status: row.status as string | undefined,
     change_reason: row.change_reason as string | undefined,
+    created_by_name: row.created_by_name as string | undefined,
+    updated_by_name: row.updated_by_name as string | undefined,
     created_at: row.created_at as string | undefined,
+    updated_at: row.updated_at as string | undefined,
     source: 'kuaiplm',
     audit: row.audit as UnifiedChangeRow['audit'],
   };
@@ -98,6 +106,10 @@ async function listFromChangeDesk(params?: ChangeListParams, category?: ChangeDe
       keyword: params?.keyword,
       change_code: params?.change_code,
       target_name: params?.target_name,
+      created_start_date: params?.created_start_date,
+      created_end_date: params?.created_end_date,
+      updated_start_date: params?.updated_start_date,
+      updated_end_date: params?.updated_end_date,
     },
   });
   const { items, total } = unwrapList<Record<string, unknown>>(res);

@@ -29,12 +29,13 @@ import {
 } from '../../../../../hooks/useDocumentCapabilities';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   buildComputationStatusValueEnum,
-  formatPlanDateTimeCell,
   normalizePlanListResponse,
   resolveComputationHistoryListParams,
 } from '../../../utils/planListCore';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 
 const ComputationHistoryPage: React.FC = () => {
   const { t } = useTranslation();
@@ -181,15 +182,7 @@ const ComputationHistoryPage: React.FC = () => {
         hideInSearch: true,
         render: (_, record) => formatDateTimeBySiteSetting(record.computation_end_time),
       },
-      {
-        title: t('app.kuaizhizao.computationHistory.col.createdAt'),
-        dataIndex: 'created_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, record) => formatPlanDateTimeCell(record.created_at),
-      },
+      ...buildDocumentAuditColumns<DemandComputation>(t),
     ],
     [computationStatusValueEnum, statusMap, t]
   );
@@ -270,7 +263,7 @@ const ComputationHistoryPage: React.FC = () => {
         <UniTable<DemandComputation>
           columnPersistenceId="apps.kuaizhizao.pages.plan-management.computation-history"
           actionRef={actionRef}
-          columns={columns}
+          columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
           request={async (params, sort, _filter, searchFormValues) => {
             try {
               const listParams = resolveComputationHistoryListParams(searchFormValues, sort);

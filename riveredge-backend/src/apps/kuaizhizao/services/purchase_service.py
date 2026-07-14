@@ -190,10 +190,13 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
             # 创建订单头
             order_dict = order_data.model_dump(exclude={'items'})
+            user_info = await self.get_user_info(created_by)
             order_dict.update({
                 'tenant_id': tenant_id,
                 'created_by': created_by,
-                'updated_by': created_by
+                'created_by_name': user_info["name"],
+                'updated_by': created_by,
+                'updated_by_name': user_info["name"],
             })
 
             # 自动带出归属采购员
@@ -247,7 +250,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 'total_amount': total_amount,
                 'tax_amount': tax_amount,
                 'net_amount': net_amount,
-                'updated_by': created_by
+                'updated_by': created_by,
+                'updated_by_name': user_info["name"],
             }).save()
 
             return await self.get_purchase_order_by_id(tenant_id, order.id)
@@ -370,22 +374,53 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         # 为每个订单加载明细（简化版，只返回基本信息）
         # 不能直接 model_validate(order)：order.items 是 ReverseRelation，会导致 Pydantic 校验失败
         order_ids = [order.id for order in orders]
-        items_count_by_order = await self._batch_order_items_count(tenant_id, order_ids)
+        totals_by_order = await self._batch_order_receipt_totals(tenant_id, order_ids)
+        downstream_totals_by_order = await self._batch_order_downstream_totals(tenant_id, order_ids)
         result = []
         for order in orders:
-            items_count = items_count_by_order.get(order.id, 0)
+            totals = totals_by_order.get(order.id, {})
+            downstream_totals = downstream_totals_by_order.get(order.id, {})
+            items_count = int(totals.get("items_count", 0) or 0)
+            ordered_total = Decimal(str(totals.get("ordered_total") or 0))
+            received_total = Decimal(str(totals.get("received_total") or 0))
+            outstanding_total = Decimal(str(totals.get("outstanding_total") or 0))
+            pushed_notice_total = Decimal(str(downstream_totals.get("notice_total") or 0))
+            pushed_receipt_total = Decimal(str(downstream_totals.get("receipt_total") or 0))
+            downstream_pushed_total = max(pushed_notice_total, pushed_receipt_total)
+            downstream_push_progress = (
+                round(float((downstream_pushed_total / ordered_total) * Decimal(100)), 1)
+                if ordered_total > 0
+                else 0.0
+            )
+            if downstream_push_progress < 0:
+                downstream_push_progress = 0.0
+            if downstream_push_progress > 100:
+                downstream_push_progress = 100.0
+            receipt_progress = (
+                round(float((received_total / ordered_total) * Decimal(100)), 1)
+                if ordered_total > 0
+                else 0.0
+            )
             order_data = order.__dict__.copy()
             order_data.pop('items', None)
             order_data['items_count'] = items_count
+            order_data['downstream_push_progress'] = downstream_push_progress
+            order_data['received_total'] = received_total
+            order_data['outstanding_total'] = outstanding_total
+            order_data['receipt_progress'] = receipt_progress
             resp = PurchaseOrderListResponse.model_construct(**order_data)
             resp.items = []
             resp.items_count = items_count
+            resp.downstream_push_progress = downstream_push_progress
+            resp.received_total = received_total
+            resp.outstanding_total = outstanding_total
+            resp.receipt_progress = receipt_progress
             from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_lifecycle
             resp.lifecycle = get_purchase_order_lifecycle(order)
             result.append(resp)
 
         has_items_by_id = {
-            oid: items_count_by_order.get(oid, 0) > 0 for oid in order_ids
+            oid: int(totals_by_order.get(oid, {}).get("items_count", 0) or 0) > 0 for oid in order_ids
         }
         enriched = await enrich_purchase_order_list_capabilities(
             tenant_id, orders, result, has_items_by_id=has_items_by_id
@@ -452,6 +487,97 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 "outstanding_total": Decimal(str(row.get("outstanding_total") or 0)),
                 "items_count": int(row.get("items_count") or 0),
             }
+        return result
+
+    async def _batch_order_downstream_totals(
+        self, tenant_id: int, order_ids: List[int]
+    ) -> Dict[int, Dict[str, Any]]:
+        """批量汇总采购订单下游单据数量（收货通知单、采购入库单）。"""
+        if not order_ids:
+            return {}
+        from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+        from apps.kuaizhizao.services.warehouse_service import _PURCHASE_RECEIPT_VOID_STATUSES
+
+        notice_rows = (
+            await ReceiptNotice.filter(
+                tenant_id=tenant_id,
+                purchase_order_id__in=order_ids,
+                deleted_at__isnull=True,
+            )
+            .group_by("purchase_order_id")
+            .annotate(
+                notice_total=Sum("total_quantity"),
+                notice_count=Count("id"),
+            )
+            .values("purchase_order_id", "notice_total", "notice_count")
+        )
+        result: Dict[int, Dict[str, Any]] = {
+            int(order_id): {
+                "notice_total": Decimal("0"),
+                "notice_count": 0,
+                "receipt_total": Decimal("0"),
+                "receipt_count": 0,
+            }
+            for order_id in order_ids
+        }
+        for row in notice_rows:
+            oid = int(row["purchase_order_id"])
+            bucket = result.setdefault(oid, {
+                "notice_total": Decimal("0"),
+                "notice_count": 0,
+                "receipt_total": Decimal("0"),
+                "receipt_count": 0,
+            })
+            bucket["notice_total"] = Decimal(str(row.get("notice_total") or 0))
+            bucket["notice_count"] = int(row.get("notice_count") or 0)
+
+        receipt_rows = await PurchaseReceipt.filter(
+            tenant_id=tenant_id,
+            purchase_order_id__in=order_ids,
+            deleted_at__isnull=True,
+        ).values("id", "purchase_order_id", "status")
+        receipt_order_map: Dict[int, int] = {}
+        for row in receipt_rows:
+            rid = int(row.get("id") or 0)
+            if rid <= 0:
+                continue
+            status = str(row.get("status") or "").strip()
+            if status in _PURCHASE_RECEIPT_VOID_STATUSES:
+                continue
+            oid = int(row.get("purchase_order_id") or 0)
+            if oid <= 0:
+                continue
+            receipt_order_map[rid] = oid
+            bucket = result.setdefault(oid, {
+                "notice_total": Decimal("0"),
+                "notice_count": 0,
+                "receipt_total": Decimal("0"),
+                "receipt_count": 0,
+            })
+            bucket["receipt_count"] = int(bucket.get("receipt_count", 0) or 0) + 1
+
+        if receipt_order_map:
+            receipt_item_rows = await PurchaseReceiptItem.filter(
+                tenant_id=tenant_id,
+                receipt_id__in=list(receipt_order_map.keys()),
+            ).values("receipt_id", "receipt_quantity")
+            for row in receipt_item_rows:
+                rid = int(row.get("receipt_id") or 0)
+                oid = receipt_order_map.get(rid)
+                if not oid:
+                    continue
+                qty = Decimal(str(row.get("receipt_quantity") or 0))
+                if qty <= 0:
+                    continue
+                bucket = result.setdefault(oid, {
+                    "notice_total": Decimal("0"),
+                    "notice_count": 0,
+                    "receipt_total": Decimal("0"),
+                    "receipt_count": 0,
+                })
+                bucket["receipt_total"] = Decimal(str(bucket.get("receipt_total") or 0)) + qty
         return result
 
     async def list_purchase_receipt_pull_candidates(
@@ -629,7 +755,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
             # 更新订单头
             update_dict = order_data.model_dump(exclude_unset=True, exclude={'items', 'change_reason'})
+            user_info = await self.get_user_info(updated_by)
             update_dict['updated_by'] = updated_by
+            update_dict['updated_by_name'] = user_info["name"]
 
             await order.update_from_dict(update_dict).save()
 

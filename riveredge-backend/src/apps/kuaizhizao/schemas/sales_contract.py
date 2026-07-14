@@ -163,7 +163,9 @@ class SalesContractResponse(BaseSchema):
     attachments: Optional[list] = None
     is_active: bool = True
     created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
     updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     items: Optional[List[SalesContractItemResponse]] = None

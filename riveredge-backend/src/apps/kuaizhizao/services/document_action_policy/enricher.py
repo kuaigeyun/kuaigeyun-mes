@@ -1150,14 +1150,17 @@ def enrich_outbound_hub_list_capabilities(
     records: List[Any],
     responses: List[T],
     outbound_type: str,
+    *,
+    item_counts: Optional[Dict[int, int]] = None,
 ) -> List[T]:
     out: List[T] = []
     for record, resp in zip(records, responses):
         caps = derive_outbound_hub_capabilities(record, outbound_type=outbound_type)
-        if hasattr(resp, "model_copy"):
-            out.append(_attach_capabilities_to_response(resp, caps))
-        else:
-            out.append(resp)
+        enriched = _attach_capabilities_to_response(resp, caps) if hasattr(resp, "model_copy") else resp
+        if item_counts is not None and hasattr(enriched, "model_copy"):
+            rid = int(getattr(record, "id", 0) or 0)
+            enriched = enriched.model_copy(update={"total_items": item_counts.get(rid, 0)})
+        out.append(enriched)
     return out
 
 
@@ -1248,7 +1251,17 @@ def enrich_quality_inspection_capabilities_on_response(
         pushed_rework_quantity=pushed_rework_quantity,
     )
     if hasattr(response, "model_copy"):
-        return _attach_capabilities_to_response(response, caps)
+        attached = _attach_capabilities_to_response(response, caps)
+        qty_updates: dict = {}
+        if supports_purchase_return:
+            qty_updates["pushed_purchase_return_quantity"] = float(
+                pushed_purchase_return_quantity or 0.0
+            )
+        if supports_push_rework:
+            qty_updates["pushed_rework_quantity"] = float(pushed_rework_quantity or 0.0)
+        if qty_updates:
+            return attached.model_copy(update=qty_updates)
+        return attached
     return response
 
 
@@ -1279,7 +1292,15 @@ def enrich_quality_inspection_list_capabilities(
             pushed_rework_quantity=pushed_qty,
         )
         if hasattr(resp, "model_copy"):
-            out.append(_attach_capabilities_to_response(resp, caps))
+            attached = _attach_capabilities_to_response(resp, caps)
+            qty_updates: dict = {}
+            if supports_purchase_return:
+                qty_updates["pushed_purchase_return_quantity"] = pushed_return_qty
+            if supports_push_rework:
+                qty_updates["pushed_rework_quantity"] = pushed_qty
+            if qty_updates:
+                attached = attached.model_copy(update=qty_updates)
+            out.append(attached)
         else:
             out.append(resp)
     return out

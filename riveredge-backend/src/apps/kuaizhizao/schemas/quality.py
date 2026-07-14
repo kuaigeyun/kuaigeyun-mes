@@ -83,6 +83,13 @@ class IncomingInspectionResponse(IncomingInspectionBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
+    pushed_purchase_return_quantity: float = Field(
+        0, ge=0, description="已下推采购退货数量（列表/详情）"
+    )
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
     capabilities: Optional[QualityInspectionCapabilities] = Field(
         None, description="业务态 capabilities（不含 RBAC）"
@@ -220,6 +227,10 @@ class ProcessInspectionResponse(ProcessInspectionBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
     capabilities: Optional[QualityInspectionCapabilities] = Field(
         None, description="业务态 capabilities（不含 RBAC）"
@@ -304,6 +315,13 @@ class FinishedGoodsInspectionResponse(FinishedGoodsInspectionBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
+    pushed_rework_quantity: float = Field(
+        0, ge=0, description="已下推返工数量（列表/详情）"
+    )
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
     capabilities: Optional[QualityInspectionCapabilities] = Field(
         None, description="业务态 capabilities（不含 RBAC）"
@@ -398,6 +416,10 @@ class QualityStandardResponse(QualityStandardBase):
     tenant_id: Optional[int] = Field(None, description="组织ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
 
     class Config:
         from_attributes = True

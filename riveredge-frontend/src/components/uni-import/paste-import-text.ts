@@ -159,6 +159,10 @@ type UniverSheetLike = {
   getActiveRange?: () => UniverRangeLike | null;
   getSelection?: () => { getActiveRange?: () => UniverRangeLike | null } | null;
   getRange?: (row: number, col: number, numRows: number, colCount: number) => UniverRangeLike | null;
+  getRowCount?: () => number;
+  getColumnCount?: () => number;
+  setRowCount?: (rowCount: number) => unknown;
+  setColumnCount?: (columnCount: number) => unknown;
 };
 
 type UniverApiLike = {
@@ -179,6 +183,26 @@ export function resolveActiveStart(sheet: UniverSheetLike): {
     return { startRow: data.startRow, startColumn: data.startColumn };
   }
   return { startRow: 0, startColumn: 0 };
+}
+
+/**
+ * 粘贴前扩展工作表行列，避免默认 100 行模板截断预览。
+ */
+export function ensureSheetCapacity(
+  sheet: UniverSheetLike,
+  requiredRows: number,
+  requiredCols: number,
+): void {
+  const rows = Math.max(1, Math.ceil(requiredRows));
+  const cols = Math.max(1, Math.ceil(requiredCols));
+  const currentRows = Number(sheet.getRowCount?.() ?? 0) || 0;
+  const currentCols = Number(sheet.getColumnCount?.() ?? 0) || 0;
+  if (rows > currentRows && typeof sheet.setRowCount === 'function') {
+    sheet.setRowCount(rows);
+  }
+  if (cols > currentCols && typeof sheet.setColumnCount === 'function') {
+    sheet.setColumnCount(cols);
+  }
 }
 
 export function mergePasteIntoStringMatrix(
@@ -236,6 +260,9 @@ export function pasteClipboardAsForceString(
   const merged = mergePasteIntoStringMatrix(existingRows, pasteRows, startRow, startColumn);
 
   const pasteColCount = Math.max(1, ...pasteRows.map((r) => r.length));
+  // 工作表默认仅 100 行；先扩容再写入，否则超出部分预览不可见
+  ensureSheetCapacity(sheet, startRow + pasteRows.length, startColumn + pasteColCount);
+
   const padded = pasteRows.map((row) =>
     Array.from({ length: pasteColCount }, (_, i) => row[i] ?? ''),
   );

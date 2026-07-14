@@ -47,6 +47,7 @@ import {
   resolvePresetOperationNameByName,
   resolvePresetOperationDefectName,
 } from '../../../../../utils/presetEntityI18n';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -690,7 +691,7 @@ const OperationsPage: React.FC = () => {
       <UniTable<Operation>
         columnPersistenceId="apps.master-data.pages.process.operations"
         actionRef={actionRef}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolveProcessListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;

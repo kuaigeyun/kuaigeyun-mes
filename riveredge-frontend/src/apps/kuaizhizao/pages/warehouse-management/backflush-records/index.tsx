@@ -16,7 +16,9 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
-import { formatDateTime } from '../../../../../utils/format';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildBackflushRecordStatusValueEnum,
@@ -40,6 +42,10 @@ interface BackflushRecordItem {
   status: string;
   error_message: string | null;
   created_at: string;
+  updated_at?: string;
+  created_by_name?: string;
+  updated_by_name?: string;
+  processed_by_name?: string;
 }
 
 const BackflushRecordsPage: React.FC = () => {
@@ -132,15 +138,7 @@ const BackflushRecordsPage: React.FC = () => {
         ellipsis: true,
         render: (_, record) => record.error_message || '-',
       },
-      {
-        title: t('app.kuaizhizao.warehouseCommon.colCreatedAt'),
-        dataIndex: 'created_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        valueType: 'dateTime',
-        sorter: true,
-        render: (_, record) => formatDateTime(record.created_at),
-      },
+      ...buildDocumentAuditColumns<BackflushRecordItem>(t),
       {
         title: t('app.kuaizhizao.warehouseCommon.colActions'),
         valueType: 'option',
@@ -178,7 +176,7 @@ const BackflushRecordsPage: React.FC = () => {
       <UniTable<BackflushRecordItem>
         headerTitle={t('app.kuaizhizao.backflushRecords.headerTitle')}
         actionRef={actionRef}
-        columns={columns}
+        columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.backflush-records"
         request={fetchRecords}
         showAdvancedSearch

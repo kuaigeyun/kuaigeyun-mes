@@ -73,7 +73,7 @@ async def create_warehouse(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await WarehouseService.create_warehouse(tenant_id, data)
+        return await WarehouseService.create_warehouse(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -157,7 +157,7 @@ async def load_preset_warehouses(
     请求体可传 names 数组，只创建选中的预设项；不传则创建全部。
     """
     names = body.names if body else None
-    count = await WarehouseService.load_preset_sme(tenant_id, names=names)
+    count = await WarehouseService.load_preset_sme(tenant_id, names=names, current_user=current_user)
     return {"created": count, "message": f"已加载 {count} 个仓库"}
 
 
@@ -170,7 +170,7 @@ async def sync_line_side_warehouses(
     根据车间/工位/工作中心自动建立线边仓。
     为每个车间、工位、工作中心创建对应的线边仓（若不存在）。
     """
-    result = await WarehouseService.sync_line_side_warehouses(tenant_id)
+    result = await WarehouseService.sync_line_side_warehouses(tenant_id, current_user=current_user)
     return {
         "created": result["created"],
         "skipped": result["skipped"],
@@ -212,7 +212,7 @@ async def update_warehouse(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await WarehouseService.update_warehouse(tenant_id, warehouse_uuid, data)
+        return await WarehouseService.update_warehouse(tenant_id, warehouse_uuid, data, current_user=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -288,7 +288,7 @@ async def create_storage_area(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await WarehouseService.create_storage_area(tenant_id, data)
+        return await WarehouseService.create_storage_area(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -374,7 +374,7 @@ async def update_storage_area(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await WarehouseService.update_storage_area(tenant_id, storage_area_uuid, data)
+        return await WarehouseService.update_storage_area(tenant_id, storage_area_uuid, data, current_user=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -450,7 +450,7 @@ async def create_storage_location(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await WarehouseService.create_storage_location(tenant_id, data)
+        return await WarehouseService.create_storage_location(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -536,7 +536,7 @@ async def update_storage_location(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await WarehouseService.update_storage_location(tenant_id, storage_location_uuid, data)
+        return await WarehouseService.update_storage_location(tenant_id, storage_location_uuid, data, current_user=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:

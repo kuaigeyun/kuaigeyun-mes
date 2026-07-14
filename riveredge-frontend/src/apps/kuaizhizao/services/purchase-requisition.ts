@@ -63,6 +63,8 @@ export interface PurchaseRequisition {
   review_status?: string;
   notes?: string;
   items_count?: number;
+  total_quantity?: number;
+  total_amount?: number;
   items?: PurchaseRequisitionItem[];
   created_at?: string;
   updated_at?: string;

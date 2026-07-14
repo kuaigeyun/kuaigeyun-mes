@@ -24,6 +24,7 @@ import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
+import { formatQuantity } from '../../../../../utils/format';
 import { ListPageTemplate, FormModalTemplate, flushDrawerOpen, MODAL_CONFIG, DRAWER_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { bomApi, materialApi } from '../../../services/material';
@@ -56,6 +57,8 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import { masterCrudCreatedUpdatedColumns } from '../../../utils/materialListCore';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 
@@ -138,6 +141,10 @@ interface MaterialBOMRow extends BOMGroupRow {
   materialId: number;
   versions: BOMGroupRow[];
   selectedVersion: BOMGroupRow;
+  createdAt?: string;
+  updatedAt?: string;
+  createdByName?: string;
+  updatedByName?: string;
 }
 
 function normalizeBomKeyword(searchFormValues: Record<string, unknown> | undefined): string {
@@ -1756,6 +1763,10 @@ const BOMPage: React.FC = () => {
           materialId,
           versions: versionRows,
           selectedVersion,
+          createdAt: selectedVersion.firstItem?.createdAt,
+          updatedAt: selectedVersion.firstItem?.updatedAt,
+          createdByName: selectedVersion.firstItem?.createdByName,
+          updatedByName: selectedVersion.firstItem?.updatedByName,
           children: sortedItems.map((item, idx) =>
             buildItemWithChildren(item, idx, `root-${materialId}`, 0, new Set())
           ),
@@ -2514,6 +2525,7 @@ const BOMPage: React.FC = () => {
       fieldProps: { checkedChildren: '', unCheckedChildren: '' },
     },
     ...bomCustomFieldColumns,
+    ...masterCrudCreatedUpdatedColumns<MaterialBOMRow>(t),
     {
       title: t('app.master-data.bom.actionTitle'),
       valueType: 'option',
@@ -4381,7 +4393,7 @@ const BOMPage: React.FC = () => {
                                 </div>
                                 <div>
                                   <span style={{ color: '#999' }}>{t('app.master-data.bom.unitQuantityLabel')}</span>
-                                  <span style={{ marginLeft: 8 }}>{component.unitQuantity.toFixed(6)} {component.unit || ''}</span>
+                                  <span style={{ marginLeft: 8 }}>{formatQuantity(component.unitQuantity)} {component.unit || ''}</span>
                                 </div>
                                 {component.wasteRate > 0 && (
                                   <div>
@@ -4392,7 +4404,7 @@ const BOMPage: React.FC = () => {
                                 <div>
                                   <span style={{ color: '#999' }}>{t('app.master-data.bom.actualQuantityLabel')}</span>
                                   <span style={{ marginLeft: 8, fontWeight: 500, color: '#52c41a', fontSize: '16px' }}>
-                                    {component.actualQuantity.toFixed(4)} {component.unit || ''}
+                                    {formatQuantity(component.actualQuantity)} {component.unit || ''}
                                   </span>
                                 </div>
                                 {(component.wasteRate > 0 || (quantityResult.baseQuantity ?? 1) !== 1) && (
@@ -4400,10 +4412,10 @@ const BOMPage: React.FC = () => {
                                     {t('app.master-data.bom.quantityCalcFormula', {
                                       line: component.lineQuantity,
                                       base: component.baseQuantity,
-                                      unit: component.unitQuantity.toFixed(6),
+                                      unit: formatQuantity(component.unitQuantity),
                                       parent: quantityResult.parentQuantity,
                                       rate: component.wasteRate,
-                                      actual: component.actualQuantity.toFixed(4),
+                                      actual: formatQuantity(component.actualQuantity),
                                     })}
                                   </div>
                                 )}

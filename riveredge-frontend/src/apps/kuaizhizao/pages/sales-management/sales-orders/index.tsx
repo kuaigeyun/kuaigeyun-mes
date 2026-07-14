@@ -12,7 +12,7 @@ import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspens
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { LIST_PAGE_REFRESH_KEYS, useListPageRefreshStore } from '../../../../../stores/listPageRefreshStore';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Segmented, Tag, Alert, Card, Typography, theme as AntdTheme } from 'antd';
+import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Tooltip, Dropdown, Select, Segmented, Tag, Alert, Card, Typography, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, ArrowLeftOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, StopOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -58,6 +58,8 @@ import {
   getSalesCommonFormLabels,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../shared/DocumentPushProgressBar';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
@@ -202,7 +204,7 @@ import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../..
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 
 /** API 异常 detail 可能是字符串或 { message, trace_id }，不能直接交给 message.error 渲染 */
@@ -2829,6 +2831,8 @@ const SalesOrdersPage: React.FC = () => {
             secondary={deliveryDateText}
             secondaryCopyable={false}
             uniformText
+            primaryBadge={t('common.start')}
+            secondaryBadge={t('common.end')}
             secondaryExtra={
               overdue ? (
                 <Tag color="error" style={{ marginInlineEnd: 0, flexShrink: 0 }}>
@@ -2872,7 +2876,7 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.salesman'),
       dataIndex: 'salesman_name',
-      width: 100,
+      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
       sorter: true,
       hideInSearch: true,
       render: (_: unknown, record: SalesOrder) => normalizeUserDisplayName(record.salesman_name) || '-',
@@ -2900,36 +2904,48 @@ const SalesOrdersPage: React.FC = () => {
         );
       },
     },
-    { title: t('app.kuaizhizao.salesOrder.totalQuantity'), dataIndex: 'total_quantity', width: 100, align: 'right' as const, sorter: true },
+    { title: t('app.kuaizhizao.salesOrder.totalQuantity'), dataIndex: 'total_quantity', width: 100, align: 'right' as const, sorter: true, render: formatQuantity },
     { title: t('app.kuaizhizao.salesOrder.totalAmountLabel'), dataIndex: 'total_amount', width: 120, align: 'right' as const, sorter: true, render: (_: unknown, r: SalesOrder) => <AmountDisplay resource={SO} fieldName="total_amount" value={r.total_amount} /> },
     {
-      title: t('app.kuaizhizao.salesOrder.pushRatio'),
+      title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
       dataIndex: 'work_order_push_progress',
-      width: 80,
+      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+      uniTableKeepWidth: true,
       hideInSearch: true,
       render: (_: unknown, record: SalesOrder) => {
         const totalQty = Number(record.total_quantity ?? 0);
         const pushedQty = Number(record.pushed_work_order_quantity ?? 0);
         const remainingQty = Number(record.remaining_push_quantity ?? Math.max(totalQty - pushedQty, 0));
         const ratio = Number(record.work_order_push_progress ?? (totalQty > 0 ? (pushedQty / totalQty) * 100 : 0));
-        const percent = Math.max(0, Math.min(100, ratio));
         return (
-          <Tooltip title={t('app.kuaizhizao.salesOrder.pushRatioTooltip', { percent: Math.round(percent), pushed: pushedQty, total: totalQty, remaining: remainingQty })}>
-            <Progress percent={Math.round(percent)} size="small" showInfo={false} style={{ margin: 0 }} />
-          </Tooltip>
+          <DocumentPushProgressBar
+            percent={ratio}
+            tooltip={t('app.kuaizhizao.salesOrder.pushRatioTooltip', {
+              percent: Math.round(ratio),
+              pushed: pushedQty,
+              total: totalQty,
+              remaining: remainingQty,
+            })}
+          />
         );
       },
     },
     {
       title: t('app.kuaizhizao.salesOrder.deliveryProgress'),
       dataIndex: 'delivery_progress',
-      width: 80,
-      render: (_: unknown, record: SalesOrder) => {
-        const p = record.delivery_progress ?? 0;
-        const percent = Math.min(100, Math.max(0, Number(p)));
-        return <Tooltip title={`${Math.round(percent)}%`}><Progress percent={Math.round(percent)} size="small" showInfo={false} style={{ margin: 0 }} /></Tooltip>;
-      },
+      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+      uniTableKeepWidth: true,
+      hideInSearch: true,
+      render: (_: unknown, record: SalesOrder) => (
+        <DocumentPushProgressBar
+          percent={record.delivery_progress ?? 0}
+          tooltip={t('app.kuaizhizao.salesManagement.pushProgress.percentOnly', {
+            percent: Math.round(Number(record.delivery_progress ?? 0)),
+          })}
+        />
+      ),
     },
+    ...buildDocumentAuditColumns<SalesOrder>(t),
     salesOrderAuditColumn,
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
@@ -3056,7 +3072,7 @@ const SalesOrdersPage: React.FC = () => {
       render: (val: any, record: SalesOrderItemRow) => (
         <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
           <MaterialInventoryIndicator materialId={record.material_id} requiredQuantity={record.required_quantity} />
-          {val ?? 0}
+          {formatQuantity(val)}
         </span>
       ),
     },
@@ -4036,7 +4052,7 @@ const SalesOrdersPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
         <SalesOrderIndicatorsProvider>
         <UniTable
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-orders"
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-orders.v3"
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           onTableDataChange={handleTableDataChange}
@@ -4843,9 +4859,9 @@ const SalesOrdersPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 140, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   {
                     title: t('app.kuaizhizao.salesOrder.productionLine'),
                     dataIndex: 'work_center_id',
@@ -4959,9 +4975,9 @@ const SalesOrdersPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   {
                     title: (
                       <>
@@ -5051,9 +5067,9 @@ const SalesOrdersPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 120, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 140, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 80, align: 'right' as const },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 80, align: 'right' as const },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 80, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 80, align: 'right' as const, render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 80, align: 'right' as const, render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 80, align: 'right' as const, render: formatQuantity },
                   {
                     title: t('app.kuaizhizao.salesOrder.materialPickerHasBom'),
                     dataIndex: 'has_bom',
@@ -5141,9 +5157,9 @@ const SalesOrdersPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   {
                     title: (
                       <>
@@ -5234,9 +5250,9 @@ const SalesOrdersPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   {
                     title: (
                       <>
@@ -5330,9 +5346,9 @@ const SalesOrdersPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', key: 'delivery_date', width: 110 },
                 ]}
                 rowKey={(r: any, i) => `${r.item_id || r.material_code}-${i}`}
@@ -5346,7 +5362,7 @@ const SalesOrdersPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 120, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 140, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 80, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 80, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', key: 'delivery_date', width: 100 },
                   ...(pushPreviewData.items[0]?.suggested_action
                     ? [{ title: t('app.kuaizhizao.salesOrder.suggestion'), dataIndex: 'suggested_action', key: 'suggested_action', width: 70 }]

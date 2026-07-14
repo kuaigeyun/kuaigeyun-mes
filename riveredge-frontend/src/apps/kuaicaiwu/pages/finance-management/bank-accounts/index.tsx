@@ -25,6 +25,7 @@ import {
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 type BankTx = Record<string, unknown>;
 
@@ -156,6 +157,7 @@ const BankAccountsPage: React.FC = () => {
     { title: t(`${BA}.col.balance`), dataIndex: 'balance_after', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
     { title: t(`${BA}.col.sourceCode`), dataIndex: 'source_doc_code', width: 140, ellipsis: true, hideInSearch: true, sorter: true },
     { title: t(`${BA}.col.summary`), dataIndex: 'summary', ellipsis: true, hideInSearch: true, sorter: true },
+    ...financeDocCreatedUpdatedColumns<BankTx>(t),
   ], [t]);
 
   const handleBatchDelete = async (keys: React.Key[]) => {
@@ -185,7 +187,7 @@ const BankAccountsPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.bank-accounts"
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         scroll={{ x: 1480 }}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter

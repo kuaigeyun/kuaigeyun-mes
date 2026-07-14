@@ -40,6 +40,8 @@ export interface SalesOrder {
   shipping_method?: string;
   payment_terms?: string;
   notes?: string;
+  created_by_name?: string;
+  updated_by_name?: string;
   created_at?: string;
   updated_at?: string;
   items?: SalesOrderItem[];

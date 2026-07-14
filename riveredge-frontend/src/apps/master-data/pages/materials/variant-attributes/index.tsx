@@ -24,6 +24,7 @@ import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import type { VariantAttributeDefinition } from '../../../types/variant-attribute';
 import { variantAttributeApi, type PresetAttributeItem } from '../../../services/variant-attribute';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const VariantAttributesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -370,7 +371,7 @@ const VariantAttributesPage: React.FC = () => {
           columnPersistenceId="apps.master-data.pages.materials.variant-attributes"
           headerTitle={t('app.master-data.menu.materials.variant-attributes')}
           actionRef={actionRef}
-          columns={columns}
+          columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
           pinnedTabsField={VARIANT_ATTRIBUTE_PINNED_ACTIVE_FIELD}

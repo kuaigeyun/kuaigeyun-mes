@@ -26,10 +26,12 @@ export const QUALITY_RESULT_I18N: Record<string, string> = {
   unqualified: 'app.kuaizhizao.quality.common.result.unqualified',
   pending: 'app.kuaizhizao.quality.common.result.pending',
   partial: 'app.kuaizhizao.quality.common.result.partial',
+  inspected: 'app.kuaizhizao.quality.common.status.inspected',
   待检验: 'app.kuaizhizao.quality.common.result.pending',
   合格: 'app.kuaizhizao.quality.common.result.qualified',
   不合格: 'app.kuaizhizao.quality.common.result.unqualified',
   部分合格: 'app.kuaizhizao.quality.common.result.partial',
+  已检验: 'app.kuaizhizao.quality.common.status.inspected',
 };
 
 export const QUALITY_DOC_STATUS_I18N: Record<string, string> = {
@@ -95,8 +97,10 @@ const DOC_STATUS_COLORS: Record<string, string> = {
 };
 
 const RESULT_COLORS: Record<string, string> = {
-  待检验: 'default',
-  pending: 'default',
+  待检验: 'warning',
+  pending: 'warning',
+  已检验: 'processing',
+  inspected: 'processing',
   合格: 'success',
   qualified: 'success',
   不合格: 'error',

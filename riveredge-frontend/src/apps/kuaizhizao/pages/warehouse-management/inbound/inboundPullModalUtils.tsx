@@ -1,20 +1,14 @@
 import React from 'react';
 import { Tag } from 'antd';
 import type { TFunction } from 'i18next';
-
-export function formatPullQty(val: unknown): string {
-  if (val == null || val === '') return '—';
-  const n = Number(val);
-  if (!Number.isFinite(n)) return '—';
-  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-}
+import { formatQuantity } from '../../../../../utils/format';
 
 export function formatPullPercent(done: unknown, total: unknown): string {
   const plan = Number(total || 0);
   const finished = Number(done || 0);
   if (!(plan > 0)) return '—';
   const pct = Math.min(100, Math.round((finished / plan) * 100));
-  return `${formatPullQty(finished)} / ${formatPullQty(plan)}（${pct}%）`;
+  return `${formatQuantity(finished)} / ${formatQuantity(plan)}（${pct}%）`;
 }
 
 type LifecycleSubStage = { key?: string; label?: string; status?: string };

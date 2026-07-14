@@ -19,6 +19,8 @@ export interface Plant {
   description?: string;
   address?: string;
   isActive: boolean;
+  createdByName?: string;
+  updatedByName?: string;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;

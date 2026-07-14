@@ -111,7 +111,7 @@ async def create_material_group(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await MaterialService.create_material_group(tenant_id, data)
+        return await MaterialService.create_material_group(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -217,7 +217,7 @@ async def update_material_group(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await MaterialService.update_material_group(tenant_id, group_uuid, data)
+        return await MaterialService.update_material_group(tenant_id, group_uuid, data, current_user=current_user)
     except NotFoundError as e:
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -270,7 +270,7 @@ async def create_bom(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await MaterialService.create_bom_batch(tenant_id, data)
+        return await MaterialService.create_bom_batch(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -468,7 +468,9 @@ async def update_bom_change(
 ):
     """更新 BOM 工程变更记录"""
     try:
-        return await BOMChangeService.update_change(tenant_id, change_uuid, data)
+        return await BOMChangeService.update_change(
+            tenant_id, change_uuid, data, current_user=current_user
+        )
     except NotFoundError as e:
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -562,7 +564,7 @@ async def update_bom(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await MaterialService.update_bom(tenant_id, str(bom_uuid), data)
+        return await MaterialService.update_bom(tenant_id, str(bom_uuid), data, current_user=current_user)
     except NotFoundError as e:
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -832,7 +834,9 @@ async def precheck_bom_relation_import(
     """BOM 高级关联导入预检（不写入数据）。"""
     try:
         payload = data.model_copy(update={"dry_run": True})
-        return await MaterialService.relation_import_bom(tenant_id, payload)
+        return await MaterialService.relation_import_bom(
+            tenant_id, payload, current_user=current_user
+        )
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except NotFoundError as e:
@@ -847,7 +851,9 @@ async def run_bom_relation_import(
 ):
     """执行 BOM 高级关联导入。"""
     try:
-        return await MaterialService.relation_import_bom(tenant_id, data)
+        return await MaterialService.relation_import_bom(
+            tenant_id, data, current_user=current_user
+        )
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except NotFoundError as e:
@@ -1009,7 +1015,7 @@ async def create_material_code_mapping(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await MaterialCodeMappingService.create_mapping(tenant_id, data)
+        return await MaterialCodeMappingService.create_mapping(tenant_id, data, current_user=current_user)
     except NotFoundError as e:
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -1087,7 +1093,7 @@ async def update_material_code_mapping(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await MaterialCodeMappingService.update_mapping(tenant_id, mapping_uuid, data)
+        return await MaterialCodeMappingService.update_mapping(tenant_id, mapping_uuid, data, current_user=current_user)
     except NotFoundError as e:
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -1155,7 +1161,9 @@ async def batch_import_material_code_mappings(
         - **failure_count**: 失败数量
         - **errors**: 错误列表
     """
-    return await MaterialCodeMappingService.batch_create_mappings(tenant_id, mappings_data)
+    return await MaterialCodeMappingService.batch_create_mappings(
+        tenant_id, mappings_data, current_user=current_user
+    )
 
 
 # ==================== 物料批号相关接口 ====================
@@ -1180,7 +1188,7 @@ async def create_material_batch(
     - **remark**: 备注（可选）
     """
     try:
-        return await MaterialBatchService.create_batch(tenant_id, data)
+        return await MaterialBatchService.create_batch(tenant_id, data, current_user=current_user)
     except NotFoundError as e:
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -1257,7 +1265,7 @@ async def update_material_batch(
     更新物料批号
     """
     try:
-        return await MaterialBatchService.update_batch(tenant_id, batch_uuid, data)
+        return await MaterialBatchService.update_batch(tenant_id, batch_uuid, data, current_user=current_user)
     except NotFoundError as e:
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -1349,7 +1357,7 @@ async def create_material_serial(
     - **remark**: 备注（可选）
     """
     try:
-        return await MaterialSerialService.create_serial(tenant_id, data)
+        return await MaterialSerialService.create_serial(tenant_id, data, current_user=current_user)
     except NotFoundError as e:
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -1426,7 +1434,7 @@ async def update_material_serial(
     更新物料序列号
     """
     try:
-        return await MaterialSerialService.update_serial(tenant_id, serial_uuid, data)
+        return await MaterialSerialService.update_serial(tenant_id, serial_uuid, data, current_user=current_user)
     except NotFoundError as e:
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -1522,7 +1530,7 @@ async def create_material(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await MaterialService.create_material(tenant_id, data)
+        return await MaterialService.create_material(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -1988,7 +1996,11 @@ async def update_material(
     """
     try:
         result = await MaterialService.update_material(
-            tenant_id, material_uuid, data, updated_by=current_user.id
+            tenant_id,
+            material_uuid,
+            data,
+            updated_by=current_user.id,
+            current_user=current_user,
         )
         return result
     except NotFoundError as e:
@@ -2117,7 +2129,7 @@ async def change_material_source(
             material_uuid=material_uuid,
             new_source_type=new_source_type,
             new_source_config=new_source_config,
-            updated_by=current_user.id
+            current_user=current_user,
         )
         return await MaterialService.get_material_by_uuid(tenant_id, material.uuid)
     except NotFoundError as e:

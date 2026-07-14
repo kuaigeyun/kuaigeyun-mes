@@ -26,11 +26,13 @@ import { employeePerformanceApi } from '../../../services/performance';
 import type { PerformanceSummary, PerformanceDetail, PerformanceDetailItem } from '../../../types/performance';
 import { getPerformanceSummaryLifecycle } from '../../../utils/performanceLifecycle';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   normalizePerformanceListResponse,
   PERFORMANCE_SUMMARY_PINNED_STATUS_FIELD,
   resolvePerformanceSummaryListParams,
 } from '../../../utils/performanceListCore';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 
 const SummariesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -186,7 +188,7 @@ const SummariesPage: React.FC = () => {
   );
 
   const columns: ProColumns<PerformanceSummary>[] = useMemo(
-    () => [
+    () => alignProColumns<PerformanceSummary>([
       {
         title: t('app.kuaizhizao.performance.common.columns.employee'),
         dataIndex: 'employee_name',
@@ -213,15 +215,7 @@ const SummariesPage: React.FC = () => {
         hideInTable: true,
         valueEnum: getPerformanceSummaryStatusValueEnum(t),
       },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
-        dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        sorter: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-      },
+      ...buildDocumentAuditColumns<PerformanceSummary>(t),
       {
         title: t('app.kuaizhizao.performance.common.columns.actions'),
         width: 220,
@@ -244,7 +238,7 @@ const SummariesPage: React.FC = () => {
           </Space>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t],
   );
 

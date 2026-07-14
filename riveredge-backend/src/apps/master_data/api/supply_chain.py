@@ -232,7 +232,7 @@ async def delete_customer(
     - **customer_uuid**: 客户UUID
     """
     try:
-        await SupplyChainService.delete_customer(tenant_id, customer_uuid)
+        await SupplyChainService.delete_customer(tenant_id, customer_uuid, current_user)
         return {"message": "客户删除成功"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -267,7 +267,7 @@ async def create_supplier(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await SupplyChainService.create_supplier(tenant_id, data)
+        return await SupplyChainService.create_supplier(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -377,7 +377,7 @@ async def update_supplier(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await SupplyChainService.update_supplier(tenant_id, supplier_uuid, data)
+        return await SupplyChainService.update_supplier(tenant_id, supplier_uuid, data, current_user=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:

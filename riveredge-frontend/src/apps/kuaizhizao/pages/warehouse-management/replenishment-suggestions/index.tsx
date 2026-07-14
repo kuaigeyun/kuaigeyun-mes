@@ -25,6 +25,7 @@ import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { warehouseApi } from '../../../services/production';
 import { formatDateTime } from '../../../../../utils/format';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildReplenishmentSuggestionStatusValueEnum,
@@ -32,6 +33,8 @@ import {
   resolveReplenishmentSuggestionListParams,
 } from '../../../utils/warehouseListCore';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 
 interface ReplenishmentSuggestion {
   id?: number;
@@ -186,24 +189,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       sorter: true,
       render: (_, record) => formatDateTime(record.suggested_order_date),
     },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colCreatedAt'),
-      dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      render: (_, record) => formatDateTime(record.created_at),
-    },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      hideInSearch: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
-    },
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
       title: t('app.kuaizhizao.warehouseCommon.colActions'),
       width: 150,
@@ -379,7 +365,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.replenishmentSuggestions.headerTitle')}
           actionRef={actionRef}
           rowKey="id"
-          columns={columns}
+          columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
           columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.replenishment-suggestions"
           showAdvancedSearch={true}
           pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}

@@ -90,6 +90,7 @@ async def create_mold_trial(
             data,
             operator_id=current_user.id,
             operator_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return MoldTrialResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -158,10 +159,11 @@ async def get_mold_trial(row_id: int, tenant_id: int = Depends(get_current_tenan
 async def update_mold_trial(
     row_id: int,
     data: MoldTrialUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.trial_service.update(tenant_id, row_id, data)
+        row = await svc.trial_service.update(tenant_id, row_id, data, current_user=current_user)
         return MoldTrialResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         raise _http_from_exc(e)
@@ -198,6 +200,7 @@ async def create_mold_borrow(
             data,
             operator_id=current_user.id,
             operator_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return MoldBorrowResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -296,10 +299,11 @@ async def get_mold_borrow(row_id: int, tenant_id: int = Depends(get_current_tena
 async def update_mold_borrow(
     row_id: int,
     data: MoldBorrowUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.borrow_service.update(tenant_id, row_id, data)
+        row = await svc.borrow_service.update(tenant_id, row_id, data, current_user=current_user)
         return MoldBorrowResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         raise _http_from_exc(e)
@@ -336,6 +340,7 @@ async def create_mold_return(
             data,
             operator_id=current_user.id,
             operator_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return MoldReturnResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -403,10 +408,11 @@ async def get_mold_return(row_id: int, tenant_id: int = Depends(get_current_tena
 async def update_mold_return(
     row_id: int,
     data: MoldReturnUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.return_service.update(tenant_id, row_id, data)
+        row = await svc.return_service.update(tenant_id, row_id, data, current_user=current_user)
         return MoldReturnResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         raise _http_from_exc(e)
@@ -459,6 +465,7 @@ async def create_mold_maintenance(
             data,
             operator_id=current_user.id,
             operator_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         lines = await svc.maintenance_service._load_lines(tenant_id, header.id)
         return _maintenance_response(header, lines)
@@ -529,10 +536,11 @@ async def get_mold_maintenance(row_id: int, tenant_id: int = Depends(get_current
 async def update_mold_maintenance(
     row_id: int,
     data: MoldMaintenanceUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        header = await svc.maintenance_service.update(tenant_id, row_id, data)
+        header = await svc.maintenance_service.update(tenant_id, row_id, data, current_user=current_user)
         lines = await svc.maintenance_service._load_lines(tenant_id, header.id)
         return _maintenance_response(header, lines)
     except (ValidationError, NotFoundError) as e:
@@ -544,9 +552,13 @@ async def update_mold_maintenance(
     response_model=MoldMaintenanceResponse,
     dependencies=[Depends(require_permission_codes("kuaizhizao:mold-maintenance:submit"))],
 )
-async def submit_mold_maintenance(row_id: int, tenant_id: int = Depends(get_current_tenant)):
+async def submit_mold_maintenance(
+    row_id: int,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
     try:
-        row = await svc.maintenance_service.submit(tenant_id, row_id)
+        row = await svc.maintenance_service.submit(tenant_id, row_id, current_user=current_user)
         return MoldMaintenanceResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         raise _http_from_exc(e)
@@ -568,6 +580,7 @@ async def approve_mold_maintenance(
             row_id,
             approver_id=current_user.id,
             approver_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return MoldMaintenanceResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -592,6 +605,7 @@ async def reject_mold_maintenance(
             body.reject_reason,
             approver_id=current_user.id,
             approver_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return MoldMaintenanceResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -658,6 +672,7 @@ async def create_mold_repair(
             data,
             operator_id=current_user.id,
             operator_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         lines = await svc.repair_service._load_lines(tenant_id, header.id)
         return _repair_response(header, lines)
@@ -728,10 +743,11 @@ async def get_mold_repair(row_id: int, tenant_id: int = Depends(get_current_tena
 async def update_mold_repair(
     row_id: int,
     data: MoldRepairUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        header = await svc.repair_service.update(tenant_id, row_id, data)
+        header = await svc.repair_service.update(tenant_id, row_id, data, current_user=current_user)
         lines = await svc.repair_service._load_lines(tenant_id, header.id)
         return _repair_response(header, lines)
     except (ValidationError, NotFoundError) as e:
@@ -743,9 +759,13 @@ async def update_mold_repair(
     response_model=MoldRepairResponse,
     dependencies=[Depends(require_permission_codes("kuaizhizao:mold-repair:submit"))],
 )
-async def submit_mold_repair(row_id: int, tenant_id: int = Depends(get_current_tenant)):
+async def submit_mold_repair(
+    row_id: int,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
     try:
-        row = await svc.repair_service.submit(tenant_id, row_id)
+        row = await svc.repair_service.submit(tenant_id, row_id, current_user=current_user)
         return MoldRepairResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         raise _http_from_exc(e)
@@ -767,6 +787,7 @@ async def approve_mold_repair(
             row_id,
             approver_id=current_user.id,
             approver_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return MoldRepairResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -791,6 +812,7 @@ async def reject_mold_repair(
             body.reject_reason,
             approver_id=current_user.id,
             approver_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return MoldRepairResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -841,6 +863,7 @@ async def create_mold_scrap_application(
             data,
             operator_id=current_user.id,
             operator_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return MoldScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -912,10 +935,11 @@ async def get_mold_scrap_application(row_id: int, tenant_id: int = Depends(get_c
 async def update_mold_scrap_application(
     row_id: int,
     data: MoldScrapApplicationUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await svc.scrap_application_service.update(tenant_id, row_id, data)
+        row = await svc.scrap_application_service.update(tenant_id, row_id, data, current_user=current_user)
         return MoldScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         raise _http_from_exc(e)
@@ -926,9 +950,13 @@ async def update_mold_scrap_application(
     response_model=MoldScrapApplicationResponse,
     dependencies=[Depends(require_permission_codes("kuaizhizao:mold-scrap:submit"))],
 )
-async def submit_mold_scrap_application(row_id: int, tenant_id: int = Depends(get_current_tenant)):
+async def submit_mold_scrap_application(
+    row_id: int,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
     try:
-        row = await svc.scrap_application_service.submit(tenant_id, row_id)
+        row = await svc.scrap_application_service.submit(tenant_id, row_id, current_user=current_user)
         return MoldScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
         raise _http_from_exc(e)
@@ -950,6 +978,7 @@ async def approve_mold_scrap_application(
             row_id,
             approver_id=current_user.id,
             approver_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return MoldScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -974,6 +1003,7 @@ async def reject_mold_scrap_application(
             body.reject_reason,
             approver_id=current_user.id,
             approver_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         return MoldScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:

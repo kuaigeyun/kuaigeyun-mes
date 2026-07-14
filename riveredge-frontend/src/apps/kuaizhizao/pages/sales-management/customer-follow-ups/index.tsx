@@ -32,6 +32,10 @@ import {
   getDictionaryOptionsSync,
 } from '../../../../master-data/services/supply-chain';
 import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
   CustomerFollowUpFormModal,
   type CustomerFollowUpPreset,
 } from '../../../components/CustomerFollowUpFormModal';
@@ -40,8 +44,15 @@ import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
+const CUSTOMER_FOLLOW_UP_LIST_FIELD_RANK = {
+  ...SALES_DOC_LIST_FIELD_RANK,
+  occurred_at: 71,
+  next_follow_up_at: 72,
+} as const;
 
 function followUpPresetFromRecord(record: CustomerFollowUp): CustomerFollowUpPreset {
   const preset: CustomerFollowUpPreset = {
@@ -65,7 +76,7 @@ const CustomerFollowUpsPage: React.FC = () => {
   const detailIdRef = useRef<number | null>(null);
   const pendingOnlySkipReloadRef = useRef(true);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
-  const [activityOptions, setActivityOptions] = useState<{ label: string; value: string }[]>(
+  const [activityOptions, setActivityOptions] = useState<{ label: string; value: string; color?: string }[]>(
     () => getDictionaryOptionsSync(DICT_CODE) ?? [],
   );
   const [modalOpen, setModalOpen] = useState(false);
@@ -87,6 +98,24 @@ const CustomerFollowUpsPage: React.FC = () => {
     });
     return m;
   }, [activityOptions]);
+
+  const activityColorMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    activityOptions.forEach((o) => {
+      const color = String(o.color ?? '').trim();
+      if (color) m[o.value] = color;
+    });
+    return m;
+  }, [activityOptions]);
+
+  const renderActivityTypeTag = useCallback(
+    (activityTypeCode?: string) => (
+      <Tag color={activityColorMap[activityTypeCode ?? ''] || 'blue'} bordered={false}>
+        {activityLabelMap[activityTypeCode ?? ''] ?? '—'}
+      </Tag>
+    ),
+    [activityLabelMap, activityColorMap],
+  );
 
   const customerSearchOptions = useMemo(
     () =>
@@ -128,11 +157,7 @@ const CustomerFollowUpsPage: React.FC = () => {
         dataIndex: 'activity_type_code',
         width: 100,
         ellipsis: true,
-        render: (_, r) => (
-          <Typography.Text ellipsis={{ tooltip: activityLabelMap[r.activity_type_code] ?? '—' }}>
-            {activityLabelMap[r.activity_type_code] ?? '—'}
-          </Typography.Text>
-        ),
+        render: (_, r) => renderActivityTypeTag(r.activity_type_code),
       },
       {
         title: t('app.kuaizhizao.customerFollowUp.colContent'),
@@ -155,7 +180,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.customerFollowUp.colActivityType'),
         dataIndex: 'activity_type_code',
-        render: (_, row) => activityLabelMap[row.activity_type_code] ?? '—',
+        render: (_, row) => renderActivityTypeTag(row.activity_type_code),
       },
       {
         title: t('app.kuaizhizao.customerFollowUp.colOccurredAt'),
@@ -351,7 +376,7 @@ const CustomerFollowUpsPage: React.FC = () => {
     actionRef.current?.reload();
   }, [pendingOnlyFilter]);
 
-  const columns: ProColumns<CustomerFollowUp>[] = [
+  const columns: ProColumns<CustomerFollowUp>[] = alignProColumns<CustomerFollowUp>([
     {
       title: t('app.kuaizhizao.customerFollowUp.colCustomer'),
       dataIndex: 'customer_id',
@@ -369,10 +394,16 @@ const CustomerFollowUpsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.customerFollowUp.colCustomer'),
       dataIndex: 'customer_name',
-      width: 160,
-      ellipsis: true,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      fixed: 'left',
       sorter: true,
       hideInSearch: true,
+      render: (_, row) => (
+        <UniTableStackedPrimaryCell
+          primary={row.customer_name || '-'}
+          secondary={row.sales_order_code || row.quotation_code || '-'}
+        />
+      ),
     },
     {
       title: t('app.kuaizhizao.customerFollowUp.colActivityType'),
@@ -405,9 +436,7 @@ const CustomerFollowUpsPage: React.FC = () => {
         },
       }),
       render: (_, row) => (
-        <Typography.Text ellipsis={{ tooltip: activityLabelMap[row.activity_type_code] ?? '—' }} style={{ maxWidth: '100%' }}>
-          {activityLabelMap[row.activity_type_code] ?? '—'}
-        </Typography.Text>
+        renderActivityTypeTag(row.activity_type_code)
       ),
     },
     {
@@ -503,13 +532,7 @@ const CustomerFollowUpsPage: React.FC = () => {
         );
       },
     },
-    {
-      title: t('app.kuaizhizao.customerFollowUp.colCreator'),
-      dataIndex: 'created_by_name',
-      width: 100,
-      ellipsis: true,
-      hideInSearch: true,
-    },
+    ...buildDocumentAuditColumns<CustomerFollowUp>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -525,7 +548,7 @@ const CustomerFollowUpsPage: React.FC = () => {
         return parts;
       },
     },
-  ];
+  ], CUSTOMER_FOLLOW_UP_LIST_FIELD_RANK);
 
   return (
     <>

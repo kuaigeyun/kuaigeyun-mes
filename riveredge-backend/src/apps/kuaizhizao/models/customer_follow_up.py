@@ -32,8 +32,6 @@ class CustomerFollowUp(BaseModel):
     stage_code_before = fields.CharField(max_length=50, null=True, description="跟进时商机阶段（变更前）")
     stage_code_after = fields.CharField(max_length=50, null=True, description="跟进后商机阶段（变更后）")
 
-    created_by = fields.IntField(null=True, description="创建人ID")
-    updated_by = fields.IntField(null=True, description="更新人ID")
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
 
     class Meta:

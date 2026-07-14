@@ -168,7 +168,35 @@ export function formatNumber(
   if (!Number.isFinite(n)) {
     return '-';
   }
-  return n.toFixed(decimals);
+  return n.toLocaleString('zh-CN', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+/**
+ * 格式化数量（唯一展示入口）
+ *
+ * 与后端主流 Decimal(decimal_places=2) 对齐：最多 2 位小数，去掉无意义尾零。
+ * 空值 / 非法值统一为「—」。金额请用 formatNumber / AmountDisplay，勿混用本函数。
+ */
+export function formatQuantity(num: unknown): string {
+  if (num === null || num === undefined || num === '') {
+    return '—';
+  }
+  const n = Number(num);
+  if (!Number.isFinite(n)) {
+    return '—';
+  }
+  return n.toLocaleString('zh-CN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+/** ProTable / 列 render 薄封装，规则同 formatQuantity */
+export function renderQuantity(value: unknown): string {
+  return formatQuantity(value);
 }
 
 /**

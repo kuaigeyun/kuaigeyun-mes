@@ -12,6 +12,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from tortoise.expressions import Q
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit, audit_response_fields
 from apps.master_data.models.material_batch import MaterialBatch
 from apps.master_data.models.material import Material
 from apps.master_data.schemas.material_schemas import (
@@ -21,6 +22,7 @@ from apps.master_data.schemas.material_schemas import (
     MaterialBatchListResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 class MaterialBatchService:
@@ -54,12 +56,14 @@ class MaterialBatchService:
             created_at=batch.created_at,
             updated_at=batch.updated_at,
             deleted_at=batch.deleted_at,
+            **audit_response_fields(batch),
         )
     
     @staticmethod
     async def create_batch(
         tenant_id: int,
-        data: MaterialBatchCreate
+        data: MaterialBatchCreate,
+        current_user: Optional[User] = None,
     ) -> MaterialBatchResponse:
         """
         创建物料批号
@@ -98,17 +102,19 @@ class MaterialBatchService:
         
         production_date = data.production_date
         # 创建批号
-        batch = await MaterialBatch.create(
-            tenant_id=tenant_id,
-            material_id=material.id,
-            batch_no=data.batch_no,
-            production_date=production_date,
-            expiry_date=data.expiry_date,
-            supplier_batch_no=data.supplier_batch_no,
-            quantity=data.quantity,
-            status=data.status,
-            remark=data.remark,
-        )
+        batch_payload = {
+            "tenant_id": tenant_id,
+            "material_id": material.id,
+            "batch_no": data.batch_no,
+            "production_date": production_date,
+            "expiry_date": data.expiry_date,
+            "supplier_batch_no": data.supplier_batch_no,
+            "quantity": data.quantity,
+            "status": data.status,
+            "remark": data.remark,
+        }
+        apply_create_audit(batch_payload, current_user)
+        batch = await MaterialBatch.create(**batch_payload)
         
         # 加载关联数据
         await batch.fetch_related("material")
@@ -250,7 +256,8 @@ class MaterialBatchService:
     async def update_batch(
         tenant_id: int,
         batch_uuid: str,
-        data: MaterialBatchUpdate
+        data: MaterialBatchUpdate,
+        current_user: Optional[User] = None,
     ) -> MaterialBatchResponse:
         """
         更新批号
@@ -280,6 +287,7 @@ class MaterialBatchService:
         for key, value in update_data.items():
             setattr(batch, key, value)
         
+        apply_update_audit(batch, current_user)
         await batch.save()
         await batch.fetch_related("material")
         

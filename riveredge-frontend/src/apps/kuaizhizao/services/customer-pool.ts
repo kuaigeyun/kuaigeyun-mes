@@ -14,6 +14,8 @@ export interface CustomerPoolItem {
   assigned_at?: string | null;
   last_follow_up_at?: string | null;
   recycle_at?: string | null;
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
   created_at: string;
   updated_at: string;
 }

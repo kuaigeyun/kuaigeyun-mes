@@ -9,6 +9,7 @@ from tortoise.exceptions import IntegrityError
 
 from tortoise.expressions import Q
 from tortoise import timezone
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.master_data.models.customer import Customer
 from apps.master_data.models.supplier import Supplier
 from apps.master_data.schemas.supply_chain_schemas import (
@@ -289,6 +290,7 @@ class SupplyChainService:
         _apply_partner_contacts_payload(create_data)
 
         try:
+            apply_create_audit(create_data, current_user)
             customer = await Customer.create(
                 tenant_id=tenant_id,
                 **create_data
@@ -501,6 +503,7 @@ class SupplyChainService:
 
         try:
             if update_data:
+                apply_update_audit(customer, current_user)
                 await customer.save()
         except IntegrityError as e:
             # 捕获数据库唯一约束错误，提供友好提示
@@ -513,7 +516,8 @@ class SupplyChainService:
     @staticmethod
     async def delete_customer(
         tenant_id: int,
-        customer_uuid: str
+        customer_uuid: str,
+        current_user: Optional[User] = None,
     ) -> None:
         """
         删除客户（软删除）
@@ -544,6 +548,7 @@ class SupplyChainService:
         # 软删除
         from tortoise import timezone
         customer.deleted_at = timezone.now()
+        apply_update_audit(customer, current_user)
         await customer.save()
     
     # ==================== 供应商相关方法 ====================
@@ -551,7 +556,8 @@ class SupplyChainService:
     @staticmethod
     async def create_supplier(
         tenant_id: int,
-        data: SupplierCreate
+        data: SupplierCreate,
+        current_user: Optional[User] = None,
     ) -> SupplierResponse:
         """
         创建供应商
@@ -589,6 +595,7 @@ class SupplyChainService:
         _apply_partner_contacts_payload(create_data)
 
         try:
+            apply_create_audit(create_data, current_user)
             supplier = await Supplier.create(
                 tenant_id=tenant_id,
                 **create_data
@@ -715,7 +722,8 @@ class SupplyChainService:
     async def update_supplier(
         tenant_id: int,
         supplier_uuid: str,
-        data: SupplierUpdate
+        data: SupplierUpdate,
+        current_user: Optional[User] = None,
     ) -> SupplierResponse:
         """
         更新供应商
@@ -769,6 +777,7 @@ class SupplyChainService:
             else:
                 supplier.buyer_name = None
 
+        apply_update_audit(supplier, current_user)
         try:
             await supplier.save()
         except IntegrityError as e:

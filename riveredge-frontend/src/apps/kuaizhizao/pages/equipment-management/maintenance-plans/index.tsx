@@ -46,6 +46,8 @@ import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString, coerceFormDate } from '../../../../../utils/formDate';
 import {
   buildMaintenancePlanStatusValueEnum,
@@ -563,7 +565,7 @@ const MaintenancePlansPage: React.FC = () => {
    */
   const planStatusValueEnum = useMemo(() => buildMaintenancePlanStatusValueEnum(t), [t]);
 
-  const columns: ProColumns<MaintenancePlan>[] = useMemo(() => [
+  const columns: ProColumns<MaintenancePlan>[] = useMemo(() => alignProColumns<MaintenancePlan>([
     {
       title: t(`${P}.col.plannedStartDate`),
       dataIndex: 'planned_start_date_range',
@@ -672,16 +674,7 @@ const MaintenancePlansPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
     },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      sorter: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
       title: t(`${P}.col.lifecycle`),
       dataIndex: 'lifecycle_stage',
@@ -701,7 +694,7 @@ const MaintenancePlansPage: React.FC = () => {
       render: (_, record) =>
         renderPlanRowActions(renderPlanRowNodes(record), `mpl-${record.uuid ?? 'row'}`),
     },
-  ], [t, planStatusValueEnum]);
+  ], SALES_DOC_LIST_FIELD_RANK), [t, planStatusValueEnum]);
 
   return (
     <>

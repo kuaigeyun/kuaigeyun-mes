@@ -88,6 +88,12 @@ export function getCalcModeText(t: TFunction, mode?: string | null): string {
   return key ? t(key) : mode;
 }
 
+export function getPieceRateModeText(t: TFunction, mode?: string | null): string {
+  if (!mode) return '-';
+  const key = PERFORMANCE_PIECE_RATE_MODE_I18N[mode];
+  return key ? t(key) : mode;
+}
+
 export function getKpiCalcTypeText(t: TFunction, type?: string | null): string {
   if (!type) return '-';
   const key = PERFORMANCE_KPI_CALC_TYPE_I18N[type];

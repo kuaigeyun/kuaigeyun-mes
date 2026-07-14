@@ -66,10 +66,6 @@ class DisassemblyOrder(BaseModel):
     remarks = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
 
-    created_by = fields.IntField(null=True, description="创建人ID")
-    created_by_name = fields.CharField(max_length=100, null=True, description="创建人姓名")
-    updated_by = fields.IntField(null=True, description="更新人ID")
-    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
     executed_by = fields.IntField(null=True, description="执行人ID")
     executed_by_name = fields.CharField(max_length=100, null=True, description="执行人姓名")
     executed_at = fields.DatetimeField(null=True, description="执行时间")

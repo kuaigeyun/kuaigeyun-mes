@@ -21,8 +21,6 @@ class DataSource(BaseModel):
     is_default = fields.BooleanField(default=False, description="是否为默认数据源")
     is_system = fields.BooleanField(default=False, description="是否为系统预置")
     
-    created_by = fields.IntField(null=True, description="创建人ID")
-    updated_by = fields.IntField(null=True, description="更新人ID")
 
     class Meta:
         table = "apps_kuaireport_data_sources"

@@ -25,7 +25,7 @@ import {
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { assemblyTemplateApi } from '../../../services/assembly-template';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 
 const ASSEMBLY_ORDERS_RESOURCE = 'kuaizhizao:warehouse-management-assembly-orders';
 
@@ -419,7 +419,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
         dataIndex: 'quantity_per_base',
         width: 100,
         align: 'right' as const,
-        render: (v: number) => Number(v || 0).toFixed(4),
+        render: (v: number) => formatQuantity(v),
       },
       {
         title: t('app.kuaizhizao.assemblyTemplate.colDefaultUnitPrice'),
@@ -472,7 +472,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
         dataIndex: 'quantity_per_base',
         width: 100,
         align: 'right' as const,
-        render: (v: number) => Number(v || 0).toFixed(4),
+        render: (v: number) => formatQuantity(v),
       },
     ],
     [t],

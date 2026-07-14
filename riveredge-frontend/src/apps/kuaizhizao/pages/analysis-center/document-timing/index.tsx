@@ -21,6 +21,7 @@ import {
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { apiRequest } from '../../../../../services/api';
 import { getDocumentTimingLifecycle } from '../../../utils/documentTimingLifecycle';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 
 /**
  * 单据耗时统计接口定义
@@ -178,7 +179,7 @@ const DocumentTimingPage: React.FC = () => {
         columnPersistenceId="apps.kuaizhizao.pages.analysis-center.document-timing"
         scroll={{ x: 'max-content' }}
         rowKey="document_code"
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         request={async (params: any) => {
           try {
             const result = await apiRequest('/apps/kuaizhizao/documents/timing', {

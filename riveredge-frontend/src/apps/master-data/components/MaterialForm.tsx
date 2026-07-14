@@ -841,11 +841,29 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         throw new Error(t('app.master-data.codeMapping.selectSupplier'));
       }
       // 处理物料来源数据（兼容处理：同时设置 camelCase 和 snake_case）
+      // 受控 Select 可能使 onFinish 的 values 缺 sourceTypes，需合并 getFieldsValue(true)
+      const allFormValuesForSource = formRef.current?.getFieldsValue?.(true) || {};
+      const rawSourceTypes =
+        values.sourceTypes ?? allFormValuesForSource.sourceTypes;
       const sourceTypes = normalizeSourceTypeValues(
-        values.sourceType || values.source_type,
-        { source_types: values.sourceTypes },
+        values.sourceType
+          || values.source_type
+          || allFormValuesForSource.sourceType
+          || allFormValuesForSource.source_type,
+        {
+          source_types: Array.isArray(rawSourceTypes)
+            ? rawSourceTypes
+            : rawSourceTypes
+              ? [rawSourceTypes]
+              : [],
+        },
       );
       const sourceType = getPrimarySourceType(sourceTypes);
+      if (!sourceType) {
+        messageApi.error(t('app.master-data.materialForm.sourceTypePlaceholder'));
+        setActiveTab('basic');
+        throw new Error(t('app.master-data.materialForm.sourceTypePlaceholder'));
+      }
       const originalSourceType = (material as any)?.source_type || (material as any)?.sourceType;
       // 关键修复：仅当 sourceType 未改变时才合并 existingSourceConfig，避免不同类型字段混合
       const existingSourceConfig = (sourceType === originalSourceType) 
@@ -1110,8 +1128,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           : undefined,
         // 默认值
         defaults: Object.keys(filteredDefaults).length > 0 ? filteredDefaults : undefined,
-        // 物料来源控制
+        // 物料来源控制（后端 MaterialCreate.sourceType 必填；snake/camel 双写）
         source_type: sourceType,
+        sourceType: sourceType,
         source_config: filteredSourceConfig,
         // 质检选项（分场景 IQC/FQC/OQC + legacy 同步）
         inspection_stages: materialStagesToApiPayload(
@@ -3491,14 +3510,24 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
             label={t('app.master-data.materialForm.sourceTypeLabel')}
             placeholder={t('app.master-data.materialForm.sourceTypePlaceholder')}
             options={sourceTypeOptions}
+            rules={[
+              {
+                required: true,
+                type: 'array',
+                min: 1,
+                message: t('app.master-data.materialForm.sourceTypePlaceholder'),
+              },
+            ]}
             fieldProps={{
               mode: 'multiple',
-              value: sourceTypes,
+              // 勿用本地 state 覆盖 Form 的 value，否则提交时 sourceTypes 可能为空
               onChange: (vals: string[]) => handleSourceTypeChange(vals),
               maxTagCount: 'responsive',
             }}
             extra={t('app.master-data.materialForm.sourceTypeExtra')}
           />
+          <ProFormText name="sourceType" hidden />
+          <ProFormText name="source_type" hidden />
         </Col>
       </Row>
 
@@ -3507,7 +3536,7 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
           if (currentSourceType === 'Make') {
             return (
               <Row gutter={16} style={{ marginTop: 0 }}>
-                <Col span={4}>
+                <Col span={8}>
                   <ProFormDependency name={['sourceConfig.manufacturing_mode']}>
                     {({ 'sourceConfig.manufacturing_mode': mode }) => (
                       <ProFormSelect
@@ -3605,7 +3634,7 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                     />
                   </ProFormItem>
                 </Col>
-                <Col span={5}>
+                <Col span={3}>
                   <ProFormDigit
                     name="sourceConfig.production_lead_time"
                     label={t('app.master-data.source.productionLeadTime')}
@@ -3613,7 +3642,7 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                     min={0}
                   />
                 </Col>
-                <Col span={5}>
+                <Col span={3}>
                   <ProFormDigit
                     name="sourceConfig.min_production_batch"
                     label={t('app.master-data.source.minProductionBatch')}

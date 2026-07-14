@@ -109,6 +109,10 @@ class PurchaseRequisitionResponse(PurchaseRequisitionBase):
     review_time: Optional[datetime] = None
     review_status: str = "待审核"
     review_remarks: Optional[str] = None
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     items: List[PurchaseRequisitionItemResponse] = Field(default_factory=list)
@@ -122,6 +126,8 @@ class PurchaseRequisitionResponse(PurchaseRequisitionBase):
 class PurchaseRequisitionListResponse(PurchaseRequisitionResponse):
     """采购申请列表响应"""
     items_count: Optional[int] = None
+    total_quantity: Optional[Decimal] = None
+    total_amount: Optional[Decimal] = None
 
 
 class ConvertToPurchaseOrderRequest(BaseModel):

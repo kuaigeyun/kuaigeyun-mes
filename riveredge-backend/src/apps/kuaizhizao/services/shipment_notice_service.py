@@ -427,11 +427,15 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             if audit_required:
                 dump["status"] = "待审核"
 
+            user_info = await self.get_user_info(created_by)
             notice = await ShipmentNotice.create(
                 tenant_id=tenant_id,
                 notice_code=code,
+                **dump,
                 created_by=created_by,
-                **dump
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
             )
 
             items = getattr(notice_data, "items", None) or []
@@ -583,7 +587,9 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
 
         async with in_transaction():
             dump = notice_data.model_dump(exclude_unset=True, exclude={"notice_code"})
+            user_info = await self.get_user_info(updated_by)
             dump["updated_by"] = updated_by
+            dump["updated_by_name"] = user_info["name"]
             await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(**dump)
             updated = await ShipmentNotice.get(tenant_id=tenant_id, id=notice_id)
             resp = ShipmentNoticeResponse.model_validate(updated)
@@ -621,6 +627,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
                 status="待发货",
                 updated_by=submitted_by,
+                updated_by_name=(await self.get_user_info(submitted_by))["name"],
             )
             return await self.get_shipment_notice_by_id(tenant_id, notice_id)
 
@@ -646,6 +653,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="待审核",
             updated_by=submitted_by,
+            updated_by_name=(await self.get_user_info(submitted_by))["name"],
         )
         return await self.get_shipment_notice_by_id(tenant_id, notice_id)
 
@@ -666,6 +674,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="待发货",
             updated_by=approver_id,
+            updated_by_name=(await self.get_user_info(approver_id))["name"],
         )
         return await self.get_shipment_notice_by_id(tenant_id, notice_id)
 
@@ -688,6 +697,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="已驳回",
             updated_by=approver_id,
+            updated_by_name=(await self.get_user_info(approver_id))["name"],
         )
         return await self.get_shipment_notice_by_id(tenant_id, notice_id)
 
@@ -716,6 +726,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="待发货",
             updated_by=operator_id,
+            updated_by_name=(await self.get_user_info(operator_id))["name"],
         )
         return await self.get_shipment_notice_by_id(tenant_id, notice_id)
 
@@ -746,6 +757,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
                 status=target_status,
                 updated_by=operator_id,
+                updated_by_name=(await self.get_user_info(operator_id))["name"],
             )
             return await self.get_shipment_notice_by_id(tenant_id, notice_id)
 
@@ -793,6 +805,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                 warehouse_id=warehouse_id,
                 warehouse_name=warehouse_name,
                 updated_by=notified_by,
+                updated_by_name=(await self.get_user_info(notified_by))["name"],
             )
             return await ShipmentNotice.get(tenant_id=tenant_id, id=notice.id)
 
@@ -809,6 +822,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             warehouse_id=int(warehouse_id),
             warehouse_name=warehouse_name,
             updated_by=notified_by,
+            updated_by_name=(await self.get_user_info(notified_by))["name"],
         )
         return await ShipmentNotice.get(tenant_id=tenant_id, id=notice.id)
 
@@ -1156,6 +1170,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             sales_delivery_code=primary_delivery.delivery_code,
             related_sales_delivery_ids=related_deliveries,
             updated_by=notified_by,
+            updated_by_name=(await self.get_user_info(notified_by))["name"],
         )
         updated = await ShipmentNotice.get(tenant_id=tenant_id, id=notice_id)
         resp = ShipmentNoticeResponse.model_validate(updated)
@@ -1197,6 +1212,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             status="待发货",
             notified_at=None,
             updated_by=withdrawn_by,
+            updated_by_name=(await self.get_user_info(withdrawn_by))["name"],
             sales_delivery_id=None,
             sales_delivery_code=None,
             related_sales_delivery_ids=None,

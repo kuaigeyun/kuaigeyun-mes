@@ -18,6 +18,7 @@ import type { ReceiptListParams } from '../../../services/finance/receipt';
 import type { PaymentListParams } from '../../../services/finance/payment';
 import {
   financeDocCodePartnerSearchColumns,
+  financeDocCreatedUpdatedColumns,
   resolvePayableListParams,
   resolvePaymentListParams,
   resolveReceiptListParams,
@@ -341,6 +342,7 @@ const SettlementPage: React.FC = () => {
       },
       { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', ellipsis: true, hideInSearch: true, sorter: true },
       { title: t(`${P}.col.pendingReceive`), dataIndex: 'remaining_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+      ...financeDocCreatedUpdatedColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
         valueType: 'option',
@@ -386,6 +388,7 @@ const SettlementPage: React.FC = () => {
         ),
       },
       { title: t(`${P}.col.balance`), dataIndex: 'unsettled_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+      ...financeDocCreatedUpdatedColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
         valueType: 'option',
@@ -433,6 +436,7 @@ const SettlementPage: React.FC = () => {
       },
       { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', ellipsis: true, hideInSearch: true, sorter: true },
       { title: t(`${P}.col.pendingPay`), dataIndex: 'remaining_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+      ...financeDocCreatedUpdatedColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
         valueType: 'option',
@@ -478,6 +482,7 @@ const SettlementPage: React.FC = () => {
         ),
       },
       { title: t(`${P}.col.balance`), dataIndex: 'unsettled_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+      ...financeDocCreatedUpdatedColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
         valueType: 'option',

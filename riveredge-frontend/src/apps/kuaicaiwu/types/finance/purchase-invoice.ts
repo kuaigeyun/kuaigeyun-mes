@@ -22,9 +22,11 @@ export interface PurchaseInvoice {
     payable_id?: number;
     payable_code?: string;
     attachment_path?: string;
-    notes?: string;
-    created_at: string;
-    updated_at: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  created_by_name?: string;
+  updated_by_name?: string;
 }
 
 export interface PurchaseInvoiceListParams {

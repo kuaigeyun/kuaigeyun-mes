@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Form, Input, Space } from 'antd';
+import { App, Button, Descriptions, Form, Input, Space, Tag } from 'antd';
 import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, RollbackOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -54,15 +54,17 @@ import { OrderChangeItemsTable } from '../../../components/order-change/OrderCha
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
 import { isSourceOrderEligibleForChange } from '../../../utils/orderChangeSourceOrder';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import {
   resolveKuaizhizaoDocumentAction,
 } from '../../../constants/documentActionRegistry';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatNumber } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
@@ -91,6 +93,12 @@ const isAppliedChangeStatus = (status?: string): boolean => {
   const normalized = String(status ?? '').trim();
   return normalized === 'APPLIED' || normalized === '已生效';
 };
+
+const SALES_ORDER_CHANGE_LIST_FIELD_RANK = {
+  ...GLOBAL_DOC_LIST_FIELD_RANK,
+  change_reason: 56.5,
+  delta_amount: 56.8,
+} as const;
 
 const SalesOrderChangesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -440,9 +448,17 @@ const SalesOrderChangesPage: React.FC = () => {
     () => createListAuditPhaseColumn<SalesOrderChange>({ t, auditEnabled }),
     [t, auditEnabled],
   );
+  const renderDeltaAmount = useCallback((value: unknown) => {
+    if (value == null) return '-';
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return '-';
+    const text = `${amount > 0 ? '+' : ''}${formatNumber(amount, 2)}`;
+    const color = amount > 0 ? '#52c41a' : amount < 0 ? '#ff4d4f' : undefined;
+    return <span style={{ color }}>{text}</span>;
+  }, []);
 
   const columns: ProColumns<SalesOrderChange>[] = useMemo(
-    () => [
+    () => alignProColumns<SalesOrderChange>([
     {
       title: t('app.kuaizhizao.salesOrderChange.colCustomerChangeCode'),
       key: 'change_code',
@@ -484,13 +500,12 @@ const SalesOrderChangesPage: React.FC = () => {
       fieldProps: { placeholder: t('app.kuaizhizao.salesOrderChange.colSourceOrder') },
     },
     {
-      title: t('app.kuaizhizao.salesOrderChange.colVersion'),
-      dataIndex: 'change_version',
-      width: 72,
-      minWidth: 72,
-      uniTableKeepWidth: true,
-      sorter: true,
+      title: t('app.kuaizhizao.salesOrderChange.colChangeReason'),
+      dataIndex: 'change_reason',
+      minWidth: 180,
+      ellipsis: true,
       hideInSearch: true,
+      uniTablePrimaryFlex: true,
     },
     {
       title: t('app.kuaizhizao.salesOrderChange.colCategory'),
@@ -501,7 +516,11 @@ const SalesOrderChangesPage: React.FC = () => {
       sorter: true,
       valueType: 'select',
       valueEnum: changeCategoryValueEnum,
-      render: (_, r) => formatOrderChangeCategory(r.change_category),
+      render: (_, r) => (
+        <Tag color="blue" bordered={false}>
+          {formatOrderChangeCategory(r.change_category)}
+        </Tag>
+      ),
     },
     {
       title: t('app.kuaizhizao.salesOrderChange.colDeltaAmount'),
@@ -512,18 +531,9 @@ const SalesOrderChangesPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
       align: 'right',
-      render: (_, r) => (r.delta_amount != null ? Number(r.delta_amount).toFixed(2) : '-'),
+      render: (_, r) => renderDeltaAmount(r.delta_amount),
     },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      defaultSortOrder: 'descend',
-      hideInSearch: true,
-      render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm') : '-'),
-    },
+    ...buildDocumentAuditColumns<SalesOrderChange>(t),
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at_range',
@@ -559,30 +569,54 @@ const SalesOrderChangesPage: React.FC = () => {
       ),
     },
     {
-      title: t('app.kuaizhizao.salesOrderChange.colChangeReason'),
-      dataIndex: 'change_reason',
-      minWidth: 180,
-      ellipsis: true,
-      hideInSearch: true,
-      uniTablePrimaryFlex: true,
-    },
-    {
       title: t('common.actions'),
       valueType: 'option',
-      width: 180,
+      width: 240,
       fixed: 'right',
       hideInSearch: true,
-      render: (_, record) => [
-            <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>
-              {t('common.detail')}
-            </Button>,
-            record.capabilities?.update?.allowed && changePerms.canUpdate ? (
-              <Button {...rowActionKind('update')} key="edit" onClick={() => openEdit(record)}>
-                {t('common.edit')}
-              </Button>
-            ) : null,
-            record.capabilities?.delete?.allowed && changePerms.canDelete ? (
-              <Button {...rowActionKind('delete')} key="del" onClick={() => {
+      render: (_, record) => {
+        const canEdit = record.capabilities?.update?.allowed === true && changePerms.canUpdate;
+        const canDelete = record.capabilities?.delete?.allowed === true && changePerms.canDelete;
+        const canSubmit = record.capabilities?.submit?.allowed === true && (changePerms.canAction?.('submit') ?? false);
+        const canRevoke =
+          record.capabilities?.withdraw_submit?.allowed === true && (changePerms.canAction?.('revoke') ?? false);
+        return [
+          <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>
+            {t('common.detail')}
+          </Button>,
+          canEdit ? (
+            <Button {...rowActionKind('update')} key="edit" onClick={() => openEdit(record)}>
+              {t('common.edit')}
+            </Button>
+          ) : null,
+          canSubmit ? (
+            <Button {...rowActionKind('submit')} key="submit" onClick={() => runSubmitWithPreview(record.id!)}>
+              {t('components.uniAction.submit')}
+            </Button>
+          ) : null,
+          canRevoke ? (
+            <Button
+              {...rowActionKind('revoke')}
+              key="revoke"
+              onClick={() => {
+                modal.confirm({
+                  title: t('components.uniAction.revoke'),
+                  onOk: async () => {
+                    await withdrawSalesOrderChange(record.id!);
+                    message.success(t('common.updateSuccess'));
+                    actionRef.current?.reload();
+                  },
+                });
+              }}
+            >
+              {t('components.uniAction.revoke')}
+            </Button>
+          ) : null,
+          canDelete ? (
+            <Button
+              {...rowActionKind('delete')}
+              key="del"
+              onClick={() => {
                 modal.confirm({
                   title: t('app.kuaizhizao.salesOrderChange.confirmDelete'),
                   onOk: async () => {
@@ -591,24 +625,28 @@ const SalesOrderChangesPage: React.FC = () => {
                     actionRef.current?.reload();
                   },
                 });
-              }}>
-                {t('common.delete')}
-              </Button>
-            ) : null,
-          ],
+              }}
+            >
+              {t('common.delete')}
+            </Button>
+          ) : null,
+        ];
+      },
     },
-  ],
+  ], SALES_ORDER_CHANGE_LIST_FIELD_RANK),
     [
       t,
       changeCategoryValueEnum,
       changeCustomerSearchOptions,
       changePerms.canDelete,
       changePerms.canUpdate,
+      changePerms.canAction,
       customersLoading,
       modal,
       message,
       orderChangeAuditColumn,
       orderChangeLifecycleValueEnum,
+      renderDeltaAmount,
     ],
   );
 
@@ -910,14 +948,15 @@ const SalesOrderChangesPage: React.FC = () => {
             })()}
             <Descriptions column={2} size="small" style={{ marginTop: 16 }}>
               <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colSourceOrderCode')}>{detail.source_order_code}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colVersion')}>V{detail.change_version}</Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.customerFollowUp.colCustomer')}>{detail.customer_name}</Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colCategory')}>
                 {formatOrderChangeCategory(detail.change_category)}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colBeforeAmount')}>{detail.before_total_amount}</Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colAfterAmount')}>{detail.after_total_amount}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colDeltaAmount')}>{detail.delta_amount}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colDeltaAmount')}>
+                {renderDeltaAmount(detail.delta_amount)}
+              </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colAppliedAt')}>{detail.applied_at ? formatDateTime(detail.applied_at, 'YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colChangeReason')} span={2}>{detail.change_reason}</Descriptions.Item>
             </Descriptions>

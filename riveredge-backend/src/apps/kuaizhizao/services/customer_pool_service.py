@@ -140,6 +140,8 @@ class CustomerPoolService:
         customer.salesman_name = target_user.full_name or target_user.username
         customer.pool_status = "owned"
         customer.assigned_at = now
+        customer.updated_by = operator.id
+        customer.updated_by_name = operator.full_name or operator.username
         customer.recycle_at = await cls._calc_recycle_at(
             tenant_id,
             assigned_at=now,
@@ -182,6 +184,8 @@ class CustomerPoolService:
         customer.pool_status = "pool"
         customer.assigned_at = None
         customer.recycle_at = None
+        customer.updated_by = operator.id
+        customer.updated_by_name = operator.full_name or operator.username
         await customer.save()
 
         await cls._write_log(
@@ -214,6 +218,8 @@ class CustomerPoolService:
         customer.pool_status = "pool"
         customer.assigned_at = None
         customer.recycle_at = None
+        customer.updated_by = operator.id
+        customer.updated_by_name = operator.full_name or operator.username
         await customer.save()
 
         await cls._write_log(

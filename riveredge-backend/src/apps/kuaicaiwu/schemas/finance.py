@@ -63,6 +63,8 @@ class PayableResponse(PayableBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     capabilities: Optional[dict] = Field(None, description="下推能力（如 push_payment）")
 
     class Config:
@@ -124,6 +126,8 @@ class PurchaseInvoiceResponse(PurchaseInvoiceBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
 
     class Config:
         from_attributes = True
@@ -186,6 +190,8 @@ class ReceivableResponse(ReceivableBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     capabilities: Optional[dict] = Field(None, description="下推能力（如 push_receipt）")
 
     class Config:
@@ -276,6 +282,8 @@ class PaymentVoucherResponse(PaymentVoucherBase):
     status: str = "Draft"
     created_at: datetime
     updated_at: datetime
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -333,6 +341,8 @@ class ReceiptVoucherResponse(ReceiptVoucherBase):
     status: str = "Draft"
     created_at: datetime
     updated_at: datetime
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -434,6 +444,10 @@ class SalesInvoiceResponse(SalesInvoiceBase):
     review_remarks: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -530,7 +544,11 @@ class PartnerStatementResponse(BaseSchema):
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

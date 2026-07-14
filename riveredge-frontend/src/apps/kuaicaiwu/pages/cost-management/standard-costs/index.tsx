@@ -23,6 +23,7 @@ import {
   standardCostSearchColumns,
 } from '../../../utils/costListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const StandardCostsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -166,7 +167,7 @@ const StandardCostsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.cost-management.standard-costs"
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         scroll={{ x: 1480 }}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter

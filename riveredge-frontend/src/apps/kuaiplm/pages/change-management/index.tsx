@@ -29,6 +29,7 @@ import { buildBomChangeCreateUrl, buildRouteChangeCreateUrl } from '../../servic
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import { getKuaiplmChangeCategoryText, getKuaiplmChangeStatusText, getKuaiplmChangeTypeText } from '../../components/kuaiplmMeta';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   changeDeskSearchColumns,
   PLM_CHANGE_PINNED_STATUS_FIELD,
@@ -222,9 +223,7 @@ const ChangeManagementPage: React.FC = () => {
         ellipsis: true,
         hideInSearch: true,
       },
-      ...plmCreatedUpdatedColumns<UnifiedChangeRow>(t).filter(
-        (col) => col.dataIndex === 'created_at' || col.dataIndex === 'created_at_range',
-      ),
+      ...plmCreatedUpdatedColumns<UnifiedChangeRow>(t),
       {
         title: t('app.kuaiplm.common.columns.actions'),
         valueType: 'option',
@@ -289,7 +288,7 @@ const ChangeManagementPage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         columnPersistenceId={`apps.kuaiplm.pages.change-management.${activeTab}`}
         scroll={{ x: 1200 }}
         showAdvancedSearch

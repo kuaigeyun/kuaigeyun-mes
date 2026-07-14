@@ -12,8 +12,10 @@ import io
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.kuaicaiwu.models.bank_account import BankAccount
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 class BankAccountService:
@@ -29,6 +31,7 @@ class BankAccountService:
         opening_balance: Decimal = Decimal("0"),
         notes: Optional[str] = None,
         attachments: Optional[list] = None,
+        current_user: Optional[User] = None,
     ) -> BankAccount:
         exists = await BankAccount.filter(
             tenant_id=tenant_id,
@@ -39,19 +42,21 @@ class BankAccountService:
             raise ValidationError(f"银行账户编码 {account_code} 已存在")
 
         ob = Decimal(str(opening_balance or 0))
-        return await BankAccount.create(
-            tenant_id=tenant_id,
-            uuid=str(uuid.uuid4()),
-            account_code=account_code,
-            account_name=account_name,
-            bank_name=bank_name,
-            account_number=account_number,
-            currency=currency,
-            opening_balance=ob,
-            current_balance=ob,
-            notes=notes,
-            attachments=attachments,
-        )
+        create_payload = {
+            "tenant_id": tenant_id,
+            "uuid": str(uuid.uuid4()),
+            "account_code": account_code,
+            "account_name": account_name,
+            "bank_name": bank_name,
+            "account_number": account_number,
+            "currency": currency,
+            "opening_balance": ob,
+            "current_balance": ob,
+            "notes": notes,
+            "attachments": attachments,
+        }
+        apply_create_audit(create_payload, current_user)
+        return await BankAccount.create(**create_payload)
 
     async def get_by_id(self, tenant_id: int, account_id: int) -> BankAccount:
         row = await BankAccount.get_or_none(
@@ -106,6 +111,7 @@ class BankAccountService:
         self,
         tenant_id: int,
         account_id: int,
+        current_user: Optional[User] = None,
         **fields,
     ) -> BankAccount:
         row = await self.get_by_id(tenant_id, account_id)
@@ -116,6 +122,7 @@ class BankAccountService:
         for key, val in fields.items():
             if key in allowed and val is not None:
                 setattr(row, key, val)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -137,6 +144,8 @@ class BankAccountService:
         source_doc_id: Optional[int] = None,
         source_doc_code: Optional[str] = None,
         summary: Optional[str] = None,
+        operator: Optional[User] = None,
+        operator_id: Optional[int] = None,
     ):
         """登记银行流水并更新账户余额。"""
         import uuid
@@ -154,21 +163,27 @@ class BankAccountService:
         if balance_after < 0:
             raise ValidationError(f"账户 {account.account_code} 余额不足，当前 {current}，本次出款 {amt}")
 
-        tx = await BankTransaction.create(
-            tenant_id=tenant_id,
-            uuid=str(uuid.uuid4()),
-            bank_account_id=bank_account_id,
-            transaction_date=transaction_date,
-            direction=direction,
-            amount=amt,
-            balance_after=balance_after,
-            source_doc_type=source_doc_type,
-            source_doc_id=source_doc_id,
-            source_doc_code=source_doc_code,
-            summary=summary,
-        )
+        user = operator
+        if user is None and operator_id is not None:
+            user = await User.filter(id=operator_id).first()
+        tx_payload = {
+            "tenant_id": tenant_id,
+            "uuid": str(uuid.uuid4()),
+            "bank_account_id": bank_account_id,
+            "transaction_date": transaction_date,
+            "direction": direction,
+            "amount": amt,
+            "balance_after": balance_after,
+            "source_doc_type": source_doc_type,
+            "source_doc_id": source_doc_id,
+            "source_doc_code": source_doc_code,
+            "summary": summary,
+        }
+        apply_create_audit(tx_payload, user)
+        tx = await BankTransaction.create(**tx_payload)
         account.current_balance = balance_after
-        await account.save(update_fields=["current_balance", "updated_at"])
+        apply_update_audit(account, user)
+        await account.save()
         return tx
 
     async def list_transactions(
@@ -212,6 +227,7 @@ class BankAccountService:
         *,
         voucher_type: str,
         voucher_id: int,
+        operator_id: Optional[int] = None,
     ):
         """收付款单确认时写入银行流水（需指定 bank_account_id）。"""
         from apps.kuaicaiwu.models.receipt import Receipt
@@ -234,6 +250,7 @@ class BankAccountService:
                 source_doc_id=row.id,
                 source_doc_code=row.receipt_code,
                 summary=row.notes,
+                operator_id=operator_id or getattr(row, "updated_by", None) or getattr(row, "created_by", None),
             )
 
         row = await Payment.get_or_none(tenant_id=tenant_id, id=voucher_id, deleted_at__isnull=True)
@@ -252,6 +269,7 @@ class BankAccountService:
             source_doc_id=row.id,
             source_doc_code=row.payment_code,
             summary=row.notes,
+            operator_id=operator_id or getattr(row, "updated_by", None) or getattr(row, "created_by", None),
         )
 
     async def _transaction_exists(self, tenant_id: int, source_doc_type: str, source_doc_id: int) -> bool:

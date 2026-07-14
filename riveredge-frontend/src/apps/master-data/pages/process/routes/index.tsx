@@ -39,6 +39,7 @@ import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -560,7 +561,7 @@ const ProcessRoutesPage: React.FC = () => {
       <UniTable<ProcessRoute>
         columnPersistenceId="apps.master-data.pages.process.routes"
         actionRef={actionRef}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolveProcessListParams(searchFormValues, sort, {
             activeField: PROCESS_ROUTE_PINNED_ACTIVE_FIELD,

@@ -39,6 +39,8 @@ export interface Invoice {
   updated_at: string;
   created_by?: number;
   updated_by?: number;
+  created_by_name?: string;
+  updated_by_name?: string;
 }
 
 export interface InvoiceListParams {
@@ -47,6 +49,10 @@ export interface InvoiceListParams {
   category?: 'IN' | 'OUT';
   status?: string;
   search?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
 }
 
 export interface InvoiceCreateData {

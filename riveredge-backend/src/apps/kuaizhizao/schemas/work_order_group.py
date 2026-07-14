@@ -44,3 +44,8 @@ class WorkOrderGroupResponse(BaseModel):
     min_readiness_rate: Optional[float] = None
     members: List[WorkOrderGroupMemberResponse] = Field(default_factory=list)
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Type
 
+from apps.common.audit_actor import operator_name_from_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.models.user import User
 
 _SUBMITTABLE_REVIEW = frozenset({"草稿", "draft", "驳回", "rejected", "已驳回"})
 _PENDING_REVIEW = frozenset({"待审核", "pending_review", "pending_approval", "已提交"})
@@ -13,6 +15,14 @@ _APPROVED_REVIEW = frozenset({"通过", "approved", "已审核"})
 
 def _norm_review(value: Any) -> str:
     return str(value or "").strip()
+
+
+async def _updated_audit_kwargs(updated_by: int) -> dict[str, Any]:
+    user = await User.filter(id=updated_by).first()
+    return {
+        "updated_by": updated_by,
+        "updated_by_name": operator_name_from_user(user) if user else "",
+    }
 
 
 async def submit_finance_review(
@@ -35,7 +45,7 @@ async def submit_finance_review(
         raise BusinessLogicError(f"{doc_label}当前审核状态不可提交")
     await model.filter(tenant_id=tenant_id, id=doc_id).update(
         review_status="待审核",
-        updated_by=updated_by,
+        **(await _updated_audit_kwargs(updated_by)),
     )
 
 
@@ -59,7 +69,7 @@ async def withdraw_finance_review(
         reviewer_name=None,
         review_time=None,
         review_remarks=None,
-        updated_by=updated_by,
+        **(await _updated_audit_kwargs(updated_by)),
     )
 
 
@@ -83,5 +93,5 @@ async def revoke_finance_review(
         reviewer_name=None,
         review_time=None,
         review_remarks=None,
-        updated_by=updated_by,
+        **(await _updated_audit_kwargs(updated_by)),
     )

@@ -6,6 +6,7 @@ import { App, Tag } from 'antd';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import { glService, type ChartOfAccount } from '../../../services/gl';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const ChartOfAccountsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -66,7 +67,7 @@ const ChartOfAccountsPage: React.FC = () => {
         actionRef={actionRef}
         enableRowSelection
         rowKey="id"
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         request={async () => {
           const list = await glService.listAccounts();
           return { data: list, success: true, total: list.length };

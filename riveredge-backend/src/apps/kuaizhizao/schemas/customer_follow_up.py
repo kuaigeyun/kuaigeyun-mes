@@ -69,6 +69,7 @@ class CustomerFollowUpResponse(CustomerFollowUpBase):
     created_by: Optional[int] = Field(None, description="创建人ID")
     updated_by: Optional[int] = Field(None, description="更新人ID")
     created_by_name: Optional[str] = Field(None, description="创建人显示名")
+    updated_by_name: Optional[str] = Field(None, description="更新人显示名")
 
 
 class CustomerFollowUpListResponse(CustomerFollowUpResponse):

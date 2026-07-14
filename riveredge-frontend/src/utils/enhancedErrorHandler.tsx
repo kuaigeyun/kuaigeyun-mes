@@ -131,7 +131,7 @@ export class ErrorClassifier {
   static getTitle(type: ErrorType): string {
     const titles: Record<ErrorType, string> = {
       [ErrorType.VALIDATION]: '数据验证失败',
-      [ErrorType.NETWORK]: '网络连接错误',
+      [ErrorType.NETWORK]: '服务连接中断',
       [ErrorType.PERMISSION]: '权限不足',
       [ErrorType.BUSINESS]: '业务处理失败',
       [ErrorType.SYSTEM]: '系统错误',
@@ -159,8 +159,8 @@ export class ErrorClassifier {
         break;
 
       case ErrorType.NETWORK:
-        suggestions.push('请检查网络连接是否正常');
-        suggestions.push('尝试刷新页面或稍后重试');
+        suggestions.push('请稍后重试或刷新页面');
+        suggestions.push('请确认网络连接正常');
         suggestions.push('如果问题持续，请联系技术支持');
         break;
 

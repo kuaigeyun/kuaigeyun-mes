@@ -36,8 +36,6 @@ class SchedulingConfig(BaseModel):
     description = fields.TextField(null=True, description="配置描述")
 
     # 创建信息
-    created_by = fields.IntField(null=True, description="创建人ID")
-    updated_by = fields.IntField(null=True, description="更新人ID")
 
     class Meta:
         table = "apps_kuaizhizao_scheduling_configs"

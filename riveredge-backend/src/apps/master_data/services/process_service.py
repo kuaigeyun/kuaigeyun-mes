@@ -11,6 +11,12 @@ import re
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
+from apps.common.audit_actor import (
+    apply_create_audit,
+    apply_restore_audit,
+    apply_update_audit,
+    audit_response_fields,
+)
 from apps.master_data.models.material import Material, MaterialGroup
 from apps.master_data.models.process import DefectType, Operation, OperationDefectType, ProcessRoute, ProcessRouteTemplate, SOP
 from apps.master_data.schemas.process_schemas import (
@@ -23,6 +29,7 @@ from apps.master_data.schemas.process_schemas import (
     SOPCreate, SOPUpdate, SOPResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 from apps.master_data.services.process_preset_catalog import (
     get_industry_by_id,
@@ -81,6 +88,7 @@ def _defect_type_to_response_data(dt: DefectType) -> Dict[str, Any]:
         "is_active": getattr(dt, "is_active", True),
         "created_at": dt.created_at,
         "updated_at": dt.updated_at,
+        **audit_response_fields(dt),
         "deleted_at": getattr(dt, "deleted_at", None),
     }
 
@@ -194,6 +202,7 @@ async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
         "is_active": getattr(op, "is_active", True),
         "created_at": op.created_at,
         "updated_at": op.updated_at,
+        **audit_response_fields(op),
         "deleted_at": getattr(op, "deleted_at", None),
         "defect_types": defect_types,
         "default_operator_ids": default_operator_ids,
@@ -293,6 +302,7 @@ class ProcessService:
             "allow_operation_jump": bool(getattr(process_route, "allow_operation_jump", False)),
             "created_at": process_route.created_at,
             "updated_at": process_route.updated_at,
+            **audit_response_fields(process_route),
             "deleted_at": process_route.deleted_at,
         }
         
@@ -311,7 +321,8 @@ class ProcessService:
     @staticmethod
     async def create_defect_type(
         tenant_id: int,
-        data: DefectTypeCreate
+        data: DefectTypeCreate,
+        current_user: Optional[User] = None,
     ) -> DefectTypeResponse:
         """
         创建不良品
@@ -338,6 +349,7 @@ class ProcessService:
         
         # 创建不良品（使用 model_dump 兼容 Pydantic v2）
         create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+        apply_create_audit(create_data, current_user)
         try:
             defect_type = await DefectType.create(
                 tenant_id=tenant_id,
@@ -445,7 +457,8 @@ class ProcessService:
     async def update_defect_type(
         tenant_id: int,
         defect_type_uuid: str,
-        data: DefectTypeUpdate
+        data: DefectTypeUpdate,
+        current_user: Optional[User] = None,
     ) -> DefectTypeResponse:
         """
         更新不良品
@@ -487,6 +500,7 @@ class ProcessService:
         for key, value in update_data.items():
             setattr(defect_type, key, value)
         
+        apply_update_audit(defect_type, current_user)
         try:
             await defect_type.save()
         except IntegrityError as e:
@@ -499,7 +513,8 @@ class ProcessService:
     @staticmethod
     async def batch_resolve_or_create_defect_types(
         tenant_id: int,
-        items: List[str]
+        items: List[str],
+        current_user: Optional[User] = None,
     ) -> Dict[str, str]:
         """
         批量解析或创建不良品项。用于工序导入时：已存在则返回 uuid，不存在则创建（编码按规则自动生成）。
@@ -553,11 +568,15 @@ class ProcessService:
             # 3. 不存在则创建，编码按规则自动生成
             try:
                 code = await CodeGenerationService.generate_code(tenant_id, "DEFECT_TYPE_CODE")
+                create_payload = {
+                    "code": code,
+                    "name": inp,
+                    "is_active": True,
+                }
+                apply_create_audit(create_payload, current_user)
                 defect_type = await DefectType.create(
                     tenant_id=tenant_id,
-                    code=code,
-                    name=inp,
-                    is_active=True
+                    **create_payload,
                 )
                 uuid_str = str(defect_type.uuid)
                 result[inp] = uuid_str
@@ -610,7 +629,8 @@ class ProcessService:
     @staticmethod
     async def create_operation(
         tenant_id: int,
-        data: OperationCreate
+        data: OperationCreate,
+        current_user: Optional[User] = None,
     ) -> OperationResponse:
         """
         创建工序。支持软删除后重用编码：若编码仅存在于已软删除记录，则恢复该记录并更新。
@@ -679,6 +699,7 @@ class ProcessService:
             existing_deleted.default_equipment_ids = getattr(data, "default_equipment_ids", None) or getattr(data, "defaultEquipmentIds", None)
             _apply_default_operator_ids(existing_deleted, oids)
             await _sync_operation_defect_types(existing_deleted.id, getattr(data, "defect_type_uuids", None) or [], tenant_id)
+            apply_restore_audit(existing_deleted, current_user)
             await existing_deleted.save()
             return OperationResponse.model_validate(await _operation_to_response_data(existing_deleted))
 
@@ -717,6 +738,7 @@ class ProcessService:
                 operation_stages=create_data.get("inspection_stages"),
             )
 
+        apply_create_audit(create_data, current_user)
         try:
             operation = await Operation.create(tenant_id=tenant_id, **create_data)
             await _sync_operation_defect_types(operation.id, getattr(data, "defect_type_uuids", None) or [], tenant_id)
@@ -756,6 +778,7 @@ class ProcessService:
                     retry.default_equipment_ids = getattr(data, "default_equipment_ids", None) or getattr(data, "defaultEquipmentIds", None)
                     _apply_default_operator_ids(retry, oids)
                     await _sync_operation_defect_types(retry.id, getattr(data, "defect_type_uuids", None) or [], tenant_id)
+                    apply_restore_audit(retry, current_user)
                     await retry.save()
                     return OperationResponse.model_validate(await _operation_to_response_data(retry))
                 raise ValidationError(f"工序编码 {data.code} 已存在（可能已被软删除，请检查）")
@@ -883,7 +906,8 @@ class ProcessService:
     async def update_operation(
         tenant_id: int,
         operation_uuid: str,
-        data: OperationUpdate
+        data: OperationUpdate,
+        current_user: Optional[User] = None,
     ) -> OperationResponse:
         """
         更新工序
@@ -953,6 +977,7 @@ class ProcessService:
         for key, value in update_data.items():
             setattr(operation, key, value)
         
+        apply_update_audit(operation, current_user)
         try:
             await operation.save()
         except IntegrityError as e:
@@ -1018,6 +1043,7 @@ class ProcessService:
         name: str,
         category: Optional[str],
         description: Optional[str],
+        current_user: Optional[User] = None,
     ) -> Tuple[str, bool]:
         """
         按名称复用未删除的不良品项；不存在则按 DEFECT_TYPE_CODE 生成编码并创建。
@@ -1039,14 +1065,15 @@ class ProcessService:
         cat = (category or "").strip()[:50] if category else None
         desc = (description or "").strip() or None
         try:
-            dt = await DefectType.create(
-                tenant_id=tenant_id,
-                code=code[:50],
-                name=name_st,
-                category=cat,
-                description=desc,
-                is_active=True,
-            )
+            create_payload = {
+                "code": code[:50],
+                "name": name_st,
+                "category": cat,
+                "description": desc,
+                "is_active": True,
+            }
+            apply_create_audit(create_payload, current_user)
+            dt = await DefectType.create(tenant_id=tenant_id, **create_payload)
             return str(dt.uuid), True
         except IntegrityError:
             retry = await DefectType.filter(
@@ -1061,6 +1088,7 @@ class ProcessService:
         tenant_id: int,
         industry_id: str,
         preset_keys: List[str],
+        current_user: Optional[User] = None,
     ) -> Dict[str, Any]:
         """
         按行业加载所选工序预设：工序编码走 OPERATION_CODE，不良品走 DEFECT_TYPE_CODE 或按名称复用；
@@ -1107,15 +1135,16 @@ class ProcessService:
             if not op_code:
                 raise ValidationError("工序编码生成失败，请检查编码规则 OPERATION_CODE 是否启用")
 
-            operation = await Operation.create(
-                tenant_id=tenant_id,
-                code=op_code,
-                name=op_name[:200],
-                reporting_type="quantity",
-                allow_jump=False,
-                is_node_operation=False,
-                is_active=True,
-            )
+            op_payload = {
+                "code": op_code,
+                "name": op_name[:200],
+                "reporting_type": "quantity",
+                "allow_jump": False,
+                "is_node_operation": False,
+                "is_active": True,
+            }
+            apply_create_audit(op_payload, current_user)
+            operation = await Operation.create(tenant_id=tenant_id, **op_payload)
             created_ops += 1
 
             defect_uuids: List[str] = []
@@ -1127,7 +1156,7 @@ class ProcessService:
                 dc = cat_raw[:50] if cat_raw else None
                 ddesc = (d.get("description") or "").strip() or None
                 uid, was_new = await ProcessService._resolve_or_create_defect_for_preset(
-                    tenant_id, dn, dc, ddesc
+                    tenant_id, dn, dc, ddesc, current_user=current_user
                 )
                 defect_uuids.append(uid)
                 if was_new:
@@ -1164,7 +1193,8 @@ class ProcessService:
     @staticmethod
     async def create_process_route(
         tenant_id: int,
-        data: ProcessRouteCreate
+        data: ProcessRouteCreate,
+        current_user: Optional[User] = None,
     ) -> ProcessRouteResponse:
         """
         创建工艺路线。支持软删除后重用编码：若编码仅存在于已软删除记录，则恢复该记录并更新。
@@ -1213,10 +1243,11 @@ class ProcessService:
             existing_deleted.description = getattr(data, 'description', None)
             existing_deleted.is_active = getattr(data, 'is_active', True)
             existing_deleted.operation_sequence = getattr(data, 'operation_sequence', None)
+            apply_update_audit(existing_deleted, current_user)
             await existing_deleted.save()
             
             # 返回恢复的记录
-            return ProcessRouteResponse.from_orm(existing_deleted)
+            return await ProcessService._to_process_route_response(existing_deleted)
         
         # 创建工艺路线
         route_data = data.dict(exclude={'parent_route_uuid'})
@@ -1241,7 +1272,8 @@ class ProcessService:
             
             route_data['parent_route_id'] = parent_route.id
             route_data['level'] = new_level
-        
+
+        apply_create_audit(route_data, current_user)
         process_route = await ProcessRoute.create(
             tenant_id=tenant_id,
             **route_data
@@ -1340,7 +1372,8 @@ class ProcessService:
     async def update_process_route(
         tenant_id: int,
         process_route_uuid: str,
-        data: ProcessRouteUpdate
+        data: ProcessRouteUpdate,
+        current_user: Optional[User] = None,
     ) -> ProcessRouteResponse:
         """
         更新工艺路线
@@ -1385,6 +1418,7 @@ class ProcessService:
         )
         for key, value in update_data.items():
             setattr(process_route, key, value)
+        apply_update_audit(process_route, current_user)
         
         try:
             await process_route.save()
@@ -1542,7 +1576,8 @@ class ProcessService:
     @staticmethod
     async def create_sop(
         tenant_id: int,
-        data: SOPCreate
+        data: SOPCreate,
+        current_user: Optional[User] = None,
     ) -> SOPResponse:
         """
         创建作业程序（SOP）
@@ -1580,6 +1615,7 @@ class ProcessService:
         
         # 创建SOP（仅传模型字段；dict 已包含 schema 中定义的绑定与融合字段）
         create_data = data.model_dump() if hasattr(data, "model_dump") else data.dict()
+        apply_create_audit(create_data, current_user)
         try:
             sop = await SOP.create(
                 tenant_id=tenant_id,
@@ -1596,7 +1632,8 @@ class ProcessService:
     @staticmethod
     async def batch_create_sops_from_route(
         tenant_id: int,
-        data: "SOPBatchCreateFromRouteRequest"
+        data: "SOPBatchCreateFromRouteRequest",
+        current_user: Optional[User] = None,
     ) -> List[SOPResponse]:
         """
         按工艺路线批量创建 SOP 草稿
@@ -1777,17 +1814,18 @@ class ProcessService:
                 base_name = f"{route_name} - {op_display}"
                 name = _sop_name_truncate(base_name + title_extra)
 
-                sop = await SOP.create(
-                    tenant_id=tenant_id,
-                    code=code,
-                    name=name,
-                    operation_id=op_id,
-                    material_uuids=mat_uuids_arg,
-                    material_group_uuids=grp_uuids_arg,
-                    route_uuids=[data.process_route_uuid],
-                    bom_load_mode=bom_mode,
-                    is_active=True,
-                )
+                sop_payload = {
+                    "code": code,
+                    "name": name,
+                    "operation_id": op_id,
+                    "material_uuids": mat_uuids_arg,
+                    "material_group_uuids": grp_uuids_arg,
+                    "route_uuids": [data.process_route_uuid],
+                    "bom_load_mode": bom_mode,
+                    "is_active": True,
+                }
+                apply_create_audit(sop_payload, current_user)
+                sop = await SOP.create(tenant_id=tenant_id, **sop_payload)
                 created_sops.append(SOPResponse.model_validate(sop))
 
         return created_sops
@@ -1900,7 +1938,8 @@ class ProcessService:
     async def update_sop(
         tenant_id: int,
         sop_uuid: str,
-        data: SOPUpdate
+        data: SOPUpdate,
+        current_user: Optional[User] = None,
     ) -> SOPResponse:
         """
         更新作业程序（SOP）
@@ -1954,6 +1993,7 @@ class ProcessService:
         for key, value in update_data.items():
             setattr(sop, key, value)
         
+        apply_update_audit(sop, current_user)
         try:
             await sop.save()
         except IntegrityError as e:
@@ -2122,7 +2162,8 @@ class ProcessService:
     async def create_process_route_version(
         tenant_id: int,
         process_route_code: str,
-        data: ProcessRouteVersionCreate
+        data: ProcessRouteVersionCreate,
+        current_user: Optional[User] = None,
     ) -> ProcessRouteResponse:
         """
         创建工艺路线新版本
@@ -2166,21 +2207,23 @@ class ProcessService:
             raise ValidationError(f"版本号 '{data.version}' 已存在，请使用其他版本号")
         
         # 创建新版本的工艺路线（复制当前版本）
-        new_route = await ProcessRoute.create(
-            tenant_id=tenant_id,
-            code=current_route.code,
-            name=current_route.name,
-            description=current_route.description,
-            version=data.version,
-            version_description=data.version_description,
-            base_version=current_route.version,
-            effective_date=data.effective_date or datetime.now(),
-            operation_sequence=current_route.operation_sequence,
-            is_active=current_route.is_active,
-            over_report_mode=getattr(current_route, "over_report_mode", None) or "none",
-            over_report_value=getattr(current_route, "over_report_value", None) or 0,
-            allow_operation_jump=bool(getattr(current_route, "allow_operation_jump", False)),
-        )
+        new_route_payload = {
+            "tenant_id": tenant_id,
+            "code": current_route.code,
+            "name": current_route.name,
+            "description": current_route.description,
+            "version": data.version,
+            "version_description": data.version_description,
+            "base_version": current_route.version,
+            "effective_date": data.effective_date or datetime.now(),
+            "operation_sequence": current_route.operation_sequence,
+            "is_active": current_route.is_active,
+            "over_report_mode": getattr(current_route, "over_report_mode", None) or "none",
+            "over_report_value": getattr(current_route, "over_report_value", None) or 0,
+            "allow_operation_jump": bool(getattr(current_route, "allow_operation_jump", False)),
+        }
+        apply_create_audit(new_route_payload, current_user)
+        new_route = await ProcessRoute.create(**new_route_payload)
         
         return await ProcessService._to_process_route_response(new_route)
     
@@ -2747,7 +2790,8 @@ class ProcessService:
         tenant_id: int,
         parent_route_uuid: str,
         parent_operation_uuid: str,
-        data: ProcessRouteCreate
+        data: ProcessRouteCreate,
+        current_user: Optional[User] = None,
     ) -> ProcessRouteResponse:
         """
         创建子工艺路线
@@ -2811,7 +2855,8 @@ class ProcessService:
         
         if 'version' not in route_data or not route_data.get('version'):
             route_data['version'] = "1.0"
-        
+
+        apply_create_audit(route_data, current_user)
         sub_route = await ProcessRoute.create(
             tenant_id=tenant_id,
             **route_data
@@ -3005,11 +3050,11 @@ class ProcessService:
         
         return ProcessRouteTemplateResponse.model_validate(template)
 
+    @staticmethod
     async def create_process_route_from_template(
-        self,
         tenant_id: int,
         route_data: ProcessRouteFromTemplateCreate,
-        created_by: int
+        current_user: Optional[User] = None,
     ) -> ProcessRouteResponse:
         """
         基于模板创建工艺路线
@@ -3017,7 +3062,7 @@ class ProcessService:
         Args:
             tenant_id: 组织ID
             route_data: 工艺路线创建数据（包含template_uuid）
-            created_by: 创建人ID
+            current_user: 操作人
             
         Returns:
             ProcessRouteResponse: 创建的工艺路线对象
@@ -3047,4 +3092,6 @@ class ProcessService:
         )
         
         # 创建工艺路线
-        return await self.create_process_route(tenant_id, route_create_data, created_by)
+        return await ProcessService.create_process_route(
+            tenant_id, route_create_data, current_user=current_user
+        )

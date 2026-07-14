@@ -22,6 +22,7 @@ from apps.kuaizhizao.schemas.equipment_fault import (
     EquipmentRepairCreate,
     EquipmentRepairUpdate,
 )
+from apps.common.audit_actor import apply_create_audit
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
@@ -85,13 +86,14 @@ class EquipmentFaultService:
                 equipment_name=equipment.name,
                 **data.model_dump(exclude_none=True, exclude={'equipment_uuid'})
             )
+            reporter = None
+            if created_by:
+                reporter = await User.filter(id=created_by, tenant_id=tenant_id).first()
+            apply_create_audit(fault, reporter)
             await fault.save()
 
             from apps.kuaizhizao.services.equipment_mobile_notification import notify_equipment_fault_reported
 
-            reporter = None
-            if created_by:
-                reporter = await User.filter(id=created_by, tenant_id=tenant_id).first()
             try:
                 await notify_equipment_fault_reported(
                     tenant_id=tenant_id,
@@ -339,6 +341,9 @@ class EquipmentRepairService:
                 equipment_fault_uuid=equipment_fault.uuid if equipment_fault else None,
                 **data.model_dump(exclude_none=True, exclude={'equipment_uuid', 'equipment_fault_uuid'})
             )
+            if created_by is not None:
+                actor = await User.filter(id=created_by).first()
+                apply_create_audit(repair, actor)
             await repair.save()
             if data.repair_parts:
                 await SparePartService().apply_parts_usage(

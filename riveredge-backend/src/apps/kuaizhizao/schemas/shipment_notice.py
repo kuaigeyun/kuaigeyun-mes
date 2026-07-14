@@ -86,6 +86,10 @@ class ShipmentNoticeResponse(ShipmentNoticeBase):
         None,
         description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
     )
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 

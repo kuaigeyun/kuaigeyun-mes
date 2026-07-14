@@ -24,12 +24,11 @@ import {
 import { plantApi } from '../../../services/factory';
 import {
   buildMasterCrudActiveValueEnum,
-  formatMasterDateTimeCell,
+  masterCrudCreatedUpdatedColumns,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   normalizeMasterListResponse,
   resolveMasterCrudListParams,
 } from '../../../utils/masterListCore';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { PlantFormModal } from '../../../components/PlantFormModal';
 import type { Plant, PlantCreate } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -43,6 +42,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
@@ -571,40 +571,7 @@ const PlantsPage: React.FC = () => {
         },
       },
       ...customFieldColumns,
-      {
-        title: t('common.createdAt'),
-        dataIndex: 'createdAt',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, record) => formatMasterDateTimeCell(record.createdAt),
-      },
-      {
-        title: t('common.createdAt'),
-        dataIndex: 'created_at_range',
-        valueType: 'dateRange',
-        hideInTable: true,
-        order: 30,
-        formItemProps: formDateRangeFormItemProps,
-      },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updatedAt',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, record) => formatMasterDateTimeCell(record.updatedAt),
-      },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at_range',
-        valueType: 'dateRange',
-        hideInTable: true,
-        order: 31,
-        formItemProps: formDateRangeFormItemProps,
-      },
+      ...masterCrudCreatedUpdatedColumns<Plant>(t),
       {
         title: t('common.actions'),
         valueType: 'option',
@@ -673,7 +640,7 @@ const PlantsPage: React.FC = () => {
         <UniTable<Plant>
           columnPersistenceId="apps.master-data.pages.factory.plants"
           actionRef={actionRef}
-          columns={columns}
+          columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
           viewTypes={['table', 'help']}
           defaultViewType="table"
           loadingDelay={200}

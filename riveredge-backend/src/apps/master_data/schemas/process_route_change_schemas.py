@@ -80,6 +80,10 @@ class ProcessRouteChangeResponse(ProcessRouteChangeBase):
     applied_at: Optional[datetime] = Field(None, description="应用时间")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, description="删除时间")
     
     class Config:

@@ -12,6 +12,14 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
 
 
+class AuditActorFields(BaseModel):
+    """BaseModel 审计人字段（列表直接展示姓名）。"""
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
+
+
 # ---------- 通用列表响应 ----------
 
 class PaginatedResponse(BaseModel):
@@ -49,7 +57,7 @@ class InspectionItemUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class InspectionItemResponse(InspectionItemBase):
+class InspectionItemResponse(InspectionItemBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -111,7 +119,7 @@ class InspectionSchemeUpdate(BaseModel):
     lines: Optional[List[InspectionSchemeLineCreate]] = None
 
 
-class InspectionSchemeResponse(InspectionSchemeBase):
+class InspectionSchemeResponse(InspectionSchemeBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -147,7 +155,7 @@ class SchemeBindingBulkReplace(BaseModel):
     scheme_ids: List[int] = Field(default_factory=list)
 
 
-class SchemeBindingResponse(SchemeBindingBase):
+class SchemeBindingResponse(SchemeBindingBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -203,7 +211,7 @@ class PatrolRouteUpdate(BaseModel):
     steps: Optional[List[PatrolRouteStepCreate]] = None
 
 
-class PatrolRouteResponse(PatrolRouteBase):
+class PatrolRouteResponse(PatrolRouteBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -243,7 +251,7 @@ class MaintenanceItemUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class MaintenanceItemResponse(MaintenanceItemBase):
+class MaintenanceItemResponse(MaintenanceItemBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -302,7 +310,7 @@ class MaintenanceSchemeUpdate(BaseModel):
     lines: Optional[List[MaintenanceSchemeLineCreate]] = None
 
 
-class MaintenanceSchemeResponse(MaintenanceSchemeBase):
+class MaintenanceSchemeResponse(MaintenanceSchemeBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -382,7 +390,7 @@ class SpotCheckUpdate(BaseModel):
     lines: Optional[List[SpotCheckLineInput]] = None
 
 
-class SpotCheckResponse(BaseModel):
+class SpotCheckResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -474,7 +482,7 @@ class RoutePatrolUpdate(BaseModel):
     lines: Optional[List[RoutePatrolLineInput]] = None
 
 
-class RoutePatrolResponse(BaseModel):
+class RoutePatrolResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -528,7 +536,7 @@ class ScrapApplicationReject(BaseModel):
     reject_reason: str
 
 
-class ScrapApplicationResponse(ScrapApplicationBase):
+class ScrapApplicationResponse(ScrapApplicationBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str
@@ -587,7 +595,7 @@ class TransferApplicationReject(BaseModel):
     reject_reason: str
 
 
-class TransferApplicationResponse(TransferApplicationBase):
+class TransferApplicationResponse(TransferApplicationBase, AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
     uuid: str

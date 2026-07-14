@@ -74,6 +74,8 @@ class PlantResponse(PlantBase):
     tenant_id: int = Field(..., alias="tenantId", description="租户ID")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     
@@ -149,6 +151,8 @@ class WorkshopResponse(WorkshopBase):
     tenant_id: int = Field(..., alias="tenantId", description="租户ID")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     plant_code: Optional[str] = Field(
@@ -237,6 +241,8 @@ class ProductionLineResponse(ProductionLineBase):
     )
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     
@@ -317,6 +323,8 @@ class WorkstationResponse(WorkstationBase):
     production_line_id: int = Field(..., alias="productionLineId", description="所属产线ID")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     production_line_code: Optional[str] = Field(
@@ -400,6 +408,8 @@ class WorkCenterResponse(WorkCenterBase):
     tenant_id: int = Field(..., alias="tenantId", description="租户ID")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     workstation_ids: List[int] = Field(default_factory=list, alias="workstationIds", description="包含工位ID列表")

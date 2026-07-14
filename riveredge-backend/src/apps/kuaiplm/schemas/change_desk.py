@@ -21,6 +21,9 @@ class ChangeDeskItem(BaseModel):
     change_reason: Optional[str] = None
     applicant_id: Optional[int] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
     entity_code: Optional[str] = None
     entity_name: Optional[str] = None
     extra: Dict[str, Any] = Field(default_factory=dict)

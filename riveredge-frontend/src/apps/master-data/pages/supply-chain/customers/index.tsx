@@ -55,6 +55,7 @@ import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -968,7 +969,7 @@ const CustomersPage: React.FC = () => {
       <UniTable<Customer>
         columnPersistenceId="apps.master-data.pages.supply-chain.customers"
         actionRef={actionRef}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, __filter, searchFormValues) => {
           const listParams = resolveCustomerListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;

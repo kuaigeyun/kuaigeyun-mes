@@ -18,6 +18,8 @@ export interface KbSpace {
   article_count?: number;
   created_at?: string;
   updated_at?: string;
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
 }
 
 export interface KbSpaceCreatePayload {
@@ -52,6 +54,8 @@ export interface KbArticle {
   project_id?: number | null;
   created_at?: string;
   updated_at?: string;
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
 }
 
 function unwrapList<T>(res: unknown): { items: T[]; total: number } {

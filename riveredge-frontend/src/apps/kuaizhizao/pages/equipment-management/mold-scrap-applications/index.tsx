@@ -21,6 +21,8 @@ import { moldApi } from '../../../services/equipment';
 import { scrapApplicationsApi } from '../../../services/moldOps';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   APPROVAL_DOC_PINNED_STATUS_FIELD,
   buildApprovalDocStatusValueEnum,
@@ -161,8 +163,7 @@ const MoldScrapApplicationsPage: React.FC = () => {
 
   const approvalStatusValueEnum = useMemo(() => buildApprovalDocStatusValueEnum(), []);
 
-  const columns: ProColumns<MoldScrapApplication>[] = useMemo(
-    () => [
+  const columns: ProColumns<MoldScrapApplication>[] = useMemo(() => alignProColumns<MoldScrapApplication>([
       {
         title: t(`${P}.col.scrapDate`),
         dataIndex: 'scrap_date_range',
@@ -218,13 +219,10 @@ const MoldScrapApplicationsPage: React.FC = () => {
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
+        hideInTable: true,
         hideInSearch: true,
-        defaultSortOrder: 'descend',
-        sorter: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
+      ...buildDocumentAuditColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
         key: 'action',
@@ -325,7 +323,7 @@ const MoldScrapApplicationsPage: React.FC = () => {
           </>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, perms, canAudit, approvalStatusValueEnum],
   );
 

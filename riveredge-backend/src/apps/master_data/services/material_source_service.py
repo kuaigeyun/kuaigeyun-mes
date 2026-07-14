@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 from loguru import logger
 
+from apps.common.audit_actor import apply_update_audit
 from apps.master_data.models.material import Material, BOM
 from apps.master_data.models.process import ProcessRoute
 from apps.master_data.models.supplier import Supplier
@@ -28,7 +29,8 @@ from apps.kuaizhizao.utils.material_source_helper import (
     VALID_SOURCE_TYPES,
     validate_material_source_config,
 )
-from infra.exceptions.exceptions import ValidationError, NotFoundError
+from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 class MaterialSourceValidationService:
@@ -231,7 +233,8 @@ class MaterialSourceChangeService:
         material_uuid: str,
         new_source_type: str,
         new_source_config: Optional[Dict[str, Any]] = None,
-        updated_by: int = 1
+        current_user: Optional[User] = None,
+        updated_by: int = 1,
     ) -> Material:
         """
         应用物料来源类型变更
@@ -241,7 +244,8 @@ class MaterialSourceChangeService:
             material_uuid: 物料UUID
             new_source_type: 新的来源类型
             new_source_config: 新的来源配置（可选）
-            updated_by: 更新人ID
+            current_user: 当前用户（写入审计字段）
+            updated_by: 兼容旧调用的更新人ID（无 current_user 时回落查库）
             
         Returns:
             Material: 更新后的物料对象
@@ -277,6 +281,11 @@ class MaterialSourceChangeService:
         
         if new_source_config is not None:
             material.source_config = new_source_config
+
+        actor = current_user
+        if actor is None and updated_by:
+            actor = await User.filter(id=updated_by).first()
+        apply_update_audit(material, actor)
         
         await material.save()
         

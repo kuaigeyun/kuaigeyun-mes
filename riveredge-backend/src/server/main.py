@@ -544,6 +544,24 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 from core.middleware.exception_handler_middleware import ExceptionHandlerMiddleware
 app.add_middleware(ExceptionHandlerMiddleware)
 
+# FastAPI 级异常处理：BaseHTTPMiddleware 在部分场景下无法可靠捕获路由异常，
+# 以 exception_handler 作为 RiverEdgeException 的可靠出口。
+from fastapi import Request as _FastAPIRequest
+from fastapi.responses import JSONResponse as _JSONResponse
+from infra.exceptions.exceptions import (
+    RiverEdgeException as _RiverEdgeException,
+    create_error_response as _create_error_response,
+)
+
+
+@app.exception_handler(_RiverEdgeException)
+async def _riveredge_exception_handler(_request: _FastAPIRequest, exc: _RiverEdgeException):
+    return _JSONResponse(
+        status_code=exc.status_code,
+        content=_create_error_response(exception=exc, request_path=str(_request.url.path)),
+    )
+
+
 # 注册性能监控中间件（在操作日志中间件之前，以便记录性能指标）
 from core.middleware.performance_middleware import PerformanceMiddleware
 app.add_middleware(PerformanceMiddleware)

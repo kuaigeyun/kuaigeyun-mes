@@ -126,7 +126,7 @@ import {
 } from '@ant-design/icons';
 
 import dayjs from 'dayjs';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 
 import {
 
@@ -236,8 +236,11 @@ import {
   SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../shared/DocumentPushProgressBar';
+import { salesContractOrderPushPercent } from '../shared/pushProgress';
 import { buildDescriptionItemsFromColumns } from '../shared/descriptionItems';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { testGenerateCode, getCodeRulePageConfig, generateCode } from '../../../../../services/codeRule';
 import SalesContractTermsManageModal from './SalesContractTermsManageModal';
@@ -1249,7 +1252,7 @@ const SalesContractsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesOrder.reviewStatus'),
         dataIndex: 'review_status',
-        width: 100,
+        width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
         render: (v: string) => {
           const approved = v === 'APPROVED' || v === '已通过' || v === '审核通过';
           const rejected = v === 'REJECTED' || v === '已驳回';
@@ -2620,7 +2623,11 @@ const SalesContractsPage: React.FC = () => {
           framework: { text: contractTypeLabels.framework },
         },
 
-        render: (_, r) => contractTypeLabels[r.contract_type as keyof typeof contractTypeLabels] || r.contract_type,
+        render: (_, r) => (
+          <Tag color="blue" bordered={false}>
+            {contractTypeLabels[r.contract_type as keyof typeof contractTypeLabels] || r.contract_type}
+          </Tag>
+        ),
 
       },
 
@@ -2639,13 +2646,23 @@ const SalesContractsPage: React.FC = () => {
 
       {
         title: t('app.kuaizhizao.salesContract.contractDate'),
+        key: 'contract_date_valid_to_stacked',
         dataIndex: 'contract_date',
-        width: 132,
+        width: 148,
         uniTableKeepWidth: true,
         sorter: true,
         defaultSortOrder: 'descend',
         hideInSearch: true,
-        valueType: 'date',
+        render: (_, record) => (
+          <UniTableStackedPrimaryCell
+            primary={record.contract_date ? formatDateTime(record.contract_date, 'YYYY-MM-DD') : '-'}
+            secondary={record.valid_to ? formatDateTime(record.valid_to, 'YYYY-MM-DD') : '-'}
+            secondaryCopyable={false}
+            uniformText
+            primaryBadge={t('common.start')}
+            secondaryBadge={t('common.end')}
+          />
+        ),
       },
 
       {
@@ -2660,13 +2677,14 @@ const SalesContractsPage: React.FC = () => {
       },
 
       {
-        title: t('app.kuaizhizao.salesContract.validUntil'),
-        dataIndex: 'valid_to',
-        width: 132,
+        title: t('app.kuaizhizao.salesOrder.totalQuantity'),
+        dataIndex: 'total_quantity',
+        width: 100,
         uniTableKeepWidth: true,
+        align: 'right',
         sorter: true,
         hideInSearch: true,
-        valueType: 'date',
+        render: formatQuantity,
       },
 
       {
@@ -2677,7 +2695,11 @@ const SalesContractsPage: React.FC = () => {
         align: 'right',
         sorter: true,
         hideInSearch: true,
-        valueType: 'money',
+        render: (_, r) =>
+          `¥${Number(r.total_amount).toLocaleString('zh-CN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
       },
 
       {
@@ -2696,9 +2718,38 @@ const SalesContractsPage: React.FC = () => {
 
         hideInSearch: true,
 
-        render: (_, r) => `¥${Number(r.released_amount ?? 0).toLocaleString()}`,
+        render: (_, r) =>
+          `¥${Number(r.released_amount).toLocaleString('zh-CN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
 
       },
+
+      {
+        title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+        dataIndex: 'order_push_progress',
+        width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, r) => {
+          const totalQty = Number(r.total_quantity ?? 0);
+          const releasedQty = Number(r.released_quantity ?? 0);
+          const percent = salesContractOrderPushPercent(releasedQty, totalQty);
+          return (
+            <DocumentPushProgressBar
+              percent={percent}
+              tooltip={t('app.kuaizhizao.salesManagement.pushProgress.orderReleaseTooltip', {
+                percent,
+                pushed: releasedQty,
+                total: totalQty,
+              })}
+            />
+          );
+        },
+      },
+
+      ...buildDocumentAuditColumns<SalesContract>(t),
 
       ...(contractAuditColumn ? [contractAuditColumn] : []),
 
@@ -2808,7 +2859,11 @@ const SalesContractsPage: React.FC = () => {
 
       dataIndex: 'contract_type',
 
-      render: (_, r) => contractTypeLabels[r.contract_type as keyof typeof contractTypeLabels] || r.contract_type,
+      render: (_, r) => (
+        <Tag color="blue" bordered={false}>
+          {contractTypeLabels[r.contract_type as keyof typeof contractTypeLabels] || r.contract_type}
+        </Tag>
+      ),
 
     },
 
@@ -2863,6 +2918,16 @@ const SalesContractsPage: React.FC = () => {
         ) : (
           '-'
         ),
+
+    },
+
+    {
+
+      title: t('app.kuaizhizao.salesOrder.totalQuantity'),
+
+      dataIndex: 'total_quantity',
+
+      render: formatQuantity,
 
     },
 
@@ -3858,18 +3923,21 @@ const SalesContractsPage: React.FC = () => {
                     dataIndex: 'quantity',
                     width: 88,
                     align: 'right',
+                    render: formatQuantity,
                   },
                   {
                     title: t('app.kuaizhizao.salesOrder.colPushedQty'),
                     dataIndex: 'pushed_quantity',
                     width: 88,
                     align: 'right',
+                    render: formatQuantity,
                   },
                   {
                     title: t('app.kuaizhizao.salesOrder.colPushableQty'),
                     dataIndex: 'max_push_quantity',
                     width: 88,
                     align: 'right',
+                    render: formatQuantity,
                   },
                   {
                     title: t('app.kuaizhizao.salesContract.thisRelease'),

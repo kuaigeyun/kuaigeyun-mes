@@ -113,6 +113,8 @@ class WarehouseResponse(WarehouseBase):
     tenant_id: Optional[int] = Field(None, alias="tenantId", description="租户ID")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     workshop_name: Optional[str] = Field(None, alias="workshopName", description="关联车间名称")
@@ -192,6 +194,8 @@ class StorageAreaResponse(StorageAreaBase):
     warehouse_id: int = Field(..., alias="warehouseId", description="所属仓库ID")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     warehouse_code: Optional[str] = Field(
@@ -274,6 +278,8 @@ class StorageLocationResponse(StorageLocationBase):
     storage_area_id: int = Field(..., alias="storageAreaId", description="所属库区ID")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     storage_area_code: Optional[str] = Field(

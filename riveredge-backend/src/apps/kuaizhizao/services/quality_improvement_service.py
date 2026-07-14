@@ -234,9 +234,14 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         if not report_code:
             report_code = _build_quick_code("8D")
 
+        user_info = await self.get_user_info(user_id)
         report = await Quality8DReport.create(
             tenant_id=tenant_id,
             report_code=report_code,
+            created_by=user_id,
+            created_by_name=user_info["name"],
+            updated_by=user_id,
+            updated_by_name=user_info["name"],
             **payload.model_dump(exclude={"report_code"}),
         )
         return self._build_response(report)
@@ -317,6 +322,9 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         if "status" in data and data.get("status") not in (None, row.status):
             raise BusinessLogicError("请通过“推进阶段”接口更新 8D 阶段")
         if data:
+            user_info = await self.get_user_info(user_id)
+            data["updated_by"] = user_id
+            data["updated_by_name"] = user_info["name"]
             await row.update_from_dict(data).save()
         return self._build_response(row)
 
@@ -339,6 +347,9 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             row.closed_at = datetime.now()
             row.verification_result = self._normalize_text(payload.verification_result) or row.verification_result
         self._append_transition_history_line(row, payload)
+        user_info = await self.get_user_info(user_id)
+        row.updated_by = user_id
+        row.updated_by_name = user_info["name"]
         await row.save()
         resp = self._build_response(row)
         return resp.model_copy(
@@ -384,6 +395,11 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         create_fields.update(
             await _quality_inspection_initial_review_fields(tenant_id, "oqc_inspection")
         )
+        user_info = await self.get_user_info(user_id)
+        create_fields["created_by"] = user_id
+        create_fields["created_by_name"] = user_info["name"]
+        create_fields["updated_by"] = user_id
+        create_fields["updated_by_name"] = user_info["name"]
         row = await OQCInspection.create(
             tenant_id=tenant_id,
             inspection_code=inspection_code,
@@ -509,6 +525,8 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         row.inspector_id = user_id
         row.inspector_name = user_info["name"]
         row.inspection_time = datetime.now()
+        row.updated_by = user_id
+        row.updated_by_name = user_info["name"]
         await row.save()
 
         if row.quality_status == "不合格" or payload.inspection_result == "不合格":
@@ -542,6 +560,8 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         row.reviewer_id = user_id
         row.reviewer_name = user_info["name"]
         row.review_time = datetime.now()
+        row.updated_by = user_id
+        row.updated_by_name = user_info["name"]
         await row.save()
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_oqc_inspection_capabilities_on_response,
@@ -1050,6 +1070,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         initial_review_fields = await _quality_inspection_initial_review_fields(
             tenant_id, "oqc_inspection"
         )
+        user_info = await self.get_user_info(user_id)
         async with in_transaction():
             for item in items:
                 if not item.material_id:
@@ -1098,6 +1119,10 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     status="待检验",
                     inspection_standard=template.get("inspection_standard"),
                     other_checks=template.get("other_checks"),
+                    created_by=user_id,
+                    created_by_name=user_info["name"],
+                    updated_by=user_id,
+                    updated_by_name=user_info["name"],
                     **initial_review_fields,
                 )
                 created.append(OQCInspectionResponse.model_validate(row))
@@ -1145,6 +1170,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         initial_review_fields = await _quality_inspection_initial_review_fields(
             tenant_id, "oqc_inspection"
         )
+        user_info = await self.get_user_info(user_id)
         async with in_transaction():
             for item in items:
                 if not item.material_id:
@@ -1193,6 +1219,10 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     status="待检验",
                     inspection_standard=template.get("inspection_standard"),
                     other_checks=template.get("other_checks"),
+                    created_by=user_id,
+                    created_by_name=user_info["name"],
+                    updated_by=user_id,
+                    updated_by_name=user_info["name"],
                     **initial_review_fields,
                 )
                 created.append(OQCInspectionResponse.model_validate(row))

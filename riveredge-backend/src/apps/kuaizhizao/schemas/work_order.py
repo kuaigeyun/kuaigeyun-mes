@@ -342,6 +342,10 @@ class WorkOrderListResponse(BaseModel):
         None,
         description="工序步骤摘要（include_operation_steps=true 时返回，与运营看板口径一致）",
     )
+    downstream_push_progress: Optional[float] = Field(
+        None,
+        description="完工进度 0-100（末道工序已完成数量/工单计划数量，列表用）",
+    )
     capabilities: Optional[WorkOrderCapabilities] = Field(
         None, description="业务态动作能力（document_action_policy）"
     )
@@ -635,12 +639,22 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
     process_inspection_status: Optional[str] = Field(
         None,
         alias="processInspectionStatus",
-        description="方案质检过程检验状态（not_started/pending/pending_review/released/rejected/unqualified）",
+        description="方案质检过程检验执行态（not_started/pending/inspected）",
     )
     process_inspection_id: Optional[int] = Field(
         None,
         alias="processInspectionId",
         description="工序关联过程检验单ID（卡片徽章跳转）",
+    )
+    inspection_qualified_quantity: Optional[Decimal] = Field(
+        None,
+        alias="inspectionQualifiedQuantity",
+        description="方案质检：已执行过程检验单合格数量合计（卡片合格率口径）",
+    )
+    inspection_unqualified_quantity: Optional[Decimal] = Field(
+        None,
+        alias="inspectionUnqualifiedQuantity",
+        description="方案质检：已执行过程检验单不合格数量合计（卡片合格率口径）",
     )
     
     created_at: datetime = Field(..., description="创建时间")

@@ -10,11 +10,17 @@ from datetime import datetime
 from tortoise.transactions import in_transaction
 from tortoise.functions import Sum
 
-from apps.kuaicaiwu.models.invoice import Invoice, InvoiceItem
-from apps.kuaicaiwu.services.accounting_event_service import AccountingEventService
-from apps.kuaicaiwu.schemas.invoice import InvoiceCreate, InvoiceUpdate
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.common.base_service import AppBaseService
+from apps.kuaicaiwu.models.invoice import Invoice, InvoiceItem
+from apps.kuaicaiwu.schemas.invoice import InvoiceCreate, InvoiceUpdate
+from apps.kuaicaiwu.services.accounting_event_service import AccountingEventService
+from apps.master_data.services.master_data_list_core import (
+    apply_master_crud_created_date_range,
+    apply_master_crud_updated_date_range,
+)
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
 
 
@@ -39,10 +45,11 @@ class InvoiceService(AppBaseService[Invoice]):
             else:
                 code = str(uuid.uuid4())
             invoice_data = data.model_dump(exclude={'items'})
+            user = await User.filter(id=created_by).first()
+            apply_create_audit(invoice_data, user)
             invoice = await Invoice.create(
                 tenant_id=tenant_id,
                 invoice_code=code,
-                created_by=created_by,
                 **invoice_data
             )
             for item_data in data.items:
@@ -111,7 +118,11 @@ class InvoiceService(AppBaseService[Invoice]):
         limit: int = 20,
         category: Optional[str] = None,
         status: Optional[str] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[Invoice], int]:
         """获取发票列表"""
         query = Invoice.filter(tenant_id=tenant_id)
@@ -121,19 +132,30 @@ class InvoiceService(AppBaseService[Invoice]):
             query = query.filter(status=status)
         if search:
             query = query.filter(invoice_number__icontains=search)
+        query = apply_master_crud_created_date_range(
+            query, start_date=created_start_date, end_date=created_end_date
+        )
+        query = apply_master_crud_updated_date_range(
+            query, start_date=updated_start_date, end_date=updated_end_date
+        )
         total = await query.count()
         items = await query.offset(skip).limit(limit).order_by('-created_at').prefetch_related('items')
         return items, total
 
-    async def update_invoice(self, tenant_id: int, code: str, data: InvoiceUpdate) -> Invoice:
+    async def update_invoice(
+        self, tenant_id: int, code: str, data: InvoiceUpdate, updated_by: int
+    ) -> Invoice:
         """更新发票信息"""
         invoice = await Invoice.get_or_none(tenant_id=tenant_id, invoice_code=code)
         if not invoice:
             raise NotFoundError(f"发票不存在: {code}")
         update_data = data.model_dump(exclude_unset=True)
         if update_data:
-            await invoice.update_from_dict(update_data)
-            await invoice.save()
+            for key, value in update_data.items():
+                setattr(invoice, key, value)
+        user = await User.filter(id=updated_by).first()
+        apply_update_audit(invoice, user)
+        await invoice.save()
         return await self.get_invoice_by_uuid(tenant_id, code)
 
     async def delete_invoice(self, tenant_id: int, code: str):

@@ -149,6 +149,10 @@ class EquipmentResponse(EquipmentBase):
     uuid: str = Field(..., description="设备UUID（对外暴露，业务标识）")
     id: int = Field(..., description="设备ID（内部使用）")
     tenant_id: int = Field(..., description="组织ID")
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     deleted_at: Optional[datetime] = Field(None, description="删除时间（软删除）")
@@ -208,6 +212,11 @@ class EquipmentCalibrationResponse(BaseModel):
     attachments: Optional[List[dict]] = None
     remark: Optional[str] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
 
 
 class EquipmentCalibrationListResponse(BaseModel):

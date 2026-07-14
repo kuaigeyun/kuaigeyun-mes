@@ -84,7 +84,9 @@ export interface PurchaseInquiry {
   source_id?: number;
   source_code?: string;
   review_status?: string;
+  items_count?: number;
   total_quantity?: number;
+  total_amount?: number;
   notes?: string;
   items?: PurchaseInquiryItem[];
   vendors?: PurchaseInquiryVendor[];

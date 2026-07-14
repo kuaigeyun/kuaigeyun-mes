@@ -38,6 +38,7 @@ import {
 import type { CustomerCreate } from '../../../../master-data/types/supply-chain';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import {
   formatCustomerPoolDateTimeCell,
   resolveCustomerPoolListParams,
@@ -49,7 +50,7 @@ const CustomerPoolPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>(null);
-  const [scope, setScope] = useState<'pool' | 'mine' | 'all'>('all');
+  const [scope, setScope] = useState<'pool' | 'mine' | 'all'>('mine');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<CustomerPoolItem[]>([]);
   const lastListParamsRef = useRef<Record<string, string | number | undefined>>({});
@@ -271,7 +272,7 @@ const CustomerPoolPage: React.FC = () => {
   }, [message, t]);
 
   const columns: ProColumns<CustomerPoolItem>[] = useMemo(
-    () => [
+    () => alignProColumns<CustomerPoolItem>([
       {
         title: t('field.customer.code'),
         dataIndex: 'code',
@@ -316,18 +317,18 @@ const CustomerPoolPage: React.FC = () => {
         fieldProps: { allowClear: true, placeholder: t('field.customer.phone') },
       },
       {
-        title: t('field.customer.contactPerson'),
+        title: `${t('field.customer.contactPerson')} / ${t('field.customer.phone')}`,
         dataIndex: 'contact_person',
-        width: 120,
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        minWidth: 190,
         sorter: true,
         hideInSearch: true,
-      },
-      {
-        title: t('field.customer.phone'),
-        dataIndex: 'phone',
-        width: 140,
-        sorter: true,
-        hideInSearch: true,
+        render: (_, row) => (
+          <UniTableStackedPrimaryCell
+            primary={String(row.contact_person ?? '')}
+            secondary={String(row.phone ?? '')}
+          />
+        ),
       },
       {
         title: t('field.customer.salesman'),
@@ -441,13 +442,25 @@ const CustomerPoolPage: React.FC = () => {
         formItemProps: formDateRangeFormItemProps,
       },
       {
-        title: t('common.createdAt'),
-        dataIndex: 'created_at',
-        width: 132,
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 148,
         uniTableKeepWidth: true,
         sorter: true,
         hideInSearch: true,
-        render: (_, row) => formatCustomerPoolDateTimeCell(row.created_at),
+        render: (_, row) => {
+          const hasUpdatedAt = Boolean(row.updated_at);
+          const operator = hasUpdatedAt ? String(row.updated_by_name ?? '-') : String(row.created_by_name ?? '-');
+          const timestamp = hasUpdatedAt ? formatCustomerPoolDateTimeCell(row.updated_at) : formatCustomerPoolDateTimeCell(row.created_at);
+          return (
+            <UniTableStackedPrimaryCell
+              primary={operator}
+              secondary={timestamp}
+              secondaryCopyable={false}
+              primaryBold={false}
+            />
+          );
+        },
       },
       {
         title: t('common.createdAt'),
@@ -459,15 +472,6 @@ const CustomerPoolPage: React.FC = () => {
           placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
         },
         formItemProps: formDateRangeFormItemProps,
-      },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, row) => formatCustomerPoolDateTimeCell(row.updated_at),
       },
       {
         title: t('common.updatedAt'),
@@ -582,7 +586,7 @@ const CustomerPoolPage: React.FC = () => {
           return actions;
         },
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [canAssign, canClaim, canDeleteCustomer, canRecycle, canRelease, canUpdateCustomer, confirmReleaseCustomer, handleDeleteCustomer, navigate, poolStatusValueEnum, salesmanOptions, salesmanValueEnum, scope, t],
   );
 
@@ -771,9 +775,9 @@ const CustomerPoolPage: React.FC = () => {
               value={scope}
               onChange={(v) => handleScopeChange(v as 'pool' | 'mine' | 'all')}
               options={[
-                { label: t('app.kuaizhizao.customerPool.scopeAll'), value: 'all' },
                 { label: t('app.kuaizhizao.customerPool.scopePrivate'), value: 'mine' },
                 { label: t('app.kuaizhizao.customerPool.scopePublic'), value: 'pool' },
+                { label: t('app.kuaizhizao.customerPool.scopeAll'), value: 'all' },
               ]}
             />
           }

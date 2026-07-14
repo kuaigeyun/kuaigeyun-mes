@@ -147,6 +147,8 @@ class MaterialGroupResponse(MaterialGroupBase):
     )
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     
@@ -684,6 +686,8 @@ class MaterialResponse(MaterialBase):
     process_route_name: Optional[str] = Field(None, alias="processRouteName", description="工艺路线名称")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     
@@ -989,6 +993,10 @@ class BOMResponse(BOMBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, description="删除时间")
     
     class Config:
@@ -1382,6 +1390,10 @@ class MaterialCodeMappingResponse(MaterialCodeMappingBase):
     material_id: int = Field(..., description="物料ID（内部使用）")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, description="删除时间")
     
     model_config = ConfigDict(
@@ -1474,6 +1486,8 @@ class MaterialBatchResponse(MaterialBatchBase):
     material_model: Optional[str] = Field(None, alias="materialModel", description="物料型号")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     
     model_config = ConfigDict(
@@ -1535,6 +1549,8 @@ class MaterialSerialResponse(MaterialSerialBase):
     material_model: Optional[str] = Field(None, alias="materialModel", description="物料型号")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     
     model_config = ConfigDict(

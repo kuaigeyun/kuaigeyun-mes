@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from datetime import date, datetime
 from loguru import logger
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.kuaicaiwu.schemas.finance import (
     PaymentVoucherCreate, PaymentVoucherUpdate,
     PaymentVoucherResponse, PaymentVoucherListResponse,
@@ -84,24 +85,25 @@ async def create_payment(
             supplier_id = int(pull_preview.get("supplier_id") or supplier_id)
             supplier_name = str(pull_preview.get("supplier_name") or supplier_name or "")
 
-        payment = await Payment.create(
-            tenant_id=tenant_id,
-            payment_code=code,
-            supplier_id=supplier_id,
-            supplier_name=supplier_name,
-            total_amount=data.total_amount,
-            settled_amount=0,
-            unsettled_amount=data.total_amount,
-            payment_date=data.payment_date,
-            payment_method=data.payment_method,
-            bank_account=data.bank_account,
-            bank_account_id=data.bank_account_id,
-            settlement_type=data.settlement_type or "normal",
-            status="Draft",
-            notes=data.notes,
-            attachments=data.attachments,
-            created_by=current_user.id,
-        )
+        payment_payload = {
+            "tenant_id": tenant_id,
+            "payment_code": code,
+            "supplier_id": supplier_id,
+            "supplier_name": supplier_name,
+            "total_amount": data.total_amount,
+            "settled_amount": 0,
+            "unsettled_amount": data.total_amount,
+            "payment_date": data.payment_date,
+            "payment_method": data.payment_method,
+            "bank_account": data.bank_account,
+            "bank_account_id": data.bank_account_id,
+            "settlement_type": data.settlement_type or "normal",
+            "status": "Draft",
+            "notes": data.notes,
+            "attachments": data.attachments,
+        }
+        apply_create_audit(payment_payload, current_user)
+        payment = await Payment.create(**payment_payload)
         if pull_preview and data.source_type and data.source_id:
             await payment_pull_service.create_pull_relation(
                 tenant_id=tenant_id,
@@ -240,6 +242,7 @@ async def update_payment(
     if payment.status == "Confirmed":
         raise _http_exception_with_trace(400, "已确认的付款单不能修改", "/payments/{id}", tenant_id)
     update_data = data.model_dump(exclude_unset=True)
+    apply_update_audit(update_data, current_user)
     await Payment.filter(id=id).update(**update_data)
     return _serialize(await _get_or_404(tenant_id, id))
 
@@ -261,11 +264,15 @@ async def confirm_payment(
     if payment.bank_account_id:
         try:
             await BankAccountService().sync_from_confirmed_voucher(
-                tenant_id, voucher_type="payment", voucher_id=id
+                tenant_id, voucher_type="payment", voucher_id=id, operator_id=current_user.id
             )
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail={"message": str(exc)})
-    await Payment.filter(id=id).update(status="Confirmed")
+    from apps.common.audit_actor import apply_update_audit
+
+    confirm_payload: dict = {"status": "Confirmed"}
+    apply_update_audit(confirm_payload, current_user)
+    await Payment.filter(id=id).update(**confirm_payload)
     return _serialize(await _get_or_404(tenant_id, id))
 
 

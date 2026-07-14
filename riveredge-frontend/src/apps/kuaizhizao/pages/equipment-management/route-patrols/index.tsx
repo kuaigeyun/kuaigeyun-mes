@@ -21,6 +21,8 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { patrolRoutesApi, routePatrolsApi } from '../../../services/equipmentOps';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   buildAbnormalityValueEnum,
@@ -236,8 +238,7 @@ const RoutePatrolsPage: React.FC = () => {
   const routePatrolStatusValueEnum = useMemo(() => buildSpotCheckStatusValueEnum(t), [t]);
   const abnormalityValueEnum = useMemo(() => buildAbnormalityValueEnum(t, P), [t]);
 
-  const columns: ProColumns<RoutePatrol>[] = useMemo(
-    () => [
+  const columns: ProColumns<RoutePatrol>[] = useMemo(() => alignProColumns<RoutePatrol>([
       {
         title: t(`${P}.col.patrolDate`),
         dataIndex: 'patrol_date_range',
@@ -322,13 +323,10 @@ const RoutePatrolsPage: React.FC = () => {
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
+        hideInTable: true,
         hideInSearch: true,
-        sorter: true,
-        defaultSortOrder: 'descend',
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
+      ...buildDocumentAuditColumns<RoutePatrol>(t),
       {
         title: t('common.actions'),
         key: 'action',
@@ -384,7 +382,7 @@ const RoutePatrolsPage: React.FC = () => {
           </>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, perms, routePatrolStatusValueEnum, abnormalityValueEnum],
   );
 

@@ -367,6 +367,13 @@ const ShiftRostersPage: React.FC = () => {
                 : t('app.kuaizhizao.performance.common.rosterStatus.draft')}
             </Tag>
           ) : null}
+          {roster ? (
+            <Typography.Text type="secondary">
+              {roster.updatedByName || '-'}
+              {' · '}
+              {roster.updatedAt ? formatDateTime(roster.updatedAt, 'YYYY-MM-DD HH:mm') : '-'}
+            </Typography.Text>
+          ) : null}
           <Button type="primary" loading={saving} disabled={!scopeReady || roster?.status === 'published'} onClick={handleSave}>
             {t('app.kuaizhizao.performance.common.actions.saveDraft')}
           </Button>

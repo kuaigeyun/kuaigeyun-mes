@@ -669,6 +669,8 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 inspection_code=code,
                 created_by=created_by,
                 created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
                 **create_data
             )
             return IncomingInspectionResponse.model_validate(inspection)
@@ -778,8 +780,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             if not inspection_model:
                 raise NotFoundError(f"来料检验单不存在: {inspection_id}")
             assert_quality_inspection_capability(inspection_model, "update")
+            user_info = await self.get_user_info(updated_by)
             update_data = inspection_data.model_dump(exclude_unset=True, exclude={'updated_by'})
             update_data['updated_by'] = updated_by
+            update_data['updated_by_name'] = user_info['name']
 
             await IncomingInspection.filter(tenant_id=tenant_id, id=inspection_id).update(**update_data)
             return await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
@@ -823,6 +827,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 "inspector_name": inspector_name,
                 "inspection_time": datetime.now(),
                 "updated_by": inspected_by,
+                "updated_by_name": inspector_name,
                 **conduct_payload,
             }
             conduct_update.update(
@@ -1100,7 +1105,8 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 status=status,
-                updated_by=approved_by
+                updated_by=approved_by,
+                updated_by_name=approver_name,
             )
 
             updated_inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
@@ -1168,6 +1174,11 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 **template,
             }
             create_kwargs.update(initial_review_fields)
+            if created_by:
+                creator_name = await self.get_user_name(created_by)
+                create_kwargs["created_by_name"] = creator_name
+                create_kwargs["updated_by"] = created_by
+                create_kwargs["updated_by_name"] = creator_name
             inspection = await IncomingInspection.create(**create_kwargs)
             inspections.append(IncomingInspectionResponse.model_validate(inspection))
 
@@ -1414,6 +1425,11 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 **template,
             }
             create_kwargs.update(initial_review_fields)
+            if created_by:
+                creator_name = await self.get_user_name(created_by)
+                create_kwargs["created_by_name"] = creator_name
+                create_kwargs["updated_by"] = created_by
+                create_kwargs["updated_by_name"] = creator_name
             inspection = await IncomingInspection.create(**create_kwargs)
             inspections.append(IncomingInspectionResponse.model_validate(inspection))
 
@@ -2202,6 +2218,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     status="待检验" if qualified_quantity == 0 and unqualified_quantity == 0 else "已检验",
                     notes=notes,
                     created_by=created_by,
+                    created_by_name=(await self.get_user_name(created_by)) if created_by else None,
+                    updated_by=created_by,
+                    updated_by_name=(await self.get_user_name(created_by)) if created_by else None,
                     **initial_review_fields,
                 )
                 success_count += 1
@@ -2327,6 +2346,8 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 inspection_code=code,
                 created_by=created_by,
                 created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
                 **create_data
             )
             return ProcessInspectionResponse.model_validate(inspection)
@@ -2438,6 +2459,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 "inspector_name": inspector_name,
                 "inspection_time": datetime.now(),
                 "updated_by": inspected_by,
+                "updated_by_name": inspector_name,
                 **conduct_payload,
             }
             conduct_update.update(
@@ -2520,7 +2542,8 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 status=status,
-                updated_by=approved_by
+                updated_by=approved_by,
+                updated_by_name=approver_name,
             )
 
             if not rejection_reason and inspection.work_order_id:
@@ -3153,6 +3176,9 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                     status="待检验" if qualified_quantity == 0 and unqualified_quantity == 0 else "已检验",
                     notes=notes,
                     created_by=created_by,
+                    created_by_name=(await self.get_user_name(created_by)) if created_by else None,
+                    updated_by=created_by,
+                    updated_by_name=(await self.get_user_name(created_by)) if created_by else None,
                     **initial_review_fields,
                 )
                 success_count += 1
@@ -3369,6 +3395,8 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 inspection_code=code,
                 created_by=created_by,
                 created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
                 **create_data
             )
             return FinishedGoodsInspectionResponse.model_validate(inspection)
@@ -3494,6 +3522,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 "inspector_name": inspector_name,
                 "inspection_time": datetime.now(),
                 "updated_by": inspected_by,
+                "updated_by_name": inspector_name,
                 **conduct_payload,
             }
             conduct_update.update(
@@ -3561,7 +3590,8 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 status=status,
-                updated_by=approved_by
+                updated_by=approved_by,
+                updated_by_name=approver_name,
             )
 
             return await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
@@ -4327,6 +4357,9 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 quality_status="待判定",
                 status="待检验",
                 created_by=created_by,
+                created_by_name=(await self.get_user_name(created_by)) if created_by else None,
+                updated_by=created_by,
+                updated_by_name=(await self.get_user_name(created_by)) if created_by else None,
                 **template,
                 **initial_review_fields,
             )
@@ -4468,6 +4501,9 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     status="待检验" if qualified_quantity == 0 and unqualified_quantity == 0 else "已检验",
                     notes=notes,
                     created_by=created_by,
+                    created_by_name=(await self.get_user_name(created_by)) if created_by else None,
+                    updated_by=created_by,
+                    updated_by_name=(await self.get_user_name(created_by)) if created_by else None,
                     **initial_review_fields,
                 )
                 success_count += 1

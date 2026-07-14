@@ -74,7 +74,9 @@ from apps.kuaizhizao.schemas.mold_ops import (
 )
 from apps.kuaizhizao.services.mold_status_service import MoldStatusService
 from core.services.business.code_generation_service import CodeGenerationService
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 T = TypeVar("T")
 
@@ -196,7 +198,7 @@ class _MasterCRUDMixin:
 class MoldMaintenanceItemService(_MasterCRUDMixin):
     model = MoldMaintenanceItem
 
-    async def create(self, tenant_id: int, data: MoldMaintenanceItemCreate) -> MoldMaintenanceItem:
+    async def create(self, tenant_id: int, data: MoldMaintenanceItemCreate, current_user: Optional[User] = None) -> MoldMaintenanceItem:
         dup = await MoldMaintenanceItem.filter(
             tenant_id=tenant_id,
             code=data.code,
@@ -204,13 +206,16 @@ class MoldMaintenanceItemService(_MasterCRUDMixin):
         ).first()
         if dup:
             raise ValidationError(f"保养项编码已存在: {data.code}")
-        return await MoldMaintenanceItem.create(tenant_id=tenant_id, **data.model_dump())
+        payload = data.model_dump()
+        apply_create_audit(payload, current_user)
+        return await MoldMaintenanceItem.create(tenant_id=tenant_id, **payload)
 
     async def update(
         self,
         tenant_id: int,
         row_id: int,
         data: MoldMaintenanceItemUpdate,
+        current_user: Optional[User] = None,
     ) -> MoldMaintenanceItem:
         row = await self._get(tenant_id, row_id)
         update_data = data.model_dump(exclude_unset=True)
@@ -224,6 +229,7 @@ class MoldMaintenanceItemService(_MasterCRUDMixin):
                 raise ValidationError(f"保养项编码已存在: {update_data['code']}")
         for k, v in update_data.items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -262,7 +268,7 @@ class MoldMaintenanceSchemeService(_MasterCRUDMixin):
                 standard_hours=line.standard_hours or snap["standard_hours"],
             )
 
-    async def create(self, tenant_id: int, data: MoldMaintenanceSchemeCreate) -> MoldMaintenanceScheme:
+    async def create(self, tenant_id: int, data: MoldMaintenanceSchemeCreate, current_user: Optional[User] = None) -> MoldMaintenanceScheme:
         async with in_transaction():
             dup = await MoldMaintenanceScheme.filter(
                 tenant_id=tenant_id,
@@ -271,7 +277,7 @@ class MoldMaintenanceSchemeService(_MasterCRUDMixin):
             ).first()
             if dup:
                 raise ValidationError(f"保养方案编码已存在: {data.code}")
-            scheme = await MoldMaintenanceScheme.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 code=data.code,
                 name=data.name,
@@ -281,6 +287,8 @@ class MoldMaintenanceSchemeService(_MasterCRUDMixin):
                 trigger_interval_usage=data.trigger_interval_usage,
                 is_active=data.is_active,
             )
+            apply_create_audit(payload, current_user)
+            scheme = await MoldMaintenanceScheme.create(**payload)
             if data.lines:
                 await self._replace_lines(tenant_id, scheme.id, data.lines)
             return scheme
@@ -290,6 +298,7 @@ class MoldMaintenanceSchemeService(_MasterCRUDMixin):
         tenant_id: int,
         row_id: int,
         data: MoldMaintenanceSchemeUpdate,
+        current_user: Optional[User] = None,
     ) -> MoldMaintenanceScheme:
         async with in_transaction():
             scheme = await self._get(tenant_id, row_id)
@@ -304,6 +313,7 @@ class MoldMaintenanceSchemeService(_MasterCRUDMixin):
                     raise ValidationError(f"保养方案编码已存在: {update_data['code']}")
             for k, v in update_data.items():
                 setattr(scheme, k, v)
+            apply_update_audit(scheme, current_user)
             await scheme.save()
             if data.lines is not None:
                 await self._replace_lines(tenant_id, scheme.id, data.lines)
@@ -322,7 +332,7 @@ class MoldMaintenanceSchemeService(_MasterCRUDMixin):
 class MoldRepairItemService(_MasterCRUDMixin):
     model = MoldRepairItem
 
-    async def create(self, tenant_id: int, data: MoldRepairItemCreate) -> MoldRepairItem:
+    async def create(self, tenant_id: int, data: MoldRepairItemCreate, current_user: Optional[User] = None) -> MoldRepairItem:
         dup = await MoldRepairItem.filter(
             tenant_id=tenant_id,
             code=data.code,
@@ -330,13 +340,16 @@ class MoldRepairItemService(_MasterCRUDMixin):
         ).first()
         if dup:
             raise ValidationError(f"维修项编码已存在: {data.code}")
-        return await MoldRepairItem.create(tenant_id=tenant_id, **data.model_dump())
+        payload = data.model_dump()
+        apply_create_audit(payload, current_user)
+        return await MoldRepairItem.create(tenant_id=tenant_id, **payload)
 
     async def update(
         self,
         tenant_id: int,
         row_id: int,
         data: MoldRepairItemUpdate,
+        current_user: Optional[User] = None,
     ) -> MoldRepairItem:
         row = await self._get(tenant_id, row_id)
         update_data = data.model_dump(exclude_unset=True)
@@ -350,6 +363,7 @@ class MoldRepairItemService(_MasterCRUDMixin):
                 raise ValidationError(f"维修项编码已存在: {update_data['code']}")
         for k, v in update_data.items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -388,7 +402,7 @@ class MoldRepairSchemeService(_MasterCRUDMixin):
                 standard_hours=line.standard_hours or snap["standard_hours"],
             )
 
-    async def create(self, tenant_id: int, data: MoldRepairSchemeCreate) -> MoldRepairScheme:
+    async def create(self, tenant_id: int, data: MoldRepairSchemeCreate, current_user: Optional[User] = None) -> MoldRepairScheme:
         async with in_transaction():
             dup = await MoldRepairScheme.filter(
                 tenant_id=tenant_id,
@@ -397,13 +411,15 @@ class MoldRepairSchemeService(_MasterCRUDMixin):
             ).first()
             if dup:
                 raise ValidationError(f"维修方案编码已存在: {data.code}")
-            scheme = await MoldRepairScheme.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 code=data.code,
                 name=data.name,
                 description=data.description,
                 is_active=data.is_active,
             )
+            apply_create_audit(payload, current_user)
+            scheme = await MoldRepairScheme.create(**payload)
             if data.lines:
                 await self._replace_lines(tenant_id, scheme.id, data.lines)
             return scheme
@@ -413,6 +429,7 @@ class MoldRepairSchemeService(_MasterCRUDMixin):
         tenant_id: int,
         row_id: int,
         data: MoldRepairSchemeUpdate,
+        current_user: Optional[User] = None,
     ) -> MoldRepairScheme:
         async with in_transaction():
             scheme = await self._get(tenant_id, row_id)
@@ -427,6 +444,7 @@ class MoldRepairSchemeService(_MasterCRUDMixin):
                     raise ValidationError(f"维修方案编码已存在: {update_data['code']}")
             for k, v in update_data.items():
                 setattr(scheme, k, v)
+            apply_update_audit(scheme, current_user)
             await scheme.save()
             if data.lines is not None:
                 await self._replace_lines(tenant_id, scheme.id, data.lines)
@@ -458,20 +476,23 @@ class MoldSchemeBindingService:
             qs = qs.filter(scheme_type=scheme_type)
         return await qs.order_by("id").all()
 
-    async def create(self, tenant_id: int, data: MoldSchemeBindingCreate) -> MoldSchemeBinding:
+    async def create(self, tenant_id: int, data: MoldSchemeBindingCreate, current_user: Optional[User] = None) -> MoldSchemeBinding:
         mold = await _get_mold_or_raise(tenant_id, data.mold_id)
-        return await MoldSchemeBinding.create(
+        payload = dict(
             tenant_id=tenant_id,
             mold_id=mold.id,
             mold_uuid=mold.uuid,
             scheme_id=data.scheme_id,
             scheme_type=data.scheme_type,
         )
+        apply_create_audit(payload, current_user)
+        return await MoldSchemeBinding.create(**payload)
 
     async def bulk_replace(
         self,
         tenant_id: int,
         data: MoldSchemeBindingBulkReplace,
+        current_user: Optional[User] = None,
     ) -> List[MoldSchemeBinding]:
         mold = await _get_mold_or_raise(tenant_id, data.mold_id)
         async with in_transaction():
@@ -483,13 +504,15 @@ class MoldSchemeBindingService:
             ).update(deleted_at=datetime.now())
             bindings = []
             for scheme_id in data.scheme_ids:
-                binding = await MoldSchemeBinding.create(
+                payload = dict(
                     tenant_id=tenant_id,
                     mold_id=mold.id,
                     mold_uuid=mold.uuid,
                     scheme_id=scheme_id,
                     scheme_type=data.scheme_type,
                 )
+                apply_create_audit(payload, current_user)
+                binding = await MoldSchemeBinding.create(**payload)
                 bindings.append(binding)
             return bindings
 
@@ -512,12 +535,13 @@ class MoldTrialService:
         data: MoldTrialCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> MoldTrial:
         mold = await _get_mold_or_raise(tenant_id, data.mold_id)
         _reject_scrapped_mold(mold)
         document_no = await _generate_code(tenant_id, "mold_trial_code", "MT")
         async with in_transaction():
-            trial = await MoldTrial.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 document_no=document_no,
                 mold_id=mold.id,
@@ -531,6 +555,8 @@ class MoldTrialService:
                 remark=data.remark,
                 status="进行中",
             )
+            apply_create_audit(payload, current_user)
+            trial = await MoldTrial.create(**payload)
             await MoldStatusService.resolve(tenant_id, mold.id)
             return trial
 
@@ -596,11 +622,13 @@ class MoldTrialService:
         tenant_id: int,
         row_id: int,
         data: MoldTrialUpdate,
+        current_user: Optional[User] = None,
     ) -> MoldTrial:
         async with in_transaction():
             row = await self.get(tenant_id, row_id)
             for k, v in data.model_dump(exclude_unset=True).items():
                 setattr(row, k, v)
+            apply_update_audit(row, current_user)
             await row.save()
             if row.status != "进行中":
                 await MoldStatusService.resolve(tenant_id, row.mold_id)
@@ -630,6 +658,7 @@ class MoldBorrowService:
         data: MoldBorrowCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> MoldBorrow:
         mold = await _get_mold_or_raise(tenant_id, data.mold_id)
         _reject_scrapped_mold(mold)
@@ -640,7 +669,7 @@ class MoldBorrowService:
 
         document_no = await _generate_code(tenant_id, "mold_borrow_code", "MB")
         async with in_transaction():
-            borrow = await MoldBorrow.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 document_no=document_no,
                 mold_id=mold.id,
@@ -658,6 +687,8 @@ class MoldBorrowService:
                 remark=data.remark,
                 status=OUTSTANDING_BORROW_STATUS,
             )
+            apply_create_audit(payload, current_user)
+            borrow = await MoldBorrow.create(**payload)
             await MoldStatusService.resolve(tenant_id, mold.id)
             return borrow
 
@@ -738,12 +769,14 @@ class MoldBorrowService:
         tenant_id: int,
         row_id: int,
         data: MoldBorrowUpdate,
+        current_user: Optional[User] = None,
     ) -> MoldBorrow:
         row = await self.get(tenant_id, row_id)
         if row.status != OUTSTANDING_BORROW_STATUS:
             raise ValidationError("仅领用中状态可编辑")
         for k, v in data.model_dump(exclude_unset=True).items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -765,6 +798,7 @@ class MoldReturnService:
         data: MoldReturnCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> MoldReturn:
         mold = await _get_mold_or_raise(tenant_id, data.mold_id)
         _reject_scrapped_mold(mold)
@@ -799,7 +833,7 @@ class MoldReturnService:
 
         document_no = await _generate_code(tenant_id, "mold_return_code", "MR")
         async with in_transaction():
-            ret = await MoldReturn.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 document_no=document_no,
                 mold_id=mold.id,
@@ -818,6 +852,8 @@ class MoldReturnService:
                 remark=data.remark,
                 status="已完成",
             )
+            apply_create_audit(payload, current_user)
+            ret = await MoldReturn.create(**payload)
             mold.total_usage_count = (mold.total_usage_count or 0) + data.usage_count
             await mold.save()
             if borrow:
@@ -885,6 +921,7 @@ class MoldReturnService:
         tenant_id: int,
         row_id: int,
         data: MoldReturnUpdate,
+        current_user: Optional[User] = None,
     ) -> MoldReturn:
         row = await self.get(tenant_id, row_id)
         update_data = data.model_dump(exclude_unset=True)
@@ -897,6 +934,7 @@ class MoldReturnService:
             await mold.save()
         for k, v in update_data.items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -1005,13 +1043,14 @@ class MoldMaintenanceService:
         data: MoldMaintenanceCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> MoldMaintenance:
         mold = await _get_mold_or_raise(tenant_id, data.mold_id)
         _reject_scrapped_mold(mold)
         scheme_id = await self._resolve_scheme_id(tenant_id, mold, data.scheme_id)
         document_no = await _generate_code(tenant_id, "mold_maintenance_code", "MM")
         async with in_transaction():
-            header = await MoldMaintenance.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 document_no=document_no,
                 mold_id=mold.id,
@@ -1026,6 +1065,8 @@ class MoldMaintenanceService:
                 remark=data.remark,
                 status="草稿",
             )
+            apply_create_audit(payload, current_user)
+            header = await MoldMaintenance.create(**payload)
             if data.lines:
                 await self._create_lines(tenant_id, header.id, data.lines)
             else:
@@ -1109,6 +1150,7 @@ class MoldMaintenanceService:
         tenant_id: int,
         row_id: int,
         data: MoldMaintenanceUpdate,
+        current_user: Optional[User] = None,
     ) -> MoldMaintenance:
         async with in_transaction():
             header = await self.get(tenant_id, row_id)
@@ -1117,6 +1159,7 @@ class MoldMaintenanceService:
             update_data = data.model_dump(exclude_unset=True, exclude={"lines"})
             for k, v in update_data.items():
                 setattr(header, k, v)
+            apply_update_audit(header, current_user)
             await header.save()
             if data.lines is not None:
                 await MoldMaintenanceLine.filter(
@@ -1127,11 +1170,17 @@ class MoldMaintenanceService:
                 await self._create_lines(tenant_id, header.id, data.lines)
             return header
 
-    async def submit(self, tenant_id: int, row_id: int) -> MoldMaintenance:
+    async def submit(
+        self,
+        tenant_id: int,
+        row_id: int,
+        current_user: Optional[User] = None,
+    ) -> MoldMaintenance:
         row = await self.get(tenant_id, row_id)
         if row.status != "草稿":
             raise ValidationError("仅草稿状态可提交")
         row.status = "已提交"
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -1141,6 +1190,7 @@ class MoldMaintenanceService:
         row_id: int,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> MoldMaintenance:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1152,6 +1202,7 @@ class MoldMaintenanceService:
             row.approved_at = datetime.now()
             if not row.maintenance_date:
                 row.maintenance_date = date.today()
+            apply_update_audit(row, current_user)
             await row.save()
             await MoldStatusService.resolve(tenant_id, row.mold_id)
         return row
@@ -1163,6 +1214,7 @@ class MoldMaintenanceService:
         reject_reason: str,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> MoldMaintenance:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1172,6 +1224,7 @@ class MoldMaintenanceService:
         row.approver_id = approver_id
         row.approver_name = approver_name
         row.approved_at = datetime.now()
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -1288,13 +1341,14 @@ class MoldRepairService:
         data: MoldRepairCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> MoldRepair:
         mold = await _get_mold_or_raise(tenant_id, data.mold_id)
         _reject_scrapped_mold(mold)
         scheme_id = await self._resolve_scheme_id(tenant_id, mold, data.scheme_id)
         document_no = await _generate_code(tenant_id, "mold_repair_code", "MRP")
         async with in_transaction():
-            header = await MoldRepair.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 document_no=document_no,
                 mold_id=mold.id,
@@ -1310,6 +1364,8 @@ class MoldRepairService:
                 remark=data.remark,
                 status="草稿",
             )
+            apply_create_audit(payload, current_user)
+            header = await MoldRepair.create(**payload)
             if data.lines:
                 await self._create_lines(tenant_id, header.id, data.lines)
             else:
@@ -1393,6 +1449,7 @@ class MoldRepairService:
         tenant_id: int,
         row_id: int,
         data: MoldRepairUpdate,
+        current_user: Optional[User] = None,
     ) -> MoldRepair:
         async with in_transaction():
             header = await self.get(tenant_id, row_id)
@@ -1401,6 +1458,7 @@ class MoldRepairService:
             update_data = data.model_dump(exclude_unset=True, exclude={"lines"})
             for k, v in update_data.items():
                 setattr(header, k, v)
+            apply_update_audit(header, current_user)
             await header.save()
             if data.lines is not None:
                 await MoldRepairLine.filter(
@@ -1411,11 +1469,17 @@ class MoldRepairService:
                 await self._create_lines(tenant_id, header.id, data.lines)
             return header
 
-    async def submit(self, tenant_id: int, row_id: int) -> MoldRepair:
+    async def submit(
+        self,
+        tenant_id: int,
+        row_id: int,
+        current_user: Optional[User] = None,
+    ) -> MoldRepair:
         row = await self.get(tenant_id, row_id)
         if row.status != "草稿":
             raise ValidationError("仅草稿状态可提交")
         row.status = "已提交"
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -1425,6 +1489,7 @@ class MoldRepairService:
         row_id: int,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> MoldRepair:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1436,6 +1501,7 @@ class MoldRepairService:
             row.approved_at = datetime.now()
             if not row.repair_date:
                 row.repair_date = date.today()
+            apply_update_audit(row, current_user)
             await row.save()
             await MoldStatusService.resolve(tenant_id, row.mold_id)
         return row
@@ -1447,6 +1513,7 @@ class MoldRepairService:
         reject_reason: str,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> MoldRepair:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1456,6 +1523,7 @@ class MoldRepairService:
         row.approver_id = approver_id
         row.approver_name = approver_name
         row.approved_at = datetime.now()
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -1491,12 +1559,13 @@ class MoldScrapApplicationService:
         data: MoldScrapApplicationCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> MoldScrapApplication:
         mold = await _get_mold_or_raise(tenant_id, data.mold_id)
         if mold.status == MOLD_STATUS_SCRAPPED:
             raise ValidationError("模具已报废，不能重复申请")
         application_no = await _generate_code(tenant_id, "mold_scrap_application_code", "MSA")
-        return await MoldScrapApplication.create(
+        payload = dict(
             tenant_id=tenant_id,
             application_no=application_no,
             mold_id=mold.id,
@@ -1511,6 +1580,8 @@ class MoldScrapApplicationService:
             attachments=data.attachments,
             status="草稿",
         )
+        apply_create_audit(payload, current_user)
+        return await MoldScrapApplication.create(**payload)
 
     async def get(self, tenant_id: int, row_id: int) -> MoldScrapApplication:
         row = await MoldScrapApplication.filter(
@@ -1568,20 +1639,28 @@ class MoldScrapApplicationService:
         tenant_id: int,
         row_id: int,
         data: MoldScrapApplicationUpdate,
+        current_user: Optional[User] = None,
     ) -> MoldScrapApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "草稿":
             raise ValidationError("仅草稿状态可编辑")
         for k, v in data.model_dump(exclude_unset=True).items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
-    async def submit(self, tenant_id: int, row_id: int) -> MoldScrapApplication:
+    async def submit(
+        self,
+        tenant_id: int,
+        row_id: int,
+        current_user: Optional[User] = None,
+    ) -> MoldScrapApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "草稿":
             raise ValidationError("仅草稿状态可提交")
         row.status = "已提交"
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -1591,6 +1670,7 @@ class MoldScrapApplicationService:
         row_id: int,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> MoldScrapApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1603,6 +1683,7 @@ class MoldScrapApplicationService:
             row.approved_at = datetime.now()
             if not row.scrap_date:
                 row.scrap_date = date.today()
+            apply_update_audit(row, current_user)
             await row.save()
             mold.status = MOLD_STATUS_SCRAPPED
             await mold.save()
@@ -1615,6 +1696,7 @@ class MoldScrapApplicationService:
         reject_reason: str,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> MoldScrapApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1624,6 +1706,7 @@ class MoldScrapApplicationService:
         row.approver_id = approver_id
         row.approver_name = approver_name
         row.approved_at = datetime.now()
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 

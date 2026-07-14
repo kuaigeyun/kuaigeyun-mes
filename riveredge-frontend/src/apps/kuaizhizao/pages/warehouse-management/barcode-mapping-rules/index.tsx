@@ -23,6 +23,9 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   normalizeWarehouseListResponse,
   resolveBarcodeMappingRuleListParams,
@@ -45,6 +48,9 @@ interface BarcodeMappingRule {
   is_enabled?: boolean;
   priority?: number;
   created_at?: string;
+  updated_at?: string;
+  created_by_name?: string;
+  updated_by_name?: string;
 }
 
 /**
@@ -219,12 +225,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
       width: 80,
       align: 'right',
     },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colCreatedAt'),
-      dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 160,
-    },
+    ...buildDocumentAuditColumns<BarcodeMappingRule>(t),
     {
       title: t('app.kuaizhizao.warehouseCommon.colActions'),
       width: 180,
@@ -283,7 +284,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.barcodeMapping.headerTitle')}
         actionRef={actionRef}
         rowKey="id"
-        columns={columns}
+        columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.barcode-mapping-rules"
         showCreateButton={true}
         createButtonText={createButtonLabel}

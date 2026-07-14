@@ -78,6 +78,10 @@ class PurchaseOrderResponse(PurchaseOrderBase):
     review_time: Optional[datetime] = Field(None, description="审核时间")
     review_status: str = Field(default=ReviewStatus.PENDING.value, max_length=20, description="审核状态")
     review_remarks: Optional[str] = Field(None, description="审核备注")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     items: List["PurchaseOrderItemResponse"] = Field(default_factory=list, description="订单明细")
@@ -91,6 +95,10 @@ class PurchaseOrderResponse(PurchaseOrderBase):
 class PurchaseOrderListResponse(PurchaseOrderResponse):
     """采购订单列表响应Schema"""
     items_count: Optional[int] = Field(None, description="订单明细条数（列表用）")
+    downstream_push_progress: Optional[float] = Field(None, description="下推进度 0-100（列表用）")
+    received_total: Optional[Decimal] = Field(None, description="累计收货数量（列表用）")
+    outstanding_total: Optional[Decimal] = Field(None, description="待收货数量（列表用）")
+    receipt_progress: Optional[float] = Field(None, description="收货进度 0-100（列表用）")
 
 
 # === 采购订单明细 ===

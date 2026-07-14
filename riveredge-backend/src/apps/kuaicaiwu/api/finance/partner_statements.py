@@ -191,10 +191,11 @@ async def dispute_partner_statement(
     id: int,
     body: PartnerStatementDisputeRequest,
     _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:update")),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        obj = await service.dispute_statement(tenant_id, id, body.reason)
+        obj = await service.dispute_statement(tenant_id, id, body.reason, user_id=current_user.id)
         return _to_response(obj)
     except (NotFoundError, BusinessLogicError) as e:
         code = 404 if isinstance(e, NotFoundError) else 400

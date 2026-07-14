@@ -56,7 +56,7 @@ import {
 import dayjs from 'dayjs'
 import { UniTable } from '../../../../../components/uni-table'
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch'
-import { MaterialStackedCell } from '../../../../../components/uni-table/stackedPrimaryColumn'
+import { MaterialStackedCell, UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn'
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
 import {
   MultiTabListPageTemplate,
@@ -126,7 +126,11 @@ import ComputationHistoryTab from './ComputationHistoryTab'
 import { MrpParametersCustomerGuideTrigger } from './MrpParametersCustomerGuide'
 import { buildDemandPushPreviewSummary } from './pushPreviewSummary'
 import { renderPushPreviewTargetBadge } from './pushPreviewTargetBadge'
-import { formatDateBySiteSetting, formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format'
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns'
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar'
+import { resolveDownstreamPushPercent } from '../../sales-management/shared/pushProgress'
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment'
+import {formatDateBySiteSetting, formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format'
 import { extractProTableSort } from '../../../../../utils/tableQueryKey'
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate'
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select'
@@ -1827,7 +1831,7 @@ const DemandComputationPage: React.FC = () => {
    * 表格列定义
    */
   const columns: ProColumns<DemandComputation>[] = useMemo(
-    () => [
+    () => alignProColumns<DemandComputation>([
     {
       title: t('app.kuaizhizao.demandComputation.colStartTime'),
       dataIndex: 'computation_start_time_range',
@@ -1945,33 +1949,43 @@ const DemandComputationPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.demandComputation.colStartTime'),
+      key: 'computation_start_end_time_stacked',
       dataIndex: 'computation_start_time',
-      width: 132,
+      width: 188,
       uniTableKeepWidth: true,
       sorter: true,
       defaultSortOrder: 'descend',
       hideInSearch: true,
-      render: (_, record) => formatDateTimeBySiteSetting(record.computation_start_time),
+      render: (_, record) => (
+        <UniTableStackedPrimaryCell
+          primary={formatDateTimeBySiteSetting(record.computation_start_time)}
+          secondary={formatDateTimeBySiteSetting(record.computation_end_time)}
+          secondaryCopyable={false}
+          uniformText
+          primaryBadge={t('common.start')}
+          secondaryBadge={t('common.end')}
+        />
+      ),
     },
     {
-      title: t('app.kuaizhizao.demandComputation.colEndTime'),
-      dataIndex: 'computation_end_time',
-      width: 132,
+      title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+      dataIndex: 'downstream_push_progress',
+      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
       uniTableKeepWidth: true,
-      sorter: true,
       hideInSearch: true,
-      render: (_, record) => formatDateTimeBySiteSetting(record.computation_end_time),
+      render: (_, record) => {
+        const percent = resolveDownstreamPushPercent(record.downstream_push_progress)
+        return (
+          <DocumentPushProgressBar
+            percent={percent}
+            tooltip={t('app.kuaizhizao.salesManagement.pushProgress.percentOnly', {
+              percent: Math.round(percent),
+            })}
+          />
+        )
+      },
     },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      hideInSearch: true,
-      render: (_, record) =>
-        record.created_at ? formatDateTime(record.created_at, 'YYYY-MM-DD HH:mm') : '-',
-    },
+    ...buildDocumentAuditColumns<DemandComputation>(t),
     {
       title: t('app.kuaizhizao.demandComputation.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
@@ -2037,7 +2051,7 @@ const DemandComputationPage: React.FC = () => {
         return renderDemandComputationRowActions(parts, `dc-${record.id ?? 'row'}`)
       },
     },
-  ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [computationPerms.canAction, computationPerms.canDelete, computationPerms.canUpdate, handleDelete, handleDetail, handleExecute, handleRecompute, messageApi, demandComputationLifecycleValueEnum, t],
   )
 
@@ -2573,9 +2587,9 @@ const DemandComputationPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.quotation.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
                   { title: t('app.kuaizhizao.quotation.colMaterialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
-                  { title: t('app.kuaizhizao.demandComputation.colRequiredQty'), dataIndex: 'quantity', width: 88, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 88, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 88, align: 'right' },
+                  { title: t('app.kuaizhizao.demandComputation.colRequiredQty'), dataIndex: 'quantity', width: 88, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 88, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 88, align: 'right' , render: formatQuantity },
                   ...(sourcePullPreviewKind === 'sales_order'
                     ? [
                         {
@@ -3496,7 +3510,7 @@ const DemandComputationPage: React.FC = () => {
                                 />
                               ),
                             },
-                            { title: t('app.kuaizhizao.demandComputation.colRequiredQty'), dataIndex: 'required_quantity', width: 96, align: 'right' },
+                            { title: t('app.kuaizhizao.demandComputation.colRequiredQty'), dataIndex: 'required_quantity', width: 96, align: 'right' , render: formatQuantity },
                             {
                               title: t('app.kuaizhizao.demandComputation.colAvailableInventory'),
                               dataIndex: 'available_inventory',

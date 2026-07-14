@@ -58,7 +58,7 @@
     "借料单": "Material Borrow",
     "还料单": "Material Return",
     "成品入库": "Finished Goods Inbound",
-    "半成品入库": "Semi-finished Inbound",
+    "半成品入库": "Semi-finished Goods Inbound",
     "来料检验": "Incoming Inspection",
     "过程检验": "Process Inspection",
     "成品检验": "Finished Goods Inspection",
@@ -99,7 +99,14 @@
     "核销": "Settlement",
     "往来对账": "Account Reconciliation",
     "研发项目": "R&D Projects",
-    "交付项目": "Delivery Projects"
+    "交付项目": "Delivery Projects",
+    "采购变更单": "Purchase Order Changes",
+    "销售变更单": "Sales Order Changes",
+    "出货检验": "OQC Inspection",
+    "8D报告": "8D Reports",
+    "产线叫料": "Material Calls",
+    "不合格品记录": "Nonconforming Records",
+    "报废记录": "Scrap Records"
   },
   "codeFieldLabel": {
     "厂区编码": "Plant code",
@@ -152,7 +159,7 @@
     "借料单编码": "Borrow code",
     "还料单编码": "Return code",
     "成品入库单编码": "Finished goods inbound code",
-    "半成品入库单编码": "Semi-finished inbound code",
+    "半成品入库单编码": "Semi-finished receipt code",
     "来料检验单编码": "Incoming inspection code",
     "过程检验单编码": "Process inspection code",
     "成品检验单编码": "Finished goods inspection code",
@@ -192,7 +199,14 @@
     "销售发票编码": "Sales invoice code",
     "核销单编码": "Settlement code",
     "对账单编码": "Reconciliation code",
-    "项目编码": "Project code"
+    "项目编码": "Project code",
+    "采购变更单编码": "Purchase change code",
+    "销售变更单编码": "Sales change code",
+    "出货检验单编码": "OQC inspection code",
+    "8D报告编码": "8D report code",
+    "叫料单编码": "Material call code",
+    "不合格品记录编码": "Nonconforming record code",
+    "报废单编码": "Scrap record code"
   },
   "pages": {
     "master-data-factory-plant": {
@@ -396,8 +410,8 @@
       "codeFieldLabel": "Finished goods inbound code"
     },
     "kuaizhizao-warehouse-semi-finished-inbound": {
-      "pageName": "Semi-finished Inbound",
-      "codeFieldLabel": "Semi-finished inbound code"
+      "pageName": "Semi-finished Goods Inbound",
+      "codeFieldLabel": "Semi-finished receipt code"
     },
     "kuaizhizao-quality-incoming-inspection": {
       "pageName": "Incoming Inspection",
@@ -558,6 +572,34 @@
     "kuaiplm-delivery-project": {
       "pageName": "Delivery Projects",
       "codeFieldLabel": "Project code"
+    },
+    "kuaizhizao-purchase-order-change": {
+      "pageName": "Purchase Order Changes",
+      "codeFieldLabel": "Purchase change code"
+    },
+    "kuaizhizao-sales-order-change": {
+      "pageName": "Sales Order Changes",
+      "codeFieldLabel": "Sales change code"
+    },
+    "kuaizhizao-quality-oqc-inspection": {
+      "pageName": "OQC Inspection",
+      "codeFieldLabel": "OQC inspection code"
+    },
+    "kuaizhizao-quality-eight-d-report": {
+      "pageName": "8D Reports",
+      "codeFieldLabel": "8D report code"
+    },
+    "kuaizhizao-warehouse-material-call": {
+      "pageName": "Material Calls",
+      "codeFieldLabel": "Material call code"
+    },
+    "kuaizhizao-quality-defect-record": {
+      "pageName": "Nonconforming Records",
+      "codeFieldLabel": "Nonconforming record code"
+    },
+    "kuaizhizao-quality-scrap-record": {
+      "pageName": "Scrap Records",
+      "codeFieldLabel": "Scrap record code"
     }
   }
 }

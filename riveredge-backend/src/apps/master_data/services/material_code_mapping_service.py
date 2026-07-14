@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Any
 from tortoise.expressions import Q
 from loguru import logger
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.master_data.models.material_code_mapping import MaterialCodeMapping
 from apps.master_data.models.material import Material
 from apps.master_data.schemas.material_schemas import (
@@ -22,6 +23,7 @@ from apps.master_data.schemas.material_schemas import (
     MaterialCodeConvertResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 class MaterialCodeMappingService:
@@ -34,7 +36,8 @@ class MaterialCodeMappingService:
     @staticmethod
     async def create_mapping(
         tenant_id: int,
-        data: MaterialCodeMappingCreate
+        data: MaterialCodeMappingCreate,
+        current_user: Optional[User] = None,
     ) -> MaterialCodeMappingResponse:
         """
         创建物料编码映射
@@ -74,15 +77,17 @@ class MaterialCodeMappingService:
             )
         
         # 创建映射
-        mapping = await MaterialCodeMapping.create(
-            tenant_id=tenant_id,
-            material_id=material.id,
-            internal_code=data.internal_code,
-            external_code=data.external_code,
-            external_system=data.external_system,
-            description=data.description,
-            is_active=data.is_active,
-        )
+        mapping_payload = {
+            "tenant_id": tenant_id,
+            "material_id": material.id,
+            "internal_code": data.internal_code,
+            "external_code": data.external_code,
+            "external_system": data.external_system,
+            "description": data.description,
+            "is_active": data.is_active,
+        }
+        apply_create_audit(mapping_payload, current_user)
+        mapping = await MaterialCodeMapping.create(**mapping_payload)
         
         return MaterialCodeMappingResponse.model_validate(mapping)
     
@@ -192,7 +197,8 @@ class MaterialCodeMappingService:
     async def update_mapping(
         tenant_id: int,
         mapping_uuid: str,
-        data: MaterialCodeMappingUpdate
+        data: MaterialCodeMappingUpdate,
+        current_user: Optional[User] = None,
     ) -> MaterialCodeMappingResponse:
         """
         更新映射
@@ -254,6 +260,7 @@ class MaterialCodeMappingService:
         for key, value in update_data.items():
             setattr(mapping, key, value)
         
+        apply_update_audit(mapping, current_user)
         await mapping.save()
         
         # 重新加载关联数据
@@ -342,7 +349,8 @@ class MaterialCodeMappingService:
     @staticmethod
     async def batch_create_mappings(
         tenant_id: int,
-        mappings_data: List[MaterialCodeMappingCreate]
+        mappings_data: List[MaterialCodeMappingCreate],
+        current_user: Optional[User] = None,
     ) -> Dict[str, Any]:
         """
         批量创建映射
@@ -350,6 +358,7 @@ class MaterialCodeMappingService:
         Args:
             tenant_id: 组织ID
             mappings_data: 映射创建数据列表
+            current_user: 当前用户（写入审计字段）
             
         Returns:
             dict: 批量创建结果（成功数、失败数、错误列表）
@@ -362,7 +371,8 @@ class MaterialCodeMappingService:
             try:
                 await MaterialCodeMappingService.create_mapping(
                     tenant_id=tenant_id,
-                    data=data
+                    data=data,
+                    current_user=current_user,
                 )
                 success_count += 1
             except Exception as e:

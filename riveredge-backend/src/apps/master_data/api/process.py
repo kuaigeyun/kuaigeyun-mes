@@ -88,7 +88,7 @@ async def create_defect_type(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await ProcessService.create_defect_type(tenant_id, data)
+        return await ProcessService.create_defect_type(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -155,7 +155,9 @@ async def batch_resolve_or_create_defect_types(
     - 不存在：创建新不良品项，编码根据编码规则自动生成
     """
     try:
-        result = await ProcessService.batch_resolve_or_create_defect_types(tenant_id, data.items)
+        result = await ProcessService.batch_resolve_or_create_defect_types(
+            tenant_id, data.items, current_user=current_user
+        )
         return {"results": result}
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -226,7 +228,9 @@ async def update_defect_type(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await ProcessService.update_defect_type(tenant_id, defect_type_uuid, data)
+        return await ProcessService.update_defect_type(
+            tenant_id, defect_type_uuid, data, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -268,7 +272,7 @@ async def create_operation(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await ProcessService.create_operation(tenant_id, data)
+        return await ProcessService.create_operation(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -360,6 +364,7 @@ async def load_preset_operations(
             tenant_id,
             body.industry_id,
             body.preset_keys,
+            current_user=current_user,
         )
         return {
             "createdOperations": result["created_operations"],
@@ -407,7 +412,9 @@ async def update_operation(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await ProcessService.update_operation(tenant_id, operation_uuid, data)
+        return await ProcessService.update_operation(
+            tenant_id, operation_uuid, data, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -454,7 +461,7 @@ async def create_process_route(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await ProcessService.create_process_route(tenant_id, data)
+        return await ProcessService.create_process_route(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -613,7 +620,9 @@ async def update_process_route_change(
     更新工艺路线变更记录
     """
     try:
-        return await ProcessRouteChangeService.update_change(tenant_id, change_uuid, data)
+        return await ProcessRouteChangeService.update_change(
+            tenant_id, change_uuid, data, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -739,7 +748,9 @@ async def update_process_route(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await ProcessService.update_process_route(tenant_id, str(process_route_uuid), data)
+        return await ProcessService.update_process_route(
+            tenant_id, str(process_route_uuid), data, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -787,7 +798,9 @@ async def create_process_route_version(
     系统会自动复制当前最新版本创建新版本。
     """
     try:
-        return await ProcessService.create_process_route_version(tenant_id, process_route_code, data)
+        return await ProcessService.create_process_route_version(
+            tenant_id, process_route_code, data, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -1010,7 +1023,9 @@ async def save_material_product_process(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
     try:
-        return await MaterialProductProcessService.save_for_material(tenant_id, material_uuid, data)
+        return await MaterialProductProcessService.save_for_material(
+            tenant_id, material_uuid, data, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -1078,7 +1093,9 @@ async def create_sub_route(
     系统会自动设置嵌套层级，最多支持3层嵌套。
     """
     try:
-        return await ProcessService.create_sub_route(tenant_id, str(parent_route_uuid), parent_operation_uuid, data)
+        return await ProcessService.create_sub_route(
+            tenant_id, str(parent_route_uuid), parent_operation_uuid, data, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -1204,7 +1221,7 @@ async def create_process_route_from_template(
         return await ProcessService.create_process_route_from_template(
             tenant_id=tenant_id,
             route_data=data,
-            created_by=current_user.id
+            current_user=current_user,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -1273,7 +1290,9 @@ async def batch_create_sops_from_route(
     为工艺路线中的每道工序创建一个 SOP，自动绑定物料/物料组。
     """
     try:
-        return await ProcessService.batch_create_sops_from_route(tenant_id, data)
+        return await ProcessService.batch_create_sops_from_route(
+            tenant_id, data, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -1298,7 +1317,7 @@ async def create_sop(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await ProcessService.create_sop(tenant_id, data)
+        return await ProcessService.create_sop(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -1429,7 +1448,7 @@ async def update_sop(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await ProcessService.update_sop(tenant_id, sop_uuid, data)
+        return await ProcessService.update_sop(tenant_id, sop_uuid, data, current_user=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:

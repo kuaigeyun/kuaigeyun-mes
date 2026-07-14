@@ -6,6 +6,7 @@ import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { glService, type Voucher, type VoucherLine } from '../../../services/gl';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const statusColor: Record<string, string> = {
   draft: 'default',
@@ -110,7 +111,7 @@ const VouchersPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         request={async (params) => {
           const list = await glService.listVouchers({
             skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),

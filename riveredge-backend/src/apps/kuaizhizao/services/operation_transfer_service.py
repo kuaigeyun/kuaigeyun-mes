@@ -129,6 +129,21 @@ def count_pending_process_inspections(inspections: List[Any]) -> int:
     )
 
 
+def sum_process_inspection_quality_quantities(
+    inspections: List[Any],
+) -> Tuple[Decimal, Decimal]:
+    """已执行过程检验单的合格/不合格数量合计（方案质检卡片展示口径）。"""
+    qualified = Decimal("0")
+    unqualified = Decimal("0")
+    for insp in inspections:
+        st = str(getattr(insp, "status", "") or "").strip()
+        if st not in ("已检验", "已审核"):
+            continue
+        qualified += Decimal(str(getattr(insp, "qualified_quantity", None) or 0))
+        unqualified += Decimal(str(getattr(insp, "unqualified_quantity", None) or 0))
+    return qualified, unqualified
+
+
 def pending_process_inspection_codes(inspections: List[Any], *, limit: int = 5) -> List[str]:
     codes: List[str] = []
     for insp in inspections:
@@ -149,50 +164,28 @@ async def resolve_process_inspection_card_status(
     reported_qualified: Decimal = Decimal("0"),
 ) -> str:
     """
-    方案质检工序卡片状态徽章。
+    方案质检工序卡片状态徽章（仅展示检验执行态，不含合格/不合格判定）。
 
     Returns:
-        not_started | pending | pending_review | released | rejected | unqualified
+        not_started | pending | inspected
     """
     if not inspections:
         return "pending" if reported_qualified > 0 else "not_started"
 
     has_pending = False
-    has_rejected = False
-    has_unqualified = False
-    has_pending_review = False
-    has_released = False
+    has_inspected = False
 
     for insp in inspections:
         st = str(getattr(insp, "status", "") or "").strip()
         if st == "待检验":
             has_pending = True
-            continue
-        if st == "已驳回":
-            has_rejected = True
-            continue
-        if st not in ("已检验", "已审核"):
-            continue
-        if getattr(insp, "quality_status", None) == "不合格":
-            has_unqualified = True
-            continue
-        if await ipqc_inspection_passed_for_transfer(tenant_id, insp):
-            has_released = True
-            continue
-        rs = str(getattr(insp, "review_status", "") or "").strip()
-        if st == "已检验" and rs in ("待审核", ""):
-            has_pending_review = True
+        elif st in ("已检验", "已审核", "已驳回"):
+            has_inspected = True
 
     if has_pending:
         return "pending"
-    if has_pending_review:
-        return "pending_review"
-    if has_rejected:
-        return "rejected"
-    if has_unqualified and not has_released:
-        return "unqualified"
-    if has_released:
-        return "released"
+    if has_inspected:
+        return "inspected"
     return "not_started"
 
 

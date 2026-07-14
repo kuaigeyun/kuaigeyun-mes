@@ -52,6 +52,7 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 /**
  * 标准操作SOP管理列表页面组件
@@ -966,7 +967,7 @@ const SOPPage: React.FC = () => {
       <UniTable<SOP>
         columnPersistenceId="apps.master-data.pages.process.sop"
         actionRef={actionRef}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolveSopListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;

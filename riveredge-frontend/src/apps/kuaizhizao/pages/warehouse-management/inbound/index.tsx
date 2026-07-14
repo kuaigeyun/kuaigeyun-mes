@@ -59,7 +59,10 @@ import {
 } from './inboundItemTracking';
 import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
-import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import {formatDateBySiteSetting, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import InboundQuickPullModals, {
   type InboundQuickPullModalsRef,
 } from './InboundQuickPullModals';
@@ -144,14 +147,6 @@ interface InboundOrderItem {
 function formatInboundMaterialUnit(val: unknown): string {
   if (val == null || val === '') return '-';
   return String(val);
-}
-
-/** 入库明细数量展示（无值时显示 —） */
-function formatInboundQty(val: unknown): string {
-  if (val == null || val === '') return '—';
-  const n = Number(val);
-  if (!Number.isFinite(n)) return '—';
-  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 function renderInboundDetailUnitCell(row: InboundOrderItem): React.ReactNode {
@@ -392,6 +387,42 @@ function isInboundStockPosted(record: InboundOrder): boolean {
   );
 }
 
+const INBOUND_DELETABLE_TYPES = new Set([
+  'production_return',
+  'purchase',
+  'finished_goods',
+  'semi_finished_goods',
+  'sales_return',
+  'other_inbound',
+  'material_return',
+]);
+
+/** 与行内删除按钮一致：可确认态 + 类型支持删除 */
+function isInboundDeletable(record: InboundOrder): boolean {
+  if (!record.id || !isInboundConfirmable(record)) return false;
+  return INBOUND_DELETABLE_TYPES.has(String(record.receipt_type ?? ''));
+}
+
+async function deleteInboundDocument(record: InboundOrder): Promise<void> {
+  if (record.receipt_type === 'purchase') {
+    await warehouseApi.purchaseReceipt.delete(String(record.id));
+  } else if (record.receipt_type === 'finished_goods') {
+    await warehouseApi.finishedGoodsReceipt.delete(String(record.id));
+  } else if (record.receipt_type === 'semi_finished_goods') {
+    await warehouseApi.semiFinishedGoodsReceipt.delete(String(record.id));
+  } else if (record.receipt_type === 'production_return') {
+    await warehouseApi.productionReturn.delete(String(record.id));
+  } else if (record.receipt_type === 'sales_return') {
+    await warehouseApi.salesReturn.delete(String(record.id));
+  } else if (record.receipt_type === 'other_inbound') {
+    await warehouseApi.otherInbound.delete(String(record.id));
+  } else if (record.receipt_type === 'material_return') {
+    await warehouseApi.materialReturn.delete(String(record.id));
+  } else {
+    throw new Error('unsupported_inbound_delete_type');
+  }
+}
+
 function renderInboundRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   return nodes;
 }
@@ -415,6 +446,7 @@ const InboundPage: React.FC = () => {
     [t],
   );
   const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
+  const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const handledDirectConfirmKeyRef = useRef<string | null>(null);
 
@@ -1414,6 +1446,40 @@ const InboundPage: React.FC = () => {
   /**
    * 处理删除：采购/成品仅草稿或待入库；生产退料为待退料（与行内按钮一致）
    */
+  const listRowsRef = useRef<Map<string, InboundOrder>>(new Map());
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const inboundRowKey = (record: InboundOrder) => `${record.receipt_type}::${record.id}`;
+
+  const isInboundPrintable = useCallback(
+    (record: InboundOrder) =>
+      !!record.id &&
+      !!inboundReceiptTypeToPrintDocumentType(record.receipt_type) &&
+      inboundPerms.canPrint &&
+      record.capabilities?.print?.allowed !== false,
+    [inboundPerms.canPrint],
+  );
+
+  const selectedInboundForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => listRowsRef.current.get(String(key)))
+        .filter((row): row is InboundOrder => row != null),
+    [selectedRowKeys],
+  );
+
+  const canToolbarPrint =
+    selectedRowKeys.length === 1 &&
+    !!selectedInboundForBatch[0] &&
+    isInboundPrintable(selectedInboundForBatch[0]);
+
+  const handlePrint = (record: InboundOrder) => {
+    if (!record.id) return;
+    const printDocType = inboundReceiptTypeToPrintDocumentType(record.receipt_type);
+    if (!printDocType) return;
+    openPrint({ documentType: printDocType, documentId: record.id });
+  };
+
   const handleDelete = async (record: InboundOrder) => {
     const code = String(record.receipt_code || record.return_code || '');
     const typeLabel =
@@ -1426,23 +1492,7 @@ const InboundPage: React.FC = () => {
       okType: 'danger',
       onOk: async () => {
         try {
-          if (record.receipt_type === 'purchase') {
-            await warehouseApi.purchaseReceipt.delete(String(record.id));
-          } else if (record.receipt_type === 'finished_goods') {
-            await warehouseApi.finishedGoodsReceipt.delete(String(record.id));
-          } else if (record.receipt_type === 'semi_finished_goods') {
-            await warehouseApi.semiFinishedGoodsReceipt.delete(String(record.id));
-          } else if (record.receipt_type === 'production_return') {
-            await warehouseApi.productionReturn.delete(String(record.id));
-          } else if (record.receipt_type === 'sales_return') {
-            await warehouseApi.salesReturn.delete(String(record.id));
-          } else if (record.receipt_type === 'other_inbound') {
-            await warehouseApi.otherInbound.delete(String(record.id));
-          } else if (record.receipt_type === 'material_return') {
-            await warehouseApi.materialReturn.delete(String(record.id));
-          } else {
-            return;
-          }
+          await deleteInboundDocument(record);
           messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.deleteSuccess'));
           invalidateMenuBadgeCounts();
 
@@ -1457,6 +1507,31 @@ const InboundPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const rows = keys
+      .map((k) => listRowsRef.current.get(String(k)))
+      .filter((r): r is InboundOrder => !!r && isInboundDeletable(r));
+    if (rows.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.warehouseCommon.batchDeleteNoneDeletable'));
+      return;
+    }
+    try {
+      for (const row of rows) {
+        await deleteInboundDocument(row);
+      }
+      messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: rows.length }));
+      invalidateMenuBadgeCounts();
+      await actionRef.current?.reload?.();
+    } catch (error: any) {
+      const msg =
+        error?.response?.data?.detail ??
+        error?.response?.data?.message ??
+        error?.message ??
+        t('app.kuaizhizao.warehouseCommon.batchDeleteFailed');
+      messageApi.error(typeof msg === 'string' ? msg : t('app.kuaizhizao.warehouseCommon.batchDeleteFailed'));
+    }
   };
 
   /**
@@ -1479,7 +1554,7 @@ const InboundPage: React.FC = () => {
   const productionReturnCustomFieldColumns = generateProductionReturnCustomFieldColumns();
   const finishedGoodsReceiptCustomFieldColumns = generateFinishedGoodsReceiptCustomFieldColumns();
   const columns: ProColumns<InboundOrder>[] = useMemo(
-    () => [
+  () => alignProColumns<InboundOrder>([
     {
       title: t('app.kuaizhizao.warehouseInbound.col.subjectDocNo'),
       key: 'receipt_code',
@@ -1533,6 +1608,7 @@ const InboundPage: React.FC = () => {
       width: 100,
       align: 'right',
       sorter: true,
+      render: formatQuantity,
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.totalItems'),
@@ -1564,16 +1640,7 @@ const InboundPage: React.FC = () => {
       sorter: true,
       render: (_, record) => formatInboundDateDisplay(record),
     },
-    {
-      title: t('app.kuaizhizao.warehouseInbound.col.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      sorter: true,
-      defaultSortOrder: 'descend',
-      render: (_, r) => formatDateTimeBySiteSetting(r.updated_at),
-    },
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
       title: t('app.kuaizhizao.warehouseInbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -1610,6 +1677,22 @@ const InboundPage: React.FC = () => {
         const nodes: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)} />,
         ];
+        if (record.receipt_type === 'finished_goods' && record.id && packingBindingPerms.canRead) {
+          nodes.push(
+            <Button
+              {...rowActionKind('execute')}
+              {...rowActionLabelKeep()}
+              key="packing-binding"
+              onClick={() =>
+                navigate(
+                  `/apps/kuaizhizao/production-execution/packing-binding?action=bind&source_type=finished_goods_receipt&source_id=${record.id}`,
+                )
+              }
+            >
+              {t('app.kuaizhizao.packingBinding.title')}
+            </Button>
+          );
+        }
         if (canConfirm) {
           nodes.push(
             <Button
@@ -1623,13 +1706,7 @@ const InboundPage: React.FC = () => {
           );
           if (
             inboundPerms.canDelete &&
-            (record.receipt_type === 'production_return' ||
-            record.receipt_type === 'purchase' ||
-            record.receipt_type === 'finished_goods' ||
-            record.receipt_type === 'semi_finished_goods' ||
-            record.receipt_type === 'sales_return' ||
-            record.receipt_type === 'other_inbound' ||
-            record.receipt_type === 'material_return')
+            isInboundDeletable(record)
           ) {
             nodes.push(
               <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDelete(record)} />
@@ -1660,35 +1737,46 @@ const InboundPage: React.FC = () => {
             </Button>
           );
         }
-        const printDocType = inboundReceiptTypeToPrintDocumentType(record.receipt_type);
-        if (printDocType && record.id && inboundPerms.canPrint && record.capabilities?.print?.allowed !== false) {
-          nodes.push(
-            <Button
-              {...rowActionKind('print')}
-              key="print"
-              icon={<PrinterOutlined />}
-              onClick={() => openPrint({ documentType: printDocType, documentId: record.id! })}
-            />
-          );
-        }
         return nodes;
       },
     },
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK),
+  [
+    t,
+    navigate,
+    purchaseReceiptCustomFieldColumns,
+    productionReturnCustomFieldColumns,
+    finishedGoodsReceiptCustomFieldColumns,
+    inboundPerms,
+    packingBindingPerms.canRead,
   ],
-  [t, purchaseReceiptCustomFieldColumns, productionReturnCustomFieldColumns, finishedGoodsReceiptCustomFieldColumns, inboundPerms],
   );
 
   return (
     <ListPageTemplate>
       <UniTable
         headerTitle={t('app.kuaizhizao.warehouseInbound.title')}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound.v2"
         actionRef={actionRef}
-        rowKey={(record) => `${record.receipt_type}::${record.id}`}
+        rowKey={inboundRowKey}
         columns={columns}
         showAdvancedSearch={true}
         pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
         skipFuzzyPinyinClientFilter
+        enableRowSelection={inboundPerms.canDelete || inboundPerms.canPrint}
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+        showDeleteButton={inboundPerms.canDelete}
+        rowSelectionGetCheckboxProps={(record) => ({
+          disabled: !isInboundDeletable(record) && !isInboundPrintable(record),
+        })}
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) =>
+          t('app.kuaizhizao.warehouseCommon.batchDeleteConfirm', {
+            count,
+            noun: t('app.kuaizhizao.warehouseInbound.title'),
+          })
+        }
         request={async (params, sort, _filter, searchFormValues) => {
           try {
             const listParams = resolveInboundHubListParams(searchFormValues, sort);
@@ -1702,6 +1790,11 @@ const InboundPage: React.FC = () => {
               enrichFinishedGoodsReceiptRecordsWithCustomFields,
               enrichProductionReturnRecordsWithCustomFields,
             });
+            const next = new Map<string, InboundOrder>();
+            for (const row of result.data ?? []) {
+              next.set(inboundRowKey(row), row);
+            }
+            listRowsRef.current = next;
             return result;
           } catch {
             messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadListFailed'));
@@ -1746,6 +1839,23 @@ const InboundPage: React.FC = () => {
             />,
           ];
         }}
+        toolBarActionsAfterBatch={
+          inboundPerms.canPrint
+            ? [
+                <Button
+                  key="inbound-toolbar-print"
+                  icon={<PrinterOutlined />}
+                  disabled={!canToolbarPrint}
+                  onClick={() => {
+                    const row = selectedInboundForBatch[0];
+                    if (row) handlePrint(row);
+                  }}
+                >
+                  {t('components.uniAction.print')}
+                </Button>,
+              ]
+            : []
+        }
         scroll={{ x: 2000 }}
       />
 
@@ -2409,6 +2519,7 @@ const InboundPage: React.FC = () => {
                                 dataIndex: 'return_quantity',
                                 width: 100,
                                 align: 'right' as const,
+                                render: formatQuantity,
                               },
                               { title: t('app.kuaizhizao.warehouseInbound.col.warehouseName'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
                               { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
@@ -2425,7 +2536,7 @@ const InboundPage: React.FC = () => {
                                   align: 'right' as const,
                                   render: (_: any, row: InboundOrderItem) => {
                                     const editable = isEditablePurchaseReceipt(currentOrder) && row.id != null;
-                                    if (!editable) return Number(row.receipt_quantity ?? 0);
+                                    if (!editable) return formatQuantity(row.receipt_quantity);
                                     const rid = Number(row.id);
                                     return (
                                       <InputNumber
@@ -2466,6 +2577,7 @@ const InboundPage: React.FC = () => {
                                   dataIndex: 'receipt_quantity',
                                   width: 100,
                                   align: 'right' as const,
+                                  render: formatQuantity,
                                 },
                                 {
                                   title: t('app.kuaizhizao.warehouseInbound.col.unit'),

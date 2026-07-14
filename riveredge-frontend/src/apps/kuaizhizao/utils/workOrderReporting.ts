@@ -87,6 +87,111 @@ export function getOperationInspectionMode(operation: any): string {
   return String(operation?.inspection_mode ?? operation?.inspectionMode ?? 'none');
 }
 
+/** 工序卡片合格/不合格/合格率：方案质检用过程检验合计，其余用报工 */
+export function getOperationQualityMetrics(operation: any): {
+  qualified: number;
+  unqualified: number;
+  rate: number | null;
+  fromInspection: boolean;
+} {
+  const mode = getOperationInspectionMode(operation);
+  if (mode === 'plan') {
+    const hasInspectionQty =
+      operation?.inspection_qualified_quantity != null ||
+      operation?.inspectionQualifiedQuantity != null ||
+      operation?.inspection_unqualified_quantity != null ||
+      operation?.inspectionUnqualifiedQuantity != null;
+    const qualified =
+      Number(
+        operation?.inspection_qualified_quantity ?? operation?.inspectionQualifiedQuantity ?? 0,
+      ) || 0;
+    const unqualified =
+      Number(
+        operation?.inspection_unqualified_quantity ??
+          operation?.inspectionUnqualifiedQuantity ??
+          0,
+      ) || 0;
+    const inspected = qualified + unqualified;
+    return {
+      qualified,
+      unqualified,
+      rate: hasInspectionQty && inspected > 0 ? Math.round((qualified / inspected) * 100) : null,
+      fromInspection: true,
+    };
+  }
+  const qualified = Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
+  const unqualified =
+    Number(operation?.unqualified_quantity ?? operation?.unqualifiedQuantity ?? 0) || 0;
+  const completed =
+    Number(operation?.completed_quantity ?? operation?.completedQuantity ?? 0) || 0;
+  return {
+    qualified,
+    unqualified,
+    rate: completed > 0 ? Math.round((qualified / completed) * 100) : null,
+    fromInspection: false,
+  };
+}
+
+/** 工序卡片环形进度：方案质检按检验合格数/计划数，其余按报工合格数/计划数 */
+export function getOperationProgressPercent(
+  operation: any,
+  workOrderQuantity: number,
+): number {
+  if (String(operation?.reporting_type ?? operation?.reportingType ?? '') === 'status') {
+    return String(operation?.status ?? '') === 'completed' ? 100 : 0;
+  }
+  const planned = Number(workOrderQuantity) || 0;
+  if (planned <= 0) return 0;
+  const metrics = getOperationQualityMetrics(operation);
+  const done = metrics.fromInspection
+    ? metrics.qualified
+    : Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
+  return Math.min(100, Math.round((done / planned) * 100));
+}
+
+/**
+ * 工序卡片「已完成」判定：与进度同一口径。
+ * 方案质检以检验合格数 >= 计划数为准，不以报工 status=completed 单独判定。
+ */
+export function isOperationEffectivelyCompleted(
+  operation: any,
+  workOrderQuantity: number,
+): boolean {
+  if (String(operation?.reporting_type ?? operation?.reportingType ?? '') === 'status') {
+    return String(operation?.status ?? '') === 'completed';
+  }
+  const planned = Number(workOrderQuantity) || 0;
+  const metrics = getOperationQualityMetrics(operation);
+  const done = metrics.fromInspection
+    ? metrics.qualified
+    : Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
+  if (planned > 0 && done >= planned) {
+    return true;
+  }
+  if (metrics.fromInspection) {
+    return false;
+  }
+  return String(operation?.status ?? '') === 'completed';
+}
+
+export type OperationCardPhase = 'completed' | 'in_progress' | 'pending';
+
+/** 工序卡片展示阶段：与进度/已完成判定一致 */
+export function getOperationCardPhase(
+  operation: any,
+  workOrderQuantity: number,
+): OperationCardPhase {
+  if (isOperationEffectivelyCompleted(operation, workOrderQuantity)) {
+    return 'completed';
+  }
+  const st = String(operation?.status ?? '');
+  const progress = getOperationProgressPercent(operation, workOrderQuantity);
+  if (st === 'in_progress' || st === 'processing' || progress > 0) {
+    return 'in_progress';
+  }
+  return 'pending';
+}
+
 /** 工序卡片质检展示文案（不含括号说明；方案质检状态由徽章单独展示） */
 export function formatOperationInspectionSummary(
   operation: any,
@@ -109,20 +214,24 @@ export function formatOperationInspectionSummary(
   return labels?.none ?? '无质检';
 }
 
-export type ProcessInspectionCardStatus =
-  | 'not_started'
-  | 'pending'
-  | 'pending_review'
-  | 'released'
-  | 'rejected'
-  | 'unqualified';
+export type ProcessInspectionCardStatus = 'not_started' | 'pending' | 'inspected';
+
+const LEGACY_INSPECTED_STATUSES = new Set([
+  'inspected',
+  'pending_review',
+  'released',
+  'rejected',
+  'unqualified',
+]);
 
 export function getProcessInspectionCardStatus(operation: any): ProcessInspectionCardStatus | null {
   const mode = getOperationInspectionMode(operation);
   if (mode !== 'plan') return null;
-  const raw = operation?.process_inspection_status ?? operation?.processInspectionStatus;
+  const raw = String(operation?.process_inspection_status ?? operation?.processInspectionStatus ?? '').trim();
   if (!raw) return null;
-  return String(raw) as ProcessInspectionCardStatus;
+  if (raw === 'pending' || raw === 'not_started') return raw;
+  if (LEGACY_INSPECTED_STATUSES.has(raw)) return 'inspected';
+  return 'not_started';
 }
 
 export function getProcessInspectionStatusTagColor(
@@ -131,13 +240,8 @@ export function getProcessInspectionStatusTagColor(
   switch (status) {
     case 'pending':
       return 'processing';
-    case 'pending_review':
-      return 'warning';
-    case 'released':
+    case 'inspected':
       return 'success';
-    case 'rejected':
-    case 'unqualified':
-      return 'error';
     case 'not_started':
     default:
       return 'default';

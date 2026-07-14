@@ -75,7 +75,9 @@ from apps.kuaizhizao.schemas.tool_ops import (
 )
 from apps.kuaizhizao.services.tool_status_service import ToolStatusService
 from core.services.business.code_generation_service import CodeGenerationService
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 T = TypeVar("T")
 
@@ -197,7 +199,7 @@ class _MasterCRUDMixin:
 class ToolMaintenanceItemService(_MasterCRUDMixin):
     model = ToolMaintenanceItem
 
-    async def create(self, tenant_id: int, data: ToolMaintenanceItemCreate) -> ToolMaintenanceItem:
+    async def create(self, tenant_id: int, data: ToolMaintenanceItemCreate, current_user: Optional[User] = None) -> ToolMaintenanceItem:
         dup = await ToolMaintenanceItem.filter(
             tenant_id=tenant_id,
             code=data.code,
@@ -205,13 +207,16 @@ class ToolMaintenanceItemService(_MasterCRUDMixin):
         ).first()
         if dup:
             raise ValidationError(f"保养项编码已存在: {data.code}")
-        return await ToolMaintenanceItem.create(tenant_id=tenant_id, **data.model_dump())
+        payload = data.model_dump()
+        apply_create_audit(payload, current_user)
+        return await ToolMaintenanceItem.create(tenant_id=tenant_id, **payload)
 
     async def update(
         self,
         tenant_id: int,
         row_id: int,
         data: ToolMaintenanceItemUpdate,
+        current_user: Optional[User] = None,
     ) -> ToolMaintenanceItem:
         row = await self._get(tenant_id, row_id)
         update_data = data.model_dump(exclude_unset=True)
@@ -225,6 +230,7 @@ class ToolMaintenanceItemService(_MasterCRUDMixin):
                 raise ValidationError(f"保养项编码已存在: {update_data['code']}")
         for k, v in update_data.items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -263,7 +269,7 @@ class ToolMaintenanceSchemeService(_MasterCRUDMixin):
                 standard_hours=line.standard_hours or snap["standard_hours"],
             )
 
-    async def create(self, tenant_id: int, data: ToolMaintenanceSchemeCreate) -> ToolMaintenanceScheme:
+    async def create(self, tenant_id: int, data: ToolMaintenanceSchemeCreate, current_user: Optional[User] = None) -> ToolMaintenanceScheme:
         async with in_transaction():
             dup = await ToolMaintenanceScheme.filter(
                 tenant_id=tenant_id,
@@ -272,7 +278,7 @@ class ToolMaintenanceSchemeService(_MasterCRUDMixin):
             ).first()
             if dup:
                 raise ValidationError(f"保养方案编码已存在: {data.code}")
-            scheme = await ToolMaintenanceScheme.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 code=data.code,
                 name=data.name,
@@ -282,6 +288,8 @@ class ToolMaintenanceSchemeService(_MasterCRUDMixin):
                 trigger_interval_usage=data.trigger_interval_usage,
                 is_active=data.is_active,
             )
+            apply_create_audit(payload, current_user)
+            scheme = await ToolMaintenanceScheme.create(**payload)
             if data.lines:
                 await self._replace_lines(tenant_id, scheme.id, data.lines)
             return scheme
@@ -291,6 +299,7 @@ class ToolMaintenanceSchemeService(_MasterCRUDMixin):
         tenant_id: int,
         row_id: int,
         data: ToolMaintenanceSchemeUpdate,
+        current_user: Optional[User] = None,
     ) -> ToolMaintenanceScheme:
         async with in_transaction():
             scheme = await self._get(tenant_id, row_id)
@@ -305,6 +314,7 @@ class ToolMaintenanceSchemeService(_MasterCRUDMixin):
                     raise ValidationError(f"保养方案编码已存在: {update_data['code']}")
             for k, v in update_data.items():
                 setattr(scheme, k, v)
+            apply_update_audit(scheme, current_user)
             await scheme.save()
             if data.lines is not None:
                 await self._replace_lines(tenant_id, scheme.id, data.lines)
@@ -323,7 +333,7 @@ class ToolMaintenanceSchemeService(_MasterCRUDMixin):
 class ToolRepairItemService(_MasterCRUDMixin):
     model = ToolRepairItem
 
-    async def create(self, tenant_id: int, data: ToolRepairItemCreate) -> ToolRepairItem:
+    async def create(self, tenant_id: int, data: ToolRepairItemCreate, current_user: Optional[User] = None) -> ToolRepairItem:
         dup = await ToolRepairItem.filter(
             tenant_id=tenant_id,
             code=data.code,
@@ -331,13 +341,16 @@ class ToolRepairItemService(_MasterCRUDMixin):
         ).first()
         if dup:
             raise ValidationError(f"维修项编码已存在: {data.code}")
-        return await ToolRepairItem.create(tenant_id=tenant_id, **data.model_dump())
+        payload = data.model_dump()
+        apply_create_audit(payload, current_user)
+        return await ToolRepairItem.create(tenant_id=tenant_id, **payload)
 
     async def update(
         self,
         tenant_id: int,
         row_id: int,
         data: ToolRepairItemUpdate,
+        current_user: Optional[User] = None,
     ) -> ToolRepairItem:
         row = await self._get(tenant_id, row_id)
         update_data = data.model_dump(exclude_unset=True)
@@ -351,6 +364,7 @@ class ToolRepairItemService(_MasterCRUDMixin):
                 raise ValidationError(f"维修项编码已存在: {update_data['code']}")
         for k, v in update_data.items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -389,7 +403,7 @@ class ToolRepairSchemeService(_MasterCRUDMixin):
                 standard_hours=line.standard_hours or snap["standard_hours"],
             )
 
-    async def create(self, tenant_id: int, data: ToolRepairSchemeCreate) -> ToolRepairScheme:
+    async def create(self, tenant_id: int, data: ToolRepairSchemeCreate, current_user: Optional[User] = None) -> ToolRepairScheme:
         async with in_transaction():
             dup = await ToolRepairScheme.filter(
                 tenant_id=tenant_id,
@@ -398,13 +412,15 @@ class ToolRepairSchemeService(_MasterCRUDMixin):
             ).first()
             if dup:
                 raise ValidationError(f"维修方案编码已存在: {data.code}")
-            scheme = await ToolRepairScheme.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 code=data.code,
                 name=data.name,
                 description=data.description,
                 is_active=data.is_active,
             )
+            apply_create_audit(payload, current_user)
+            scheme = await ToolRepairScheme.create(**payload)
             if data.lines:
                 await self._replace_lines(tenant_id, scheme.id, data.lines)
             return scheme
@@ -414,6 +430,7 @@ class ToolRepairSchemeService(_MasterCRUDMixin):
         tenant_id: int,
         row_id: int,
         data: ToolRepairSchemeUpdate,
+        current_user: Optional[User] = None,
     ) -> ToolRepairScheme:
         async with in_transaction():
             scheme = await self._get(tenant_id, row_id)
@@ -428,6 +445,7 @@ class ToolRepairSchemeService(_MasterCRUDMixin):
                     raise ValidationError(f"维修方案编码已存在: {update_data['code']}")
             for k, v in update_data.items():
                 setattr(scheme, k, v)
+            apply_update_audit(scheme, current_user)
             await scheme.save()
             if data.lines is not None:
                 await self._replace_lines(tenant_id, scheme.id, data.lines)
@@ -459,20 +477,23 @@ class ToolSchemeBindingService:
             qs = qs.filter(scheme_type=scheme_type)
         return await qs.order_by("id").all()
 
-    async def create(self, tenant_id: int, data: ToolSchemeBindingCreate) -> ToolSchemeBinding:
+    async def create(self, tenant_id: int, data: ToolSchemeBindingCreate, current_user: Optional[User] = None) -> ToolSchemeBinding:
         tool = await _get_tool_or_raise(tenant_id, data.tool_id)
-        return await ToolSchemeBinding.create(
+        payload = dict(
             tenant_id=tenant_id,
             tool_id=tool.id,
             tool_uuid=tool.uuid,
             scheme_id=data.scheme_id,
             scheme_type=data.scheme_type,
         )
+        apply_create_audit(payload, current_user)
+        return await ToolSchemeBinding.create(**payload)
 
     async def bulk_replace(
         self,
         tenant_id: int,
         data: ToolSchemeBindingBulkReplace,
+        current_user: Optional[User] = None,
     ) -> List[ToolSchemeBinding]:
         tool = await _get_tool_or_raise(tenant_id, data.tool_id)
         async with in_transaction():
@@ -484,13 +505,15 @@ class ToolSchemeBindingService:
             ).update(deleted_at=datetime.now())
             bindings = []
             for scheme_id in data.scheme_ids:
-                binding = await ToolSchemeBinding.create(
+                payload = dict(
                     tenant_id=tenant_id,
                     tool_id=tool.id,
                     tool_uuid=tool.uuid,
                     scheme_id=scheme_id,
                     scheme_type=data.scheme_type,
                 )
+                apply_create_audit(payload, current_user)
+                binding = await ToolSchemeBinding.create(**payload)
                 bindings.append(binding)
             return bindings
 
@@ -521,6 +544,7 @@ class ToolBorrowService:
         data: ToolBorrowCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> ToolBorrow:
         tool = await _get_tool_or_raise(tenant_id, data.tool_id)
         _reject_scrapped_tool(tool)
@@ -531,7 +555,7 @@ class ToolBorrowService:
 
         document_no = await _generate_code(tenant_id, "tool_borrow_code", "MB")
         async with in_transaction():
-            borrow = await ToolBorrow.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 document_no=document_no,
                 tool_id=tool.id,
@@ -549,6 +573,8 @@ class ToolBorrowService:
                 remark=data.remark,
                 status=OUTSTANDING_BORROW_STATUS,
             )
+            apply_create_audit(payload, current_user)
+            borrow = await ToolBorrow.create(**payload)
             await ToolStatusService.resolve(tenant_id, tool.id)
             return borrow
 
@@ -629,12 +655,14 @@ class ToolBorrowService:
         tenant_id: int,
         row_id: int,
         data: ToolBorrowUpdate,
+        current_user: Optional[User] = None,
     ) -> ToolBorrow:
         row = await self.get(tenant_id, row_id)
         if row.status != OUTSTANDING_BORROW_STATUS:
             raise ValidationError("仅领用中状态可编辑")
         for k, v in data.model_dump(exclude_unset=True).items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -656,6 +684,7 @@ class ToolReturnService:
         data: ToolReturnCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> ToolReturn:
         tool = await _get_tool_or_raise(tenant_id, data.tool_id)
         _reject_scrapped_tool(tool)
@@ -690,7 +719,7 @@ class ToolReturnService:
 
         document_no = await _generate_code(tenant_id, "tool_return_code", "MR")
         async with in_transaction():
-            ret = await ToolReturn.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 document_no=document_no,
                 tool_id=tool.id,
@@ -709,6 +738,8 @@ class ToolReturnService:
                 remark=data.remark,
                 status="已完成",
             )
+            apply_create_audit(payload, current_user)
+            ret = await ToolReturn.create(**payload)
             tool.total_usage_count = (tool.total_usage_count or 0) + data.usage_count
             await tool.save()
             if borrow:
@@ -776,6 +807,7 @@ class ToolReturnService:
         tenant_id: int,
         row_id: int,
         data: ToolReturnUpdate,
+        current_user: Optional[User] = None,
     ) -> ToolReturn:
         row = await self.get(tenant_id, row_id)
         update_data = data.model_dump(exclude_unset=True)
@@ -788,6 +820,7 @@ class ToolReturnService:
             await tool.save()
         for k, v in update_data.items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -896,13 +929,14 @@ class ToolMaintenanceService:
         data: ToolMaintenanceCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> ToolMaintenance:
         tool = await _get_tool_or_raise(tenant_id, data.tool_id)
         _reject_scrapped_tool(tool)
         scheme_id = await self._resolve_scheme_id(tenant_id, tool, data.scheme_id)
         document_no = await _generate_code(tenant_id, "tool_maintenance_code", "MM")
         async with in_transaction():
-            header = await ToolMaintenance.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 document_no=document_no,
                 tool_id=tool.id,
@@ -917,6 +951,8 @@ class ToolMaintenanceService:
                 remark=data.remark,
                 status="草稿",
             )
+            apply_create_audit(payload, current_user)
+            header = await ToolMaintenance.create(**payload)
             if data.lines:
                 await self._create_lines(tenant_id, header.id, data.lines)
             else:
@@ -1000,6 +1036,7 @@ class ToolMaintenanceService:
         tenant_id: int,
         row_id: int,
         data: ToolMaintenanceUpdate,
+        current_user: Optional[User] = None,
     ) -> ToolMaintenance:
         async with in_transaction():
             header = await self.get(tenant_id, row_id)
@@ -1008,6 +1045,7 @@ class ToolMaintenanceService:
             update_data = data.model_dump(exclude_unset=True, exclude={"lines"})
             for k, v in update_data.items():
                 setattr(header, k, v)
+            apply_update_audit(header, current_user)
             await header.save()
             if data.lines is not None:
                 await ToolMaintenanceLine.filter(
@@ -1018,11 +1056,17 @@ class ToolMaintenanceService:
                 await self._create_lines(tenant_id, header.id, data.lines)
             return header
 
-    async def submit(self, tenant_id: int, row_id: int) -> ToolMaintenance:
+    async def submit(
+        self,
+        tenant_id: int,
+        row_id: int,
+        current_user: Optional[User] = None,
+    ) -> ToolMaintenance:
         row = await self.get(tenant_id, row_id)
         if row.status != "草稿":
             raise ValidationError("仅草稿状态可提交")
         row.status = "已提交"
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -1032,6 +1076,7 @@ class ToolMaintenanceService:
         row_id: int,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> ToolMaintenance:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1043,6 +1088,7 @@ class ToolMaintenanceService:
             row.approved_at = datetime.now()
             if not row.maintenance_date:
                 row.maintenance_date = date.today()
+            apply_update_audit(row, current_user)
             await row.save()
             await ToolStatusService.resolve(tenant_id, row.tool_id)
         return row
@@ -1054,6 +1100,7 @@ class ToolMaintenanceService:
         reject_reason: str,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> ToolMaintenance:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1063,6 +1110,7 @@ class ToolMaintenanceService:
         row.approver_id = approver_id
         row.approver_name = approver_name
         row.approved_at = datetime.now()
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -1179,13 +1227,14 @@ class ToolRepairService:
         data: ToolRepairCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> ToolRepair:
         tool = await _get_tool_or_raise(tenant_id, data.tool_id)
         _reject_scrapped_tool(tool)
         scheme_id = await self._resolve_scheme_id(tenant_id, tool, data.scheme_id)
         document_no = await _generate_code(tenant_id, "tool_repair_code", "MRP")
         async with in_transaction():
-            header = await ToolRepair.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 document_no=document_no,
                 tool_id=tool.id,
@@ -1201,6 +1250,8 @@ class ToolRepairService:
                 remark=data.remark,
                 status="草稿",
             )
+            apply_create_audit(payload, current_user)
+            header = await ToolRepair.create(**payload)
             if data.lines:
                 await self._create_lines(tenant_id, header.id, data.lines)
             else:
@@ -1284,6 +1335,7 @@ class ToolRepairService:
         tenant_id: int,
         row_id: int,
         data: ToolRepairUpdate,
+        current_user: Optional[User] = None,
     ) -> ToolRepair:
         async with in_transaction():
             header = await self.get(tenant_id, row_id)
@@ -1292,6 +1344,7 @@ class ToolRepairService:
             update_data = data.model_dump(exclude_unset=True, exclude={"lines"})
             for k, v in update_data.items():
                 setattr(header, k, v)
+            apply_update_audit(header, current_user)
             await header.save()
             if data.lines is not None:
                 await ToolRepairLine.filter(
@@ -1302,11 +1355,17 @@ class ToolRepairService:
                 await self._create_lines(tenant_id, header.id, data.lines)
             return header
 
-    async def submit(self, tenant_id: int, row_id: int) -> ToolRepair:
+    async def submit(
+        self,
+        tenant_id: int,
+        row_id: int,
+        current_user: Optional[User] = None,
+    ) -> ToolRepair:
         row = await self.get(tenant_id, row_id)
         if row.status != "草稿":
             raise ValidationError("仅草稿状态可提交")
         row.status = "已提交"
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -1316,6 +1375,7 @@ class ToolRepairService:
         row_id: int,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> ToolRepair:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1327,6 +1387,7 @@ class ToolRepairService:
             row.approved_at = datetime.now()
             if not row.repair_date:
                 row.repair_date = date.today()
+            apply_update_audit(row, current_user)
             await row.save()
             await ToolStatusService.resolve(tenant_id, row.tool_id)
         return row
@@ -1338,6 +1399,7 @@ class ToolRepairService:
         reject_reason: str,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> ToolRepair:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1347,6 +1409,7 @@ class ToolRepairService:
         row.approver_id = approver_id
         row.approver_name = approver_name
         row.approved_at = datetime.now()
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -1384,12 +1447,13 @@ class ToolOpsCalibrationService:
         data: ToolOpsCalibrationCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> ToolOpsCalibration:
         tool = await _get_tool_or_raise(tenant_id, data.tool_id)
         _reject_scrapped_tool(tool)
         document_no = await _generate_code(tenant_id, "tool_calibration_code", "TC")
         async with in_transaction():
-            row = await ToolOpsCalibration.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 document_no=document_no,
                 tool_id=tool.id,
@@ -1407,6 +1471,8 @@ class ToolOpsCalibrationService:
                 remark=data.remark,
                 status="进行中",
             )
+            apply_create_audit(payload, current_user)
+            row = await ToolOpsCalibration.create(**payload)
             await ToolStatusService.resolve(tenant_id, tool.id)
             return row
 
@@ -1416,13 +1482,14 @@ class ToolOpsCalibrationService:
         data: ToolOpsCalibrationCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> ToolOpsCalibration:
         tool = await _get_tool_or_raise(tenant_id, data.tool_id)
         _reject_scrapped_tool(tool)
         document_no = await _generate_code(tenant_id, "tool_calibration_code", "TC")
         cal_date = data.calibration_date or date.today()
         async with in_transaction():
-            row = await ToolOpsCalibration.create(
+            payload = dict(
                 tenant_id=tenant_id,
                 document_no=document_no,
                 tool_id=tool.id,
@@ -1440,6 +1507,8 @@ class ToolOpsCalibrationService:
                 remark=data.remark,
                 status="已完成",
             )
+            apply_create_audit(payload, current_user)
+            row = await ToolOpsCalibration.create(**payload)
             tool.last_calibration_date = cal_date
             if data.expiry_date:
                 tool.next_calibration_date = data.expiry_date
@@ -1514,11 +1583,13 @@ class ToolOpsCalibrationService:
         tenant_id: int,
         row_id: int,
         data: ToolOpsCalibrationUpdate,
+        current_user: Optional[User] = None,
     ) -> ToolOpsCalibration:
         async with in_transaction():
             row = await self.get(tenant_id, row_id)
             for k, v in data.model_dump(exclude_unset=True).items():
                 setattr(row, k, v)
+            apply_update_audit(row, current_user)
             await row.save()
             if row.status != "进行中":
                 await ToolStatusService.resolve(tenant_id, row.tool_id)
@@ -1560,12 +1631,13 @@ class ToolScrapApplicationService:
         data: ToolScrapApplicationCreate,
         operator_id: Optional[int] = None,
         operator_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> ToolScrapApplication:
         tool = await _get_tool_or_raise(tenant_id, data.tool_id)
         if tool.status == TOOL_STATUS_SCRAPPED:
             raise ValidationError("工装已报废，不能重复申请")
         application_no = await _generate_code(tenant_id, "tool_scrap_application_code", "TSA")
-        return await ToolScrapApplication.create(
+        payload = dict(
             tenant_id=tenant_id,
             application_no=application_no,
             tool_id=tool.id,
@@ -1580,6 +1652,8 @@ class ToolScrapApplicationService:
             attachments=data.attachments,
             status="草稿",
         )
+        apply_create_audit(payload, current_user)
+        return await ToolScrapApplication.create(**payload)
 
     async def get(self, tenant_id: int, row_id: int) -> ToolScrapApplication:
         row = await ToolScrapApplication.filter(
@@ -1637,20 +1711,28 @@ class ToolScrapApplicationService:
         tenant_id: int,
         row_id: int,
         data: ToolScrapApplicationUpdate,
+        current_user: Optional[User] = None,
     ) -> ToolScrapApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "草稿":
             raise ValidationError("仅草稿状态可编辑")
         for k, v in data.model_dump(exclude_unset=True).items():
             setattr(row, k, v)
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
-    async def submit(self, tenant_id: int, row_id: int) -> ToolScrapApplication:
+    async def submit(
+        self,
+        tenant_id: int,
+        row_id: int,
+        current_user: Optional[User] = None,
+    ) -> ToolScrapApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "草稿":
             raise ValidationError("仅草稿状态可提交")
         row.status = "已提交"
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 
@@ -1660,6 +1742,7 @@ class ToolScrapApplicationService:
         row_id: int,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> ToolScrapApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1672,6 +1755,7 @@ class ToolScrapApplicationService:
             row.approved_at = datetime.now()
             if not row.scrap_date:
                 row.scrap_date = date.today()
+            apply_update_audit(row, current_user)
             await row.save()
             tool.status = TOOL_STATUS_SCRAPPED
             await tool.save()
@@ -1684,6 +1768,7 @@ class ToolScrapApplicationService:
         reject_reason: str,
         approver_id: Optional[int] = None,
         approver_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> ToolScrapApplication:
         row = await self.get(tenant_id, row_id)
         if row.status != "已提交":
@@ -1693,6 +1778,7 @@ class ToolScrapApplicationService:
         row.approver_id = approver_id
         row.approver_name = approver_name
         row.approved_at = datetime.now()
+        apply_update_audit(row, current_user)
         await row.save()
         return row
 

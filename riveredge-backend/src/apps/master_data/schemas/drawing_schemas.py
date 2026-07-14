@@ -12,6 +12,57 @@ DRAWING_TYPES = {"part", "assembly", "process", "other"}
 DRAWING_STATUSES = {"Draft", "Released", "Obsolete"}
 
 
+class AssociatedMaterialBrief(BaseModel):
+    uuid: str
+    main_code: str = Field(..., alias="mainCode")
+    name: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class AssociatedProcessRouteBrief(BaseModel):
+    uuid: str
+    code: str
+    name: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class AssociatedOperationBrief(BaseModel):
+    uuid: str
+    code: str
+    name: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class LinkedBomBrief(BaseModel):
+    material_id: int = Field(..., alias="materialId")
+    material_code: str = Field(..., alias="materialCode")
+    material_name: str = Field(..., alias="materialName")
+    version: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class EngineeringDrawingRevisionBrief(BaseModel):
+    uuid: str
+    revision: str
+    status: str
+    released_at: Optional[datetime] = Field(None, alias="releasedAt")
+    obsolete_reason: Optional[str] = Field(None, alias="obsoleteReason")
+    created_at: datetime = Field(..., alias="createdAt")
+
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
+
+
+class EngineeringDrawingRevisionsResponse(BaseModel):
+    code: str
+    revisions: List[EngineeringDrawingRevisionBrief]
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class FileBriefResponse(BaseModel):
     """文件简要信息（来自 core_files）"""
 
@@ -102,11 +153,17 @@ class EngineeringDrawingResponse(EngineeringDrawingBase):
     obsolete_at: Optional[datetime] = Field(None, alias="obsoleteAt")
     obsolete_reason: Optional[str] = Field(None, alias="obsoleteReason")
     created_by: Optional[int] = Field(None, alias="createdBy")
+    created_by_name: Optional[str] = Field(None, alias="createdByName")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName")
     created_at: datetime = Field(..., alias="createdAt")
     updated_at: datetime = Field(..., alias="updatedAt")
     linked_bom_material_id: Optional[int] = Field(None, alias="linkedBomMaterialId")
     linked_bom_version: Optional[str] = Field(None, alias="linkedBomVersion")
     last_step_bom_import_at: Optional[datetime] = Field(None, alias="lastStepBomImportAt")
+    materials: Optional[List[AssociatedMaterialBrief]] = None
+    process_routes: Optional[List[AssociatedProcessRouteBrief]] = Field(None, alias="processRoutes")
+    operations: Optional[List[AssociatedOperationBrief]] = None
+    linked_bom: Optional[LinkedBomBrief] = Field(None, alias="linkedBom")
 
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 

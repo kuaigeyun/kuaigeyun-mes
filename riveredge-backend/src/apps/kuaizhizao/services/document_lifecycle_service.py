@@ -44,6 +44,7 @@ LIFECYCLE_AUDIT_MODE: Dict[str, LifecycleAuditMode] = {
     "inventory_transfer": "N",
     "stocktaking": "N",
     "material_borrow": "N",
+    "material_return": "N",
     "other_inbound": "N",
     "other_outbound": "N",
     "assembly_order": "N",
@@ -177,6 +178,7 @@ WORK_ORDER_MAIN_STAGES = [
 # 需求生命周期节点（按业务含义独立：需求由上游审核通过自动生成，无草稿；审核 + 是否下推计算）
 # ---------------------------------------------------------------------------
 DEMAND_MAIN_STAGES = [
+    {"key": "effective", "label": "已生效"},
     {"key": "pushed", "label": "已下推计算"},
 ]
 
@@ -478,7 +480,7 @@ def get_demand_lifecycle(
 ) -> Dict[str, Any]:
     """
     根据需求数据计算生命周期，返回供前端展示的结构。
-    需求业务含义：来自上游审核通过后进入需求池，可下推需求计算（MRP）；无执行/交货/完成阶段。
+    模式 A：审核态见 audit 列；业务主轴为「已生效 → 已下推计算」（审核通过入池后可下推 MRP）。
     """
     status = _norm(getattr(demand, "status", None))
     review_status = _norm(getattr(demand, "review_status", None))
@@ -486,7 +488,6 @@ def get_demand_lifecycle(
     demand_type = getattr(demand, "demand_type", None)
     origin_sub = _demand_origin_sub_stages(demand_type if isinstance(demand_type, str) else None)
     audited = _is_approved(review_status) or _is_audited(status) or _is_confirmed(status)
-    business_effective = pushed
 
     if pushed:
         extra = _demand_next_suggestions_extra(True, demand_type if isinstance(demand_type, str) else None)
@@ -499,13 +500,15 @@ def get_demand_lifecycle(
             "next_step_suggestions": extra,
         }
 
-    if _mode_a_is_audit_pre_effective(status, review_status, business_effective=business_effective):
-        suggestions = ["下推需求计算"] if audited else ["提交审核"]
-        return _mode_a_pre_effective_lifecycle(
-            DEMAND_MAIN_STAGES,
-            suggestions,
-            sub_stages=origin_sub,
-        )
+    if audited:
+        return {
+            "current_stage_key": "effective",
+            "current_stage_name": "已生效",
+            "status": "normal",
+            "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "effective"),
+            "sub_stages": origin_sub,
+            "next_step_suggestions": ["下推需求计算"],
+        }
 
     return _mode_a_pre_effective_lifecycle(
         DEMAND_MAIN_STAGES,
@@ -2262,6 +2265,48 @@ def get_material_borrow_lifecycle(
         "main_stages": _build_main_stages(MATERIAL_BORROW_MAIN_STAGES, key, is_exception=(key == "cancelled")),
         "sub_stages": None,
         "next_step_suggestions": ["确认借出"] if key == "pending_borrow" else ["归还"] if key == "borrowed" else [],
+        "milestones": milestones,
+    }
+
+
+MATERIAL_RETURN_MAIN_STAGES = [
+    {"key": "pending_material_return", "label": "待归还"},
+    {"key": "returned", "label": "已归还"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+def get_material_return_lifecycle(
+    record: Any,
+    milestones: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """还料单生命周期计算（与其他入库/借料列表注入方式一致）"""
+    status = _norm(getattr(record, "status", None))
+    milestones = milestones or []
+    status_map = {
+        "待归还": "pending_material_return",
+        "pending_material_return": "pending_material_return",
+        "已归还": "returned",
+        "returned": "returned",
+        "已取消": "cancelled",
+        "cancelled": "cancelled",
+    }
+    key = status_map.get(status, "pending_material_return")
+    stage_name_map = {
+        "pending_material_return": "待归还",
+        "returned": "已归还",
+        "cancelled": "已取消",
+    }
+    stage_name = stage_name_map.get(key, status or "待归还")
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if key == "cancelled" else "success" if key == "returned" else "normal",
+        "main_stages": _build_main_stages(
+            MATERIAL_RETURN_MAIN_STAGES, key, is_exception=(key == "cancelled")
+        ),
+        "sub_stages": None,
+        "next_step_suggestions": ["确认归还"] if key == "pending_material_return" else [],
         "milestones": milestones,
     }
 

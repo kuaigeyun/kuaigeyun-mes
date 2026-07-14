@@ -48,6 +48,7 @@ import {
   resolvePaymentListParams,
 } from '../../../utils/financeListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 type PullPayableCandidate = PaymentPullCandidate;
 
@@ -588,7 +589,7 @@ const PaymentsPage: React.FC = () => {
         }}
         skipFuzzyPinyinClientFilter
         pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
-        columns={columns}
+        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
       />
 
       <UniPullQueryModal<PullPayableCandidate>

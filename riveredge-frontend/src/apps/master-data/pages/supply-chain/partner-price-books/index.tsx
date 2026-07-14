@@ -55,6 +55,7 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { convertUnitPriceByPriceType } from '../../../utils/resolve-partner-material-price';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
@@ -625,7 +626,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           enableRowSelection
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
-          columns={columns}
+          columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
           headerTitle={pageTitle}
           showCreateButton
           createButtonText={createButtonLabel}

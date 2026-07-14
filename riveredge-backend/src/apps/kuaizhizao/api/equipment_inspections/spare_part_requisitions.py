@@ -48,6 +48,7 @@ async def create_spare_part_requisition(
             data,
             operator_id=current_user.id,
             operator_name=current_user.full_name or current_user.username,
+            current_user=current_user,
         )
         lines = await service._load_lines(tenant_id, header.id)
         return _response(header, lines)
@@ -108,10 +109,11 @@ async def get_spare_part_requisition(row_id: int, tenant_id: int = Depends(get_c
 async def update_spare_part_requisition(
     row_id: int,
     data: SparePartRequisitionUpdate,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        header = await service.update(tenant_id, row_id, data)
+        header = await service.update(tenant_id, row_id, data, current_user=current_user)
         lines = await service._load_lines(tenant_id, header.id)
         return _response(header, lines)
     except (ValidationError, NotFoundError) as e:
@@ -124,9 +126,13 @@ async def update_spare_part_requisition(
     response_model=SparePartRequisitionResponse,
     dependencies=[Depends(require_permission_codes("kuaizhizao:spare-part-requisition:submit"))],
 )
-async def submit_spare_part_requisition(row_id: int, tenant_id: int = Depends(get_current_tenant)):
+async def submit_spare_part_requisition(
+    row_id: int,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
     try:
-        header = await service.submit(tenant_id, row_id)
+        header = await service.submit(tenant_id, row_id, current_user=current_user)
         lines = await service._load_lines(tenant_id, header.id)
         return _response(header, lines)
     except (ValidationError, NotFoundError) as e:

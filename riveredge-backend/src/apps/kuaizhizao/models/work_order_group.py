@@ -60,6 +60,4 @@ class WorkOrderGroup(BaseModel):
     member_count = fields.IntField(default=0, description="组成员工单数（含委外）")
 
     remarks = fields.TextField(null=True, description="备注")
-    created_by = fields.IntField(null=True, description="创建人 ID")
-    updated_by = fields.IntField(null=True, description="更新人 ID")
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

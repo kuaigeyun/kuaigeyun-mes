@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Alert, Button, Descriptions, Empty, Form, Input, Modal, Space, Spin, Table, Typography } from 'antd';
+import { App, Alert, Button, Descriptions, Empty, Form, Input, Modal, Space, Spin, Table, Tag, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
@@ -22,6 +22,8 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -47,7 +49,7 @@ import {
   resolveOrderChangeListLifecycleParams,
 } from '../../../utils/orderChangeLifecycle';
 import { formatOrderChangeCategory, ORDER_CHANGE_CATEGORY_LABELS } from '../../../utils/orderChangeCategory';
-import { formatDateTime } from '../../../../../utils/format';
+import {formatDateTime, formatNumber, formatQuantity} from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
@@ -60,6 +62,12 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { purchaseOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 
 const PURCHASE_ORDER_CHANGE_RESOURCE = 'kuaizhizao:purchase-order-change';
+const PURCHASE_ORDER_CHANGE_LIST_FIELD_RANK = {
+  ...SALES_DOC_LIST_FIELD_RANK,
+  change_reason: 56.5,
+  delta_amount: 56.8,
+  change_category: 57,
+};
 
 type PullPurchaseOrderCandidate = PurchaseOrder & {
   id: number;
@@ -378,9 +386,17 @@ const PurchaseOrderChangesPage: React.FC = () => {
     () => createListAuditPhaseColumn<PurchaseOrderChange>({ t, auditEnabled }),
     [t, auditEnabled],
   );
+  const renderDeltaAmount = useCallback((value: unknown) => {
+    if (value == null) return '-';
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return '-';
+    const text = `${amount > 0 ? '+' : ''}${formatNumber(amount, 2)}`;
+    const color = amount > 0 ? '#52c41a' : amount < 0 ? '#ff4d4f' : undefined;
+    return <span style={{ color }}>{text}</span>;
+  }, []);
 
   const columns: ProColumns<PurchaseOrderChange>[] = useMemo(
-    () => [
+    () => alignProColumns<PurchaseOrderChange>([
       {
         title: t('app.kuaizhizao.purchaseOrderChange.colSupplierChangeCode'),
         key: 'change_code',
@@ -419,11 +435,12 @@ const PurchaseOrderChangesPage: React.FC = () => {
         hideInSearch: false,
       },
       {
-        title: t('app.kuaizhizao.purchaseOrderChange.colVersion'),
-        dataIndex: 'change_version',
-        width: 72,
-        sorter: true,
+        title: t('app.kuaizhizao.purchaseOrderChange.colChangeReason'),
+        dataIndex: 'change_reason',
+        minWidth: 180,
+        ellipsis: true,
         hideInSearch: true,
+        uniTablePrimaryFlex: true,
       },
       {
         title: t('app.kuaizhizao.purchaseOrderChange.colCategory'),
@@ -432,7 +449,11 @@ const PurchaseOrderChangesPage: React.FC = () => {
         sorter: true,
         valueType: 'select',
         valueEnum: changeCategoryValueEnum,
-        render: (_, r) => formatOrderChangeCategory(r.change_category),
+        render: (_, r) => (
+          <Tag color="blue" bordered={false}>
+            {formatOrderChangeCategory(r.change_category)}
+          </Tag>
+        ),
       },
       {
         title: t('app.kuaizhizao.purchaseOrderChange.colDeltaAmount'),
@@ -440,18 +461,9 @@ const PurchaseOrderChangesPage: React.FC = () => {
         width: 100,
         sorter: true,
         hideInSearch: true,
-        render: (_, r) => (r.delta_amount != null ? Number(r.delta_amount).toFixed(2) : '-'),
+        render: (_, r) => renderDeltaAmount(r.delta_amount),
       },
-      {
-        title: t('common.createdAt'),
-        dataIndex: 'created_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        defaultSortOrder: 'descend',
-        hideInSearch: true,
-        render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm') : '-'),
-      },
+      ...buildDocumentAuditColumns<PurchaseOrderChange>(t),
       {
         title: t('common.createdAt'),
         dataIndex: 'created_at_range',
@@ -471,14 +483,6 @@ const PurchaseOrderChangesPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => (r.applied_at ? formatDateTime(r.applied_at, 'YYYY-MM-DD HH:mm') : '-'),
       },
-      {
-        title: t('app.kuaizhizao.purchaseOrderChange.colChangeReason'),
-        dataIndex: 'change_reason',
-        minWidth: 180,
-        ellipsis: true,
-        hideInSearch: true,
-        uniTablePrimaryFlex: true,
-      },
       ...(purchaseOrderChangeAuditColumn ? [purchaseOrderChangeAuditColumn] : []),
       {
         title: t('app.kuaizhizao.purchaseOrderChange.colLifecycle'),
@@ -497,7 +501,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
       {
         title: t('common.actions'),
         valueType: 'option',
-        width: 180,
+        width: 220,
         fixed: 'right',
         render: (_, record) => [
           <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>
@@ -531,8 +535,8 @@ const PurchaseOrderChangesPage: React.FC = () => {
           ) : null,
         ],
       },
-    ],
-    [message, modal, orderChangeLifecycleValueEnum, purchaseOrderChangeAuditColumn, purchaseOrderChangePerms.canDelete, purchaseOrderChangePerms.canUpdate, changeCategoryValueEnum, changeSupplierSearchOptions, suppliersLoading, t],
+    ], PURCHASE_ORDER_CHANGE_LIST_FIELD_RANK),
+    [message, modal, orderChangeLifecycleValueEnum, purchaseOrderChangeAuditColumn, purchaseOrderChangePerms.canDelete, purchaseOrderChangePerms.canUpdate, changeCategoryValueEnum, changeSupplierSearchOptions, suppliersLoading, t, renderDeltaAmount],
   );
 
   const request = useCallback(
@@ -750,9 +754,9 @@ const PurchaseOrderChangesPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' , render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' , render: formatQuantity },
                 ]}
               />
             ) : (

@@ -32,7 +32,7 @@ import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useTranslation } from 'react-i18next';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatQuantity } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
@@ -40,6 +40,7 @@ import {
   normalizeWarehouseListResponse,
   resolveAssemblyDisassemblyOrderListParams,
 } from '../../../utils/warehouseListCore';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
@@ -528,6 +529,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       align: 'right',
       sorter: true,
       hideInSearch: true,
+      render: formatQuantity,
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colComponentCount'),
@@ -537,16 +539,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       sorter: true,
       hideInSearch: true,
     },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      sorter: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
-    },
+    ...buildDocumentAuditColumns<OrderLike>(t),
     {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -615,7 +608,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         return <Tag>{String(status ?? '-')}</Tag>;
       },
     },
-    { title: config.quantityLabel, dataIndex: 'total_quantity' },
+    { title: config.quantityLabel, dataIndex: 'total_quantity', render: formatQuantity },
     { title: t('app.kuaizhizao.warehouseCommon.colComponentCount'), dataIndex: 'total_items' },
     ...(config.enableTemplateApply
       ? [{ title: t('app.kuaizhizao.assemblyOrder.assemblyTemplate'), dataIndex: 'assembly_template_code' as const }]
@@ -861,7 +854,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
                   columns={[
                     { title: t('app.kuaizhizao.warehouseCommon.colComponentCode'), dataIndex: 'material_code', width: 120 },
                     { title: t('app.kuaizhizao.warehouseCommon.colComponentName'), dataIndex: 'material_name', width: 150 },
-                    { title: t('app.kuaizhizao.warehouseCommon.colQuantity'), dataIndex: 'quantity', width: 90, align: 'right' },
+                    { title: t('app.kuaizhizao.warehouseCommon.colQuantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
                     {
                       title: t('app.kuaizhizao.warehouseCommon.colUnitPrice'),
                       dataIndex: 'unit_price',

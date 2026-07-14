@@ -130,7 +130,7 @@ async def update_standard_cost(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await service.update_standard_cost(tenant_id, id, data)
+        return await service.update_standard_cost(tenant_id, id, data, current_user.id)
     except NotFoundError as e:
         raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost/standard-costs/{id}", tenant_id)
 

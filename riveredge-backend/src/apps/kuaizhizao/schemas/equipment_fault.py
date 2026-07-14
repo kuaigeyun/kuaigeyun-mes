@@ -103,6 +103,10 @@ class EquipmentFaultResponse(EquipmentFaultBase):
     tenant_id: int = Field(..., description="组织ID")
     equipment_id: int = Field(..., description="设备ID")
     equipment_name: str = Field(..., description="设备名称")
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[Dict[str, Any]] = Field(None, description="通用生命周期")
@@ -202,6 +206,10 @@ class EquipmentRepairResponse(EquipmentRepairBase):
     equipment_name: str = Field(..., description="设备名称")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, description="删除时间（软删除）")
 
 

@@ -16,8 +16,8 @@ export interface PlatformSettings {
   id?: number;
   platform_name: string;
   platform_name_en?: string;
-  platform_logo?: string;
-  favicon?: string;
+  platform_logo?: string | null;
+  favicon?: string | null;
   platform_description?: string;
   platform_contact_email?: string;
   platform_contact_phone?: string;
@@ -47,8 +47,8 @@ export interface PlatformSettings {
 export interface PlatformSettingsUpdateRequest {
   platform_name?: string;
   platform_name_en?: string;
-  platform_logo?: string;
-  favicon?: string;
+  platform_logo?: string | null;
+  favicon?: string | null;
   platform_description?: string;
   platform_contact_email?: string;
   platform_contact_phone?: string;

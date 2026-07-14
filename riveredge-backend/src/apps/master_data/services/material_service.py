@@ -17,7 +17,9 @@ from tortoise.models import Q
 from tortoise.expressions import F
 from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
+from apps.common.audit_actor import apply_create_audit, apply_update_audit, audit_response_fields
 from apps.master_data.models.material import MaterialGroup, Material, BOM
+from infra.models.user import User
 from apps.master_data.constants.material_source_type import (
     LEGACY_SOURCE_TYPE_CONFIGURE,
     is_canonical_material_source_type,
@@ -517,6 +519,7 @@ def _material_to_response_data(material) -> Dict[str, Any]:
         "process_route_name": getattr(pr, "name", None) if pr else None,
         "created_at": material.created_at,
         "updated_at": material.updated_at,
+        **audit_response_fields(material),
         "deleted_at": getattr(material, "deleted_at", None),
     }
 
@@ -583,7 +586,8 @@ class MaterialService:
     @staticmethod
     async def create_material_group(
         tenant_id: int,
-        data: MaterialGroupCreate
+        data: MaterialGroupCreate,
+        current_user: Optional[User] = None,
     ) -> MaterialGroupResponse:
         """
         创建物料分组
@@ -591,6 +595,7 @@ class MaterialService:
         Args:
             tenant_id: 租户ID
             data: 物料分组创建数据
+            current_user: 当前用户（写入审计字段）
             
         Returns:
             MaterialGroupResponse: 创建的物料分组对象
@@ -636,6 +641,7 @@ class MaterialService:
                 material_stages=group_data.get("inspection_stages"),
             )
         
+        apply_create_audit(group_data, current_user)
         # 创建物料分组
         material_group = await MaterialGroup.create(
             tenant_id=tenant_id,
@@ -732,6 +738,7 @@ class MaterialService:
                         "is_active": getattr(mg, 'is_active', True),
                         "created_at": mg.created_at,
                         "updated_at": mg.updated_at,
+                        **audit_response_fields(mg),
                         "deleted_at": getattr(mg, 'deleted_at', None),
                         "process_route_id": getattr(mg, 'process_route_id', None) if hasattr(mg, 'process_route_id') else (getattr(mg.process_route, 'id', None) if hasattr(mg, 'process_route') and mg.process_route else None),
                         "process_route_name": getattr(mg.process_route, 'name', None) if hasattr(mg, 'process_route') and mg.process_route else None,
@@ -749,7 +756,8 @@ class MaterialService:
     async def update_material_group(
         tenant_id: int,
         group_uuid: str,
-        data: MaterialGroupUpdate
+        data: MaterialGroupUpdate,
+        current_user: Optional[User] = None,
     ) -> MaterialGroupResponse:
         """
         更新物料分组
@@ -758,6 +766,7 @@ class MaterialService:
             tenant_id: 租户ID
             group_uuid: 物料分组UUID
             data: 物料分组更新数据
+            current_user: 当前用户（写入审计字段）
             
         Returns:
             MaterialGroupResponse: 更新后的物料分组对象
@@ -822,6 +831,7 @@ class MaterialService:
         for key, value in update_data.items():
             setattr(material_group, key, value)
         
+        apply_update_audit(material_group, current_user)
         await material_group.save()
         await material_group.fetch_related("process_route")
         return await MaterialService._material_group_to_response(material_group)
@@ -881,7 +891,8 @@ class MaterialService:
     @staticmethod
     async def create_material(
         tenant_id: int,
-        data: MaterialCreate
+        data: MaterialCreate,
+        current_user: Optional[User] = None,
     ) -> MaterialResponse:
         """
         创建物料
@@ -1162,6 +1173,7 @@ class MaterialService:
                     material_data["variant_attributes"],
                 )
             try:
+                apply_create_audit(material_data, current_user)
                 material = await Material.create(
                     tenant_id=tenant_id,
                     **material_data
@@ -2345,6 +2357,7 @@ class MaterialService:
         material_uuid: str,
         data: MaterialUpdate,
         updated_by: Optional[int] = None,
+        current_user: Optional[User] = None,
     ) -> MaterialResponse:
         """
         更新物料
@@ -2491,7 +2504,8 @@ class MaterialService:
             resolved_pr_id = await _resolve_process_route_id_from_defaults_dict(tenant_id, material.defaults)
             if resolved_pr_id:
                 material.process_route_id = resolved_pr_id
-        
+
+        apply_update_audit(material, current_user)
         await material.save()
         
         # 处理编码映射更新
@@ -3427,7 +3441,8 @@ class MaterialService:
     @staticmethod
     async def create_bom(
         tenant_id: int,
-        data: BOMCreate
+        data: BOMCreate,
+        current_user: Optional[User] = None,
     ) -> BOMResponse:
         """
         创建BOM（单个）
@@ -3479,7 +3494,7 @@ class MaterialService:
         payload = data.dict()
         payload["level"] = 1
         payload["path"] = f"{data.material_id}/{data.component_id}"
-        
+        apply_create_audit(payload, current_user)
         bom = await BOM.create(tenant_id=tenant_id, **payload)
         return BOMResponse.model_validate(bom)
     
@@ -3622,7 +3637,8 @@ class MaterialService:
     @staticmethod
     async def create_bom_batch(
         tenant_id: int,
-        data: BOMBatchCreate
+        data: BOMBatchCreate,
+        current_user: Optional[User] = None,
     ) -> List[BOMResponse]:
         """
         批量创建BOM（为一个主物料添加多个子物料）
@@ -3725,34 +3741,36 @@ class MaterialService:
             data.version or "1.0",
         )
         for item in data.items:
-            bom = await BOM.create(
-                tenant_id=tenant_id,
-                material_id=data.material_id,
-                component_id=item.component_id,
-                quantity=item.quantity,
-                base_quantity=version_base_qty,
-                unit=item.unit,
-                waste_rate=item.waste_rate if hasattr(item, 'waste_rate') else Decimal("0.00"),
-                is_required=item.is_required if hasattr(item, 'is_required') else True,
-                issue_method=getattr(item, 'issue_method', None) or "pick",
-                level=1,  # 直接子件深度 1（根主料为 0）
-                path=f"{data.material_id}/{item.component_id}",
-                version=data.version,
-                bom_code=data.bom_code,
-                bom_name=version_bom_name,
-                effective_date=data.effective_date,
-                expiry_date=data.expiry_date,
-                approval_status=data.approval_status,
-                is_alternative=item.is_alternative,
-                alternative_group_id=item.alternative_group_id,
-                priority=item.priority,
-                is_configurable=item.is_configurable,
-                configurable_group_id=item.configurable_group_id,
-                is_default_configurable=item.is_default_configurable,
-                description=data.description,
-                remark=item.remark or data.remark,
-                is_active=data.is_active,
-            )
+            bom_payload = {
+                "tenant_id": tenant_id,
+                "material_id": data.material_id,
+                "component_id": item.component_id,
+                "quantity": item.quantity,
+                "base_quantity": version_base_qty,
+                "unit": item.unit,
+                "waste_rate": item.waste_rate if hasattr(item, 'waste_rate') else Decimal("0.00"),
+                "is_required": item.is_required if hasattr(item, 'is_required') else True,
+                "issue_method": getattr(item, 'issue_method', None) or "pick",
+                "level": 1,  # 直接子件深度 1（根主料为 0）
+                "path": f"{data.material_id}/{item.component_id}",
+                "version": data.version,
+                "bom_code": data.bom_code,
+                "bom_name": version_bom_name,
+                "effective_date": data.effective_date,
+                "expiry_date": data.expiry_date,
+                "approval_status": data.approval_status,
+                "is_alternative": item.is_alternative,
+                "alternative_group_id": item.alternative_group_id,
+                "priority": item.priority,
+                "is_configurable": item.is_configurable,
+                "configurable_group_id": item.configurable_group_id,
+                "is_default_configurable": item.is_default_configurable,
+                "description": data.description,
+                "remark": item.remark or data.remark,
+                "is_active": data.is_active,
+            }
+            apply_create_audit(bom_payload, current_user)
+            bom = await BOM.create(**bom_payload)
             bom_list.append(bom)
         
         return [BOMResponse.model_validate(bom) for bom in bom_list]
@@ -3867,6 +3885,7 @@ class MaterialService:
                 "is_active": getattr(b, "is_active", True),
                 "created_at": b.created_at,
                 "updated_at": b.updated_at,
+                **audit_response_fields(b),
                 "deleted_at": b.deleted_at,
             }
             result.append(BOMResponse.model_validate(d))
@@ -4010,6 +4029,7 @@ class MaterialService:
                 "is_active": getattr(b, "is_active", True),
                 "created_at": b.created_at,
                 "updated_at": b.updated_at,
+                **audit_response_fields(b),
                 "deleted_at": b.deleted_at,
             }
             out[k].append(BOMResponse.model_validate(d))
@@ -4019,7 +4039,8 @@ class MaterialService:
     async def update_bom(
         tenant_id: int,
         bom_uuid: str,
-        data: BOMUpdate
+        data: BOMUpdate,
+        current_user: Optional[User] = None,
     ) -> BOMResponse:
         """
         更新BOM
@@ -4113,7 +4134,7 @@ class MaterialService:
         
         for key, value in update_data.items():
             setattr(bom, key, value)
-        
+        apply_update_audit(bom, current_user)
         await bom.save()
         
         return BOMResponse.model_validate(bom)
@@ -4667,6 +4688,7 @@ class MaterialService:
                 "is_active": group.is_active,
                 "created_at": group.created_at,
                 "updated_at": group.updated_at,
+                **audit_response_fields(group),
                 "deleted_at": group.deleted_at,
                 "children": [],  # 先初始化为空，稍后递归填充
                 "materials": group_materials,
@@ -4994,9 +5016,12 @@ class MaterialService:
     async def relation_import_bom(
         tenant_id: int,
         data: BOMRelationImportRequest,
+        current_user: Optional[User] = None,
     ) -> BOMRelationImportResponse:
         """BOM 高级关联导入：物料/工艺路线/工序/绩效 + BOM 明细一体化导入。"""
-        return await MaterialService._relation_import_bom_v2(tenant_id, data)
+        return await MaterialService._relation_import_bom_v2(
+            tenant_id, data, current_user=current_user
+        )
 
         def _norm(value: Any) -> str:
             return str(value or "").strip()
@@ -5365,6 +5390,7 @@ class MaterialService:
     async def _relation_import_bom_v2(
         tenant_id: int,
         data: BOMRelationImportRequest,
+        current_user: Optional[User] = None,
     ) -> BOMRelationImportResponse:
         """BOM 关联导入 v2：规范化契约解析 + 统一预检/提交链路 + 事务回滚保护。"""
 
@@ -5489,16 +5515,18 @@ class MaterialService:
                     errors.append(f"第 {row_no} 行物料编码不存在：{code}")
                     return None
 
-                created = await Material.create(
-                    tenant_id=tenant_id,
-                    main_code=code,
-                    code=code,
-                    name=_cell(row, canonical_idx["material_name"]) or code,
-                    specification=_cell(row, canonical_idx["specification"]) or None,
-                    base_unit=_cell(row, canonical_idx["base_unit"]) or "个",
-                    source_type="Make",
-                    is_active=True,
-                )
+                created_payload = {
+                    "tenant_id": tenant_id,
+                    "main_code": code,
+                    "code": code,
+                    "name": _cell(row, canonical_idx["material_name"]) or code,
+                    "specification": _cell(row, canonical_idx["specification"]) or None,
+                    "base_unit": _cell(row, canonical_idx["base_unit"]) or "个",
+                    "source_type": "Make",
+                    "is_active": True,
+                }
+                apply_create_audit(created_payload, current_user)
+                created = await Material.create(**created_payload)
                 summary.created += 1
                 material_cache[code] = created
                 return created

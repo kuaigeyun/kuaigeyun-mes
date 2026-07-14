@@ -59,7 +59,6 @@ class EngineeringDrawing(BaseModel):
     released_by = fields.IntField(null=True, description="发布人 ID")
     obsolete_at = fields.DatetimeField(null=True, description="作废时间")
     obsolete_reason = fields.TextField(null=True, description="作废原因")
-    created_by = fields.IntField(null=True, description="创建人 ID")
 
     deleted_at = fields.DatetimeField(null=True, description="软删除时间")
 

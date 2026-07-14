@@ -22,6 +22,7 @@ import { receivableService } from '../../apps/kuaicaiwu/services/finance/receiva
 import { payableService } from '../../apps/kuaicaiwu/services/finance/payable';
 import { purchaseInvoiceService } from '../../apps/kuaicaiwu/services/finance/purchase-invoice';
 import { AmountDisplay } from '../permission';
+import { formatQuantity } from '../../utils/format';
 import {
   KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO,
   KUAIZHIZAO_QUOTATION_FIELD_RESOURCE as QO,
@@ -143,7 +144,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           title: '数量',
           dataIndex: 'qty',
           width: 88,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         { title: '单位', dataIndex: 'unit', width: 64 },
         {
@@ -190,7 +191,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           title: '数量',
           dataIndex: 'qty',
           width: 88,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         { title: '单位', dataIndex: 'unit', width: 64 },
         {
@@ -237,7 +238,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           title: '数量',
           dataIndex: 'qty',
           width: 88,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         { title: '单位', dataIndex: 'unit', width: 64 },
         {
@@ -282,7 +283,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           title: '净需求',
           dataIndex: 'net_requirement',
           width: 96,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         { title: '单位', dataIndex: 'unit', width: 64 },
         { title: '来源', dataIndex: 'source', width: 88 },
@@ -315,7 +316,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           title: '数量',
           dataIndex: 'qty',
           width: 120,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
       ];
       return { basics, columns, rows };
@@ -352,7 +353,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           title: '数量',
           dataIndex: 'qty',
           width: 88,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         { title: '单位', dataIndex: 'unit', width: 64 },
         {
@@ -400,7 +401,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           title: '数量',
           dataIndex: 'qty',
           width: 88,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         { title: '单位', dataIndex: 'unit', width: 64 },
         {
@@ -443,13 +444,13 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           title: '需求数量',
           dataIndex: 'required_quantity',
           width: 88,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         {
           title: '已领数量',
           dataIndex: 'picked_quantity',
           width: 88,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         { title: '单位', dataIndex: 'unit', width: 64 },
         { title: '仓库', dataIndex: 'warehouse_name', width: 100, ellipsis: true },
@@ -488,13 +489,13 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           title: '入库数量',
           dataIndex: 'receipt_quantity',
           width: 88,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         {
           title: '合格数',
           dataIndex: 'qualified_quantity',
           width: 80,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         { title: '单位', dataIndex: 'unit', width: 64 },
         { title: '批号', dataIndex: 'batch_number', width: 96, render: (v: string) => dash(v) },
@@ -533,13 +534,13 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           title: '入库数量',
           dataIndex: 'receipt_quantity',
           width: 88,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         {
           title: '合格数',
           dataIndex: 'qualified_quantity',
           width: 80,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         { title: '单位', dataIndex: 'unit', width: 64 },
         { title: '批号', dataIndex: 'batch_number', width: 96, render: (v: string) => dash(v) },
@@ -582,7 +583,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           title: '出库数量',
           dataIndex: 'delivery_quantity',
           width: 88,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         { title: '单位', dataIndex: 'unit', width: 64 },
         {
@@ -637,13 +638,13 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           title: '入库数量',
           dataIndex: 'receipt_quantity',
           width: 88,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         {
           title: '合格数',
           dataIndex: 'qualified_quantity',
           width: 80,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         { title: '单位', dataIndex: 'unit', width: 64 },
         {
@@ -694,10 +695,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
         { key: 'won', label: '工单名称', value: dash(wo.name ?? wo.product_name) },
         { key: 'cnt', label: '报工条数', value: String(list.length) },
       ];
-      const qtyFmt = (v: unknown) =>
-        v != null && v !== '' && Number.isFinite(Number(v))
-          ? Number(v).toFixed(4).replace(/\.?0+$/, '')
-          : '—';
+      const qtyFmt = formatQuantity;
       const columns: BriefModel['columns'] = [
         {
           title: '工序',
@@ -787,7 +785,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           title: '数量',
           dataIndex: 'qty',
           width: 80,
-          render: (v: number) => (v != null ? Number(v).toFixed(4).replace(/\.?0+$/, '') : '—'),
+          render: formatQuantity,
         },
         { title: '单位', dataIndex: 'unit', width: 56, render: (v: string) => dash(v) },
         {
@@ -919,10 +917,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           ? ([{ key: 'reject', label: '驳回原因', value: dash(r.rejection_reason) }] as BriefModel['basics'])
           : []),
       ];
-      const qtyFmt = (v: unknown) =>
-        v != null && v !== '' && Number.isFinite(Number(v))
-          ? Number(v).toFixed(4).replace(/\.?0+$/, '')
-          : '—';
+      const qtyFmt = formatQuantity;
       const rows = [
         {
           key: 'report-qty',

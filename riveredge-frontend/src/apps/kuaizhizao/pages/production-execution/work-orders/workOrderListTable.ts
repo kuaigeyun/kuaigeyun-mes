@@ -16,7 +16,7 @@ import type { WorkOrderListRow } from './workOrderListTreeTypes'
 
 export const WORK_ORDER_LIST_TANSTACK_PREFIX = ['kuaizhizao', 'work-orders', 'list'] as const
 
-export const WORK_ORDER_LIST_STALE_MS = 0
+export const WORK_ORDER_LIST_STALE_MS = 45_000
 
 /** 从列表 rowKey 解析工单组 ID（组父行：work_order_group-123 或负数 id） */
 export function parseWorkOrderGroupIdFromListRowKey(key: React.Key): number | null {
@@ -439,8 +439,8 @@ export async function fetchWorkOrderListForTable(
   searchFormValues: Record<string, any> | undefined
 ): Promise<WorkOrderListTableResult> {
   const apiParams = buildWorkOrderListApiParams(params, sort, searchFormValues, {
-    /** 与齐套分析 API 同口径重算当前页并写库，保证列表齐套率与库位弹窗一致 */
-    include_readiness: true,
+    /** 读持久化齐套率；缺失活跃工单由后端按需补算。强制 true 会整页重算拖慢首屏 */
+    include_readiness: false,
     /** 列表首屏关闭；避免 batch_ensure_scores 触发大量快照计算 */
     include_scores: false,
     /** 工序列：与运营看板同口径的步骤摘要 */

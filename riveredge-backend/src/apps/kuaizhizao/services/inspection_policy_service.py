@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
 
 from infra.exceptions.exceptions import ValidationError
@@ -503,7 +504,14 @@ async def resolve_fqc_plan_label_for_material(tenant_id: int, material_id: int) 
     return "检验方案"
 
 
-_IQC_PASSED_REVIEW_STATUSES = frozenset({"已审核", "通过", "APPROVED"})
+_IQC_PASSED_REVIEW_STATUSES = frozenset({
+    "已审核",
+    "通过",
+    "已通过",
+    "审核通过",
+    "APPROVED",
+    "approved",
+})
 _IQC_CONDUCTED_STATUSES = frozenset({"已检验", "已审核"})
 
 
@@ -525,15 +533,30 @@ _FQC_CONDUCTED_STATUSES = frozenset({"已检验", "已审核"})
 _IPQC_CONDUCTED_STATUSES = frozenset({"已检验", "已审核"})
 
 
+def _ipqc_transferable_qualified_quantity(inspection: Any) -> Decimal:
+    try:
+        return Decimal(str(getattr(inspection, "qualified_quantity", None) or 0))
+    except Exception:
+        return Decimal("0")
+
+
 async def ipqc_inspection_passed_for_transfer(tenant_id: int, inspection: Any) -> bool:
-    """过程检验是否满足转下道条件（合格 + 已检验；需审核时另须审核通过）。"""
-    if getattr(inspection, "quality_status", None) != "合格":
+    """
+    过程检验是否可计入转下道。
+
+    口径：检验已执行，且合格数量 > 0；需审核时另须审核通过。
+    整单 quality_status 可为「不合格」（部分不合格），仍放行其中的合格数量。
+    """
+    st = str(getattr(inspection, "status", "") or "").strip()
+    if st not in _IPQC_CONDUCTED_STATUSES:
+        return False
+    if _ipqc_transferable_qualified_quantity(inspection) <= 0:
         return False
     from infra.services.business_config_service import BusinessConfigService
 
     audit_required = await BusinessConfigService().check_audit_required(tenant_id, "process_inspection")
     if not audit_required:
-        return str(getattr(inspection, "status", "") or "").strip() in _IPQC_CONDUCTED_STATUSES
+        return True
     return getattr(inspection, "review_status", None) in _IQC_PASSED_REVIEW_STATUSES
 
 

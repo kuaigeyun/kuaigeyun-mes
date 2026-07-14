@@ -20,8 +20,6 @@ class KbSpace(BaseModel):
     parent_space_id = fields.IntField(null=True, description="父空间ID")
     sort_order = fields.IntField(default=0, description="排序")
     is_active = fields.BooleanField(default=True, description="是否启用")
-    created_by = fields.IntField(null=True)
-    updated_by = fields.IntField(null=True)
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:
@@ -45,8 +43,6 @@ class KbArticle(BaseModel):
     tags = fields.JSONField(null=True, description="标签")
     author_id = fields.IntField(null=True, description="作者ID")
     author_name = fields.CharField(max_length=100, null=True, description="作者姓名")
-    created_by = fields.IntField(null=True)
-    updated_by = fields.IntField(null=True)
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:

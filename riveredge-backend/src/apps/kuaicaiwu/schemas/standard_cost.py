@@ -49,6 +49,8 @@ class StandardCostResponse(StandardCostBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
 
     class Config:
         from_attributes = True

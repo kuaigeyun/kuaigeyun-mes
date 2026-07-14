@@ -204,14 +204,15 @@ class AppBaseService(BaseService[T]):
         if not self.model:
             raise ValueError("Model not set")
 
-        # 获取用户信息
+        # 获取用户信息（创建时同步写 updated_*，与 audit_actor 约定一致）
         user_info = await self.get_user_info(created_by)
 
-        # 添加租户和用户信息
         data.update({
             'tenant_id': tenant_id,
             'created_by': created_by,
-            'created_by_name': user_info['name']
+            'created_by_name': user_info['name'],
+            'updated_by': created_by,
+            'updated_by_name': user_info['name'],
         })
 
         return await self.model.create(**data)

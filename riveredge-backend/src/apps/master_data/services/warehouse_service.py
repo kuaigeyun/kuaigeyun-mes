@@ -8,6 +8,7 @@ from typing import List, Optional, TYPE_CHECKING
 from tortoise.exceptions import IntegrityError
 from tortoise.models import Q
 
+from apps.common.audit_actor import apply_create_audit, apply_restore_audit, apply_update_audit
 from apps.master_data.models.warehouse import Warehouse, StorageArea, StorageLocation
 from apps.master_data.models.factory import Workshop, WorkCenter, Workstation
 from apps.master_data.schemas.warehouse_schemas import (
@@ -16,6 +17,7 @@ from apps.master_data.schemas.warehouse_schemas import (
     StorageLocationCreate, StorageLocationUpdate, StorageLocationResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 from apps.master_data.services.master_data_list_core import apply_master_crud_list_filters
 
 if TYPE_CHECKING:
@@ -86,7 +88,8 @@ class WarehouseService:
     @staticmethod
     async def create_warehouse(
         tenant_id: int,
-        data: WarehouseCreate
+        data: WarehouseCreate,
+        current_user: Optional[User] = None,
     ) -> WarehouseResponse:
         """
         创建仓库
@@ -130,6 +133,7 @@ class WarehouseService:
             existing_deleted.workshop_name = workshop_name
             existing_deleted.workstation_name = workstation_name
             existing_deleted.work_center_name = work_center_name
+            apply_restore_audit(existing_deleted, current_user)
             await existing_deleted.save()
             return WarehouseResponse.model_validate(existing_deleted)
 
@@ -141,6 +145,7 @@ class WarehouseService:
         create_data["workshop_name"] = workshop_name
         create_data["workstation_name"] = workstation_name
         create_data["work_center_name"] = work_center_name
+        apply_create_audit(create_data, current_user)
         try:
             warehouse = await Warehouse.create(
                 tenant_id=tenant_id,
@@ -169,6 +174,7 @@ class WarehouseService:
                     existing_deleted_retry.workshop_name = workshop_name_r
                     existing_deleted_retry.workstation_name = workstation_name_r
                     existing_deleted_retry.work_center_name = work_center_name_r
+                    apply_restore_audit(existing_deleted_retry, current_user)
                     await existing_deleted_retry.save()
                     return WarehouseResponse.model_validate(existing_deleted_retry)
                 
@@ -275,7 +281,8 @@ class WarehouseService:
     async def update_warehouse(
         tenant_id: int,
         warehouse_uuid: str,
-        data: WarehouseUpdate
+        data: WarehouseUpdate,
+        current_user: Optional[User] = None,
     ) -> WarehouseResponse:
         """
         更新仓库
@@ -332,6 +339,7 @@ class WarehouseService:
             warehouse.workstation_name = workstation_name
             warehouse.work_center_name = work_center_name
 
+        apply_update_audit(warehouse, current_user)
         try:
             await warehouse.save()
         except IntegrityError as e:
@@ -461,7 +469,8 @@ class WarehouseService:
     @staticmethod
     async def create_storage_area(
         tenant_id: int,
-        data: StorageAreaCreate
+        data: StorageAreaCreate,
+        current_user: Optional[User] = None,
     ) -> StorageAreaResponse:
         """
         创建库区
@@ -510,14 +519,17 @@ class WarehouseService:
             existing_deleted.description = data.description
             existing_deleted.warehouse_id = data.warehouse_id
             existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            apply_restore_audit(existing_deleted, current_user)
             await existing_deleted.save()
             return await WarehouseService._storage_area_to_response(existing_deleted)
         
         # 创建新库区
+        create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+        apply_create_audit(create_data, current_user)
         try:
             storage_area = await StorageArea.create(
                 tenant_id=tenant_id,
-                **(data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
+                **create_data
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束或主键冲突错误
@@ -537,6 +549,7 @@ class WarehouseService:
                     existing_deleted_retry.description = data.description
                     existing_deleted_retry.warehouse_id = data.warehouse_id
                     existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    apply_restore_audit(existing_deleted_retry, current_user)
                     await existing_deleted_retry.save()
                     return await WarehouseService._storage_area_to_response(existing_deleted_retry)
                 
@@ -648,7 +661,8 @@ class WarehouseService:
     async def update_storage_area(
         tenant_id: int,
         storage_area_uuid: str,
-        data: StorageAreaUpdate
+        data: StorageAreaUpdate,
+        current_user: Optional[User] = None,
     ) -> StorageAreaResponse:
         """
         更新库区
@@ -701,6 +715,7 @@ class WarehouseService:
         for key, value in update_data.items():
             setattr(storage_area, key, value)
         
+        apply_update_audit(storage_area, current_user)
         try:
             await storage_area.save()
         except IntegrityError as e:
@@ -830,7 +845,8 @@ class WarehouseService:
     @staticmethod
     async def create_storage_location(
         tenant_id: int,
-        data: StorageLocationCreate
+        data: StorageLocationCreate,
+        current_user: Optional[User] = None,
     ) -> StorageLocationResponse:
         """
         创建库位
@@ -879,14 +895,17 @@ class WarehouseService:
             existing_deleted.description = data.description
             existing_deleted.storage_area_id = data.storage_area_id
             existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            apply_restore_audit(existing_deleted, current_user)
             await existing_deleted.save()
             return await WarehouseService._storage_location_to_response(existing_deleted)
         
         # 创建新库位
+        create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+        apply_create_audit(create_data, current_user)
         try:
             storage_location = await StorageLocation.create(
                 tenant_id=tenant_id,
-                **(data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
+                **create_data
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束或主键冲突错误
@@ -906,6 +925,7 @@ class WarehouseService:
                     existing_deleted_retry.description = data.description
                     existing_deleted_retry.storage_area_id = data.storage_area_id
                     existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    apply_restore_audit(existing_deleted_retry, current_user)
                     await existing_deleted_retry.save()
                     return await WarehouseService._storage_location_to_response(existing_deleted_retry)
                 
@@ -1017,7 +1037,8 @@ class WarehouseService:
     async def update_storage_location(
         tenant_id: int,
         storage_location_uuid: str,
-        data: StorageLocationUpdate
+        data: StorageLocationUpdate,
+        current_user: Optional[User] = None,
     ) -> StorageLocationResponse:
         """
         更新库位
@@ -1070,6 +1091,7 @@ class WarehouseService:
         for key, value in update_data.items():
             setattr(storage_location, key, value)
         
+        apply_update_audit(storage_location, current_user)
         try:
             await storage_location.save()
         except IntegrityError as e:
@@ -1274,7 +1296,11 @@ class WarehouseService:
     ]
 
     @staticmethod
-    async def load_preset_sme(tenant_id: int, names: Optional[List[str]] = None) -> int:
+    async def load_preset_sme(
+        tenant_id: int,
+        names: Optional[List[str]] = None,
+        current_user: Optional[User] = None,
+    ) -> int:
         """
         加载中国中小制造业常见仓库预设数据。
         仅创建不存在的仓库（按 name 去重），仓库编码根据编码规则生成。
@@ -1301,21 +1327,25 @@ class WarehouseService:
                     code = await CodeGenerationService.generate_code(
                         tenant_id, "MASTER_DATA_WAREHOUSE_WAREHOUSE"
                     )
-                    await Warehouse.create(
-                        tenant_id=tenant_id,
-                        code=code,
-                        name=item["name"],
-                        description=item.get("description"),
-                        warehouse_type=item.get("warehouse_type", "normal"),
-                        is_active=True,
-                    )
+                    payload = {
+                        "code": code,
+                        "name": item["name"],
+                        "description": item.get("description"),
+                        "warehouse_type": item.get("warehouse_type", "normal"),
+                        "is_active": True,
+                    }
+                    apply_create_audit(payload, current_user)
+                    await Warehouse.create(tenant_id=tenant_id, **payload)
                     created += 1
                 except IntegrityError:
                     pass
         return created
 
     @staticmethod
-    async def sync_line_side_warehouses(tenant_id: int) -> dict:
+    async def sync_line_side_warehouses(
+        tenant_id: int,
+        current_user: Optional[User] = None,
+    ) -> dict:
         """
         根据车间/工位/工作中心自动建立线边仓。
         为每个车间、工位、工作中心创建对应的线边仓（若不存在）。
@@ -1335,15 +1365,16 @@ class WarehouseService:
             ).exists()
             if not exists:
                 try:
-                    await Warehouse.create(
-                        tenant_id=tenant_id,
-                        code=code,
-                        name=f"{ws.name}线边仓",
-                        warehouse_type="line_side",
-                        workshop_id=ws.id,
-                        workshop_name=ws.name,
-                        is_active=True,
-                    )
+                    payload = {
+                        "code": code,
+                        "name": f"{ws.name}线边仓",
+                        "warehouse_type": "line_side",
+                        "workshop_id": ws.id,
+                        "workshop_name": ws.name,
+                        "is_active": True,
+                    }
+                    apply_create_audit(payload, current_user)
+                    await Warehouse.create(tenant_id=tenant_id, **payload)
                     created += 1
                 except IntegrityError:
                     skipped += 1
@@ -1364,17 +1395,18 @@ class WarehouseService:
                 ).first()
                 workshop_name = workshop.name if workshop else None
                 try:
-                    await Warehouse.create(
-                        tenant_id=tenant_id,
-                        code=code,
-                        name=f"{wst.name}线边仓",
-                        warehouse_type="line_side",
-                        workshop_id=workshop_id,
-                        workshop_name=workshop_name,
-                        workstation_id=wst.id,
-                        workstation_name=wst.name,
-                        is_active=True,
-                    )
+                    payload = {
+                        "code": code,
+                        "name": f"{wst.name}线边仓",
+                        "warehouse_type": "line_side",
+                        "workshop_id": workshop_id,
+                        "workshop_name": workshop_name,
+                        "workstation_id": wst.id,
+                        "workstation_name": wst.name,
+                        "is_active": True,
+                    }
+                    apply_create_audit(payload, current_user)
+                    await Warehouse.create(tenant_id=tenant_id, **payload)
                     created += 1
                 except IntegrityError:
                     skipped += 1
@@ -1405,17 +1437,18 @@ class WarehouseService:
             ).first()
             workshop_name = workshop.name if workshop else None
             try:
-                await Warehouse.create(
-                    tenant_id=tenant_id,
-                    code=code,
-                    name=f"{wc.name}线边仓",
-                    warehouse_type="line_side",
-                    workshop_id=workshop_id,
-                    workshop_name=workshop_name,
-                    work_center_id=wc.id,
-                    work_center_name=wc.name,
-                    is_active=True,
-                )
+                payload = {
+                    "code": code,
+                    "name": f"{wc.name}线边仓",
+                    "warehouse_type": "line_side",
+                    "workshop_id": workshop_id,
+                    "workshop_name": workshop_name,
+                    "work_center_id": wc.id,
+                    "work_center_name": wc.name,
+                    "is_active": True,
+                }
+                apply_create_audit(payload, current_user)
+                await Warehouse.create(tenant_id=tenant_id, **payload)
                 created += 1
             except IntegrityError:
                 skipped += 1

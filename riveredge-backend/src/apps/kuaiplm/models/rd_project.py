@@ -50,8 +50,6 @@ class RdProject(BaseModel):
     actual_start_date = fields.DateField(null=True, description="实际开始日期")
     actual_end_date = fields.DateField(null=True, description="实际结束日期")
     notes = fields.TextField(null=True, description="备注")
-    created_by = fields.IntField(null=True, description="创建人ID")
-    updated_by = fields.IntField(null=True, description="更新人ID")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     class Meta:
@@ -123,8 +121,6 @@ class RdProjectTask(BaseModel):
     completed_at = fields.DatetimeField(null=True, description="完成时间")
     sort_order = fields.IntField(default=0, description="排序")
     priority = fields.CharField(max_length=20, default="normal", description="优先级")
-    created_by = fields.IntField(null=True)
-    updated_by = fields.IntField(null=True)
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:
@@ -154,8 +150,6 @@ class RdProjectDeliverable(BaseModel):
     file_name = fields.CharField(max_length=200, null=True, description="文件名")
     submitted_at = fields.DatetimeField(null=True, description="提交时间")
     approved_at = fields.DatetimeField(null=True, description="批准时间")
-    created_by = fields.IntField(null=True)
-    updated_by = fields.IntField(null=True)
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:
@@ -183,7 +177,6 @@ class RdProjectLink(BaseModel):
     target_code = fields.CharField(max_length=100, null=True, description="目标编码")
     target_name = fields.CharField(max_length=200, null=True, description="目标名称")
     notes = fields.TextField(null=True, description="备注")
-    created_by = fields.IntField(null=True)
 
     class Meta:
         table = "apps_kuaiplm_rd_project_links"

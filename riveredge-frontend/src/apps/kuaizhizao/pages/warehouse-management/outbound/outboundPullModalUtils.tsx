@@ -1,13 +1,6 @@
 import { Tag } from 'antd';
 import type { TFunction } from 'i18next';
 
-export function formatPullQty(val: unknown): string {
-  if (val == null || val === '') return '—';
-  const n = Number(val);
-  if (!Number.isFinite(n)) return String(val);
-  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-}
-
 export function formatPullPercent(done: number, total: number): string {
   if (!(total > 0)) return '—';
   const pct = Math.min(100, Math.round((done / total) * 100));

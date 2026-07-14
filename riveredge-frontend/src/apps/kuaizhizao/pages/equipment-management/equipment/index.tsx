@@ -57,6 +57,8 @@ import {
   CustomFieldsFormSection,
 } from '../../../../../components/custom-fields';
 import { formatDateTime } from '../../../../../utils/format';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
   buildActiveStatusValueEnum,
@@ -543,7 +545,7 @@ const EquipmentPage: React.FC = () => {
    */
   const columns: ProColumns<Equipment>[] = useMemo(() => {
     const customFieldColumns = generateEquipmentCustomFieldColumns();
-    return [
+    return alignProColumns<Equipment>([
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at_range',
@@ -691,16 +693,7 @@ const EquipmentPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
     },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      sorter: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     ...customFieldColumns,
     {
       title: t('common.actions'),
@@ -711,7 +704,7 @@ const EquipmentPage: React.FC = () => {
       render: (_, record) =>
         renderEquipmentRowActions(renderEquipmentRowNodes(record), `eq-${record.uuid ?? 'row'}`),
     },
-  ];
+  ], SALES_DOC_LIST_FIELD_RANK);
   }, [
     equipmentListCustomFields,
     generateEquipmentCustomFieldColumns,

@@ -62,7 +62,9 @@ async def create_batch_rule(
 ):
     """创建批号规则"""
     try:
-        rule = await BatchRuleService.create_rule(tenant_id, data.model_dump())
+        rule = await BatchRuleService.create_rule(
+            tenant_id, data.model_dump(), current_user=current_user
+        )
         return BatchRuleResponse.model_validate(rule)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -130,7 +132,9 @@ async def update_batch_rule(
     """更新批号规则"""
     try:
         update_data = data.model_dump(exclude_unset=True)
-        rule = await BatchRuleService.update_rule(tenant_id, rule_uuid, update_data)
+        rule = await BatchRuleService.update_rule(
+            tenant_id, rule_uuid, update_data, current_user=current_user
+        )
         return BatchRuleResponse.model_validate(rule)
     except NotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="批号规则不存在")
@@ -164,7 +168,9 @@ async def create_serial_rule(
 ):
     """创建序列号规则"""
     try:
-        rule = await SerialRuleService.create_rule(tenant_id, data.model_dump())
+        rule = await SerialRuleService.create_rule(
+            tenant_id, data.model_dump(), current_user=current_user
+        )
         return SerialRuleResponse.model_validate(rule)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -232,7 +238,9 @@ async def update_serial_rule(
     """更新序列号规则"""
     try:
         update_data = data.model_dump(exclude_unset=True)
-        rule = await SerialRuleService.update_rule(tenant_id, rule_uuid, update_data)
+        rule = await SerialRuleService.update_rule(
+            tenant_id, rule_uuid, update_data, current_user=current_user
+        )
         return SerialRuleResponse.model_validate(rule)
     except NotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="序列号规则不存在")

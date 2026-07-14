@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from loguru import logger
 
+from apps.common.audit_actor import audit_response_fields
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
@@ -152,6 +153,8 @@ class WorkOrderGroupService(AppBaseService):
             "min_readiness_rate": min_readiness,
             "members": wo_nodes + owo_nodes,
             "created_at": group.created_at,
+            "updated_at": getattr(group, "updated_at", None),
+            **audit_response_fields(group),
         }
 
     async def generate_groups_from_computation(

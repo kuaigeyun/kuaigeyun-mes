@@ -9,6 +9,8 @@ from tortoise.exceptions import IntegrityError
 from tortoise.models import Q
 
 from apps.master_data.models.factory import Plant, Workshop, ProductionLine, Workstation, WorkCenter
+from infra.models.user import User
+from apps.common.audit_actor import apply_create_audit, apply_restore_audit, apply_update_audit
 from apps.master_data.schemas.factory_schemas import (
     PlantCreate, PlantUpdate, PlantResponse,
     WorkshopCreate, WorkshopUpdate, WorkshopResponse,
@@ -77,7 +79,8 @@ class FactoryService:
     @staticmethod
     async def create_plant(
         tenant_id: int,
-        data: PlantCreate
+        data: PlantCreate,
+        current_user: Optional[User] = None,
     ) -> PlantResponse:
         """
         创建厂区
@@ -116,14 +119,19 @@ class FactoryService:
             existing_deleted.description = data.description
             existing_deleted.address = data.address if hasattr(data, 'address') else None
             existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            if current_user:
+                apply_restore_audit(existing_deleted, current_user)
             await existing_deleted.save()
             return PlantResponse.model_validate(existing_deleted)
         
         # 创建新厂区
+        payload = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+        if current_user:
+            apply_create_audit(payload, current_user)
         try:
             plant = await Plant.create(
                 tenant_id=tenant_id,
-                **(data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
+                **payload
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束或主键冲突错误
@@ -143,6 +151,8 @@ class FactoryService:
                     existing_deleted_retry.description = data.description
                     existing_deleted_retry.address = data.address if hasattr(data, 'address') else None
                     existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    if current_user:
+                        apply_restore_audit(existing_deleted_retry, current_user)
                     await existing_deleted_retry.save()
                     return PlantResponse.model_validate(existing_deleted_retry)
                 
@@ -259,7 +269,8 @@ class FactoryService:
     async def update_plant(
         tenant_id: int,
         plant_uuid: str,
-        data: PlantUpdate
+        data: PlantUpdate,
+        current_user: Optional[User] = None,
     ) -> PlantResponse:
         """
         更新厂区
@@ -300,6 +311,8 @@ class FactoryService:
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(plant, key, value)
+        if current_user:
+            apply_update_audit(plant, current_user)
         
         try:
             await plant.save()
@@ -310,7 +323,7 @@ class FactoryService:
             raise
         
         return PlantResponse.model_validate(plant)
-    
+
     @staticmethod
     async def delete_plant(
         tenant_id: int,
@@ -437,7 +450,8 @@ class FactoryService:
     @staticmethod
     async def create_workshop(
         tenant_id: int,
-        data: WorkshopCreate
+        data: WorkshopCreate,
+        current_user: Optional[User] = None,
     ) -> WorkshopResponse:
         """
         创建车间
@@ -477,6 +491,8 @@ class FactoryService:
             existing_deleted.description = data.description
             existing_deleted.plant_id = data.plant_id if hasattr(data, 'plant_id') else None
             existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            if current_user:
+                apply_restore_audit(existing_deleted, current_user)
             await existing_deleted.save()
             return await FactoryService._workshop_to_response(existing_deleted)
         
@@ -502,16 +518,21 @@ class FactoryService:
                         existing_deleted.description = data.description
                         existing_deleted.plant_id = data.plant_id if hasattr(data, 'plant_id') else None
                         existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+                        if current_user:
+                            apply_restore_audit(existing_deleted, current_user)
                         # 统一使用新传入的编码
                         existing_deleted.code = data.code
                         await existing_deleted.save()
                         return await FactoryService._workshop_to_response(existing_deleted)
         
         # 创建新车间
+        create_payload = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+        if current_user:
+            apply_create_audit(create_payload, current_user)
         try:
             workshop = await Workshop.create(
                 tenant_id=tenant_id,
-                **(data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
+                **create_payload
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束或主键冲突错误
@@ -532,6 +553,8 @@ class FactoryService:
                     existing_deleted_retry.description = data.description
                     existing_deleted_retry.plant_id = data.plant_id if hasattr(data, 'plant_id') else None
                     existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    if current_user:
+                        apply_restore_audit(existing_deleted_retry, current_user)
                     await existing_deleted_retry.save()
                     return await FactoryService._workshop_to_response(existing_deleted_retry)
                 
@@ -551,6 +574,8 @@ class FactoryService:
                                 record.description = data.description
                                 record.plant_id = data.plant_id if hasattr(data, 'plant_id') else None
                                 record.is_active = data.is_active if hasattr(data, 'is_active') else True
+                                if current_user:
+                                    apply_restore_audit(record, current_user)
                                 # 统一使用新传入的编码
                                 record.code = data.code
                                 await record.save()
@@ -674,7 +699,8 @@ class FactoryService:
     async def update_workshop(
         tenant_id: int,
         workshop_uuid: str,
-        data: WorkshopUpdate
+        data: WorkshopUpdate,
+        current_user: Optional[User] = None,
     ) -> WorkshopResponse:
         """
         更新车间
@@ -715,6 +741,8 @@ class FactoryService:
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(workshop, key, value)
+        if current_user:
+            apply_update_audit(workshop, current_user)
         
         try:
             await workshop.save()
@@ -852,7 +880,8 @@ class FactoryService:
     @staticmethod
     async def create_production_line(
         tenant_id: int,
-        data: ProductionLineCreate
+        data: ProductionLineCreate,
+        current_user: Optional[User] = None,
     ) -> ProductionLineResponse:
         """
         创建产线
@@ -904,6 +933,8 @@ class FactoryService:
             existing_deleted.description = data.description
             existing_deleted.workshop_id = data.workshop_id
             existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            if current_user:
+                apply_restore_audit(existing_deleted, current_user)
             await existing_deleted.save()
             return await FactoryService._production_line_to_response(existing_deleted)
         
@@ -929,16 +960,21 @@ class FactoryService:
                         existing_deleted.description = data.description
                         existing_deleted.workshop_id = data.workshop_id
                         existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+                        if current_user:
+                            apply_restore_audit(existing_deleted, current_user)
                         # 统一使用新传入的编码
                         existing_deleted.code = data.code
                         await existing_deleted.save()
                         return await FactoryService._production_line_to_response(existing_deleted)
         
         # 创建新产线
+        create_payload = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+        if current_user:
+            apply_create_audit(create_payload, current_user)
         try:
             production_line = await ProductionLine.create(
                 tenant_id=tenant_id,
-                **(data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
+                **create_payload
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束或主键冲突错误
@@ -963,6 +999,8 @@ class FactoryService:
                     existing_deleted_retry.description = data.description
                     existing_deleted_retry.workshop_id = data.workshop_id
                     existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    if current_user:
+                        apply_restore_audit(existing_deleted_retry, current_user)
                     await existing_deleted_retry.save()
                     return await FactoryService._production_line_to_response(existing_deleted_retry)
                 
@@ -986,6 +1024,8 @@ class FactoryService:
                                 record.description = data.description
                                 record.workshop_id = data.workshop_id
                                 record.is_active = data.is_active if hasattr(data, 'is_active') else True
+                                if current_user:
+                                    apply_restore_audit(record, current_user)
                                 # 统一使用新传入的编码
                                 record.code = data.code
                                 await record.save()
@@ -1113,7 +1153,8 @@ class FactoryService:
     async def update_production_line(
         tenant_id: int,
         production_line_uuid: str,
-        data: ProductionLineUpdate
+        data: ProductionLineUpdate,
+        current_user: Optional[User] = None,
     ) -> ProductionLineResponse:
         """
         更新产线
@@ -1165,6 +1206,8 @@ class FactoryService:
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(production_line, key, value)
+        if current_user:
+            apply_update_audit(production_line, current_user)
         
         try:
             await production_line.save()
@@ -1304,7 +1347,8 @@ class FactoryService:
     @staticmethod
     async def create_workstation(
         tenant_id: int,
-        data: WorkstationCreate
+        data: WorkstationCreate,
+        current_user: Optional[User] = None,
     ) -> WorkstationResponse:
         """
         创建工位
@@ -1356,6 +1400,8 @@ class FactoryService:
             existing_deleted.description = data.description
             existing_deleted.production_line_id = data.production_line_id
             existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            if current_user:
+                apply_restore_audit(existing_deleted, current_user)
             await existing_deleted.save()
             return await FactoryService._workstation_to_response(existing_deleted)
         
@@ -1381,16 +1427,21 @@ class FactoryService:
                         existing_deleted.description = data.description
                         existing_deleted.production_line_id = data.production_line_id
                         existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+                        if current_user:
+                            apply_restore_audit(existing_deleted, current_user)
                         # 统一使用新传入的编码
                         existing_deleted.code = data.code
                         await existing_deleted.save()
                         return await FactoryService._workstation_to_response(existing_deleted)
         
         # 创建新工位
+        create_payload = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+        if current_user:
+            apply_create_audit(create_payload, current_user)
         try:
             workstation = await Workstation.create(
                 tenant_id=tenant_id,
-                **(data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
+                **create_payload
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束或主键冲突错误
@@ -1415,6 +1466,8 @@ class FactoryService:
                     existing_deleted_retry.description = data.description
                     existing_deleted_retry.production_line_id = data.production_line_id
                     existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    if current_user:
+                        apply_restore_audit(existing_deleted_retry, current_user)
                     await existing_deleted_retry.save()
                     return await FactoryService._workstation_to_response(existing_deleted_retry)
                 
@@ -1438,6 +1491,8 @@ class FactoryService:
                                 record.description = data.description
                                 record.production_line_id = data.production_line_id
                                 record.is_active = data.is_active if hasattr(data, 'is_active') else True
+                                if current_user:
+                                    apply_restore_audit(record, current_user)
                                 # 统一使用新传入的编码
                                 record.code = data.code
                                 await record.save()
@@ -1564,7 +1619,8 @@ class FactoryService:
     async def update_workstation(
         tenant_id: int,
         workstation_uuid: str,
-        data: WorkstationUpdate
+        data: WorkstationUpdate,
+        current_user: Optional[User] = None,
     ) -> WorkstationResponse:
         """
         更新工位
@@ -1616,6 +1672,8 @@ class FactoryService:
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(workstation, key, value)
+        if current_user:
+            apply_update_audit(workstation, current_user)
         
         try:
             await workstation.save()
@@ -1726,7 +1784,8 @@ class FactoryService:
     @staticmethod
     async def create_work_center(
         tenant_id: int,
-        data: WorkCenterCreate
+        data: WorkCenterCreate,
+        current_user: Optional[User] = None,
     ) -> WorkCenterResponse:
         """创建工作中心"""
         existing_active = await WorkCenter.filter(
@@ -1749,6 +1808,8 @@ class FactoryService:
             existing_deleted.name = data.name
             existing_deleted.description = data.description
             existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            if current_user:
+                apply_restore_audit(existing_deleted, current_user)
             await existing_deleted.save()
             work_center = existing_deleted
             workstation_ids = getattr(data, 'workstation_ids', None) or []
@@ -1764,6 +1825,8 @@ class FactoryService:
 
         create_data = (data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
         workstation_ids = create_data.pop('workstation_ids', None) or []
+        if current_user:
+            apply_create_audit(create_data, current_user)
 
         try:
             work_center = await WorkCenter.create(
@@ -1783,6 +1846,8 @@ class FactoryService:
                     existing_deleted_retry.name = data.name
                     existing_deleted_retry.description = data.description
                     existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    if current_user:
+                        apply_restore_audit(existing_deleted_retry, current_user)
                     await existing_deleted_retry.save()
                     work_center = existing_deleted_retry
                     if workstation_ids:
@@ -1878,7 +1943,8 @@ class FactoryService:
     async def update_work_center(
         tenant_id: int,
         work_center_uuid: str,
-        data: WorkCenterUpdate
+        data: WorkCenterUpdate,
+        current_user: Optional[User] = None,
     ) -> WorkCenterResponse:
         """更新工作中心"""
         work_center = await WorkCenter.filter(
@@ -1904,6 +1970,8 @@ class FactoryService:
 
         for key, value in update_data.items():
             setattr(work_center, key, value)
+        if current_user:
+            apply_update_audit(work_center, current_user)
 
         try:
             await work_center.save()

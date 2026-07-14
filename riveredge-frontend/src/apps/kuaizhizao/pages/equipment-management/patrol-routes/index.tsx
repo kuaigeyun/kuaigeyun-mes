@@ -22,6 +22,8 @@ import { equipmentApi } from '../../../services/equipment';
 import { inspectionSchemesApi, patrolRoutesApi } from '../../../services/equipmentOps';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   MASTER_DATA_PINNED_ACTIVE_FIELD,
   buildActiveStatusValueEnum,
@@ -145,8 +147,7 @@ const PatrolRoutesPage: React.FC = () => {
 
   const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
 
-  const columns: ProColumns<PatrolRoute>[] = useMemo(
-    () => [
+  const columns: ProColumns<PatrolRoute>[] = useMemo(() => alignProColumns<PatrolRoute>([
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at_range',
@@ -202,13 +203,10 @@ const PatrolRoutesPage: React.FC = () => {
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 132,
-        uniTableKeepWidth: true,
+        hideInTable: true,
         hideInSearch: true,
-        defaultSortOrder: 'descend',
-        sorter: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
+      ...buildDocumentAuditColumns<PatrolRoute>(t),
       {
         title: t('common.actions'),
         key: 'action',
@@ -252,7 +250,7 @@ const PatrolRoutesPage: React.FC = () => {
           </>
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t, perms, activeStatusValueEnum],
   );
 

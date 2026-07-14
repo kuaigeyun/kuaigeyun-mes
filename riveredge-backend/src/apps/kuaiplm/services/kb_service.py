@@ -11,6 +11,7 @@ from typing import List, Optional
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit, operator_name_from_user
 from apps.common.base_service import AppBaseService
 from apps.kuaiplm.models import KbArticle, KbArticleLink, KbSpace
 from apps.kuaiplm.schemas.knowledge_base import (
@@ -24,6 +25,7 @@ from apps.kuaiplm.schemas.knowledge_base import (
     KbSpaceUpdate,
 )
 from infra.exceptions.exceptions import NotFoundError
+from infra.models.user import User
 
 
 class KbService(AppBaseService[KbSpace]):
@@ -38,17 +40,18 @@ class KbService(AppBaseService[KbSpace]):
         return [KbSpaceResponse.model_validate(r) for r in rows]
 
     async def create_space(self, tenant_id: int, data: KbSpaceCreate, created_by: int) -> KbSpaceResponse:
-        row = await KbSpace.create(
-            tenant_id=tenant_id,
-            space_code=data.space_code,
-            space_name=data.space_name,
-            description=data.description,
-            parent_space_id=data.parent_space_id,
-            sort_order=data.sort_order,
-            is_active=data.is_active,
-            created_by=created_by,
-            updated_by=created_by,
-        )
+        user = await User.filter(id=created_by).first()
+        payload = {
+            "tenant_id": tenant_id,
+            "space_code": data.space_code,
+            "space_name": data.space_name,
+            "description": data.description,
+            "parent_space_id": data.parent_space_id,
+            "sort_order": data.sort_order,
+            "is_active": data.is_active,
+        }
+        apply_create_audit(payload, user)
+        row = await KbSpace.create(**payload)
         return KbSpaceResponse.model_validate(row)
 
     async def update_space(
@@ -57,19 +60,26 @@ class KbService(AppBaseService[KbSpace]):
         row = await KbSpace.get_or_none(tenant_id=tenant_id, id=space_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError(f"知识空间不存在: {space_id}")
-        update_fields = {"updated_by": updated_by}
+        update_fields = {}
         for field in ("space_name", "description", "parent_space_id", "sort_order", "is_active"):
             val = getattr(data, field, None)
             if val is not None:
                 update_fields[field] = val
-        await row.update_from_dict(update_fields).save()
+        for key, value in update_fields.items():
+            setattr(row, key, value)
+        user = await User.filter(id=updated_by).first()
+        apply_update_audit(row, user)
+        await row.save()
         return KbSpaceResponse.model_validate(row)
 
     async def delete_space(self, tenant_id: int, space_id: int, deleted_by: int) -> None:
         row = await KbSpace.get_or_none(tenant_id=tenant_id, id=space_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError(f"知识空间不存在: {space_id}")
-        await row.update_from_dict({"deleted_at": datetime.now(), "updated_by": deleted_by}).save()
+        row.deleted_at = datetime.now()
+        user = await User.filter(id=deleted_by).first()
+        apply_update_audit(row, user)
+        await row.save()
 
     async def _build_article_response(
         self, tenant_id: int, article: KbArticle, space_name: Optional[str] = None
@@ -131,21 +141,22 @@ class KbService(AppBaseService[KbSpace]):
         space = await KbSpace.get_or_none(tenant_id=tenant_id, id=data.space_id, deleted_at__isnull=True)
         if not space:
             raise NotFoundError(f"知识空间不存在: {data.space_id}")
-        author_name = await self.get_user_name(created_by)
+        user = await User.filter(id=created_by).first()
+        author_name = operator_name_from_user(user) or await self.get_user_name(created_by)
         async with in_transaction():
-            article = await KbArticle.create(
-                tenant_id=tenant_id,
-                space_id=data.space_id,
-                article_code=data.article_code,
-                title=data.title,
-                content=data.content,
-                status=data.status,
-                tags=data.tags,
-                author_id=created_by,
-                author_name=author_name,
-                created_by=created_by,
-                updated_by=created_by,
-            )
+            article_payload = {
+                "tenant_id": tenant_id,
+                "space_id": data.space_id,
+                "article_code": data.article_code,
+                "title": data.title,
+                "content": data.content,
+                "status": data.status,
+                "tags": data.tags,
+                "author_id": created_by,
+                "author_name": author_name,
+            }
+            apply_create_audit(article_payload, user)
+            article = await KbArticle.create(**article_payload)
             for link in data.links:
                 await KbArticleLink.create(
                     tenant_id=tenant_id,
@@ -165,19 +176,23 @@ class KbService(AppBaseService[KbSpace]):
         row = await KbArticle.get_or_none(tenant_id=tenant_id, id=article_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError(f"文章不存在: {article_id}")
-        update_fields = {"updated_by": updated_by}
         for field in ("title", "content", "status", "tags", "space_id"):
             val = getattr(data, field, None)
             if val is not None:
-                update_fields[field] = val
-        await row.update_from_dict(update_fields).save()
+                setattr(row, field, val)
+        user = await User.filter(id=updated_by).first()
+        apply_update_audit(row, user)
+        await row.save()
         return await self.get_article(tenant_id, article_id)
 
     async def delete_article(self, tenant_id: int, article_id: int, deleted_by: int) -> None:
         row = await KbArticle.get_or_none(tenant_id=tenant_id, id=article_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError(f"文章不存在: {article_id}")
-        await row.update_from_dict({"deleted_at": datetime.now(), "updated_by": deleted_by}).save()
+        row.deleted_at = datetime.now()
+        user = await User.filter(id=deleted_by).first()
+        apply_update_audit(row, user)
+        await row.save()
 
     async def search_articles(
         self, tenant_id: int, keyword: str, space_id: Optional[int] = None, limit: int = 20
