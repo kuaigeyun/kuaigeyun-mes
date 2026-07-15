@@ -624,11 +624,39 @@ class ReportingService(AppBaseService[ReportingRecord]):
                         previous_operation,
                     )
                     current_completed = Decimal(str(work_order_operation.completed_quantity or 0))
-                    new_total = current_completed + reported_quantity_dec
+                    # 过程质检不合格不占用「对上道转入」的消耗，允许同等数量补报
+                    qc_fail = Decimal(str(work_order_operation.unqualified_quantity or 0))
+                    master_op_id = int(work_order_operation.operation_id or 0)
+                    if master_op_id > 0:
+                        from apps.kuaizhizao.services.inspection_policy_service import (
+                            resolve_inspection_policy,
+                        )
+                        from apps.kuaizhizao.services.operation_transfer_service import (
+                            sum_process_inspection_quality_quantities,
+                        )
+                        from apps.kuaizhizao.models.process_inspection import ProcessInspection
 
-                    if reporting_type == "quantity" and new_total > previous_transfer:
+                        mode, _, _ = await resolve_inspection_policy(
+                            tenant_id, "ipqc", operation_id=master_op_id
+                        )
+                        if mode == "plan":
+                            insp_rows = await ProcessInspection.filter(
+                                tenant_id=tenant_id,
+                                work_order_id=reporting_data.work_order_id,
+                                operation_id=master_op_id,
+                                deleted_at__isnull=True,
+                            ).all()
+                            _, insp_u = sum_process_inspection_quality_quantities(insp_rows)
+                            if insp_u > 0:
+                                qc_fail = insp_u
+                    effective_after = (
+                        current_completed - qc_fail
+                    ) + reported_quantity_dec
+
+                    if reporting_type == "quantity" and effective_after > previous_transfer:
                         raise BusinessLogicError(
-                            f"工序跳转规则：当前工序的累计报工数量（{new_total}）不能超过"
+                            f"工序跳转规则：当前工序的有效累计报工（{effective_after}，"
+                            f"已扣除质检不合格 {qc_fail}）不能超过"
                             f"前序工序「{previous_operation.operation_name}」的合格产出（{previous_transfer}）"
                         )
             else:
@@ -650,7 +678,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 if is_future_datetime(reporting_data.reported_at):
                     raise ValidationError("报工时间不能晚于当前时间")
 
-            # 数量报工：累计完成不可超过工单计划 + 超报上限（存于工单工序行）
+            # 数量报工：累计完成不可超过「计划+超报」与「质检合格缺口补报」允许的较大值
             if reporting_type == "quantity":
                 from apps.kuaizhizao.services.over_report_rules import (
                     max_completed_quantity_for_plan,
@@ -661,11 +689,45 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 om, ov = tuple_from_model(work_order_operation)
                 max_completed = max_completed_quantity_for_plan(plan_qty, om, ov)
                 current_completed = Decimal(str(work_order_operation.completed_quantity or 0))
-                new_total = current_completed + reported_quantity_dec
-                if new_total > max_completed:
+                toward_plan = Decimal(str(work_order_operation.qualified_quantity or 0))
+
+                from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
+                from apps.kuaizhizao.services.operation_transfer_service import (
+                    sum_process_inspection_quality_quantities,
+                )
+
+                master_op_id = int(work_order_operation.operation_id or 0)
+                mode = "none"
+                if master_op_id > 0:
+                    mode, _, _ = await resolve_inspection_policy(
+                        tenant_id, "ipqc", operation_id=master_op_id
+                    )
+                if mode == "plan" and master_op_id > 0:
+                    from apps.kuaizhizao.models.process_inspection import ProcessInspection
+
+                    insp_rows = await ProcessInspection.filter(
+                        tenant_id=tenant_id,
+                        work_order_id=reporting_data.work_order_id,
+                        operation_id=master_op_id,
+                        deleted_at__isnull=True,
+                    ).all()
+                    insp_q, insp_u = sum_process_inspection_quality_quantities(insp_rows)
+                    if insp_q + insp_u > 0:
+                        # 检验合格 + 已报未检，计入计划完成口径（不合格不计入）
+                        uninspected = max(
+                            Decimal("0"),
+                            current_completed - insp_q - insp_u,
+                        )
+                        toward_plan = insp_q + uninspected
+
+                classic_headroom = max(Decimal("0"), max_completed - current_completed)
+                makeup_headroom = max(Decimal("0"), plan_qty - toward_plan)
+                allowed_additional = max(classic_headroom, makeup_headroom)
+                if reported_quantity_dec > allowed_additional:
                     raise BusinessLogicError(
-                        f"报工数量超限：本道工序累计完成上限为 {max_completed}（计划 {plan_qty}，超报规则 {om}），"
-                        f"当前已报 {current_completed}，本次报工后将为 {new_total}"
+                        f"报工数量超限：本道工序本次最多可报 {allowed_additional}"
+                        f"（计划 {plan_qty}，超报规则 {om}，当前已报完成 {current_completed}，"
+                        f"已计入计划口径 {toward_plan}），本次报工 {reported_quantity_dec}"
                     )
             
             if reporting_type != "status":

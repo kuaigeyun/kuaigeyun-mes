@@ -76,6 +76,7 @@ REVIEW_STATUS_ALIASES: dict[str, str] = {
     "通过": ReviewStatus.APPROVED.value,
     "驳回": ReviewStatus.REJECTED.value,
     "已通过": ReviewStatus.APPROVED.value,
+    "已审核": ReviewStatus.APPROVED.value,
 }
 
 def normalize_status(status: str) -> str:

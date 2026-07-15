@@ -2,9 +2,11 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+TimeUnit = Literal["h", "m", "s"]
 
 
 class ProductProcessLineSchema(BaseModel):
@@ -16,8 +18,32 @@ class ProductProcessLineSchema(BaseModel):
     operation_id: Optional[int] = Field(None, alias="operationId")
     code: Optional[str] = None
     name: Optional[str] = None
-    standard_time: Optional[float] = Field(None, alias="standardTime", description="标准工时（小时/件，API 存小时）")
-    setup_time: Optional[float] = Field(None, alias="setupTime", description="准备时间（小时，API 存小时）")
+    standard_time: Optional[float] = Field(
+        None,
+        alias="standardTime",
+        description="标准工时：standardTimeQty 件合计秒数",
+    )
+    standard_time_qty: Optional[float] = Field(
+        1,
+        alias="standardTimeQty",
+        description="标准工时件数基准，默认 1",
+        ge=1,
+    )
+    standard_time_unit: Optional[TimeUnit] = Field(
+        "m",
+        alias="standardTimeUnit",
+        description="标准工时 UI 单位偏好 h/m/s，不参与运算",
+    )
+    setup_time: Optional[float] = Field(
+        None,
+        alias="setupTime",
+        description="准备时间（秒，整批固定）",
+    )
+    setup_time_unit: Optional[TimeUnit] = Field(
+        "m",
+        alias="setupTimeUnit",
+        description="准备时间 UI 单位偏好 h/m/s，不参与运算",
+    )
     workshop_ids: Optional[List[int]] = Field(default=None, alias="workshopIds")
     operator_ids: Optional[List[int]] = Field(default=None, alias="operatorIds")
     team_ids: Optional[List[int]] = Field(default=None, alias="teamIds")
@@ -27,6 +53,15 @@ class ProductProcessLineSchema(BaseModel):
     is_node_operation: bool = Field(False, alias="isNodeOperation")
     over_report_mode: Optional[str] = Field("none", alias="overReportMode")
     over_report_value: Optional[float] = Field(0, alias="overReportValue")
+
+    @field_validator("standard_time_qty")
+    @classmethod
+    def _qty_at_least_one(cls, v: Optional[float]) -> Optional[float]:
+        if v is None:
+            return 1.0
+        if float(v) < 1:
+            raise ValueError("standardTimeQty 须 >= 1")
+        return float(v)
 
 
 class MaterialProductProcessResponse(BaseModel):

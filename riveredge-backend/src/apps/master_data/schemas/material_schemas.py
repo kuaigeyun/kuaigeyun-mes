@@ -204,8 +204,13 @@ class MaterialBase(BaseModel):
     # 默认值设置（用于创建时输入）
     defaults: Optional[Dict[str, Any]] = Field(None, description="默认值设置（JSON格式），包含财务、采购、销售、库存、生产的默认值")
     
-    # 物料来源控制（核心功能，新增）
-    source_type: str = Field(..., alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource）：Make(自制件)、Buy(采购件)、Phantom(虚拟件)、Outsource(委外件)")
+    # 物料来源控制（读取可为空：历史行尚未维护；创建必填见 MaterialCreate）
+    source_type: Optional[str] = Field(
+        None,
+        alias="sourceType",
+        max_length=20,
+        description="物料来源类型（Make/Buy/Phantom/Outsource/Service）",
+    )
     source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式），自制件含 manufacturing_mode、工艺路线、BOM等；采购件含供应商；委外件含委外供应商/工序等")
     
     # 质检选项（简易质检：只管合格数量；方案质检：与快制造质检模块联动）
@@ -238,19 +243,34 @@ class MaterialBase(BaseModel):
         return v.strip()
 
     @validator("source_type")
+    def normalize_source_type_optional(cls, v):
+        """读取/共享字段：空则保持空；Configure 归并为 Buy；不在此强制必填。"""
+        if v is None:
+            return None
+        raw = str(v).strip()
+        if not raw:
+            return None
+        return normalize_material_source_type(raw)
+
+
+class MaterialCreate(MaterialBase):
+    """创建物料 Schema（来源类型必填且须为规范值）"""
+
+    source_type: str = Field(
+        ...,
+        alias="sourceType",
+        max_length=20,
+        description="物料来源类型（Make/Buy/Phantom/Outsource/Service）",
+    )
+
+    @validator("source_type")
     def validate_source_type_required(cls, v):
-        """创建物料时来源类型必填且须为规范值"""
         if v is None or not str(v).strip():
             raise ValueError("物料来源类型不能为空")
         normalized = normalize_material_source_type(v)
         if not normalized or not is_canonical_material_source_type(normalized):
             raise ValueError(f"无效的物料来源类型: {v}")
         return normalized
-
-
-class MaterialCreate(MaterialBase):
-    """创建物料 Schema"""
-    pass
 
 
 class MaterialUpdate(BaseModel):
@@ -331,6 +351,19 @@ class MaterialUpdate(BaseModel):
         if v is not None and (not v or not v.strip()):
             raise ValueError("基础单位不能为空")
         return v.strip() if v else None
+
+    @validator("source_type")
+    def validate_source_type_on_update(cls, v):
+        """更新时若传入 source_type，须为规范非空值，禁止清空。"""
+        if v is None:
+            return None
+        raw = str(v).strip()
+        if not raw:
+            raise ValueError("物料来源类型不能为空")
+        normalized = normalize_material_source_type(raw)
+        if not normalized or not is_canonical_material_source_type(normalized):
+            raise ValueError(f"无效的物料来源类型: {v}")
+        return normalized
 
 
 class MaterialBulkTrackingRequest(BaseModel):

@@ -1993,32 +1993,29 @@ class MaterialService:
         raw_rows: List[Dict[str, Any]] = []
         materials_for_rows: List[Any] = []
         for m in all_rows:
-            try:
-                resp_data = _material_to_response_data(m)
-                resp_data["code_aliases"] = []
-                raw_rows.append(resp_data)
-                materials_for_rows.append(m)
-            except Exception as e:
-                logger.warning(f"序列化物料 {getattr(m, 'id', 'unknown')} 失败: {str(e)}")
+            resp_data = _material_to_response_data(m)
+            resp_data["code_aliases"] = []
+            raw_rows.append(resp_data)
+            materials_for_rows.append(m)
         await _batch_enrich_process_route_for_material_list(tenant_id, materials_for_rows, raw_rows)
 
         row_by_id = {r["id"]: r for r in raw_rows}
         items: List[MaterialResponse] = []
         for root in roots:
-            try:
-                root_data = row_by_id.get(root.id)
-                if not root_data:
-                    continue
-                kids_data = []
-                for child in children_by_main.get(root.main_code, []):
-                    cd = row_by_id.get(child.id)
-                    if cd:
-                        kids_data.append(MaterialResponse.model_validate(cd))
-                if kids_data:
-                    root_data = {**root_data, "children": kids_data}
-                items.append(MaterialResponse.model_validate(root_data))
-            except Exception as e:
-                logger.warning(f"校验物料树节点失败: {str(e)}")
+            root_data = row_by_id.get(root.id)
+            if not root_data:
+                raise ValidationError(
+                    f"物料树节点序列化缺失: id={getattr(root, 'id', None)} "
+                    f"code={getattr(root, 'code', None)}"
+                )
+            kids_data = []
+            for child in children_by_main.get(root.main_code, []):
+                cd = row_by_id.get(child.id)
+                if cd:
+                    kids_data.append(MaterialResponse.model_validate(cd))
+            if kids_data:
+                root_data = {**root_data, "children": kids_data}
+            items.append(MaterialResponse.model_validate(root_data))
 
         return MaterialListResponse(items=items, total=total)
 
@@ -2218,23 +2215,13 @@ class MaterialService:
         raw_rows: List[Dict[str, Any]] = []
         materials_for_rows: List[Any] = []
         for m in materials:
-            try:
-                resp_data = _material_to_response_data(m)
-                resp_data["code_aliases"] = []
-                raw_rows.append(resp_data)
-                materials_for_rows.append(m)
-            except Exception as e:
-                logger.warning(f"序列化物料 {m.id if hasattr(m, 'id') else 'unknown'} 失败: {str(e)}")
-                continue
+            resp_data = _material_to_response_data(m)
+            resp_data["code_aliases"] = []
+            raw_rows.append(resp_data)
+            materials_for_rows.append(m)
         await _batch_enrich_process_route_for_material_list(tenant_id, materials_for_rows, raw_rows)
-        items = []
-        for resp_data in raw_rows:
-            try:
-                items.append(MaterialResponse.model_validate(resp_data))
-            except Exception as e:
-                logger.warning(f"校验物料响应失败: {str(e)}")
-                continue
-        
+        items = [MaterialResponse.model_validate(resp_data) for resp_data in raw_rows]
+
         return MaterialListResponse(items=items, total=total)
 
     @staticmethod

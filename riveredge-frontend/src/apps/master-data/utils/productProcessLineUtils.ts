@@ -175,8 +175,12 @@ export function buildLineFromRowAndOperation(
     operationId: Number(row.operation_id ?? row.operationId ?? op?.id) || op?.id,
     code: String(row.code ?? op?.code ?? ''),
     name: String(row.name ?? op?.name ?? ''),
+    // 路线存小时 → 界面默认分钟；产品工艺 API 存秒由 Panel fromApi 处理
     standardTime: hoursToDisplayMinutes(_floatOrUndef(row.standard_time ?? row.standardTime)),
+    standardTimeQty: 1,
+    standardTimeUnit: 'm',
     setupTime: hoursToDisplayMinutes(_floatOrUndef(row.setup_time ?? row.setupTime)),
+    setupTimeUnit: 'm',
     ...resources,
     reportingType: String(row.reporting_type ?? row.reportingType ?? op?.reportingType ?? 'quantity'),
     isNodeOperation: Boolean(row.is_node_operation ?? row.isNodeOperation ?? false),
@@ -200,12 +204,18 @@ export function snapshotProductProcessState(input: {
     ...line,
     standardTime:
       line.standardTime != null && Number.isFinite(line.standardTime)
-        ? Math.round(line.standardTime)
+        ? Math.round(line.standardTime * 1000) / 1000
         : undefined,
+    standardTimeQty:
+      line.standardTimeQty != null && Number.isFinite(line.standardTimeQty)
+        ? Math.max(1, Number(line.standardTimeQty))
+        : 1,
+    standardTimeUnit: line.standardTimeUnit ?? 'm',
     setupTime:
       line.setupTime != null && Number.isFinite(line.setupTime)
-        ? Math.round(line.setupTime)
+        ? Math.round(line.setupTime * 1000) / 1000
         : undefined,
+    setupTimeUnit: line.setupTimeUnit ?? 'm',
     pieceRate:
       line.pieceRate != null && Number.isFinite(line.pieceRate)
         ? Math.round(line.pieceRate * 100) / 100

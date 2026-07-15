@@ -449,11 +449,22 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
   const middleColRef = useRef<HTMLDivElement>(null);
   const [bodyHeight, setBodyHeight] = useState(COORDINATION_PIPELINE_BODY_MIN_HEIGHT);
 
-  const { data: activeList, loading: listLoading, refresh: refreshList } = useRequest(async () => {
+  const {
+    data: activeList,
+    loading: listLoading,
+    error: listError,
+    refresh: refreshList,
+  } = useRequest(async () => {
     return coordinationBoardApi.listActiveOrders(30);
   });
 
   const activeItems: ActiveOrderItem[] = activeList?.items ?? [];
+  const listErrorMessage =
+    listError instanceof Error
+      ? listError.message
+      : listError
+        ? String(listError)
+        : null;
 
   const incompleteItems = useMemo(
     () => activeItems.filter((item) => (item.incomplete_work_orders ?? 0) > 0),
@@ -559,13 +570,28 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
     [navigate, handleRefresh, t],
   );
 
-  if (listLoading && !activeItems.length) {
+  if (listLoading && !activeItems.length && !listErrorMessage) {
     return (
       <div style={{ textAlign: 'center', padding: 48 }}>
         <Spin tip={t('app.kuaizhizao.coordinationPipeline.loading')}>
           <div style={{ minHeight: 24 }} />
         </Spin>
       </div>
+    );
+  }
+
+  if (listErrorMessage && !activeItems.length) {
+    return (
+      <Empty
+        description={t('app.kuaizhizao.coordinationPipeline.loadActiveOrdersFailed', {
+          message: listErrorMessage,
+        })}
+        style={{ padding: 48 }}
+      >
+        <Button type="primary" onClick={handleRefresh}>
+          {t('app.kuaizhizao.coordinationPipeline.retry')}
+        </Button>
+      </Empty>
     );
   }
 

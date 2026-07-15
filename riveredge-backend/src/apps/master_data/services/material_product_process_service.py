@@ -25,6 +25,8 @@ from apps.master_data.schemas.material_product_process_schemas import (
 )
 from infra.models.user import User
 
+SECONDS_PER_HOUR = 3600.0
+
 
 def _first_id(ids: Optional[List[int]]) -> Optional[int]:
     if not ids:
@@ -33,6 +35,48 @@ def _first_id(ids: Optional[List[int]]) -> Optional[int]:
         if x is not None:
             return int(x)
     return None
+
+
+def _product_process_seconds_to_wo_hours(
+    total_seconds: Optional[float],
+    qty: Optional[float],
+) -> Optional[float]:
+    """产品工艺秒（N 件合计）→ 工单小时/件。"""
+    if total_seconds is None:
+        return None
+    basis = float(qty) if qty is not None and float(qty) > 0 else 1.0
+    return (float(total_seconds) / basis) / SECONDS_PER_HOUR
+
+
+def _route_hours_to_product_process_seconds(hours: Optional[float]) -> Optional[float]:
+    """工艺路线小时 → 产品工艺秒。"""
+    if hours is None:
+        return None
+    return float(hours) * SECONDS_PER_HOUR
+
+
+def _convert_route_row_times_to_seconds(row: Dict[str, Any]) -> Dict[str, Any]:
+    """路线 operation_sequence 行（小时）转为产品工艺行时间（秒）。"""
+    out = dict(row)
+    if "standard_time" in out or "standardTime" in out:
+        std = _float_or_none(out.get("standard_time", out.get("standardTime")))
+        if std is not None:
+            sec = _route_hours_to_product_process_seconds(std)
+            out["standard_time"] = sec
+            out["standardTime"] = sec
+        out["standard_time_qty"] = 1
+        out["standardTimeQty"] = 1
+        out.setdefault("standard_time_unit", "m")
+        out.setdefault("standardTimeUnit", "m")
+    if "setup_time" in out or "setupTime" in out:
+        setup = _float_or_none(out.get("setup_time", out.get("setupTime")))
+        if setup is not None:
+            sec = _route_hours_to_product_process_seconds(setup)
+            out["setup_time"] = sec
+            out["setupTime"] = sec
+        out.setdefault("setup_time_unit", "m")
+        out.setdefault("setupTimeUnit", "m")
+    return out
 
 
 def _line_to_operation_payload(line: ProductProcessLineSchema, allow_jump: bool) -> Dict[str, Any]:
@@ -55,10 +99,12 @@ def _line_to_operation_payload(line: ProductProcessLineSchema, allow_jump: bool)
         row["overReportMode"] = om
         row["over_report_value"] = ov
         row["overReportValue"] = ov
-    if line.standard_time is not None:
-        row["standard_time"] = float(line.standard_time)
-    if line.setup_time is not None:
-        row["setup_time"] = float(line.setup_time)
+    std_hours = _product_process_seconds_to_wo_hours(line.standard_time, line.standard_time_qty)
+    if std_hours is not None:
+        row["standard_time"] = float(std_hours)
+    setup_hours = _product_process_seconds_to_wo_hours(line.setup_time, 1.0)
+    if setup_hours is not None:
+        row["setup_time"] = float(setup_hours)
     ws = line.workshop_ids or []
     if ws:
         row["workshop_ids"] = ws
@@ -216,6 +262,13 @@ def _row_dict_to_line_schema(
     piece_rate: Optional[Decimal],
 ) -> ProductProcessLineSchema:
     uid = _operation_uuid_from_row(row)
+    qty = _float_or_none(row.get("standard_time_qty") or row.get("standardTimeQty"))
+    std_unit = row.get("standard_time_unit") or row.get("standardTimeUnit") or "m"
+    setup_unit = row.get("setup_time_unit") or row.get("setupTimeUnit") or "m"
+    if std_unit not in ("h", "m", "s"):
+        std_unit = "m"
+    if setup_unit not in ("h", "m", "s"):
+        setup_unit = "m"
     return ProductProcessLineSchema(
         operation_uuid=uid,
         operation_id=(
@@ -226,7 +279,10 @@ def _row_dict_to_line_schema(
         code=row.get("code") or (op.code if op else None),
         name=row.get("name") or (op.name if op else None),
         standard_time=_float_or_none(row.get("standard_time") or row.get("standardTime")),
+        standard_time_qty=qty if qty is not None else 1,
+        standard_time_unit=std_unit,
         setup_time=_float_or_none(row.get("setup_time") or row.get("setupTime")),
+        setup_time_unit=setup_unit,
         workshop_ids=_ids_from_row(row, "workshop"),
         operator_ids=_operator_ids_from_row(row),
         team_ids=_team_ids_from_row(row),
@@ -324,6 +380,7 @@ async def _compose_lines(
         route_row_dicts = await _parse_sequence_to_line_dicts(
             tenant_id, process_route.operation_sequence
         )
+        route_row_dicts = [_convert_route_row_times_to_seconds(d) for d in route_row_dicts]
 
     if stored_lines and route_row_dicts:
         row_dicts = _merge_stored_lines_with_route(stored_lines, route_row_dicts)
@@ -671,7 +728,7 @@ class MaterialProductProcessService:
             apply_create_audit(create_payload, current_user)
             record = await MaterialProductProcess.create(**create_payload)
 
-        # 同步物料指派
+        # 同步物料指派（须 .save()，否则列表仍读到未指派）
         defaults = material.defaults if isinstance(material.defaults, dict) else {}
         defaults = dict(defaults or {})
         defaults["defaultProcessRouteUuid"] = process_route.uuid if process_route else None
@@ -681,7 +738,7 @@ class MaterialProductProcessService:
                 "process_route_id": pr_id,
                 "defaults": defaults,
             }
-        )
+        ).save()
 
         await MaterialProductProcessService._sync_piece_rates(
             tenant_id,
@@ -729,7 +786,7 @@ class MaterialProductProcessService:
         for rate in existing:
             op_id = int(rate.operation_id)
             if op_id not in wanted:
-                await rate.update_from_dict({"deleted_at": now, "is_active": False})
+                await rate.update_from_dict({"deleted_at": now, "is_active": False}).save()
                 continue
             new_val = wanted.pop(op_id)
             if rate.rate != new_val:
@@ -748,7 +805,7 @@ class MaterialProductProcessService:
                         "is_active": True,
                         "deleted_at": None,
                     }
-                )
+                ).save()
 
         for op_id, val in wanted.items():
             ln = next((x for x in lines if x.operation_id == op_id), None)

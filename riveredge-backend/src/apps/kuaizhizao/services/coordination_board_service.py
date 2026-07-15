@@ -30,7 +30,11 @@ from apps.kuaizhizao.services.demand_computation_service import (
     SOURCE_TYPE_PHANTOM,
 )
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
-from apps.kuaizhizao.constants import ReviewStatus
+from apps.kuaizhizao.constants import REVIEW_STATUS_ALIASES, ReviewStatus
+from apps.kuaizhizao.utils.material_source_helper import (
+    get_material_source_type,
+    resolve_computation_item_source_config,
+)
 from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError
 
@@ -50,6 +54,17 @@ _CLOSED_SALES_ORDER_STATUSES = frozenset({
     "cancelled", "CANCELLED", "已取消",
     "completed", "COMPLETED", "已完成",
     "finished", "FINISHED", "已出库", "closed", "CLOSED",
+})
+# 与 document_lifecycle._is_approved / audit_phase._REVIEW_APPROVED 对齐
+_APPROVED_REVIEW_STATUSES = frozenset({
+    ReviewStatus.APPROVED.value,
+    "APPROVED",
+    "已审核",
+    *[
+        alias
+        for alias, normalized in REVIEW_STATUS_ALIASES.items()
+        if normalized == ReviewStatus.APPROVED.value
+    ],
 })
 
 
@@ -131,6 +146,10 @@ class CoordinationBoardService:
         demand_id: Optional[int],
         planning_computation_id: Optional[int],
     ) -> Optional[DemandComputation]:
+        """优先取已完成 MRP；否则回落到需求下最新单 / 订单上挂的 planning_computation_id。
+
+        审核后自动下推常留下「进行中」计算单，列表必须能挂上，否则计划中心看起来像没订单。
+        """
         comp = None
         if demand_id:
             comp = (
@@ -142,11 +161,19 @@ class CoordinationBoardService:
                 .order_by("-id")
                 .first()
             )
+            if not comp:
+                comp = (
+                    await DemandComputation.filter(
+                        tenant_id=tenant_id,
+                        demand_id=demand_id,
+                    )
+                    .order_by("-id")
+                    .first()
+                )
         if not comp and planning_computation_id:
             comp = await DemandComputation.get_or_none(
                 tenant_id=tenant_id,
                 id=planning_computation_id,
-                computation_status="完成",
             )
         return comp
 
@@ -233,19 +260,12 @@ class CoordinationBoardService:
         from apps.kuaizhizao.models.demand import Demand
         from apps.kuaizhizao.models.sales_order import SalesOrder
 
-        approved_review_statuses = [
-            ReviewStatus.APPROVED.value,
-            "APPROVED",
-            "审核通过",
-            "通过",
-            "已通过",
-        ]
         scan_limit = min(max(limit * 10, limit), 200)
         orders = (
             await SalesOrder.filter(
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
-                review_status__in=approved_review_statuses,
+                review_status__in=list(_APPROVED_REVIEW_STATUSES),
             )
             .exclude(status__in=list(_CLOSED_SALES_ORDER_STATUSES))
             .order_by("-updated_at")
@@ -1507,10 +1527,6 @@ class CoordinationBoardService:
         sales_order_id: Optional[int],
         demand: Any,
     ) -> Tuple[str, str, List[str], List[int]]:
-        from apps.kuaizhizao.utils.material_source_helper import (
-            get_material_source_type,
-            resolve_computation_item_source_config,
-        )
         from apps.master_data.services.material_service import MaterialService
 
         lines = await self._get_order_line_materials(tenant_id, sales_order_id, demand)

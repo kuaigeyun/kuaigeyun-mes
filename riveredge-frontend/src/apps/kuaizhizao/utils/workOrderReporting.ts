@@ -25,63 +25,6 @@ export function getMaxReportableQuantityForOperation(operation: any, workOrderQu
   return Math.max(0, plan);
 }
 
-/** 计划可报（剩余）：相对工单计划与超报规则，本工序尚可累计报工的数量 */
-export function getPlanRemainingReportableQuantity(operation: any, workOrderQuantity: number): number {
-  const cap = getMaxReportableQuantityForOperation(operation, workOrderQuantity);
-  const done = Number(operation?.completed_quantity ?? operation?.completedQuantity ?? 0) || 0;
-  return Math.max(0, cap - done);
-}
-
-/** 物料可报（剩余）：上道合格转出尚未在本工序消耗的数量（首道则为计划剩余在制） */
-export function getMaterialRemainingReportableQuantity(operation: any): number | null {
-  const raw = operation?.material_remaining ?? operation?.materialRemaining;
-  if (raw == null || raw === '') return null;
-  return Math.max(0, Number(raw) || 0);
-}
-
-export interface ReportableQuantityBreakdown {
-  planCap: number;
-  operationCompleted: number;
-  planRemaining: number;
-  materialRemaining: number | null;
-  /** 上道工序合格转出（本工序在制来源） */
-  prevTransferQty: number | null;
-  effectiveRemaining: number;
-  isFirstOperation: boolean;
-}
-
-export function getReportableQuantityBreakdown(
-  operation: any,
-  workOrderQuantity: number,
-): ReportableQuantityBreakdown {
-  const planCap = getMaxReportableQuantityForOperation(operation, workOrderQuantity);
-  const operationCompleted =
-    Number(operation?.completed_quantity ?? operation?.completedQuantity ?? 0) || 0;
-  const planRemaining = Math.max(0, planCap - operationCompleted);
-  const materialRemaining = getMaterialRemainingReportableQuantity(operation);
-  const qualified = Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
-  const prevTransferQty =
-    materialRemaining != null ? materialRemaining + qualified : null;
-  const seq = Number(operation?.sequence ?? 1);
-  const isFirstOperation = seq <= 1;
-  const effectiveRemaining =
-    materialRemaining != null ? Math.min(planRemaining, materialRemaining) : planRemaining;
-  return {
-    planCap,
-    operationCompleted,
-    planRemaining,
-    materialRemaining,
-    prevTransferQty,
-    effectiveRemaining,
-    isFirstOperation,
-  };
-}
-
-/** 本次可报上限（计划可报与物料可报之较小值） */
-export function getRemainingReportableQuantity(operation: any, workOrderQuantity: number): number {
-  return getReportableQuantityBreakdown(operation, workOrderQuantity).effectiveRemaining;
-}
-
 /** 工序 IPQC 质检模式（none / simple / plan） */
 export function getOperationInspectionMode(operation: any): string {
   return String(operation?.inspection_mode ?? operation?.inspectionMode ?? 'none');
@@ -130,6 +73,87 @@ export function getOperationQualityMetrics(operation: any): {
     rate: completed > 0 ? Math.round((qualified / completed) * 100) : null,
     fromInspection: false,
   };
+}
+
+/**
+ * 计入计划完成口径的数量。
+ * 方案质检已检验后：检验合格 + 已报未检（不合格不计入，可补报）。
+ */
+export function getTowardPlanQuantity(operation: any): number {
+  const completed =
+    Number(operation?.completed_quantity ?? operation?.completedQuantity ?? 0) || 0;
+  const metrics = getOperationQualityMetrics(operation);
+  if (metrics.fromInspection && metrics.qualified + metrics.unqualified > 0) {
+    const uninspected = Math.max(0, completed - metrics.qualified - metrics.unqualified);
+    return metrics.qualified + uninspected;
+  }
+  return Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
+}
+
+/** 计划可报（剩余）：超报头寸与质检不合格补报头寸取较大 */
+export function getPlanRemainingReportableQuantity(operation: any, workOrderQuantity: number): number {
+  const cap = getMaxReportableQuantityForOperation(operation, workOrderQuantity);
+  const done = Number(operation?.completed_quantity ?? operation?.completedQuantity ?? 0) || 0;
+  const classic = Math.max(0, cap - done);
+  const plan = Number(workOrderQuantity) || 0;
+  const makeup = Math.max(0, plan - getTowardPlanQuantity(operation));
+  return Math.max(classic, makeup);
+}
+
+/** 物料可报（剩余）：上道合格转出尚未在本工序消耗的数量（首道则为计划剩余在制） */
+export function getMaterialRemainingReportableQuantity(operation: any): number | null {
+  const raw = operation?.material_remaining ?? operation?.materialRemaining;
+  if (raw == null || raw === '') return null;
+  return Math.max(0, Number(raw) || 0);
+}
+
+export interface ReportableQuantityBreakdown {
+  planCap: number;
+  operationCompleted: number;
+  planRemaining: number;
+  materialRemaining: number | null;
+  /** 上道工序合格转出（本工序在制来源） */
+  prevTransferQty: number | null;
+  effectiveRemaining: number;
+  isFirstOperation: boolean;
+}
+
+export function getReportableQuantityBreakdown(
+  operation: any,
+  workOrderQuantity: number,
+): ReportableQuantityBreakdown {
+  const planCap = getMaxReportableQuantityForOperation(operation, workOrderQuantity);
+  const operationCompleted =
+    Number(operation?.completed_quantity ?? operation?.completedQuantity ?? 0) || 0;
+  const planRemaining = getPlanRemainingReportableQuantity(operation, workOrderQuantity);
+  const materialRemaining = getMaterialRemainingReportableQuantity(operation);
+  // prev = material_remaining + material_consumed；消耗口径与后端一致
+  const metrics = getOperationQualityMetrics(operation);
+  const qualified = Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
+  let materialConsumed = qualified;
+  if (metrics.fromInspection && metrics.qualified + metrics.unqualified > 0) {
+    materialConsumed = Math.max(0, operationCompleted - metrics.unqualified);
+  }
+  const prevTransferQty =
+    materialRemaining != null ? materialRemaining + materialConsumed : null;
+  const seq = Number(operation?.sequence ?? 1);
+  const isFirstOperation = seq <= 1;
+  const effectiveRemaining =
+    materialRemaining != null ? Math.min(planRemaining, materialRemaining) : planRemaining;
+  return {
+    planCap,
+    operationCompleted,
+    planRemaining,
+    materialRemaining,
+    prevTransferQty,
+    effectiveRemaining,
+    isFirstOperation,
+  };
+}
+
+/** 本次可报上限（计划可报与物料可报之较小值） */
+export function getRemainingReportableQuantity(operation: any, workOrderQuantity: number): number {
+  return getReportableQuantityBreakdown(operation, workOrderQuantity).effectiveRemaining;
 }
 
 /** 工序卡片环形进度：方案质检按检验合格数/计划数，其余按报工合格数/计划数 */

@@ -27,6 +27,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { ProductProcessLine } from '../types/productProcess';
+import type { ManufacturingTimeUnit } from '../types/productProcess';
 import type { Operation } from '../types/process';
 import { workshopApi, workGroupApi, factoryListItems } from '../services/factory';
 import { equipmentApi } from '../../kuaizhizao/services/equipment';
@@ -38,11 +39,18 @@ import {
   parsePersonnelConfigs,
   resourcesFromOperation,
 } from '../utils/productProcessLineUtils';
+import { fromSeconds, normalizeTimeUnit, toSeconds } from '../utils/manufacturingTimeUnits';
 
 const OVER_REPORT_MODE_OPTIONS = [
   { value: 'none' as const },
   { value: 'fixed' as const },
   { value: 'percent' as const },
+];
+
+const TIME_UNIT_OPTIONS: { value: ManufacturingTimeUnit; labelKey: string }[] = [
+  { value: 'h', labelKey: 'app.master-data.manufacturing.timeUnitHour' },
+  { value: 'm', labelKey: 'app.master-data.manufacturing.timeUnitMinute' },
+  { value: 's', labelKey: 'app.master-data.manufacturing.timeUnitSecond' },
 ];
 
 const nowrapTableHeaderCell = () => ({ style: { whiteSpace: 'nowrap' as const } });
@@ -277,6 +285,28 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
     onChange(lines.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
 
+  const changeStandardTimeUnit = (index: number, nextUnit: ManufacturingTimeUnit) => {
+    const row = lines[index];
+    if (!row) return;
+    const prevUnit = normalizeTimeUnit(row.standardTimeUnit);
+    const seconds = toSeconds(row.standardTime, prevUnit);
+    patchLine(index, {
+      standardTimeUnit: nextUnit,
+      standardTime: fromSeconds(seconds, nextUnit),
+    });
+  };
+
+  const changeSetupTimeUnit = (index: number, nextUnit: ManufacturingTimeUnit) => {
+    const row = lines[index];
+    if (!row) return;
+    const prevUnit = normalizeTimeUnit(row.setupTimeUnit);
+    const seconds = toSeconds(row.setupTime, prevUnit);
+    patchLine(index, {
+      setupTimeUnit: nextUnit,
+      setupTime: fromSeconds(seconds, nextUnit),
+    });
+  };
+
   const removeLine = (index: number) => {
     onChange(lines.filter((_, i) => i !== index));
   };
@@ -293,6 +323,9 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
         operationId: op.id,
         code: op.code,
         name: op.name,
+        standardTimeQty: 1,
+        standardTimeUnit: 'm',
+        setupTimeUnit: 'm',
         ...res,
         reportingType: op.reportingType ?? (op as { reporting_type?: string }).reporting_type ?? 'quantity',
         isNodeOperation: false,
@@ -384,34 +417,92 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
       },
       {
         title: t('app.master-data.manufacturing.standardTime'),
-        width: 168,
+        width: 280,
         render: (_: unknown, row: ProductProcessLine, index: number) => (
-          <InputNumber
-            min={0}
-            step={1}
-            precision={0}
-            style={{ width: '100%' }}
-            disabled={disabled}
-            addonAfter={t('app.master-data.manufacturing.minutePerPieceUnit')}
-            value={row.standardTime}
-            onChange={(v) => patchLine(index, { standardTime: v ?? undefined })}
-          />
+          <Space.Compact style={{ width: '100%' }}>
+            <InputNumber
+              min={0}
+              step={0.01}
+              style={{ width: 72 }}
+              disabled={disabled}
+              value={row.standardTime}
+              onChange={(v) => patchLine(index, { standardTime: v ?? undefined })}
+            />
+            <Select
+              style={{ width: 64 }}
+              disabled={disabled}
+              value={normalizeTimeUnit(row.standardTimeUnit)}
+              options={TIME_UNIT_OPTIONS.map((o) => ({
+                value: o.value,
+                label: t(o.labelKey),
+              }))}
+              onChange={(u) => changeStandardTimeUnit(index, u)}
+            />
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '0 6px',
+                color: 'rgba(0,0,0,0.45)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              /
+            </span>
+            <InputNumber
+              min={1}
+              step={1}
+              precision={0}
+              style={{ width: 72 }}
+              disabled={disabled}
+              value={row.standardTimeQty ?? 1}
+              onChange={(v) =>
+                patchLine(index, {
+                  standardTimeQty: v != null && Number(v) >= 1 ? Number(v) : 1,
+                })
+              }
+            />
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '0 8px',
+                background: 'rgba(0,0,0,0.02)',
+                border: '1px solid #d9d9d9',
+                borderLeft: 0,
+                borderRadius: '0 6px 6px 0',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('app.master-data.manufacturing.pieceUnit')}
+            </span>
+          </Space.Compact>
         ),
       },
       {
         title: t('app.master-data.manufacturing.setupTime'),
-        width: 148,
+        width: 168,
         render: (_: unknown, row: ProductProcessLine, index: number) => (
-          <InputNumber
-            min={0}
-            step={1}
-            precision={0}
-            style={{ width: '100%' }}
-            disabled={disabled}
-            addonAfter={t('app.master-data.manufacturing.minuteUnit')}
-            value={row.setupTime}
-            onChange={(v) => patchLine(index, { setupTime: v ?? undefined })}
-          />
+          <Space.Compact style={{ width: '100%' }}>
+            <InputNumber
+              min={0}
+              step={0.01}
+              style={{ flex: 1, minWidth: 72 }}
+              disabled={disabled}
+              value={row.setupTime}
+              onChange={(v) => patchLine(index, { setupTime: v ?? undefined })}
+            />
+            <Select
+              style={{ width: 72 }}
+              disabled={disabled}
+              value={normalizeTimeUnit(row.setupTimeUnit)}
+              options={TIME_UNIT_OPTIONS.map((o) => ({
+                value: o.value,
+                label: t(o.labelKey),
+              }))}
+              onChange={(u) => changeSetupTimeUnit(index, u)}
+            />
+          </Space.Compact>
         ),
       },
       {

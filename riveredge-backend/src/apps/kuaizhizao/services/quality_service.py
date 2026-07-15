@@ -2496,13 +2496,12 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 source_type="process_inspection",
             )
 
-            # 自动更新报工合格数
+            # 方案质检完成后，用检验不合格回写工单工序质量口径（不合格不占可报）
             if inspection_model.work_order_id:
-                await self._update_reporting_qualified_quantity(
+                await self._reconcile_operation_quality_after_inspection(
                     tenant_id=tenant_id,
-                    work_order_id=inspection_model.work_order_id,
-                    operation_id=inspection_model.operation_id,
-                    qualified_quantity=qualified_quantity
+                    work_order_id=int(inspection_model.work_order_id),
+                    operation_id=int(inspection_model.operation_id),
                 )
                 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 
@@ -2556,34 +2555,67 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
 
             return await self.get_process_inspection_by_id(tenant_id, inspection_id)
 
-    async def _update_reporting_qualified_quantity(
+    async def _reconcile_operation_quality_after_inspection(
         self,
         tenant_id: int,
         work_order_id: int,
         operation_id: int,
-        qualified_quantity: Decimal
-    ):
-        """更新报工记录中的合格数量"""
-        from apps.kuaizhizao.models.reporting_record import ReportingRecord
-        
-        # 查找对应的报工记录
-        reporting = await ReportingRecord.filter(
+    ) -> None:
+        """
+        方案质检落单后回写工单工序合格/不合格。
+
+        口径：检验不合格从已完成中拆出；其余（含已报未检）仍计合格。
+        completed_quantity 不变，以便按「完成 − 不合格」释放可报数量。
+        """
+        from apps.kuaizhizao.models.process_inspection import ProcessInspection
+        from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+        from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
+        from apps.kuaizhizao.services.operation_transfer_service import (
+            sum_process_inspection_quality_quantities,
+        )
+
+        mode, _, _ = await resolve_inspection_policy(
+            tenant_id, "ipqc", operation_id=operation_id
+        )
+        if mode != "plan":
+            return
+
+        insp_rows = await ProcessInspection.filter(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             operation_id=operation_id,
-            status='已报工'
-        ).order_by('-created_at').first()
-        
-        if reporting:
-            # 更新合格数量
-            await ReportingRecord.filter(
-                tenant_id=tenant_id,
-                id=reporting.id
-            ).update(
-                qualified_quantity=qualified_quantity,
-                updated_at=datetime.now()
-            )
-            logger.info(f"已更新报工记录合格数量: 工单{work_order_id}, 工序{operation_id}, 合格数{qualified_quantity}")
+            deleted_at__isnull=True,
+        ).all()
+        insp_q, insp_u = sum_process_inspection_quality_quantities(insp_rows)
+        if insp_q + insp_u <= 0:
+            return
+
+        woo = await WorkOrderOperation.get_or_none(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            operation_id=operation_id,
+            deleted_at__isnull=True,
+        )
+        if not woo:
+            return
+
+        completed = Decimal(str(woo.completed_quantity or 0))
+        reconciled_qualified = completed - insp_u
+        if reconciled_qualified < 0:
+            reconciled_qualified = Decimal("0")
+
+        await WorkOrderOperation.filter(tenant_id=tenant_id, id=woo.id).update(
+            qualified_quantity=reconciled_qualified,
+            unqualified_quantity=insp_u,
+            updated_at=datetime.now(),
+        )
+        logger.info(
+            "过程质检已回写工序质量口径: 工单%s 工序%s 合格%s 不合格%s",
+            work_order_id,
+            operation_id,
+            reconciled_qualified,
+            insp_u,
+        )
 
     async def create_inspection_from_work_order(
         self,
