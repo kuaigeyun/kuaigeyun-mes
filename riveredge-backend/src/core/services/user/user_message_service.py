@@ -195,6 +195,28 @@ class UserMessageService:
         )
         
         return updated_count
+
+    @staticmethod
+    async def mark_all_messages_read(
+        tenant_id: int,
+        user_id: int,
+    ) -> int:
+        """将当前用户全部未读消息标记为已读。"""
+        user = await User.get_or_none(id=user_id, tenant_id=tenant_id)
+        if not user:
+            return 0
+
+        recipient_conditions = [str(user_id)]
+        if user.email:
+            recipient_conditions.append(user.email)
+
+        query = Q(
+            tenant_id=tenant_id,
+            recipient__in=recipient_conditions,
+            status__in=["pending", "sending", "success"],
+            deleted_at__isnull=True,
+        )
+        return await MessageLog.filter(query).update(status="read")
     
     @staticmethod
     async def get_user_message_stats(

@@ -1320,6 +1320,22 @@ async def list_equipment_operational_status_history(
     return [EquipmentOperationalStatusLogOut.model_validate(r) for r in rows]
 
 
+@_equipment_ledger_router.get(
+    "/equipments/{row_id}/operation-records",
+    summary="设备履历（点检/巡检/维保/产出/验收/状态变更）",
+)
+async def list_equipment_operation_records_api(
+    row_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    if not await tenant_alive(HaoligoEquipment, tenant_id).filter(id=row_id).exists():
+        await _not_found()
+    from apps.haoligo.services.equipment_operation_records import list_equipment_operation_records
+
+    return await list_equipment_operation_records(tenant_id=tenant_id, equipment_id=row_id)
+
+
 @_equipment_ledger_router.patch("/equipments/{row_id}", response_model=EquipmentOut, summary="更新设备")
 async def update_equipment(
     row_id: int,

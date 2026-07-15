@@ -537,6 +537,10 @@ async def list_outsource_maintenance_complete_sheets(
     sheet_status: Optional[str] = Query(None, description="待审核 / 已通过 / 已驳回 等"),
     created_from: Optional[datetime] = Query(None, description="创建时间起（含）"),
     created_to: Optional[datetime] = Query(None, description="创建时间止（含）"),
+    assigned_to_me: bool = Query(
+        False,
+        description="仅个人待办队列（与 /mobile/todo-badges 口径一致）",
+    ),
 ):
     qs = tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id)
     qs = await apply_mold_line_items_sheet_keyword_filter(
@@ -555,6 +559,12 @@ async def list_outsource_maintenance_complete_sheets(
     qs = await apply_outsource_sheet_scope(
         qs, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
     )
+    if assigned_to_me:
+        from apps.haoligo.services.mobile_assigned_to_me import (
+            apply_assigned_to_me_outsource_complete_pending,
+        )
+
+        qs = await apply_assigned_to_me_outsource_complete_pending(qs, user, tenant_id)
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     items = [await _serialize(r) for r in rows]
@@ -695,6 +705,10 @@ async def list_pending_audit_outsource_maintenance_complete_sheets(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     keyword: Optional[str] = Query(None),
+    assigned_to_me: bool = Query(
+        False,
+        description="仅个人待办队列（与 /mobile/todo-badges 口径一致）",
+    ),
 ):
     qs = tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id).filter(
         sheet_status=SHEET_STATUS_PENDING
@@ -709,6 +723,12 @@ async def list_pending_audit_outsource_maintenance_complete_sheets(
         outsource_complete_header_keyword_q,
         HaoligoMoldOutsourceMaintenanceCompleteSheet,
     )
+    if assigned_to_me:
+        from apps.haoligo.services.mobile_assigned_to_me import (
+            apply_assigned_to_me_outsource_complete_pending,
+        )
+
+        qs = await apply_assigned_to_me_outsource_complete_pending(qs, user, tenant_id)
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     items = [await _serialize(r) for r in rows]

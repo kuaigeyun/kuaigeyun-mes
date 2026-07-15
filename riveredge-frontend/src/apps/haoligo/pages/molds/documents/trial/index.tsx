@@ -145,12 +145,20 @@ const productionTrialResultSearchEnum: Record<string, { text: string }> = {
   未填写: { text: '未填写' },
 };
 
+/** 库内 failure_handling 真值 → 用户可见文案（「已收回」展示为「确认收回」） */
+function failureHandlingDisplay(value: string | null | undefined): string {
+  const s = (value || '').trim();
+  if (!s) return '';
+  if (s === '已收回') return '确认收回';
+  return s;
+}
+
 const failureHandlingSearchEnum: Record<string, { text: string }> = {
   待处理: { text: '待处理' },
   立即送修: { text: '立即送修' },
   已发出: { text: '已发出' },
   调整完成: { text: '调整完成' },
-  已收回: { text: '已收回' },
+  已收回: { text: '确认收回' },
 };
 
 const workflowPhaseSearchEnum: Record<string, { text: string }> = {
@@ -320,7 +328,7 @@ function renderFailureHandlingCell(value: string | null | undefined): React.Reac
           : s === TRIAL_FAILURE_REPAIR
             ? 'warning'
             : undefined;
-  return <Tag color={color}>{s}</Tag>;
+  return <Tag color={color}>{failureHandlingDisplay(s)}</Tag>;
 }
 
 function isTrialSheetHandlingClosed(record: MoldTrialSheetRow): boolean {
@@ -3318,7 +3326,7 @@ const MoldTrialSheetsPage: React.FC = () => {
               </Form.Item>
             </Form>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              外协已确认调整完成后，模具到厂时选择厂内目标仓库并确认收回；本单变为「已收回」并结束。
+              外协已确认调整完成后，模具到厂时选择厂内目标仓库并确认收回；本单变为「确认收回」并结束。
             </Typography.Text>
           </Space>
         )}

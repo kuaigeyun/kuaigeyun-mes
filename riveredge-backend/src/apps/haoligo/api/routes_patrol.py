@@ -257,7 +257,7 @@ async def _serialize_hazard(
 @router.get("", summary="隐患单分页")
 async def list_hazards(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     status_filter: Optional[str] = Query(None, alias="status"),
@@ -270,6 +270,10 @@ async def list_hazards(
     reported_to: Optional[datetime] = Query(None, description="巡查/反馈时间止（含）"),
     sheet_no: Optional[str] = Query(None, description="登记单号（模糊）"),
     keyword: Optional[str] = Query(None, description="单号/区域/登记人/责任人（模糊）"),
+    assigned_to_me: bool = Query(
+        False,
+        description="仅个人待办队列（与 /mobile/todo-badges 口径一致）",
+    ),
 ):
     qs = tenant_alive(HaoligoHazardReport, tenant_id)
     if status_filter:
@@ -292,6 +296,12 @@ async def list_hazards(
             | Q(registrant_name__icontains=k)
             | Q(responsible_name__icontains=k)
         )
+    if assigned_to_me:
+        from apps.haoligo.services.mobile_assigned_to_me import apply_assigned_to_me_hazard
+
+        if not status_filter and not for_remediation:
+            qs = qs.filter(status="已登记")
+        qs = await apply_assigned_to_me_hazard(qs, user)
     total = await qs.count()
     rows = await qs.order_by("-reported_at", "-id").offset(skip).limit(limit)
     eq_ids = {r.equipment_id for r in rows if getattr(r, "equipment_id", None)}

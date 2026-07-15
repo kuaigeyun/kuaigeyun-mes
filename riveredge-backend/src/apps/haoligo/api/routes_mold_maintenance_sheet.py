@@ -444,6 +444,7 @@ async def _enrich_primary_mold_names_for_list(
 async def list_maintenance_sheets(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[AuthContext, Depends(require_inhouse_maintenance_sheet_list_access())],
+    user: Annotated[User, Depends(get_current_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     keyword: Optional[str] = Query(None),
@@ -453,6 +454,10 @@ async def list_maintenance_sheets(
         description="为 true 时仅返回尚未关联未删除维保完修单的维保单（用于完修单选源）",
     ),
     service_type: Optional[str] = Query(None, description="维修 / 保养"),
+    assigned_to_me: bool = Query(
+        False,
+        description="仅个人待办队列（与 /mobile/todo-badges 口径一致）",
+    ),
 ):
     linked_complete_ids = await _linked_maintenance_ids_with_complete(tenant_id)
     qs = tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id)
@@ -474,6 +479,35 @@ async def list_maintenance_sheets(
         inhouse_maintenance_header_keyword_q,
         HaoligoMoldMaintenanceSheet,
     )
+    if assigned_to_me:
+        from apps.haoligo.services.mobile_assigned_to_me import (
+            apply_assigned_to_me_open_for_complete,
+            apply_assigned_to_me_pending_audit,
+        )
+
+        if open_for_complete:
+            complete_module = (
+                "molds-documents-repair-complete"
+                if svc == "维修"
+                else "molds-documents-upkeep-complete"
+            )
+            qs = await apply_assigned_to_me_open_for_complete(
+                qs,
+                user,
+                tenant_id,
+                complete_module=complete_module,
+            )
+        else:
+            approve_module = (
+                "molds-documents-repair" if svc == "维修" else "molds-documents-upkeep"
+            )
+            qs = await apply_assigned_to_me_pending_audit(
+                qs,
+                user,
+                tenant_id,
+                notify_field="submitted_notify_user_ids",
+                approve_module=approve_module,
+            )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     items = [_serialize(r, linked_complete_ids=linked_complete_ids) for r in rows]

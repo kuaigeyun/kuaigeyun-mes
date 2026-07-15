@@ -515,6 +515,10 @@ async def list_trial_sheets(
     keyword: Optional[str] = Query(None, description="采购订单号/模具代号/名称关键字"),
     created_from: Optional[datetime] = Query(None, description="创建时间起（含）"),
     created_to: Optional[datetime] = Query(None, description="创建时间止（含）"),
+    assigned_to_me: bool = Query(
+        False,
+        description="仅个人待办队列（与 /mobile/todo-badges 口径一致）",
+    ),
 ):
     qs = tenant_alive(HaoligoMoldTrialSheet, tenant_id)
     st = (sheet_status or "").strip()
@@ -578,6 +582,22 @@ async def list_trial_sheets(
     qs = await apply_trial_sheet_scope(
         qs, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET
     )
+    if assigned_to_me:
+        from apps.haoligo.services.mobile_assigned_to_me import (
+            apply_assigned_to_me_pending_audit,
+            apply_assigned_to_me_trial_failed,
+        )
+
+        if failure_pending:
+            qs = await apply_assigned_to_me_trial_failed(qs, user)
+        else:
+            qs = await apply_assigned_to_me_pending_audit(
+                qs,
+                user,
+                tenant_id,
+                notify_field="submitted_notify_user_ids",
+                approve_module="molds-documents-trial",
+            )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     items: List[MoldTrialSheetOut] = []

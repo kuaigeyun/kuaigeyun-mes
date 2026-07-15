@@ -205,7 +205,7 @@ async def _serialize(
 @router.get("", summary="设备维保单分页列表")
 async def list_upkeep_sheets(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     keyword: Optional[str] = Query(None),
@@ -213,6 +213,10 @@ async def list_upkeep_sheets(
     open_for_complete: bool = Query(
         False,
         description="为 true 时仅返回尚未关联未删除维保完成单的维保单（用于完成单选源）",
+    ),
+    assigned_to_me: bool = Query(
+        False,
+        description="仅个人待办队列（与 /mobile/todo-badges 口径一致）",
     ),
 ):
     linked_complete_ids = await _linked_upkeep_ids_with_complete(tenant_id)
@@ -237,6 +241,19 @@ async def list_upkeep_sheets(
             | Q(description__icontains=k)
             | Q(equipment__asset_code__icontains=k)
             | Q(equipment__name__icontains=k)
+        )
+    if assigned_to_me:
+        from apps.haoligo.services.mobile_assigned_to_me import apply_assigned_to_me_open_for_complete
+
+        if not open_for_complete:
+            lid = list(linked_complete_ids)
+            if lid:
+                qs = qs.filter(~Q(id__in=lid))
+        qs = await apply_assigned_to_me_open_for_complete(
+            qs,
+            user,
+            tenant_id,
+            complete_module="equipment-documents-upkeep-complete",
         )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)

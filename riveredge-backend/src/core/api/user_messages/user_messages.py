@@ -126,3 +126,15 @@ async def mark_messages_read(
     
     return {"updated_count": updated_count}
 
+
+@router.post("/mark-all-read", response_model=Dict[str, int], summary="全部未读标记为已读")
+async def mark_all_messages_read(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    updated_count = await UserMessageService.mark_all_messages_read(
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+    )
+    return {"updated_count": updated_count}
+

@@ -170,6 +170,9 @@ def _filter_scope_sections(
                 item["icon_group"] = icon_group
             if entry.get("solo_row"):
                 item["solo_row"] = True
+            nature = (entry.get("nature") or "").strip()
+            if nature:
+                item["nature"] = nature
             entries_out.append(item)
 
         if not entries_out:

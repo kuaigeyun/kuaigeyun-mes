@@ -44,6 +44,7 @@ class MobileWorkbenchEntryOut(BaseModel):
     icon: str
     icon_group: str | None = None
     solo_row: bool = False
+    nature: str | None = Field(default=None, description="audit=待我审核 / handle=待我处理")
 
 
 class MobileWorkbenchSectionOut(BaseModel):
@@ -195,6 +196,25 @@ async def get_mobile_updates_manifest(
     response.headers["expo-sfv-version"] = "0"
     response.headers["cache-control"] = "private, max-age=0"
     return manifest
+
+
+class MobileTodoBadgesOut(BaseModel):
+    badges: dict[str, int] = Field(default_factory=dict)
+    pending: int = Field(description="底栏待办合计（个人队列，已去重）")
+
+
+@router.get("/todo-badges", response_model=MobileTodoBadgesOut, summary="移动端待办角标（个人队列）")
+async def get_mobile_todo_badges(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> MobileTodoBadgesOut:
+    from apps.haoligo.services.mobile_todo_badges import (
+        compute_mobile_todo_badges,
+        sum_personal_todo_badges,
+    )
+
+    badges = await compute_mobile_todo_badges(tenant_id, user)
+    return MobileTodoBadgesOut(badges=badges, pending=sum_personal_todo_badges(badges))
 
 
 @router.get("/bootstrap", response_model=MobileBootstrapOut, summary="移动端启动聚合")

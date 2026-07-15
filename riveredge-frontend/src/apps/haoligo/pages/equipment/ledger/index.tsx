@@ -20,7 +20,7 @@ import {
   ProFormUploadButton,
 } from '@ant-design/pro-components';
 import type { UploadProps } from 'antd';
-import { App, Button, Col, Modal, Row, Space, Table, Typography, Upload } from 'antd';
+import { App, Button, Col, Descriptions, Modal, Row, Space, Spin, Table, Timeline, Typography, Upload } from 'antd';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
@@ -29,12 +29,14 @@ import { formatDateTime } from '../../../../../utils/format';
 import { UniTable } from '../../../../../components/uni-table';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import {
-  DetailDrawerTemplate,
+  DetailDrawerSection,
   DRAWER_CONFIG,
   ListPageTemplate,
   FormModalTemplate,
   MODAL_CONFIG,
+  PAGE_SPACING,
 } from '../../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import {
   createEquipment,
   deleteEquipment,
@@ -44,6 +46,7 @@ import {
   listCategories,
   listEquipments,
   listEquipmentOperationalStatusHistory,
+  listEquipmentOperationRecords,
   listEquipmentUpkeepParamSets,
   listInspectionParamSets,
   listManufacturers,
@@ -51,6 +54,7 @@ import {
   updateEquipment,
   type CategoryRow,
   type EquipmentCreatePayload,
+  type EquipmentOperationRecordRow,
   type EquipmentOperationalStatusLogRow,
   type EquipmentRow,
   type EquipmentUpdatePayload,
@@ -90,6 +94,53 @@ function intOrUndef(v: unknown): number | undefined {
   return Math.trunc(n);
 }
 
+const equipmentOperationKindColors: Record<EquipmentOperationRecordRow['kind'], string> = {
+  spot_check: 'blue',
+  route_patrol: 'cyan',
+  upkeep: 'orange',
+  upkeep_complete: 'green',
+  output: 'gold',
+  acceptance: 'purple',
+  status_adjustment: 'magenta',
+  status_change: 'gray',
+};
+
+function EquipmentOperationRecordDetails({ record }: { record: EquipmentOperationRecordRow }) {
+  const rows =
+    record.fields && record.fields.length > 0
+      ? record.fields
+      : record.detail
+        ? record.detail.split('；').map((chunk) => {
+            const idx = chunk.indexOf('：');
+            if (idx <= 0) return { label: '摘要', value: chunk.trim() };
+            return { label: chunk.slice(0, idx).trim(), value: chunk.slice(idx + 1).trim() };
+          })
+        : [];
+  if (rows.length === 0) return null;
+  return (
+    <div
+      style={{
+        marginTop: 6,
+        display: 'grid',
+        gridTemplateColumns: 'auto 1fr',
+        columnGap: 8,
+        rowGap: 4,
+        fontSize: 13,
+        lineHeight: 1.5,
+      }}
+    >
+      {rows.map((row) => (
+        <React.Fragment key={`${record.uuid}-${row.label}-${row.value}`}>
+          <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap' }}>
+            {row.label}
+          </Typography.Text>
+          <Typography.Text style={{ wordBreak: 'break-word' }}>{row.value}</Typography.Text>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
 const EquipmentLedgerPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -111,6 +162,9 @@ const EquipmentLedgerPage: React.FC = () => {
   const [statusHistoryRows, setStatusHistoryRows] = useState<EquipmentOperationalStatusLogRow[]>([]);
   const [statusHistoryLoading, setStatusHistoryLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [operationRecords, setOperationRecords] = useState<EquipmentOperationRecordRow[]>([]);
   const [detailRecord, setDetailRecord] = useState<EquipmentRow | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [level1Filter, setLevel1Filter] = useState<string>('__all__');
@@ -237,6 +291,30 @@ const EquipmentLedgerPage: React.FC = () => {
       messageApi.error((e as Error).message || t('app.haoligo.equipment.ledger.loadEquipmentFailed'));
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const handleOpenHistory = async (record: EquipmentRow) => {
+    setHistoryOpen(true);
+    setDetailRecord(record);
+    setOperationRecords([]);
+    setHistoryLoading(true);
+    try {
+      const [detailRes, opsRes] = await Promise.allSettled([
+        getEquipment(record.id),
+        listEquipmentOperationRecords(record.id),
+      ]);
+      if (detailRes.status === 'fulfilled') {
+        setDetailRecord(detailRes.value);
+      }
+      if (opsRes.status === 'fulfilled') {
+        setOperationRecords(opsRes.value.items ?? []);
+      } else {
+        setOperationRecords([]);
+        messageApi.warning((opsRes.reason as Error)?.message || t('app.haoligo.equipment.ledger.historyLoadFailed'));
+      }
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -606,12 +684,15 @@ const EquipmentLedgerPage: React.FC = () => {
       {
         title: t('app.haoligo.equipment.ledger.colActions'),
         valueType: 'option',
-        width: 200,
+        width: 260,
         fixed: 'right',
         render: (_, record) => (
           <Space>
             <Button key="view" {...rowActionKind('read')} onClick={() => void handleDetail(record)}>
               {t('common.detail')}
+            </Button>
+            <Button key="history" {...rowActionKind('read')} onClick={() => void handleOpenHistory(record)}>
+              {t('app.haoligo.equipment.ledger.actionHistory')}
             </Button>
             <Button key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)}>
               {t('app.haoligo.equipment.ledger.actionEdit')}
@@ -983,7 +1064,7 @@ const EquipmentLedgerPage: React.FC = () => {
         </Row>
       </FormModalTemplate>
 
-      <DetailDrawerTemplate
+      <UniDetail
         title={
           detailRecord
             ? `${t('common.detail')} · ${detailRecord.asset_code}`
@@ -992,12 +1073,75 @@ const EquipmentLedgerPage: React.FC = () => {
         open={detailOpen}
         onClose={() => {
           setDetailOpen(false);
-          setDetailRecord(null);
         }}
         loading={detailLoading}
         width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={detailRecord}
-        columns={detailColumns}
+        plainBody={
+          detailRecord ? (
+            <>
+              <DetailDrawerSection
+                title={t('app.haoligo.equipment.ledger.sectionBasic')}
+                marginBottom={PAGE_SPACING.PADDING}
+              >
+                <Descriptions
+                  column={2}
+                  items={detailDrawerDescriptionItems(detailColumns, detailRecord)}
+                />
+              </DetailDrawerSection>
+              <Typography.Link onClick={() => void handleOpenHistory(detailRecord)}>
+                {t('app.haoligo.equipment.ledger.viewHistoryLink')}
+              </Typography.Link>
+            </>
+          ) : null
+        }
+      />
+
+      <UniDetail
+        title={
+          detailRecord
+            ? `${t('app.haoligo.equipment.ledger.historyTitle')} · ${detailRecord.asset_code}`
+            : t('app.haoligo.equipment.ledger.historyTitle')
+        }
+        open={historyOpen}
+        onClose={() => {
+          setHistoryOpen(false);
+          setOperationRecords([]);
+        }}
+        loading={historyLoading}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        plainBody={
+          <DetailDrawerSection title={t('app.haoligo.equipment.ledger.historySection')} marginBottom={0}>
+            {historyLoading ? (
+              <div style={{ padding: `${PAGE_SPACING.BLOCK_GAP}px 0`, display: 'flex', justifyContent: 'center' }}>
+                <Spin />
+              </div>
+            ) : operationRecords.length === 0 ? (
+              <Typography.Text type="secondary">{t('app.haoligo.equipment.ledger.historyEmpty')}</Typography.Text>
+            ) : (
+              <Timeline
+                items={operationRecords.map((e) => ({
+                  color: equipmentOperationKindColors[e.kind] ?? 'gray',
+                  children: (
+                    <div style={{ paddingBottom: 4 }}>
+                      <div style={{ marginBottom: 4 }}>
+                        <Typography.Text type="secondary">
+                          {formatDateTime(e.occurred_at, 'YYYY-MM-DD HH:mm')}
+                        </Typography.Text>
+                        <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
+                          {e.sheet_no?.trim()
+                            ? `${t('app.haoligo.equipment.ledger.historySheetNo')} ${e.sheet_no.trim()}`
+                            : `${t('app.haoligo.equipment.ledger.historySheetNo')} #${e.record_id}`}
+                        </Typography.Text>
+                      </div>
+                      <Typography.Text strong>{e.title}</Typography.Text>
+                      <EquipmentOperationRecordDetails record={e} />
+                    </div>
+                  ),
+                }))}
+              />
+            )}
+          </DetailDrawerSection>
+        }
       />
 
       <Modal

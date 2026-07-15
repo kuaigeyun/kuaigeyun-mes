@@ -479,6 +479,8 @@ const MoldLedgerPage: React.FC = () => {
   const [listMatchTotal, setListMatchTotal] = useState(0);
   const listSnapshotRef = useRef<{ total: number; keyword?: string; status?: string }>({ total: 0 });
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [historyDrawerVisible, setHistoryDrawerVisible] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [moldDetail, setMoldDetail] = useState<MoldRow | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [moldOperationRecords, setMoldOperationRecords] = useState<MoldOperationRecordRow[]>([]);
@@ -884,9 +886,31 @@ const MoldLedgerPage: React.FC = () => {
     const req = ++moldDetailReqRef.current;
     flushDrawerOpen(() => {
       setMoldDetail(record);
-      setMoldOperationRecords([]);
       setDetailDrawerVisible(true);
       setDetailLoading(true);
+    });
+    try {
+      const detail = await getMold(record.id);
+      if (moldDetailReqRef.current !== req) return;
+      setMoldDetail(detail);
+    } catch (e) {
+      if (moldDetailReqRef.current === req) {
+        messageApi.error((e as Error)?.message || '加载详情失败');
+      }
+    } finally {
+      if (moldDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
+    }
+  };
+
+  const handleOpenMoldHistory = async (record: MoldRow) => {
+    const req = ++moldDetailReqRef.current;
+    flushDrawerOpen(() => {
+      setMoldDetail(record);
+      setMoldOperationRecords([]);
+      setHistoryDrawerVisible(true);
+      setHistoryLoading(true);
     });
     try {
       const [detailRes, opsRes] = await Promise.allSettled([
@@ -896,25 +920,26 @@ const MoldLedgerPage: React.FC = () => {
       if (moldDetailReqRef.current !== req) return;
       if (detailRes.status === 'fulfilled') {
         setMoldDetail(detailRes.value);
-      } else {
-        messageApi.error((detailRes.reason as Error)?.message || '加载详情失败');
       }
       if (opsRes.status === 'fulfilled') {
         setMoldOperationRecords(opsRes.value.items ?? []);
       } else {
         setMoldOperationRecords([]);
-        messageApi.warning((opsRes.reason as Error)?.message || '操作记录加载失败');
+        messageApi.warning((opsRes.reason as Error)?.message || '模具履历加载失败');
       }
     } finally {
       if (moldDetailReqRef.current === req) {
-        setDetailLoading(false);
+        setHistoryLoading(false);
       }
     }
   };
 
   const handleCloseMoldDetail = () => {
     setDetailDrawerVisible(false);
-    setMoldDetail(null);
+  };
+
+  const handleCloseMoldHistory = () => {
+    setHistoryDrawerVisible(false);
     setMoldOperationRecords([]);
   };
 
@@ -1163,8 +1188,12 @@ const MoldLedgerPage: React.FC = () => {
       title: '操作',
       valueType: 'option',
       fixed: 'right',
+      width: 180,
       render: (_, record) => [
         <Button key="detail" {...rowActionKind('read')} onClick={() => void handleOpenMoldDetail(record)} />,
+        <Button key="history" {...rowActionKind('read')} onClick={() => void handleOpenMoldHistory(record)}>
+          履历
+        </Button>,
         <Button key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)} />,
         <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteOne(record)} />,
       ],
@@ -1365,39 +1394,52 @@ const MoldLedgerPage: React.FC = () => {
                   items={detailDrawerDescriptionItems(moldDetailColumnsBasic, moldDetail)}
                 />
               </DetailDrawerSection>
-              <DetailDrawerSection title="操作记录" marginBottom={0}>
-                {detailLoading ? (
-                  <div style={{ padding: `${PAGE_SPACING.BLOCK_GAP}px 0`, display: 'flex', justifyContent: 'center' }}>
-                    <Spin />
-                  </div>
-                ) : moldOperationRecords.length === 0 ? (
-                  <Typography.Text type="secondary">暂无关联操作记录</Typography.Text>
-                ) : (
-                  <Timeline
-                    items={moldOperationRecords.map((e) => ({
-                      color: moldOperationKindColors[e.kind] ?? 'gray',
-                      children: (
-                        <div style={{ paddingBottom: 4 }}>
-                          <div style={{ marginBottom: 4 }}>
-                            <Typography.Text type="secondary">
-                              {formatDateTime(e.occurred_at, 'YYYY-MM-DD HH:mm')}
-                            </Typography.Text>
-                            <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
-                              {e.sheet_no?.trim()
-                                ? `单号 ${e.sheet_no.trim()}`
-                                : `单号 #${e.record_id}`}
-                            </Typography.Text>
-                          </div>
-                          <Typography.Text strong>{e.title}</Typography.Text>
-                          <MoldOperationRecordDetails record={e} />
-                        </div>
-                      ),
-                    }))}
-                  />
-                )}
-              </DetailDrawerSection>
+              <Typography.Link onClick={() => void handleOpenMoldHistory(moldDetail)}>
+                查看模具履历 →
+              </Typography.Link>
             </>
           ) : null
+        }
+      />
+
+      <UniDetail
+        title={moldDetail ? `模具履历 · ${moldDetail.mold_code}` : '模具履历'}
+        open={historyDrawerVisible}
+        onClose={handleCloseMoldHistory}
+        loading={historyLoading}
+        width={DRAWER_CONFIG.HALF_WIDTH}
+        plainBody={
+          <DetailDrawerSection title="履历追溯" marginBottom={0}>
+            {historyLoading ? (
+              <div style={{ padding: `${PAGE_SPACING.BLOCK_GAP}px 0`, display: 'flex', justifyContent: 'center' }}>
+                <Spin />
+              </div>
+            ) : moldOperationRecords.length === 0 ? (
+              <Typography.Text type="secondary">暂无关联履历</Typography.Text>
+            ) : (
+              <Timeline
+                items={moldOperationRecords.map((e) => ({
+                  color: moldOperationKindColors[e.kind] ?? 'gray',
+                  children: (
+                    <div style={{ paddingBottom: 4 }}>
+                      <div style={{ marginBottom: 4 }}>
+                        <Typography.Text type="secondary">
+                          {formatDateTime(e.occurred_at, 'YYYY-MM-DD HH:mm')}
+                        </Typography.Text>
+                        <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
+                          {e.sheet_no?.trim()
+                            ? `单号 ${e.sheet_no.trim()}`
+                            : `单号 #${e.record_id}`}
+                        </Typography.Text>
+                      </div>
+                      <Typography.Text strong>{e.title}</Typography.Text>
+                      <MoldOperationRecordDetails record={e} />
+                    </div>
+                  ),
+                }))}
+              />
+            )}
+          </DetailDrawerSection>
         }
       />
 

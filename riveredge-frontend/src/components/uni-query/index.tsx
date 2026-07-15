@@ -512,12 +512,14 @@ function scoreLifecycleStageColumn(column: ProColumns<any>, field: string): numb
   if (field === LIST_LIFECYCLE_STAGE_FIELD) score += 200;
   if (field === LEGACY_LIST_LIFECYCLE_FIELD) score += 150;
   if (field === 'ledger_source') score += 120;
+  if (field === 'failure_handling') score += 100;
   if (/^operation_type$/i.test(field)) score += 120;
   if (/生命周期/.test(title)) score += 100;
   if (/lifecycle|stage|state/i.test(field)) score += 60;
   if (/^status$/i.test(field)) score += 40;
   if (/operation[\s_-]*type|action[\s_-]*type/i.test(field)) score += 80;
   if (/阶段/.test(title)) score += 70;
+  if (/处理方式/.test(title)) score += 70;
   if (/状态/.test(title)) score += 50;
   if (/来源/.test(title)) score += 50;
   if (/操作类型|动作类型/.test(title)) score += 90;

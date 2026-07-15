@@ -894,11 +894,15 @@ issues_router = APIRouter(
 @issues_router.get("", response_model=_PageOut, summary="品质问题分页")
 async def list_quality_issues(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     status_filter: Optional[str] = Query(None, alias="status"),
     keyword: Optional[str] = Query(None),
+    assigned_to_me: bool = Query(
+        False,
+        description="仅个人待办队列（与 /mobile/todo-badges 口径一致）",
+    ),
 ):
     qs = tenant_alive(HaoligoQualityIssueTracking, tenant_id)
     if status_filter:
@@ -906,6 +910,12 @@ async def list_quality_issues(
     k = (keyword or "").strip()
     if k:
         qs = qs.filter(Q(sheet_no__icontains=k) | Q(title__icontains=k) | Q(problem_description__icontains=k))
+    if assigned_to_me:
+        from apps.haoligo.services.mobile_assigned_to_me import apply_assigned_to_me_quality_handle
+
+        if not status_filter:
+            qs = qs.filter(status__in=["assigned", "processing"])
+        qs = await apply_assigned_to_me_quality_handle(qs, user)
     total = await qs.count()
     rows = await qs.order_by("-reported_at", "-id").offset(skip).limit(limit)
     items = [await _serialize_common(r, tenant_id, QualityIssueOut) for r in rows]
@@ -1245,11 +1255,15 @@ complaints_router = APIRouter(
 @complaints_router.get("", response_model=_PageOut, summary="客户投诉分页")
 async def list_customer_complaints(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     status_filter: Optional[str] = Query(None, alias="status"),
     keyword: Optional[str] = Query(None),
+    assigned_to_me: bool = Query(
+        False,
+        description="仅个人待办队列（与 /mobile/todo-badges 口径一致）",
+    ),
 ):
     qs = tenant_alive(HaoligoCustomerComplaint, tenant_id)
     if status_filter:
@@ -1257,6 +1271,12 @@ async def list_customer_complaints(
     k = (keyword or "").strip()
     if k:
         qs = qs.filter(Q(sheet_no__icontains=k) | Q(title__icontains=k) | Q(customer_name__icontains=k))
+    if assigned_to_me:
+        from apps.haoligo.services.mobile_assigned_to_me import apply_assigned_to_me_quality_handle
+
+        if not status_filter:
+            qs = qs.filter(status__in=["assigned", "processing"])
+        qs = await apply_assigned_to_me_quality_handle(qs, user)
     total = await qs.count()
     rows = await qs.order_by("-reported_at", "-id").offset(skip).limit(limit)
     items = [await _serialize_common(r, tenant_id, CustomerComplaintOut) for r in rows]
@@ -1572,11 +1592,15 @@ line_stops_router = APIRouter(
 @line_stops_router.get("", response_model=_PageOut, summary="停线反馈分页")
 async def list_line_stop_feedbacks(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     status_filter: Optional[str] = Query(None, alias="status"),
     keyword: Optional[str] = Query(None),
+    assigned_to_me: bool = Query(
+        False,
+        description="仅个人待办队列（与 /mobile/todo-badges 口径一致）",
+    ),
 ):
     qs = tenant_alive(HaoligoLineStopFeedback, tenant_id)
     if status_filter:
@@ -1584,6 +1608,12 @@ async def list_line_stop_feedbacks(
     k = (keyword or "").strip()
     if k:
         qs = qs.filter(Q(sheet_no__icontains=k) | Q(title__icontains=k) | Q(stop_reason__icontains=k))
+    if assigned_to_me:
+        from apps.haoligo.services.mobile_assigned_to_me import apply_assigned_to_me_quality_handle
+
+        if not status_filter:
+            qs = qs.filter(status__in=["assigned", "processing"])
+        qs = await apply_assigned_to_me_quality_handle(qs, user)
     total = await qs.count()
     rows = await qs.order_by("-reported_at", "-id").offset(skip).limit(limit)
     items = [await _serialize_common(r, tenant_id, LineStopOut) for r in rows]

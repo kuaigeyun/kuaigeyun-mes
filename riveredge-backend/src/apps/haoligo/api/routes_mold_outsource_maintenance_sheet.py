@@ -471,6 +471,10 @@ async def list_outsource_maintenance_sheets(
         False,
         description="为 true 时仅返回尚未关联未删除外协维保完修单的外协维保单（用于完修单选源）",
     ),
+    assigned_to_me: bool = Query(
+        False,
+        description="仅个人待办队列（与 /mobile/todo-badges 口径一致）",
+    ),
 ):
     linked_complete_ids = await _linked_maintenance_ids_with_active_complete(tenant_id)
     complete_status_by_source = await _active_complete_status_by_source(tenant_id)
@@ -495,6 +499,16 @@ async def list_outsource_maintenance_sheets(
     qs = await apply_outsource_sheet_scope(
         qs, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
     )
+    if assigned_to_me:
+        from apps.haoligo.services.mobile_assigned_to_me import apply_assigned_to_me_pending_audit
+
+        qs = await apply_assigned_to_me_pending_audit(
+            qs,
+            user,
+            tenant_id,
+            notify_field="submitted_notify_user_ids",
+            approve_module="molds-documents-outsource-maintenance",
+        )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     return {

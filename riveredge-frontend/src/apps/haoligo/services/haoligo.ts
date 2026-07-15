@@ -237,6 +237,34 @@ export function listEquipmentOperationalStatusHistory(
   return apiRequest(`${PREFIX}/equipment/equipments/${equipmentId}/operational-status-history`, { params });
 }
 
+/** 设备台账履历 — 与后端 EquipmentOperationRecordOut 对齐 */
+export type EquipmentOperationRecordKind =
+  | 'spot_check'
+  | 'route_patrol'
+  | 'upkeep'
+  | 'upkeep_complete'
+  | 'output'
+  | 'acceptance'
+  | 'status_adjustment'
+  | 'status_change';
+
+export interface EquipmentOperationRecordRow {
+  kind: EquipmentOperationRecordKind;
+  occurred_at: string;
+  record_id: number;
+  uuid: string;
+  title: string;
+  detail: string;
+  fields?: Array<{ label: string; value: string }>;
+  sheet_no?: string | null;
+}
+
+export function listEquipmentOperationRecords(
+  rowId: number,
+): Promise<{ items: EquipmentOperationRecordRow[] }> {
+  return apiRequest(`${PREFIX}/equipment/equipments/${rowId}/operation-records`);
+}
+
 export function deleteEquipment(rowId: number): Promise<void> {
   return apiRequest(`${PREFIX}/equipment/equipments/${rowId}`, { method: 'DELETE' });
 }
