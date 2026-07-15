@@ -17,7 +17,7 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, Modal, Space, Table, Tag, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
@@ -546,7 +546,10 @@ const FinanceSuppliersPage: React.FC = () => {
         {detailRecord ? (
           <>
             <DetailDrawerSection title="基本信息">
-              {detailDrawerDescriptionItems(detailItems, detailRecord)}
+              <Descriptions
+                column={2}
+                items={detailDrawerDescriptionItems(detailItems, detailRecord)}
+              />
             </DetailDrawerSection>
             <DetailDrawerSection
               title={
