@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from fastapi import HTTPException
+
 from apps.haoligo.models.finance_supplier import HaoligoFinanceSupplier
+from apps.haoligo.services.finance_supplier_price import ensure_finance_supplier_code_available
 
 
 @dataclass(frozen=True)
@@ -25,10 +28,6 @@ class FinanceSupplierImportOutcome:
     created_count: int
     failed_count: int
     errors: list[str]
-
-
-def _supplier_qs(tenant_id: int):
-    return HaoligoFinanceSupplier.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
 
 def _optional_str(val: str | None) -> str | None:
@@ -56,10 +55,11 @@ async def import_finance_suppliers(
             continue
         seen_codes.add(code)
 
-        exists = await _supplier_qs(tenant_id).filter(supplier_code=code).exists()
-        if exists:
+        try:
+            await ensure_finance_supplier_code_available(tenant_id, code)
+        except HTTPException as exc:
             failed_count += 1
-            errors.append(f"第{row_no}行：代号「{code}」已存在")
+            errors.append(f"第{row_no}行：{exc.detail}")
             continue
 
         await HaoligoFinanceSupplier.create(

@@ -48,6 +48,7 @@ import FinanceSupplierSelect, {
 } from '../../../components/FinanceSupplierSelect';
 import { haoligoDocumentCreatorColumn, resolveHaoligoDocumentCreatorName } from '../../../utils/documentTableColumns';
 import {
+  createFinanceInvoice,
   deleteFinanceInvoice,
   getFinanceInvoice,
   getOrCreateFinanceAcceptanceFromInvoice,

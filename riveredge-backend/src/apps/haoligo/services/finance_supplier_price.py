@@ -44,6 +44,45 @@ async def get_supplier_or_404(tenant_id: int, supplier_id: int) -> HaoligoFinanc
     return row
 
 
+def release_finance_supplier_code(row: HaoligoFinanceSupplier) -> None:
+    """软删前改写代号，避免 unique(tenant_id, supplier_code) 阻止同代号重建。"""
+    suffix = f"__del{row.id}"
+    current = (row.supplier_code or "").strip() or "S"
+    if current.endswith(suffix):
+        return
+    head_len = max(0, 64 - len(suffix))
+    row.supplier_code = f"{current[:head_len]}{suffix}"
+
+
+async def ensure_finance_supplier_code_available(
+    tenant_id: int,
+    code: str,
+    *,
+    exclude_id: int | None = None,
+) -> None:
+    """
+    保证代号可写入。
+    - 未删除占用 → 409
+    - 软删占用（历史数据未释放）→ 改写旧行代号后放行
+    """
+    qs = HaoligoFinanceSupplier.filter(tenant_id=tenant_id, supplier_code=code)
+    if exclude_id is not None:
+        qs = qs.exclude(id=exclude_id)
+    existing = await qs.first()
+    if existing is None:
+        return
+    if existing.deleted_at is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="供应商代号已存在")
+    release_finance_supplier_code(existing)
+    await existing.save(update_fields=["supplier_code"])
+
+
+async def soft_delete_finance_supplier(row: HaoligoFinanceSupplier) -> None:
+    release_finance_supplier_code(row)
+    row.deleted_at = timezone.now()
+    await row.save(update_fields=["supplier_code", "deleted_at"])
+
+
 async def resolve_supplier_by_name(tenant_id: int, supplier_name: str) -> HaoligoFinanceSupplier | None:
     name = (supplier_name or "").strip()
     if not name:
@@ -86,7 +125,8 @@ def _base_supplier_code_from_name(supplier_name: str) -> str:
 
 async def _allocate_supplier_code(tenant_id: int, supplier_name: str) -> str:
     base = _base_supplier_code_from_name(supplier_name)
-    qs = HaoligoFinanceSupplier.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    # 含软删行：unique(tenant_id, supplier_code) 不区分 deleted_at
+    qs = HaoligoFinanceSupplier.filter(tenant_id=tenant_id)
     if not await qs.filter(supplier_code=base).exists():
         return base
     for i in range(2, 10000):

@@ -141,6 +141,9 @@ def _join_field_tokens(
         ]
         return "".join(ordered)
     ordered = [t for _y, _x, t, _src in sorted(tokens, key=lambda item: (item[0], item[1]))]
+    # 中文规格折行（剥线 + 头）直接拼接；含拉丁字母时保留空格
+    if not any(re.search(r"[A-Za-z]", t) for t in ordered):
+        return "".join(ordered)
     return " ".join(ordered)
 
 
@@ -211,6 +214,18 @@ def _band_is_name_only(band: dict[str, list[tuple[float, float, str]]]) -> bool:
     if band.get("spec") or band.get("unit"):
         return False
     return bool(band.get("name"))
+
+
+def _band_is_wrap_continuation(band: dict[str, list[tuple[float, float, str]]]) -> bool:
+    """同一明细项折行续段：无数量/单价/金额，且非下一行 *大类* 名称开头。"""
+    if band.get("amount") or band.get("quantity") or band.get("price"):
+        return False
+    if band.get("tax_rate") or band.get("tax"):
+        return False
+    name = _band_name_text(band)
+    if _has_category_prefix(name):
+        return False
+    return bool(band.get("name") or band.get("spec") or band.get("unit"))
 
 
 def _band_has_amount(band: dict[str, list[tuple[float, float, str]]]) -> bool:
@@ -291,6 +306,52 @@ def _attach_post_name_band(
     return dist_cur <= dist_next
 
 
+_LEADING_NAME_WRAP_RE = re.compile(r"^([^*]{1,8})(\*[^*]{1,32}\*.+)$")
+# 上一行规格末字与本行规格同 y 粘连：头140度… / 头 140度…
+_LEADING_SPEC_WRAP_RE = re.compile(r"^([\u4e00-\u9fff]{1,3})(?:\s+|　)?(?=\d)")
+
+
+def _peel_leading_name_wrap(name: str) -> tuple[str, str]:
+    """金额行名称若以折行残片开头再接 *大类*，拆出残片归上一行。"""
+    m = _LEADING_NAME_WRAP_RE.match((name or "").strip())
+    if not m:
+        return "", name or ""
+    frag, rest = m.group(1), m.group(2)
+    if _has_category_prefix(frag):
+        return "", name or ""
+    return frag, rest
+
+
+def _peel_leading_spec_wrap(spec: str) -> tuple[str, str]:
+    """规格列若以短中文残片开头且后接数字规格，拆出残片归上一行。"""
+    s = (spec or "").strip()
+    m = _LEADING_SPEC_WRAP_RE.match(s)
+    if not m:
+        return "", s
+    frag = m.group(1)
+    rest = s[m.end() :].strip()
+    if not rest:
+        return "", s
+    return frag, rest
+
+
+def _redistribute_y_merged_wrap_fragments(items: list[list[str]]) -> list[list[str]]:
+    """纠正折行末字与下一金额行同 y 粘连（器*家用… / 头 140度…）。"""
+    if len(items) < 2:
+        return items
+    for i in range(1, len(items)):
+        prev, cur = items[i - 1], items[i]
+        name_frag, name_rest = _peel_leading_name_wrap(cur[0])
+        if name_frag:
+            prev[0] = f"{prev[0]}{name_frag}"
+            cur[0] = name_rest
+        spec_frag, spec_rest = _peel_leading_spec_wrap(cur[1])
+        if spec_frag:
+            prev[1] = f"{(prev[1] or '').rstrip()}{spec_frag}".strip()
+            cur[1] = spec_rest
+    return items
+
+
 def _detail_items_from_page_words(
     words: list[tuple],
     anchors: dict[str, float],
@@ -346,10 +407,14 @@ def _group_bands_into_items(
 
         if idx_prev is None:
             for j in range(0, idx):
+                # 首项之前不应出现「属上一项」的折行；照常吸收
                 buf.absorb_band(bands[j][2])
         else:
             for j in range(idx_prev + 1, idx):
                 p_mid, y_mid, mid_band = bands[j]
+                # 规格/名称折行续段属于上一金额行，留给上一项的 post，勿并入本行
+                if _band_is_wrap_continuation(mid_band):
+                    continue
                 if not _band_is_name_only(mid_band):
                     buf.absorb_band(mid_band)
                     continue
@@ -368,28 +433,49 @@ def _group_bands_into_items(
 
         buf.absorb_band(amount_band, name_source="amount")
 
-        if idx_next is not None:
-            for j in range(idx + 1, idx_next):
-                p_mid, y_mid, mid_band = bands[j]
-                if not _band_is_name_only(mid_band):
-                    continue
-                name_text = _band_name_text(mid_band)
-                if _attach_post_name_band(
-                    p_mid,
-                    y_mid,
-                    page_a,
-                    y_a,
-                    page_next,
-                    y_next,
-                    next_amount_orphan=next_orphan,
-                    name_text=name_text,
-                ):
+        post_end = idx_next if idx_next is not None else len(bands)
+        for j in range(idx + 1, post_end):
+            p_mid, y_mid, mid_band = bands[j]
+            if _band_is_wrap_continuation(mid_band):
+                if _band_is_name_only(mid_band):
+                    name_text = _band_name_text(mid_band)
+                    if idx_next is None or _attach_post_name_band(
+                        p_mid,
+                        y_mid,
+                        page_a,
+                        y_a,
+                        page_next,
+                        y_next,
+                        next_amount_orphan=next_orphan,
+                        name_text=name_text,
+                    ):
+                        buf.absorb_band(mid_band, name_source="post")
+                else:
+                    # 规格/单位折行（如「头」）固定归属当前行
                     buf.absorb_band(mid_band, name_source="post")
+                continue
+            if idx_next is None:
+                continue
+            if not _band_is_name_only(mid_band):
+                continue
+            name_text = _band_name_text(mid_band)
+            if _attach_post_name_band(
+                p_mid,
+                y_mid,
+                page_a,
+                y_a,
+                page_next,
+                y_next,
+                next_amount_orphan=next_orphan,
+                name_text=name_text,
+            ):
+                buf.absorb_band(mid_band, name_source="post")
 
         cells = buf.to_cells()
         if _parse_invoice_detail_row(cells):
             items.append(cells)
-    return items
+
+    return _redistribute_y_merged_wrap_fragments(items)
 
 
 def _is_footer_band(band: dict[str, list[tuple[float, float, str]]]) -> bool:

@@ -8,7 +8,6 @@ from typing import Annotated, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from tortoise import timezone
 from tortoise.expressions import Q
 
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
@@ -29,8 +28,10 @@ from apps.haoligo.services.finance_supplier_import import (
 from apps.haoligo.services.finance_supplier_price import (
     change_supplier_price,
     create_supplier_price_row,
+    ensure_finance_supplier_code_available,
     get_supplier_or_404,
     quick_add_supplier_price,
+    soft_delete_finance_supplier,
 )
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
@@ -255,9 +256,7 @@ async def create_finance_supplier(
     _: Annotated[User, Depends(get_current_user)],
 ):
     code = body.supplier_code.strip()
-    exists = await tenant_alive(HaoligoFinanceSupplier, tenant_id).filter(supplier_code=code).exists()
-    if exists:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="供应商代号已存在")
+    await ensure_finance_supplier_code_available(tenant_id, code)
     row = await HaoligoFinanceSupplier.create(
         tenant_id=tenant_id,
         supplier_code=code,
@@ -316,10 +315,11 @@ async def batch_delete_finance_suppliers(
     _: Annotated[User, Depends(get_current_user)],
 ):
     unique_ids = list(dict.fromkeys(body.ids))
-    now = timezone.now()
-    deleted_count = await tenant_alive(HaoligoFinanceSupplier, tenant_id).filter(
-        id__in=unique_ids
-    ).update(deleted_at=now)
+    rows = await tenant_alive(HaoligoFinanceSupplier, tenant_id).filter(id__in=unique_ids)
+    deleted_count = 0
+    for row in rows:
+        await soft_delete_finance_supplier(row)
+        deleted_count += 1
     return FinanceBatchDeleteResult(deleted_count=deleted_count)
 
 
@@ -334,14 +334,7 @@ async def update_finance_supplier(
     data = body.model_dump(exclude_unset=True)
     if "supplier_code" in data and data["supplier_code"] is not None:
         code = data["supplier_code"].strip()
-        dup = (
-            await tenant_alive(HaoligoFinanceSupplier, tenant_id)
-            .filter(supplier_code=code)
-            .exclude(id=row_id)
-            .exists()
-        )
-        if dup:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="供应商代号已存在")
+        await ensure_finance_supplier_code_available(tenant_id, code, exclude_id=row_id)
         row.supplier_code = code
     if "supplier_name" in data and data["supplier_name"] is not None:
         row.supplier_name = data["supplier_name"].strip()
@@ -364,8 +357,7 @@ async def delete_finance_supplier(
     _: Annotated[User, Depends(get_current_user)],
 ):
     row = await get_supplier_or_404(tenant_id, row_id)
-    row.deleted_at = timezone.now()
-    await row.save()
+    await soft_delete_finance_supplier(row)
 
 
 @router.get(
