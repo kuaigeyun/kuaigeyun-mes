@@ -17,7 +17,7 @@ from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPull
 from apps.kuaizhizao.services.document_state_engine import DocumentStateEngine
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
-router = APIRouter(prefix="/document-push-pull", tags=["App · Kuaige Zhizao · Document Push & Pull"])
+router = APIRouter(prefix="/document-push-pull", tags=["App - Kuaige Zhizao - Document Push & Pull"])
 
 
 class PushDocumentRequest(BaseModel):

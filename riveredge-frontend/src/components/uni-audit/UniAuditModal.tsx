@@ -953,7 +953,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
       open={open}
 
-      title={canExecute ? actionTitle : `审核 · ${actionTitle}`}
+      title={canExecute ? actionTitle : `审核 - ${actionTitle}`}
 
       onCancel={onCancel}
 

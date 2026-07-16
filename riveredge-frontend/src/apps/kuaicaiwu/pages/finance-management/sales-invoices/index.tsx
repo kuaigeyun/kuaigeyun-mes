@@ -6,9 +6,9 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Space, Dropdown, Tag, Alert, Spin, Table, Empty } from 'antd';
+import { App, Button, Modal, Typography, Space, Dropdown, Tag, Alert, Spin, Table, Empty, Form } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { CheckCircleOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { UniTable } from '../../../../../components/uni-table';
@@ -51,6 +51,7 @@ import {
 } from '../../../utils/financeListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
 type PullPreviewKind = 'sales_order' | 'sales_delivery';
 
@@ -63,6 +64,7 @@ const TAX_RATE_OPTIONS = [
 ];
 
 const P = 'app.kuaicaiwu.salesInvoice';
+const SALES_INVOICE_RESOURCE = 'kuaicaiwu:sales-invoice';
 
 const SalesInvoicesPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
@@ -89,13 +91,14 @@ const SalesInvoicesPage: React.FC = () => {
   const [pullPreviewData, setPullPreviewData] = useState<SalesInvoicePullPreview | null>(null);
   const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
   const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
-  const pullFormRef = useRef<any>(null);
+  const [pullForm] = Form.useForm();
   const pullFromSalesOrderCloseRef = useRef<(() => void) | null>(null);
   const pullFromSalesDeliveryCloseRef = useRef<(() => void) | null>(null);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const { message: messageApi } = App.useApp();
   const pullFromSalesOrderAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_sales_order');
   const pullFromSalesDeliveryAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_sales_delivery');
+  const salesInvoicePerms = useResourcePermissions(SALES_INVOICE_RESOURCE);
 
   useEffect(() => {
     const load = async () => {
@@ -116,8 +119,6 @@ const SalesInvoicesPage: React.FC = () => {
   const handleCreate = async (values: any) => {
     const invoiceAmount = Number(values.invoice_amount) || 0;
     const taxRate = Number(values.tax_rate) || 13;
-    const taxAmount = Number((invoiceAmount * taxRate / 100).toFixed(2));
-    const totalAmount = Number((invoiceAmount + taxAmount).toFixed(2));
     const data = {
       customer_id: values.customer_id,
       customer_name: customerOptions.find(o => o.value === values.customer_id)?.label || '',
@@ -126,8 +127,6 @@ const SalesInvoicesPage: React.FC = () => {
       invoice_type: values.invoice_type || '增值税专用发票',
       tax_rate: taxRate,
       invoice_amount: invoiceAmount,
-      tax_amount: taxAmount,
-      total_amount: totalAmount,
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
     };
@@ -142,7 +141,7 @@ const SalesInvoicesPage: React.FC = () => {
     setPullPreviewSourceId(null);
     setPullPreviewData(null);
     setPullPreviewKind(null);
-    pullFormRef.current?.resetFields();
+    pullForm.resetFields();
   };
 
   const openPullPreview = async (kind: PullPreviewKind, sourceId: number) => {
@@ -157,20 +156,6 @@ const SalesInvoicesPage: React.FC = () => {
           ? await salesInvoiceService.previewPullFromSalesOrder(sourceId)
           : await salesInvoiceService.previewPullFromSalesDelivery(sourceId);
       setPullPreviewData(data);
-      const maxPush = Number(data.items?.[0]?.max_push_quantity ?? 0);
-      const taxRate = 13;
-      const defaultExcl = maxPush > 0 ? Number((maxPush / (1 + taxRate / 100)).toFixed(2)) : 0;
-      const sourceLabel =
-        kind === 'sales_order' ? pullFromSalesOrderAction.sourceLabel : pullFromSalesDeliveryAction.sourceLabel;
-      pullFormRef.current?.setFieldsValue({
-        source_code: data.source_code,
-        customer_name: data.customer_name,
-        invoice_date: dayjs(),
-        invoice_type: '增值税专用发票',
-        tax_rate: taxRate,
-        invoice_amount: defaultExcl,
-        notes: t(`${P}.pullNotes`, { source: sourceLabel, code: data.source_code }),
-      });
     } catch (e: any) {
       messageApi.error(
         e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
@@ -244,8 +229,17 @@ const SalesInvoicesPage: React.FC = () => {
   pullFromSalesDeliveryCloseRef.current = pullFromSalesDeliveryQuery.closeModal;
 
   const handlePullCreateSubmit = async (values: any) => {
-    if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) return false;
-    if (pullPreviewData.has_blocking_issues) return false;
+    if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) {
+      messageApi.warning(t(`${P}.pullPreviewIncomplete`));
+      return false;
+    }
+    if (pullPreviewData.has_blocking_issues) {
+      messageApi.warning(
+        salesInvoiceCapabilityReasonMessage(pullPreviewData.blocking_reason, t)
+          || t(`${P}.pullPreviewBlocked`),
+      );
+      return false;
+    }
     const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
     const invoiceAmount = Number(values.invoice_amount) || 0;
     if (invoiceAmount <= 0) {
@@ -253,9 +247,8 @@ const SalesInvoicesPage: React.FC = () => {
       return false;
     }
     const taxRate = Number(values.tax_rate) || 13;
-    const taxAmount = Number((invoiceAmount * taxRate / 100).toFixed(2));
-    const totalAmount = Number((invoiceAmount + taxAmount).toFixed(2));
-    if (totalAmount > maxPush) {
+    const estimatedTotal = Number((invoiceAmount * (1 + taxRate / 100)).toFixed(2));
+    if (estimatedTotal > maxPush) {
       messageApi.warning(t(`${P}.pullExceedMax`, { max: maxPush.toFixed(2) }));
       return false;
     }
@@ -279,8 +272,6 @@ const SalesInvoicesPage: React.FC = () => {
           invoice_type: values.invoice_type || '增值税专用发票',
           tax_rate: taxRate,
           invoice_amount: invoiceAmount,
-          tax_amount: taxAmount,
-          total_amount: totalAmount,
           notes: String(values.notes ?? '').trim() || t(`${P}.pullNotes`, { source: sourceLabel, code: pullPreviewData.source_code }),
           attachments: normalizeDocumentAttachments(values.attachments),
         },
@@ -542,7 +533,7 @@ const SalesInvoicesPage: React.FC = () => {
         fixed: 'right',
         width: 200,
         render: (_, record) => [
-          !['已审核', '已作废', '已红冲'].includes(String(record.status || '').trim()) ? (
+          !['已审核', '已作废', '已红冲'].includes(String(record.status || '').trim()) && salesInvoicePerms.canUpdate ? (
             <Button {...rowActionKind('edit')} key="edit" onClick={() => openEditModal(record)}>
               {t(`${P}.fillNumber`)}
             </Button>
@@ -556,12 +547,12 @@ const SalesInvoicesPage: React.FC = () => {
           >
             {t('common.detail')}
           </Button>,
-          record.review_status === '待审核' ? (
+          record.review_status === '待审核' && salesInvoicePerms.canAction?.('audit') ? (
             <Button {...rowActionKind('audit')} key="ap" onClick={() => handleApprove(record)}>
               {t('components.uniAction.audit')}
             </Button>
           ) : null,
-          canDeleteSalesInvoice(record) ? (
+          canDeleteSalesInvoice(record) && salesInvoicePerms.canDelete ? (
             <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
               {t('common.delete')}
             </Button>
@@ -569,7 +560,7 @@ const SalesInvoicesPage: React.FC = () => {
         ].filter(Boolean) as React.ReactNode[],
       },
     ],
-    [t, navigate, reviewStatusEnum, customerOptions],
+    [t, navigate, reviewStatusEnum, customerOptions, salesInvoicePerms],
   );
 
   const pullTableColumns = useMemo(
@@ -610,6 +601,61 @@ const SalesInvoicesPage: React.FC = () => {
     pullPreviewKind === 'sales_delivery'
       ? pullFromSalesDeliveryAction.targetLabel
       : pullFromSalesOrderAction.targetLabel;
+
+  const pullFormInitialValues = useMemo(() => {
+    if (!pullPreviewData || !pullPreviewKind) return undefined;
+    const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+    const taxRate = 13;
+    const defaultExcl = maxPush > 0 ? Number((maxPush / (1 + taxRate / 100)).toFixed(2)) : undefined;
+    const sourceLabel =
+      pullPreviewKind === 'sales_order'
+        ? pullFromSalesOrderAction.sourceLabel
+        : pullFromSalesDeliveryAction.sourceLabel;
+    return {
+      source_code: pullPreviewData.source_code,
+      customer_name: pullPreviewData.customer_name,
+      invoice_date: dayjs(),
+      invoice_type: '增值税专用发票',
+      tax_rate: taxRate,
+      invoice_amount: defaultExcl,
+      notes: t(`${P}.pullNotes`, { source: sourceLabel, code: pullPreviewData.source_code }),
+    };
+  }, [
+    pullPreviewData,
+    pullPreviewKind,
+    pullFromSalesOrderAction.sourceLabel,
+    pullFromSalesDeliveryAction.sourceLabel,
+    t,
+  ]);
+
+  useEffect(() => {
+    if (!pullPreviewOpen || pullPreviewLoading || !pullFormInitialValues) return;
+    pullForm.setFieldsValue(pullFormInitialValues);
+  }, [pullPreviewOpen, pullPreviewLoading, pullFormInitialValues, pullForm]);
+
+  const handlePullPreviewOk = async () => {
+    if (pullPreviewLoading || !pullPreviewData) {
+      messageApi.warning(t(`${P}.pullPreviewIncomplete`));
+      return;
+    }
+    if (pullPreviewData.has_blocking_issues) {
+      messageApi.warning(
+        salesInvoiceCapabilityReasonMessage(pullPreviewData.blocking_reason, t)
+          || t(`${P}.pullPreviewBlocked`),
+      );
+      return;
+    }
+    if (pullPreviewMaxPush <= 0) {
+      messageApi.warning(t(`${P}.pullNoInvoiceableAmount`));
+      return;
+    }
+    try {
+      const values = await pullForm.validateFields();
+      await handlePullCreateSubmit(values);
+    } catch {
+      messageApi.warning(t(`${P}.pullFormValidationFailed`));
+    }
+  };
 
   return (
     <ListPageTemplate>
@@ -763,7 +809,9 @@ const SalesInvoicesPage: React.FC = () => {
         okText={pullPreviewTargetLabel}
         cancelText={t('common.cancel')}
         confirmLoading={pullSubmitting}
-        onOk={() => pullFormRef.current?.submit?.()}
+        onOk={() => {
+          void handlePullPreviewOk();
+        }}
         okButtonProps={{
           disabled:
             pullPreviewLoading ||
@@ -830,8 +878,10 @@ const SalesInvoicesPage: React.FC = () => {
               </Typography.Paragraph>
             ) : null}
             {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
-              <ModalForm
-                formRef={pullFormRef}
+              <ProForm
+                key={`pull-sales-invoice-${pullPreviewKind}-${pullPreviewSourceId}`}
+                form={pullForm}
+                initialValues={pullFormInitialValues}
                 submitter={false}
                 onFinish={handlePullCreateSubmit}
                 layout="vertical"
@@ -870,7 +920,7 @@ const SalesInvoicesPage: React.FC = () => {
                 />
                 <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />
                 <DocumentAttachmentsField category="sales_invoice_attachments" />
-              </ModalForm>
+              </ProForm>
             ) : null}
           </div>
         ) : null}

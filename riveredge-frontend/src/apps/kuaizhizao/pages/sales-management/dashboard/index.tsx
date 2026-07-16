@@ -393,10 +393,17 @@ const SalesDashboard: React.FC = () => {
         width: 104,
         render: (date: string | null, record: { delivery_date?: string | null }) =>
           date ? (
-            <span style={{ whiteSpace: 'nowrap' }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                columnGap: 4,
+                whiteSpace: 'nowrap',
+              }}
+            >
               {formatDateTime(date, 'MM-DD')}
               {isDeliveryOverdue(record.delivery_date) ? (
-                <Tag color="error" style={{ marginLeft: 4, fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>
+                <Tag color="error" style={{ marginInlineEnd: 0 }}>
                   {t('app.kuaizhizao.salesDashboard.deliveryOverdue')}
                 </Tag>
               ) : null}

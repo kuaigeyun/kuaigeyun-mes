@@ -472,7 +472,7 @@ const WorkOrdersKioskPage: React.FC = () => {
         });
         const qcStatus = getProcessInspectionCardStatus(activeOperation);
         if (!qcStatus) return summary;
-        return `${summary} · ${t(`app.kuaizhizao.workOrder.opCard.processInspectionStatus.${qcStatus}`)}`;
+        return `${summary} - ${t(`app.kuaizhizao.workOrder.opCard.processInspectionStatus.${qcStatus}`)}`;
     })();
 
     const panelStyle: React.CSSProperties = {
@@ -958,10 +958,10 @@ const WorkOrdersKioskPage: React.FC = () => {
                                         >
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%', minWidth: 0 }}>
                                                 <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                    {item.operator || '操作员'} · {item.time}
+                                                    {item.operator || '操作员'} - {item.time}
                                                 </div>
                                                 <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                    {item.action}{item.detail ? ` · ${item.detail}` : ''}
+                                                    {item.action}{item.detail ? ` - ${item.detail}` : ''}
                                                 </div>
                                             </div>
                                         </List.Item>

@@ -348,7 +348,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             )
             code = str(order.order_code or oid)
             name = str(getattr(order, "supplier_name", "") or "").strip()
-            label = f"{code} · {name}" if name else code
+            label = f"{code} - {name}" if name else code
             rows.append(
                 {
                     "id": oid,
@@ -415,7 +415,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             )
             code = str(receipt.receipt_code or rid)
             name = str(getattr(receipt, "supplier_name", "") or "").strip()
-            label = f"{code} · {name}" if name else code
+            label = f"{code} - {name}" if name else code
             rows.append(
                 {
                     "id": rid,

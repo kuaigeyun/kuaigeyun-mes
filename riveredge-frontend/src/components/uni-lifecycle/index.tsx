@@ -72,7 +72,7 @@ function TooltipContent(props: {
     return (
       <div>
         <span>
-          {stageName} · {subLabel} {Math.round(subPercent)}%
+          {stageName} - {subLabel} {Math.round(subPercent)}%
         </span>
         {meta}
       </div>

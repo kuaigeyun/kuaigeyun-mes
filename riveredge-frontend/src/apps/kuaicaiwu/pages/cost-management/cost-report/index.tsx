@@ -289,7 +289,7 @@ const CostReportPage: React.FC = () => {
                 color: 'blue',
                 children: (
                   <>
-                    {t('app.kuaicaiwu.costReport.reportGenerated')} · {formatDateTime(result.generated_at, 'YYYY-MM-DD HH:mm:ss')}
+                    {t('app.kuaicaiwu.costReport.reportGenerated')} - {formatDateTime(result.generated_at, 'YYYY-MM-DD HH:mm:ss')}
                   </>
                 ),
               },

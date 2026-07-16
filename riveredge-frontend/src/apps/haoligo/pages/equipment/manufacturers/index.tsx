@@ -265,7 +265,7 @@ const ManufacturersPage: React.FC = () => {
       <DetailDrawerTemplate
         title={
           detailRecord
-            ? `${t('common.detail')} · ${detailRecord.code}`
+            ? `${t('common.detail')} - ${detailRecord.code}`
             : t('app.haoligo.equipment.manufacturers.title')
         }
         open={detailOpen}

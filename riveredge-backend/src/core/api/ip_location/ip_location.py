@@ -12,7 +12,7 @@ from core.utils.ip_parser import get_ip_location_detail, reverse_geocode_label
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 
-router = APIRouter(prefix="/ip-location", tags=["Core · IP Location"])
+router = APIRouter(prefix="/ip-location", tags=["Core - IP Location"])
 
 
 def _get_client_ip(request: Request) -> Optional[str]:

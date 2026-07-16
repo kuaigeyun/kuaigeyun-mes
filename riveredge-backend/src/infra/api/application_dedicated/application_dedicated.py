@@ -14,7 +14,7 @@ from infra.api.deps.deps import get_current_infra_superadmin
 from infra.exceptions.exceptions import ValidationError
 from infra.models.infra_superadmin import InfraSuperAdmin
 
-router = APIRouter(prefix="/application-dedicated-bindings", tags=["Platform · Dedicated Apps"])
+router = APIRouter(prefix="/application-dedicated-bindings", tags=["Platform - Dedicated Apps"])
 
 
 class DedicatedBindingItem(BaseModel):

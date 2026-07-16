@@ -19,8 +19,8 @@ from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 class SettlementGateService(AppBaseService[SettlementRecord]):
     """往来核销预览与门控"""
 
-    _RECEIVABLE_ELIGIBLE_REVIEW = frozenset({"通过", "已审核"})
-    _PAYABLE_ELIGIBLE_REVIEW = frozenset({"通过", "已审核"})
+    _RECEIVABLE_ELIGIBLE_REVIEW = frozenset({"已审核"})
+    _PAYABLE_ELIGIBLE_REVIEW = frozenset({"已审核"})
     _EXCLUDED_VOUCHER_STATUSES = frozenset({"Cancelled"})
 
     def _money(self, value: Decimal) -> Decimal:

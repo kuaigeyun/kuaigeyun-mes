@@ -1,5 +1,5 @@
 /**
- * 系统必备 / 补充初始项加载（配置中心 · 系统设置）
+ * 系统必备 / 补充初始项加载（配置中心 - 系统设置）
  */
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

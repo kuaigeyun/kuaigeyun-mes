@@ -46,7 +46,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/equipment/acceptance-sheets",
-    tags=["App · HaoliGO · 设备验收单"],
+    tags=["App - HaoliGO - 设备验收单"],
     dependencies=[Depends(require_haoligo_module_access("equipment-documents-acceptance"))],
 )
 

@@ -17,7 +17,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(
     prefix="/bank-accounts",
-    tags=["App · Kuaicaiwu · Bank Accounts"],
+    tags=["App - Kuaicaiwu - Bank Accounts"],
     dependencies=[Depends(require_kuaicaiwu_module_access("bank-account"))],
 )
 service = BankAccountService()
@@ -74,7 +74,8 @@ async def create_bank_account(
         row = await service.create(
             current_user.tenant_id,
             current_user=current_user,
-            **data.model_dump(),
+            # BaseSchema.audit 为响应专用派生字段，不属于创建参数
+            **data.model_dump(exclude={"audit"}),
         )
         return BankAccountResponse.model_validate(row)
     except ValidationError as exc:

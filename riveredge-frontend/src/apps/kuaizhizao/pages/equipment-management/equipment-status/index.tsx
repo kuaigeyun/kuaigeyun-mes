@@ -629,7 +629,7 @@ const EquipmentStatusPage: React.FC = () => {
                           </div>
                           <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
                             {formatDateTime(history.status_changed_at, 'YYYY-MM-DD HH:mm:ss')}
-                            {history.changed_by_name && ` · ${history.changed_by_name}`}
+                            {history.changed_by_name && ` - ${history.changed_by_name}`}
                           </div>
                           {history.reason && (
                             <div style={{ marginTop: 4, color: '#666' }}>

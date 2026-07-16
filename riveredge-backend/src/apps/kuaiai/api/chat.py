@@ -19,7 +19,7 @@ from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 from loguru import logger
 
-router = APIRouter(prefix="/chat", tags=["App · KU-AI · Chat"])
+router = APIRouter(prefix="/chat", tags=["App - KU-AI - Chat"])
 
 
 class ChatCompletionRequest(BaseModel):

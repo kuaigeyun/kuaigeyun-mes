@@ -34,7 +34,7 @@ from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
-router = APIRouter(prefix="/custom-fields", tags=["Core · Custom Fields"])
+router = APIRouter(prefix="/custom-fields", tags=["Core - Custom Fields"])
 
 
 @router.post("", response_model=CustomFieldResponse, status_code=status.HTTP_201_CREATED)

@@ -77,7 +77,7 @@ export function formatCategoryDisplayName(
 }
 
 export function formatCategoryLabel(c: Pick<CategoryRow, 'code' | 'level1_category' | 'level2_category' | 'name'>): string {
-  return `${c.code} · ${formatCategoryDisplayName(c)}`;
+  return `${c.code} - ${formatCategoryDisplayName(c)}`;
 }
 
 export function listCategories(): Promise<CategoryRow[]> {

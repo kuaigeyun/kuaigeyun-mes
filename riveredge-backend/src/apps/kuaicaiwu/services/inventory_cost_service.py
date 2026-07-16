@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
+from infra.exceptions.exceptions import ValidationError
+
 from apps.master_data.models.material import Material
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
@@ -54,19 +56,41 @@ class InventoryCostService:
                 continue
         return None
 
-    async def get_material_unit_cost(self, tenant_id: int, material_id: int) -> Decimal:
+    async def get_material_unit_cost(self, tenant_id: int, material_id: int) -> Optional[Decimal]:
+        """移动加权 → 标准成本 → 采购价；全部缺失返回 None（不编造默认价）。"""
         material = await Material.get_or_none(
             tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
         )
         if not material:
-            return Decimal("0")
-        cost = self._read_defaults_cost(
+            return None
+        return self._read_defaults_cost(
             material.defaults,
             "moving_average_cost",
             "standard_cost",
             "purchase_price",
         )
-        return cost or Decimal("0")
+
+    async def get_material_unit_cost_or_zero(self, tenant_id: int, material_id: int) -> Decimal:
+        """库存计价内部使用：无单价时按 0 处理。"""
+        cost = await self.get_material_unit_cost(tenant_id, material_id)
+        return cost if cost is not None else Decimal("0")
+
+    async def require_material_unit_cost(self, tenant_id: int, material_id: int) -> Decimal:
+        cost = await self.get_material_unit_cost(tenant_id, material_id)
+        if cost is not None:
+            return cost
+        material = await Material.get_or_none(
+            tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
+        )
+        if material:
+            code = (material.main_code or material.code or "").strip()
+            name = (material.name or "").strip()
+            label = f"{code} {name}".strip() or str(material_id)
+        else:
+            label = str(material_id)
+        raise ValidationError(
+            f"物料 {label} 无可用单价，请维护标准成本或完成一次采购入库"
+        )
 
     async def _persist_moving_average_cost(
         self,
@@ -95,12 +119,12 @@ class InventoryCostService:
         inbound_qty = self._decimal(inbound_qty)
         inbound_unit_price = self._decimal(inbound_unit_price)
         if inbound_qty <= 0:
-            return await self.get_material_unit_cost(tenant_id, material_id)
+            return await self.get_material_unit_cost_or_zero(tenant_id, material_id)
 
         info = await get_material_inventory_info(tenant_id=tenant_id, material_id=material_id)
         on_hand = self._decimal(info.get("on_hand") or info.get("total_quantity"))
         prior_qty = max(on_hand - inbound_qty, Decimal("0"))
-        prior_avg = await self.get_material_unit_cost(tenant_id, material_id)
+        prior_avg = await self.get_material_unit_cost_or_zero(tenant_id, material_id)
 
         if prior_qty <= 0:
             new_avg = inbound_unit_price
@@ -122,7 +146,7 @@ class InventoryCostService:
             if qty <= 0:
                 continue
             material_id = int(item.material_id)
-            unit_cost = await self.get_material_unit_cost(tenant_id, material_id)
+            unit_cost = await self.get_material_unit_cost_or_zero(tenant_id, material_id)
             if unit_cost <= 0:
                 unit_cost = self._decimal(item.unit_price)
             item.unit_price = unit_cost
@@ -142,7 +166,7 @@ class InventoryCostService:
                 continue
             unit_price = self._decimal(item.unit_price)
             if unit_price <= 0:
-                unit_price = await self.get_material_unit_cost(tenant_id, int(item.material_id))
+                unit_price = await self.get_material_unit_cost_or_zero(tenant_id, int(item.material_id))
             try:
                 await self.update_moving_average_cost(
                     tenant_id=tenant_id,
@@ -185,7 +209,7 @@ class InventoryCostService:
 
     async def resolve_outbound_unit_cost(self, tenant_id: int, material_id: int) -> Decimal:
         """销售出库确认时取当前移动平均/标准成本作为出库单位成本。"""
-        return await self.get_material_unit_cost(tenant_id, material_id)
+        return await self.get_material_unit_cost_or_zero(tenant_id, material_id)
 
     async def apply_sales_delivery_outbound_costs(
         self,
@@ -249,7 +273,7 @@ class InventoryCostService:
                 qty = self._decimal(item.picked_quantity)
                 if qty <= 0:
                     continue
-                unit = await self.get_material_unit_cost(tenant_id, int(item.material_id))
+                unit = await self.get_material_unit_cost_or_zero(tenant_id, int(item.material_id))
                 material_cost += qty * unit
 
         qty = self._decimal(wo.quantity)
@@ -313,7 +337,7 @@ class InventoryCostService:
                 continue
             unit_price = self._decimal(item.unit_price)
             if unit_price <= 0:
-                unit_price = await self.get_material_unit_cost(tenant_id, int(item.material_id))
+                unit_price = await self.get_material_unit_cost_or_zero(tenant_id, int(item.material_id))
             try:
                 await self.update_moving_average_cost(
                     tenant_id=tenant_id,
@@ -343,7 +367,7 @@ class InventoryCostService:
             return
         price = self._decimal(unit_price)
         if price <= 0:
-            price = await self.get_material_unit_cost(tenant_id, material_id)
+            price = await self.get_material_unit_cost_or_zero(tenant_id, material_id)
         try:
             await self.update_moving_average_cost(
                 tenant_id=tenant_id,

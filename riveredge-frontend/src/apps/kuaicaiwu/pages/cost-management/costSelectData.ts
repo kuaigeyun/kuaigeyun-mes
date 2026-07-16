@@ -5,8 +5,29 @@
 import { workOrderApi } from '../../../kuaizhizao/services/work-order';
 import { outsourceWorkOrderApi } from '../../../kuaizhizao/services/production';
 import { listPurchaseOrders, getPurchaseOrder } from '../../../kuaizhizao/services/purchase';
+import { joinDisplayParts, formatCodeNameLabel } from '../../../../utils/joinDisplayParts';
 
 export type CostSelectOption = { label: string; value: number };
+
+function formatWorkOrderSelectLabel(wo: Record<string, unknown>): string {
+  const code = String(wo.code ?? wo.work_order_code ?? '-');
+  const product = String(wo.product_name ?? wo.name ?? '').trim();
+  const base = product ? formatCodeNameLabel(code, product) : code;
+  const qty = wo.quantity;
+  const qtyPart =
+    qty != null && qty !== '' && Number.isFinite(Number(qty)) ? `×${Number(qty)}` : '';
+  const salesOrder = String(wo.sales_order_code ?? '').trim();
+  const soPart = salesOrder ? `SO ${salesOrder}` : '';
+  return joinDisplayParts(base, qtyPart, soPart);
+}
+
+function formatOutsourceWorkOrderSelectLabel(row: Record<string, unknown>): string {
+  const code = String(row.code ?? row.outsource_work_order_code ?? '-');
+  const product = String(row.product_name ?? row.name ?? '').trim();
+  const base = product ? formatCodeNameLabel(code, product) : code;
+  const supplier = String(row.supplier_name ?? '').trim();
+  return joinDisplayParts(base, supplier);
+}
 
 export function normalizeCostListRows(res: unknown): any[] {
   if (Array.isArray(res)) return res;
@@ -24,8 +45,7 @@ export async function loadWorkOrderSelectOptions(limit = 400): Promise<CostSelec
   for (const wo of rows) {
     const id = wo?.id;
     if (id == null || typeof id !== 'number') continue;
-    const code = wo.code || wo.work_order_code || '-';
-    opts.push({ value: id, label: `${code} (#${id})` });
+    opts.push({ value: id, label: formatWorkOrderSelectLabel(wo) });
   }
   return opts;
 }
@@ -37,8 +57,7 @@ export async function loadOutsourceWorkOrderSelectOptions(limit = 400): Promise<
   for (const row of rows) {
     const id = row?.id;
     if (id == null || typeof id !== 'number') continue;
-    const code = row.code || row.outsource_work_order_code || '-';
-    opts.push({ value: id, label: `${code} (#${id})` });
+    opts.push({ value: id, label: formatOutsourceWorkOrderSelectLabel(row) });
   }
   return opts;
 }
@@ -50,7 +69,7 @@ export async function loadPurchaseOrderSelectOptions(limit = 200): Promise<CostS
   for (const po of rows) {
     const id = po?.id;
     if (id == null || typeof id !== 'number') continue;
-    opts.push({ value: id, label: `${po.order_code || '-'} (#${id})` });
+    opts.push({ value: id, label: po.order_code || '-' });
   }
   return opts;
 }
@@ -73,7 +92,7 @@ export async function loadPurchaseOrderItemSelectOptions(maxOrders = 32): Promis
             if (item?.id == null) continue;
             options.push({
               value: item.id,
-              label: `${code} · ${item.material_code || ''} ${item.material_name || ''} (#${item.id})`,
+              label: `${code} - ${item.material_code || ''} ${item.material_name || ''}`.trim(),
             });
           }
         } catch {
@@ -88,6 +107,6 @@ export async function loadPurchaseOrderItemSelectOptions(maxOrders = 32): Promis
 export function materialsToIdSelectOptions(materials: any[]): CostSelectOption[] {
   return (materials || []).map((m) => ({
     value: m.id,
-    label: `${m.mainCode || m.code} - ${m.name} (#${m.id})`,
+    label: `${m.mainCode || m.code} - ${m.name}`,
   }));
 }

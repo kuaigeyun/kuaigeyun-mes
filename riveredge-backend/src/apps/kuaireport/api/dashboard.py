@@ -11,7 +11,7 @@ from apps.kuaireport.schemas.dashboard import (
     DashboardCreate, DashboardUpdate, DashboardResponse, DashboardListResponse
 )
 
-router = APIRouter(prefix="/dashboards", tags=["App · KuanReport · Dashboards"])
+router = APIRouter(prefix="/dashboards", tags=["App - KuanReport - Dashboards"])
 
 dashboard_service = DashboardService()
 

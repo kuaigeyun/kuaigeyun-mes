@@ -21,7 +21,7 @@ class PaymentPullService(AppBaseService[Payment]):
 
     _EXCLUDED_PAYMENT_STATUSES = frozenset({"Cancelled"})
 
-    _PAYABLE_ELIGIBLE_REVIEW = frozenset({"通过", "已审核"})
+    _PAYABLE_ELIGIBLE_REVIEW = frozenset({"已审核"})
 
     def _derive_pull_capability(
         self,
@@ -241,7 +241,7 @@ class PaymentPullService(AppBaseService[Payment]):
             )
             code = str(payable.payable_code or pid)
             name = str(getattr(payable, "supplier_name", "") or "").strip()
-            label = f"{code} · {name}" if name else code
+            label = f"{code} - {name}" if name else code
             rows.append(
                 {
                     "id": pid,

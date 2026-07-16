@@ -13,6 +13,7 @@ import { materialApi } from '../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { normalizeCostListRows } from './costSelectData';
 import { formatSourceType, getPriorityTag, getSourceTypeTag } from '../../utils/costUiLabels';
+import { toApiDateString } from '../../../../utils/formDate';
 
 export interface OptimizationSuggestion {
   suggestion_type: string;
@@ -72,13 +73,13 @@ const CostOptimizationPanel: React.FC = () => {
         res = await costOptimizationApi.getSuggestions({
           material_id: values.material_id,
           quantity: values.quantity,
-          calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
+          calculation_date: toApiDateString(values.calculation_date),
         });
       } else {
         res = await costOptimizationApi.getBatchSuggestions({
           material_ids: values.material_ids || [],
           quantity: values.quantity,
-          calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
+          calculation_date: toApiDateString(values.calculation_date),
         });
       }
       setResult(res);

@@ -29,7 +29,7 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache_manager import cache_manager
 
-router = APIRouter(prefix="/menus", tags=["Core · Menus"])
+router = APIRouter(prefix="/menus", tags=["Core - Menus"])
 
 
 def _menu_cache_enabled() -> bool:

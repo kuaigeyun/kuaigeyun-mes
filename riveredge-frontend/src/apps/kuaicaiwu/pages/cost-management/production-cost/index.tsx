@@ -15,6 +15,7 @@ import dayjs from 'dayjs';
 import { normalizeCostListRows } from '../costSelectData';
 import { formatCalculationType, formatSourceType, getSourceTypeTag } from '../../../utils/costUiLabels';
 import { formatDateTime } from '../../../../../utils/format';
+import { toApiDateString } from '../../../../../utils/formDate';
 
 interface ProductionCostResult {
   material_id: number;
@@ -64,7 +65,7 @@ const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = fals
       const data = {
         material_id: values.material_id,
         quantity: values.quantity,
-        calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
+        calculation_date: toApiDateString(values.calculation_date),
         variant_attributes: values.variant_attributes ? JSON.parse(values.variant_attributes) : undefined,
       };
       const res = await productionCostApi.calculate(data);

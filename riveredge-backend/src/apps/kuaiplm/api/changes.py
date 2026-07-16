@@ -28,7 +28,7 @@ from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
-router = APIRouter(prefix="/changes", tags=["App · Kuaiplm · Change Desk"])
+router = APIRouter(prefix="/changes", tags=["App - Kuaiplm - Change Desk"])
 service = ChangeDeskService()
 
 

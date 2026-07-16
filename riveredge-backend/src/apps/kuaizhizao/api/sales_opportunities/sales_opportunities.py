@@ -23,7 +23,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/sales-opportunities",
-    tags=["App · Kuaige Zhizao · Sales Opportunity"],
+    tags=["App - Kuaige Zhizao - Sales Opportunity"],
     dependencies=[Depends(require_kuaizhizao_module_access("sales-opportunity"))],
 )
 

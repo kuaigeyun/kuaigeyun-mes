@@ -26,10 +26,12 @@ import {
   resolveReceiptListParams,
 } from '../../../utils/financeListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
 type PrepaymentRow = Record<string, unknown>;
 
 const P = 'app.kuaicaiwu.prepayment';
+const PREPAYMENT_RESOURCE = 'kuaicaiwu:prepayment';
 
 const prepaymentTag = (type: string | undefined, t: TFunction) => {
   const label = formatSettlementType(type, t);
@@ -58,6 +60,7 @@ const PrepaymentsPage: React.FC = () => {
   const [payableOptions, setPayableOptions] = useState<{ label: string; value: number; remaining: number }[]>([]);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
+  const prepaymentPerms = useResourcePermissions(PREPAYMENT_RESOURCE);
 
   const { data: balances } = useQuery({
     queryKey: ['prepaymentBalances'],
@@ -190,6 +193,7 @@ const PrepaymentsPage: React.FC = () => {
       valueType: 'option',
       width: 100,
       render: (_, r) => [
+        prepaymentPerms.canUpdate ? (
         <a
           key="apply"
           onClick={async () => {
@@ -212,10 +216,11 @@ const PrepaymentsPage: React.FC = () => {
           }}
         >
           {t(`${P}.applySettle`)}
-        </a>,
+        </a>
+        ) : null,
       ],
     },
-  ], [t, customerOptions]);
+  ], [t, customerOptions, prepaymentPerms.canUpdate]);
 
   const paymentColumns: ProColumns<PrepaymentRow>[] = useMemo(() => [
     ...financeDocCodePartnerSearchColumns({
@@ -280,6 +285,7 @@ const PrepaymentsPage: React.FC = () => {
       valueType: 'option',
       width: 100,
       render: (_, r) => [
+        prepaymentPerms.canUpdate ? (
         <a
           key="apply"
           onClick={async () => {
@@ -302,10 +308,11 @@ const PrepaymentsPage: React.FC = () => {
           }}
         >
           {t(`${P}.applySettle`)}
-        </a>,
+        </a>
+        ) : null,
       ],
     },
-  ], [t, supplierOptions]);
+  ], [t, supplierOptions, prepaymentPerms.canUpdate]);
 
   const reloadBalanceTables = () => {
     queryClient.invalidateQueries({ queryKey: ['prepaymentBalances'] });

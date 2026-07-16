@@ -1,5 +1,5 @@
 /**
- * 销售订单 · AI 对话式智能录单抽屉
+ * 销售订单 - AI 对话式智能录单抽屉
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';

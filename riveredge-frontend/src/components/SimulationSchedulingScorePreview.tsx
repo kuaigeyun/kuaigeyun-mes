@@ -1,5 +1,5 @@
 /**
- * 插单模拟 · APS-Lite 权重分 What-if 预览（只读，不写库）
+ * 插单模拟 - APS-Lite 权重分 What-if 预览（只读，不写库）
  */
 import React from 'react';
 import { Card, Space, Typography } from 'antd';

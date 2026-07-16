@@ -17,6 +17,7 @@ export type RollingScheduleLine = {
   planned_end_date?: string | null;
   scheduling_score?: number | null;
   scheduling_rank_band?: string | null;
+  scheduling_diagnostics?: string[];
 };
 
 export type RollingScheduleCloseSummary = {

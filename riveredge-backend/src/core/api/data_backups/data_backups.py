@@ -16,7 +16,7 @@ from core.schemas.data_backup import DataBackupCreate, DataBackupResponse, DataB
 from core.services.system.data_backup_service import DataBackupService
 from core.services.system.backup_download_service import BackupDownloadService
 
-router = APIRouter(prefix="/data-backups", tags=["Core · Data Backups"])
+router = APIRouter(prefix="/data-backups", tags=["Core - Data Backups"])
 
 
 class BackupWorkerHealthResponse(BaseModel):

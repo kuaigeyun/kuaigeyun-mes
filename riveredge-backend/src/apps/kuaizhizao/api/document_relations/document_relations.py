@@ -16,7 +16,7 @@ from apps.kuaizhizao.services.document_relation_new_service import DocumentRelat
 from apps.kuaizhizao.schemas.document_relation import DocumentRelationListResponse, DocumentTraceResponse
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/document-relations", tags=["App · Kuaige Zhizao · Document Relations"])
+router = APIRouter(prefix="/document-relations", tags=["App - Kuaige Zhizao - Document Relations"])
 
 
 @router.get("/{document_type}/{document_id}", response_model=DocumentRelationListResponse, summary="List document relations")

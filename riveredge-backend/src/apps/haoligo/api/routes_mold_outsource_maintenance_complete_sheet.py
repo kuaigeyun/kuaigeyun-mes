@@ -72,7 +72,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/molds/outsource-maintenance-complete-sheets",
-    tags=["App · HaoliGO · 外协维保完修单"],
+    tags=["App - HaoliGO - 外协维保完修单"],
     dependencies=[
         Depends(
             require_haoligo_module_access(

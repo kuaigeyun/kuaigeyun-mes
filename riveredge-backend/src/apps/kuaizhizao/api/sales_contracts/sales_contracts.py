@@ -37,7 +37,7 @@ service = SalesContractService()
 billing_service = ContractMilestoneBillingService()
 router = APIRouter(
     prefix="/sales-contracts",
-    tags=["App · Kuaige Zhizao · Sales Contracts"],
+    tags=["App - Kuaige Zhizao - Sales Contracts"],
     dependencies=[Depends(require_kuaizhizao_module_access("sales-contract"))],
 )
 

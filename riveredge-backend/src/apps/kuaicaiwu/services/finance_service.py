@@ -8,7 +8,6 @@ Date: 2025-12-30
 """
 
 import json
-import re
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal
@@ -219,7 +218,7 @@ class PayableService(AppBaseService[Payable]):
             if payment_data.notes:
                 note_parts.append(payment_data.notes.strip())
             note_parts.append(f"应付单 {payable.payable_code}")
-            notes = " · ".join(note_parts)
+            notes = " - ".join(note_parts)
 
             user_info = await self.get_user_info(recorded_by)
             payment = await Payment.create(
@@ -259,7 +258,7 @@ class PayableService(AppBaseService[Payable]):
             if payable.review_status != '待审核':
                 raise BusinessLogicError("应付单审核状态不是待审核")
             approver_name = await self.get_user_name(approved_by)
-            review_status = "驳回" if rejection_reason else "通过"
+            review_status = "驳回" if rejection_reason else "已审核"
             await Payable.filter(tenant_id=tenant_id, id=payable_id).update(
                 reviewer_id=approved_by,
                 reviewer_name=approver_name,
@@ -366,7 +365,7 @@ class PayableService(AppBaseService[Payable]):
     async def delete_payable(self, tenant_id: int, payable_id: int) -> None:
         """删除应付单"""
         payable = await self.get_payable_by_id(tenant_id, payable_id)
-        if str(payable.review_status or '') in ('已审核', '通过'):
+        if str(payable.review_status or '') == '已审核':
             raise BusinessLogicError("已审核的应付单不能删除")
         if payable.paid_amount > 0:
             raise BusinessLogicError("已有付款记录的应付单不能删除")
@@ -435,6 +434,19 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today}")
 
+            from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
+
+            payload = invoice_data.model_dump(
+                exclude_unset=True,
+                exclude={"created_by", "source_type", "source_id"},
+            )
+            _, tax_amount, total_amount = compute_tax_from_excluding(
+                Decimal(payload["invoice_amount"]),
+                Decimal(payload["tax_rate"]),
+            )
+            payload["tax_amount"] = tax_amount
+            payload["total_amount"] = total_amount
+
             invoice = await PurchaseInvoice.create(
                 tenant_id=tenant_id,
                 invoice_code=code,
@@ -442,10 +454,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 created_by_name=user_info["name"],
                 updated_by=created_by,
                 updated_by_name=user_info["name"],
-                **invoice_data.model_dump(
-                    exclude_unset=True,
-                    exclude={"created_by", "source_type", "source_id"},
-                ),
+                **payload,
             )
             await self.accounting_event_service.record_event(
                 tenant_id=tenant_id,
@@ -486,6 +495,12 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             return
 
         payable_service = PayableService()
+        from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
+
+        biz_date = invoice.invoice_date or date.today()
+        due = await resolve_partner_due_date(
+            tenant_id, "supplier", int(invoice.supplier_id), biz_date
+        )
         payable = await payable_service.create_payable(
             tenant_id=tenant_id,
             payable_data=PayableCreate(
@@ -497,8 +512,8 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 total_amount=self._money(invoice.total_amount or Decimal("0.00")),
                 paid_amount=Decimal("0.00"),
                 remaining_amount=self._money(invoice.total_amount or Decimal("0.00")),
-                due_date=invoice.invoice_date,
-                business_date=invoice.invoice_date,
+                due_date=due,
+                business_date=biz_date,
                 status="未付款",
                 invoice_received=True,
                 invoice_number=invoice.invoice_number,
@@ -595,7 +610,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             if invoice.review_status != '待审核':
                 raise BusinessLogicError("发票审核状态不是待审核")
             approver_name = await self.get_user_name(approved_by)
-            review_status = "驳回" if rejection_reason else "通过"
+            review_status = "驳回" if rejection_reason else "已审核"
             status = "已驳回" if rejection_reason else "已审核"
 
             await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice_id).update(
@@ -818,7 +833,7 @@ class ReceivableService(AppBaseService[Receivable]):
             if receipt_data.notes:
                 note_parts.append(receipt_data.notes.strip())
             note_parts.append(f"应收单 {receivable.receivable_code}")
-            notes = " · ".join(note_parts)
+            notes = " - ".join(note_parts)
 
             user_info = await self.get_user_info(recorded_by)
             receipt = await Receipt.create(
@@ -858,7 +873,7 @@ class ReceivableService(AppBaseService[Receivable]):
             if receivable.review_status != '待审核':
                 raise BusinessLogicError("应收单审核状态不是待审核")
             approver_name = await self.get_user_name(approved_by)
-            review_status = "驳回" if rejection_reason else "通过"
+            review_status = "驳回" if rejection_reason else "已审核"
             await Receivable.filter(tenant_id=tenant_id, id=receivable_id).update(
                 reviewer_id=approved_by,
                 reviewer_name=approver_name,
@@ -965,7 +980,7 @@ class ReceivableService(AppBaseService[Receivable]):
     async def delete_receivable(self, tenant_id: int, receivable_id: int) -> None:
         """删除应收单"""
         receivable = await self.get_receivable_by_id(tenant_id, receivable_id)
-        if str(receivable.review_status or '') in ('已审核', '通过'):
+        if str(receivable.review_status or '') == '已审核':
             raise BusinessLogicError("已审核的应收单不能删除")
         if receivable.received_amount > 0:
             raise BusinessLogicError("已有收款记录的应收单不能删除")
@@ -983,64 +998,6 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
 
     def _money(self, value: Decimal) -> Decimal:
         return Decimal(value).quantize(self._money_scale)
-
-    @staticmethod
-    def _extract_ref_tokens(value: Optional[str]) -> set[str]:
-        if not value:
-            return set()
-        return {
-            token
-            for token in re.split(r"[^A-Za-z0-9]+", value.upper())
-            if len(token) >= 4
-        }
-
-    def _build_match_score(
-        self,
-        *,
-        debit_amount: Decimal,
-        credit_amount: Decimal,
-        debit_date: Optional[date],
-        credit_date: Optional[date],
-        debit_ref: Optional[str],
-        credit_ref: Optional[str],
-        tolerance: Decimal,
-    ) -> Dict[str, Any]:
-        amount_gap = self._money(abs(self._money(debit_amount) - self._money(credit_amount)))
-        score = 0
-        reasons: List[str] = []
-
-        if amount_gap == Decimal("0.00"):
-            score += 60
-            reasons.append("exact_amount")
-        elif amount_gap <= tolerance:
-            score += 45
-            reasons.append("within_tolerance")
-        elif amount_gap <= self._money(tolerance * Decimal("2")):
-            score += 25
-            reasons.append("near_tolerance")
-
-        ref_overlap = self._extract_ref_tokens(debit_ref) & self._extract_ref_tokens(credit_ref)
-        if ref_overlap:
-            score += min(25, len(ref_overlap) * 5)
-            reasons.append("ref_overlap")
-
-        date_gap_days: Optional[int] = None
-        if debit_date and credit_date:
-            date_gap_days = abs((debit_date - credit_date).days)
-            if date_gap_days <= 3:
-                score += 15
-                reasons.append("date_close")
-            elif date_gap_days <= 15:
-                score += 8
-                reasons.append("date_near")
-
-        return {
-            "score": min(score, 100),
-            "amount_gap": amount_gap,
-            "ref_overlap_tokens": sorted(list(ref_overlap))[:5],
-            "date_gap_days": date_gap_days,
-            "reasons": reasons,
-        }
 
     def _apply_rounding_writeoff_value(
         self,
@@ -1276,158 +1233,6 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
             operation_content=content,
         )
 
-    async def suggest_receivable_matches(
-        self,
-        tenant_id: int,
-        customer_id: Optional[int] = None,
-        limit: int = 50,
-    ) -> List[Dict[str, Any]]:
-        write_off_limit = self._money(
-            Decimal(
-                str(await self.business_config_service.get_finance_auto_write_off_precision_limit(tenant_id))
-            )
-        )
-        query_receivables = Receivable.filter(
-            tenant_id=tenant_id,
-            remaining_amount__gt=0,
-            deleted_at__isnull=True,
-        )
-        query_receipts = Receipt.filter(
-            tenant_id=tenant_id,
-            unsettled_amount__gt=0,
-            deleted_at__isnull=True,
-        )
-        if customer_id is not None:
-            query_receivables = query_receivables.filter(customer_id=customer_id)
-            query_receipts = query_receipts.filter(customer_id=customer_id)
-
-        receivables = await query_receivables.order_by("due_date", "id").all()
-        receipts = await query_receipts.order_by("receipt_date", "id").all()
-
-        suggestions: List[Dict[str, Any]] = []
-        for receivable in receivables:
-            for receipt in receipts:
-                if receivable.customer_id != receipt.customer_id:
-                    continue
-                suggested_amount = self._money(min(receivable.remaining_amount, receipt.unsettled_amount))
-                if suggested_amount <= Decimal("0.00"):
-                    continue
-                score_data = self._build_match_score(
-                    debit_amount=receivable.remaining_amount,
-                    credit_amount=receipt.unsettled_amount,
-                    debit_date=receivable.business_date,
-                    credit_date=receipt.receipt_date,
-                    debit_ref=f"{receivable.source_code or ''} {receivable.invoice_number or ''}",
-                    credit_ref=receipt.notes,
-                    tolerance=write_off_limit,
-                )
-                if score_data["score"] < 50:
-                    continue
-                suggestions.append(
-                    {
-                        "business_type": "receivable",
-                        "customer_id": receivable.customer_id,
-                        "customer_name": receivable.customer_name,
-                        "receivable_id": receivable.id,
-                        "receivable_code": receivable.receivable_code,
-                        "receipt_id": receipt.id,
-                        "receipt_code": receipt.receipt_code,
-                        "receivable_remaining_amount": str(self._money(receivable.remaining_amount)),
-                        "receipt_unsettled_amount": str(self._money(receipt.unsettled_amount)),
-                        "suggested_settle_amount": str(suggested_amount),
-                        "amount_gap": str(score_data["amount_gap"]),
-                        "date_gap_days": score_data["date_gap_days"],
-                        "confidence_score": score_data["score"],
-                        "reasons": score_data["reasons"],
-                        "ref_overlap_tokens": score_data["ref_overlap_tokens"],
-                    }
-                )
-
-        suggestions.sort(
-            key=lambda x: (
-                -x["confidence_score"],
-                Decimal(x["amount_gap"]),
-                x["date_gap_days"] if x["date_gap_days"] is not None else 9999,
-            )
-        )
-        return suggestions[:limit]
-
-    async def suggest_payable_matches(
-        self,
-        tenant_id: int,
-        supplier_id: Optional[int] = None,
-        limit: int = 50,
-    ) -> List[Dict[str, Any]]:
-        write_off_limit = self._money(
-            Decimal(
-                str(await self.business_config_service.get_finance_auto_write_off_precision_limit(tenant_id))
-            )
-        )
-        query_payables = Payable.filter(
-            tenant_id=tenant_id,
-            remaining_amount__gt=0,
-            deleted_at__isnull=True,
-        )
-        query_payments = Payment.filter(
-            tenant_id=tenant_id,
-            unsettled_amount__gt=0,
-            deleted_at__isnull=True,
-        )
-        if supplier_id is not None:
-            query_payables = query_payables.filter(supplier_id=supplier_id)
-            query_payments = query_payments.filter(supplier_id=supplier_id)
-
-        payables = await query_payables.order_by("due_date", "id").all()
-        payments = await query_payments.order_by("payment_date", "id").all()
-
-        suggestions: List[Dict[str, Any]] = []
-        for payable in payables:
-            for payment in payments:
-                if payable.supplier_id != payment.supplier_id:
-                    continue
-                suggested_amount = self._money(min(payable.remaining_amount, payment.unsettled_amount))
-                if suggested_amount <= Decimal("0.00"):
-                    continue
-                score_data = self._build_match_score(
-                    debit_amount=payable.remaining_amount,
-                    credit_amount=payment.unsettled_amount,
-                    debit_date=payable.business_date,
-                    credit_date=payment.payment_date,
-                    debit_ref=f"{payable.source_code or ''} {payable.invoice_number or ''}",
-                    credit_ref=payment.notes,
-                    tolerance=write_off_limit,
-                )
-                if score_data["score"] < 50:
-                    continue
-                suggestions.append(
-                    {
-                        "business_type": "payable",
-                        "supplier_id": payable.supplier_id,
-                        "supplier_name": payable.supplier_name,
-                        "payable_id": payable.id,
-                        "payable_code": payable.payable_code,
-                        "payment_id": payment.id,
-                        "payment_code": payment.payment_code,
-                        "payable_remaining_amount": str(self._money(payable.remaining_amount)),
-                        "payment_unsettled_amount": str(self._money(payment.unsettled_amount)),
-                        "suggested_settle_amount": str(suggested_amount),
-                        "amount_gap": str(score_data["amount_gap"]),
-                        "date_gap_days": score_data["date_gap_days"],
-                        "confidence_score": score_data["score"],
-                        "reasons": score_data["reasons"],
-                        "ref_overlap_tokens": score_data["ref_overlap_tokens"],
-                    }
-                )
-
-        suggestions.sort(
-            key=lambda x: (
-                -x["confidence_score"],
-                Decimal(x["amount_gap"]),
-                x["date_gap_days"] if x["date_gap_days"] is not None else 9999,
-            )
-        )
-        return suggestions[:limit]
-
     async def backfill_receipts_from_legacy_receivables(self, tenant_id: int, operator_id: int) -> int:
         """
         为「应收已收款、但无收款单/核销记录」的历史数据补录收款单（幂等）。
@@ -1580,7 +1385,7 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
                 value=new_rem_receivable,
                 limit=write_off_limit,
             )
-            await Receivable.filter(id=receivable_id).update(
+            await Receivable.filter(tenant_id=tenant_id, id=receivable_id).update(
                 received_amount=new_received,
                 remaining_amount=new_rem_receivable,
                 status="已结清" if new_rem_receivable <= Decimal("0.00") else "部分收款",
@@ -1619,7 +1424,7 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
                 value=new_unsettled,
                 limit=write_off_limit,
             )
-            await Receipt.filter(id=receipt_id).update(
+            await Receipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 settled_amount=new_settled,
                 unsettled_amount=new_unsettled,
                 status="Confirmed",  # 已核销完也可以保持 Confirmed，或者加个 FullySettled
@@ -1734,7 +1539,7 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
                 value=new_rem_payable,
                 limit=write_off_limit,
             )
-            await Payable.filter(id=payable_id).update(
+            await Payable.filter(tenant_id=tenant_id, id=payable_id).update(
                 paid_amount=new_paid,
                 remaining_amount=new_rem_payable,
                 status="已结清" if new_rem_payable <= Decimal("0.00") else "部分付款",
@@ -1765,7 +1570,7 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
                 value=new_unsettled,
                 limit=write_off_limit,
             )
-            await Payment.filter(id=payment_id).update(
+            await Payment.filter(tenant_id=tenant_id, id=payment_id).update(
                 settled_amount=new_settled,
                 unsettled_amount=new_unsettled,
                 status="Confirmed",
@@ -1810,120 +1615,3 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
             )
 
             return settlement
-
-    async def generate_partner_statement(
-        self, 
-        tenant_id: int, 
-        partner_id: int, 
-        partner_type: str, 
-        start_date: date, 
-        end_date: date
-    ) -> Dict[str, Any]:
-        """
-        生成往来对账单：汇总特定期间内的所有交易
-        """
-        # 1. 获取期初余额 (逻辑待细化：需要汇总 start_date 之前的所有应收减去已收)
-        # 2. 获取本期发生额
-        if partner_type == "Customer":
-            debits = await Receivable.filter(
-                tenant_id=tenant_id, customer_id=partner_id, 
-                business_date__gte=start_date, business_date__lte=end_date
-            ).all()
-            credits = await Receipt.filter(
-                tenant_id=tenant_id, customer_id=partner_id, 
-                receipt_date__gte=start_date, receipt_date__lte=end_date
-            ).all()
-        else: # Supplier
-            debits = await Payable.filter(
-                tenant_id=tenant_id, supplier_id=partner_id, 
-                business_date__gte=start_date, business_date__lte=end_date
-            ).all()
-            credits = await Payment.filter(
-                tenant_id=tenant_id, supplier_id=partner_id, 
-                payment_date__gte=start_date, payment_date__lte=end_date
-            ).all()
-
-        return {
-            "partner_id": partner_id,
-            "period": f"{start_date} to {end_date}",
-            "debit_transactions": debits,
-            "credit_transactions": credits,
-            "summary": {
-                "total_debit": sum((d.total_amount for d in debits), Decimal("0.00")),
-                "total_credit": sum((c.total_amount for c in credits), Decimal("0.00"))
-            }
-        }
-
-    async def fifo_auto_settle_receivables(self, tenant_id: int, customer_id: int, operator_id: int):
-        """
-        自动核销：按时间顺序将未核销收款匹配到待收账单 (FIFO)
-        """
-        async with in_transaction():
-            # 1. 获取所有待收款项 (按到期日/业务日排序)
-            receivables = await Receivable.filter(
-                tenant_id=tenant_id, customer_id=customer_id, 
-                remaining_amount__gt=0, status__not="已结清"
-            ).order_by("due_date", "id").all()
-
-            # 2. 获取所有待核销收款单
-            receipts = await Receipt.filter(
-                tenant_id=tenant_id, customer_id=customer_id, 
-                unsettled_amount__gt=0
-            ).order_by("receipt_date", "id").all()
-
-            settled_count = 0
-            for receipt in receipts:
-                for receivable in receivables:
-                    if receipt.unsettled_amount <= 0:
-                        break
-                    if receivable.remaining_amount <= 0:
-                        continue
-                    
-                    settle_amt = min(receipt.unsettled_amount, receivable.remaining_amount)
-                    await self.settle_receivable(tenant_id, receivable.id, receipt.id, settle_amt, operator_id)
-                    
-                    # 更新内存对象状态以供后续循环判断
-                    receipt.unsettled_amount -= settle_amt
-                    receivable.remaining_amount -= settle_amt
-                    settled_count += 1
-            
-            return settled_count
-
-    async def generate_formal_statement(
-        self, 
-        tenant_id: int, 
-        partner_id: int, 
-        partner_type: str, 
-        period: str
-    ) -> PartnerStatement:
-        """
-        生成正式对账单存档
-        """
-        # 简化版实现：先计算本期发生额
-        start_date = date.fromisoformat(f"{period}-01")
-        # 简单计算月底
-        if start_date.month == 12:
-            end_date = date(start_date.year + 1, 1, 1)
-        else:
-            end_date = date(start_date.year, start_date.month + 1, 1)
-            
-        data = await self.generate_partner_statement(tenant_id, partner_id, partner_type, start_date, end_date)
-        
-        # 存档
-        statement = await PartnerStatement.create(
-            tenant_id=tenant_id,
-            statement_code=f"STMT-{partner_id}-{period}",
-            partner_id=partner_id,
-            partner_name=data["debit_transactions"][0].customer_name if data["debit_transactions"] else "Unknown",
-            partner_type=partner_type,
-            statement_period=period,
-            start_date=start_date,
-            end_date=end_date,
-            opening_balance=Decimal(0), # 需从上期获取
-            debit_total=data["summary"]["total_debit"],
-            credit_total=data["summary"]["total_credit"],
-            closing_balance=data["summary"]["total_debit"] - data["summary"]["total_credit"],
-            status="Draft",
-            transaction_details={"msg": "Historical snapshot stored here"}
-        )
-        return statement

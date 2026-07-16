@@ -469,7 +469,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
             it.delivery_quantity ?? it.picked_quantity ?? it.outbound_quantity ?? it.borrow_quantity ?? 0,
           );
           const opts = serialOptionsByLineId[lineId] ?? [];
-          const materialLabel = [it.material_code, it.material_name].filter(Boolean).join(' · ');
+          const materialLabel = [it.material_code, it.material_name].filter(Boolean).join(' - ');
           return (
             <Form.Item name={`serial_${lineId}`} style={{ marginBottom: 0 }}>
               <OutboundSerialPickerField

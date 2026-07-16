@@ -18,13 +18,13 @@ from infra.models.user import User
 
 payable_router = APIRouter(
     prefix="/finance/reports/payable",
-    tags=["App · HaoliGO · 财务管理 · 应付款报表"],
+    tags=["App - HaoliGO - 财务管理 - 应付款报表"],
     dependencies=[Depends(require_haoligo_module_access("finance-reports-payable"))],
 )
 
 monthly_router = APIRouter(
     prefix="/finance/reports/monthly-payment",
-    tags=["App · HaoliGO · 财务管理 · 本月付款明细"],
+    tags=["App - HaoliGO - 财务管理 - 本月付款明细"],
     dependencies=[Depends(require_haoligo_module_access("finance-reports-monthly-payment"))],
 )
 

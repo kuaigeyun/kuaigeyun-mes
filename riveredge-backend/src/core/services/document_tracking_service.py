@@ -483,7 +483,7 @@ class DocumentTrackingService:
                         "at": at_val,
                         "by": r.worker_name or str(r.worker_id or ""),
                         "by_id": r.worker_id,
-                        "detail": " · ".join(detail_parts),
+                        "detail": " - ".join(detail_parts),
                         "operation_name": r.operation_name,
                         "operation_code": r.operation_code,
                         "reported_quantity": str(r.reported_quantity) if r.reported_quantity is not None else None,

@@ -31,7 +31,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/patrol/hazard-reports",
-    tags=["App · HaoliGO · 巡查"],
+    tags=["App - HaoliGO - 巡查"],
     dependencies=[Depends(require_haoligo_module_access("patrol-hazards"))],
 )
 

@@ -18,7 +18,7 @@ from infra.models.tenant import Tenant, TenantStatus
 from core.services.system.site_setting_service import SiteSettingService
 
 # 创建路由
-router = APIRouter(prefix="/platform-settings", tags=["Platform · Settings (Public)"])
+router = APIRouter(prefix="/platform-settings", tags=["Platform - Settings (Public)"])
 
 # 降级默认值：数据库异常时返回，确保登录页可加载
 DEFAULT_PLATFORM_SETTINGS = PlatformSettingsResponse(

@@ -33,7 +33,7 @@ export default {
   'pages.login.provenanceLabel': '构建来源',
   'pages.login.telemetryDisclosure': '可选统计说明',
   'components.iterationFloatButton.provenanceStatus.official_self_hosted': '官方仓库 自托管',
-  'components.iterationFloatButton.provenanceStatus.official_unknown_commit': '官方来源 · commit 未校验',
+  'components.iterationFloatButton.provenanceStatus.official_unknown_commit': '官方来源 - commit 未校验',
   'components.iterationFloatButton.provenanceStatus.unverified_commit': '未验证 commit',
   'components.iterationFloatButton.provenanceStatus.unverified_build': '未验证构建',
   'components.iterationFloatButton.provenanceStatus.unknown': '来源未知',

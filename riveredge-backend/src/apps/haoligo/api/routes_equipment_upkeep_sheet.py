@@ -35,7 +35,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/equipment/upkeep-sheets",
-    tags=["App · HaoliGO · 设备维保单"],
+    tags=["App - HaoliGO - 设备维保单"],
     dependencies=[
         Depends(
             require_haoligo_module_access(

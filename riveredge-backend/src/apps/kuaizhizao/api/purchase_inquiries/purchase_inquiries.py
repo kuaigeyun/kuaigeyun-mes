@@ -34,7 +34,7 @@ from apps.kuaizhizao.services.purchase_inquiry_service import (
     PURCHASE_INQUIRY_SORTABLE_FIELDS,
 )
 
-router = APIRouter(tags=["App · Kuaige Zhizao · Purchase Inquiry"])
+router = APIRouter(tags=["App - Kuaige Zhizao - Purchase Inquiry"])
 
 
 def _http_exception(status_code: int, message: str, route: str = "/purchase-inquiries") -> FastAPIHTTPException:

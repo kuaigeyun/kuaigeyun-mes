@@ -342,7 +342,7 @@ class ReceivablePullService(AppBaseService[Receivable]):
             )
             code = str(order.order_code or oid)
             name = str(getattr(order, "customer_name", "") or "").strip()
-            label = f"{code} · {name}" if name else code
+            label = f"{code} - {name}" if name else code
             rows.append(
                 {
                     "id": oid,
@@ -407,7 +407,7 @@ class ReceivablePullService(AppBaseService[Receivable]):
             )
             code = str(delivery.delivery_code or did)
             name = str(getattr(delivery, "customer_name", "") or "").strip()
-            label = f"{code} · {name}" if name else code
+            label = f"{code} - {name}" if name else code
             rows.append(
                 {
                     "id": did,

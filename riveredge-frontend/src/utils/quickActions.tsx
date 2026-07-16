@@ -7,7 +7,7 @@
  * @date 2026-01-27
  */
 
-import { message } from 'antd';
+import { getAntdMessage } from './antdAppApis';
 import { navigateTo } from './navigation';
 import { getTenantId } from './auth';
 
@@ -65,7 +65,7 @@ export class QuickActionHelper {
   static async execute(key: string): Promise<void> {
     const action = this.actions.get(key);
     if (!action) {
-      message.warning(`快捷操作 "${key}" 不存在`);
+      getAntdMessage().warning(`快捷操作 "${key}" 不存在`);
       return;
     }
 
@@ -81,7 +81,7 @@ export class QuickActionHelper {
         this.history.shift();
       }
     } catch (error: any) {
-      message.error(error.message || '操作失败');
+      getAntdMessage().error(error.message || '操作失败');
       console.error('快捷操作执行失败:', error);
     }
   }

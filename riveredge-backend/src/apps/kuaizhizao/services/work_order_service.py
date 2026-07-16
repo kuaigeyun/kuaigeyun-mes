@@ -174,7 +174,7 @@ async def _resolve_sales_order_snapshot_fields(
         return sales_order_code, sales_order_name
     code = sales_order_code or so.order_code
     name = sales_order_name or (
-        f"{so.order_code} · {so.customer_name}" if so.customer_name else so.order_code
+        f"{so.order_code} - {so.customer_name}" if so.customer_name else so.order_code
     )
     return code, name
 
@@ -1499,7 +1499,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             for so in sos:
                 so_snapshot_map[so.id] = (
                     so.order_code,
-                    f"{so.order_code} · {so.customer_name}" if so.customer_name else so.order_code,
+                    f"{so.order_code} - {so.customer_name}" if so.customer_name else so.order_code,
                 )
 
         # 批量预取工序（include_operations 时消除 N+1）
@@ -2094,6 +2094,130 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 result["updated"].append(int(op_id))
         return result
 
+    async def batch_update_operation_assignments(
+        self,
+        tenant_id: int,
+        updates: list,
+        updated_by: int,
+    ) -> Dict[str, Any]:
+        """批量更新工序派工资源（人员/设备/模具/工装）。"""
+        from apps.kuaizhizao.models.equipment import Equipment
+        from apps.kuaizhizao.models.mold import Mold
+        from apps.kuaizhizao.models.tool import Tool
+        from apps.master_data.models.factory import WorkGroup
+        from infra.models.user import User
+
+        result: Dict[str, Any] = {
+            "updated": [],
+            "skipped_frozen": [],
+            "failed": [],
+        }
+        if not updates:
+            return result
+
+        user_info = await self.get_user_info(updated_by)
+        now = datetime.now()
+
+        async with in_transaction():
+            for item in updates[:50]:
+                op_id = item.operation_id if hasattr(item, "operation_id") else item.get("operation_id")
+                if not op_id:
+                    continue
+                op = await WorkOrderOperation.get_or_none(
+                    tenant_id=tenant_id, id=op_id, deleted_at__isnull=True
+                )
+                if not op:
+                    result["failed"].append({"id": int(op_id), "reason": "工序不存在"})
+                    continue
+                wo = await WorkOrder.get_or_none(
+                    tenant_id=tenant_id, id=op.work_order_id, deleted_at__isnull=True
+                )
+                if not wo:
+                    result["failed"].append({"id": int(op_id), "reason": "工单不存在"})
+                    continue
+                if wo.is_frozen:
+                    if int(wo.id) not in result["skipped_frozen"]:
+                        result["skipped_frozen"].append(int(wo.id))
+                    continue
+
+                patch_fields: Dict[str, Any] = {}
+                if hasattr(item, "model_dump"):
+                    raw = item.model_dump(exclude_unset=True)
+                else:
+                    raw = dict(item)
+
+                worker_id = raw.get("assigned_worker_id")
+                if worker_id is not None:
+                    if int(worker_id) > 0:
+                        user = await User.get_or_none(id=int(worker_id), tenant_id=tenant_id)
+                        patch_fields["assigned_worker_id"] = int(worker_id)
+                        patch_fields["assigned_worker_name"] = (
+                            (user.full_name or user.username) if user else f"员工{worker_id}"
+                        )
+                    else:
+                        patch_fields["assigned_worker_id"] = None
+                        patch_fields["assigned_worker_name"] = None
+
+                team_id = raw.get("assigned_team_id")
+                if team_id is not None:
+                    if int(team_id) > 0:
+                        team = await WorkGroup.get_or_none(
+                            tenant_id=tenant_id, id=int(team_id), deleted_at__isnull=True
+                        )
+                        patch_fields["assigned_team_id"] = int(team_id)
+                        patch_fields["assigned_team_name"] = team.name if team else f"小组{team_id}"
+                    else:
+                        patch_fields["assigned_team_id"] = None
+                        patch_fields["assigned_team_name"] = None
+
+                equipment_id = raw.get("assigned_equipment_id")
+                if equipment_id is not None:
+                    if int(equipment_id) > 0:
+                        eq = await Equipment.get_or_none(
+                            tenant_id=tenant_id, id=int(equipment_id), deleted_at__isnull=True
+                        )
+                        patch_fields["assigned_equipment_id"] = int(equipment_id)
+                        patch_fields["assigned_equipment_name"] = eq.name if eq else f"设备{equipment_id}"
+                    else:
+                        patch_fields["assigned_equipment_id"] = None
+                        patch_fields["assigned_equipment_name"] = None
+
+                mold_id = raw.get("assigned_mold_id")
+                if mold_id is not None:
+                    if int(mold_id) > 0:
+                        mold = await Mold.get_or_none(
+                            tenant_id=tenant_id, id=int(mold_id), deleted_at__isnull=True
+                        )
+                        patch_fields["assigned_mold_id"] = int(mold_id)
+                        patch_fields["assigned_mold_name"] = mold.name if mold else f"模具{mold_id}"
+                    else:
+                        patch_fields["assigned_mold_id"] = None
+                        patch_fields["assigned_mold_name"] = None
+
+                tool_id = raw.get("assigned_tool_id")
+                if tool_id is not None:
+                    if int(tool_id) > 0:
+                        tool = await Tool.get_or_none(
+                            tenant_id=tenant_id, id=int(tool_id), deleted_at__isnull=True
+                        )
+                        patch_fields["assigned_tool_id"] = int(tool_id)
+                        patch_fields["assigned_tool_name"] = tool.name if tool else f"工装{tool_id}"
+                    else:
+                        patch_fields["assigned_tool_id"] = None
+                        patch_fields["assigned_tool_name"] = None
+
+                if not patch_fields:
+                    continue
+
+                patch_fields["assigned_at"] = now
+                patch_fields["assigned_by"] = updated_by
+                patch_fields["assigned_by_name"] = user_info["name"]
+                await WorkOrderOperation.filter(tenant_id=tenant_id, id=op_id).update(**patch_fields)
+                wo.updated_by = updated_by
+                await wo.save(update_fields=["updated_by", "updated_at"])
+                result["updated"].append(int(op_id))
+        return result
+
     async def _upsert_delivery_delay_exception(
         self,
         tenant_id: int,
@@ -2176,6 +2300,152 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         await work_order.save()
         return True
 
+    async def build_reschedule_forward_proposals(
+        self,
+        tenant_id: int,
+        work_order_ids: List[int],
+    ) -> Dict[str, Any]:
+        """为逾期工单生成顺延重排提案（不落库）。"""
+        from apps.kuaizhizao.services.rolling_schedule_service import RollingScheduleService
+        from apps.kuaizhizao.utils.work_order_operation_scheduling import (
+            build_operation_time_slots,
+            operation_total_hours,
+        )
+
+        now = datetime.now()
+        proposals: Dict[str, Any] = {
+            "summary": None,
+            "warnings": [],
+            "work_order_adjustments": [],
+            "operation_adjustments": [],
+            "operation_station_adjustments": [],
+        }
+        if not work_order_ids:
+            return proposals
+
+        rolling_svc = RollingScheduleService()
+        next_day = await rolling_svc.get_next_workday(tenant_id, now.date())
+        anchor_start = datetime.combine(next_day, datetime.min.time().replace(hour=8))
+
+        wos = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            id__in=work_order_ids[:50],
+            deleted_at__isnull=True,
+        ).all()
+        wo_by_id = {int(wo.id): wo for wo in wos}
+
+        for wo_id in work_order_ids[:50]:
+            wo = wo_by_id.get(int(wo_id))
+            if not wo:
+                proposals["warnings"].append(f"工单 {wo_id} 不存在")
+                continue
+            if wo.status not in {"released", "in_progress"}:
+                proposals["warnings"].append(f"工单 {wo.code} 状态不可顺延")
+                continue
+            if not wo.planned_end_date or wo.planned_end_date >= now:
+                proposals["warnings"].append(f"工单 {wo.code} 未逾期，跳过")
+                continue
+            if wo.is_frozen:
+                proposals["warnings"].append(f"工单 {wo.code} 已冻结，跳过")
+                continue
+
+            ops = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=wo.id,
+                deleted_at__isnull=True,
+            ).order_by("sequence").all()
+            pending_ops = [op for op in ops if op.status not in {"completed", "cancelled"}]
+            if not pending_ops:
+                proposals["warnings"].append(f"工单 {wo.code} 无待排工序")
+                continue
+
+            durations = [
+                operation_total_hours(op.setup_time, op.standard_time, wo.quantity)
+                for op in pending_ops
+            ]
+            slots = build_operation_time_slots(durations, planned_start=anchor_start)
+            for op, (start, end) in zip(pending_ops, slots):
+                proposals["operation_adjustments"].append(
+                    {
+                        "operation_id": int(op.id),
+                        "planned_start_date": start.isoformat(),
+                        "planned_end_date": end.isoformat(),
+                    }
+                )
+            if slots:
+                wo_start = slots[0][0]
+                wo_end = slots[-1][1]
+                proposals["work_order_adjustments"].append(
+                    {
+                        "work_order_id": int(wo.id),
+                        "planned_start_date": wo_start.isoformat(),
+                        "planned_end_date": wo_end.isoformat(),
+                    }
+                )
+
+        count = len(proposals["work_order_adjustments"])
+        proposals["summary"] = f"已为 {count} 张逾期工单生成顺延重排提案（锚点 {next_day}）"
+        return proposals
+
+    async def apply_reschedule_forward(
+        self,
+        tenant_id: int,
+        work_order_ids: List[int],
+        *,
+        handled_by: int,
+        reason: str = "可视排产顺延重排",
+    ) -> Dict[str, Any]:
+        """将逾期工单计划顺延到下一工作日起并落库。"""
+        result: Dict[str, Any] = {
+            "updated": [],
+            "converted_to_exception": [],
+            "unfreezed": [],
+            "skipped": [],
+            "failed": [],
+        }
+        proposals = await self.build_reschedule_forward_proposals(tenant_id, work_order_ids)
+        wo_updates = proposals.get("work_order_adjustments") or []
+        op_updates = proposals.get("operation_adjustments") or []
+        if not wo_updates and not op_updates:
+            return result
+
+        wo_ids_touched = {int(u["work_order_id"]) for u in wo_updates}
+        if op_updates:
+            op_result = await self.batch_update_operation_dates(
+                tenant_id=tenant_id,
+                updates=op_updates,
+                updated_by=handled_by,
+            )
+            for fail in op_result.get("failed") or []:
+                result["failed"].append(fail)
+        if wo_updates:
+            wo_result = await self.batch_update_dates(
+                tenant_id=tenant_id,
+                updates=wo_updates,
+                updated_by=handled_by,
+            )
+            for fail in wo_result.get("failed") or []:
+                result["failed"].append(fail)
+
+        now = datetime.now()
+        wos = await WorkOrder.filter(tenant_id=tenant_id, id__in=list(wo_ids_touched)).all()
+        for wo in wos:
+            delay_days = (now - wo.planned_end_date).days if wo.planned_end_date and wo.planned_end_date < now else 0
+            try:
+                await self._upsert_delivery_delay_exception(
+                    tenant_id,
+                    wo,
+                    delay_days=delay_days,
+                    reason=reason,
+                    suggested_action="adjust_plan",
+                    status="processing",
+                    handled_by=handled_by,
+                )
+                result["updated"].append(int(wo.id))
+            except Exception as exc:
+                result["failed"].append({"id": int(wo.id), "reason": str(exc)})
+        return result
+
     async def scheduling_quick_action(
         self,
         tenant_id: int,
@@ -2183,7 +2453,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         handled_by: int,
     ) -> Dict[str, Any]:
         action = str(body.action or "").strip()
-        if action not in {"confirm_delay", "to_exception", "apply_unfreeze"}:
+        if action not in {"confirm_delay", "to_exception", "apply_unfreeze", "reschedule_forward"}:
             raise ValidationError("不支持的快捷处置动作")
         result: Dict[str, Any] = {
             "updated": [],
@@ -2214,6 +2484,20 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             delay_days = (now - planned_end).days if planned_end and planned_end < now else 0
             reason = body.reason or "可视排产快捷处置"
             try:
+                if action == "reschedule_forward":
+                    fwd = await self.apply_reschedule_forward(
+                        tenant_id,
+                        [int(wo.id)],
+                        handled_by=handled_by,
+                        reason=reason,
+                    )
+                    if fwd["updated"]:
+                        result["updated"].extend(fwd["updated"])
+                    elif fwd["failed"]:
+                        result["failed"].extend(fwd["failed"])
+                    else:
+                        result["skipped"].append(int(wo.id))
+                    continue
                 if action == "to_exception":
                     await self._upsert_delivery_delay_exception(
                         tenant_id,
@@ -2358,6 +2642,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     cfg_selections = {str(k): int(v) for k, v in cfg_selections.items() if v is not None}
                 except (TypeError, ValueError):
                     cfg_selections = None
+            # 与领料同口径：只校验一阶物料（自制/委外子件走各自工单，不拆子 BOM），
+            # 否则半成品及其原材料被双重计入需求，出现虚假缺料
             material_requirements = await calculate_material_requirements_from_bom(
                 tenant_id=tenant_id,
                 material_id=work_order.product_id,
@@ -2365,6 +2651,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 only_approved=True,
                 variant_attributes=variant_attrs,
                 configurable_selections=cfg_selections,
+                for_kitting_analysis=True,
             )
         except NotFoundError:
             # 如果没有BOM，返回无缺料
@@ -2376,9 +2663,18 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             }
 
         shortage_items = []
-        
+
         # 检查每个物料的需求和库存
+        # 与齐套分析同口径：服务/委外/虚拟件及发料方式 none 的 BOM 行不校验实物库存
+        # （服务类物料永远无库存，纳入缺料会导致工单永远无法下达）
+        from apps.kuaizhizao.utils.issue_method_resolver import is_kitting_inventory_material
+
         for requirement in material_requirements:
+            if not is_kitting_inventory_material(
+                getattr(requirement, "issue_method", None),
+                getattr(requirement, "component_type", None),
+            ):
+                continue
             # 获取可用库存
             available_quantity = await get_material_available_quantity(
                 tenant_id=tenant_id,

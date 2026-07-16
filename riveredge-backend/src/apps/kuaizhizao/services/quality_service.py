@@ -1986,7 +1986,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             reg_code = getattr(registration, "registration_code", None) or rid
             label = f"{reg_code}"
             if getattr(registration, "customer_name", None):
-                label = f"{label} · {registration.customer_name}"
+                label = f"{label} - {registration.customer_name}"
             rows.append(
                 {
                     "id": rid,

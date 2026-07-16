@@ -27,7 +27,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 report_template_service = ReportTemplateService()
 
 # 创建路由
-router = APIRouter(prefix="/reports/templates", tags=["Core · Report Templates"])
+router = APIRouter(prefix="/reports/templates", tags=["Core - Report Templates"])
 
 
 @router.post("", response_model=ReportTemplateResponse, status_code=status.HTTP_201_CREATED, summary="Create report template")

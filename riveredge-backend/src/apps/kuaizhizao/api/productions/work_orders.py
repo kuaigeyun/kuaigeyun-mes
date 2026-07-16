@@ -21,6 +21,7 @@ from apps.kuaizhizao.services.rework_order_service import ReworkOrderService, RE
 from apps.kuaizhizao.services.demand_source_chain_service import DemandSourceChainService
 from apps.kuaizhizao.services.outsource_service import OutsourceService, OUTSOURCE_ORDER_SORTABLE_FIELDS
 from apps.kuaizhizao.schemas.visual_scheduling import (
+    OperationBatchUpdateAssignmentsResult,
     OperationBatchUpdateDatesResult,
     OperationBatchUpdateStationsResult,
     WorkOrderBatchUpdateDatesResult,
@@ -31,6 +32,7 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderBatchUpdateDatesRequest,
     WorkOrderOperationBatchUpdateDatesRequest,
     WorkOrderOperationBatchUpdateStationsRequest,
+    WorkOrderOperationBatchUpdateAssignmentsRequest,
     WorkOrderSchedulingQuickActionRequest,
     WorkOrderSchedulingQuickActionResult,
     WorkOrderResponse,
@@ -86,7 +88,7 @@ from apps.kuaizhizao.schemas.outsource_order import (
 )
 
 router = APIRouter(
-    tags=["App · Kuaige Zhizao · Production Execution"],
+    tags=["App - Kuaige Zhizao - Production Execution"],
     dependencies=[Depends(require_kuaizhizao_module_access("work-order"))],
 )
 
@@ -956,6 +958,26 @@ async def batch_update_work_order_operation_stations(
         updated_by=current_user.id,
     )
     return OperationBatchUpdateStationsResult(**raw)
+
+
+@router.put(
+    "/work-orders/batch-update-operation-assignments",
+    response_model=OperationBatchUpdateAssignmentsResult,
+    summary="Batch update operation assigned resources",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:update"))],
+)
+async def batch_update_work_order_operation_assignments(
+    request: WorkOrderOperationBatchUpdateAssignmentsRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OperationBatchUpdateAssignmentsResult:
+    """批量更新工序派工资源（人员/设备/模具/工装）。"""
+    raw = await WorkOrderService().batch_update_operation_assignments(
+        tenant_id=tenant_id,
+        updates=request.updates,
+        updated_by=current_user.id,
+    )
+    return OperationBatchUpdateAssignmentsResult(**raw)
 
 
 @router.post(

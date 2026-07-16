@@ -17,7 +17,7 @@ from core.services.application.application_dedicated_binding_service import Appl
 from infra.exceptions.exceptions import ValidationError
 from infra.services.tenant_service import TenantService
 
-router = APIRouter(prefix="/application-dedicated-bindings", tags=["Core · Dedicated app bindings"])
+router = APIRouter(prefix="/application-dedicated-bindings", tags=["Core - Dedicated app bindings"])
 
 
 class DedicatedBindingRow(BaseModel):

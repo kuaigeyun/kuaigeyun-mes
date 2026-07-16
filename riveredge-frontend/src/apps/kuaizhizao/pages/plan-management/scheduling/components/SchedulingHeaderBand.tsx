@@ -14,6 +14,8 @@ export interface SchedulingLegendMetrics {
 interface SchedulingHeaderBandProps {
   constraints: SchedulingConstraints;
   selectedWorkOrderCount: number;
+  selectedOperationCount: number;
+  resourceViewStats: { stationCount: number; taskCount: number };
   legendMetrics: SchedulingLegendMetrics;
   planReliabilityLoading: boolean;
   planReliability?: {
@@ -25,6 +27,8 @@ interface SchedulingHeaderBandProps {
 const SchedulingHeaderBand: React.FC<SchedulingHeaderBandProps> = ({
   constraints,
   selectedWorkOrderCount,
+  selectedOperationCount,
+  resourceViewStats,
   legendMetrics,
   planReliabilityLoading,
   planReliability,
@@ -72,6 +76,22 @@ const SchedulingHeaderBand: React.FC<SchedulingHeaderBandProps> = ({
             </Typography.Text>
           </>
         )}
+        <Typography.Text type="secondary" className="aps-header-band-resource-stats">
+          {t('app.kuaizhizao.scheduling.ganttToolbar.stationOpStats', {
+            stations: resourceViewStats.stationCount,
+            operations: resourceViewStats.taskCount,
+          })}
+          {selectedWorkOrderCount > 0
+            ? selectedOperationCount > 0
+              ? t('app.kuaizhizao.scheduling.ganttToolbar.selectedStats', {
+                  workOrders: selectedWorkOrderCount,
+                  operations: selectedOperationCount,
+                })
+              : t('app.kuaizhizao.scheduling.ganttToolbar.selectedWorkOrdersOnly', {
+                  workOrders: selectedWorkOrderCount,
+                })
+            : ''}
+        </Typography.Text>
       </div>
     </Card>
   );

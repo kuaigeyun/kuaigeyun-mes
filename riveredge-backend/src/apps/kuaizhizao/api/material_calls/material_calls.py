@@ -15,7 +15,7 @@ from apps.kuaizhizao.schemas.material_call import (
     MaterialCallBatchFromWorkOrderRequest,
 )
 
-router = APIRouter(prefix="/material-calls", tags=["App · Kuaige Zhizao · Material Call"])
+router = APIRouter(prefix="/material-calls", tags=["App - Kuaige Zhizao - Material Call"])
 
 @router.post("", response_model=MaterialCallRequestResponse, summary="Create material call request")
 async def create_material_call(

@@ -29,7 +29,7 @@ from loguru import logger
 
 router = APIRouter(
     prefix="/process/drawings",
-    tags=["App · Master Data · Drawings"],
+    tags=["App - Master Data - Drawings"],
     dependencies=[Depends(require_master_data_module_access("process:drawing"))],
 )
 

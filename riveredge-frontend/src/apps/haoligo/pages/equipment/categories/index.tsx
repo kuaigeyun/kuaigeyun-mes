@@ -105,7 +105,7 @@ const CategoriesPage: React.FC = () => {
   }, [level1Filter]);
 
   const paramSetOptions = React.useMemo(
-    () => paramSets.map((s) => ({ label: `${s.code} · ${s.name}`, value: s.id })),
+    () => paramSets.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id })),
     [paramSets],
   );
 
@@ -291,7 +291,7 @@ const CategoriesPage: React.FC = () => {
               const [all, sets] = await Promise.all([listCategories(), listInspectionParamSets()]);
               setAllCategories(all);
               const map = new Map<number, string>();
-              sets.forEach((s) => map.set(s.id, `${s.code} · ${s.name}`));
+              sets.forEach((s) => map.set(s.id, `${s.code} - ${s.name}`));
               const codeQ = String(searchFormValues?.code ?? '').trim().toLowerCase();
               const level2Q = String(searchFormValues?.level2_category ?? '').trim().toLowerCase();
               let rows: CategoryTableRow[] = all.map((c) => ({
@@ -379,7 +379,7 @@ const CategoriesPage: React.FC = () => {
       <DetailDrawerTemplate
         title={
           detailRecord
-            ? `${t('common.detail')} · ${detailRecord.code}`
+            ? `${t('common.detail')} - ${detailRecord.code}`
             : t('app.haoligo.menu.equipment.categories')
         }
         open={detailOpen}

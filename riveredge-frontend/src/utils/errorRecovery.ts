@@ -4,7 +4,7 @@
  * 提供错误恢复机制，包括重试、降级、回退等
  */
 
-import { message, Modal } from 'antd';
+import { getAntdMessage, getAntdModal } from './antdAppApis';
 import { handleError } from './errorHandler';
 
 /**
@@ -175,7 +175,7 @@ export async function withErrorRecovery<T>(
     switch (config.strategy) {
       case ErrorRecoveryStrategy.FALLBACK:
         if (config.fallbackValue !== undefined) {
-          message.warning('操作失败，已使用默认值');
+          getAntdMessage().warning('操作失败，已使用默认值');
           return config.fallbackValue;
         }
         throw error;
@@ -205,7 +205,7 @@ export function handleNetworkError(error: any): void {
                         error?.message?.includes('Failed to fetch');
   
   if (isNetworkError) {
-    Modal.error({
+    getAntdModal().error({
       title: '服务连接中断',
       content: '暂时无法连接服务，请稍后重试。若多次重试仍失败，请检查网络后再试。',
       okText: '重试',
@@ -227,7 +227,7 @@ export function handleServerError(error: any): void {
   const status = error?.response?.status;
   
   if (status === 502 || status === 503 || status === 504) {
-    Modal.warning({
+    getAntdModal().warning({
       title: '服务器暂时不可用',
       content: '服务器正在维护或暂时不可用，请稍后重试。',
       okText: '重试',

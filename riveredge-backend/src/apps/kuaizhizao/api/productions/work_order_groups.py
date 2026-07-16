@@ -11,7 +11,7 @@ from apps.kuaizhizao.schemas.work_order_group import WorkOrderGroupResponse
 from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
 
 router = APIRouter(
-    tags=["App · Kuaige Zhizao · Work Order Groups"],
+    tags=["App - Kuaige Zhizao - Work Order Groups"],
     dependencies=[Depends(require_kuaizhizao_module_access("work-order"))],
 )
 

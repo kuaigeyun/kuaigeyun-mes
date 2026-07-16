@@ -276,7 +276,7 @@ function EquipmentUpkeepRecordFieldsInner({
             <Row key={ln.param_id} gutter={16} style={{ marginBottom: 8 }}>
               <Col xs={24} md={8}>
                 <Text>
-                  {ln.param_code} · {ln.param_name}
+                  {ln.param_code} - {ln.param_name}
                   {ln.is_required ? <Text type="danger"> *</Text> : null}
                 </Text>
                 {ln.requirement ? (

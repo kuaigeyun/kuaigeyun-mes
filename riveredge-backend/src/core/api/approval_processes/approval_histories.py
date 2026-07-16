@@ -12,7 +12,7 @@ from core.services.approval.approval_history_service import ApprovalHistoryServi
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError
 
-router = APIRouter(prefix="/approval-histories", tags=["Core · Approval Histories"])
+router = APIRouter(prefix="/approval-histories", tags=["Core - Approval Histories"])
 
 
 @router.get("", response_model=List[ApprovalHistoryResponse])

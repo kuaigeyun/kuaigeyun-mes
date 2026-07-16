@@ -18,7 +18,7 @@ from core.api.deps.deps import get_current_tenant
 from infra.models.user import User
 
 # 创建路由
-router = APIRouter(prefix="/performance", tags=["Core · Performance"])
+router = APIRouter(prefix="/performance", tags=["Core - Performance"])
 
 
 @router.get("/stats", summary="Get performance statistics")

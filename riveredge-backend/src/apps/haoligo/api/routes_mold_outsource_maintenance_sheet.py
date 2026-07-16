@@ -88,7 +88,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/molds/outsource-maintenance-sheets",
-    tags=["App · HaoliGO · 外协维保单"],
+    tags=["App - HaoliGO - 外协维保单"],
     dependencies=[Depends(require_haoligo_module_access("molds-documents-outsource-maintenance"))],
 )
 

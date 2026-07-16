@@ -25,7 +25,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/mobile",
-    tags=["App · HaoliGO · 移动端"],
+    tags=["App - HaoliGO - 移动端"],
 )
 
 

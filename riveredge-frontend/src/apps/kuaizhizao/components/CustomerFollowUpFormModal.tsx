@@ -270,7 +270,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
       .filter((q) => q.id != null && q.customer_id === modalCustomerId)
       .map((q) => ({
         value: q.id as number,
-        label: [q.quotation_code, q.customer_name].filter(Boolean).join(' · ') || `#${q.id}`,
+        label: [q.quotation_code, q.customer_name].filter(Boolean).join(' - ') || `#${q.id}`,
       }));
   }, [quotationList, modalCustomerId]);
 
@@ -280,7 +280,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
       .filter((o) => o.id != null && o.customer_id === modalCustomerId)
       .map((o) => ({
         value: o.id as number,
-        label: [o.order_code, o.customer_name].filter(Boolean).join(' · ') || `#${o.id}`,
+        label: [o.order_code, o.customer_name].filter(Boolean).join(' - ') || `#${o.id}`,
       }));
   }, [salesOrderList, modalCustomerId]);
 

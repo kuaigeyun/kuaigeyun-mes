@@ -118,7 +118,7 @@ const EquipmentStatusDashboardPage: React.FC = () => {
       groups.push({
         label: t('app.haoligo.equipment.statusBoard.workshopFilterGroup'),
         options: workshops.map((w) => ({
-          label: w.code ? `${w.code} · ${w.name?.trim() || w.code}` : w.name?.trim() || w.code,
+          label: w.code ? `${w.code} - ${w.name?.trim() || w.code}` : w.name?.trim() || w.code,
           value: workshopViewKey(w.id),
         })),
       });

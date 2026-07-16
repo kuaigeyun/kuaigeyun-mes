@@ -18,7 +18,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 
 from apps.kuaizhizao.services.state_transition_service import StateTransitionService
 
-router = APIRouter(prefix="/state-transitions", tags=["App · Kuaige Zhizao · State Transitions"])
+router = APIRouter(prefix="/state-transitions", tags=["App - Kuaige Zhizao - State Transitions"])
 
 state_transition_service = StateTransitionService()
 

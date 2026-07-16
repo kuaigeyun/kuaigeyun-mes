@@ -29,8 +29,8 @@ from apps.kuaizhizao.services.warehouse_list_core import (
 from apps.master_data.models.warehouse import Warehouse
 from apps.kuaizhizao.services.backflush_service import BackflushService
 from core.api.deps import get_current_tenant, get_current_user_id
-router = APIRouter(prefix="/line-side-warehouse", tags=["App · Kuaige Zhizao · Line-Side Warehouse"])
-backflush_router = APIRouter(prefix="/backflush-records", tags=["App · Kuaige Zhizao · Backflush Records"])
+router = APIRouter(prefix="/line-side-warehouse", tags=["App - Kuaige Zhizao - Line-Side Warehouse"])
+backflush_router = APIRouter(prefix="/backflush-records", tags=["App - Kuaige Zhizao - Backflush Records"])
 
 
 @router.get(

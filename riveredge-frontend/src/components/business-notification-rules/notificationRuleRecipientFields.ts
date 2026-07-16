@@ -26,7 +26,7 @@ export function getFixedRecipientUserIdsFromRule(
   return [];
 }
 
-/** 开单用户指定 · 默认人员（仅当表单未选人时使用） */
+/** 开单用户指定 - 默认人员（仅当表单未选人时使用） */
 export function getFormNotifyUserDefaultsFromRule(
   rule: Record<string, unknown> | undefined,
 ): number[] {

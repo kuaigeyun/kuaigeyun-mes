@@ -62,7 +62,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/molds/maintenance-sheets",
-    tags=["App · HaoliGO · 维保单"],
+    tags=["App - HaoliGO - 维保单"],
 )
 
 ServiceTypeLiteral = Literal["维修", "保养"]

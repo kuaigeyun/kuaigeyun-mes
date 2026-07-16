@@ -113,7 +113,7 @@ const MaintenancePlanCalendarPage: React.FC = () => {
                         <Tag color={STATUS_COLOR[item.status ?? ''] ?? 'default'}>{item.status}</Tag>
                       </>
                     }
-                    description={`${item.equipment_name ?? '-'} · ${item.plan_name ?? ''}`}
+                    description={`${item.equipment_name ?? '-'} - ${item.plan_name ?? ''}`}
                   />
                 </List.Item>
               )}

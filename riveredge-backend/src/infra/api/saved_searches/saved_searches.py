@@ -25,7 +25,7 @@ from infra.api.deps.deps import get_current_user
 from typing import Any
 
 # 创建路由
-router = APIRouter(prefix="/saved-searches", tags=["Platform · Saved Searches"])
+router = APIRouter(prefix="/saved-searches", tags=["Platform - Saved Searches"])
 
 
 @router.get("", response_model=SavedSearchListResponse)

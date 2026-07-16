@@ -25,7 +25,7 @@ from apps.kuaizhizao.services.sales_order_change_service import (
     SALES_ORDER_CHANGE_SORTABLE_FIELDS,
 )
 
-router = APIRouter(prefix="/sales-order-change-orders", tags=["App · Kuaige Zhizao · Sales Order Change"])
+router = APIRouter(prefix="/sales-order-change-orders", tags=["App - Kuaige Zhizao - Sales Order Change"])
 service = SalesOrderChangeService()
 
 

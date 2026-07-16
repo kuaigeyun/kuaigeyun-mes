@@ -81,7 +81,9 @@ const BankAccountsPage: React.FC = () => {
     ...financeDocCreatedUpdatedColumns<BankAccount>(t),
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
+      fixed: 'right',
       width: 180,
       render: (_, record) => [
         <a key="tx" onClick={() => { setTxAccount(record); setTxDrawerOpen(true); }}>{t(`${BA}.action.transactions`)}</a>,

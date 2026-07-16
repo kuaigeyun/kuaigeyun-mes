@@ -41,7 +41,7 @@ from core.schemas.dataset import ExecuteQueryRequest
 from core.services.data.dataset_service import DatasetService
 from infra.models.user import User
 
-router = APIRouter(prefix="/molds", tags=["App · HaoliGO · 模具"])
+router = APIRouter(prefix="/molds", tags=["App - HaoliGO - 模具"])
 
 _LEDGER_READ = Depends(
     require_access(

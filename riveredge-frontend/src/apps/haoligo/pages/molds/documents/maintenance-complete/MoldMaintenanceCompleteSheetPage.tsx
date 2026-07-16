@@ -108,7 +108,7 @@ function formatMaintRowLabel(r: MoldMaintenanceSheetRow): string {
   return [
     r.sheet_no && String(r.sheet_no).trim(),
     (r.source_order_no && String(r.source_order_no).trim()) || `维保单#${r.id}`,
-    r.primary_mold_code ? `· ${r.primary_mold_code}` : null,
+    r.primary_mold_code ? `${r.primary_mold_code}` : null,
   ]
     .filter(Boolean)
     .join(' ');
@@ -334,7 +334,7 @@ export function MoldMaintenanceCompleteSheetPage({
     }
     try {
       const sets = await listMoldUpkeepParamSets();
-      setUpkeepSetOptions(sets.map((s) => ({ value: s.id, label: `${s.code} · ${s.name}` })));
+      setUpkeepSetOptions(sets.map((s) => ({ value: s.id, label: `${s.code} - ${s.name}` })));
     } catch {
       setUpkeepSetOptions([]);
     }
@@ -1070,7 +1070,7 @@ export function MoldMaintenanceCompleteSheetPage({
         for (const it of items) {
           const rr = (it.repair_result && String(it.repair_result).trim()) || '';
           const rc = (it.repair_content && String(it.repair_content).trim()) || '';
-          if (rr || rc) parts.push([rr, rc].filter(Boolean).join(' · '));
+          if (rr || rc) parts.push([rr, rc].filter(Boolean).join(' - '));
         }
         return renderCompletionSummaryCell(parts.length ? parts.join('；') : '—');
       },

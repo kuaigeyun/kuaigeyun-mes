@@ -4136,7 +4136,7 @@ const BOMPage: React.FC = () => {
         <p style={{ marginBottom: 8 }}>{t('app.master-data.bom.setObsoleteConfirm')}</p>
         {obsoleteRecord && (
           <p style={{ marginBottom: 12, color: '#666' }}>
-            {obsoleteRecord.bomCode} · {t('app.master-data.bom.versionTitle')} {obsoleteRecord.version}
+            {obsoleteRecord.bomCode} - {t('app.master-data.bom.versionTitle')} {obsoleteRecord.version}
           </p>
         )}
         <AntForm.Item label={t('app.master-data.bom.obsoleteReason')}>

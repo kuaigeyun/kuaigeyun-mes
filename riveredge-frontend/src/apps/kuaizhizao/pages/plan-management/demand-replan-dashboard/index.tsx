@@ -586,7 +586,7 @@ const DemandReplanDashboardPage: React.FC = () => {
               </div>
               <div style={{ marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {eventTypeText[row.event_type as keyof typeof eventTypeText] || row.event_type} ·{' '}
+                  {eventTypeText[row.event_type as keyof typeof eventTypeText] || row.event_type} 
                   {sourceTypeText[row.source_type as keyof typeof sourceTypeText] || row.source_type}
                 </Typography.Text>
                 <Space size={4}>

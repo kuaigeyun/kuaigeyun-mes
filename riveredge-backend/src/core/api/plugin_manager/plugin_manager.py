@@ -11,7 +11,7 @@ from core.services.plugin_manager.plugin_manager import PluginManagerService
 from core.api.deps.deps import get_current_tenant
 from infra.infrastructure.database.database import get_db_connection
 
-router = APIRouter(prefix="/plugin-manager", tags=["Core · Plugin Manager"])
+router = APIRouter(prefix="/plugin-manager", tags=["Core - Plugin Manager"])
 
 
 def get_plugin_manager_service() -> PluginManagerService:

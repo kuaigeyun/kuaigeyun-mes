@@ -14,7 +14,7 @@ from infra.models.user import User
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.exceptions.exceptions import NotFoundError
 
-router = APIRouter(prefix="/help-documents", tags=["Core · Help Documents"])
+router = APIRouter(prefix="/help-documents", tags=["Core - Help Documents"])
 
 
 class HelpSectionResponse(BaseModel):

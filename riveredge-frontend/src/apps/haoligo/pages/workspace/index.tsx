@@ -92,7 +92,7 @@ function buildHazardTrendFromDailyPoints(
 }
 
 function joinMaintenanceMeta(parts: Array<string | null | undefined>): string {
-  return parts.map((p) => (p ?? '').trim()).filter(Boolean).join(' · ');
+  return parts.map((p) => (p ?? '').trim()).filter(Boolean).join(' - ');
 }
 
 function equipmentRemainingLabel(record: EquipmentMaintenanceAlertRow): string | null {

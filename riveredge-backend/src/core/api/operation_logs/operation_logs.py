@@ -18,7 +18,7 @@ from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 
-router = APIRouter(prefix="/operation-logs", tags=["Core · Operation Logs"])
+router = APIRouter(prefix="/operation-logs", tags=["Core - Operation Logs"])
 
 
 @router.get("", response_model=OperationLogListResponse)

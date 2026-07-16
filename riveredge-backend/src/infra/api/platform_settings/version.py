@@ -17,7 +17,7 @@ from loguru import logger
 from infra.config.infra_config import infra_settings
 from infra.infrastructure.http import get_http_client
 
-router = APIRouter(prefix="/platform", tags=["Platform · Version"])
+router = APIRouter(prefix="/platform", tags=["Platform - Version"])
 
 GITEE_REPO = "kuaigeyun/kuaigeyun"
 GITEE_API_URL = f"https://gitee.com/api/v5/repos/{GITEE_REPO}/commits?per_page=1"

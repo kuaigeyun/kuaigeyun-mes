@@ -81,7 +81,7 @@ function buildSummaryTask(
     childTasks.length === 0
       ? '空闲'
       : conflictCount > 0
-        ? `${childTasks.length} 道工序 · 冲突 ${conflictCount}`
+        ? `${childTasks.length} 道工序 - 冲突 ${conflictCount}`
         : `${childTasks.length} 道工序`;
   const label = name.trim();
   return {

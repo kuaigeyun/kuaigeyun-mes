@@ -35,20 +35,20 @@ _INVENTORY_FIELDS: FrozenSet[str] = frozenset({"total_amount", "amount", "unit_p
 
 # app:resource（小写）→ 该单据实际存在的可脱敏字段
 FIELD_PERMISSION_RESOURCE_FIELDS: dict[str, FrozenSet[str]] = {
-    # kuaizhizao · 销售
+    # kuaizhizao - 销售
     "kuaizhizao:quotation": _SALES_DOC_FIELDS,
     "kuaizhizao:sales-contract": _SALES_DOC_FIELDS,
     "kuaizhizao:sales-order": _SALES_DOC_FIELDS,
     "kuaizhizao:sales-order-change": _SALES_DOC_FIELDS,
     "kuaizhizao:demand": _SALES_DOC_FIELDS,
-    # kuaizhizao · 采购 / 外协
+    # kuaizhizao - 采购 / 外协
     "kuaizhizao:purchase-requisition": _PURCHASE_DOC_FIELDS,
     "kuaizhizao:purchase-order": _PURCHASE_DOC_FIELDS,
     "kuaizhizao:purchase-order-change": _PURCHASE_DOC_FIELDS,
     "kuaizhizao:outsource-order": _OUTSOURCE_FIELDS,
-    # kuaizhizao · 仓储
+    # kuaizhizao - 仓储
     "kuaizhizao:warehouse-management-inventory": _INVENTORY_FIELDS,
-    # kuaicaiwu · 应收 / 应付
+    # kuaicaiwu - 应收 / 应付
     "kuaicaiwu:receivable": _FINANCE_AR_FIELDS,
     "kuaicaiwu:sales-invoice": _FINANCE_AR_FIELDS,
     "kuaicaiwu:receipt": _FINANCE_AR_FIELDS,

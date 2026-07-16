@@ -27,7 +27,7 @@ class ValidationResponse(BaseModel):
         from_attributes = True
 
 
-router = APIRouter(prefix="/validation", tags=["App · Master Data · Data Validation"])
+router = APIRouter(prefix="/validation", tags=["App - Master Data - Data Validation"])
 
 
 def _http_exception_with_trace(

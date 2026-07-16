@@ -65,6 +65,9 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 from infra.services.business_config_service import BusinessConfigService
 from core.utils.timezone_utils import make_aware, now_utc, to_api_isoformat
 
+# 草稿下推采购单时，无默认供应商的物料归入同一分组（supplier_id=0，名称「待定供应商」）
+PURCHASE_ORDER_NO_SUPPLIER_GROUP = 0
+
 
 def _to_utc_aware(dt: Optional[datetime]) -> Optional[datetime]:
     """统一为 UTC timezone-aware，避免 naive/aware datetime 比较报错。"""
@@ -2416,7 +2419,7 @@ class DemandComputationService(AppBaseService):
                     created_wo_material_ids.add(item.material_id)
                     
             elif source_type == SOURCE_TYPE_BUY:
-                # 采购件：仅当配置了默认供应商时直接生成采购单；未配置的需通过「下推到采购申请」
+                # 采购件：正式下推须配置默认供应商；草稿下推允许无供应商（归入待定分组）
                 # 排除已下推且仍存在的采购单中的物料，避免重复
                 if item.material_id in already_pushed_po_material_ids:
                     continue
@@ -2425,10 +2428,15 @@ class DemandComputationService(AppBaseService):
                     if item.material_source_config:
                         sc = resolve_computation_item_source_config(item.material_source_config)
                         supplier_id = sc.get("default_supplier_id")
+                    group_key = None
                     if supplier_id:
-                        if supplier_id not in purchase_items_by_supplier:
-                            purchase_items_by_supplier[supplier_id] = []
-                        purchase_items_by_supplier[supplier_id].append(item)
+                        group_key = supplier_id
+                    elif allow_draft:
+                        group_key = PURCHASE_ORDER_NO_SUPPLIER_GROUP
+                    if group_key is not None:
+                        if group_key not in purchase_items_by_supplier:
+                            purchase_items_by_supplier[group_key] = []
+                        purchase_items_by_supplier[group_key].append(item)
                     
             elif source_type == SOURCE_TYPE_OUTSOURCE:
                 # 委外件：生成委外工单（按物料聚合，避免重复）
@@ -2491,16 +2499,21 @@ class DemandComputationService(AppBaseService):
                         work_orders.append(work_order)
                         created_wo_material_ids.add(item.material_id)
                 
-                # 如果有建议采购订单数量，仅当配置了默认供应商时生成采购单
+                # 如果有建议采购订单数量：正式下推须默认供应商，草稿下推允许无供应商
                 if item.material_id not in already_pushed_po_material_ids and item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
                     supplier_id = None
                     if item.material_source_config:
                         sc = resolve_computation_item_source_config(item.material_source_config)
                         supplier_id = sc.get("default_supplier_id")
+                    group_key = None
                     if supplier_id:
-                        if supplier_id not in purchase_items_by_supplier:
-                            purchase_items_by_supplier[supplier_id] = []
-                        purchase_items_by_supplier[supplier_id].append(item)
+                        group_key = supplier_id
+                    elif allow_draft:
+                        group_key = PURCHASE_ORDER_NO_SUPPLIER_GROUP
+                    if group_key is not None:
+                        if group_key not in purchase_items_by_supplier:
+                            purchase_items_by_supplier[group_key] = []
+                        purchase_items_by_supplier[group_key].append(item)
             
             else:
                 # #region agent log
@@ -2563,6 +2576,13 @@ class DemandComputationService(AppBaseService):
                 if "关联关系已存在" not in str(e):
                     raise
         
+        if (
+            generate_mode == "purchase_only"
+            and push_as_confirm
+            and not purchase_items_by_supplier
+        ):
+            raise BusinessLogicError("无已配置默认供应商的采购件，无法正式下推采购订单")
+
         # 按供应商分组生成采购订单（物料来源控制增强）
         for supplier_id, items_for_supplier in purchase_items_by_supplier.items():
             if items_for_supplier:
@@ -2680,6 +2700,12 @@ class DemandComputationService(AppBaseService):
         for po in purchase_orders:
             po_id = po.get("id")
             if not po_id:
+                continue
+            po_supplier_id = int(po.get("supplier_id") or 0)
+            if po_supplier_id <= 0:
+                logger.warning(
+                    f"需求计算下推 confirm：采购单 {po_id} 未指定供应商，跳过自动提交"
+                )
                 continue
             try:
                 submitted = await po_service.submit_purchase_order(
@@ -3258,10 +3284,12 @@ class DemandComputationService(AppBaseService):
         tenant_id: int,
         computation_id: int,
         items: List[DemandComputationItem],
+        push_mode: str = "draft",
     ) -> tuple[List[Dict[str, Any]], str, str, bool, Optional[str]]:
         """按与 generate_orders(purchase_only) 一致规则构建采购订单下推预览明细。"""
         from apps.master_data.models.material import Material
 
+        push_as_confirm = push_mode == "confirm"
         exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
         already_pushed_po = exclusions["po_material_ids"]
 
@@ -3284,6 +3312,7 @@ class DemandComputationService(AppBaseService):
         material_by_id = {m.id: m for m in material_rows}
 
         preview_items: List[Dict[str, Any]] = []
+        skipped_without_supplier = 0
         for item in items:
             if item.material_source_type != SOURCE_TYPE_BUY:
                 continue
@@ -3293,7 +3322,9 @@ class DemandComputationService(AppBaseService):
             if qty <= 0:
                 continue
             sc = resolve_computation_item_source_config(item.material_source_config)
-            if not sc.get("default_supplier_id"):
+            supplier_id = sc.get("default_supplier_id")
+            if push_as_confirm and not supplier_id:
+                skipped_without_supplier += 1
                 continue
             material = material_by_id.get(int(item.material_id)) if item.material_id is not None else None
             material_code = str(item.material_code or "").strip()
@@ -3317,22 +3348,49 @@ class DemandComputationService(AppBaseService):
                     "pushed_quantity": 0.0,
                     "max_push_quantity": qty,
                     "target_document": "purchase_order",
+                    "default_supplier_id": supplier_id,
+                    "supplier_pending": not bool(supplier_id),
                 }
             )
 
         pushable_count = sum(
             1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
         )
+        pending_supplier_count = sum(1 for row in preview_items if row.get("supplier_pending"))
         has_blocking = pushable_count == 0
         blocking_reason = (
             "demand_computation.push_purchase_order.no_purchase_items" if has_blocking else None
         )
-        summary = (
-            f"将按供应商生成采购订单，共 {pushable_count} 条已配置供应商的采购件明细"
-            if not has_blocking
-            else "无已配置默认供应商且未下推的采购件，无法下推采购订单"
-        )
-        tip = "确认后将按默认供应商分组生成采购订单。"
+        if has_blocking:
+            if push_as_confirm:
+                summary = "无已配置默认供应商且未下推的采购件，无法下推采购订单"
+            else:
+                summary = "无未下推的采购件，无法下推采购订单"
+            tip = (
+                "正式下推须先为采购件配置默认供应商。"
+                if push_as_confirm
+                else "请确认需求计算结果中存在可下推的采购件。"
+            )
+        elif push_as_confirm:
+            summary = (
+                f"将按供应商生成采购订单，共 {pushable_count} 条已配置供应商的采购件明细"
+            )
+            if skipped_without_supplier > 0:
+                tip = (
+                    f"另有 {skipped_without_supplier} 条采购件未配置默认供应商，"
+                    "正式下推将跳过；可改用草稿下推或先维护默认供应商。"
+                )
+            else:
+                tip = "确认后将按默认供应商分组生成采购订单并自动提交。"
+        elif pending_supplier_count > 0:
+            summary = (
+                f"将生成采购订单草稿，共 {pushable_count} 条采购件明细"
+                f"（{pending_supplier_count} 条待指定供应商）"
+            )
+            tip = "草稿下推允许未配置默认供应商，生成后可在采购单中补充供应商再提交。"
+        else:
+            summary = f"将按供应商生成采购订单草稿，共 {pushable_count} 条采购件明细"
+            tip = "确认后将按默认供应商分组生成采购订单草稿。"
         return preview_items, summary, tip, has_blocking, blocking_reason
 
     async def get_push_preview(
@@ -3341,16 +3399,22 @@ class DemandComputationService(AppBaseService):
         computation_id: int,
         push_config: Optional[Dict[str, Any]] = None,
         generate_mode: Optional[str] = None,
+        push_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         获取下推预览（不实际执行），用于下推前展示将生成的单据数量。
         push_config: { "production": "work_order", "purchase": "requisition"|"purchase_order" }
+        push_mode: draft=草稿下推，confirm=正式下推；缺省为 draft
         """
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
         if not computation:
             raise NotFoundError(f"需求计算不存在: {computation_id}")
         if computation.computation_status != "完成":
             raise BusinessLogicError("只能对已完成的计算进行下推")
+
+        resolved_push_mode = str(push_mode or "").strip().lower()
+        if resolved_push_mode not in ("draft", "confirm"):
+            resolved_push_mode = "draft"
 
         items = await DemandComputationItem.filter(
             tenant_id=tenant_id,
@@ -3409,15 +3473,25 @@ class DemandComputationService(AppBaseService):
 
         if purchase == "requisition" and (purchase_items_with_supplier > 0 or purchase_items_without_supplier > 0):
             purchase_requisition_count = 1
-        elif purchase == "purchase_order" and purchase_items_with_supplier > 0:
+        elif purchase == "purchase_order":
+            exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
+            already_pushed_po = exclusions["po_material_ids"]
             supplier_ids = set()
+            has_no_supplier_group = False
             for item in items:
-                if item.material_source_type == SOURCE_TYPE_BUY and item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
+                if (
+                    item.material_source_type == SOURCE_TYPE_BUY
+                    and item.suggested_purchase_order_quantity
+                    and item.suggested_purchase_order_quantity > 0
+                    and item.material_id not in already_pushed_po
+                ):
                     sc = resolve_computation_item_source_config(item.material_source_config)
                     sid = sc.get("default_supplier_id")
                     if sid:
                         supplier_ids.add(sid)
-            purchase_order_count = len(supplier_ids)
+                    elif resolved_push_mode != "confirm":
+                        has_no_supplier_group = True
+            purchase_order_count = len(supplier_ids) + (1 if has_no_supplier_group else 0)
 
         biz_config = BusinessConfigService()
         can_direct_wo = await biz_config.can_direct_generate_work_order_from_computation(tenant_id)
@@ -3466,7 +3540,10 @@ class DemandComputationService(AppBaseService):
         elif purchase == "purchase_order":
             po_items, po_summary, po_tip, po_blocking, po_reason = (
                 await self._build_purchase_order_pull_preview_items(
-                    tenant_id, computation_id, items
+                    tenant_id,
+                    computation_id,
+                    items,
+                    push_mode=resolved_push_mode,
                 )
             )
             preview_items.extend(po_items)
@@ -3637,7 +3714,7 @@ class DemandComputationService(AppBaseService):
                 if so:
                     sales_order_code = so.order_code
                     sales_order_name = (
-                        f"{so.order_code} · {so.customer_name}" if so.customer_name else so.order_code
+                        f"{so.order_code} - {so.customer_name}" if so.customer_name else so.order_code
                     )
 
             # 确定计划时间（交期锚定倒排结果）
@@ -3870,9 +3947,10 @@ class DemandComputationService(AppBaseService):
                 supplier_name = source_config.get("default_supplier_name", "待指定供应商")
                 unit_price = Decimal(str(source_config.get("purchase_price", 0)))
             
-            # 如果没有配置，使用占位值
+            # 如果没有配置，草稿使用待定供应商占位（supplier_id=0）
             if not supplier_id:
-                supplier_id = 1  # 需要手动指定
+                supplier_id = PURCHASE_ORDER_NO_SUPPLIER_GROUP
+                supplier_name = "待定供应商"
             
             # 确定交货日期
             delivery_date = item.procurement_completion_date or item.delivery_date
@@ -3971,16 +4049,22 @@ class DemandComputationService(AppBaseService):
             from datetime import datetime, date, timedelta
             from decimal import Decimal
             
-            # 验证供应商
-            supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=supplier_id)
-            if not supplier:
-                # 如果供应商不存在，尝试从第一个物料的配置中获取供应商名称
-                supplier_name = "待指定供应商"
-                if items and items[0].material_source_config:
-                    source_config = resolve_computation_item_source_config(items[0].material_source_config)
-                    supplier_name = source_config.get("default_supplier_name", "待指定供应商")
-            else:
-                supplier_name = supplier.name
+            # 验证供应商（supplier_id<=0 为草稿待定供应商，不查主数据）
+            supplier_name = "待定供应商"
+            if int(supplier_id or 0) > 0:
+                supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=supplier_id)
+                if not supplier:
+                    if items and items[0].material_source_config:
+                        source_config = resolve_computation_item_source_config(
+                            items[0].material_source_config
+                        )
+                        supplier_name = source_config.get(
+                            "default_supplier_name", "待定供应商"
+                        )
+                    else:
+                        supplier_name = "待定供应商"
+                else:
+                    supplier_name = supplier.name
             
             # 生成采购订单编码
             try:
@@ -4014,7 +4098,7 @@ class DemandComputationService(AppBaseService):
             order_data: Dict[str, Any] = {
                 "tenant_id": tenant_id,
                 "order_code": order_code,
-                "supplier_id": supplier_id,
+                "supplier_id": int(supplier_id or 0),
                 "supplier_name": supplier_name,
                 "order_date": date.today(),
                 "delivery_date": delivery_date,

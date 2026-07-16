@@ -1,5 +1,5 @@
 /**
- * 单据独立新建/编辑页顶栏操作区（取消 · 保存草稿/保存 · 创建/保存并提交）。
+ * 单据独立新建/编辑页顶栏操作区（取消 - 保存草稿/保存 - 创建/保存并提交）。
  * 文案真源：components.layoutTemplates.documentFormPage.*
  */
 import { Button, Space } from 'antd';

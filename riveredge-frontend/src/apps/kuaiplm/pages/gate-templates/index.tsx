@@ -433,7 +433,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                     {(() => {
                       const preferred = resolvePlmPreferredAudit(item as unknown as Record<string, unknown>);
-                      return `${item.template_code} · ${t('app.kuaiplm.gateTemplates.stageCount', { count: item.stage_count ?? 0 })} · ${preferred.operator} · ${preferred.time}`;
+                      return `${item.template_code} - ${t('app.kuaiplm.gateTemplates.stageCount', { count: item.stage_count ?? 0 })} - ${preferred.operator} - ${preferred.time}`;
                     })()}
                   </Typography.Text>
                 }

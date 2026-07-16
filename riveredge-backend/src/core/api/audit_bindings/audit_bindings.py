@@ -12,7 +12,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
-router = APIRouter(prefix="/audit-bindings", tags=["Core · Audit Bindings"])
+router = APIRouter(prefix="/audit-bindings", tags=["Core - Audit Bindings"])
 
 
 @router.get("", response_model=AuditBindingListResponse)

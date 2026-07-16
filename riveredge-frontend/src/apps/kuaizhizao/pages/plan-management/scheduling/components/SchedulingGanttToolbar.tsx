@@ -15,10 +15,8 @@ import type { ViewMode } from '../../../../components/GanttSchedulingChart/types
 interface SchedulingGanttToolbarProps {
   t: TFunction;
   ganttViewMode: ViewMode;
-  resourceViewStats: { stationCount: number; taskCount: number };
   shiftDays: number;
   selectedWorkOrderCount: number;
-  selectedOperationCount: number;
   batchActionLoading: boolean;
   canUpdate?: boolean;
   draftMode?: boolean;
@@ -35,6 +33,10 @@ interface SchedulingGanttToolbarProps {
   onViewModeChange: (mode: ViewMode) => void;
   onScrollToToday: () => void;
   aiTrigger?: React.ReactNode;
+  onAutoReschedule?: () => void;
+  onEditOperation?: () => void;
+  autoRescheduleLoading?: boolean;
+  canEditOperation?: boolean;
 }
 
 export interface SchedulingGanttToolbarNodes {
@@ -45,10 +47,8 @@ export interface SchedulingGanttToolbarNodes {
 function buildSchedulingGanttToolbar({
   t,
   ganttViewMode,
-  resourceViewStats,
   shiftDays,
   selectedWorkOrderCount,
-  selectedOperationCount,
   batchActionLoading,
   canUpdate = true,
   draftMode = false,
@@ -65,6 +65,10 @@ function buildSchedulingGanttToolbar({
   onViewModeChange,
   onScrollToToday,
   aiTrigger,
+  onAutoReschedule,
+  onEditOperation,
+  autoRescheduleLoading = false,
+  canEditOperation = false,
 }: SchedulingGanttToolbarProps): SchedulingGanttToolbarNodes {
   const title = (
     <Space wrap align="center" size={[8, 8]} className="scheduling-gantt-toolbar__title">
@@ -74,22 +78,6 @@ function buildSchedulingGanttToolbar({
       <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.fullscreenTip')}>
         <QuestionCircleOutlined className="scheduling-gantt-toolbar__help-icon" />
       </Tooltip>
-      <Typography.Text type="secondary">
-        {t('app.kuaizhizao.scheduling.ganttToolbar.stationOpStats', {
-          stations: resourceViewStats.stationCount,
-          operations: resourceViewStats.taskCount,
-        })}
-        {selectedWorkOrderCount > 0
-          ? selectedOperationCount > 0
-            ? t('app.kuaizhizao.scheduling.ganttToolbar.selectedStats', {
-                workOrders: selectedWorkOrderCount,
-                operations: selectedOperationCount,
-              })
-            : t('app.kuaizhizao.scheduling.ganttToolbar.selectedWorkOrdersOnly', {
-                workOrders: selectedWorkOrderCount,
-              })
-          : ''}
-      </Typography.Text>
       {canUpdate ? (
         <>
           <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.draftTooltip')}>
@@ -122,6 +110,19 @@ function buildSchedulingGanttToolbar({
                 {t('app.kuaizhizao.scheduling.ganttToolbar.undo')}
               </Button>
             </>
+          ) : null}
+          <Button
+            size="small"
+            disabled={selectedWorkOrderCount === 0}
+            loading={autoRescheduleLoading}
+            onClick={onAutoReschedule}
+          >
+            {t('app.kuaizhizao.scheduling.ganttToolbar.autoReschedule')}
+          </Button>
+          {canEditOperation ? (
+            <Button size="small" onClick={onEditOperation}>
+              {t('app.kuaizhizao.scheduling.ganttToolbar.editOperation')}
+            </Button>
           ) : null}
           <Button size="small" icon={<SettingOutlined />} onClick={onOpenConfig}>
             {t('app.kuaizhizao.scheduling.ganttToolbar.settings')}

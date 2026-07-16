@@ -314,7 +314,7 @@ const DocumentEfficiencyPage: React.FC = () => {
                 items={[
                   {
                     color: 'blue',
-                    children: <>数据刷新 · {lastLoadedAt || '-'}</>,
+                    children: <>数据刷新 - {lastLoadedAt || '-'}</>,
                   },
                 ]}
               />

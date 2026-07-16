@@ -24,7 +24,7 @@ from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
-router = APIRouter(prefix="/supply-chain", tags=["App · Master Data · Supply Chain"])
+router = APIRouter(prefix="/supply-chain", tags=["App - Master Data - Supply Chain"])
 
 
 def _http_exception(status_code: int, message: str, route: str = "/supply-chain"):

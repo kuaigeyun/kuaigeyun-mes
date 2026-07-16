@@ -20,7 +20,7 @@ from apps.kuaizhizao.schemas.spare_part_requisition import (
 )
 from apps.kuaizhizao.services.spare_part_requisition_service import SparePartRequisitionService
 
-router = APIRouter(prefix="/spare-part-requisitions", tags=["App · Kuaige Zhizao · Spare Part Requisitions"])
+router = APIRouter(prefix="/spare-part-requisitions", tags=["App - Kuaige Zhizao - Spare Part Requisitions"])
 service = SparePartRequisitionService()
 
 

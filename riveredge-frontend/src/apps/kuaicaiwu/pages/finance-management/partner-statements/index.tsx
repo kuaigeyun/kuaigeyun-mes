@@ -35,6 +35,7 @@ import { apiRequest } from '../../../../../services/api';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { formatDateTime } from '../../../../../utils/format';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
   financeDocCreatedUpdatedColumns,
@@ -47,6 +48,7 @@ const money = (v: number | string | undefined) =>
   `¥${Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const PS = 'app.kuaicaiwu.partnerStatement';
+const PARTNER_STATEMENT_RESOURCE = 'kuaicaiwu:partner-statement';
 
 const PartnerStatementsPage: React.FC = () => {
   const customerActionRef = useRef<ActionType>();
@@ -65,6 +67,7 @@ const PartnerStatementsPage: React.FC = () => {
   const [partnerOptions, setPartnerOptions] = useState<{ label: string; value: number }[]>([]);
   const [createForm] = ProForm.useForm();
   const { message: messageApi } = App.useApp();
+  const statementPerms = useResourcePermissions(PARTNER_STATEMENT_RESOURCE);
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -306,7 +309,7 @@ const PartnerStatementsPage: React.FC = () => {
             >
               {t('common.detail')}
             </Button>,
-            record.status === 'Draft' ? (
+            record.status === 'Draft' && statementPerms.canDelete ? (
               <Button {...rowActionKind('delete')}
                 key="del"
                 type="link"
@@ -321,7 +324,7 @@ const PartnerStatementsPage: React.FC = () => {
           ].filter(Boolean) as React.ReactNode[],
       },
     ],
-    [t, navigate, statusEnum, partnerOptions],
+    [t, navigate, statusEnum, partnerOptions, statementPerms.canDelete],
   );
 
   const previewLineColumns = useMemo(() => [

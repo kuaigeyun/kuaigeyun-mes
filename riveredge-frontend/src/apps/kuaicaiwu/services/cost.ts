@@ -19,10 +19,16 @@ export const costCalculationApi = {
   list: async (params?: any) => apiRequest(`${COST_BASE}/cost/calculations`, { method: 'GET', params }),
   calculateWorkOrderCost: async (data: any) => apiRequest(`${COST_BASE}/cost/calculations/work-order`, { method: 'POST', data }),
   calculateProductCost: async (data: any) => apiRequest(`${COST_BASE}/cost/calculations/product`, { method: 'POST', data }),
+  previewWorkOrderReadiness: async (workOrderId: number) =>
+    apiRequest(`${COST_BASE}/cost/calculations/work-order/${workOrderId}/readiness`, { method: 'GET' }),
+  previewProductReadiness: async (productId: number, quantity: number) =>
+    apiRequest(`${COST_BASE}/cost/calculations/product/${productId}/readiness`, {
+      method: 'GET',
+      params: { quantity },
+    }),
   get: async (uuid: string) => apiRequest(`${COST_BASE}/cost/calculations/${uuid}`, { method: 'GET' }),
   compareCosts: async (productId: number) => apiRequest(`${COST_BASE}/cost/calculations/product/${productId}/compare`, { method: 'GET' }),
   analyzeCost: async (productId: number) => apiRequest(`${COST_BASE}/cost/calculations/product/${productId}/analyze`, { method: 'GET' }),
-  getOptimization: async (productId: number) => apiRequest(`${COST_BASE}/cost/calculations/product/${productId}/optimization`, { method: 'GET' }),
   getPeriodSummary: async (year: number, month: number) => apiRequest(`${COST_BASE}/cost/calculations/period-summary`, { method: 'GET', params: { year, month } }),
   performMonthlySettlement: async (data: any) => apiRequest(`${COST_BASE}/cost/calculations/monthly-settlement`, { method: 'POST', data }),
 };
@@ -45,7 +51,6 @@ export const qualityCostApi = {
 
 export const costComparisonApi = {
   compare: async (data: any) => apiRequest(`${COST_BASE}/cost-comparison/compare`, { method: 'POST', data }),
-  compareBySourceType: async (data: any) => apiRequest(`${COST_BASE}/cost-comparison/compare-by-source-type`, { method: 'POST', data }),
 };
 
 export const costOptimizationApi = {
@@ -54,7 +59,5 @@ export const costOptimizationApi = {
 };
 
 export const costReportApi = {
-  analyzeTrend: async (data: any) => apiRequest(`${COST_BASE}/cost-report/trend`, { method: 'POST', data }),
-  analyzeStructure: async (data: any) => apiRequest(`${COST_BASE}/cost-report/structure`, { method: 'POST', data }),
   generate: async (data: any) => apiRequest(`${COST_BASE}/cost-report/generate`, { method: 'POST', data }),
 };

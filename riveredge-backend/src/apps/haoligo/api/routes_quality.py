@@ -42,7 +42,7 @@ from core.schemas.dataset import ExecuteQueryRequest
 from core.services.data.dataset_service import DatasetService
 from infra.models.user import User
 
-router = APIRouter(prefix="/quality", tags=["App · HaoliGO · 品质管理"])
+router = APIRouter(prefix="/quality", tags=["App - HaoliGO - 品质管理"])
 
 _ALLOWED_STATUSES = {"registered", "assigned", "processing", "completed"}
 _ALLOWED_ISSUE_KINDS = {"equipment", "product"}
@@ -886,7 +886,7 @@ async def dispatch_overdue_reminders(
 
 issues_router = APIRouter(
     prefix="/issues",
-    tags=["App · HaoliGO · 品质问题跟踪"],
+    tags=["App - HaoliGO - 品质问题跟踪"],
     dependencies=[Depends(require_haoligo_module_access("quality-issue-tracking"))],
 )
 
@@ -1247,7 +1247,7 @@ async def delete_quality_issue(
 
 complaints_router = APIRouter(
     prefix="/complaints",
-    tags=["App · HaoliGO · 客户投诉"],
+    tags=["App - HaoliGO - 客户投诉"],
     dependencies=[Depends(require_haoligo_module_access("customer-complaint"))],
 )
 
@@ -1584,7 +1584,7 @@ async def delete_customer_complaint(
 
 line_stops_router = APIRouter(
     prefix="/line-stops",
-    tags=["App · HaoliGO · 停线反馈"],
+    tags=["App - HaoliGO - 停线反馈"],
     dependencies=[Depends(require_haoligo_module_access("line-stop-feedback"))],
 )
 

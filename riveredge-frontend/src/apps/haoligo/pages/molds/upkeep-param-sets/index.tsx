@@ -250,7 +250,7 @@ const MoldUpkeepParamSetsPage: React.FC = () => {
     () =>
       allParams
         .filter((p) => !usedParamIds.has(p.id))
-        .map((p) => ({ label: `${p.code} · ${p.name}`, value: p.id })),
+        .map((p) => ({ label: `${p.code} - ${p.name}`, value: p.id })),
     [allParams, usedParamIds],
   );
 

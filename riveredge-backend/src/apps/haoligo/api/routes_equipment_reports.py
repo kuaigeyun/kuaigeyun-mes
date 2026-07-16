@@ -30,7 +30,7 @@ from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
-router = APIRouter(prefix="/equipment/reports", tags=["App · HaoliGO · 设备报表"])
+router = APIRouter(prefix="/equipment/reports", tags=["App - HaoliGO - 设备报表"])
 
 
 class EquipmentOperationalStatusSummaryOut(BaseModel):

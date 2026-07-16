@@ -19,7 +19,7 @@ from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.services.install_registration_service import InstallRegistrationService
 from infra.utils.client_ip import get_client_ip
 
-router = APIRouter(prefix="/install", tags=["Platform · Install Registration"])
+router = APIRouter(prefix="/install", tags=["Platform - Install Registration"])
 
 
 def _assert_registry_summary_admin_access(request: Request) -> None:

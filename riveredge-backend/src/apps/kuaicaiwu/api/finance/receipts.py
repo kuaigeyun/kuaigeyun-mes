@@ -24,7 +24,7 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import BusinessLogicError
 
-router = APIRouter(prefix="/receipts", tags=["App · Kuaicaiwu · Finance"])
+router = APIRouter(prefix="/receipts", tags=["App - Kuaicaiwu - Finance"])
 receipt_pull_service = ReceiptPullService()
 
 

@@ -295,7 +295,7 @@ const RdProjectDetailPage: React.FC = () => {
   const handlePassGate = (gate: RdProjectGate) => {
     if (!id || !gate.id) return;
     modalApi.confirm({
-      title: `${t('app.kuaiplm.common.actions.approve')} · ${gate.gate_name}`,
+      title: `${t('app.kuaiplm.common.actions.approve')} - ${gate.gate_name}`,
       content: t('app.kuaiplm.rdProjects.detail.gatePassConfirm'),
       onOk: async () => {
         try {
@@ -677,7 +677,7 @@ const RdProjectDetailPage: React.FC = () => {
             {t('app.kuaiplm.common.actions.allProjects')}
           </Button>
           <Typography.Title level={4} style={{ margin: 0 }}>
-            {project.project_code} · {project.project_name}
+            {project.project_code} - {project.project_name}
           </Typography.Title>
           <Tag color={projectType === 'DELIVERY' ? 'blue' : 'purple'}>
             {getKuaiplmProjectTypeText(t, projectType)}
@@ -775,7 +775,7 @@ const RdProjectDetailPage: React.FC = () => {
               <Typography.Text type="secondary">{t('app.kuaiplm.common.columns.progress')}</Typography.Text>
               <Progress percent={Math.round(progress)} status="active" />
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {t('app.kuaiplm.common.columns.gate')} 40% · {t('app.kuaiplm.common.columns.task')} 30% ·{' '}
+                {t('app.kuaiplm.common.columns.gate')} 40% - {t('app.kuaiplm.common.columns.task')} 30% 
                 {t('app.kuaiplm.rdProjects.detail.deliverable.name')} 30%
               </Typography.Text>
             </Col>
@@ -1061,7 +1061,7 @@ const RdProjectDetailPage: React.FC = () => {
       </FormModalTemplate>
 
       <FormModalTemplate
-        title={`${t('app.kuaiplm.common.actions.edit')} · ${editingGate?.gate_name ?? ''}`}
+        title={`${t('app.kuaiplm.common.actions.edit')} - ${editingGate?.gate_name ?? ''}`}
         open={gateEditOpen}
         grid
         onClose={() => {

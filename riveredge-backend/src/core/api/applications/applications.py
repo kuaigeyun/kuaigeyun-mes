@@ -32,7 +32,7 @@ from infra.services.license_center_service import LicenseCenterService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
-router = APIRouter(prefix="/applications", tags=["Core · Applications"])
+router = APIRouter(prefix="/applications", tags=["Core - Applications"])
 PRO_ACTIVATION_REGISTRY_KEY = "pro_app_activation_registry"
 
 

@@ -105,7 +105,7 @@ export const RdProjectGateStepper: React.FC<RdProjectGateStepperProps> = ({
                       : 'default'
               }
             >
-              {activeGate.gate_name} · {getKuaiplmGateStatusText(t, activeStatus)}
+              {activeGate.gate_name} - {getKuaiplmGateStatusText(t, activeStatus)}
             </Tag>
           ) : null}
         </SpaceLike>

@@ -129,9 +129,17 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
         lines = []
         for item in analysis.items:
             im = issue_map.get(item.material_id, "pick")
-            if not is_batching_material(im, None):
+            if not is_batching_material(im, getattr(item, "source_type", None)):
                 continue
-            shortage = item.shortage_quantity or Decimal("0")
+            # 配料口径：线边就绪量（已领 + 线边仓 + 关联工单供给），不含主仓。
+            # 主仓有货、线边不足，正是「去配料」要把料送到线边的场景。
+            required = item.required_quantity or Decimal("0")
+            line_ready = (
+                (item.picked_quantity or Decimal("0"))
+                + (item.line_side_available or Decimal("0"))
+                + (item.work_order_supply_quantity or Decimal("0"))
+            )
+            shortage = required - line_ready
             if shortage <= 0:
                 continue
             lines.append((item, shortage))

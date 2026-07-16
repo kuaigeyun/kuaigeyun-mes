@@ -11,7 +11,7 @@ from apps.kuaicaiwu.services.finance_aggregation_service import FinanceAggregati
 
 router = APIRouter(
     prefix="/management-report",
-    tags=["App · Kuaicaiwu · Management Accounting Reports"],
+    tags=["App - Kuaicaiwu - Management Accounting Reports"],
     dependencies=[Depends(require_kuaicaiwu_module_access("cost-report"))],
 )
 service = ManagementReportService()

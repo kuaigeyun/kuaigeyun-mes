@@ -129,14 +129,8 @@ const MaintenanceExecutionsPage = lazy(() => import('./pages/equipment-managemen
 const EquipmentRepairsPage = lazy(() => import('./pages/equipment-management/equipment-repairs'));
 const EquipmentCalibrationsPage = lazy(() => import('./pages/equipment-management/equipment-calibrations'));
 
-// 成本管理（分析中心已迁至快报表 kuaireport）
-const CostCalculationsPage = lazy(() => import('./pages/cost-management/cost-calculations'));
+// 成本管理（仅保留成本中心仪表盘，其余入口在快财务）
 const CostCenterDashboardPage = lazy(() => import('./pages/cost-management/dashboard'));
-const CostComparisonPage = lazy(() => import('./pages/cost-management/cost-comparison'));
-const CostRulesPage = lazy(() => import('./pages/cost-management/cost-rules'));
-const CostDetailsPage = lazy(() => import('./pages/cost-management/cost-details'));
-const CostOptimizationPage = lazy(() => import('./pages/cost-management/cost-optimization'));
-const CostReportPage = lazy(() => import('./pages/cost-management/cost-report'));
 
 // 仓储管理页面
 const WarehouseDashboard = lazy(() => import('./pages/warehouse-management/dashboard'));
@@ -472,14 +466,18 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/line-side-warehouse" element={withPageSuspense(LineSideWarehousePage)} />
       <Route path="warehouse-management/backflush-records" element={withPageSuspense(BackflushRecordsPage)} />
 
-      {/* 成本管理 */}
+      {/* 成本管理：仅成本中心；旧路径跳转快财务 */}
       <Route path="cost-management/dashboard" element={withPageSuspense(CostCenterDashboardPage)} />
-      <Route path="cost-management/cost-calculations" element={withPageSuspense(CostCalculationsPage)} />
-      <Route path="cost-management/cost-comparison" element={withPageSuspense(CostComparisonPage)} />
-      <Route path="cost-management/cost-rules" element={withPageSuspense(CostRulesPage)} />
-      <Route path="cost-management/cost-details" element={withPageSuspense(CostDetailsPage)} />
-      <Route path="cost-management/cost-optimization" element={withPageSuspense(CostOptimizationPage)} />
-      <Route path="cost-management/cost-report" element={withPageSuspense(CostReportPage)} />
+      <Route path="cost-management/cost-calculations" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations" replace />} />
+      <Route path="cost-management/cost-comparison" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations?cat=compare" replace />} />
+      <Route path="cost-management/cost-rules" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-rules" replace />} />
+      <Route path="cost-management/cost-details" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations?cat=trial&sub=production" replace />} />
+      <Route path="cost-management/cost-optimization" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations?cat=optimization" replace />} />
+      <Route path="cost-management/cost-report" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-report" replace />} />
+      <Route path="cost-management/production-cost" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations?cat=trial&sub=production" replace />} />
+      <Route path="cost-management/outsource-cost" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations?tab=outsource" replace />} />
+      <Route path="cost-management/purchase-cost" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations?cat=trial&sub=purchase" replace />} />
+      <Route path="cost-management/quality-cost" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations?cat=trial&sub=quality" replace />} />
 
       <Route path="sales-management/reports/sales-order-query" element={withPageSuspense(SalesOrderQueryPage)} />
       <Route path="sales-management/reports/sales-delivery-detail" element={withPageSuspense(SalesDeliveryDetailPage)} />

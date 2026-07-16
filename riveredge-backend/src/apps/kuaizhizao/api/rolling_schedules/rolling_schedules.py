@@ -19,7 +19,7 @@ from apps.kuaizhizao.schemas.rolling_schedule import (
 )
 from apps.kuaizhizao.services.rolling_schedule_service import RollingScheduleService
 
-router = APIRouter(prefix="/rolling-schedules", tags=["App · Kuaige Zhizao · Rolling Plan"])
+router = APIRouter(prefix="/rolling-schedules", tags=["App - Kuaige Zhizao - Rolling Plan"])
 
 _service = RollingScheduleService()
 

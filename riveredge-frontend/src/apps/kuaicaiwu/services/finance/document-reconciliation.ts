@@ -81,12 +81,6 @@ export const documentReconciliationService = {
   listOpenGaps: (params: DocumentReconciliationGapParams) =>
     apiRequest<DocumentReconciliationGapResult>(`${API}/gaps/open`, { method: 'GET', params }),
 
-  getPipelineSummary: () =>
-    apiRequest<FinancePipelineSummary>(`${API}/pipeline-summary`, { method: 'GET' }),
-
-  reconcileDocument: (documentType: string, documentId: number) =>
-    apiRequest<Record<string, unknown>>(`${API}/${documentType}/${documentId}`, { method: 'GET' }),
-
   getStandardChain: (flowType: 'sales' | 'purchase', documentType: string, documentId: number) =>
     apiRequest<Record<string, unknown>>(`${API}/chain/${flowType}/${documentType}/${documentId}`, { method: 'GET' }),
 

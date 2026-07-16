@@ -647,7 +647,7 @@ export const MemoTool = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <Text strong style={{ fontSize: 13 }}>{t('pages.dashboard.toolkit.memoTitle')}</Text>
         <Text type="secondary" style={{ fontSize: 11 }}>
-          {wc} {t('pages.dashboard.toolkit.wordCount')} · {lines} {t('pages.dashboard.toolkit.lineCount')}
+          {wc} {t('pages.dashboard.toolkit.wordCount')} - {lines} {t('pages.dashboard.toolkit.lineCount')}
         </Text>
       </div>
       <Text type="secondary" style={{ fontSize: 10, display: 'block', marginBottom: 6 }}>{t('pages.dashboard.toolkit.browserOnlyHint')}</Text>

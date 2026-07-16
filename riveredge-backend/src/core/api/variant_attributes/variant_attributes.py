@@ -24,7 +24,7 @@ from core.services.business.material_variant_attribute_service import MaterialVa
 from core.api.deps.deps import get_current_tenant, get_current_user_id
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/variant-attributes", tags=["Core · Variant Attributes"])
+router = APIRouter(prefix="/variant-attributes", tags=["Core - Variant Attributes"])
 
 
 # ==================== 预设 ====================

@@ -138,7 +138,7 @@ export function WorkOrderOperationStepsStrip({
                 justifyContent: 'center',
               }}
             >
-              <Tooltip title={`${step.name}${step.status === 'active' ? ` · ${step.progress}%` : ''}`}>
+              <Tooltip title={`${step.name}${step.status === 'active' ? ` - ${step.progress}%` : ''}`}>
                 {node}
               </Tooltip>
             </div>

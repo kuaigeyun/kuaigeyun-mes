@@ -1279,7 +1279,8 @@ class WarehouseService:
             warehouse_storage_areas = storage_area_map.get(warehouse.id, [])
             
             # 创建仓库响应对象（包含库区列表）
-            warehouse_response = WarehouseTreeResponse.model_validate(warehouse)
+            wh_full = WarehouseResponse.model_validate(warehouse)
+            warehouse_response = WarehouseTreeResponse.model_validate(wh_full.model_dump(mode="python"))
             warehouse_response.storage_areas = warehouse_storage_areas
             result.append(warehouse_response)
         

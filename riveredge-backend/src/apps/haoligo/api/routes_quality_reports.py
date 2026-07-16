@@ -13,7 +13,7 @@ from core.api.deps.access import AuthContext, get_auth_context
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
-router = APIRouter(prefix="/quality/reports", tags=["App · HaoliGO · 品质报表"])
+router = APIRouter(prefix="/quality/reports", tags=["App - HaoliGO - 品质报表"])
 
 _STATUS_LABELS = {
     "registered": "已登记",

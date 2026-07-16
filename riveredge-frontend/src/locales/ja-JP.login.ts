@@ -31,7 +31,7 @@ export default {
   'pages.login.provenanceLabel': 'ビルド出所',
   'pages.login.telemetryDisclosure': '任意テレメトリの説明',
   'components.iterationFloatButton.provenanceStatus.official_self_hosted': '公式リポジトリ 自ホスト',
-  'components.iterationFloatButton.provenanceStatus.official_unknown_commit': '公式ソース · commit 未検証',
+  'components.iterationFloatButton.provenanceStatus.official_unknown_commit': '公式ソース - commit 未検証',
   'components.iterationFloatButton.provenanceStatus.unverified_commit': '未検証 commit',
   'components.iterationFloatButton.provenanceStatus.unverified_build': '未検証ビルド',
   'components.iterationFloatButton.provenanceStatus.unknown': '出所不明',

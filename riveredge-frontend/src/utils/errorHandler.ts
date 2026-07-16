@@ -4,20 +4,14 @@
  * 提供统一的错误处理函数，确保所有错误都按照统一格式处理。
  * 
  * ⚠️ 注意：Ant Design 6.0 要求使用 App.useApp() 获取 message 实例，
- * 但工具函数无法使用 hooks，因此使用全局 message 实例。
+ * 工具函数无法使用 hooks，因此通过 antdAppApis 注册表获取（由 AntdAppBridge 注册）。
+ * 禁止回落到 antd 静态 API：静态 API 渲染在 ConfigProvider 之外，
+ * 无法消费主题 CSS 变量，会出现黑色图标、无间距的裸样式提示。
  */
 
-import { App } from 'antd';
+import { getAntdMessage } from './antdAppApis';
 
-// 使用全局 message 实例（通过 window.__ANTD_MESSAGE__ 设置）
-const getMessage = () => {
-  if (typeof window !== 'undefined' && (window as any).__ANTD_MESSAGE__) {
-    return (window as any).__ANTD_MESSAGE__;
-  }
-  // 降级方案：如果全局实例不存在，使用静态 API（会有警告，但不影响功能）
-  const { message } = require('antd');
-  return message;
-};
+const getMessage = () => getAntdMessage();
 
 /**
  * 将 FastAPI / Pydantic 的 detail（字符串、校验项数组或单对象）转为可展示文案，避免传入 message.error 导致 React 崩溃。

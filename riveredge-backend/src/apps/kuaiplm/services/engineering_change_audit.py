@@ -54,7 +54,7 @@ def _approval_content(change: Any) -> str:
     reason = (getattr(change, "change_reason", None) or "").strip()
     change_type = getattr(change, "change_type", None) or ""
     if reason and change_type:
-        return f"{change_type} · {reason}"
+        return f"{change_type} - {reason}"
     return reason or change_type or "工程变更自动提交审批"
 
 

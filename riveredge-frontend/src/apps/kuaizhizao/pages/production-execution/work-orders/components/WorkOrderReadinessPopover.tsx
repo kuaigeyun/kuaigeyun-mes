@@ -640,7 +640,21 @@ const WorkOrderReadinessPopoverContent: React.FC<{
 
   const callList = Array.isArray(calls) ? calls : []
 
-  const hasShortage = warehouseRows.some((r) => r.kittingApplicable && r.qtyVsRequired === 'short')
+  /** 配料启用：线边就绪不足（已领+线边+工单供给 < 需求）；主仓有货不计入，正是要配到线边 */
+  const hasBatchingShortage = items.some((raw) => {
+    const it = raw as Record<string, unknown>
+    if (it.kitting_applicable === false) return false
+    const required = Number(it.required_quantity ?? it.requiredQuantity ?? 0)
+    if (!Number.isFinite(required) || required <= 0) return false
+    const picked = Number(it.picked_quantity ?? it.pickedQuantity ?? 0)
+    const lineSide = Number(it.line_side_available ?? it.lineSideAvailable ?? 0)
+    const woSupply = Number(it.work_order_supply_quantity ?? it.workOrderSupplyQuantity ?? 0)
+    const lineReady =
+      (Number.isFinite(picked) ? picked : 0) +
+      (Number.isFinite(lineSide) ? lineSide : 0) +
+      (Number.isFinite(woSupply) ? woSupply : 0)
+    return lineReady < required
+  })
 
   const handleGoBatching = async () => {
     setPullLoading(true)
@@ -676,14 +690,14 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                 type="primary"
                 size="small"
                 loading={pullLoading}
-                disabled={!hasShortage}
+                disabled={!hasBatchingShortage}
                 onClick={handleGoBatching}
               >
                 去配料
               </Button>
-              {!hasShortage ? (
+              {!hasBatchingShortage ? (
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  当前无待配料缺料，无需配料
+                  {t('app.kuaizhizao.workOrder.readinessNoShortageHint')}
                 </Typography.Text>
               ) : null}
             </Space>

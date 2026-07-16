@@ -16,6 +16,9 @@
         "install:all": "npm install",
         "postinstall": "patch-package --patch-dir static/patch-package && node scripts/sync-libredwg-wasm.mjs",
         "clean": "rm -rf node_modules",
+        "test:e2e": "playwright test",
+        "test:e2e:login": "playwright test e2e/login.spec.ts",
+        "test:e2e:crawl": "playwright test e2e/menu-crawl.spec.ts --workers=2",
         "scan:row-action-kind": "node scripts/scan-row-action-kind.mjs"
     },
     "engines": {
@@ -95,6 +98,7 @@
         "zustand": "^5.0.0"
     },
     "devDependencies": {
+        "@playwright/test": "^1.61.1",
         "@types/dompurify": "^3.0.5",
         "@types/node": "^22.7.0",
         "@types/react": "18.3.1",

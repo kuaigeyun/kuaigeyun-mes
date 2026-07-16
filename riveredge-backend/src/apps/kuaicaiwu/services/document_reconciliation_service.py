@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -53,6 +53,116 @@ class DocumentReconciliationService:
         unsettled = Decimal(str(item.get("remaining_amount") or item.get("unsettled_amount") or 0))
         related = int(item.get("finance_related_count") or 0)
         return related <= 0 or unsettled > 0
+
+    async def _append_source_doc_finance_gaps(
+        self,
+        tenant_id: int,
+        *,
+        partner_type: str,
+        partner_id: int,
+        start_date: date,
+        end_date: date,
+        items: List[Dict[str, Any]],
+    ) -> None:
+        """扫描已确认出入库但尚未生成应收/应付的源业务单据缺口。"""
+        from apps.kuaicaiwu.models.receivable import Receivable
+        from apps.kuaicaiwu.models.payable import Payable
+
+        start_dt = datetime.combine(start_date, time.min)
+        end_dt = datetime.combine(end_date, time.max)
+        pt = partner_type.lower()
+
+        if pt in ("customer", "客户"):
+            from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+
+            deliveries = await SalesDelivery.filter(
+                tenant_id=tenant_id,
+                customer_id=partner_id,
+                status="已出库",
+                delivery_time__gte=start_dt,
+                delivery_time__lte=end_dt,
+                deleted_at__isnull=True,
+                total_amount__gt=0,
+            ).all()
+            if not deliveries:
+                return
+            delivery_ids = [int(d.id) for d in deliveries]
+            linked_ids = set(
+                await Receivable.filter(
+                    tenant_id=tenant_id,
+                    source_type="销售出库",
+                    source_id__in=delivery_ids,
+                    deleted_at__isnull=True,
+                ).values_list("source_id", flat=True)
+            )
+            for row in deliveries:
+                if int(row.id) in linked_ids:
+                    continue
+                amount = Decimal(str(row.total_amount or 0))
+                items.append(
+                    self._aggregation.enrich_gap_item(
+                        doc_type="sales_delivery",
+                        total_amount=amount,
+                        settled_amount=Decimal("0"),
+                        remaining_amount=amount,
+                        finance_related_count=0,
+                        base={
+                            "doc_type": "sales_delivery",
+                            "doc_id": row.id,
+                            "doc_code": row.delivery_code,
+                            "amount": float(amount),
+                            "remaining_amount": float(amount),
+                            "finance_related_count": 0,
+                            "gap_reason": "confirmed_delivery_without_receivable",
+                        },
+                    )
+                )
+            return
+
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+        receipts = await PurchaseReceipt.filter(
+            tenant_id=tenant_id,
+            supplier_id=partner_id,
+            status__in=["已入库", "已完成"],
+            receipt_time__gte=start_dt,
+            receipt_time__lte=end_dt,
+            deleted_at__isnull=True,
+            total_amount__gt=0,
+        ).all()
+        if not receipts:
+            return
+        receipt_ids = [int(r.id) for r in receipts]
+        linked_ids = set(
+            await Payable.filter(
+                tenant_id=tenant_id,
+                source_type="采购入库",
+                source_id__in=receipt_ids,
+                deleted_at__isnull=True,
+            ).values_list("source_id", flat=True)
+        )
+        for row in receipts:
+            if int(row.id) in linked_ids:
+                continue
+            amount = Decimal(str(row.total_amount or 0))
+            items.append(
+                self._aggregation.enrich_gap_item(
+                    doc_type="purchase_receipt",
+                    total_amount=amount,
+                    settled_amount=Decimal("0"),
+                    remaining_amount=amount,
+                    finance_related_count=0,
+                    base={
+                        "doc_type": "purchase_receipt",
+                        "doc_id": row.id,
+                        "doc_code": row.receipt_code,
+                        "amount": float(amount),
+                        "remaining_amount": float(amount),
+                        "finance_related_count": 0,
+                        "gap_reason": "confirmed_receipt_without_payable",
+                    },
+                )
+            )
 
     def _index_chain_nodes(self, trace: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
         buckets: Dict[str, List[Dict[str, Any]]] = {}
@@ -304,6 +414,14 @@ class DocumentReconciliationService:
 
         items: List[Dict[str, Any]] = []
         if partner_type.lower() in ("customer", "客户"):
+            await self._append_source_doc_finance_gaps(
+                tenant_id,
+                partner_type=partner_type,
+                partner_id=partner_id,
+                start_date=start_date,
+                end_date=end_date,
+                items=items,
+            )
             receivables = await Receivable.filter(
                 tenant_id=tenant_id,
                 customer_id=partner_id,
@@ -359,6 +477,14 @@ class DocumentReconciliationService:
                     )
                 )
         else:
+            await self._append_source_doc_finance_gaps(
+                tenant_id,
+                partner_type=partner_type,
+                partner_id=partner_id,
+                start_date=start_date,
+                end_date=end_date,
+                items=items,
+            )
             payables = await Payable.filter(
                 tenant_id=tenant_id,
                 supplier_id=partner_id,

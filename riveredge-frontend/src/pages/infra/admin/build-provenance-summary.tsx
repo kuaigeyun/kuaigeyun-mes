@@ -1,5 +1,5 @@
 /**
- * 平台管理 · 构建来源汇总（仅 kuaigeyun.com 官方 SaaS）
+ * 平台管理 - 构建来源汇总（仅 kuaigeyun.com 官方 SaaS）
  */
 
 import { useTranslation } from 'react-i18next';

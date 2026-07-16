@@ -797,7 +797,7 @@ const InspectionParamsPage: React.FC = () => {
       <DetailDrawerTemplate
         title={
           detailRecord
-            ? `${t('common.detail')} · ${detailRecord.code}`
+            ? `${t('common.detail')} - ${detailRecord.code}`
             : t('app.haoligo.equipment.inspectionParams.title')
         }
         open={detailOpen}

@@ -13,7 +13,7 @@ from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import AuthorizationError, NotFoundError, ValidationError
 from infra.models.user import User
 
-router = APIRouter(prefix="/documents", tags=["App · KU-AI · Documents"])
+router = APIRouter(prefix="/documents", tags=["App - KU-AI - Documents"])
 
 
 def _http_error(exc: Exception):

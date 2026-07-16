@@ -25,7 +25,7 @@ from apps.kuaizhizao.schemas.scheduling_config import (
 from apps.kuaizhizao.schemas.scheduling_constraints import SchedulingConstraints
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/scheduling-configs", tags=["App · Kuaige Zhizao · Scheduling Configuration"])
+router = APIRouter(prefix="/scheduling-configs", tags=["App - Kuaige Zhizao - Scheduling Configuration"])
 
 config_service = SchedulingConfigService()
 

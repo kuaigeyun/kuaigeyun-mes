@@ -23,7 +23,7 @@ from apps.kuaizhizao.services.report_service import ReportService
 report_service = ReportService()
 
 # 创建路由
-router = APIRouter(prefix="/reports", tags=["App · Kuaige Zhizao · Reports"])
+router = APIRouter(prefix="/reports", tags=["App - Kuaige Zhizao - Reports"])
 
 
 async def _execute_report(coro):

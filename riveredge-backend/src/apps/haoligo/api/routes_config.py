@@ -12,7 +12,7 @@ from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
-router = APIRouter(prefix="/config", tags=["App · HaoliGO · 配置"])
+router = APIRouter(prefix="/config", tags=["App - HaoliGO - 配置"])
 
 
 class LoadNotificationRulePresetsOut(BaseModel):

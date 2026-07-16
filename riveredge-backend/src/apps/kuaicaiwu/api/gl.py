@@ -11,14 +11,20 @@ from pydantic import Field
 
 from apps.kuaicaiwu.models.chart_of_account import ChartOfAccount
 from apps.kuaicaiwu.models.voucher_line import VoucherLine
+from apps.kuaicaiwu.api._kuaicaiwu_route_access import require_kuaicaiwu_module_access
 from apps.kuaicaiwu.services.period_close_service import PeriodCloseService
 from apps.kuaicaiwu.services.posting_service import PostingService
 from apps.kuaicaiwu.services.voucher_export_service import VoucherExportService
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_user
 from core.schemas.base import BaseSchema
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/gl", tags=["App · Kuaicaiwu · General Ledger"])
+router = APIRouter(
+    prefix="/gl",
+    tags=["App - Kuaicaiwu - General Ledger"],
+    dependencies=[Depends(require_kuaicaiwu_module_access("gl"))],
+)
 posting_service = PostingService()
 period_service = PeriodCloseService()
 export_service = VoucherExportService()
@@ -156,7 +162,12 @@ async def period_close_status(current_user: Any = Depends(get_current_user)):
 
 
 @router.post("/period-close/{year}/{month}")
-async def close_period(year: int, month: int, current_user: Any = Depends(get_current_user)):
+async def close_period(
+    year: int,
+    month: int,
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:gl:execute")),
+    current_user: Any = Depends(get_current_user),
+):
     try:
         return await period_service.close_period(
             current_user.tenant_id, year, month, current_user.id

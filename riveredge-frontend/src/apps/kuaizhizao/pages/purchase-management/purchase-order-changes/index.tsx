@@ -363,7 +363,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
     () =>
       suppliers.map((s) => ({
         value: Number(s.id),
-        label: [s.name, s.code].filter(Boolean).join(' · ') || String(s.id),
+        label: [s.name, s.code].filter(Boolean).join(' - ') || String(s.id),
       })),
     [suppliers],
   );
@@ -455,6 +455,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
         width: 100,
         sorter: true,
         hideInSearch: true,
+        align: 'right',
         render: (_, r) => renderDeltaAmount(r.delta_amount),
       },
       ...buildDocumentAuditColumns<PurchaseOrderChange>(t),

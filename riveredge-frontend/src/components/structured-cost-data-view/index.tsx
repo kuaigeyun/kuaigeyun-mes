@@ -20,6 +20,22 @@ const COST_FIELD_LABELS: Record<string, string> = {
   name: '名称',
   amount: '金额',
   price: '单价',
+  material_cost_breakdown: '材料成本明细',
+  labor_cost_breakdown: '人工成本明细',
+  manufacturing_cost_breakdown: '制造费用明细',
+  operation_name: '工序',
+  standard_time_hours: '标准工时(h)',
+  hourly_rate: '工时单价',
+  overhead_rate: '制造费率',
+  work_center_id: '工作中心',
+  rule_name: '核算规则',
+  calculation_method: '计算方法',
+  ratio: '分摊比例',
+  base_material_cost: '材料成本基数',
+  source: '数据来源',
+  unit_price: '单价',
+  material_code: '物料编码',
+  material_name: '物料名称',
 };
 
 function isPlainCostRecord(value: unknown): value is Record<string, unknown> {

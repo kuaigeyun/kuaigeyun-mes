@@ -26,8 +26,10 @@ import {
 } from '../../../utils/financeListCore';
 import { apiRequest } from '../../../../../services/api';
 import { settlementCapabilityReasonMessage } from '../../../utils/settlementCapabilityMessages';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
 const P = 'app.kuaicaiwu.settlement';
+const SETTLEMENT_RESOURCE = 'kuaicaiwu:settlement';
 const C = 'app.kuaicaiwu.common';
 
 const formatSettleMoney = (value: number) =>
@@ -35,6 +37,7 @@ const formatSettleMoney = (value: number) =>
 
 const SettlementPage: React.FC = () => {
   const { t } = useTranslation();
+  const settlementPerms = useResourcePermissions(SETTLEMENT_RESOURCE);
   const receivableActionRef = useRef<ActionType>();
   const receiptActionRef = useRef<ActionType>();
   const payableActionRef = useRef<ActionType>();
@@ -176,6 +179,7 @@ const SettlementPage: React.FC = () => {
   }, [selectedPayable?.id, selectedPayment?.id, resetApSelection, t]);
 
   const handleManualSettleReceivable = async () => {
+    if (!settlementPerms.canUpdate) return;
     if (!selectedReceivable || !selectedReceipt || !arPreviewData || arPreviewData.has_blocking_issues) {
       message.error(t(`${P}.invalidAmount`));
       return;
@@ -205,6 +209,7 @@ const SettlementPage: React.FC = () => {
   };
 
   const handleManualSettlePayable = async () => {
+    if (!settlementPerms.canUpdate) return;
     if (!selectedPayable || !selectedPayment || !apPreviewData || apPreviewData.has_blocking_issues) {
       message.error(t(`${P}.invalidAmount`));
       return;
@@ -394,6 +399,7 @@ const SettlementPage: React.FC = () => {
         valueType: 'option',
         width: 80,
         render: (_, record) => [
+          settlementPerms.canUpdate ? (
           <a
             key="m"
             onClick={() => {
@@ -405,11 +411,12 @@ const SettlementPage: React.FC = () => {
             }}
           >
             {t(`${P}.match`)}
-          </a>,
+          </a>
+          ) : null,
         ],
       },
     ],
-    [t, selectedReceivable, customerOptions],
+    [t, selectedReceivable, customerOptions, settlementPerms.canUpdate],
   );
 
   const payableColumns: ProColumns<Record<string, unknown>>[] = useMemo(
@@ -488,6 +495,7 @@ const SettlementPage: React.FC = () => {
         valueType: 'option',
         width: 80,
         render: (_, record) => [
+          settlementPerms.canUpdate ? (
           <a
             key="m"
             onClick={() => {
@@ -499,11 +507,12 @@ const SettlementPage: React.FC = () => {
             }}
           >
             {t(`${P}.match`)}
-          </a>,
+          </a>
+          ) : null,
         ],
       },
     ],
-    [t, selectedPayable, supplierOptions],
+    [t, selectedPayable, supplierOptions, settlementPerms.canUpdate],
   );
 
   useEffect(() => {
@@ -619,6 +628,7 @@ const SettlementPage: React.FC = () => {
         okText={t(`${P}.confirmSettle`)}
         okButtonProps={{
           disabled:
+            !settlementPerms.canUpdate ||
             arPreviewLoading ||
             !arPreviewData ||
             !!arPreviewData?.has_blocking_issues ||
@@ -732,6 +742,7 @@ const SettlementPage: React.FC = () => {
         okText={t(`${P}.confirmSettle`)}
         okButtonProps={{
           disabled:
+            !settlementPerms.canUpdate ||
             apPreviewLoading ||
             !apPreviewData ||
             !!apPreviewData?.has_blocking_issues ||

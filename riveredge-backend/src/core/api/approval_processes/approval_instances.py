@@ -21,7 +21,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/approval-instances", tags=["Core · Approval Instances"])
+router = APIRouter(prefix="/approval-instances", tags=["Core - Approval Instances"])
 
 
 @router.post("", response_model=ApprovalInstanceResponse, status_code=status.HTTP_201_CREATED)

@@ -1041,8 +1041,6 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             # 更新库存（扣减）及其前置的【防超发拦截】闭环
             try:
                 from apps.kuaizhizao.services.inventory_service import InventoryService
-                from apps.kuaizhizao.models.production_picking import ProductionPicking
-                from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
 
                 picking_items = await ProductionPickingItem.filter(
                     tenant_id=tenant_id, picking_id=picking_id
@@ -1285,19 +1283,37 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 raise BusinessLogicError(f"工单状态为 {work_order.status}，无法创建领料单")
             
             # 2. 从master_data获取产品的BOM并计算物料需求
+            # 领料只发一阶物料：自制/委外子件走各自工单或库存，不拆子 BOM
+            # （多阶展开会把半成品与其原材料同时列入领料需求，导致双重扣料）
             try:
                 material_requirements = await calculate_material_requirements_from_bom(
                     tenant_id=tenant_id,
                     material_id=work_order.product_id,
                     required_quantity=float(work_order.quantity),
-                    only_approved=True
+                    only_approved=True,
+                    for_kitting_analysis=True,
                 )
             except NotFoundError as e:
                 raise NotFoundError(f"产品 {work_order.product_code} 的BOM不存在或未审核: {e}")
             
             if not material_requirements:
                 raise ValidationError("BOM中没有物料明细，无法生成领料单")
-            
+
+            # 与齐套/缺料同口径：服务/委外/虚拟件及发料方式 none 的行不需实物发料，
+            # 不进领料单（服务类物料无库存，纳入会导致确认领料必然失败）
+            from apps.kuaizhizao.utils.issue_method_resolver import is_kitting_inventory_material
+
+            material_requirements = [
+                req
+                for req in material_requirements
+                if is_kitting_inventory_material(
+                    getattr(req, "issue_method", None),
+                    getattr(req, "component_type", None),
+                )
+            ]
+            if not material_requirements:
+                raise ValidationError("BOM中没有需要实物发料的物料明细，无法生成领料单")
+
             # 4. 生成领料单编码
             today = datetime.now().strftime("%Y%m%d")
             picking_code = await self.generate_code(tenant_id, "PRODUCTION_PICKING_CODE", prefix=f"PP{today}")
@@ -4280,6 +4296,22 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         P2-W-004: 发货通知与库存锁定闭环。
         出库确认后，按数量消费可匹配的“已通知”发货通知并置为“已出库”，释放预占。
         """
+        # notify 路径生成的出库单在创建时已回填 notice.sales_delivery_id，
+        # 下方按数量匹配的查询以 sales_delivery_id__isnull=True 过滤会漏掉它们，
+        # 导致通知单永远停留在「已通知」、预占无法释放。先按直接关联关闭。
+        direct_closed = await ShipmentNotice.filter(
+            tenant_id=tenant_id,
+            status="已通知",
+            deleted_at__isnull=True,
+            sales_delivery_id=delivery.id,
+        ).update(
+            status="已出库",
+            sales_delivery_code=delivery.delivery_code,
+            updated_by=updated_by,
+        )
+        if direct_closed:
+            return
+
         sales_order_id = getattr(delivery, "sales_order_id", None)
         if not sales_order_id:
             return
@@ -4695,6 +4727,12 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     ):
                         return updated_delivery
             total_amount = Decimal(str(delivery_row.total_amount))
+            from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
+
+            biz_date = datetime.now().date()
+            due_date = await resolve_partner_due_date(
+                tenant_id, "customer", int(delivery_row.customer_id), biz_date
+            )
             receivable_data = ReceivableCreate(
                 source_type="销售出库",
                 source_id=delivery_id,
@@ -4704,8 +4742,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 total_amount=float(total_amount),
                 received_amount=0.0,
                 remaining_amount=float(total_amount),
-                due_date=(datetime.now() + timedelta(days=30)).date(),
-                business_date=datetime.now().date(),
+                due_date=due_date,
+                business_date=biz_date,
                 status="未收款",
                 notes=f"由销售出库单 {delivery_row.delivery_code} 自动生成",
             )
@@ -4748,7 +4786,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             except Exception as rel_e:
                 logger.warning("创建销售出库→应收单 单据关联/会计事件失败: %s", rel_e)
         except Exception as e:
-            logger.error("自动生成应收单失败: %s", e)
+            logger.exception(
+                "销售出库单 %s 自动生成应收单失败: %s",
+                getattr(updated_delivery, "delivery_code", delivery_id),
+                e,
+            )
 
         return updated_delivery
 
@@ -5720,6 +5762,12 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 # 创建应付单
                 total_amount = Decimal(str(receipt_for_payable.total_amount or 0))
                 if total_amount > 0:
+                    from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
+
+                    biz_date = datetime.now().date()
+                    due_date = await resolve_partner_due_date(
+                        tenant_id, "supplier", int(receipt_for_payable.supplier_id), biz_date
+                    )
                     payable_data = PayableCreate(
                         source_type="采购入库",
                         source_id=receipt_id,
@@ -5729,8 +5777,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         total_amount=float(total_amount),
                         paid_amount=0.0,
                         remaining_amount=float(total_amount),
-                        due_date=(datetime.now() + timedelta(days=30)).date(),
-                        business_date=datetime.now().date(),
+                        due_date=due_date,
+                        business_date=biz_date,
                         status="未付款",
                         notes=f"由采购入库单 {receipt_for_payable.receipt_code} 自动生成"
                     )
@@ -5772,9 +5820,15 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                             notes=f"采购入库单 {receipt_for_payable.receipt_code} 自动生成应付单",
                         )
                     except Exception as rel_e:
-                        logger.warning("创建采购入库→应付单 单据关联/会计事件失败: %s", rel_e)
+                        logger.exception(
+                            "创建采购入库→应付单 单据关联/会计事件失败 receipt_code=%s",
+                            receipt_for_payable.receipt_code,
+                        )
             except Exception as e:
-                logger.warning(f"自动生成应付单失败（不影响入库确认结果）: {str(e)}")
+                logger.exception(
+                    "自动生成应付单失败 receipt_code=%s（不影响入库确认结果）",
+                    receipt_for_payable.receipt_code,
+                )
         # #region agent log
         _agent_debug_ndjson(
             "warehouse_service.confirm_receipt:after_tx",
@@ -7079,7 +7133,13 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 ret_obj = await SalesReturn.get(tenant_id=tenant_id, id=return_id)
                 total_amount = float(ret_obj.total_amount or 0)
                 if total_amount > 0 and ret_obj.customer_id:
+                    from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
+
                     receivable_service = ReceivableService()
+                    biz_date = datetime.now().date()
+                    due_date = await resolve_partner_due_date(
+                        tenant_id, "customer", int(ret_obj.customer_id), biz_date
+                    )
                     receivable_data = ReceivableCreate(
                         source_type="销售退货",
                         source_id=return_id,
@@ -7089,8 +7149,8 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         total_amount=total_amount,
                         received_amount=0.0,
                         remaining_amount=total_amount,
-                        due_date=(datetime.now() + timedelta(days=30)).date(),
-                        business_date=datetime.now().date(),
+                        due_date=due_date,
+                        business_date=biz_date,
                         status="已冲减",
                         notes=f"销售退货冲减-由销售退货单 {ret_obj.return_code} 自动生成",
                     )
@@ -7837,7 +7897,13 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 ret_obj = await PurchaseReturn.get(tenant_id=tenant_id, id=return_id)
                 total_amount = float(ret_obj.total_amount or 0)
                 if total_amount > 0 and ret_obj.supplier_id:
+                    from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
+
                     payable_service = PayableService()
+                    biz_date = datetime.now().date()
+                    due_date = await resolve_partner_due_date(
+                        tenant_id, "supplier", int(ret_obj.supplier_id), biz_date
+                    )
                     payable_data = PayableCreate(
                         source_type="采购退货",
                         source_id=return_id,
@@ -7847,8 +7913,8 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         total_amount=total_amount,
                         paid_amount=0.0,
                         remaining_amount=total_amount,
-                        due_date=(datetime.now() + timedelta(days=30)).date(),
-                        business_date=datetime.now().date(),
+                        due_date=due_date,
+                        business_date=biz_date,
                         status="已冲减",
                         notes=f"采购退货冲减-由采购退货单 {ret_obj.return_code} 自动生成",
                     )

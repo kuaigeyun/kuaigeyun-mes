@@ -20,7 +20,7 @@ LEGACY_DEFAULT_TITLES = {
     "快格云制造运营看板",
 }
 
-router = APIRouter(prefix="/dashboard", tags=["Core · Dashboard"])
+router = APIRouter(prefix="/dashboard", tags=["Core - Dashboard"])
 
 
 class BusinessBoardTitleResponse(BaseModel):

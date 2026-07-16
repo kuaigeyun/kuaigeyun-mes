@@ -347,7 +347,7 @@ class PayablePullService(AppBaseService[Payable]):
             )
             code = str(order.order_code or oid)
             name = str(getattr(order, "supplier_name", "") or "").strip()
-            label = f"{code} · {name}" if name else code
+            label = f"{code} - {name}" if name else code
             rows.append(
                 {
                     "id": oid,
@@ -412,7 +412,7 @@ class PayablePullService(AppBaseService[Payable]):
             )
             code = str(receipt.receipt_code or rid)
             name = str(getattr(receipt, "supplier_name", "") or "").strip()
-            label = f"{code} · {name}" if name else code
+            label = f"{code} - {name}" if name else code
             rows.append(
                 {
                     "id": rid,

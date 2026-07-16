@@ -24,7 +24,7 @@ from apps.kuaizhizao.services.outsource_material_receipt_service import Outsourc
 outsource_material_receipt_service = OutsourceMaterialReceiptService()
 
 router = APIRouter(
-    tags=["App · Kuaige Zhizao · Warehouse Inbound · Outsource Receipt"],
+    tags=["App - Kuaige Zhizao - Warehouse Inbound - Outsource Receipt"],
     dependencies=[Depends(require_kuaizhizao_module_access("inbound", resolve_print=False))],
 )
 

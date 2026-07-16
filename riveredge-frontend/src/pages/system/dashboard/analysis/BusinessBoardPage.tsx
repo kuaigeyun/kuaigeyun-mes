@@ -785,7 +785,7 @@ const BroadcastFeed: React.FC<BroadcastFeedProps> = ({ items, emptyText }) => {
                   whiteSpace: 'nowrap',
                 }}
               >
-                {it.operator_name} · {it.process_name} · {it.work_order_no}
+                {it.operator_name} - {it.process_name} - {it.work_order_no}
               </span>
               <span style={{ color: getBoardHud().emerald, fontFamily: clockFont, fontSize: 13 }}>
                 ✓{qualified}
@@ -2076,7 +2076,7 @@ const BusinessBoardPage: React.FC = () => {
         }}
       >
         <span>
-          SYS · OK · {broadcastItems.length.toString().padStart(2, '0')} BROADCAST · {processItems.length.toString().padStart(2, '0')} PROCESS
+          SYS - OK - {broadcastItems.length.toString().padStart(2, '0')} BROADCAST - {processItems.length.toString().padStart(2, '0')} PROCESS
         </span>
         <span>{currentTime}</span>
       </div>

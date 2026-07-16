@@ -10,6 +10,9 @@ export interface OperationNeedingStation {
   workCenterId?: number | null;
   workCenterName?: string | null;
   assignedStationId?: number | null;
+  assignedWorkerId?: number | null;
+  assignedEquipmentId?: number | null;
+  assignedMoldId?: number | null;
   plannedStartDate?: string | null;
   plannedEndDate?: string | null;
 }
@@ -39,6 +42,18 @@ export function getOperationsForStationPrep(wo: WorkOrderForGantt): OperationNee
       assignedStationId:
         op.assigned_station_id != null && Number(op.assigned_station_id) > 0
           ? Number(op.assigned_station_id)
+          : null,
+      assignedWorkerId:
+        op.assigned_worker_id != null && Number(op.assigned_worker_id) > 0
+          ? Number(op.assigned_worker_id)
+          : null,
+      assignedEquipmentId:
+        op.assigned_equipment_id != null && Number(op.assigned_equipment_id) > 0
+          ? Number(op.assigned_equipment_id)
+          : null,
+      assignedMoldId:
+        op.assigned_mold_id != null && Number(op.assigned_mold_id) > 0
+          ? Number(op.assigned_mold_id)
           : null,
       plannedStartDate: op.planned_start_date ?? null,
       plannedEndDate: op.planned_end_date ?? null,

@@ -139,7 +139,7 @@ export const MobileWorkplace: React.FC<MobileWorkplaceProps> = ({
             </Title>
             <Text type="secondary" style={{ fontSize: 13 }}>
               {currentTime.format('YYYY-MM-DD')}
-              {i18n.language?.startsWith('zh') ? ` · ${lunarDateStr}` : ''}
+              {i18n.language?.startsWith('zh') ? ` - ${lunarDateStr}` : ''}
             </Text>
           </div>
         </Space>

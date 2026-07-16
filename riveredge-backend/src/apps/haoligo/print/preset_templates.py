@@ -143,7 +143,7 @@ EQUIPMENT_UPKEEP_COMPLETE_PRINT_CONTENT = (
     <div><div class="sign-box">班组长确认</div></div>
     <div><div class="sign-box">设备管理确认</div></div>
   </div>
-  <div class="report-footer">本报告由 {{ print_user or '系统' }} 于 {{ print_time }} 打印 · 单据 ID {{ document_id }}</div>
+  <div class="report-footer">本报告由 {{ print_user or '系统' }} 于 {{ print_time }} 打印 - 单据 ID {{ document_id }}</div>
 </div>
 """
 )
@@ -226,7 +226,7 @@ MOLD_MAINTENANCE_COMPLETE_PRINT_CONTENT = (
   {% for line in line_items %}
   {% if line.upkeep_record_lines %}
   <div class="section">
-    <div class="section-title">保养记录 · {{ line.mold_code }}</div>
+    <div class="section-title">保养记录 - {{ line.mold_code }}</div>
     <table class="data-table">
       <thead><tr><th style="width:36px;">序</th><th>保养项</th><th>要求</th><th>记录值</th></tr></thead>
       <tbody>
@@ -262,7 +262,7 @@ MOLD_MAINTENANCE_COMPLETE_PRINT_CONTENT = (
     <div><div class="sign-box">班组长确认</div></div>
     <div><div class="sign-box">模具管理确认</div></div>
   </div>
-  <div class="report-footer">本报告由 {{ print_user or '系统' }} 于 {{ print_time }} 打印 · 单据 ID {{ document_id }}</div>
+  <div class="report-footer">本报告由 {{ print_user or '系统' }} 于 {{ print_time }} 打印 - 单据 ID {{ document_id }}</div>
 </div>
 """
 )
@@ -339,7 +339,7 @@ EQUIPMENT_SPOT_CHECK_PRINT_CONTENT = (
     <div><div class="sign-box">班组长确认</div></div>
     <div><div class="sign-box">设备管理确认</div></div>
   </div>
-  <div class="report-footer">本报告由 {{ print_user or '系统' }} 于 {{ print_time }} 打印 · 单据 ID {{ document_id }}</div>
+  <div class="report-footer">本报告由 {{ print_user or '系统' }} 于 {{ print_time }} 打印 - 单据 ID {{ document_id }}</div>
 </div>
 """
 )

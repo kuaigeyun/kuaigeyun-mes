@@ -60,9 +60,6 @@ export const bankAccountService = {
     return normalizeFinanceListResponse(res);
   },
 
-  get: (id: number) =>
-    apiRequest<BankAccount>(`${API}/${id}`, { method: 'GET' }),
-
   create: (data: Partial<BankAccount>) =>
     apiRequest<BankAccount>(API, { method: 'POST', data }),
 

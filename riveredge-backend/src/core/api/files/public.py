@@ -16,7 +16,7 @@ from infra.exceptions.exceptions import NotFoundError
 from loguru import logger
 
 # 创建路由（公开接口，不需要认证）
-router = APIRouter(prefix="/files", tags=["Core · Files (Public)"])
+router = APIRouter(prefix="/files", tags=["Core - Files (Public)"])
 
 # 平台品牌资源：favicon 常与 logo 共用同一 UUID（历史上传分类为 platform-logo）
 PUBLIC_BRANDING_CATEGORY_ALIASES: dict[str, list[str]] = {

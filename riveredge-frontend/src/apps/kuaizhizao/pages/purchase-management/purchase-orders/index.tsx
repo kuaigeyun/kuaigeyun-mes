@@ -554,7 +554,7 @@ const PurchaseOrdersPage: React.FC = () => {
     () =>
       supplierList.map((s: { id?: number; name?: string; code?: string; supplier_name?: string }) => ({
         value: Number(s.id),
-        label: [s.name ?? s.supplier_name, s.code].filter(Boolean).join(' · ') || String(s.id),
+        label: [s.name ?? s.supplier_name, s.code].filter(Boolean).join(' - ') || String(s.id),
       })),
     [supplierList],
   );

@@ -28,7 +28,7 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
-router = APIRouter(prefix="/files", tags=["Core · Files"])
+router = APIRouter(prefix="/files", tags=["Core - Files"])
 
 
 @router.post("/upload", response_model=FileUploadResponse, status_code=status.HTTP_201_CREATED)

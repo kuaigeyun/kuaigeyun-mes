@@ -52,7 +52,7 @@ const MonthlySettlementPage: React.FC = () => {
           product: item.product_name,
           quantity: item.quantity,
           hours: item.hours,
-          material_cost: item.material_cost || item.quantity * 10,
+          material_cost: item.material_cost ?? 0,
         })),
         totalHours: resp.total_hours,
       }));

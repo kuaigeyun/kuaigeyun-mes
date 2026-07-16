@@ -5,7 +5,8 @@
  */
 
 import React from 'react';
-import { Modal, Progress, message } from 'antd';
+import { Progress } from 'antd';
+import { getAntdMessage, getAntdModal } from './antdAppApis';
 
 /**
  * 批量导入配置
@@ -73,7 +74,7 @@ export async function batchImport<T = any>(
   } = config;
 
   // 显示导入进度 Modal
-  const progressModal = Modal.info({
+  const progressModal = getAntdModal().info({
     title,
     width: 600,
     content: (
@@ -178,7 +179,7 @@ export async function batchImport<T = any>(
 
   // 显示导入结果
   if (result.failureCount > 0) {
-    Modal.warning({
+    getAntdModal().warning({
       title: `${title}（部分失败）`,
       width: 700,
       content: (
@@ -190,7 +191,7 @@ export async function batchImport<T = any>(
       ),
     });
   } else {
-    message.success(`成功导入 ${result.successCount} 条数据`);
+    getAntdMessage().success(`成功导入 ${result.successCount} 条数据`);
   }
 
   if (onComplete) {
@@ -252,7 +253,7 @@ export function exportToCSV(
   link.click();
   URL.revokeObjectURL(url);
   
-  message.success(`导出成功，共 ${data.length} 条数据`);
+  getAntdMessage().success(`导出成功，共 ${data.length} 条数据`);
 }
 
 /**
@@ -277,7 +278,7 @@ export async function batchProcess<T = any>(
   };
 
   // 显示进度 Modal
-  const progressModal = Modal.info({
+  const progressModal = getAntdModal().info({
     title,
     width: 600,
     content: (
@@ -350,12 +351,12 @@ export async function batchProcess<T = any>(
 
   // 显示处理结果
   if (result.failureCount > 0) {
-    Modal.warning({
+    getAntdModal().warning({
       title: `${title}（部分失败）`,
       content: `成功处理 ${result.successCount} 条，失败 ${result.failureCount} 条`,
     });
   } else {
-    message.success(`成功处理 ${result.successCount} 条数据`);
+    getAntdMessage().success(`成功处理 ${result.successCount} 条数据`);
   }
 
   return result;

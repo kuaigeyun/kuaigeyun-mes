@@ -106,7 +106,7 @@ const MobileEquipmentHubPage: React.FC = () => {
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Card>
             <Typography.Title level={4} style={{ marginTop: 0 }}>
-              {equipment.code} · {equipment.name}
+              {equipment.code} - {equipment.name}
             </Typography.Title>
             <Descriptions column={1} size="small">
               <Descriptions.Item label={t('app.kuaizhizao.equipment.colType')}>

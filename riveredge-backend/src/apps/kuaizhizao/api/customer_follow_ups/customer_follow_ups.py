@@ -26,7 +26,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/customer-follow-ups",
-    tags=["App · Kuaige Zhizao · Customer Follow-up"],
+    tags=["App - Kuaige Zhizao - Customer Follow-up"],
     dependencies=[Depends(require_kuaizhizao_module_access("customer-follow-up"))],
 )
 

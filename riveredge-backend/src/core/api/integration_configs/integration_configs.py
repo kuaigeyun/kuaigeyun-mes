@@ -21,7 +21,7 @@ from core.services.integration.integration_config_service import (
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/integration-configs", tags=["Core · Integration Configs"])
+router = APIRouter(prefix="/integration-configs", tags=["Core - Integration Configs"])
 
 
 @router.post("/test-config", response_model=TestConnectionResponse)

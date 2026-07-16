@@ -17,7 +17,7 @@ from core.api.deps.access import AuthContext, get_auth_context
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
-router = APIRouter(prefix="/patrol/reports", tags=["App · HaoliGO · 巡查报表"])
+router = APIRouter(prefix="/patrol/reports", tags=["App - HaoliGO - 巡查报表"])
 
 REPORT_KEYS = frozenset(
     {

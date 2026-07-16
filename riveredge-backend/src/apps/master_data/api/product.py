@@ -18,7 +18,7 @@ from apps.master_data.schemas.product_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/product", tags=["App · Master Data · Product"])
+router = APIRouter(prefix="/product", tags=["App - Master Data - Product"])
 
 
 def _http_exception_with_trace(
@@ -88,6 +88,62 @@ async def list_products(
     - **is_active**: 是否启用（可选）
     """
     return await ProductService.list_products(tenant_id, skip, limit, is_active)
+
+
+@router.get("/grouped", response_model=Dict[str, List[ProductResponse]], summary="List products grouped")
+async def get_products_grouped(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    is_active: Optional[bool] = Query(True, description="是否只查询启用的产品（默认：true）")
+):
+    """
+    获取按首字母分组的产品列表
+
+    用于前端级联选择组件，支持按首字母快速定位产品。
+
+    - **is_active**: 是否只查询启用的产品（默认：true）
+
+    返回结构：
+    ```json
+    {
+      "A": [
+        {
+          "id": 1,
+          "uuid": "...",
+          "code": "A001",
+          "name": "产品A001",
+          "specification": "规格",
+          "unit": "pcs",
+          "version": "v1.0",
+          "isActive": true
+        }
+      ],
+      "B": [...],
+      "#": [...]  // 非字母开头的编码
+    }
+    ```
+    """
+    return await ProductService.get_products_grouped(tenant_id, is_active)
+
+
+@router.get("/by-category/{category_prefix}", response_model=List[ProductResponse], summary="List products by category prefix")
+async def get_products_by_category(
+    category_prefix: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    is_active: Optional[bool] = Query(True, description="是否只查询启用的产品（默认：true）")
+):
+    """
+    根据分类前缀获取产品列表
+
+    支持按产品编码前缀过滤，用于级联选择的子级查询。
+
+    - **category_prefix**: 分类前缀（如"A"表示A开头的编码，"#"表示非字母开头）
+    - **is_active**: 是否只查询启用的产品（默认：true）
+
+    返回按编码排序的产品列表。
+    """
+    return await ProductService.get_products_by_category(tenant_id, category_prefix, is_active)
 
 
 @router.get("/{product_uuid}", response_model=ProductResponse, summary="Get product")
@@ -193,75 +249,3 @@ async def get_product_bom(
         return await ProductService.get_product_bom(tenant_id, product_uuid)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
-
-# ==================== 级联选择相关接口 ====================
-
-@router.get("/grouped", response_model=Dict[str, List[ProductResponse]], summary="List products grouped")
-async def get_products_grouped(
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)],
-    is_active: Optional[bool] = Query(True, description="是否只查询启用的产品（默认：true）")
-):
-    """
-    获取按首字母分组的产品列表
-
-    用于前端级联选择组件，支持按首字母快速定位产品。
-
-    - **is_active**: 是否只查询启用的产品（默认：true）
-
-    返回结构：
-    ```json
-    {
-      "A": [
-        {
-          "id": 1,
-          "uuid": "...",
-          "code": "A001",
-          "name": "产品A001",
-          "specification": "规格",
-          "unit": "pcs",
-          "version": "v1.0",
-          "isActive": true
-        }
-      ],
-      "B": [...],
-      "#": [...]  // 非字母开头的编码
-    }
-    ```
-    """
-    return await ProductService.get_products_grouped(tenant_id, is_active)
-
-
-@router.get("/by-category/{category_prefix}", response_model=List[ProductResponse], summary="List products by category prefix")
-async def get_products_by_category(
-    category_prefix: str,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)],
-    is_active: Optional[bool] = Query(True, description="是否只查询启用的产品（默认：true）")
-):
-    """
-    根据分类前缀获取产品列表
-
-    支持按产品编码前缀过滤，用于级联选择的子级查询。
-
-    - **category_prefix**: 分类前缀（如"A"表示A开头的编码，"#"表示非字母开头）
-    - **is_active**: 是否只查询启用的产品（默认：true）
-
-    返回结构：
-    ```json
-    [
-      {
-        "id": 1,
-        "uuid": "...",
-        "code": "A001",
-        "name": "产品A001",
-        "specification": "规格",
-        "unit": "pcs",
-        "version": "v1.0",
-        "isActive": true
-      }
-    ]
-    ```
-    """
-    return await ProductService.get_products_by_category(tenant_id, category_prefix, is_active)

@@ -17,7 +17,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/molds/reports",
-    tags=["App · HaoliGO · 模具报表"],
+    tags=["App - HaoliGO - 模具报表"],
     dependencies=[Depends(require_haoligo_module_access("molds-reports-maintenance-alert"))],
 )
 

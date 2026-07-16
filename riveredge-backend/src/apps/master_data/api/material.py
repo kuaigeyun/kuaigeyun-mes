@@ -70,7 +70,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(
     prefix="/materials",
-    tags=["App · Master Data · Materials"],
+    tags=["App - Master Data - Materials"],
     dependencies=[Depends(require_master_data_module_access("material"))],
 )
 

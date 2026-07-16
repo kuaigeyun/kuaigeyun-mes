@@ -17,7 +17,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(
     prefix="/prepayments",
-    tags=["App · Kuaicaiwu · Prepayments"],
+    tags=["App - Kuaicaiwu - Prepayments"],
     dependencies=[Depends(require_kuaicaiwu_module_access("prepayment"))],
 )
 service = PrepaymentService()

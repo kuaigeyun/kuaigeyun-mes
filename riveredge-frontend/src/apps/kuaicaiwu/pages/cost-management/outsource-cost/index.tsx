@@ -15,6 +15,7 @@ import dayjs from 'dayjs';
 import { loadOutsourceWorkOrderSelectOptions, normalizeCostListRows, type CostSelectOption } from '../costSelectData';
 import { formatCalculationType, getSourceTypeTag } from '../../../utils/costUiLabels';
 import { formatDateTime } from '../../../../../utils/format';
+import { toApiDateString } from '../../../../../utils/formDate';
 
 interface OutsourceCostResult {
   material_id?: number;
@@ -82,7 +83,7 @@ const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false 
     try {
       setLoading(true);
       const data: any = {
-        calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
+        calculation_date: toApiDateString(values.calculation_date),
       };
       if (calculationMode === 'standard') {
         data.material_id = values.material_id;

@@ -31,7 +31,11 @@ import {
   buildReviewStatusEnum,
 } from '../../../utils/financeSharedOptions';
 import { canDeleteSalesInvoice } from '../../../utils/salesInvoiceUi';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { formatDateTime } from '../../../../../utils/format';
+
+const P = 'app.kuaicaiwu.salesInvoice';
+const SALES_INVOICE_RESOURCE = 'kuaicaiwu:sales-invoice';
 
 interface SalesInvoiceLine {
   id: number;
@@ -78,8 +82,6 @@ const TAX_RATE_OPTIONS = [
   { label: '0%', value: 0 },
 ];
 
-const P = 'app.kuaicaiwu.salesInvoice';
-
 function moneyCell(v: string | number | undefined | null) {
   const n = Number(v ?? 0);
   const abs = Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2 });
@@ -91,6 +93,7 @@ const SalesInvoiceDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
+  const salesInvoicePerms = useResourcePermissions(SALES_INVOICE_RESOURCE);
   const [form] = Form.useForm();
   const voidReasonRef = useRef('');
   const redLetterReasonRef = useRef('');
@@ -177,8 +180,6 @@ const SalesInvoiceDetailPage: React.FC = () => {
           invoice_type: v.invoice_type,
           tax_rate: Number(v.tax_rate),
           invoice_amount: Number(v.invoice_amount),
-          tax_amount: Number(v.tax_amount),
-          total_amount: Number(v.total_amount),
           notes: v.notes,
         },
       });
@@ -336,27 +337,27 @@ const SalesInvoiceDetailPage: React.FC = () => {
   const pageActions = data ? (
     <Space wrap size={8}>
       <Button onClick={() => navigate('/apps/kuaicaiwu/finance-management/sales-invoices')}>{t('app.kuaicaiwu.common.back')}</Button>
-      {editable ? (
+      {editable && salesInvoicePerms.canUpdate ? (
         <Button type="primary" onClick={save}>
           {t(`${P}.saveChanges`)}
         </Button>
       ) : null}
-      {data.review_status === '待审核' && ['未审核', 'DRAFT'].includes(String(data.status || '')) ? (
+      {data.review_status === '待审核' && ['未审核', 'DRAFT'].includes(String(data.status || '')) && salesInvoicePerms.canAction?.('audit') ? (
         <Button type="primary" onClick={approve}>
           {t(`${P}.approvePass`)}
         </Button>
       ) : null}
-      {editable ? (
+      {editable && salesInvoicePerms.canAction?.('revoke') ? (
         <Button danger onClick={openVoid}>
           {t('app.kuaicaiwu.common.void')}
         </Button>
       ) : null}
-      {canDeleteSalesInvoice(data) ? (
+      {canDeleteSalesInvoice(data) && salesInvoicePerms.canDelete ? (
         <Button danger onClick={remove}>
           {t('common.delete')}
         </Button>
       ) : null}
-      {showRedLetterBtn ? (
+      {showRedLetterBtn && salesInvoicePerms.canCreate ? (
         <Button onClick={openRedLetter}>
           {t(`${P}.applyRedLetter`)}
         </Button>
@@ -459,14 +460,6 @@ const SalesInvoiceDetailPage: React.FC = () => {
             <ProFormDigit
               name="invoice_amount"
               label={t(`${P}.col.exclTax`)}
-              min={-1e12}
-              fieldProps={{ precision: 2 }}
-              rules={[{ required: true }]}
-            />
-            <ProFormDigit name="tax_amount" label={t(`${P}.col.taxAmount`)} min={-1e12} fieldProps={{ precision: 2 }} rules={[{ required: true }]} />
-            <ProFormDigit
-              name="total_amount"
-              label={t('app.kuaicaiwu.invoice.col.totalAmount')}
               min={-1e12}
               fieldProps={{ precision: 2 }}
               rules={[{ required: true }]}

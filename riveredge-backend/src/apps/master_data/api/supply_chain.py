@@ -25,7 +25,7 @@ from apps.master_data.schemas.supply_chain_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/supply-chain", tags=["App · Master Data · Supply Chain"])
+router = APIRouter(prefix="/supply-chain", tags=["App - Master Data - Supply Chain"])
 
 
 def _http_exception_with_trace(

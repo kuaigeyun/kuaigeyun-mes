@@ -56,7 +56,7 @@ scrap_record_service = ScrapRecordService()
 defect_record_service = DefectRecordService()
 material_binding_service = MaterialBindingService()
 
-router = APIRouter(tags=["App · Kuaige Zhizao · Production Execution"])
+router = APIRouter(tags=["App - Kuaige Zhizao - Production Execution"])
 
 
 def _parse_iso_datetime_or_400(value: Optional[str], field_name: str) -> Optional[datetime]:

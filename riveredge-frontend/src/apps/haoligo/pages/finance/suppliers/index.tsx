@@ -18,7 +18,7 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Descriptions, Modal, Space, Table, Tag, Typography } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -382,27 +382,10 @@ const FinanceSuppliersPage: React.FC = () => {
       width: 160,
       fixed: 'right',
       render: (_, record) => [
-        <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => void openDetail(record)}>
-          详情
-        </Button>,
-        perms.canUpdate ? (
-          <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEditSupplier(record)}>
-            编辑
-          </Button>
-        ) : null,
-        perms.canDelete ? (
-          <Button
-            key="delete"
-            type="link"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDeleteSupplier(record)}
-          >
-            删除
-          </Button>
-        ) : null,
-      ].filter(Boolean),
+        <Button key="view" {...rowActionKind('read')} onClick={() => void openDetail(record)} />,
+        <Button key="edit" {...rowActionKind('update')} onClick={() => handleEditSupplier(record)} />,
+        <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteSupplier(record)} />,
+      ],
     },
   ];
 
@@ -509,7 +492,6 @@ const FinanceSuppliersPage: React.FC = () => {
             const rows = await listFinanceSuppliers({ keyword });
             return { data: rows, success: true, total: rows.length };
           }}
-          rowActionKind={rowActionKind.link}
         />
       </ListPageTemplate>
 
@@ -662,7 +644,7 @@ const FinanceSuppliersPage: React.FC = () => {
       </FormModalTemplate>
 
       <FormModalTemplate
-        title={changePriceTarget ? `改价 · ${changePriceTarget.material_code}` : '改价'}
+        title={changePriceTarget ? `改价 - ${changePriceTarget.material_code}` : '改价'}
         open={changePriceModalOpen}
         onClose={() => setChangePriceModalOpen(false)}
         formRef={changePriceFormRef}

@@ -154,7 +154,7 @@ export const HAOLIGO_NOTIFICATION_ACTION_OPTIONS: Record<
 
       labelKey: 'app.haoligo.settings.notifications.action.mold_trial.trial_failure_pending',
 
-      fallback: '试模不合格·待处理',
+      fallback: '试模不合格-待处理',
 
     },
 
@@ -164,7 +164,7 @@ export const HAOLIGO_NOTIFICATION_ACTION_OPTIONS: Record<
 
       labelKey: 'app.haoligo.settings.notifications.action.mold_trial.trial_failure_repair',
 
-      fallback: '试模不合格·立即送修',
+      fallback: '试模不合格-立即送修',
 
     },
 

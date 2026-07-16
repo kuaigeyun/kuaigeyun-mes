@@ -40,7 +40,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(
     prefix="/factory",
-    tags=["App · Master Data · Factory"],
+    tags=["App - Master Data - Factory"],
     dependencies=[Depends(require_master_data_module_access("factory"))],
 )
 

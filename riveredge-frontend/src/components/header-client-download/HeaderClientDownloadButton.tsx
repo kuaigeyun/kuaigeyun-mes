@@ -45,7 +45,7 @@ function DownloadQrCard({
         <div>
           <Text type="secondary" style={{ fontSize: 12 }}>
             v{item.app_version}
-            {sizeLabel ? ` · ${sizeLabel}` : ''}
+            {sizeLabel ? ` - ${sizeLabel}` : ''}
           </Text>
         </div>
       </div>

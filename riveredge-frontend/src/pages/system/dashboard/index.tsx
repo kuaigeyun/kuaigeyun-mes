@@ -722,7 +722,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="dashboard-feed-item__row">
                       <p className="dashboard-feed-item__meta dashboard-feed-item__main">
-                        {`${item.work_order_no}${item.product_name ? ` · ${item.product_name}` : ''}`}
+                        {`${item.work_order_no}${item.product_name ? ` - ${item.product_name}` : ''}`}
                       </p>
                       <div className="dashboard-feed-item__stats">
                         <span className="dashboard-feed-item__stat--ok">

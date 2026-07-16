@@ -13,7 +13,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/print",
-    tags=["App · Kuaige Zhizao · 打印"],
+    tags=["App - Kuaige Zhizao - 打印"],
 )
 
 

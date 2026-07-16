@@ -170,7 +170,7 @@ class MaterialHealthService:
                         category="completeness" if field not in ("specification",) else "completeness",
                         severity=severity,  # type: ignore[arg-type]
                         title=message,
-                        description=f"物料 {m.main_code} · {m.name}",
+                        description=f"物料 {m.main_code} - {m.name}",
                         materials=[_material_ref(m)],
                         field=field,
                     )
@@ -182,7 +182,7 @@ class MaterialHealthService:
                         category="reasonableness",
                         severity=severity,  # type: ignore[arg-type]
                         title=message,
-                        description=f"物料 {m.main_code} · {m.name}",
+                        description=f"物料 {m.main_code} - {m.name}",
                         materials=[_material_ref(m)],
                         field=field,
                     )

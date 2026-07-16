@@ -15,7 +15,7 @@ from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.models.user import User
 from infra.services.platform_settings_service import PlatformSettingsService
 
-router = APIRouter(prefix="/client-releases", tags=["Platform · Client Releases"])
+router = APIRouter(prefix="/client-releases", tags=["Platform - Client Releases"])
 
 
 class ClientProductOut(BaseModel):
@@ -376,7 +376,7 @@ async def delete_client_release(
     return {"success": True}
 
 
-public_router = APIRouter(prefix="/clients", tags=["Platform · Client Releases (Public)"])
+public_router = APIRouter(prefix="/clients", tags=["Platform - Client Releases (Public)"])
 
 
 @public_router.get("/login-downloads", response_model=LoginClientDownloadsOut, summary="登录页终端下载（公开）")
@@ -446,7 +446,7 @@ async def get_client_updates_manifest(
     return manifest
 
 
-tenant_router = APIRouter(prefix="/client-releases", tags=["Core · Client Releases"])
+tenant_router = APIRouter(prefix="/client-releases", tags=["Core - Client Releases"])
 
 
 class TenantClientDownloadOut(BaseModel):

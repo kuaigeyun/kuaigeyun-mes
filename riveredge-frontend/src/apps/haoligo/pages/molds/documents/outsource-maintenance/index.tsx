@@ -183,7 +183,7 @@ type DetailAttachmentPreview = {
 const formatMoldWarehouseLabel = (name?: string | null, code?: string | null) => {
   const n = (name || '').trim();
   const c = (code || '').trim();
-  if (n && c) return `${c} · ${n}`;
+  if (n && c) return `${c} - ${n}`;
   return n || c || '—';
 };
 
@@ -283,7 +283,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
     const mapped = list.map((s) => ({
       key: s.uuid,
       value: s.name,
-      label: s.code ? `${s.code} · ${s.name}` : s.name,
+      label: s.code ? `${s.code} - ${s.name}` : s.name,
       code: s.code ?? '',
     }));
     supplierOptionsRef.current = mapped;

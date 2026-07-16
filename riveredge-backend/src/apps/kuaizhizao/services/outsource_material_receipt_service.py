@@ -435,7 +435,13 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
             return
 
         try:
+            from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
+
             payable_service = PayableService()
+            biz_date = datetime.now().date()
+            due_date = await resolve_partner_due_date(
+                tenant_id, "supplier", int(outsource_work_order.supplier_id), biz_date
+            )
             payable_data = PayableCreate(
                 source_type=PAYABLE_SOURCE_OUTSOURCE_RECEIPT,
                 source_id=material_receipt.id,
@@ -445,8 +451,8 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                 total_amount=float(total_amount),
                 paid_amount=0.0,
                 remaining_amount=float(total_amount),
-                due_date=(datetime.now() + timedelta(days=30)).date(),
-                business_date=datetime.now().date(),
+                due_date=due_date,
+                business_date=biz_date,
                 status="未付款",
                 notes=f"由委外收货单 {material_receipt.code} 自动生成",
             )

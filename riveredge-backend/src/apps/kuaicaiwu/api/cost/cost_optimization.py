@@ -20,12 +20,17 @@ from apps.kuaizhizao.schemas.cost import (
     CostOptimizationBatchResponse,
 )
 from apps.kuaizhizao.services.cost_optimization_service import CostOptimizationService
+from apps.kuaicaiwu.api._kuaicaiwu_route_access import require_kuaicaiwu_module_access
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
-router = APIRouter(prefix="/cost-optimization", tags=["App · Kuaicaiwu · Cost Optimization"])
+router = APIRouter(
+    prefix="/cost-optimization",
+    tags=["App - Kuaicaiwu - Cost Optimization"],
+    dependencies=[Depends(require_kuaicaiwu_module_access("cost"))],
+)
 
 
 def _http_exception_with_trace(

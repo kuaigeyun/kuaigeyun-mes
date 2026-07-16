@@ -11,7 +11,7 @@ from .dashboard import router as dashboard_router
 from .phase2 import router as phase2_router
 from .gate_templates import router as gate_templates_router
 
-router = APIRouter(tags=["App · Kuaiplm · Overview"])
+router = APIRouter(tags=["App - Kuaiplm - Overview"])
 
 router.include_router(projects_router)
 router.include_router(knowledge_router)

@@ -23,7 +23,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/finance/payments",
-    tags=["App · HaoliGO · 财务管理 · 付款"],
+    tags=["App - HaoliGO - 财务管理 - 付款"],
     dependencies=[Depends(require_haoligo_module_access("finance-payments"))],
 )
 

@@ -32,7 +32,7 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.rework_order import ReworkOrder
 from loguru import logger
 
-router = APIRouter(prefix="/dashboard", tags=["App · Kuaige Zhizao · Dashboard"])
+router = APIRouter(prefix="/dashboard", tags=["App - Kuaige Zhizao - Dashboard"])
 
 _MONEY_META_KEYS = frozenset({
     "amount", "total_amount", "price", "unit_price", "total_value", "total_price",
@@ -61,7 +61,7 @@ def _format_qty(value: object) -> Optional[str]:
 
 def _join_parts(*parts: Optional[str]) -> Optional[str]:
     items = [part.strip() for part in parts if part and str(part).strip()]
-    return " · ".join(items) if items else None
+    return " - ".join(items) if items else None
 
 
 def _todo_meta(**kwargs: object) -> Optional[dict[str, str]]:

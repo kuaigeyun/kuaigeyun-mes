@@ -304,6 +304,25 @@ const RollingSchedulingPage: React.FC = () => {
           ),
       },
       {
+        title: t('app.kuaizhizao.rollingScheduling.col.diagnostics'),
+        dataIndex: 'scheduling_diagnostics',
+        width: 160,
+        render: (_: unknown, row: RollingScheduleLine) => {
+          const items = row.scheduling_diagnostics ?? [];
+          if (!items.length) return '—';
+          return (
+            <Space size={4} wrap>
+              {items.slice(0, 2).map((item) => (
+                <Tag key={item} color="warning">
+                  {item}
+                </Tag>
+              ))}
+              {items.length > 2 ? <Tag>+{items.length - 2}</Tag> : null}
+            </Space>
+          );
+        },
+      },
+      {
         title: t('app.kuaizhizao.rollingScheduling.col.status'),
         dataIndex: 'work_order_status',
         width: 80,

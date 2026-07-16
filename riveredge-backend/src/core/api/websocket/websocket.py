@@ -17,7 +17,7 @@ from infra.models.user import User
 from infra.api.deps.deps import get_current_user as get_current_user_dep
 from infra.api.deps.deps import oauth2_scheme
 
-router = APIRouter(prefix="/ws", tags=["Core · Web Socket"])
+router = APIRouter(prefix="/ws", tags=["Core - Web Socket"])
 
 
 async def get_user_from_token(token: str) -> Optional[User]:

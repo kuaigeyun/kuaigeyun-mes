@@ -12,10 +12,17 @@ from apps.kuaizhizao.schemas.visual_scheduling import (
     VisualSchedulingScanResponse,
     VisualSchedulingValidateRequest,
     VisualSchedulingValidateResponse,
+    SchedulingRateCoverageRequest,
+    SchedulingRateCoverageResponse,
+    SchedulingAutoRescheduleRequest,
+    SchedulingAutoRescheduleResponse,
 )
 from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingService
+from apps.kuaizhizao.services.scheduling_rate_coverage_service import check_scheduling_rate_coverage
+from apps.kuaizhizao.services.scheduling_engine.registry import get_scheduling_engine
+from apps.kuaizhizao.services.scheduling_engine.base import SchedulingPlanRequest
 
-router = APIRouter(prefix="/scheduling", tags=["App · Kuaige Zhizao · Visual Scheduling"])
+router = APIRouter(prefix="/scheduling", tags=["App - Kuaige Zhizao - Visual Scheduling"])
 
 _service = VisualSchedulingService()
 
@@ -81,3 +88,49 @@ async def validate_schedule_adjustments(
         operation_station_updates=[u.model_dump() for u in body.operation_station_updates],
     )
     return VisualSchedulingValidateResponse(**raw)
+
+
+@router.post(
+    "/rate-coverage",
+    response_model=SchedulingRateCoverageResponse,
+    summary="Check performance rate coverage for dispatch assignments",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:read"))],
+)
+async def check_rate_coverage(
+    body: SchedulingRateCoverageRequest,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+) -> SchedulingRateCoverageResponse:
+    del current_user
+    raw = await check_scheduling_rate_coverage(
+        tenant_id,
+        [item.model_dump() for item in body.items],
+    )
+    return SchedulingRateCoverageResponse(**raw)
+
+
+@router.post(
+    "/auto-reschedule",
+    response_model=SchedulingAutoRescheduleResponse,
+    summary="Auto-reschedule dry-run proposal",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:update"))],
+)
+async def auto_reschedule(
+    body: SchedulingAutoRescheduleRequest,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+) -> SchedulingAutoRescheduleResponse:
+    plan_date = None
+    if body.plan_date:
+        plan_date = date.fromisoformat(str(body.plan_date))
+    engine = get_scheduling_engine("greedy")
+    raw = await engine.plan(
+        SchedulingPlanRequest(
+            tenant_id=tenant_id,
+            work_order_ids=body.work_order_ids,
+            scope=body.scope,
+            plan_date=plan_date,
+            updated_by=int(current_user.id),
+        )
+    )
+    return SchedulingAutoRescheduleResponse(proposal=raw)

@@ -23,14 +23,17 @@ import {
   getSentChannelOptions,
 } from '../../../utils/financeSharedOptions';
 import { formatDateTime } from '../../../../../utils/format';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
 const PS = 'app.kuaicaiwu.partnerStatement';
+const PARTNER_STATEMENT_RESOURCE = 'kuaicaiwu:partner-statement';
 
 const money = (v: number | string | undefined) =>
   `¥${Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const PartnerStatementDetailPage: React.FC = () => {
   const { t } = useTranslation();
+  const statementPerms = useResourcePermissions(PARTNER_STATEMENT_RESOURCE);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const printRef = useRef<HTMLDivElement>(null);
@@ -213,15 +216,21 @@ const PartnerStatementDetailPage: React.FC = () => {
     <Space wrap size={8}>
       <Button onClick={() => navigate('/apps/kuaicaiwu/finance-management/partner-statements')}>{t('app.kuaicaiwu.common.back')}</Button>
       {data.status === 'Draft' || data.status === 'Disputed' ? (
+        statementPerms.canUpdate ? (
         <Button type="primary" onClick={handleConfirm}>{t(`${PS}.detail.internalConfirm`)}</Button>
+        ) : null
       ) : null}
-      {data.status === 'Confirmed' ? (
+      {data.status === 'Confirmed' && statementPerms.canUpdate ? (
         <Button type="primary" onClick={handleMarkSent}>{t(`${PS}.detail.markSent`)}</Button>
       ) : null}
+      {statementPerms.canExport ? (
+        <>
       <Button loading={exporting === 'xlsx'} onClick={() => void handleExport('xlsx')}>{t(`${PS}.detail.exportExcel`)}</Button>
       <Button loading={exporting === 'pdf'} onClick={() => void handleExport('pdf')}>{t(`${PS}.detail.exportPdf`)}</Button>
+        </>
+      ) : null}
       <Button onClick={handlePrint}>{t(`${PS}.detail.print`)}</Button>
-      {data.status === 'Sent' || data.status === 'Confirmed' ? (
+      {(data.status === 'Sent' || data.status === 'Confirmed') && statementPerms.canUpdate ? (
         <Button danger onClick={handleDispute}>{t(`${PS}.detail.recordDispute`)}</Button>
       ) : null}
     </Space>
@@ -259,7 +268,7 @@ const PartnerStatementDetailPage: React.FC = () => {
               <Typography.Text type="secondary">
                 {t(`${PS}.detail.sentAt`, {
                   channel: formatSentChannel(data.sent_channel, t),
-                  time: data.sent_at ? ` · ${formatDateTime(data.sent_at, 'YYYY-MM-DD HH:mm')}` : '',
+                  time: data.sent_at ? ` - ${formatDateTime(data.sent_at, 'YYYY-MM-DD HH:mm')}` : '',
                 })}
               </Typography.Text>
             ) : null}

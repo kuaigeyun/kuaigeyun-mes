@@ -2129,7 +2129,7 @@ const MaterialsManagementPage: React.FC = () => {
           if (days != null) {
             return (
               <span>
-                {t('app.master-data.bom.yes')} · {days}
+                {t('app.master-data.bom.yes')} - {days}
                 {t('app.master-data.materialForm.shelfLifeDayUnit')}
               </span>
             )

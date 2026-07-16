@@ -33,7 +33,7 @@ from apps.kuaizhizao.services.purchase_requisition_service import (
 from apps.kuaizhizao.services.purchase_inquiry_service import PurchaseInquiryService
 
 router = APIRouter(
-    tags=["App · Kuaige Zhizao · Purchase Requisition Management"],
+    tags=["App - Kuaige Zhizao - Purchase Requisition Management"],
     dependencies=[Depends(require_kuaizhizao_module_access("purchase-requisition"))],
 )
 

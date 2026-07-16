@@ -19,7 +19,7 @@ from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.schemas.infra_superadmin import InfraSuperAdminResponse
 
 # 创建路由
-router = APIRouter(prefix="/auth", tags=["Platform · Admin Auth"])
+router = APIRouter(prefix="/auth", tags=["Platform - Admin Auth"])
 
 
 def _get_client_ip(request: Request) -> str:

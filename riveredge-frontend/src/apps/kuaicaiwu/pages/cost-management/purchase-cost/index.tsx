@@ -20,6 +20,7 @@ import {
 } from '../costSelectData';
 import { formatCalculationType, getSourceTypeTag } from '../../../utils/costUiLabels';
 import { formatDateTime } from '../../../../../utils/format';
+import { toApiDateString } from '../../../../../utils/formDate';
 
 interface PurchaseCostResult {
   material_id: number;
@@ -93,7 +94,7 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
     try {
       setLoading(true);
       const data: any = {
-        calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
+        calculation_date: toApiDateString(values.calculation_date),
       };
       if (calculationMode === 'standard') {
         data.material_id = values.material_id;

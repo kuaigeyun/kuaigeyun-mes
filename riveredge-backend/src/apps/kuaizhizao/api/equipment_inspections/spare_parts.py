@@ -16,7 +16,7 @@ from apps.kuaizhizao.schemas.equipment_extra import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/spare-parts", tags=["App · Kuaige Zhizao · Spare Parts"])
+router = APIRouter(prefix="/spare-parts", tags=["App - Kuaige Zhizao - Spare Parts"])
 service = SparePartService()
 
 

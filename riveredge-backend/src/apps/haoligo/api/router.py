@@ -51,7 +51,7 @@ from apps.haoligo.api.routes_finance_payment import router as finance_payment_ro
 from apps.haoligo.api.routes_finance_reports import monthly_router as finance_monthly_report_router
 from apps.haoligo.api.routes_finance_reports import payable_router as finance_payable_report_router
 
-router = APIRouter(tags=["App · HaoliGO"])
+router = APIRouter(tags=["App - HaoliGO"])
 
 
 class HaoligoMeta(BaseModel):

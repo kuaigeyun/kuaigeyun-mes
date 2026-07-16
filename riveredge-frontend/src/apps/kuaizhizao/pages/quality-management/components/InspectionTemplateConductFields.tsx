@@ -386,7 +386,7 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
           const hintParts = [step.inspection_method, step.acceptance_criteria];
           const samplingHint = formatSamplingCriteriaPreview(step.sampling_type, step.value_spec, t);
           if (samplingHint) hintParts.push(samplingHint);
-          const hint = hintParts.filter(Boolean).join(' · ');
+          const hint = hintParts.filter(Boolean).join(' - ');
           return (
             <TypedStepFields
               key={stepKey}

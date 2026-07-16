@@ -17,8 +17,8 @@ from apps.kuaizhizao.schemas.cost import (
     ProductCostCalculationRequest,
     CostComparisonResponse,
     CostAnalysisResponse,
-    CostOptimizationResponse,
     MonthlySettlementRequest,
+    CostCalculationReadinessResponse,
 )
 from apps.kuaicaiwu.services.cost_service import CostCalculationService
 from apps.kuaicaiwu.models.cost_calculation import CostCalculation
@@ -30,7 +30,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(
     prefix="/cost/calculations",
-    tags=["App · Kuaicaiwu · Cost Calculations"],
+    tags=["App - Kuaicaiwu - Cost Calculations"],
     dependencies=[Depends(require_kuaicaiwu_module_access("cost"))],
 )
 
@@ -92,6 +92,52 @@ async def calculate_product_cost(
         raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost/calculations/product", tenant_id)
     except ValidationError as e:
         raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/cost/calculations/product", tenant_id)
+
+
+@router.get("/work-order/{work_order_id}/readiness", response_model=CostCalculationReadinessResponse)
+async def preview_work_order_cost_readiness(
+    work_order_id: int,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        data = await CostCalculationService().preview_work_order_cost_readiness(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+        )
+        return CostCalculationReadinessResponse.model_validate(data)
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            status.HTTP_404_NOT_FOUND,
+            str(e),
+            "/cost/calculations/work-order/{work_order_id}/readiness",
+            tenant_id,
+        )
+
+
+@router.get("/product/{product_id}/readiness", response_model=CostCalculationReadinessResponse)
+async def preview_product_cost_readiness(
+    product_id: int,
+    quantity: float = Query(1, gt=0, description="核算数量"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from decimal import Decimal
+
+    try:
+        data = await CostCalculationService().preview_product_cost_readiness(
+            tenant_id=tenant_id,
+            product_id=product_id,
+            quantity=Decimal(str(quantity)),
+        )
+        return CostCalculationReadinessResponse.model_validate(data)
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            status.HTTP_404_NOT_FOUND,
+            str(e),
+            "/cost/calculations/product/{product_id}/readiness",
+            tenant_id,
+        )
 
 
 @router.get("", response_model=CostCalculationListResponse)
@@ -198,22 +244,6 @@ async def analyze_cost(
         return CostAnalysisResponse.model_validate(cost_analysis)
     except NotFoundError as e:
         raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost/calculations/product/{product_id}/analyze", tenant_id)
-
-
-@router.get("/product/{product_id}/optimization", response_model=CostOptimizationResponse)
-async def get_cost_optimization(
-    product_id: int,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    try:
-        cost_optimization = await CostCalculationService().get_cost_optimization(
-            tenant_id=tenant_id,
-            product_id=product_id
-        )
-        return CostOptimizationResponse.model_validate(cost_optimization)
-    except NotFoundError as e:
-        raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost/calculations/product/{product_id}/optimization", tenant_id)
 
 
 @router.get("/period-summary")

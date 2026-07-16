@@ -17,7 +17,6 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Modal } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -26,7 +25,6 @@ import {
   ListPageTemplate,
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
-import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { haoligoDocumentCreatorColumn, resolveHaoligoDocumentCreatorName } from '../../../utils/documentTableColumns';
 import {
   deleteFinancePayment,
@@ -52,7 +50,6 @@ const PAYMENT_METHOD_OPTIONS = [
 
 const FinancePaymentsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const perms = useResourcePermissions(HAOLIGO_FINANCE_PAYMENTS_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
 
@@ -224,28 +221,22 @@ const FinancePaymentsPage: React.FC = () => {
       width: 160,
       fixed: 'right',
       render: (_, record) => [
-        <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => {
-          setDetailRecord(record);
-          setDetailOpen(true);
-        }}>
-          详情
-        </Button>,
-        perms.canUpdate ? (
-          <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-        ) : null,
-        perms.canDelete ? (
-          <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
-            删除
-          </Button>
-        ) : null,
-      ].filter(Boolean),
+        <Button
+          key="view"
+          {...rowActionKind('read')}
+          onClick={() => {
+            setDetailRecord(record);
+            setDetailOpen(true);
+          }}
+        />,
+        <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+        <Button key="del" {...rowActionKind('delete')} onClick={() => handleDelete(record)} />,
+      ],
     },
   ];
 
   const invoiceOptions = invoicesBySupplier.map((inv) => ({
-    label: `${inv.invoice_no} · ${Number(inv.total_amount).toFixed(2)}`,
+    label: `${inv.invoice_no} - ${Number(inv.total_amount).toFixed(2)}`,
     value: inv.id,
   }));
 
@@ -256,6 +247,7 @@ const FinancePaymentsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
+          permissionResource={HAOLIGO_FINANCE_PAYMENTS_RESOURCE}
           showAdvancedSearch
           showCreateButton
           createButtonText="登记付款"
@@ -268,7 +260,6 @@ const FinancePaymentsPage: React.FC = () => {
             });
             return { data: rows, success: true, total: rows.length };
           }}
-          rowActionKind={rowActionKind.link}
         />
       </ListPageTemplate>
 
@@ -319,7 +310,7 @@ const FinancePaymentsPage: React.FC = () => {
       </FormModalTemplate>
 
       <DetailDrawerTemplate
-        title={detailRecord ? `付款详情 · ${Number(detailRecord.amount).toFixed(2)}` : '付款详情'}
+        title={detailRecord ? `付款详情 - ${Number(detailRecord.amount).toFixed(2)}` : '付款详情'}
         open={detailOpen}
         onClose={() => {
           setDetailOpen(false);

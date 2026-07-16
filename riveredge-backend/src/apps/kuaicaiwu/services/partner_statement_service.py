@@ -29,7 +29,7 @@ from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, Valid
 from infra.models.tenant import Tenant
 from infra.models.user import User
 
-_APPROVED_REVIEW = ("已审核", "通过")
+_APPROVED_REVIEW = ("已审核",)
 _EXCLUDED_REVIEW = ("待审核", "驳回")
 _MONEY = Decimal("0.01")
 

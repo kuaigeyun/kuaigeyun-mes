@@ -103,6 +103,8 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaicaiwu-finance-payable": "PY",              # 应付
     "kuaicaiwu-finance-purchase-invoice": "PI",     # 进项发票
     "kuaicaiwu-finance-settlement": "HX",           # 核销
+    "kuaicaiwu-cost-calculations": "CC",            # 成本核算
+    "kuaicaiwu-cost-rules": "CR",                   # 成本核算规则
     "kuaiplm-rd-project": "YFXM",                   # 研发项目
     "kuaiplm-delivery-project": "JFXM",             # 交付项目
 }
@@ -1458,6 +1460,31 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "rule_code": "PARTNER_STATEMENT_CODE",
         "allow_manual_edit": True,
     },
+    # 轻管理会计 - 成本管理
+    {
+        "page_code": "kuaicaiwu-cost-calculations",
+        "page_name": "产品成本核算",
+        "page_path": "/apps/kuaicaiwu/cost-management/cost-calculations",
+        "code_field": "calculation_no",
+        "code_field_label": "核算单号",
+        "module": "轻管理会计",
+        "module_icon": "calculator",
+        "auto_generate": True,
+        "rule_code": "COST_CALCULATION_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaicaiwu-cost-rules",
+        "page_name": "成本核算规则",
+        "page_path": "/apps/kuaicaiwu/cost-management/cost-rules",
+        "code_field": "code",
+        "code_field_label": "规则编码",
+        "module": "轻管理会计",
+        "module_icon": "calculator",
+        "auto_generate": True,
+        "rule_code": "COST_RULE_CODE",
+        "allow_manual_edit": True,
+    },
     # ==================== 快研发 APP ====================
     {
         "page_code": "kuaiplm-rd-project",
@@ -1656,6 +1683,18 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
         "PartnerStatement",
         "statement_code",
     ),
+    "COST_CALCULATION_CODE": (
+        "apps.kuaicaiwu.models.cost_calculation",
+        "CostCalculation",
+        "calculation_no",
+    ),
+    "kuaicaiwu-cost-calculations": (
+        "apps.kuaicaiwu.models.cost_calculation",
+        "CostCalculation",
+        "calculation_no",
+    ),
+    "COST_RULE_CODE": ("apps.kuaicaiwu.models.cost_rule", "CostRule", "code"),
+    "kuaicaiwu-cost-rules": ("apps.kuaicaiwu.models.cost_rule", "CostRule", "code"),
     "SALES_ORDER_CODE": ("apps.kuaizhizao.models.sales_order", "SalesOrder", "order_code"),
     "kuaizhizao-sales-order": ("apps.kuaizhizao.models.sales_order", "SalesOrder", "order_code"),
     "RD_PROJECT_CODE": ("apps.kuaiplm.models.rd_project", "RdProject", "project_code"),

@@ -1,11 +1,10 @@
 """
-往来核销与对账 API 控制器
+往来核销 API 控制器
 """
 
 import uuid
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from typing import Any, Optional
-from datetime import date
 from decimal import Decimal
 from loguru import logger
 from core.api.deps.access import require_permission_codes
@@ -14,7 +13,7 @@ from apps.kuaicaiwu.services.finance_service import AccountSettlementService
 from apps.kuaicaiwu.services.settlement_gate_service import SettlementGateService
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
-router = APIRouter(prefix="/settlement", tags=["App · Kuaicaiwu · Settlement & Reconciliation"])
+router = APIRouter(prefix="/settlement", tags=["App - Kuaicaiwu - Settlement & Reconciliation"])
 service = AccountSettlementService()
 settlement_gate_service = SettlementGateService()
 
@@ -38,36 +37,6 @@ def _http_exception_with_trace(
         status_code=status_code,
         detail={"message": message, "trace_id": trace_id},
     )
-
-
-@router.get("/suggestions/receivable", summary="Receivable settlement suggestions")
-async def get_receivable_suggestions(
-    customer_id: int | None = Query(None, description="客户ID（可选，不传则返回全部客户建议）"),
-    limit: int = Query(50, ge=1, le=200, description="返回建议数量上限"),
-    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:read")),
-    current_user: Any = Depends(get_current_user),
-):
-    items = await service.suggest_receivable_matches(
-        tenant_id=current_user.tenant_id,
-        customer_id=customer_id,
-        limit=limit,
-    )
-    return {"items": items, "total": len(items)}
-
-
-@router.get("/suggestions/payable", summary="Payable settlement suggestions")
-async def get_payable_suggestions(
-    supplier_id: int | None = Query(None, description="供应商ID（可选，不传则返回全部供应商建议）"),
-    limit: int = Query(50, ge=1, le=200, description="返回建议数量上限"),
-    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:read")),
-    current_user: Any = Depends(get_current_user),
-):
-    items = await service.suggest_payable_matches(
-        tenant_id=current_user.tenant_id,
-        supplier_id=supplier_id,
-        limit=limit,
-    )
-    return {"items": items, "total": len(items)}
 
 
 @router.get("/receivable/preview", summary="Preview receivable settlement")
@@ -167,17 +136,6 @@ async def settle_payable(
     except BusinessLogicError as e:
         raise _http_exception_with_trace(422, str(e), "/settlement/payable", current_user.tenant_id) from e
 
-@router.post("/auto-settle/receivables", summary="Auto-settle all receivables for customer (FIFO)")
-async def auto_settle_receivables(
-    customer_id: int,
-    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:update")),
-    current_user: Any = Depends(get_current_user)
-):
-    count = await service.fifo_auto_settle_receivables(
-        current_user.tenant_id, customer_id, current_user.id
-    )
-    return {"message": f"Successfully settled {count} transactions."}
-
 
 @router.post("/fx-revaluation/period-end", summary="Period-end FX revaluation (draft exchange entries)")
 async def revaluate_period_end(
@@ -204,29 +162,4 @@ async def revaluate_period_end(
         book_rate=book_rate,
         period_end_rate=period_end_rate,
         doc_type=doc_type,
-    )
-
-@router.get("/partner-statement", summary="Partner account statement preview")
-async def get_statement(
-    partner_id: int,
-    partner_type: str = Query(..., description="Customer/Supplier"),
-    start_date: date = Query(...),
-    end_date: date = Query(...),
-    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:read")),
-    current_user: Any = Depends(get_current_user)
-):
-    return await service.generate_partner_statement(
-        current_user.tenant_id, partner_id, partner_type, start_date, end_date
-    )
-
-@router.post("/archive-statement", summary="Archive partner account statement")
-async def archive_statement(
-    partner_id: int,
-    partner_type: str,
-    period: str = Query(..., description="YYYY-MM"),
-    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:create")),
-    current_user: Any = Depends(get_current_user)
-):
-    return await service.generate_formal_statement(
-        current_user.tenant_id, partner_id, partner_type, period
     )

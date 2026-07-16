@@ -18,7 +18,7 @@ from apps.kuaizhizao.schemas.wave_picking import (
     WavePickingResponse
 )
 
-router = APIRouter(prefix="/wave-pickings", tags=["App · Kuaige Zhizao · Wave Picking"])
+router = APIRouter(prefix="/wave-pickings", tags=["App - Kuaige Zhizao - Wave Picking"])
 
 @router.post("/generate", response_model=WavePickingResponse, summary="Generate consolidated wave picking list")
 async def generate_picking_wave(

@@ -16,9 +16,11 @@ from apps.master_data.api.drawings import router as drawings_router
 from apps.master_data.api.supply_chain import router as supply_chain_router
 from apps.master_data.api.partner_price_book import router as partner_price_book_router
 from apps.master_data.api.performance import router as performance_router
+from apps.master_data.api.product import router as product_router
+from apps.master_data.api.validation import router as validation_router
 
 # 创建主路由
-router = APIRouter(tags=["App · Master Data · Overview"])
+router = APIRouter(tags=["App - Master Data - Overview"])
 
 # 注意：路由前缀使用 master-data（带连字符），因为这是 URL 路径
 # 但目录名使用 master_data（下划线），因为 Python 模块名不能有连字符
@@ -35,6 +37,8 @@ router.include_router(drawings_router)
 router.include_router(supply_chain_router)
 router.include_router(partner_price_book_router)
 router.include_router(performance_router)
+router.include_router(product_router)
+router.include_router(validation_router)
 
 @router.get("/health")
 async def health_check():

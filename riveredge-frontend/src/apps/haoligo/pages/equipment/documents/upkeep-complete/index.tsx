@@ -79,7 +79,7 @@ function formatUpkeepRowLabel(r: EquipmentUpkeepSheetRow): string {
     r.equipment_asset_code || r.equipment_name
       ? `${r.equipment_asset_code || ''} ${r.equipment_name || ''}`.trim()
       : `设备#${r.equipment_id}`;
-  return `${no} · ${eq}`;
+  return `${no} - ${eq}`;
 }
 
 function SourceUpkeepPickerTrigger({

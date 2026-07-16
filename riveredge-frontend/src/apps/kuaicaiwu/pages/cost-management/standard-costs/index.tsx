@@ -9,13 +9,17 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Popconfirm, Tag } from 'antd';
+import { App, Button, Popconfirm, Space, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { standardCostService, type StandardCost } from '../../../services/cost/standard-cost';
-import { formatCostItemType, formatTargetType } from '../../../utils/financeUiLabels';
+import {
+  formatCostItemType,
+  formatTargetType,
+  getCostItemTypeSelectOptions,
+} from '../../../utils/financeUiLabels';
 import {
   COST_CRUD_PINNED_ACTIVE_FIELD,
   costDocCreatedUpdatedColumns,
@@ -121,23 +125,38 @@ const StandardCostsPage: React.FC = () => {
       ...costDocCreatedUpdatedColumns<StandardCost>(t),
       {
         title: t('app.kuaicaiwu.costCommon.action'),
+        key: 'action',
         valueType: 'option',
         width: 120,
-        render: (_, record) => [
-          <a key="edit" onClick={() => { setEditing(record); setModalVisible(true); }}>{t('app.kuaicaiwu.costCommon.edit')}</a>,
-          <Popconfirm
-            {...rowActionKind('delete')}
-            key="del"
-            title={t('app.kuaicaiwu.standardCost.confirmDelete')}
-            onConfirm={async () => {
-              await standardCostService.delete(record.id);
-              messageApi.success(t('app.kuaicaiwu.costCommon.deleteSuccess'));
-              actionRef.current?.reload();
-            }}
-          >
-            <a>{t('app.kuaicaiwu.costCommon.delete')}</a>
-          </Popconfirm>,
-        ],
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) => (
+          <Space size={0}>
+            <Button
+              {...rowActionKind('update')}
+              size="small"
+              onClick={() => {
+                setEditing(record);
+                setModalVisible(true);
+              }}
+            >
+              {t('app.kuaicaiwu.costCommon.edit')}
+            </Button>
+            <Popconfirm
+              {...rowActionKind('delete')}
+              title={t('app.kuaicaiwu.standardCost.confirmDelete')}
+              onConfirm={async () => {
+                await standardCostService.delete(record.id);
+                messageApi.success(t('app.kuaicaiwu.costCommon.deleteSuccess'));
+                actionRef.current?.reload();
+              }}
+            >
+              <Button type="link" danger size="small">
+                {t('app.kuaicaiwu.costCommon.delete')}
+              </Button>
+            </Popconfirm>
+          </Space>
+        ),
       },
     ],
     [t, messageApi],
@@ -152,14 +171,7 @@ const StandardCostsPage: React.FC = () => {
     [t],
   );
 
-  const costItemOptions = useMemo(
-    () => [
-      { label: t('app.kuaicaiwu.financeUi.costItem.material'), value: 'material' },
-      { label: t('app.kuaicaiwu.financeUi.costItem.labor'), value: 'labor' },
-      { label: t('app.kuaicaiwu.financeUi.costItem.overhead'), value: 'overhead' },
-    ],
-    [t],
-  );
+  const costItemOptions = useMemo(() => getCostItemTypeSelectOptions(t), [t]);
 
   return (
     <ListPageTemplate>

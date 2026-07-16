@@ -1,5 +1,5 @@
 /**
- * KU-AI · 物料健康助手 — 检查物料完备度与疑似重复编码
+ * KU-AI - 物料健康助手 — 检查物料完备度与疑似重复编码
  */
 
 import React, { useCallback, useMemo, useState } from 'react';

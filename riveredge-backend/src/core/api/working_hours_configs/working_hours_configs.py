@@ -24,7 +24,7 @@ from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
-router = APIRouter(prefix="/working-hours-configs", tags=["Core · Working Hours"])
+router = APIRouter(prefix="/working-hours-configs", tags=["Core - Working Hours"])
 
 working_hours_config_service = WorkingHoursConfigService()
 

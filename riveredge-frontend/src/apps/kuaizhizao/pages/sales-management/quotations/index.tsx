@@ -2829,7 +2829,7 @@ const QuotationsPage: React.FC = () => {
           />
         </Col>
       </Row>
-      {/* 联系人 1/6 · 电话 1/6 · 地址 1/3 · 付款条件 1/6 · 币种 1/6 */}
+      {/* 联系人 1/6 - 电话 1/6 - 地址 1/3 - 付款条件 1/6 - 币种 1/6 */}
       <Row gutter={16}>
         <Col span={4}>
           <ProFormText name="customer_contact" label={salesCommonFormLabels.contact} />

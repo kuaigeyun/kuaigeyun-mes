@@ -70,17 +70,29 @@ export function formatTargetType(value: string | null | undefined, t: TFunction)
   return i18nKey ? t(i18nKey) : value;
 }
 
+/** 标准成本库 cost_item_type（与后端 StandardCost 模型一致） */
+export const COST_ITEM_TYPE_CANONICAL = ['material_cost', 'labor_rate', 'overhead_rate'] as const;
+
 const COST_ITEM_TYPE_I18N_KEY: Record<string, string> = {
   material: 'app.kuaicaiwu.financeUi.costItem.material',
-  material_cost: 'app.kuaicaiwu.financeUi.costItem.material',
+  material_cost: 'app.kuaicaiwu.financeUi.costItem.materialCost',
   labor: 'app.kuaicaiwu.financeUi.costItem.labor',
+  labor_rate: 'app.kuaicaiwu.financeUi.costItem.laborRate',
   overhead: 'app.kuaicaiwu.financeUi.costItem.overhead',
+  overhead_rate: 'app.kuaicaiwu.financeUi.costItem.overheadRate',
 };
 
 export function formatCostItemType(value: string | null | undefined, t: TFunction): string {
   if (!value) return '—';
   const i18nKey = COST_ITEM_TYPE_I18N_KEY[value];
   return i18nKey ? t(i18nKey) : value;
+}
+
+export function getCostItemTypeSelectOptions(t: TFunction) {
+  return COST_ITEM_TYPE_CANONICAL.map((value) => ({
+    label: formatCostItemType(value, t),
+    value,
+  }));
 }
 
 export function getCurrencySelectOptions(t: TFunction) {

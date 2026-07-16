@@ -13,10 +13,9 @@ import {
   ModuleCenterLayout,
   ModuleKpiRow,
   ModuleShortcutGrid,
-  ModuleActionPanel,
-  ModuleTodoList,
+  type ModuleKpiDef,
+  type ModuleShortcutDef,
 } from '../../../components/module-center';
-import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
 const CostCenterDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -62,7 +61,7 @@ const CostCenterDashboard: React.FC = () => {
     { key: 'calc', title: '成本核算', icon: <CalculatorOutlined style={{ fontSize: 22, color: '#1890ff' }} />, path: '/apps/kuaicaiwu/cost-management/cost-calculations' },
     { key: 'rules', title: '分摊规则', icon: <FileSearchOutlined style={{ fontSize: 22, color: '#52c41a' }} />, path: '/apps/kuaicaiwu/cost-management/cost-rules' },
     { key: 'report', title: '成本报表', icon: <BarChartOutlined style={{ fontSize: 22, color: '#fa8c16' }} />, path: '/apps/kuaicaiwu/cost-management/cost-report' },
-    { key: 'compare', title: '成本对比', icon: <DiffOutlined style={{ fontSize: 22, color: '#722ed1' }} />, path: '/apps/kuaizhizao/cost-management/cost-comparison' },
+    { key: 'compare', title: '成本对比', icon: <DiffOutlined style={{ fontSize: 22, color: '#722ed1' }} />, path: '/apps/kuaicaiwu/cost-management/cost-calculations?cat=compare' },
   ];
 
   return (
@@ -70,24 +69,6 @@ const CostCenterDashboard: React.FC = () => {
       loading={loading && !s}
       kpiRow={<ModuleKpiRow items={kpis} />}
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}
-      actionRow={
-        <ModuleActionPanel title="成本工作提示" lg={24}>
-          <ModuleTodoList
-            items={[
-              {
-                id: 'cost-tip-1',
-                type: 'cost',
-                title: '完成工单成本核算后可查看成本报表',
-                priority: 'medium',
-                status: 'pending',
-                link: '/apps/kuaicaiwu/cost-management/cost-calculations',
-                created_at: new Date().toISOString(),
-              },
-            ]}
-            emptyText="暂无成本待办"
-          />
-        </ModuleActionPanel>
-      }
     />
   );
 };

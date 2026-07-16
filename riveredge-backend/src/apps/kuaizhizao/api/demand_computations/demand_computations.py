@@ -37,7 +37,7 @@ from apps.kuaizhizao.schemas.demand_replanning import (
     DemandReplanTaskExecuteRequest,
 )
 
-router = APIRouter(prefix="/demand-computations", tags=["App · Kuaige Zhizao · Unified Demand Computation"])
+router = APIRouter(prefix="/demand-computations", tags=["App - Kuaige Zhizao - Unified Demand Computation"])
 
 computation_service = DemandComputationService()
 change_event_service = DemandChangeEventService()
@@ -681,6 +681,10 @@ async def get_push_preview(
         None,
         description="生成粒度：work_order_only=仅工单（与工单上拉一致）",
     ),
+    push_mode: Optional[str] = Query(
+        None,
+        description="下推模式：draft=草稿，confirm=正式；采购单预览时控制是否要求默认供应商",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -698,6 +702,7 @@ async def get_push_preview(
             computation_id=computation_id,
             push_config=push_config if push_config else None,
             generate_mode=generate_mode,
+            push_mode=push_mode,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

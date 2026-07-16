@@ -73,7 +73,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/equipment",
-    tags=["App · HaoliGO · 设备单据"],
+    tags=["App - HaoliGO - 设备单据"],
 )
 
 _output_record_router = APIRouter(

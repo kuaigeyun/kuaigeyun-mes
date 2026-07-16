@@ -120,6 +120,7 @@ const PurchaseInquiriesPage: React.FC = () => {
   const [pendingQuoteFormValues, setPendingQuoteFormValues] = useState<Record<string, unknown> | null>(null);
   const [quoteSupplierId, setQuoteSupplierId] = useState<number | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [compareInquiryId, setCompareInquiryId] = useState<number | null>(null);
   const [compareRows, setCompareRows] = useState<ComparisonRow[]>([]);
   const [awardSelection, setAwardSelection] = useState<Record<number, number>>({});
   const [supplierOptions, setSupplierOptions] = useState<Array<{ id: number; name: string; code?: string }>>([]);
@@ -293,7 +294,13 @@ const PurchaseInquiriesPage: React.FC = () => {
   };
 
   const openCompare = async (inquiry: PurchaseInquiry) => {
-    const matrix = await getInquiryComparison(inquiry.id!);
+    const inquiryId = inquiry.id;
+    if (!inquiryId) {
+      message.warning(t('app.kuaizhizao.purchaseInquiry.compareAwardMissingInquiry'));
+      return;
+    }
+    const matrix = await getInquiryComparison(inquiryId);
+    setCompareInquiryId(inquiryId);
     setCompareRows(matrix.rows);
     const init: Record<number, number> = {};
     matrix.rows.forEach((row) => {
@@ -309,7 +316,18 @@ const PurchaseInquiriesPage: React.FC = () => {
   };
 
   const confirmAward = async () => {
-    if (!detail?.id) return;
+    if (!compareInquiryId) {
+      message.warning(t('app.kuaizhizao.purchaseInquiry.compareAwardMissingInquiry'));
+      return;
+    }
+    const rowCount = compareRows.length;
+    const hasSelectableQuote = compareRows.some((row) =>
+      row.cells.some((cell) => cell.quote_item_id),
+    );
+    if (!rowCount || !hasSelectableQuote) {
+      message.warning(t('app.kuaizhizao.purchaseInquiry.selectAwardQuoteNoQuote'));
+      return;
+    }
     const awards = Object.entries(awardSelection)
       .filter(([, quoteItemId]) => quoteItemId)
       .map(([inquiryItemId, quoteItemId]) => ({
@@ -320,11 +338,30 @@ const PurchaseInquiriesPage: React.FC = () => {
       message.warning(t('app.kuaizhizao.purchaseInquiry.selectAwardQuote'));
       return;
     }
-    await awardInquiryQuotes(detail.id, awards);
-    message.success(t('app.kuaizhizao.purchaseInquiry.awardSuccess'));
-    setCompareOpen(false);
-    setDetail(await getPurchaseInquiry(detail.id));
-    actionRef.current?.reload();
+    if (awards.length < rowCount) {
+      message.warning(
+        t('app.kuaizhizao.purchaseInquiry.selectAwardQuoteIncomplete', {
+          selected: awards.length,
+          total: rowCount,
+        }),
+      );
+      return;
+    }
+    try {
+      await awardInquiryQuotes(compareInquiryId, awards);
+      message.success(t('app.kuaizhizao.purchaseInquiry.awardSuccess'));
+      setCompareOpen(false);
+      setCompareInquiryId(null);
+      if (detail?.id === compareInquiryId) {
+        setDetail(await getPurchaseInquiry(compareInquiryId));
+      }
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      const err = error as { message?: string; response?: { data?: { detail?: string } } };
+      message.error(
+        err?.response?.data?.detail || err?.message || t('app.kuaizhizao.purchaseInquiry.awardFailed'),
+      );
+    }
   };
 
   const resetPullPreviewModal = useCallback(() => {
@@ -1602,12 +1639,23 @@ const PurchaseInquiriesPage: React.FC = () => {
         title={t('app.kuaizhizao.purchaseInquiry.compareAwardTitle')}
         open={compareOpen}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
-        onCancel={() => setCompareOpen(false)}
+        onCancel={() => {
+          setCompareOpen(false);
+          setCompareInquiryId(null);
+        }}
         onOk={() => void confirmAward()}
       >
         <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
           {t('app.kuaizhizao.purchaseInquiry.compareAwardHint')}
         </Typography.Text>
+        {!compareRows.some((row) => row.cells.some((cell) => cell.quote_item_id)) ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={t('app.kuaizhizao.purchaseInquiry.selectAwardQuoteNoQuote')}
+          />
+        ) : null}
         <Table
           size="small"
           pagination={false}

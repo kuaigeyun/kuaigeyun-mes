@@ -47,7 +47,16 @@ async def record_finance_accounting_event(
             payload=payload,
         )
     except Exception as e:
-        logger.warning("记录会计事件失败 %s→%s: %s", source_doc_type, target_doc_type, e)
+        logger.error(
+            "记录会计事件失败 %s→%s (source=%s#%s target=%s#%s): %s",
+            source_doc_type,
+            target_doc_type,
+            source_doc_type,
+            source_doc_id,
+            target_doc_type,
+            target_doc_id,
+            e,
+        )
 
 
 async def link_finance_document_relation(
@@ -85,4 +94,13 @@ async def link_finance_document_relation(
             created_by=created_by,
         )
     except Exception as e:
-        logger.warning("创建单据关联失败 %s→%s: %s", source_type, target_type, e)
+        logger.error(
+            "创建单据关联失败 %s→%s (source=%s#%s target=%s#%s): %s",
+            source_type,
+            target_type,
+            source_type,
+            source_id,
+            target_type,
+            target_id,
+            e,
+        )

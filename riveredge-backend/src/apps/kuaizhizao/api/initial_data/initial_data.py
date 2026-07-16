@@ -30,7 +30,7 @@ from apps.kuaizhizao.schemas.initial_data import (
 
 router = APIRouter(
     prefix="/initial-data",
-    tags=["App · Kuaige Zhizao · Initial Data Import"],
+    tags=["App - Kuaige Zhizao - Initial Data Import"],
     dependencies=[Depends(require_kuaizhizao_module_access("warehouse-management-initial-data"))],
 )
 

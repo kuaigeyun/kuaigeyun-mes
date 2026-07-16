@@ -27,7 +27,7 @@ export function renderLifecycleSubStageTag(
       : stage.status === 'active'
         ? t('app.kuaizhizao.warehouseInbound.pull.lifecycle.active')
         : t('app.kuaizhizao.warehouseInbound.pull.lifecycle.pending');
-  return <Tag color={color}>{`${stage.label}·${suffix}`}</Tag>;
+  return <Tag color={color}>{`${stage.label} ${suffix}`}</Tag>;
 }
 
 export function renderPullableTag(

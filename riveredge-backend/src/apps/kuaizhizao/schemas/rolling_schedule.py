@@ -52,6 +52,7 @@ class RollingScheduleLineResponse(BaseSchema):
     planned_end_date: Optional[datetime] = None
     scheduling_score: Optional[float] = None
     scheduling_rank_band: Optional[str] = None
+    scheduling_diagnostics: List[str] = Field(default_factory=list, description="排产缺失诊断摘要")
 
 
 class RollingScheduleCapacityAdvisory(BaseSchema):

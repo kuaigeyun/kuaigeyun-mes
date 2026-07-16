@@ -32,7 +32,7 @@ from infra.models.tenant import TenantStatus
 from infra.services.tenant_service import TenantService, schedule_initialize_tenant_data
 from infra.services.package_service import PackageService
 
-router = APIRouter(prefix="/site-settings", tags=["Core · Site Settings"])
+router = APIRouter(prefix="/site-settings", tags=["Core - Site Settings"])
 
 
 class DeepSeekIntegrationStatusResponse(BaseModel):

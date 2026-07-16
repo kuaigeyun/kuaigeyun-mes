@@ -211,7 +211,7 @@ const ReceiptNoticesPage: React.FC = () => {
     () =>
       supplierList.map((s) => ({
         value: Number(s.id),
-        label: [s.name, s.code].filter(Boolean).join(' · ') || String(s.id),
+        label: [s.name, s.code].filter(Boolean).join(' - ') || String(s.id),
       })),
     [supplierList],
   );

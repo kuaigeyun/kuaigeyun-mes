@@ -78,13 +78,6 @@ export const payableService = {
     });
   },
 
-  approvePayable: (id: number, rejection_reason?: string) => {
-    return apiRequest<Payable>(`${PAYABLE_API}/${id}/approve`, {
-      method: 'POST',
-      params: { rejection_reason },
-    });
-  },
-
   deletePayable: (id: number) => {
     return apiRequest<void>(`${PAYABLE_API}/${id}`, {
       method: 'DELETE',

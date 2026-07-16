@@ -37,7 +37,7 @@ from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from infra.models.user import User
 
-router = APIRouter(prefix="/rd-projects", tags=["App · Kuaiplm · RD Projects"])
+router = APIRouter(prefix="/rd-projects", tags=["App - Kuaiplm - RD Projects"])
 service = RdProjectService()
 
 

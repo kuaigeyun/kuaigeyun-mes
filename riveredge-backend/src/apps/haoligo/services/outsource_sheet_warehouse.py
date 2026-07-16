@@ -42,7 +42,7 @@ def format_mold_warehouse_label(
         return CLOSED_WAREHOUSE_DISPLAY_LABEL
     code = (warehouse_code or "").strip()
     if name and code:
-        return f"{code} · {name}"
+        return f"{code} - {name}"
     return name or code or None
 
 

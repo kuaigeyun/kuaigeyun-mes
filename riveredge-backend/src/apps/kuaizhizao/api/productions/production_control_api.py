@@ -21,7 +21,7 @@ from apps.kuaizhizao.services.production_control_service import ProductionContro
 from core.api.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
-router = APIRouter(prefix="/production-control", tags=["App · Kuaige Zhizao · Production Planning Control"])
+router = APIRouter(prefix="/production-control", tags=["App - Kuaige Zhizao - Production Planning Control"])
 service = ProductionControlService()
 
 

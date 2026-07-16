@@ -9,7 +9,7 @@ from apps.kuaizhizao.services.traceability import TraceabilityService
 from core.api.deps import get_current_tenant, get_current_user
 from core.api.deps.access import require_permission_codes
 
-router = APIRouter(tags=["App · Kuaige Zhizao · Traceability"])
+router = APIRouter(tags=["App - Kuaige Zhizao - Traceability"])
 service = TraceabilityService()
 
 TraceDirection = Literal["forward", "backward", "both"]

@@ -34,7 +34,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/molds/return-sheets",
-    tags=["App · HaoliGO · 还入单"],
+    tags=["App - HaoliGO - 还入单"],
     dependencies=[Depends(require_haoligo_module_access("molds-documents-return-in"))],
 )
 

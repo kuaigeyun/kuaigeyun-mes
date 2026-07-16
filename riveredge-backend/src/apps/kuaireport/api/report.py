@@ -13,7 +13,7 @@ from apps.kuaireport.schemas.report import (
     ReportCreate, ReportUpdate, ReportResponse, ReportListResponse
 )
 
-router = APIRouter(prefix="/reports", tags=["App · KuanReport · Reports"])
+router = APIRouter(prefix="/reports", tags=["App - KuanReport - Reports"])
 
 report_service = ReportService()
 

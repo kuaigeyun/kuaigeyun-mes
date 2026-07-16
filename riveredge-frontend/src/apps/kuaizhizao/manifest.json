@@ -1662,33 +1662,12 @@
                         "path": "/apps/kuaizhizao/cost-management/dashboard",
                         "permission": "kuaizhizao:cost-management-dashboard:read",
                         "sort_order": 0
-                    },
-                    {
-                        "title": "app.kuaizhizao.menu.cost-management.cost-calculations",
-                        "path": "/apps/kuaizhizao/cost-management/cost-calculations",
-                        "permission": "kuaizhizao:cost-management-cost-calculations:read",
-                        "sort_order": 1
-                    },
-                    {
-                        "title": "app.kuaizhizao.menu.cost-management.cost-comparison",
-                        "path": "/apps/kuaizhizao/cost-management/cost-comparison",
-                        "permission": "kuaizhizao:cost-management-cost-comparison:read",
-                        "sort_order": 2
-                    },
-                    {
-                        "title": "app.kuaizhizao.menu.cost-management.cost-report",
-                        "path": "/apps/kuaizhizao/cost-management/cost-report",
-                        "permission": "kuaizhizao:cost-management-cost-report:read",
-                        "sort_order": 3
                     }
                 ]
             }
         ]
     },
     "permissions": [
-        "kuaizhizao:cost-management-cost-calculations:read",
-        "kuaizhizao:cost-management-cost-comparison:read",
-        "kuaizhizao:cost-management-cost-report:read",
         "kuaizhizao:cost-management-dashboard:read",
         "kuaizhizao:customer-follow-up:read",
         "kuaizhizao:customer-follow-up:create",

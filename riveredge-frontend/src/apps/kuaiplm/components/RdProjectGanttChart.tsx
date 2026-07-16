@@ -56,7 +56,7 @@ function toGanttTask(t: TFunction, item: RdProjectGanttItem, index: number): Gan
   }
   const durationMs = end.getTime() - start.getTime();
   const duration = Math.max(1, Math.ceil(durationMs / (24 * 60 * 60 * 1000)));
-  const gateHint = item.current_gate_name ? ` · ${item.current_gate_name}` : '';
+  const gateHint = item.current_gate_name ? ` - ${item.current_gate_name}` : '';
   const text =
     [item.project_code, item.project_name].filter(Boolean).join(' - ') + gateHint ||
     `${t('app.kuaiplm.common.columns.project')} ${index + 1}`;
@@ -85,6 +85,11 @@ function rdGanttContentHeight(rowCount: number): number {
   return RD_GANTT_SCALE_ROWS * RD_GANTT_SCALE_HEIGHT + rowCount * RD_GANTT_CELL_HEIGHT;
 }
 
+/** 覆盖 svar-gantt 默认的 %d-%m-%Y 列模板，统一为 YYYY-MM-DD */
+function formatColumnDate(value: Date): string {
+  return formatDateTime(dayjs(value), 'YYYY-MM-DD');
+}
+
 const RdProjectGanttChart: React.FC<RdProjectGanttChartProps> = ({ items }) => {
   const { t } = useTranslation();
   const isDark = useThemeStore((s) => s.resolved.isDark);
@@ -101,8 +106,8 @@ const RdProjectGanttChart: React.FC<RdProjectGanttChartProps> = ({ items }) => {
   const columns = useMemo(
     () => [
       { id: 'text', header: t('app.kuaiplm.gantt.columns.projectGate'), width: 260 },
-      { id: 'start', header: t('app.kuaiplm.gantt.columns.plannedStart'), width: 100 },
-      { id: 'end', header: t('app.kuaiplm.gantt.columns.plannedEnd'), width: 100 },
+      { id: 'start', header: t('app.kuaiplm.gantt.columns.plannedStart'), width: 100, template: formatColumnDate },
+      { id: 'end', header: t('app.kuaiplm.gantt.columns.plannedEnd'), width: 100, template: formatColumnDate },
       { id: 'duration', header: t('app.kuaiplm.gantt.columns.durationDays'), width: 80 },
       { id: 'progress', header: t('app.kuaiplm.gantt.columns.progressPercent'), width: 72 },
     ],

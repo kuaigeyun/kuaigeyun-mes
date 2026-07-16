@@ -7,7 +7,7 @@ from core.schemas.access_policy import AccessPolicyCreate, AccessPolicyResponse,
 from core.services.authorization.access_policy_service import AccessPolicyService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/access/policies", tags=["Core · Access Policies"])
+router = APIRouter(prefix="/access/policies", tags=["Core - Access Policies"])
 
 
 async def _to_policy_response(item) -> AccessPolicyResponse:

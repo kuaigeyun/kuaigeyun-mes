@@ -330,7 +330,7 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
             key: node.uuid,
             title: resolveMenuTitle(node, t),
             path: node.path || '',
-            description: `${currentAppLabel} · ${node.path}`,
+            description: `${currentAppLabel} - ${node.path}`,
           });
         }
         if (node.children?.length) walk(node.children, currentAppLabel);

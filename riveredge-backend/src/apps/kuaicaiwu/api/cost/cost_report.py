@@ -23,12 +23,17 @@ from apps.kuaizhizao.schemas.cost import (
     CostReportResponse,
 )
 from apps.kuaizhizao.services.cost_report_service import CostReportService
+from apps.kuaicaiwu.api._kuaicaiwu_route_access import require_kuaicaiwu_module_access
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
-router = APIRouter(prefix="/cost-report", tags=["App · Kuaicaiwu · Cost Report"])
+router = APIRouter(
+    prefix="/cost-report",
+    tags=["App - Kuaicaiwu - Cost Report"],
+    dependencies=[Depends(require_kuaicaiwu_module_access("cost-report"))],
+)
 
 
 def _http_exception_with_trace(

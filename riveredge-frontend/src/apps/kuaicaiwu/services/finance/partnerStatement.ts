@@ -125,21 +125,6 @@ export const partnerStatementService = {
     }),
 };
 
-export const PARTNER_STATEMENT_STATUS_MAP: Record<string, { text: string; color: string }> = {
-  Draft: { text: '草稿', color: 'default' },
-  Confirmed: { text: '已确认', color: 'processing' },
-  Sent: { text: '已发送', color: 'success' },
-  Disputed: { text: '有异议', color: 'warning' },
-};
-
-export const SENT_CHANNEL_OPTIONS = [
-  { label: '导出后微信/邮件发送', value: 'wechat_manual' },
-  { label: '打印邮寄', value: 'print' },
-  { label: '导出文件发送', value: 'export' },
-  { label: '邮件手动发送', value: 'email_manual' },
-  { label: '其他', value: 'other' },
-];
-
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

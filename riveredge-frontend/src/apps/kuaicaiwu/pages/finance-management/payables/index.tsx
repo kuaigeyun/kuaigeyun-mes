@@ -4,8 +4,8 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Typography, Modal, Spin, Alert, Table, Empty } from 'antd';
-import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Typography, Modal, Spin, Alert, Table, Empty, Form } from 'antd';
+import { ModalForm, ProForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import { EyeOutlined, DollarOutlined, PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -66,7 +66,7 @@ const PayableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
     const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
     const createFormRef = useRef<ProFormInstance>(null);
-    const pullFormRef = useRef<ProFormInstance>(null);
+    const [pullForm] = Form.useForm();
     const [createModalVisible, setCreateModalVisible] = useState(false);
     const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
     const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
@@ -175,7 +175,7 @@ const PayableList: React.FC = () => {
         setPullPreviewSourceId(null);
         setPullPreviewData(null);
         setPullPreviewKind(null);
-        pullFormRef.current?.resetFields();
+        pullForm.resetFields();
     };
 
     const openPullPreview = async (kind: PullPreviewKind, sourceId: number) => {
@@ -190,22 +190,6 @@ const PayableList: React.FC = () => {
                     ? await payableService.previewPullFromPurchaseOrder(sourceId)
                     : await payableService.previewPullFromPurchaseReceipt(sourceId);
             setPullPreviewData(data);
-            const maxPush = Number(data.items?.[0]?.max_push_quantity ?? 0);
-            const sourceLabel =
-                kind === 'purchase_order'
-                    ? pullFromPurchaseOrderAction.sourceLabel
-                    : pullFromPurchaseReceiptAction.sourceLabel;
-            pullFormRef.current?.setFieldsValue({
-                source_code: data.source_code,
-                supplier_name: data.supplier_name,
-                total_amount: maxPush > 0 ? maxPush : undefined,
-                due_date: dayjs().add(30, 'day'),
-                business_date: dayjs(),
-                notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
-                    source: sourceLabel,
-                    code: data.source_code,
-                }),
-            });
         } catch (e: any) {
             messageApi.error(
                 e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
@@ -279,8 +263,17 @@ const PayableList: React.FC = () => {
     pullFromPurchaseReceiptCloseRef.current = pullFromPurchaseReceiptQuery.closeModal;
 
     const handlePullCreateSubmit = async (values: any) => {
-        if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) return false;
-        if (pullPreviewData.has_blocking_issues) return false;
+        if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) {
+            messageApi.warning(t(`${P}.pullPreviewIncomplete`));
+            return false;
+        }
+        if (pullPreviewData.has_blocking_issues) {
+            messageApi.warning(
+                payableCapabilityReasonMessage(pullPreviewData.blocking_reason, t)
+                    || t(`${P}.pullPreviewBlocked`),
+            );
+            return false;
+        }
         const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
         const totalAmount = Number(values.total_amount) || 0;
         if (totalAmount <= 0) {
@@ -336,6 +329,61 @@ const PayableList: React.FC = () => {
 
     const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
     const pullPreviewTargetLabel = pullFromPurchaseOrderAction.targetLabel;
+
+    const pullFormInitialValues = useMemo(() => {
+        if (!pullPreviewData || !pullPreviewKind) return undefined;
+        const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+        const sourceLabel =
+            pullPreviewKind === 'purchase_order'
+                ? pullFromPurchaseOrderAction.sourceLabel
+                : pullFromPurchaseReceiptAction.sourceLabel;
+        return {
+            source_code: pullPreviewData.source_code,
+            supplier_name: pullPreviewData.supplier_name,
+            total_amount: maxPush > 0 ? maxPush : undefined,
+            due_date: dayjs().add(30, 'day'),
+            business_date: dayjs(),
+            notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
+                source: sourceLabel,
+                code: pullPreviewData.source_code,
+            }),
+        };
+    }, [
+        pullPreviewData,
+        pullPreviewKind,
+        pullFromPurchaseOrderAction.sourceLabel,
+        pullFromPurchaseReceiptAction.sourceLabel,
+        t,
+    ]);
+
+    useEffect(() => {
+        if (!pullPreviewOpen || pullPreviewLoading || !pullFormInitialValues) return;
+        pullForm.setFieldsValue(pullFormInitialValues);
+    }, [pullPreviewOpen, pullPreviewLoading, pullFormInitialValues, pullForm]);
+
+    const handlePullPreviewOk = async () => {
+        if (pullPreviewLoading || !pullPreviewData) {
+            messageApi.warning(t(`${P}.pullPreviewIncomplete`));
+            return;
+        }
+        if (pullPreviewData.has_blocking_issues) {
+            messageApi.warning(
+                payableCapabilityReasonMessage(pullPreviewData.blocking_reason, t)
+                    || t(`${P}.pullPreviewBlocked`),
+            );
+            return;
+        }
+        if (pullPreviewMaxPush <= 0) {
+            messageApi.warning(t(`${P}.pullNoPayableAmount`));
+            return;
+        }
+        try {
+            const values = await pullForm.validateFields();
+            await handlePullCreateSubmit(values);
+        } catch {
+            messageApi.warning(t(`${P}.pullFormValidationFailed`));
+        }
+    };
 
     const pullTableColumns: ProColumns<PayablePullCandidate>[] = useMemo(
         () => [
@@ -527,19 +575,22 @@ const PayableList: React.FC = () => {
                         <UniWorkflowActions {...rowActionKind('skip')}
                             key="wf"
                             record={record}
+                            apiPrefix="/apps/kuaicaiwu/payables"
+                            entityType="payable"
                             entityName={t(`${P}.entityName`)}
                             statusField="status"
                             reviewStatusField="review_status"
                             draftStatuses={[]}
                             pendingStatuses={['待审核']}
-                            approvedStatuses={['已审核', '通过']}
+                            approvedStatuses={['已审核']}
                             rejectedStatuses={['已驳回', '驳回']}
                             theme="link"
                             size="small"
                             onSuccess={() => actionRef.current?.reload()}
                         />,
                         record.remaining_amount > 0 &&
-                        record.capabilities?.push_payment?.allowed !== false ? (
+                        record.capabilities?.push_payment?.allowed !== false &&
+                        payablePerms.canUpdate ? (
                             <Button {...rowActionKind('execute')}
                                 key="pay"
                                 type="link"
@@ -552,7 +603,7 @@ const PayableList: React.FC = () => {
                         ) : null,
                     ].filter(Boolean) as React.ReactNode[],
         },
-    ], [t, navigate, supplierOptions]);
+    ], [t, navigate, supplierOptions, payablePerms]);
 
     return (
         <ListPageTemplate>
@@ -816,7 +867,9 @@ const PayableList: React.FC = () => {
                 okText={pullPreviewTargetLabel}
                 cancelText={t('common.cancel')}
                 confirmLoading={pullSubmitting}
-                onOk={() => pullFormRef.current?.submit?.()}
+                onOk={() => {
+                    void handlePullPreviewOk();
+                }}
                 okButtonProps={{
                     disabled:
                         pullPreviewLoading ||
@@ -883,8 +936,10 @@ const PayableList: React.FC = () => {
                             </Typography.Paragraph>
                         ) : null}
                         {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
-                            <ModalForm
-                                formRef={pullFormRef}
+                            <ProForm
+                                key={`pull-payable-${pullPreviewKind}-${pullPreviewSourceId}`}
+                                form={pullForm}
+                                initialValues={pullFormInitialValues}
                                 submitter={false}
                                 onFinish={handlePullCreateSubmit}
                                 layout="vertical"
@@ -903,7 +958,7 @@ const PayableList: React.FC = () => {
                                     label={t('app.kuaicaiwu.common.dueDate')}
                                     rules={[{ required: true }]}
                                     fieldProps={buildFutureDateShortcutFieldProps({
-                                        getForm: () => pullFormRef.current,
+                                        getForm: () => pullForm,
                                         fieldName: 'due_date',
                                         baseFieldName: 'business_date',
                                         t,
@@ -912,7 +967,7 @@ const PayableList: React.FC = () => {
                                 <ProFormDatePicker name="business_date" label={t('app.kuaicaiwu.common.businessDate')} />
                                 <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
                                 <DocumentAttachmentsField category="payable_attachments" />
-                            </ModalForm>
+                            </ProForm>
                         ) : null}
                     </div>
                 ) : null}

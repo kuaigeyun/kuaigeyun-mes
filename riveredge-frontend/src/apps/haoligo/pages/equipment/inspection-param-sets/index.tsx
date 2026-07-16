@@ -336,8 +336,8 @@ const InspectionParamSetsPage: React.FC = () => {
         return p.level1_category === paramPickerLevel1;
       })
       .map((p) => {
-        const cat = p.level1_category ? ` · ${p.level1_category}` : '';
-        return { label: `${p.code} · ${p.name}${cat}`, value: p.id };
+        const cat = p.level1_category ? ` - ${p.level1_category}` : '';
+        return { label: `${p.code} - ${p.name}${cat}`, value: p.id };
       });
   }, [allParams, editorCreateMode, usedParamIdsCreate, usedParamIdsEdit, paramPickerLevel1]);
 
@@ -892,7 +892,7 @@ const InspectionParamSetsPage: React.FC = () => {
       <DetailDrawerTemplate
         title={
           detailRecord
-            ? `${t('common.detail')} · ${detailRecord.code}`
+            ? `${t('common.detail')} - ${detailRecord.code}`
             : t('app.haoligo.menu.equipment.inspection-param-sets')
         }
         open={detailOpen}

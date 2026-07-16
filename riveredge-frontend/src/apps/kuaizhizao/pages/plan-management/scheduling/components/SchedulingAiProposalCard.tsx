@@ -1,5 +1,5 @@
 /**
- * 可视排产 AI · 改期提案卡片
+ * 可视排产 AI - 改期提案卡片
  */
 
 import React, { useEffect, useMemo, useState } from 'react';

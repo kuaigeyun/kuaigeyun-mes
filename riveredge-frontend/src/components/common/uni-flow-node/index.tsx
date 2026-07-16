@@ -79,7 +79,7 @@ const UniFlowNode: React.FC<UniFlowNodeProps> = ({ type, data, selected }) => {
       const n = (data.conditions as unknown[] | undefined)?.length || 0;
       parts.push(n > 0 ? `${n}条分支` : '条件分支');
     }
-    return parts.join(' · ') || data.description || '';
+    return parts.join(' - ') || data.description || '';
   }, [type, data]);
 
   const isWide = type !== 'start' && type !== 'end';

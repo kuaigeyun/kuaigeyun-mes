@@ -29,7 +29,7 @@ from core.schemas.qrcode import (
 )
 from infra.exceptions.exceptions import ValidationError, NotFoundError
 
-router = APIRouter(prefix="/qrcode", tags=["Core · QR Code"])
+router = APIRouter(prefix="/qrcode", tags=["Core - QR Code"])
 
 
 @router.post("/generate", response_model=QRCodeGenerateResponse, summary="Generate QR code")

@@ -17,7 +17,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from loguru import logger
 
-router = APIRouter(prefix="/operation-guide", tags=["Core · Operation Guide"])
+router = APIRouter(prefix="/operation-guide", tags=["Core - Operation Guide"])
 
 
 class OperationGuideStep(BaseModel):

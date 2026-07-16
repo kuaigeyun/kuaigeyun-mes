@@ -18,7 +18,7 @@ from core.services.invitation.invitation_code_service import InvitationCodeServi
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/invitation-codes", tags=["Core · Invitation Codes"])
+router = APIRouter(prefix="/invitation-codes", tags=["Core - Invitation Codes"])
 
 
 @router.post("", response_model=InvitationCodeResponse, status_code=status.HTTP_201_CREATED)

@@ -11,8 +11,9 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Descriptions, Typography, Timeline } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Descriptions, Typography, Timeline, Popconfirm } from 'antd';
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
@@ -23,8 +24,6 @@ import {
   MODAL_CONFIG,
   DRAWER_CONFIG,
 } from '../../../../../components/layout-templates';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { getPerformanceConfigActiveLifecycle } from '../../../../kuaizhizao/utils/performanceLifecycle';
 import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
 import { costRuleApi } from '../../../services/cost';
 import { getRuleTypeSelectOptions, getRuleTypeTag } from '../../../utils/costUiLabels';
@@ -290,33 +289,28 @@ const CostRulePage: React.FC = () => {
       { title: t('app.kuaicaiwu.costRule.col.sourceModule'), dataIndex: 'source_module', key: 'source_module', width: 120, hideInSearch: true, sorter: true },
       ...costDocCreatedUpdatedColumns<CostRule>(t),
       {
-        title: t('app.kuaicaiwu.costCommon.section.lifecycle'),
-        dataIndex: 'lifecycle_stage',
-        key: 'lifecycle',
-        width: 200,
-        fixed: 'right',
-        align: 'left',
-        search: false,
-        render: (_, record) => (
-          <UniLifecycle {...getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>)} showCircleTooltip={false} />
-        ),
-      },
-      {
         title: t('app.kuaicaiwu.costCommon.action'),
-        key: 'action',
-        width: 200,
+        valueType: 'option',
+        width: 150,
         fixed: 'right',
         render: (_: any, record: CostRule) => (
           <Space>
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+            <Button key="view" {...rowActionKind('read')} size="small" onClick={() => handleDetail(record)}>
               {t('app.kuaicaiwu.costCommon.detail')}
             </Button>
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button key="edit" {...rowActionKind('update')} size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               {t('app.kuaicaiwu.costCommon.edit')}
             </Button>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
-              {t('app.kuaicaiwu.costCommon.delete')}
-            </Button>
+            <Popconfirm
+              key="delete"
+              {...rowActionKind('delete')}
+              title={t('common.confirmDelete')}
+              onConfirm={() => handleDelete(record)}
+            >
+              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                {t('app.kuaicaiwu.costCommon.delete')}
+              </Button>
+            </Popconfirm>
           </Space>
         ),
       },
@@ -386,20 +380,6 @@ const CostRulePage: React.FC = () => {
     () => [
       { label: t('app.kuaicaiwu.costRule.allocationBasis.output'), value: '产量' },
       { label: t('app.kuaicaiwu.costRule.allocationBasis.hours'), value: '工时' },
-      { label: t('app.kuaicaiwu.costRule.allocationBasis.machineHours'), value: '机器工时' },
-      { label: t('app.kuaicaiwu.costRule.allocationBasis.outputValue'), value: '产值' },
-      { label: t('app.kuaicaiwu.costRule.allocationBasis.average'), value: '平均分摊' },
-      { label: t('app.kuaicaiwu.costRule.allocationBasis.manual'), value: '手动分摊' },
-    ],
-    [t],
-  );
-
-  const wipValuationOptions = useMemo(
-    () => [
-      { label: t('app.kuaicaiwu.costRule.wipValuation.none'), value: '不计算' },
-      { label: t('app.kuaicaiwu.costRule.wipValuation.equivalent'), value: '约当产量法' },
-      { label: t('app.kuaicaiwu.costRule.wipValuation.standard'), value: '定额成本法' },
-      { label: t('app.kuaicaiwu.costRule.wipValuation.materialOnly'), value: '只计材料' },
     ],
     [t],
   );
@@ -536,12 +516,6 @@ const CostRulePage: React.FC = () => {
           options={allocationBasisOptions}
         />
         <ProFormSelect
-          name="wip_valuation_method"
-          label={t('app.kuaicaiwu.costRule.field.wipValuation')}
-          placeholder={t('app.kuaicaiwu.costRule.field.wipValuationPlaceholder')}
-          options={wipValuationOptions}
-        />
-        <ProFormSelect
           name="source_module"
           label={t('app.kuaicaiwu.costRule.col.sourceModule')}
           placeholder={t('app.kuaicaiwu.costRule.field.sourceModulePlaceholder')}
@@ -590,15 +564,6 @@ const CostRulePage: React.FC = () => {
                   )}
                 />
               </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.lifecycle')}>
-                <UniLifecycle
-                  {...getPerformanceConfigActiveLifecycle(costRuleDetail as unknown as Record<string, unknown>)}
-                  showCircleTooltip={false}
-                />
-                <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
-                  {t('app.kuaicaiwu.costRule.lifecycleHint')}
-                </Typography.Paragraph>
-              </DetailDrawerSection>
               <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.details')}>
                 <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
                   <Typography.Text type="secondary">{t('app.kuaicaiwu.costRule.col.calculationFormula')}</Typography.Text>
@@ -620,9 +585,9 @@ const CostRulePage: React.FC = () => {
                       color: 'green',
                       children: (
                         <>
-                          {t('app.kuaicaiwu.costCommon.log.created')} ·{' '}
+                          {t('app.kuaicaiwu.costCommon.log.created')}{' '}
                           {costRuleDetail.created_at ? formatDateTime(costRuleDetail.created_at, 'YYYY-MM-DD HH:mm:ss') : '-'}
-                          {costRuleDetail.created_by_name ? ` · ${costRuleDetail.created_by_name}` : ''}
+                          {costRuleDetail.created_by_name ? ` - ${costRuleDetail.created_by_name}` : ''}
                         </>
                       ),
                     },
@@ -630,9 +595,9 @@ const CostRulePage: React.FC = () => {
                       color: 'blue',
                       children: (
                         <>
-                          {t('app.kuaicaiwu.costCommon.log.updated')} ·{' '}
+                          {t('app.kuaicaiwu.costCommon.log.updated')}{' '}
                           {costRuleDetail.updated_at ? formatDateTime(costRuleDetail.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'}
-                          {costRuleDetail.updated_by_name ? ` · ${costRuleDetail.updated_by_name}` : ''}
+                          {costRuleDetail.updated_by_name ? ` - ${costRuleDetail.updated_by_name}` : ''}
                         </>
                       ),
                     },

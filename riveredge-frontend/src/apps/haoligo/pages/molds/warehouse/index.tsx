@@ -81,7 +81,7 @@ const MoldWarehousePage: React.FC = () => {
       setSupplierOptions(
         list.map((s) => ({
           value: s.uuid,
-          label: s.code ? `${s.code} · ${s.name}` : s.name,
+          label: s.code ? `${s.code} - ${s.name}` : s.name,
         })),
       );
     } catch {
@@ -95,7 +95,7 @@ const MoldWarehousePage: React.FC = () => {
       setWorkshopOptions(
         rows.map((w: WorkshopRow) => ({
           value: w.id,
-          label: w.code ? `${w.code} · ${w.name}` : w.name,
+          label: w.code ? `${w.code} - ${w.name}` : w.name,
         })),
       );
     } catch {
@@ -218,7 +218,7 @@ const MoldWarehousePage: React.FC = () => {
       title: t('app.haoligo.molds.warehouse.colWorkshop'),
       dataIndex: 'workshop_name',
       render: (_, r) =>
-        r.workshop_code ? `${r.workshop_code} · ${r.workshop_name ?? ''}` : r.workshop_name || '—',
+        r.workshop_code ? `${r.workshop_code} - ${r.workshop_name ?? ''}` : r.workshop_name || '—',
     },
     {
       title: t('app.haoligo.molds.warehouse.colSupplier'),
@@ -226,7 +226,7 @@ const MoldWarehousePage: React.FC = () => {
       render: (_, r) =>
         r.warehouse_type === WAREHOUSE_TYPE_EXTERNAL
           ? r.supplier_code
-            ? `${r.supplier_code} · ${r.supplier_name ?? ''}`
+            ? `${r.supplier_code} - ${r.supplier_name ?? ''}`
             : r.supplier_name || '—'
           : '—',
     },
@@ -261,7 +261,7 @@ const MoldWarehousePage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
       render: (_, r) =>
-        r.workshop_code ? `${r.workshop_code} · ${r.workshop_name ?? ''}` : r.workshop_name || '—',
+        r.workshop_code ? `${r.workshop_code} - ${r.workshop_name ?? ''}` : r.workshop_name || '—',
     },
     {
       title: t('app.haoligo.molds.warehouse.colSupplier'),
@@ -272,7 +272,7 @@ const MoldWarehousePage: React.FC = () => {
       render: (_, r) =>
         r.warehouse_type === WAREHOUSE_TYPE_EXTERNAL
           ? r.supplier_code
-            ? `${r.supplier_code} · ${r.supplier_name ?? ''}`
+            ? `${r.supplier_code} - ${r.supplier_name ?? ''}`
             : r.supplier_name || '—'
           : '—',
     },
@@ -413,7 +413,7 @@ const MoldWarehousePage: React.FC = () => {
       <DetailDrawerTemplate
         title={
           detailRecord
-            ? `${t('common.detail')} · ${detailRecord.warehouse_code}`
+            ? `${t('common.detail')} - ${detailRecord.warehouse_code}`
             : t('app.haoligo.molds.warehouse.title')
         }
         open={detailOpen}

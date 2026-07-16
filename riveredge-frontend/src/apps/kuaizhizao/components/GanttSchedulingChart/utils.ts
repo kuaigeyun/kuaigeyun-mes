@@ -153,8 +153,8 @@ export function operationToGanttTask(
     viewLevel === 'station_child'
       ? {
           gantt_primary_label: `${frozenPrefix}${opName}`,
-          gantt_work_order_code: `${workOrderCode} · ${productName}`,
-          text: `${frozenPrefix}${opName}\n${workOrderCode} · ${productName}`,
+          gantt_work_order_code: `${workOrderCode} - ${productName}`,
+          text: `${frozenPrefix}${opName}\n${workOrderCode} - ${productName}`,
         }
       : buildGanttLabel(wo, opName);
   const visual = resolveTaskVisual(wo, end);

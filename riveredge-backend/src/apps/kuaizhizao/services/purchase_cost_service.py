@@ -414,16 +414,9 @@ class PurchaseCostService:
         Returns:
             tuple[Decimal, List[Dict[str, Any]]]: (采购价格, 价格明细)
         """
-        # 从物料的默认值获取采购单价
-        defaults = material.defaults or {}
-        purchase_defaults = defaults.get("purchase", {})
-        standard_price = purchase_defaults.get("standard_price")
-        
-        if standard_price:
-            unit_price = Decimal(str(standard_price))
-        else:
-            # 如果没有配置，使用默认值
-            unit_price = Decimal(100.00)
+        from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+
+        unit_price = await InventoryCostService().require_material_unit_cost(tenant_id, material.id)
         
         # 计算采购价格
         purchase_price = quantity * unit_price
@@ -436,7 +429,7 @@ class PurchaseCostService:
             "unit": material.base_unit,
             "unit_price": float(unit_price),
             "price": float(purchase_price),
-            "source": "material_defaults" if standard_price else "default",
+            "source": "inventory_cost",
         }]
         
         return purchase_price, price_breakdown

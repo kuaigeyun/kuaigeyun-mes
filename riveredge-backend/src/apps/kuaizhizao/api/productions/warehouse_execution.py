@@ -179,7 +179,7 @@ from apps.kuaizhizao.schemas.batching_order import (
 )
 
 router = APIRouter(
-    tags=["App · Kuaige Zhizao · Warehouse Execution"],
+    tags=["App - Kuaige Zhizao - Warehouse Execution"],
     dependencies=[Depends(require_kuaizhizao_module_access("warehouse-management-inventory", resolve_print=False))],
 )
 

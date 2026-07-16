@@ -31,7 +31,7 @@ export default {
   'pages.login.provenanceLabel': 'Nguồn bản dựng',
   'pages.login.telemetryDisclosure': 'Mô tả thống kê tùy chọn',
   'components.iterationFloatButton.provenanceStatus.official_self_hosted': 'Kho chính thức tự lưu trữ',
-  'components.iterationFloatButton.provenanceStatus.official_unknown_commit': 'Nguồn chính thức · commit chưa xác minh',
+  'components.iterationFloatButton.provenanceStatus.official_unknown_commit': 'Nguồn chính thức - commit chưa xác minh',
   'components.iterationFloatButton.provenanceStatus.unverified_commit': 'Commit chưa xác minh',
   'components.iterationFloatButton.provenanceStatus.unverified_build': 'Bản dựng chưa xác minh',
   'components.iterationFloatButton.provenanceStatus.unknown': 'Nguồn không rõ',

@@ -4,7 +4,7 @@ from core.api.deps import get_current_user, get_current_tenant
 from apps.kuaireport.models.data_source import DataSource
 from apps.kuaireport.constants import DataSourceType
 
-router = APIRouter(prefix="/data-sources", tags=["App · KuanReport · Data Sources"])
+router = APIRouter(prefix="/data-sources", tags=["App - KuanReport - Data Sources"])
 
 @router.get("", summary="List data sources")
 async def list_data_sources(
@@ -13,15 +13,15 @@ async def list_data_sources(
 ):
     # 自动确保护租户拥有一个默认的本地数据库数据源
     internal_exists = await DataSource.filter(
-        tenant_id=tenant_id, 
-        type=DataSourceType.INTERNAL
+        tenant_id=tenant_id,
+        type=DataSourceType.INTERNAL.value,
     ).exists()
-    
+
     if not internal_exists:
         await DataSource.create(
             tenant_id=tenant_id,
             name="本地数据库",
-            type=DataSourceType.INTERNAL,
+            type=DataSourceType.INTERNAL.value,
             is_default=True,
             is_system=True,
             description="系统内置本地数据库"

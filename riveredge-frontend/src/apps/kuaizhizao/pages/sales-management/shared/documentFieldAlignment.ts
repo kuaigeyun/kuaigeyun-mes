@@ -137,6 +137,12 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   demand_type: 51,
   calculation_type: 51,
   calc_type: 52,
+  target_type: 51.05,
+  target_code: 51.15,
+  target_name: 51.25,
+  cost_item_type: 51.35,
+  standard_value: 61.05,
+  unit: 61.15,
   business_mode: 52,
   contract_type: 51,
   activity_type_code: 53,
@@ -206,6 +212,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   inspectorName: 91.9,
   version_no: 62.5,
   version: 62.5,
+  effective_date: 62.65,
   /** 启用状态：业务列之后、更新时间之前（勿再旁路覆盖） */
   is_active: 91.6,
   isActive: 91.6,
@@ -213,6 +220,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   createdAt: 93,
   updated_at: 92,
   created_at: 93,
+  action: 94,
 } satisfies FieldRankMap
 
 /**

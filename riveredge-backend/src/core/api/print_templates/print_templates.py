@@ -25,7 +25,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/print-templates", tags=["Core · Print Templates"])
+router = APIRouter(prefix="/print-templates", tags=["Core - Print Templates"])
 
 
 @router.post("", response_model=PrintTemplateResponse, status_code=status.HTTP_201_CREATED)

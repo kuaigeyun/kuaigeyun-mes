@@ -23,7 +23,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(
     prefix="/cost/standard-costs",
-    tags=["App · Kuaicaiwu · Standard Costs"],
+    tags=["App - Kuaicaiwu - Standard Costs"],
     dependencies=[Depends(require_kuaicaiwu_module_access("standard-cost"))],
 )
 

@@ -1,6 +1,6 @@
 import { apiRequest } from '../../../../services/api';
 import type { DocumentPushPreview } from '../../../kuaizhizao/services/purchase-requisition';
-import { SettlementRecord, PartnerStatement } from '../../types/finance/settlement';
+import { SettlementRecord } from '../../types/finance/settlement';
 
 const SETTLEMENT_API = '/apps/kuaicaiwu/settlement';
 
@@ -55,27 +55,6 @@ export const settlementService = {
     return apiRequest<SettlementRecord>(`${SETTLEMENT_API}/payable`, {
       method: 'POST',
       params: { payable_id, payment_id, amount },
-    });
-  },
-
-  autoSettleReceivables: (customer_id: number) => {
-    return apiRequest<{ message: string }>(`${SETTLEMENT_API}/auto-settle/receivables`, {
-      method: 'POST',
-      params: { customer_id },
-    });
-  },
-
-  getStatement: (partner_id: number, partner_type: string, start_date: string, end_date: string) => {
-    return apiRequest<any>(`${SETTLEMENT_API}/partner-statement`, {
-      method: 'GET',
-      params: { partner_id, partner_type, start_date, end_date },
-    });
-  },
-
-  archiveStatement: (partner_id: number, partner_type: string, period: string) => {
-    return apiRequest<PartnerStatement>(`${SETTLEMENT_API}/archive-statement`, {
-      method: 'POST',
-      params: { partner_id, partner_type, period },
     });
   },
 };

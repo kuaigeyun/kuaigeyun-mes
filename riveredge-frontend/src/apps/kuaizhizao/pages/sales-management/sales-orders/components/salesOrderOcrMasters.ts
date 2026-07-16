@@ -1,5 +1,5 @@
 /**
- * 销售订单 OCR · 客户/物料比对与按需新建
+ * 销售订单 OCR - 客户/物料比对与按需新建
  */
 
 import { DEFAULT_MATERIAL_BASE_UNIT } from '../../../../../master-data/constants/materialDefaults';
@@ -307,7 +307,7 @@ export function buildOcrMatchPreview(
     const label = row.materialCode || row.materialName || '';
     const subLabel = [row.materialName, row.materialSpec, row.requiredQuantity != null ? `×${row.requiredQuantity}` : null]
       .filter(Boolean)
-      .join(' · ');
+      .join(' - ');
     if (!label && !row.materialName) {
       return { status: 'empty' as const, label: '', subLabel };
     }

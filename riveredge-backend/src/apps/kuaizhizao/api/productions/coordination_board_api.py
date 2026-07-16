@@ -15,7 +15,7 @@ from apps.kuaizhizao.services.coordination_board_service import CoordinationBoar
 from core.api.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
-router = APIRouter(prefix="/coordination-board", tags=["App · Kuaige Zhizao · Coordination Board"])
+router = APIRouter(prefix="/coordination-board", tags=["App - Kuaige Zhizao - Coordination Board"])
 service = CoordinationBoardService()
 
 

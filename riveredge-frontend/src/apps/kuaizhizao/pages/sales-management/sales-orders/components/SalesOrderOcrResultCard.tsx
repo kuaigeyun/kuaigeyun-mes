@@ -1,5 +1,5 @@
 /**
- * 销售订单 OCR / 对话录单 · 识别结果预览卡片
+ * 销售订单 OCR / 对话录单 - 识别结果预览卡片
  */
 
 import React from 'react';
@@ -101,7 +101,7 @@ export function SalesOrderOcrResultCard({
                 <Text type="secondary">
                   {[item.materialName, item.materialSpec, item.requiredQuantity != null ? `×${item.requiredQuantity}` : null]
                     .filter(Boolean)
-                    .join(' · ')}
+                    .join(' - ')}
                 </Text>
               </div>
             );

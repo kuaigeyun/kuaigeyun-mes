@@ -24,7 +24,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/equipment/status-adjustments",
-    tags=["App · HaoliGO · 设备状态调整单"],
+    tags=["App - HaoliGO - 设备状态调整单"],
     dependencies=[Depends(require_haoligo_module_access("equipment-documents-status-adjustment"))],
 )
 

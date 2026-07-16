@@ -217,9 +217,23 @@ export const workOrderApi = {
       '/apps/kuaizhizao/work-orders/batch-update-operation-stations',
       { method: 'PUT', data: { updates } }
     ),
+  batchUpdateOperationAssignments: async (
+    updates: Array<{
+      operation_id: number;
+      assigned_worker_id?: number | null;
+      assigned_team_id?: number | null;
+      assigned_equipment_id?: number | null;
+      assigned_mold_id?: number | null;
+      assigned_tool_id?: number | null;
+    }>
+  ) =>
+    apiRequest<{ updated: number[]; skipped_frozen: number[]; failed: Array<{ id: number; reason: string }> }>(
+      '/apps/kuaizhizao/work-orders/batch-update-operation-assignments',
+      { method: 'PUT', data: { updates } }
+    ),
   schedulingQuickAction: async (data: {
     work_order_ids: number[];
-    action: 'confirm_delay' | 'to_exception' | 'apply_unfreeze';
+    action: 'confirm_delay' | 'to_exception' | 'apply_unfreeze' | 'reschedule_forward';
     reason?: string;
     auto_move_out_of_freeze_window?: boolean;
   }) =>

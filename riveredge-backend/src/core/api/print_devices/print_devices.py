@@ -22,7 +22,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/print-devices", tags=["Core · Print Devices"])
+router = APIRouter(prefix="/print-devices", tags=["Core - Print Devices"])
 
 
 @router.post("", response_model=PrintDeviceResponse, status_code=status.HTTP_201_CREATED)

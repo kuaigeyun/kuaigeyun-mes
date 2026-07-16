@@ -9,7 +9,7 @@ from .documents import router as documents_router
 from .scheme_bindings import router as scheme_bindings_router
 from .reports import router as reports_router
 
-router = APIRouter(tags=["App · Kuaige Zhizao · Tool Ops"])
+router = APIRouter(tags=["App - Kuaige Zhizao - Tool Ops"])
 
 router.include_router(master_data_router)
 router.include_router(scheme_bindings_router)

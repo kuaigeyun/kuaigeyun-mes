@@ -17,6 +17,7 @@ import { EyeOutlined, EditOutlined, ArrowDownOutlined, ArrowLeftOutlined, PlusOu
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
+  UniTableStackedLineBadge,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
@@ -2835,9 +2836,9 @@ const SalesOrdersPage: React.FC = () => {
             secondaryBadge={t('common.end')}
             secondaryExtra={
               overdue ? (
-                <Tag color="error" style={{ marginInlineEnd: 0, flexShrink: 0 }}>
+                <UniTableStackedLineBadge tone="danger">
                   {t('app.kuaizhizao.salesOrder.overdueBadge')}
-                </Tag>
+                </UniTableStackedLineBadge>
               ) : null
             }
           />
@@ -2896,9 +2897,9 @@ const SalesOrdersPage: React.FC = () => {
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
             <span>{text}</span>
             {overdue ? (
-              <Tag color="error" style={{ marginInlineEnd: 0, flexShrink: 0 }}>
+              <UniTableStackedLineBadge tone="danger">
                 {t('app.kuaizhizao.salesOrder.overdueBadge')}
-              </Tag>
+              </UniTableStackedLineBadge>
             ) : null}
           </span>
         );
@@ -3093,9 +3094,9 @@ const SalesOrdersPage: React.FC = () => {
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
             <span>{text}</span>
             {overdue ? (
-              <Tag color="error" style={{ marginInlineEnd: 0, flexShrink: 0 }}>
+              <UniTableStackedLineBadge tone="danger">
                 {t('app.kuaizhizao.salesOrder.overdueBadge')}
-              </Tag>
+              </UniTableStackedLineBadge>
             ) : null}
           </span>
         );

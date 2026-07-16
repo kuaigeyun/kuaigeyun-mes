@@ -182,7 +182,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
 
   const formatWorkshopLabel = useCallback((workshopId: number) => {
     const w = workshopMapRef.current.get(workshopId);
-    return w ? `${w.code} · ${w.name}` : '—';
+    return w ? `${w.code} - ${w.name}` : '—';
   }, []);
 
   const syncEquipmentWorkshop = useCallback(

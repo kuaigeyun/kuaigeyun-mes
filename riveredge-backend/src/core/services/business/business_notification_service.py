@@ -76,7 +76,7 @@ def _rule_fixed_recipient_user_ids(rule: dict) -> List[int]:
 
 
 def _rule_form_notify_default_user_ids(rule: dict) -> List[int]:
-    """开单用户指定 · 默认人员（仅当表单未选人时使用）。"""
+    """开单用户指定 - 默认人员（仅当表单未选人时使用）。"""
     dedicated = _normalize_context_user_ids(rule.get("form_notify_default_user_ids"))
     if dedicated:
         return dedicated

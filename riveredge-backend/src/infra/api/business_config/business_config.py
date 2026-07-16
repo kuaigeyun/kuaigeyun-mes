@@ -26,7 +26,7 @@ from core.api.deps.deps import get_current_tenant
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
-router = APIRouter(prefix="/business-config", tags=["Platform · Business Config"])
+router = APIRouter(prefix="/business-config", tags=["Platform - Business Config"])
 
 
 @router.get("/schema", summary="Get business config schema")

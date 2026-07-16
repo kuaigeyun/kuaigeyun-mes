@@ -29,7 +29,7 @@ from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import NotFoundError
 from infra.models.user import User
 
-router = APIRouter(prefix="/phase2", tags=["App · Kuaiplm · Phase2"])
+router = APIRouter(prefix="/phase2", tags=["App - Kuaiplm - Phase2"])
 service = Phase2Service()
 
 

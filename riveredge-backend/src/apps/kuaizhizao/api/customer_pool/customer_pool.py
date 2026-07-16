@@ -28,7 +28,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/customer-pool",
-    tags=["App · Kuaige Zhizao · Customer Pool"],
+    tags=["App - Kuaige Zhizao - Customer Pool"],
 )
 
 

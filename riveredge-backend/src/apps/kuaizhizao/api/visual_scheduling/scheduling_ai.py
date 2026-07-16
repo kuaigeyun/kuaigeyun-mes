@@ -17,7 +17,7 @@ from apps.kuaizhizao.schemas.scheduling_ai import (
 )
 from apps.kuaizhizao.services.scheduling_ai_service import SchedulingAiService
 
-router = APIRouter(prefix="/ai-assist", tags=["App · Kuaige Zhizao · Scheduling AI"])
+router = APIRouter(prefix="/ai-assist", tags=["App - Kuaige Zhizao - Scheduling AI"])
 
 _service = SchedulingAiService()
 

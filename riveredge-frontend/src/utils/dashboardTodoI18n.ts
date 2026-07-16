@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next';
 import type { TodoItem } from '../services/dashboard';
+import { joinDisplayParts } from './joinDisplayParts';
 
 function getTodoKind(id: string): string {
   const lastUnderscore = id.lastIndexOf('_');
@@ -22,13 +23,13 @@ function extractTitleParam(title: string, kind: string): string {
 }
 
 function splitDotDescription(description: string): [string, string] {
-  const parts = description.split(/\s*[·•]\s*/);
-  return [parts[0]?.trim() ?? '', parts.slice(1).join(' · ').trim()];
+  const parts = description.split(/\s*[·•]\s*|\s+-\s+/);
+  return [parts[0]?.trim() ?? '', parts.slice(1).join(' ').trim()];
 }
 
 function joinSegments(...parts: Array<string | undefined | null>): string | undefined {
-  const items = parts.map((part) => part?.trim()).filter(Boolean) as string[];
-  return items.length > 0 ? items.join(' · ') : undefined;
+  const joined = joinDisplayParts(...parts);
+  return joined || undefined;
 }
 
 const TITLE_KEYS: Record<string, string> = {

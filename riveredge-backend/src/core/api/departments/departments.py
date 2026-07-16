@@ -72,7 +72,7 @@ def _serialize_department_dataset_binding(row: Optional[DepartmentDatasetBinding
     )
 
 
-router = APIRouter(prefix="/departments", tags=["Core · Departments"])
+router = APIRouter(prefix="/departments", tags=["Core - Departments"])
 require_department_reference_display_access = require_reference_display_access(
     "system:department",
     "缺少部门读或引用展示权限",

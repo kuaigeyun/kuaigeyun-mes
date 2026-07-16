@@ -12,7 +12,7 @@ from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
-router = APIRouter(prefix="/notify-users", tags=["App · HaoliGO · 通知人员候选"])
+router = APIRouter(prefix="/notify-users", tags=["App - HaoliGO - 通知人员候选"])
 
 
 _require_haoligo_notify_user_picker_access = require_permission_codes(

@@ -11,7 +11,8 @@ import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { setNavigateRef } from './utils/navigation';
-import { App as AntdApp, ConfigProvider, message, Spin } from 'antd';
+import { App as AntdApp, ConfigProvider, Spin } from 'antd';
+import { AntdAppBridge } from './utils/antdAppApis';
 import PageSkeleton, { PageSkeletonProps } from './components/page-skeleton';
 import { PageLoadingFullscreen } from './components/page-loading-lottie';
 import { GLOBAL_SPIN_INDICATOR } from './initSpinIndicator';
@@ -44,17 +45,10 @@ import { initDocumentStatusCache } from './services/enums';
 import MainRoutes from './routes';
 import ErrorBoundary from './components/error-boundary';
 
-// ⚠️ 关键修复：将 Ant Design App 组件的 message 实例注入到全局，供工具函数使用
-// 这样可以避免 Ant Design 6.0 的警告："Static function can not consume context like dynamic theme"
-// 注意：这个实例会在 App 组件渲染后通过 useApp() hook 设置
-if (typeof window !== 'undefined') {
-  // 先设置一个占位符，实际实例会在 App 组件内部设置
-  (window as any).__ANTD_MESSAGE__ = null;
-}
-
 // 权限守卫组件（memo 阻断上层频繁重渲染的级联）
 const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const { t } = useTranslation();
+  const { message } = AntdApp.useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const currentUser = useGlobalStore((s) => s.currentUser);
@@ -421,6 +415,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     setCurrentUser,
     getConfig,
     t,
+    message,
     tokenCheckIntervalSec,
     inactivityTimeoutSec,
     navigate,
@@ -547,15 +542,7 @@ const AppShellLoading: React.FC<{ isDark: boolean }> = ({ isDark }) => (
 );
 
 const AppContent: React.FC<{ touchScreen: any }> = ({ touchScreen }) => {
-  const { message } = AntdApp.useApp();
   const navigate = useNavigate();
-
-  // 将 message 实例设置到全局，供工具函数使用
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      (window as any).__ANTD_MESSAGE__ = message;
-    }
-  }, [message]);
 
   // 将 navigate 注入到全局，供 QuickNavigation 等工具在非组件上下文中使用
   React.useEffect(() => {
@@ -775,6 +762,8 @@ export default function App() {
       tag={{ variant: 'solid' }}
     >
       <AntdApp>
+        {/* 无条件挂载：壳层加载阶段的请求错误提示也必须使用带主题的 App 实例 */}
+        <AntdAppBridge />
         {appShellReady ? (
           <AppContent touchScreen={touchScreen} />
         ) : (

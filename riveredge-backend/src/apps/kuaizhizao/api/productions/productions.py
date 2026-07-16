@@ -293,7 +293,7 @@ def _attach_visual_scheduling_guidance(handled: Any, *, action: str, plan_adjust
 # 创建路由
 # 注意：路由前缀为空，因为应用路由注册时会自动添加 /apps/kuaizhizao 前缀
 router = APIRouter(
-    tags=["App · Kuaige Zhizao · Production Execution"],
+    tags=["App - Kuaige Zhizao - Production Execution"],
     dependencies=[Depends(require_kuaizhizao_module_access("production-execution-reporting", resolve_print=False))],
 )
 router.include_router(work_orders_router)

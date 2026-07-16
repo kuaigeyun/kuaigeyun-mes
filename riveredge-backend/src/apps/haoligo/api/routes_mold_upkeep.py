@@ -32,7 +32,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/molds",
-    tags=["App · HaoliGO · 模具保养方案"],
+    tags=["App - HaoliGO - 模具保养方案"],
 )
 
 

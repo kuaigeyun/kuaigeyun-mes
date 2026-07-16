@@ -146,7 +146,7 @@ class CostCalculationBase(BaseModel):
     @classmethod
     def validate_calculation_type(cls, v: str) -> str:
         """验证核算类型"""
-        allowed_types = ["工单成本", "产品成本", "标准成本", "实际成本"]
+        allowed_types = ["工单成本", "产品成本", "标准成本", "实际成本", "月度结转"]
         if v not in allowed_types:
             raise ValueError(f"核算类型必须是 {allowed_types} 之一")
         return v
@@ -241,6 +241,28 @@ class ProductCostCalculationRequest(BaseModel):
     calculation_date: Optional[date] = Field(None, description="核算日期（可选，默认为当前日期）")
     calculation_type: str = Field("标准成本", description="核算类型（标准成本、实际成本）")
     remark: Optional[str] = Field(None, description="备注")
+
+
+class CostCalculationFactorItem(BaseModel):
+    """单项核算因素就绪状态。"""
+
+    key: str = Field(..., description="因素键")
+    category: str = Field(..., description="因素分类：material/labor/manufacturing")
+    status: str = Field(..., description="状态：ready/missing/warning")
+    message: str = Field(..., description="说明")
+    hint: Optional[str] = Field(None, description="修复建议")
+
+
+class CostCalculationReadinessResponse(BaseModel):
+    """成本核算就绪检查（核算前展示因素）。"""
+
+    target_type: str = Field(..., description="work_order 或 product")
+    target_id: int = Field(..., description="工单或产品 ID")
+    target_label: Optional[str] = Field(None, description="对象展示名")
+    ready: bool = Field(..., description="是否可核算（无 missing 因素）")
+    blocking_count: int = Field(0, description="缺失因素数")
+    warning_count: int = Field(0, description="警告因素数")
+    factors: List[CostCalculationFactorItem] = Field(default_factory=list, description="因素列表")
 
 
 # ========== 成本对比 Schema ==========

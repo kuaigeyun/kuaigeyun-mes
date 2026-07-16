@@ -843,7 +843,7 @@ const DeliveryNotesPage: React.FC = () => {
                 const res = await warehouseApi.salesDelivery.list({ limit: 200, skip: 0 });
                 const list = Array.isArray(res) ? res : ((res as any)?.data ?? []);
                 return (list as any[]).map((d: any) => ({
-                  label: `${d.delivery_code || d.code || '#' + d.id}${d.customer_name ? ' · ' + d.customer_name : ''}`,
+                  label: `${d.delivery_code || d.code || '#' + d.id}${d.customer_name ? ' - ' + d.customer_name : ''}`,
                   value: d.id,
                 }));
               } catch {
@@ -887,7 +887,7 @@ const DeliveryNotesPage: React.FC = () => {
                   keyword: keyWords || undefined,
                 });
                 return (r.data || []).map((o: any) => ({
-                  label: `${o.order_code || o.id}${o.customer_name ? ' · ' + o.customer_name : ''}`,
+                  label: `${o.order_code || o.id}${o.customer_name ? ' - ' + o.customer_name : ''}`,
                   value: o.id,
                 }));
               } catch {

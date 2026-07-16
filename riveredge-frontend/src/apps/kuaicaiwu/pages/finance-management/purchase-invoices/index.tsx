@@ -4,7 +4,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Tag, Alert, Spin, Table, Empty } from 'antd';
+import { App, Button, Modal, Typography, Tag, Alert, Spin, Table, Empty, Form } from 'antd';
 import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { apiRequest } from '../../../../../services/api';
@@ -25,7 +25,7 @@ import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
@@ -70,7 +70,7 @@ const PurchaseInvoiceList: React.FC = () => {
   const [pullPreviewData, setPullPreviewData] = useState<PurchaseInvoicePullPreview | null>(null);
   const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
   const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
-  const pullFormRef = useRef<any>(null);
+  const [pullForm] = Form.useForm();
   const pullFromPurchaseOrderCloseRef = useRef<(() => void) | null>(null);
   const pullFromPurchaseReceiptCloseRef = useRef<(() => void) | null>(null);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
@@ -123,8 +123,6 @@ const PurchaseInvoiceList: React.FC = () => {
     try {
       const invoiceAmount = Number(values.invoice_amount) || 0;
       const taxRate = Number(values.tax_rate) || 13;
-      const taxAmount = Number((invoiceAmount * taxRate / 100).toFixed(2));
-      const totalAmount = Number((invoiceAmount + taxAmount).toFixed(2));
 
       const data: any = {
         supplier_id: values.supplier_id,
@@ -134,8 +132,6 @@ const PurchaseInvoiceList: React.FC = () => {
         invoice_type: values.invoice_type || '增值税专用发票',
         tax_rate: taxRate,
         invoice_amount: invoiceAmount,
-        tax_amount: taxAmount,
-        total_amount: totalAmount,
         notes: values.notes,
         status: '未审核',
         review_status: '待审核',
@@ -158,7 +154,7 @@ const PurchaseInvoiceList: React.FC = () => {
     setPullPreviewSourceId(null);
     setPullPreviewData(null);
     setPullPreviewKind(null);
-    pullFormRef.current?.resetFields();
+    pullForm.resetFields();
   };
 
   const openPullPreview = async (kind: PullPreviewKind, sourceId: number) => {
@@ -173,25 +169,6 @@ const PurchaseInvoiceList: React.FC = () => {
           ? await purchaseInvoiceService.previewPullFromPurchaseOrder(sourceId)
           : await purchaseInvoiceService.previewPullFromPurchaseReceipt(sourceId);
       setPullPreviewData(data);
-      const maxPush = Number(data.items?.[0]?.max_push_quantity ?? 0);
-      const taxRate = 13;
-      const defaultExcl = maxPush > 0 ? Number((maxPush / (1 + taxRate / 100)).toFixed(2)) : 0;
-      const sourceLabel =
-        kind === 'purchase_order'
-          ? pullFromPurchaseOrderAction.sourceLabel
-          : pullFromPurchaseReceiptAction.sourceLabel;
-      pullFormRef.current?.setFieldsValue({
-        source_code: data.source_code,
-        supplier_name: data.supplier_name,
-        invoice_date: dayjs(),
-        invoice_type: '增值税专用发票',
-        tax_rate: taxRate,
-        invoice_amount: defaultExcl,
-        notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
-          source: sourceLabel,
-          code: data.source_code,
-        }),
-      });
     } catch (e: any) {
       messageApi.error(
         e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
@@ -265,8 +242,17 @@ const PurchaseInvoiceList: React.FC = () => {
   pullFromPurchaseReceiptCloseRef.current = pullFromPurchaseReceiptQuery.closeModal;
 
   const handlePullCreateSubmit = async (values: any) => {
-    if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) return false;
-    if (pullPreviewData.has_blocking_issues) return false;
+    if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) {
+      messageApi.warning(t(`${P}.pullPreviewIncomplete`));
+      return false;
+    }
+    if (pullPreviewData.has_blocking_issues) {
+      messageApi.warning(
+        purchaseInvoiceCapabilityReasonMessage(pullPreviewData.blocking_reason, t)
+          || t(`${P}.pullPreviewBlocked`),
+      );
+      return false;
+    }
     const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
     const invoiceAmount = Number(values.invoice_amount) || 0;
     if (invoiceAmount <= 0) {
@@ -274,9 +260,8 @@ const PurchaseInvoiceList: React.FC = () => {
       return false;
     }
     const taxRate = Number(values.tax_rate) || 13;
-    const taxAmount = Number((invoiceAmount * taxRate / 100).toFixed(2));
-    const totalAmount = Number((invoiceAmount + taxAmount).toFixed(2));
-    if (totalAmount > maxPush) {
+    const estimatedTotal = Number((invoiceAmount * (1 + taxRate / 100)).toFixed(2));
+    if (estimatedTotal > maxPush) {
       messageApi.warning(t(`${P}.pullExceedMax`, { max: maxPush.toFixed(2) }));
       return false;
     }
@@ -298,8 +283,6 @@ const PurchaseInvoiceList: React.FC = () => {
         invoice_type: values.invoice_type || '增值税专用发票',
         tax_rate: taxRate,
         invoice_amount: invoiceAmount,
-        tax_amount: taxAmount,
-        total_amount: totalAmount,
         notes:
           String(values.notes ?? '').trim() ||
           t('app.kuaicaiwu.common.createdFromSourceNote', {
@@ -456,12 +439,14 @@ const PurchaseInvoiceList: React.FC = () => {
                 {...rowActionKind('skip')}
                 key="wf"
                 record={record}
+                apiPrefix="/apps/kuaicaiwu/purchase-invoices"
+                entityType="purchase_invoice"
                 entityName={t(`${P}.entityName`)}
                 statusField="status"
                 reviewStatusField="review_status"
                 draftStatuses={[]}
                 pendingStatuses={['待审核']}
-                approvedStatuses={['已审核', '通过']}
+                approvedStatuses={['已审核']}
                 rejectedStatuses={['已驳回', '驳回']}
                 theme="link"
                 size="small"
@@ -512,6 +497,64 @@ const PurchaseInvoiceList: React.FC = () => {
     pullPreviewKind === 'purchase_receipt'
       ? pullFromPurchaseReceiptAction.targetLabel
       : pullFromPurchaseOrderAction.targetLabel;
+
+  const pullFormInitialValues = useMemo(() => {
+    if (!pullPreviewData || !pullPreviewKind) return undefined;
+    const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+    const taxRate = 13;
+    const defaultExcl = maxPush > 0 ? Number((maxPush / (1 + taxRate / 100)).toFixed(2)) : undefined;
+    const sourceLabel =
+      pullPreviewKind === 'purchase_order'
+        ? pullFromPurchaseOrderAction.sourceLabel
+        : pullFromPurchaseReceiptAction.sourceLabel;
+    return {
+      source_code: pullPreviewData.source_code,
+      supplier_name: pullPreviewData.supplier_name,
+      invoice_date: dayjs(),
+      invoice_type: '增值税专用发票',
+      tax_rate: taxRate,
+      invoice_amount: defaultExcl,
+      notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
+        source: sourceLabel,
+        code: pullPreviewData.source_code,
+      }),
+    };
+  }, [
+    pullPreviewData,
+    pullPreviewKind,
+    pullFromPurchaseOrderAction.sourceLabel,
+    pullFromPurchaseReceiptAction.sourceLabel,
+    t,
+  ]);
+
+  useEffect(() => {
+    if (!pullPreviewOpen || pullPreviewLoading || !pullFormInitialValues) return;
+    pullForm.setFieldsValue(pullFormInitialValues);
+  }, [pullPreviewOpen, pullPreviewLoading, pullFormInitialValues, pullForm]);
+
+  const handlePullPreviewOk = async () => {
+    if (pullPreviewLoading || !pullPreviewData) {
+      messageApi.warning(t(`${P}.pullPreviewIncomplete`));
+      return;
+    }
+    if (pullPreviewData.has_blocking_issues) {
+      messageApi.warning(
+        purchaseInvoiceCapabilityReasonMessage(pullPreviewData.blocking_reason, t)
+          || t(`${P}.pullPreviewBlocked`),
+      );
+      return;
+    }
+    if (pullPreviewMaxPush <= 0) {
+      messageApi.warning(t(`${P}.pullNoInvoiceableAmount`));
+      return;
+    }
+    try {
+      const values = await pullForm.validateFields();
+      await handlePullCreateSubmit(values);
+    } catch {
+      messageApi.warning(t(`${P}.pullFormValidationFailed`));
+    }
+  };
 
   return (
     <ListPageTemplate>
@@ -659,7 +702,9 @@ const PurchaseInvoiceList: React.FC = () => {
         okText={pullPreviewTargetLabel}
         cancelText={t('common.cancel')}
         confirmLoading={pullSubmitting}
-        onOk={() => pullFormRef.current?.submit?.()}
+        onOk={() => {
+          void handlePullPreviewOk();
+        }}
         okButtonProps={{
           disabled:
             pullPreviewLoading ||
@@ -740,8 +785,10 @@ const PurchaseInvoiceList: React.FC = () => {
               </Typography.Paragraph>
             ) : null}
             {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
-              <ModalForm
-                formRef={pullFormRef}
+              <ProForm
+                key={`pull-purchase-invoice-${pullPreviewKind}-${pullPreviewSourceId}`}
+                form={pullForm}
+                initialValues={pullFormInitialValues}
                 submitter={false}
                 onFinish={handlePullCreateSubmit}
                 layout="vertical"
@@ -781,7 +828,7 @@ const PurchaseInvoiceList: React.FC = () => {
                 />
                 <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />
                 <DocumentAttachmentsField category="purchase_invoice_attachments" />
-              </ModalForm>
+              </ProForm>
             ) : null}
           </div>
         ) : null}

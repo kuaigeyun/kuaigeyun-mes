@@ -14,7 +14,7 @@ from apps.kuaizhizao.constants import (
     REVIEW_STATUS_ALIASES,
 )
 
-router = APIRouter(prefix="/enums", tags=["Core · Enums"])
+router = APIRouter(prefix="/enums", tags=["Core - Enums"])
 
 # 单据状态展示配置（与后端常量一致，单一数据源）
 STATUS_DISPLAY: Dict[str, Dict[str, str]] = {

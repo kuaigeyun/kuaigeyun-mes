@@ -501,7 +501,7 @@ const RdProjectsListPage: React.FC = () => {
             request={async () => {
               const res = await listRdProjects({ project_type: 'RD', limit: 100 });
               return res.items.map((p) => ({
-                label: `${p.project_code} · ${p.project_name}`,
+                label: `${p.project_code} - ${p.project_name}`,
                 value: p.id,
               }));
             }}

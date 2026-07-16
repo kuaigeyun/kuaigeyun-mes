@@ -17,7 +17,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from loguru import logger
 
-router = APIRouter(prefix="/suggestions", tags=["App · KU-AI · Suggestions"])
+router = APIRouter(prefix="/suggestions", tags=["App - KU-AI - Suggestions"])
 
 
 def _http_exception_with_trace(

@@ -1,5 +1,5 @@
 /**
- * 分析中心 · 单据耗时：是否已有关键节点数据
+ * 分析中心 - 单据耗时：是否已有关键节点数据
  */
 import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
 

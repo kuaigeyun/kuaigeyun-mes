@@ -84,7 +84,7 @@ const MobileSpotCheckListPage: React.FC = () => {
                   <>
                     <div>{row.equipment_name || row.equipment_code || '—'}</div>
                     <div style={{ fontSize: 12, color: '#64748b' }}>
-                      {row.check_date} · {row.status}
+                      {row.check_date} - {row.status}
                     </div>
                   </>
                 }

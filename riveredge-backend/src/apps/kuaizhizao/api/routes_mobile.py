@@ -16,7 +16,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/mobile",
-    tags=["App · Kuaige Zhizao · 移动端"],
+    tags=["App - Kuaige Zhizao - 移动端"],
 )
 
 

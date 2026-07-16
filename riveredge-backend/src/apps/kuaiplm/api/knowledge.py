@@ -27,7 +27,7 @@ from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import NotFoundError
 from infra.models.user import User
 
-router = APIRouter(prefix="/knowledge", tags=["App · Kuaiplm · Knowledge"])
+router = APIRouter(prefix="/knowledge", tags=["App - Kuaiplm - Knowledge"])
 service = KbService()
 
 

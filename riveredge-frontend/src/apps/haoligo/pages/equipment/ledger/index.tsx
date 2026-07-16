@@ -222,7 +222,7 @@ const EquipmentLedgerPage: React.FC = () => {
   }, [categories, t]);
 
   const workshopOptions = useMemo(
-    () => workshops.map((w) => ({ label: `${w.code} · ${w.name}`, value: w.id })),
+    () => workshops.map((w) => ({ label: `${w.code} - ${w.name}`, value: w.id })),
     [workshops],
   );
   const categoryOptions = useMemo(
@@ -230,15 +230,15 @@ const EquipmentLedgerPage: React.FC = () => {
     [categories],
   );
   const manufacturerOptions = useMemo(
-    () => manufacturers.map((m) => ({ label: `${m.code} · ${m.name}`, value: m.id })),
+    () => manufacturers.map((m) => ({ label: `${m.code} - ${m.name}`, value: m.id })),
     [manufacturers],
   );
   const paramSetOptions = useMemo(
-    () => paramSets.map((s) => ({ label: `${s.code} · ${s.name}`, value: s.id })),
+    () => paramSets.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id })),
     [paramSets],
   );
   const upkeepSetOptions = useMemo(
-    () => upkeepSets.map((s) => ({ label: `${s.code} · ${s.name}`, value: s.id })),
+    () => upkeepSets.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id })),
     [upkeepSets],
   );
 
@@ -1067,7 +1067,7 @@ const EquipmentLedgerPage: React.FC = () => {
       <UniDetail
         title={
           detailRecord
-            ? `${t('common.detail')} · ${detailRecord.asset_code}`
+            ? `${t('common.detail')} - ${detailRecord.asset_code}`
             : t('app.haoligo.equipment.ledger.title')
         }
         open={detailOpen}
@@ -1099,7 +1099,7 @@ const EquipmentLedgerPage: React.FC = () => {
       <UniDetail
         title={
           detailRecord
-            ? `${t('app.haoligo.equipment.ledger.historyTitle')} · ${detailRecord.asset_code}`
+            ? `${t('app.haoligo.equipment.ledger.historyTitle')} - ${detailRecord.asset_code}`
             : t('app.haoligo.equipment.ledger.historyTitle')
         }
         open={historyOpen}

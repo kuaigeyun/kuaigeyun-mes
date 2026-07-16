@@ -21,7 +21,7 @@ class ReceiptPullService(AppBaseService[Receipt]):
 
     _EXCLUDED_RECEIPT_STATUSES = frozenset({"Cancelled"})
 
-    _RECEIVABLE_ELIGIBLE_REVIEW = frozenset({"通过", "已审核"})
+    _RECEIVABLE_ELIGIBLE_REVIEW = frozenset({"已审核"})
 
     def _derive_pull_capability(
         self,
@@ -241,7 +241,7 @@ class ReceiptPullService(AppBaseService[Receipt]):
             )
             code = str(receivable.receivable_code or rid)
             name = str(getattr(receivable, "customer_name", "") or "").strip()
-            label = f"{code} · {name}" if name else code
+            label = f"{code} - {name}" if name else code
             rows.append(
                 {
                     "id": rid,

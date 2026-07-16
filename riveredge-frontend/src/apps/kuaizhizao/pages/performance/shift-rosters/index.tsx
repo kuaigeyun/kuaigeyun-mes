@@ -370,7 +370,7 @@ const ShiftRostersPage: React.FC = () => {
           {roster ? (
             <Typography.Text type="secondary">
               {roster.updatedByName || '-'}
-              {' · '}
+              {' - '}
               {roster.updatedAt ? formatDateTime(roster.updatedAt, 'YYYY-MM-DD HH:mm') : '-'}
             </Typography.Text>
           ) : null}

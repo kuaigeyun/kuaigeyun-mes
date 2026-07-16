@@ -58,6 +58,11 @@ function toGanttTask(item: SalesOrderItemForGantt, index: number): GanttTask {
   };
 }
 
+/** 覆盖 svar-gantt 默认的 %d-%m-%Y 列模板，统一为 YYYY-MM-DD */
+function formatColumnDate(value: Date): string {
+  return formatDateTime(dayjs(value), 'YYYY-MM-DD');
+}
+
 const SCALES = [
   { unit: 'month' as const, step: 1, format: '%Y年%m月' },
   { unit: 'week' as const, step: 1, format: '第%W周' },
@@ -110,8 +115,8 @@ const SalesOrderGanttChart: React.FC<SalesOrderGanttChartProps> = ({ items }) =>
           readonly
           columns={[
             { id: 'text', header: '订单/物料', width: 220 },
-            { id: 'start', header: '开始', width: 100 },
-            { id: 'end', header: '结束', width: 100 },
+            { id: 'start', header: '开始', width: 100, template: formatColumnDate },
+            { id: 'end', header: '结束', width: 100, template: formatColumnDate },
             { id: 'duration', header: '工期(天)', width: 80 },
           ]}
         />

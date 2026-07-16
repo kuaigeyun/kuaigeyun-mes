@@ -13,7 +13,7 @@ from core.api.deps.deps import get_current_user
 
 router = APIRouter(
     prefix="/document-reconciliation",
-    tags=["App · Kuaicaiwu · Document Reconciliation"],
+    tags=["App - Kuaicaiwu - Document Reconciliation"],
     dependencies=[Depends(require_kuaicaiwu_module_access("document-reconciliation"))],
 )
 service = DocumentReconciliationService()

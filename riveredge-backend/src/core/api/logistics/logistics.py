@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Query
 from core.api.deps import get_current_user, get_current_tenant
 from core.services.logistics_service import LogisticsService
 
-router = APIRouter(prefix="/logistics", tags=["Core · Logistics"])
+router = APIRouter(prefix="/logistics", tags=["Core - Logistics"])
 
 
 @router.get("/track", summary="Track shipment")

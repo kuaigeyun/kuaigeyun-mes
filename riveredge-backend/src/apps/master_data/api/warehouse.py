@@ -25,7 +25,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(
     prefix="/warehouse",
-    tags=["App · Master Data · Warehouse"],
+    tags=["App - Master Data - Warehouse"],
     dependencies=[Depends(require_master_data_module_access("warehouse"))],
 )
 

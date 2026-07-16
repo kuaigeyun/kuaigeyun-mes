@@ -40,7 +40,7 @@ class CostRule(BaseModel):
     cost_type = fields.CharField(max_length=50, description="成本类型")
     calculation_method = fields.CharField(max_length=50, description="计算方法")
     allocation_basis = fields.CharField(max_length=50, null=True, description="分摊基准（如：产量、工时、机器工时、产值、手动分摊）")
-    wip_valuation_method = fields.CharField(max_length=50, null=True, description="在产品核算方法（如：不计算、约当产量法、定额成本法、只计材料）")
+    wip_valuation_method = fields.CharField(max_length=50, null=True, description="[已弃用] 在产品核算方法，配置面已移除")
     source_module = fields.CharField(max_length=50, null=True, description="费用来源模块（如：薪资、采购、仓库、报工）")
     calculation_formula = fields.JSONField(null=True, description="计算公式（JSON格式）")
     rule_parameters = fields.JSONField(null=True, description="规则参数（JSON格式）")

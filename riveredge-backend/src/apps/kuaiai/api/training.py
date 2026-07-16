@@ -13,7 +13,7 @@ from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 
-router = APIRouter(prefix="/training", tags=["App · KU-AI · Training"])
+router = APIRouter(prefix="/training", tags=["App - KU-AI - Training"])
 
 
 class TrainingSampleCreate(BaseModel):

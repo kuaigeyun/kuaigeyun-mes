@@ -22,7 +22,7 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import BusinessLogicError
 
-router = APIRouter(prefix="/payments", tags=["App · Kuaicaiwu · Finance"])
+router = APIRouter(prefix="/payments", tags=["App - Kuaicaiwu - Finance"])
 payment_pull_service = PaymentPullService()
 
 

@@ -20,7 +20,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/scripts", tags=["Core · Scripts"])
+router = APIRouter(prefix="/scripts", tags=["Core - Scripts"])
 
 
 @router.post("", response_model=ScriptResponse, status_code=status.HTTP_201_CREATED)

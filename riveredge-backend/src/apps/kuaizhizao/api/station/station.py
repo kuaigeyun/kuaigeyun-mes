@@ -21,7 +21,7 @@ from apps.kuaizhizao.schemas.station import (
 
 router = APIRouter(
     prefix="/station",
-    tags=["App · Kuaige Zhizao · Station Terminal"],
+    tags=["App - Kuaige Zhizao - Station Terminal"],
     dependencies=[Depends(require_kuaizhizao_module_access("production-execution-terminal"))],
 )
 

@@ -23,7 +23,7 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 
 # 创建路由
-router = APIRouter(prefix="/templates", tags=["Platform · Industry Templates"])
+router = APIRouter(prefix="/templates", tags=["Platform - Industry Templates"])
 
 
 def get_industry_template_service() -> IndustryTemplateService:

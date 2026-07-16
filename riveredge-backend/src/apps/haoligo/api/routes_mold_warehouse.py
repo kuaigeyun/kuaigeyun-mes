@@ -25,7 +25,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/molds/warehouses",
-    tags=["App · HaoliGO · 模具仓库"],
+    tags=["App - HaoliGO - 模具仓库"],
     dependencies=[Depends(require_haoligo_module_access("molds-warehouse"))],
 )
 

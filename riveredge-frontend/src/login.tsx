@@ -27,6 +27,7 @@ import zhHantLocale from './locales/zh-Hant.login';
 import jaJPLocale from './locales/ja-JP.login';
 import viVNLocale from './locales/vi-VN.login';
 import LoginPage from './pages/login';
+import { AntdAppBridge } from './utils/antdAppApis';
 import { getGuestLanguageStorageKey, resolveLoginInitialLanguage } from './utils/localeBootstrap';
 
 const initialLang = resolveLoginInitialLanguage();
@@ -101,6 +102,7 @@ function LoginRoot() {
     <QueryClientProvider client={loginQueryClient}>
       <ConfigProvider locale={locale}>
         <App>
+          <AntdAppBridge />
           <MemoryRouter initialEntries={[initialPath]} initialIndex={0}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />

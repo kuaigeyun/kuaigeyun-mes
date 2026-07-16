@@ -25,7 +25,7 @@ from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from infra.models.user import User
 
-router = APIRouter(prefix="/gate-templates", tags=["App · Kuaiplm · Gate Templates"])
+router = APIRouter(prefix="/gate-templates", tags=["App - Kuaiplm - Gate Templates"])
 service = RdGateTemplateService()
 
 

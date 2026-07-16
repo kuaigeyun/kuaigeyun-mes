@@ -1,5 +1,5 @@
 /**
- * 可视排产 AI · 待排池排序建议卡片
+ * 可视排产 AI - 待排池排序建议卡片
  */
 
 import React from 'react';

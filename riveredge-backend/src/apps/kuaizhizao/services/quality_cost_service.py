@@ -796,9 +796,14 @@ class QualityCostService:
         
         process_inspections = await process_query.all()
         
+        from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+
+        cost_svc = InventoryCostService()
+        
         for inspection in process_inspections:
-            # 获取物料单位成本（简化处理，使用默认值）
-            material_unit_cost = Decimal(100.00)  # TODO: 从物料成本获取
+            material_unit_cost = await cost_svc.require_material_unit_cost(
+                tenant_id, int(inspection.material_id)
+            )
             
             # 计算废品损失（不合格数量 × 单位成本）
             scrap_cost = inspection.unqualified_quantity * material_unit_cost
@@ -838,8 +843,9 @@ class QualityCostService:
         finished_inspections = await finished_query.all()
         
         for inspection in finished_inspections:
-            # 获取物料单位成本（简化处理，使用默认值）
-            material_unit_cost = Decimal(100.00)  # TODO: 从物料成本获取
+            material_unit_cost = await cost_svc.require_material_unit_cost(
+                tenant_id, int(inspection.material_id)
+            )
             
             # 计算废品损失（不合格数量 × 单位成本）
             scrap_cost = inspection.unqualified_quantity * material_unit_cost

@@ -137,7 +137,7 @@ function buildBeforePreviewFromMaintenance(row: MoldOutsourceMaintenanceSheetRow
 const formatMoldWarehouseLabel = (name?: string | null, code?: string | null) => {
   const n = (name || '').trim();
   const c = (code || '').trim();
-  if (n && c) return `${c} · ${n}`;
+  if (n && c) return `${c} - ${n}`;
   return n || c || '';
 };
 
@@ -171,7 +171,7 @@ function formatOutsourceRowLabel(r: MoldOutsourceMaintenanceSheetRow): string {
   return [
     r.sheet_no && String(r.sheet_no).trim(),
     (r.source_order_no && String(r.source_order_no).trim()) || `外协维修单#${r.id}`,
-    r.primary_mold_code ? `· ${r.primary_mold_code}` : null,
+    r.primary_mold_code ? `${r.primary_mold_code}` : null,
   ]
     .filter(Boolean)
     .join(' ');
@@ -910,7 +910,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         for (const it of items) {
           const rr = (it.repair_result && String(it.repair_result).trim()) || '';
           const rc = (it.repair_content && String(it.repair_content).trim()) || '';
-          if (rr || rc) parts.push([rr, rc].filter(Boolean).join(' · '));
+          if (rr || rc) parts.push([rr, rc].filter(Boolean).join(' - '));
         }
         return parts.length ? parts.join('；') : '—';
       },

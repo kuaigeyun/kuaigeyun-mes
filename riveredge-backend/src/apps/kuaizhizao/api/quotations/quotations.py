@@ -51,7 +51,7 @@ QUOTATION_SORTABLE_FIELDS = frozenset({
 
 router = APIRouter(
     prefix="/quotations",
-    tags=["App · Kuaige Zhizao · Quotation Management"],
+    tags=["App - Kuaige Zhizao - Quotation Management"],
     dependencies=[Depends(require_kuaizhizao_module_access("quotation"))],
 )
 

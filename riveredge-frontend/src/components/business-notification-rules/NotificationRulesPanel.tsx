@@ -1,6 +1,6 @@
 import { rowActionKind } from '../uni-action';
 /**
- * 业务配置 · 消息提醒（平台通用 + 已开通定制 APP 合并展示）
+ * 业务配置 - 消息提醒（平台通用 + 已开通定制 APP 合并展示）
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';

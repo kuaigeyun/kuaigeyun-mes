@@ -14,7 +14,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 
-router = APIRouter(tags=["Core · Users · Data Scope Bindings"])
+router = APIRouter(tags=["Core - Users - Data Scope Bindings"])
 
 
 async def _resolve_user_id(tenant_id: int, user_id: int) -> int:

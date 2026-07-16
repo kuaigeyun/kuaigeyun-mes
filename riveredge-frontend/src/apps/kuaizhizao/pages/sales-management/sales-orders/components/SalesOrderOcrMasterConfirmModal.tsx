@@ -1,5 +1,5 @@
 /**
- * OCR 录单 · 主数据新建确认弹窗
+ * OCR 录单 - 主数据新建确认弹窗
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -310,7 +310,7 @@ export function SalesOrderOcrMasterConfirmModal({
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 {basePlan.materials.map((draft, index) => {
                   const created = createdMaterialsByDedupeKey.get(draft.dedupeKey);
-                  const summary = [draft.name, draft.specification, draft.baseUnit].filter(Boolean).join(' · ');
+                  const summary = [draft.name, draft.specification, draft.baseUnit].filter(Boolean).join(' - ');
                   return (
                     <div key={draft.dedupeKey} className="sales-order-ai-master-confirm-item">
                       <div className="sales-order-ai-master-confirm-item-head">

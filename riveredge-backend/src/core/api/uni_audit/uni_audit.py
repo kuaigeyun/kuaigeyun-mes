@@ -21,7 +21,7 @@ from core.services.approval.uni_audit_dispatch import (
 )
 from infra.exceptions.exceptions import ValidationError
 
-router = APIRouter(prefix="/uni-audit", tags=["Core · Uni Audit"])
+router = APIRouter(prefix="/uni-audit", tags=["Core - Uni Audit"])
 
 
 @router.post("/{entity_type}/{entity_id}/{action}")

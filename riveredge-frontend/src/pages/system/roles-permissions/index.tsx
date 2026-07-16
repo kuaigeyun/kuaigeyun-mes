@@ -144,16 +144,16 @@ function permissionLeafDisplayLabel(
     return t('permission.kuaizhizao.workOrderAssign', { defaultValue: '工单派工' });
   }
   if (code === 'kuaizhizao:customer-pool:assign') {
-    return t('permission.kuaizhizao.customerPoolAssign', { defaultValue: '客户池 · 分配客户' });
+    return t('permission.kuaizhizao.customerPoolAssign', { defaultValue: '客户池 - 分配客户' });
   }
   if (code === 'kuaizhizao:customer-pool:release') {
-    return t('permission.kuaizhizao.customerPoolRelease', { defaultValue: '客户池 · 释放客户' });
+    return t('permission.kuaizhizao.customerPoolRelease', { defaultValue: '客户池 - 释放客户' });
   }
   if (code === 'kuaizhizao:customer-pool:recycle') {
-    return t('permission.kuaizhizao.customerPoolRecycle', { defaultValue: '客户池 · 强制回收' });
+    return t('permission.kuaizhizao.customerPoolRecycle', { defaultValue: '客户池 - 强制回收' });
   }
   if (code === 'kuaizhizao:customer-pool:claim') {
-    return t('permission.kuaizhizao.customerPoolClaim', { defaultValue: '客户池 · 领取客户' });
+    return t('permission.kuaizhizao.customerPoolClaim', { defaultValue: '客户池 - 领取客户' });
   }
   const parts = code.split(':').filter(Boolean);
   const n = parts.length;
@@ -2298,7 +2298,7 @@ const RolesPermissionsPage: React.FC = () => {
                           description={
                             <Typography.Text type="secondary" ellipsis style={{ fontSize: 12 }}>
                               {user.department_name
-                                ? `${user.department_name} · ${user.username}`
+                                ? `${user.department_name} - ${user.username}`
                                 : user.username}
                             </Typography.Text>
                           }

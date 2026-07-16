@@ -175,7 +175,7 @@ function renderGanttTimelineLabel(
     if (!isOperationTaskId(row.id)) return null;
     const tooltip = [row.gantt_primary_label, row.gantt_work_order_code, row.assigned_station_name, row.assigned_equipment_name]
       .filter(Boolean)
-      .join(' · ');
+      .join(' - ');
     return (
       <GanttTaskLabel
         productName={row.gantt_primary_label}
@@ -189,7 +189,7 @@ function renderGanttTimelineLabel(
   }
   const tooltip = [row.gantt_primary_label, row.gantt_work_order_code, row.assigned_equipment_name, row.assigned_mold_name]
     .filter(Boolean)
-    .join(' · ');
+    .join(' - ');
   return (
     <GanttTaskLabel
       productName={row.gantt_primary_label}
@@ -297,6 +297,7 @@ export interface GanttSchedulingChartProps {
   onBatchUpdateOperations?: (updates: GanttOperationDateUpdate[]) => void | Promise<void>;
   onBatchUpdateOperationStations?: (updates: GanttOperationStationUpdate[]) => void | Promise<void>;
   onWorkOrderSelect?: (workOrderId: number | null) => void;
+  onOperationSelect?: (operationId: number, workOrderId: number | null) => void;
   onRefresh?: () => void;
   nonDraggableTaskIds?: Array<number | string>;
   onBlockedDragAttempt?: (taskId: number | string) => void;
@@ -318,6 +319,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   onBatchUpdateOperations,
   onBatchUpdateOperationStations,
   onWorkOrderSelect,
+  onOperationSelect,
   onRefresh,
   nonDraggableTaskIds = [],
   onBlockedDragAttempt,
@@ -590,6 +592,11 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
       if (!RESOURCE_LEVELS.includes(taskLevel)) return;
       if (isOperationTaskId(ev.id)) {
         const woId = resolveWorkOrderIdFromTask(ev.id, tasks, safeWorkOrders);
+        const opMatch = String(ev.id).match(/^op-(\d+)$/i);
+        const opId = opMatch ? Number(opMatch[1]) : null;
+        if (opId && onOperationSelect) {
+          onOperationSelect(opId, woId);
+        }
         selectWorkOrderGroup(woId, ev.toggle);
         return;
       }
@@ -605,7 +612,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
       }
       selectWorkOrderGroup(null);
     },
-    [taskLevel, tasks, safeWorkOrders, selectWorkOrderGroup]
+    [taskLevel, tasks, safeWorkOrders, selectWorkOrderGroup, onOperationSelect]
   );
 
   const handleGanttInit = useCallback(

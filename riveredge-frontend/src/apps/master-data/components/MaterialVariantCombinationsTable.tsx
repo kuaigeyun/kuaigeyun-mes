@@ -97,7 +97,7 @@ export function getVariantAttributeLabel(
 export function formatVariantAttributesLine(
   attrs: Record<string, unknown>,
   labelMap: Map<string, string>,
-  separator = ' · ',
+  separator = ' - ',
 ): string {
   const line = Object.entries(attrs)
     .filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0))

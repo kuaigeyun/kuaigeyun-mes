@@ -19,12 +19,17 @@ from apps.kuaizhizao.schemas.cost import (
     QualityCostCalculationResponse,
 )
 from apps.kuaizhizao.services.quality_cost_service import QualityCostService
+from apps.kuaicaiwu.api._kuaicaiwu_route_access import require_kuaicaiwu_module_access
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
-router = APIRouter(prefix="/quality-cost", tags=["App · Kuaicaiwu · Quality Cost"])
+router = APIRouter(
+    prefix="/quality-cost",
+    tags=["App - Kuaicaiwu - Quality Cost"],
+    dependencies=[Depends(require_kuaicaiwu_module_access("cost"))],
+)
 
 
 def _http_exception_with_trace(

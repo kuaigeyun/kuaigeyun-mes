@@ -39,7 +39,7 @@ from loguru import logger
 
 # 注意：路由前缀为空，因为应用路由注册时会自动添加 /apps/kuaizhizao 前缀
 router = APIRouter(
-    tags=["App · Kuaige Zhizao · Purchase Order Management"],
+    tags=["App - Kuaige Zhizao - Purchase Order Management"],
     dependencies=[Depends(require_kuaizhizao_module_access("purchase-order"))],
 )
 

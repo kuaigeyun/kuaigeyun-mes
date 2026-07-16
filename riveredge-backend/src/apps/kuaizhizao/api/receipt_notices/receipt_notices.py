@@ -31,7 +31,7 @@ from apps.kuaizhizao.schemas.receipt_notice import (
 )
 
 receipt_notice_service = ReceiptNoticeService()
-router = APIRouter(prefix="/receipt-notices", tags=["App · Kuaige Zhizao · Receipt Notice"])
+router = APIRouter(prefix="/receipt-notices", tags=["App - Kuaige Zhizao - Receipt Notice"])
 
 
 def _http_exception_with_trace(

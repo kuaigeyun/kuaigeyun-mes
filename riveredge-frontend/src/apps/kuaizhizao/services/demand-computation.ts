@@ -426,6 +426,7 @@ export async function getPushPreview(
     purchase?: 'requisition' | 'purchase_order'
     outsource_only?: boolean
     generate_mode?: 'work_order_only' | 'all' | 'purchase_only' | 'outsource_only'
+    push_mode?: 'draft' | 'confirm'
   },
 ): Promise<PushPreview> {
   return apiRequest<PushPreview>(`/apps/kuaizhizao/demand-computations/${id}/push-preview`, {

@@ -880,7 +880,7 @@ const MoldBorrowOutPage: React.FC = () => {
       </Modal>
 
       <Modal
-        title="领用单 · 数据集关联"
+        title="领用单 - 数据集关联"
         open={bindingModalOpen}
         onCancel={() => setBindingModalOpen(false)}
         width={720}

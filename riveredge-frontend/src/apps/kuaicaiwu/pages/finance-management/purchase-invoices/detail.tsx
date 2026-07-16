@@ -69,12 +69,14 @@ const PurchaseInvoiceDetail: React.FC = () => {
       {data.review_status === '待审核' && (
         <UniWorkflowActions
           record={data}
+          apiPrefix="/apps/kuaicaiwu/purchase-invoices"
+          entityType="purchase_invoice"
           entityName={t(`${P}.entityName`)}
           statusField="status"
           reviewStatusField="review_status"
           draftStatuses={[]}
           pendingStatuses={['待审核']}
-          approvedStatuses={['已审核', '通过']}
+          approvedStatuses={['已审核']}
           rejectedStatuses={['已驳回', '驳回']}
           theme="default"
           size="small"

@@ -460,7 +460,7 @@ async def _resolve_repair_warehouse_name(
     name = (wh.warehouse_name or "").strip()
     code = (wh.warehouse_code or "").strip()
     if name and code:
-        return f"{code} · {name}"
+        return f"{code} - {name}"
     return name or code or str(wh.id)
 
 

@@ -33,7 +33,7 @@ export default {
   'pages.login.provenanceLabel': '構建來源',
   'pages.login.telemetryDisclosure': '可選統計說明',
   'components.iterationFloatButton.provenanceStatus.official_self_hosted': '官方倉庫 自託管',
-  'components.iterationFloatButton.provenanceStatus.official_unknown_commit': '官方來源 · commit 未校驗',
+  'components.iterationFloatButton.provenanceStatus.official_unknown_commit': '官方來源 - commit 未校驗',
   'components.iterationFloatButton.provenanceStatus.unverified_commit': '未驗證 commit',
   'components.iterationFloatButton.provenanceStatus.unverified_build': '未驗證構建',
   'components.iterationFloatButton.provenanceStatus.unknown': '來源未知',

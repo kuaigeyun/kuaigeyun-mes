@@ -20,7 +20,7 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/user-tasks", tags=["Core · User Tasks"])
+router = APIRouter(prefix="/user-tasks", tags=["Core - User Tasks"])
 
 
 @router.post("", response_model=UserTaskResponse, status_code=status.HTTP_201_CREATED)

@@ -28,7 +28,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/finance/material-acceptances",
-    tags=["App · HaoliGO · 财务管理 · 材料验收"],
+    tags=["App - HaoliGO - 财务管理 - 材料验收"],
     dependencies=[Depends(require_haoligo_module_access("finance-invoice-verify"))],
 )
 
@@ -205,7 +205,7 @@ async def save_finance_acceptance_pdf(
         original_name=filename,
         category="haoligo_finance_acceptance",
         tags=["haoligo", "finance", "material_acceptance"],
-        description=f"材料验收单 PDF · {row.sheet_no}",
+        description=f"材料验收单 PDF - {row.sheet_no}",
     )
     row.pdf_file_uuid = file_obj.uuid
     await row.save()

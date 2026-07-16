@@ -785,7 +785,7 @@ class CoordinationBoardService:
         else:
             mrp_done = comp.computation_status == "完成"
             mrp_status = "done" if mrp_done else "blocked"
-            mrp_summary = f"计算单 {comp.computation_code} · {comp.computation_status}"
+            mrp_summary = f"计算单 {comp.computation_code} - {comp.computation_status}"
             mrp_blockers = [] if mrp_done else ["需求计算尚未完成"]
             mrp_actions = [
                 self._nav(
@@ -856,7 +856,7 @@ class CoordinationBoardService:
         elif pr_count > 0 and po_count > 0 and unpushed_buy:
             pf_status = "partial"
             pf_summary = (
-                f"采购申请×{pr_count} · 采购单×{po_count}，"
+                f"采购申请×{pr_count} - 采购单×{po_count}，"
                 f"待补 {len(unpushed_buy)} 种"
             )
             pf_blockers = [f"{i.material_code} 待转采购订单" for i in unpushed_buy[:5]]
@@ -1146,7 +1146,7 @@ class CoordinationBoardService:
                 )
             elif in_prog or completed:
                 prod_status = "partial"
-                prod_summary = f"生产中 {len(in_prog)} · 已完工 {len(completed)}"
+                prod_summary = f"生产中 {len(in_prog)} - 已完工 {len(completed)}"
                 prod_blockers = [f"{w['code']} 待报工入库" for w in in_prog[:5]]
             else:
                 prod_status = "pending"

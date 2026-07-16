@@ -22,6 +22,47 @@ export const UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS = {
   ellipsis: false,
 } as const;
 
+/** 与「开始/结束」行前徽章同尺寸（高 16 / 字号 10） */
+const STACKED_LINE_BADGE_BOX: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '0 6px',
+  width: 36,
+  height: 16,
+  borderRadius: 10,
+  fontSize: 10,
+  lineHeight: '16px',
+  flexShrink: 0,
+  boxSizing: 'border-box',
+};
+
+export type UniTableStackedLineBadgeTone = 'neutral' | 'danger';
+
+/** 堆叠列行内紧凑徽章：开始/结束、逾期等同尺寸对齐 */
+export function UniTableStackedLineBadge({
+  children,
+  tone = 'neutral',
+}: {
+  children: React.ReactNode;
+  tone?: UniTableStackedLineBadgeTone;
+}) {
+  const { token } = theme.useToken();
+  const isDanger = tone === 'danger';
+  return (
+    <span
+      style={{
+        ...STACKED_LINE_BADGE_BOX,
+        border: `1px solid ${isDanger ? token.colorError : token.colorBorderSecondary}`,
+        color: isDanger ? '#fff' : token.colorTextSecondary,
+        background: isDanger ? token.colorError : token.colorFillTertiary,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 export interface UniTableStackedPrimaryCellProps {
   /** 上行主文案（如客户名、物料名） */
   primary: string;
@@ -31,7 +72,7 @@ export interface UniTableStackedPrimaryCellProps {
   secondaryCopyable?: boolean;
   /** @deprecated 请用 secondaryExtra；复制按钮前的插槽（历史兼容） */
   secondaryLeadingExtra?: React.ReactNode;
-  /** 次行末尾附加内容（如逾期标签） */
+  /** 次行末尾附加内容（如逾期：须用 UniTableStackedLineBadge tone="danger"，与开始/结束同尺寸） */
   secondaryExtra?: React.ReactNode;
   /** 主行末尾附加内容（如拆分工单标签） */
   primaryExtra?: React.ReactNode;
@@ -69,21 +110,6 @@ export function UniTableStackedPrimaryCell({
   const secondaryLineStyle: React.CSSProperties = uniformText
     ? { fontSize: token.fontSize, fontWeight: 400, lineHeight: 1.25, whiteSpace: 'nowrap' }
     : { fontSize: token.fontSizeSM, lineHeight: 1.2, whiteSpace: 'nowrap' };
-  const lineBadgeStyle: React.CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '0 6px',
-    width: 36,
-    borderRadius: 10,
-    border: `1px solid ${token.colorBorderSecondary}`,
-    color: token.colorTextSecondary,
-    background: token.colorFillTertiary,
-    fontSize: 10,
-    lineHeight: '16px',
-    height: 16,
-    flexShrink: 0,
-  };
 
   const primaryTextStyle: React.CSSProperties = {
     ...primaryLineStyle,
@@ -112,7 +138,7 @@ export function UniTableStackedPrimaryCell({
           width: '100%',
         }}
       >
-        {primaryBadge ? <span style={lineBadgeStyle}>{primaryBadge}</span> : null}
+        {primaryBadge ? <UniTableStackedLineBadge>{primaryBadge}</UniTableStackedLineBadge> : null}
         <span title={primaryText} style={primaryTextStyle}>
           {primaryText}
         </span>
@@ -129,7 +155,7 @@ export function UniTableStackedPrimaryCell({
           flexWrap: 'nowrap',
         }}
       >
-        {secondaryBadge ? <span style={lineBadgeStyle}>{secondaryBadge}</span> : null}
+        {secondaryBadge ? <UniTableStackedLineBadge>{secondaryBadge}</UniTableStackedLineBadge> : null}
         <Typography.Text
           {...(uniformText ? {} : { type: 'secondary' as const })}
           style={secondaryLineStyle}
@@ -156,11 +182,11 @@ export function UniTableStackedPrimaryCell({
   );
 }
 
-/** 物料次行：编号 · 规格（无规格则仅编号） */
+/** 物料次行：编号 - 规格（无规格则仅编号） */
 export function formatMaterialCodeSpecLine(code?: string | null, spec?: string | null): string {
   const c = code?.trim() ?? '';
   const s = spec?.trim() ?? '';
-  if (c && s) return `${c} · ${s}`;
+  if (c && s) return `${c} - ${s}`;
   return c || s || '-';
 }
 

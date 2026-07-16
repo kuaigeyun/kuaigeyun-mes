@@ -35,6 +35,11 @@ import SchedulingPoolToolbar from './components/SchedulingPoolToolbar';
 import SchedulingWorkOrderPrepModal, {
   type SchedulingWorkOrderPrepValues,
 } from './components/SchedulingWorkOrderPrepModal';
+import SchedulingOperationEditDrawer, {
+  type SchedulingOperationEditContext,
+} from './components/SchedulingOperationEditDrawer';
+import { convertEngineProposalToAiProposal } from './convertEngineProposal';
+import { applySchedulingAiProposal } from './applySchedulingAiProposal';
 import buildSchedulingGanttToolbar from './components/SchedulingGanttToolbar';
 import {
   SchedulingAiAssistantDrawer,
@@ -69,6 +74,10 @@ import {
 } from './schedulingPoolUtils';
 import './delfoi-style.less';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { searchUserDisplay } from '../../../../../services/user';
+import { displayItemsToUsers } from '../../../../../utils/userDisplay';
+import { getEquipmentList } from '../../../../../services/equipment';
+import { getMoldList } from '../../../../../services/mold';
 
 const GANTT_WORK_ORDER_LIMIT = 500;
 
@@ -216,6 +225,7 @@ const SchedulingPage: React.FC = () => {
   const [poolKeyword, setPoolKeyword] = useState('');
   const [poolAppliedKeyword, setPoolAppliedKeyword] = useState('');
   const [poolStatusFilter, setPoolStatusFilter] = useState<PoolStatusFilter>('all');
+  const [poolOverdueOnly, setPoolOverdueOnly] = useState(false);
   const [lastBlockedTaskId, setLastBlockedTaskId] = useState<string>('');
   const [shiftDays, setShiftDays] = useState(1);
   const [batchActionLoading, setBatchActionLoading] = useState(false);
@@ -235,6 +245,12 @@ const SchedulingPage: React.FC = () => {
   const [prepModalLoading, setPrepModalLoading] = useState(false);
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   const [aiSuggestedPoolOrderIds, setAiSuggestedPoolOrderIds] = useState<number[]>([]);
+  const [autoRescheduleLoading, setAutoRescheduleLoading] = useState(false);
+  const [operationEditContext, setOperationEditContext] = useState<SchedulingOperationEditContext | null>(null);
+  const [operationEditOpen, setOperationEditOpen] = useState(false);
+  const [schedulingWorkers, setSchedulingWorkers] = useState<Array<{ id: number; name: string; code?: string }>>([]);
+  const [schedulingEquipments, setSchedulingEquipments] = useState<Array<{ id: number; name: string; code?: string }>>([]);
+  const [schedulingMolds, setSchedulingMolds] = useState<Array<{ id: number; name: string; code?: string }>>([]);
   const draftWoUpdatesRef = useRef(
     new Map<number, { work_order_id: number; planned_start_date: string; planned_end_date: string }>()
   );
@@ -274,7 +290,53 @@ const SchedulingPage: React.FC = () => {
 
   useEffect(() => {
     actionRef.current?.reload();
-  }, [poolAppliedKeyword, poolStatusFilter]);
+  }, [poolAppliedKeyword, poolStatusFilter, poolOverdueOnly]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadResources = async () => {
+      try {
+        const [usersRes, equipmentRes, moldsRes] = await Promise.all([
+          searchUserDisplay({ is_active: true, page_size: 200 }).catch(() => ({ items: [] })),
+          getEquipmentList({ is_active: true, limit: 200 }).catch(() => ({ items: [] })),
+          getMoldList({ is_active: true, limit: 200 }).catch(() => ({ items: [] })),
+        ]);
+        if (cancelled) return;
+        const users = displayItemsToUsers(usersRes?.items || []);
+        setSchedulingWorkers(
+          users.map((u) => ({
+            id: Number(u.id),
+            name: String(u.full_name || u.username || u.id),
+            code: u.username,
+          }))
+        );
+        setSchedulingEquipments(
+          (equipmentRes?.items || []).map((item: any) => ({
+            id: Number(item.id),
+            name: String(item.name || item.id),
+            code: item.code,
+          }))
+        );
+        setSchedulingMolds(
+          (moldsRes?.items || []).map((item: any) => ({
+            id: Number(item.id),
+            name: String(item.name || item.id),
+            code: item.code,
+          }))
+        );
+      } catch {
+        if (!cancelled) {
+          setSchedulingWorkers([]);
+          setSchedulingEquipments([]);
+          setSchedulingMolds([]);
+        }
+      }
+    };
+    void loadResources();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handlePoolSearch = useCallback(() => {
     setPoolAppliedKeyword(poolKeyword.trim());
@@ -284,6 +346,7 @@ const SchedulingPage: React.FC = () => {
     setPoolKeyword('');
     setPoolAppliedKeyword('');
     setPoolStatusFilter('all');
+    setPoolOverdueOnly(false);
   }, []);
 
   const {
@@ -327,12 +390,14 @@ const SchedulingPage: React.FC = () => {
 
   const poolWorkOrders = useMemo(
     () =>
-      ganttWorkOrders.filter(
-        (wo) =>
-          (poolStatusFilter === 'all' || wo.status === poolStatusFilter) &&
-          matchesPoolKeyword(wo, poolAppliedKeyword)
-      ),
-    [ganttWorkOrders, poolAppliedKeyword, poolStatusFilter]
+      ganttWorkOrders.filter((wo) => {
+        if (poolStatusFilter !== 'all' && wo.status !== poolStatusFilter) return false;
+        if (poolOverdueOnly) {
+          if (!wo.planned_end_date || !dayjs(wo.planned_end_date).isBefore(dayjs())) return false;
+        }
+        return matchesPoolKeyword(wo, poolAppliedKeyword);
+      }),
+    [ganttWorkOrders, poolAppliedKeyword, poolOverdueOnly, poolStatusFilter]
   );
 
   const workOrderDiagnosticsById = useMemo(() => {
@@ -975,6 +1040,99 @@ const SchedulingPage: React.FC = () => {
     );
   }, [handleSchedulingQuickAction, t]);
 
+  const applyEngineProposalToDraft = useCallback(
+    async (scope: 'selected' | 'overdue' | 'unscheduled', workOrderIds: number[]) => {
+      if (!canScheduleUpdate || workOrderIds.length === 0) return false;
+      setAutoRescheduleLoading(true);
+      try {
+        const res = await visualSchedulingApi.autoReschedule({
+          work_order_ids: workOrderIds,
+          scope,
+          plan_date: filterPlanDate,
+        });
+        const proposal = convertEngineProposalToAiProposal(res.proposal);
+        if ((res.proposal.unfreezed?.length ?? 0) > 0) {
+          refreshGantt();
+        }
+        if (proposal.warnings.length > 0) {
+          messageApi.info(proposal.warnings.slice(0, 3).join('；'));
+        }
+        return applySchedulingAiProposal({
+          proposal,
+          draftWoUpdatesRef,
+          draftOpUpdatesRef,
+          draftStationUpdatesRef,
+          mutateGanttWorkOrders,
+          pushUndoSnapshot,
+          syncDraftPendingCount,
+          setDraftMode,
+          message: messageApi,
+          t,
+        });
+      } catch (e: any) {
+        messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.autoRescheduleFailed'));
+        return false;
+      } finally {
+        setAutoRescheduleLoading(false);
+      }
+    },
+    [
+      canScheduleUpdate,
+      draftOpUpdatesRef,
+      draftStationUpdatesRef,
+      draftWoUpdatesRef,
+      filterPlanDate,
+      messageApi,
+      mutateGanttWorkOrders,
+      pushUndoSnapshot,
+      refreshGantt,
+      syncDraftPendingCount,
+      t,
+    ]
+  );
+
+  const handleAutoReschedule = useCallback(async () => {
+    const ids = selectedWorkOrderIds.slice(0, 50);
+    if (ids.length === 0) return;
+    await new Promise<void>((resolve, reject) => {
+      modal.confirm({
+        title: t('app.kuaizhizao.scheduling.msg.autoRescheduleTitle'),
+        content: t('app.kuaizhizao.scheduling.msg.autoRescheduleConfirm', { count: ids.length }),
+        okText: t('app.kuaizhizao.scheduling.common.confirm'),
+        cancelText: t('app.kuaizhizao.scheduling.common.cancel'),
+        onOk: () => resolve(),
+        onCancel: () => reject(new Error('cancelled')),
+      });
+    });
+    await applyEngineProposalToDraft('selected', ids);
+  }, [applyEngineProposalToDraft, modal, selectedWorkOrderIds, t]);
+
+  const handleRescheduleForward = useCallback(async () => {
+    const ids = selectedWorkOrderIds.slice(0, 50);
+    if (ids.length === 0) return;
+    await new Promise<void>((resolve, reject) => {
+      modal.confirm({
+        title: t('app.kuaizhizao.scheduling.msg.rescheduleForwardTitle'),
+        content: t('app.kuaizhizao.scheduling.msg.rescheduleForwardConfirm', { count: ids.length }),
+        okText: t('app.kuaizhizao.scheduling.common.confirm'),
+        cancelText: t('app.kuaizhizao.scheduling.common.cancel'),
+        onOk: () => resolve(),
+        onCancel: () => reject(new Error('cancelled')),
+      });
+    });
+    await applyEngineProposalToDraft('overdue', ids);
+  }, [applyEngineProposalToDraft, modal, selectedWorkOrderIds, t]);
+
+  const handleGanttOperationSelect = useCallback(
+    (operationId: number, workOrderId: number | null) => {
+      if (!workOrderId) return;
+      const wo = ganttWorkOrders.find((item) => item.id === workOrderId);
+      if (!wo) return;
+      setOperationEditContext({ workOrder: wo, operationId });
+    },
+    [ganttWorkOrders]
+  );
+
   const persistOperationScheduling = useCallback(
     async (
       operationDateUpdates: Array<{ operation_id: number; planned_start_date: string; planned_end_date: string }>,
@@ -1224,16 +1382,47 @@ const SchedulingPage: React.FC = () => {
           woPlannedEnd = ends[ends.length - 1];
         }
 
+        if (values.operationDates.length > 0 || values.operationStations.length > 0) {
+          await persistOperationScheduling(values.operationDates, values.operationStations);
+        }
+        if (values.operationAssignments.length > 0) {
+          await workOrderApi.batchUpdateOperationAssignments(values.operationAssignments);
+        }
+
+        const assignmentByOp = new Map(values.operationAssignments.map((item) => [item.operation_id, item]));
+        const workerNameById = new Map(schedulingWorkers.map((w) => [w.id, w.name]));
+        const equipmentNameById = new Map(schedulingEquipments.map((e) => [e.id, e.name]));
+        const moldNameById = new Map(schedulingMolds.map((m) => [m.id, m.name]));
+        const updatedOpsWithAssignments = updatedOps.map((op) => {
+          if (op.id == null) return op;
+          const patch = assignmentByOp.get(op.id);
+          if (!patch) return op;
+          return {
+            ...op,
+            assigned_worker_id: patch.assigned_worker_id ?? op.assigned_worker_id,
+            assigned_worker_name:
+              patch.assigned_worker_id != null
+                ? workerNameById.get(patch.assigned_worker_id) ?? op.assigned_worker_name
+                : op.assigned_worker_name,
+            assigned_equipment_id: patch.assigned_equipment_id ?? op.assigned_equipment_id,
+            assigned_equipment_name:
+              patch.assigned_equipment_id != null
+                ? equipmentNameById.get(patch.assigned_equipment_id) ?? op.assigned_equipment_name
+                : op.assigned_equipment_name,
+            assigned_mold_id: patch.assigned_mold_id ?? op.assigned_mold_id,
+            assigned_mold_name:
+              patch.assigned_mold_id != null
+                ? moldNameById.get(patch.assigned_mold_id) ?? op.assigned_mold_name
+                : op.assigned_mold_name,
+          };
+        });
+
         const updatedWo: WorkOrderForGantt = {
           ...prepModalWorkOrder,
           planned_start_date: woPlannedStart,
           planned_end_date: woPlannedEnd,
-          operations: updatedOps,
+          operations: updatedOpsWithAssignments,
         };
-
-        if (values.operationDates.length > 0 || values.operationStations.length > 0) {
-          await persistOperationScheduling(values.operationDates, values.operationStations);
-        }
 
         setSelectedRowKeys([updatedWo.id]);
         const focusTask = pickFocusOperationTaskId(updatedWo);
@@ -1266,6 +1455,9 @@ const SchedulingPage: React.FC = () => {
       prepModalWorkOrder,
       refreshBoardScan,
       refreshGanttPreservingWorkOrder,
+      schedulingEquipments,
+      schedulingMolds,
+      schedulingWorkers,
       t,
     ]
   );
@@ -1459,10 +1651,8 @@ const SchedulingPage: React.FC = () => {
   const ganttToolbarNodes = buildSchedulingGanttToolbar({
     t,
     ganttViewMode,
-    resourceViewStats,
     shiftDays,
     selectedWorkOrderCount: selectedWorkOrderIds.length,
-    selectedOperationCount,
     batchActionLoading,
     canUpdate: canScheduleUpdate,
     draftMode,
@@ -1499,6 +1689,10 @@ const SchedulingPage: React.FC = () => {
     onViewModeChange: setGanttViewMode,
     onScrollToToday: () => setScrollToTodayToken((n) => n + 1),
     aiTrigger: <SchedulingAiAssistantTrigger onOpen={() => setAiDrawerOpen(true)} />,
+    onAutoReschedule: handleAutoReschedule,
+    onEditOperation: () => setOperationEditOpen(true),
+    autoRescheduleLoading,
+    canEditOperation: operationEditContext != null,
   });
 
   return (
@@ -1525,6 +1719,8 @@ const SchedulingPage: React.FC = () => {
       <SchedulingHeaderBand
         constraints={schedulingConstraints}
         selectedWorkOrderCount={selectedWorkOrderIds.length}
+        selectedOperationCount={selectedOperationCount}
+        resourceViewStats={resourceViewStats}
         legendMetrics={topLegendMetrics}
         planReliabilityLoading={planReliabilityLoading}
         planReliability={planReliability}
@@ -1597,6 +1793,7 @@ const SchedulingPage: React.FC = () => {
                     canScheduleUpdate ? handleBatchUpdateOperationStations : undefined
                   }
                   onWorkOrderSelect={handleGanttWorkOrderSelect}
+                  onOperationSelect={handleGanttOperationSelect}
                   onRefresh={refreshGantt}
                   canUpdate={canScheduleUpdate}
                   nonDraggableTaskIds={nonDraggableTaskIds}
@@ -1628,7 +1825,7 @@ const SchedulingPage: React.FC = () => {
                       {t('app.kuaizhizao.scheduling.pool.hint')}
                     </Typography.Text>
                     <span className="scheduling-pending-pool__sep" aria-hidden>
-                      ·
+                      -
                     </span>
                   </>
                 ) : null}
@@ -1659,6 +1856,9 @@ const SchedulingPage: React.FC = () => {
                       onConfirmDelay={handleConfirmDelay}
                       onToException={handleToException}
                       onApplyUnfreeze={handleApplyUnfreeze}
+                      onRescheduleForward={handleRescheduleForward}
+                      overdueOnly={poolOverdueOnly}
+                      onOverdueOnlyChange={setPoolOverdueOnly}
                     />
                   }
                   request={async (params: any) => {
@@ -1715,6 +1915,9 @@ const SchedulingPage: React.FC = () => {
         operationsNeedingStation={prepModalOperationsNeedingStation}
         workstations={workstationResources}
         workCenters={schedulingWorkCenters}
+        workers={schedulingWorkers}
+        equipments={schedulingEquipments}
+        molds={schedulingMolds}
         loading={prepModalSaving || prepModalLoading}
         onCancel={() => {
           setPrepModalOpen(false);
@@ -1723,6 +1926,22 @@ const SchedulingPage: React.FC = () => {
           setPrepModalOperationsNeedingStation([]);
         }}
         onSubmit={handlePrepModalSubmit}
+      />
+
+      <SchedulingOperationEditDrawer
+        open={operationEditOpen}
+        context={operationEditContext}
+        workstations={workstationResources}
+        workers={schedulingWorkers}
+        equipments={schedulingEquipments}
+        molds={schedulingMolds}
+        canUpdate={canScheduleUpdate}
+        onClose={() => setOperationEditOpen(false)}
+        onSaved={() => {
+          refreshGantt();
+          refreshBoardScan();
+          actionRef.current?.reload();
+        }}
       />
 
       <Modal

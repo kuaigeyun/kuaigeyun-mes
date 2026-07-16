@@ -48,11 +48,13 @@ import {
   resolveReceiptListParams,
 } from '../../../utils/financeListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 type PullReceivableCandidate = ReceiptPullCandidate;
 
 const R = 'app.kuaicaiwu.receipt';
+const RECEIPT_RESOURCE = 'kuaicaiwu:receipt';
 
 const ReceiptsPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
@@ -75,6 +77,7 @@ const ReceiptsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const pullFromReceivableAction = getKuaicaiwuDocumentAction('receipt.pull_from_receivable');
+  const receiptPerms = useResourcePermissions(RECEIPT_RESOURCE);
 
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
   const receiptSettlementTypeOptions = useMemo(() => getReceiptSettlementTypeOptions(t), [t]);
@@ -144,7 +147,7 @@ const ReceiptsPage: React.FC = () => {
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
     };
-    await apiRequest('/apps/kuaicaiwu/receipts', { method: 'POST', data });
+    await receiptService.create(data);
     messageApi.success(t(`${R}.createSuccess`));
     setCreateModalVisible(false);
     actionRef.current?.reload();
@@ -274,7 +277,7 @@ const ReceiptsPage: React.FC = () => {
       content: t(`${R}.confirmContent`, { code: record.receipt_code }),
       onOk: async () => {
         try {
-          await apiRequest(`/apps/kuaicaiwu/receipts/${record.id}/confirm`, { method: 'POST' });
+          await receiptService.confirmReceipt(record.id);
           messageApi.success(t(`${R}.confirmSuccess`));
           actionRef.current?.reload();
         } catch (e: any) {
@@ -333,7 +336,7 @@ const ReceiptsPage: React.FC = () => {
   const handleBatchConfirm = async (keys: React.Key[]) => {
     try {
       for (const key of keys) {
-        await apiRequest(`/apps/kuaicaiwu/receipts/${key}/confirm`, { method: 'POST' });
+        await receiptService.confirmReceipt(Number(key));
       }
       messageApi.success(t(`${R}.batchConfirmed`, { count: keys.length }));
       setSelectedRowKeys([]);
@@ -549,7 +552,7 @@ const ReceiptsPage: React.FC = () => {
             <Button {...rowActionKind('read')} key="det" onClick={() => openDetail(record)}>
               {t('common.detail')}
             </Button>,
-            record.status === 'Draft' ? (
+            record.status === 'Draft' && receiptPerms.canAction?.('audit') ? (
               <Button {...rowActionKind('audit')} key="cf" onClick={() => handleConfirm(record)}>
                 {t('app.kuaicaiwu.common.confirm')}
               </Button>
@@ -559,19 +562,19 @@ const ReceiptsPage: React.FC = () => {
                 {t('app.kuaicaiwu.common.settle')}
               </Button>
             ) : null,
-            record.status !== 'Cancelled' && record.settled_amount === 0 ? (
+            record.status !== 'Cancelled' && record.settled_amount === 0 && receiptPerms.canAction?.('revoke') ? (
               <Button {...rowActionKind('revoke')} key="ca" onClick={() => handleCancel(record)}>
                 {t('app.kuaicaiwu.common.void')}
               </Button>
             ) : null,
-            record.status !== 'Confirmed' ? (
+            record.status !== 'Confirmed' && receiptPerms.canDelete ? (
               <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
                 {t('common.delete')}
               </Button>
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
     },
-  ], [t, navigate, customerOptions, receiptSettlementTypeOptions]);
+  ], [t, navigate, customerOptions, receiptSettlementTypeOptions, receiptPerms]);
 
   return (
     <ListPageTemplate>

@@ -24,7 +24,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/print",
-    tags=["App · HaoliGO · 打印"],
+    tags=["App - HaoliGO - 打印"],
 )
 
 def _print_user_label(user: User) -> str:

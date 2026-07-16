@@ -20,7 +20,7 @@ from apps.kuaizhizao.services.print_service import DocumentPrintService
 from apps.kuaizhizao.services.document_timing_service import DocumentTimingService
 from apps.kuaizhizao.schemas.document_node_timing import DocumentTimingSummaryResponse
 
-router = APIRouter(tags=["App · Kuaige Zhizao · Document Print & Timing"])
+router = APIRouter(tags=["App - Kuaige Zhizao - Document Print & Timing"])
 document_timing_service = DocumentTimingService()
 
 

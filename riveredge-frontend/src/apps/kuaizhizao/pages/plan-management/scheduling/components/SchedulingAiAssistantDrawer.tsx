@@ -1,5 +1,5 @@
 /**
- * 可视排产 · AI 排产助手抽屉
+ * 可视排产 - AI 排产助手抽屉
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -14,12 +14,14 @@ import { UniAiButton, UniAiLottieIcon } from '../../../../../../components/uni-a
 import { formatApiErrorDetail } from '../../../../../../services/api';
 import type { WorkOrderForGantt } from '../../../../components/GanttSchedulingChart/types';
 import type { VisualSchedulingBoardScan } from '../../../../services/production';
+import { visualSchedulingApi } from '../../../../services/production';
 import {
   schedulingAiApi,
   type SchedulingAiPriorityResult,
   type SchedulingAiProposal,
 } from '../../../../services/scheduling-ai';
 import { applySchedulingAiProposal } from '../applySchedulingAiProposal';
+import { convertEngineProposalToAiProposal } from '../convertEngineProposal';
 import { SchedulingAiExplainCard } from './SchedulingAiExplainCard';
 import { SchedulingAiPriorityCard } from './SchedulingAiPriorityCard';
 import { SchedulingAiProposalCard } from './SchedulingAiProposalCard';
@@ -232,7 +234,20 @@ export function SchedulingAiAssistantDrawer({
 
   const runProposal = useCallback(
     async (text: string, assistantKey: string, proposalContext?: SchedulingAiProposal | null) => {
-      const res = await schedulingAiApi.suggestAdjustments(text, apiContext, proposalContext);
+      let engineContext = proposalContext ?? null;
+      if (!engineContext && apiContext.selectedWorkOrderIds?.length) {
+        try {
+          const engineRes = await visualSchedulingApi.autoReschedule({
+            work_order_ids: apiContext.selectedWorkOrderIds,
+            scope: 'selected',
+            plan_date: apiContext.planDate,
+          });
+          engineContext = convertEngineProposalToAiProposal(engineRes.proposal);
+        } catch {
+          engineContext = null;
+        }
+      }
+      const res = await schedulingAiApi.suggestAdjustments(text, apiContext, engineContext);
       setLatestProposal(res.proposal);
       patchMessage(assistantKey, {
         status: 'done',

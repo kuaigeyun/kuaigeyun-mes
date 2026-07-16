@@ -18,6 +18,13 @@ from apps.kuaicaiwu.schemas.standard_cost import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
+def standard_cost_effective_q(ref_date: date) -> Q:
+    """生效/失效窗口：未填生效日视为已生效；未填失效日视为长期有效。"""
+    return (Q(effective_date__isnull=True) | Q(effective_date__lte=ref_date)) & (
+        Q(expiry_date__isnull=True) | Q(expiry_date__gte=ref_date)
+    )
+
+
 class StandardCostService(AppBaseService[StandardCost]):
     """标准成本库 CRUD"""
 
@@ -167,10 +174,7 @@ class StandardCostService(AppBaseService[StandardCost]):
             cost_item_type=cost_item_type,
             is_active=True,
             deleted_at__isnull=True,
-            effective_date__lte=ref_date,
-        ).order_by("-effective_date", "-id").first()
+        ).filter(standard_cost_effective_q(ref_date)).order_by("-effective_date", "-id").first()
         if not row:
-            return None
-        if row.expiry_date and row.expiry_date < ref_date:
             return None
         return StandardCostResponse.model_validate(row)

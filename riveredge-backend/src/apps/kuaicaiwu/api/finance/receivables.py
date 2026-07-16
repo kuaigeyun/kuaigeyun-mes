@@ -20,7 +20,7 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
-router = APIRouter(prefix="/receivables", tags=["App · Kuaicaiwu · Finance"])
+router = APIRouter(prefix="/receivables", tags=["App - Kuaicaiwu - Finance"])
 
 receivable_service = ReceivableService()
 receivable_pull_service = ReceivablePullService()

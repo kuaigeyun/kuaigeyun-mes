@@ -1016,12 +1016,14 @@ const DemandComputationPage: React.FC = () => {
       production?: 'work_order'
       purchase?: 'requisition' | 'purchase_order'
       generate_mode?: 'work_order_only'
+      push_mode?: 'draft' | 'confirm'
     } = {}
     if (pushConfig.production) {
       params.production = pushConfig.production
       params.generate_mode = 'work_order_only'
     }
     if (pushConfig.purchase) params.purchase = pushConfig.purchase
+    if (pushConfig.purchase === 'purchase_order') params.push_mode = pushMode
     setPushPreviewLoadError(null)
     getPushPreview(pushPanelRecord.id!, Object.keys(params).length ? params : undefined)
       .then((data) => {
@@ -1032,7 +1034,7 @@ const DemandComputationPage: React.FC = () => {
         setPushPreviewData(null)
         setPushPreviewLoadError(e?.response?.data?.detail || e?.message || t('app.kuaizhizao.demandComputation.pushPreviewFailed'))
       })
-  }, [pushPanelRecord?.id, pushPanelLoading, pushConfig.production, pushConfig.purchase, t])
+  }, [pushPanelRecord?.id, pushPanelLoading, pushConfig.production, pushConfig.purchase, pushMode, t])
 
   const resetSourcePullPreviewModal = useCallback(() => {
     setSourcePullPreviewOpen(false)

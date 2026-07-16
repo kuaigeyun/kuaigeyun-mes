@@ -331,7 +331,7 @@ const ManufacturingDashboard: React.FC = () => {
             <div style={{ marginTop: 4 }}>
               <Text type="secondary" style={{ fontSize: 11 }}>
                 {t('app.kuaizhizao.productionExecutionDashboard.broadcastWorkOrder')}: {item.work_order_no || '-'}
-                {' · '}
+                {' - '}
                 {t('app.kuaizhizao.productionExecutionDashboard.broadcastProduct')}: {item.product_name || '-'}
               </Text>
             </div>

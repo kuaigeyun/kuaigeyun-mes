@@ -90,7 +90,7 @@ const MobileFaultListPage: React.FC = () => {
                   <>
                     <div>{row.fault_description || '—'}</div>
                     <div style={{ fontSize: 12, color: '#64748b' }}>
-                      {row.fault_level} · {row.fault_date ? String(row.fault_date).slice(0, 10) : ''}
+                      {row.fault_level} - {row.fault_date ? String(row.fault_date).slice(0, 10) : ''}
                     </div>
                   </>
                 }

@@ -64,5 +64,5 @@ export function compareInvoiceLineToSupplierPrice(
 export function formatCompareStatusText(result: InvoiceLineCompareResult): string {
   if (result.status === '一致') return '一致';
   if (result.status === '未登记') return '未登记';
-  return `差异 · 清单 ${result.systemUnitPrice ?? '—'}`;
+  return `差异 - 清单 ${result.systemUnitPrice ?? '—'}`;
 }

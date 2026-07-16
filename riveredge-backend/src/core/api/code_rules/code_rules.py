@@ -31,7 +31,7 @@ from core.services.system.installed_feature_scope import (
 from core.services.code_rule.code_rule_page_discovery import apply_manifest_display_overlay
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/code-rules", tags=["Core · Code Rules"])
+router = APIRouter(prefix="/code-rules", tags=["Core - Code Rules"])
 
 
 @router.post("", response_model=CodeRuleResponse, status_code=status.HTTP_201_CREATED)

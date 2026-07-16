@@ -30,7 +30,7 @@ from core.api.deps.system_module_access import (
 from core.services.system.installed_feature_scope import get_installed_application_codes
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/data-dictionaries", tags=["Core · Data Dictionaries"])
+router = APIRouter(prefix="/data-dictionaries", tags=["Core - Data Dictionaries"])
 
 
 @router.post("/initialize-system", status_code=status.HTTP_200_OK)

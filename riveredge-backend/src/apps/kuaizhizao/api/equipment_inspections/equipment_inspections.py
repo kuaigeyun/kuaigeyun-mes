@@ -6,7 +6,7 @@ from infra.models.user import User
 from apps.kuaizhizao.services.equipment_point_inspection_service import EquipmentPointInspectionService
 from apps.kuaizhizao.schemas.equipment_extra import PointInspectionRecordCreate, PointInspectionRecordResponse
 
-router = APIRouter(prefix="/equipment-inspections", tags=["App · Kuaige Zhizao · Equipment Inspection"])
+router = APIRouter(prefix="/equipment-inspections", tags=["App - Kuaige Zhizao - Equipment Inspection"])
 service = EquipmentPointInspectionService()
 
 @router.post("", response_model=PointInspectionRecordResponse, status_code=status.HTTP_201_CREATED)

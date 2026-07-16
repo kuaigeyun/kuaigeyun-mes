@@ -1261,7 +1261,7 @@ const MoldTrialSheetsPage: React.FC = () => {
     if (!mold) return '（未设置）';
     const name = (mold.mold_warehouse_name || '').trim();
     const code = (mold.mold_warehouse_code || '').trim();
-    if (name && code) return `${code} · ${name}`;
+    if (name && code) return `${code} - ${name}`;
     return name || code || '（未设置）';
   }, []);
 
@@ -1661,7 +1661,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           list.map((s) => ({
             key: s.uuid,
             value: s.name,
-            label: s.code ? `${s.code} · ${s.name}` : s.name,
+            label: s.code ? `${s.code} - ${s.name}` : s.name,
           })),
         );
       } catch {
@@ -3242,8 +3242,8 @@ const MoldTrialSheetsPage: React.FC = () => {
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
             <Typography.Text type="secondary">
               单号：{dispatchRecord?.sheet_no || '—'}
-              {dispatchRecord?.mold_code ? ` · 模具 ${dispatchRecord.mold_code}` : ''}
-              {dispatchRecord?.supplier_name ? ` · ${dispatchRecord.supplier_name}` : ''}
+              {dispatchRecord?.mold_code ? ` - 模具 ${dispatchRecord.mold_code}` : ''}
+              {dispatchRecord?.supplier_name ? ` - ${dispatchRecord.supplier_name}` : ''}
             </Typography.Text>
             {dispatchTargetOptions.length === 0 ? (
               <Alert
@@ -3308,7 +3308,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
             <Typography.Text type="secondary">
               单号：{recallRecord?.sheet_no || '—'}
-              {recallRecord?.mold_code ? ` · 模具 ${recallRecord.mold_code}` : ''}
+              {recallRecord?.mold_code ? ` - 模具 ${recallRecord.mold_code}` : ''}
             </Typography.Text>
             <Form layout="vertical">
               <Form.Item label={recallFromWarehouseLabel(recallRecord)}>
@@ -3333,7 +3333,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       </Modal>
 
       <Modal
-        title="试模单 · ERP 数据集"
+        title="试模单 - ERP 数据集"
         open={bindingModalOpen}
         onCancel={() => setBindingModalOpen(false)}
         width={640}

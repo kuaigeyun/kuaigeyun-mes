@@ -94,6 +94,68 @@ def _as_comparable_datetime(value: Optional[datetime]) -> Optional[datetime]:
     return make_aware(value, tz_name) if value.tzinfo is None else value
 
 
+def _operation_local_date(value: Optional[datetime]) -> Optional[date]:
+    if not value:
+        return None
+    local = value.astimezone(_business_tz()) if value.tzinfo is not None else value
+    return local.date()
+
+
+def _has_fine_schedule_on_plan_date(
+    wo: WorkOrder,
+    ops: List[WorkOrderOperation],
+    plan_date: date,
+    day_end: datetime,
+) -> bool:
+    """工序级已细排且落在计划日内则发布时不覆盖为全天占位。"""
+    for op in ops:
+        if op.status in {"completed", "cancelled"}:
+            continue
+        if not op.planned_start_date or not op.planned_end_date:
+            continue
+        if _operation_local_date(op.planned_start_date) != plan_date:
+            continue
+        local_start = (
+            op.planned_start_date.astimezone(_business_tz())
+            if op.planned_start_date.tzinfo is not None
+            else op.planned_start_date
+        )
+        if local_start.hour != 0 or local_start.minute != 0:
+            return True
+        if int(op.assigned_station_id or 0) > 0:
+            return True
+    ps = _as_comparable_datetime(wo.planned_start_date)
+    pe = _as_comparable_datetime(wo.planned_end_date)
+    if ps and pe and _operation_local_date(ps) == plan_date:
+        local_start = ps.astimezone(_business_tz()) if ps.tzinfo is not None else ps
+        if local_start.hour != 0 or local_start.minute != 0:
+            return True
+        if pe != day_end:
+            return True
+    return False
+
+
+def _scheduling_line_diagnostics(
+    wo: Optional[WorkOrder],
+    ops: List[WorkOrderOperation],
+) -> List[str]:
+    if not wo:
+        return []
+    issues: List[str] = []
+    if not wo.planned_start_date:
+        issues.append("缺计划开始")
+    if not wo.planned_end_date:
+        issues.append("缺计划结束")
+    pending = [op for op in ops if op.status not in {"completed", "cancelled"}]
+    missing_station = sum(1 for op in pending if not op.assigned_station_id)
+    if missing_station:
+        issues.append(f"缺工位{missing_station}道工序")
+    missing_worker = sum(1 for op in pending if not op.assigned_worker_id)
+    if missing_worker:
+        issues.append(f"缺人员{missing_worker}道工序")
+    return issues
+
+
 class RollingScheduleService:
     def __init__(self) -> None:
         self.work_order_service = WorkOrderService()
@@ -565,10 +627,25 @@ class RollingScheduleService:
         plan_date = plan.plan_date
         day_start, day_end = _plan_day_bounds(plan_date)
 
+        wo_ids = [ln.work_order_id for ln in lines]
+        all_ops: List[WorkOrderOperation] = []
+        if wo_ids:
+            all_ops = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id__in=wo_ids,
+                deleted_at__isnull=True,
+            ).all()
+        ops_by_wo: Dict[int, List[WorkOrderOperation]] = {}
+        for op in all_ops:
+            ops_by_wo.setdefault(int(op.work_order_id), []).append(op)
+
         updates: List[WorkOrderBatchUpdateDatesItem] = []
         for ln in lines:
             wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=ln.work_order_id)
             if not wo:
+                continue
+            wo_ops = ops_by_wo.get(int(wo.id), [])
+            if _has_fine_schedule_on_plan_date(wo, wo_ops, plan_date, day_end):
                 continue
             end_dt = _as_comparable_datetime(wo.planned_end_date)
             if not end_dt or end_dt < day_start:
@@ -583,12 +660,19 @@ class RollingScheduleService:
                 )
             )
 
-        batch_result = await self.work_order_service.batch_update_dates(
-            tenant_id=tenant_id,
-            updates=updates,
-            updated_by=published_by,
-            bypass_freeze=True,
-        )
+        batch_result: Dict[str, Any] = {
+            "updated": [],
+            "skipped_frozen": [],
+            "skipped_freeze_window": [],
+            "failed": [],
+        }
+        if updates:
+            batch_result = await self.work_order_service.batch_update_dates(
+                tenant_id=tenant_id,
+                updates=updates,
+                updated_by=published_by,
+                bypass_freeze=True,
+            )
 
         plan.status = "published"
         plan.published_at = datetime.now()
@@ -638,9 +722,17 @@ class RollingScheduleService:
         ).order_by("sequence").all()
         wo_ids = [ln.work_order_id for ln in lines]
         wo_map: Dict[int, WorkOrder] = {}
+        ops_by_wo: Dict[int, List[WorkOrderOperation]] = {}
         if wo_ids:
             wos = await WorkOrder.filter(tenant_id=tenant_id, id__in=wo_ids).all()
             wo_map = {w.id: w for w in wos}
+            all_ops = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id__in=wo_ids,
+                deleted_at__isnull=True,
+            ).all()
+            for op in all_ops:
+                ops_by_wo.setdefault(int(op.work_order_id), []).append(op)
 
         score_map = await self.score_service.batch_get_scores(
             tenant_id,
@@ -652,6 +744,7 @@ class RollingScheduleService:
         for ln in lines:
             wo = wo_map.get(ln.work_order_id)
             cached = score_map.get(ln.work_order_id)
+            wo_ops = ops_by_wo.get(ln.work_order_id, [])
             line_responses.append(
                 {
                     "id": ln.id,
@@ -670,6 +763,7 @@ class RollingScheduleService:
                     "planned_end_date": wo.planned_end_date if wo else None,
                     "scheduling_score": float(cached.composite_score) if cached and cached.composite_score else None,
                     "scheduling_rank_band": cached.rank_band if cached else None,
+                    "scheduling_diagnostics": _scheduling_line_diagnostics(wo, wo_ops),
                 }
             )
 

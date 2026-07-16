@@ -51,7 +51,7 @@ from apps.kuaizhizao.services.exception_service import (
     QUALITY_EXCEPTION_SORTABLE_FIELDS,
 )
 
-router = APIRouter(tags=["App · Kuaige Zhizao · Production Exceptions"])
+router = APIRouter(tags=["App - Kuaige Zhizao - Production Exceptions"])
 
 exception_service = ExceptionService()
 exception_process_service = ExceptionProcessService()

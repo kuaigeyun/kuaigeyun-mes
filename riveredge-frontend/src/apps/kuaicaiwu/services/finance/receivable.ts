@@ -78,13 +78,6 @@ export const receivableService = {
     });
   },
 
-  approveReceivable: (id: number, rejection_reason?: string) => {
-    return apiRequest<Receivable>(`${RECEIVABLE_API}/${id}/approve`, {
-      method: 'POST',
-      params: { rejection_reason },
-    });
-  },
-
   deleteReceivable: (id: number) => {
     return apiRequest<void>(`${RECEIVABLE_API}/${id}`, {
       method: 'DELETE',

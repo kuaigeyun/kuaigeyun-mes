@@ -10,7 +10,7 @@ from infra.models.user import User
 
 _SUBMITTABLE_REVIEW = frozenset({"草稿", "draft", "驳回", "rejected", "已驳回"})
 _PENDING_REVIEW = frozenset({"待审核", "pending_review", "pending_approval", "已提交"})
-_APPROVED_REVIEW = frozenset({"通过", "approved", "已审核"})
+_APPROVED_REVIEW = frozenset({"approved", "已审核"})
 
 
 def _norm_review(value: Any) -> str:

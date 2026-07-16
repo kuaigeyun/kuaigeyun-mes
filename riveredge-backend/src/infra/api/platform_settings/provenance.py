@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from infra.constants.official_registry import is_registry_summary_admin_enabled
 from infra.services.build_provenance_service import BuildProvenanceService
 
-router = APIRouter(prefix="/platform", tags=["Platform · Provenance"])
+router = APIRouter(prefix="/platform", tags=["Platform - Provenance"])
 
 
 class BuildProvenanceResponse(BaseModel):

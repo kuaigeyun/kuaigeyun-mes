@@ -98,7 +98,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/molds/trial-sheets",
-    tags=["App · HaoliGO · 试模单"],
+    tags=["App - HaoliGO - 试模单"],
     dependencies=[Depends(require_haoligo_module_access("molds-documents-trial"))],
 )
 

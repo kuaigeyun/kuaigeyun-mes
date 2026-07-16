@@ -85,7 +85,7 @@ class WeComBindResponse(BaseModel):
 
 
 # 创建路由
-router = APIRouter(prefix="/auth", tags=["Platform · Auth"])
+router = APIRouter(prefix="/auth", tags=["Platform - Auth"])
 
 
 @router.post("/login", response_model=LoginResponse)

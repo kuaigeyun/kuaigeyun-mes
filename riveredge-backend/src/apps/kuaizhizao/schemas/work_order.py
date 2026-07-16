@@ -181,6 +181,21 @@ class WorkOrderOperationBatchUpdateStationsRequest(BaseModel):
     updates: list[WorkOrderOperationBatchUpdateStationsItem] = Field(..., description="更新项列表")
 
 
+class WorkOrderOperationBatchUpdateAssignmentsItem(BaseModel):
+    """批量更新工序派工资源项（人员/设备/模具/工装）"""
+    operation_id: int = Field(..., description="工序ID（WorkOrderOperation.id）")
+    assigned_worker_id: Optional[int] = Field(None, description="分配的员工ID")
+    assigned_team_id: Optional[int] = Field(None, description="分配的工作小组ID")
+    assigned_equipment_id: Optional[int] = Field(None, description="分配的设备ID")
+    assigned_mold_id: Optional[int] = Field(None, description="分配的模具ID")
+    assigned_tool_id: Optional[int] = Field(None, description="分配的工装ID")
+
+
+class WorkOrderOperationBatchUpdateAssignmentsRequest(BaseModel):
+    """批量更新工序派工资源请求"""
+    updates: list[WorkOrderOperationBatchUpdateAssignmentsItem] = Field(..., description="更新项列表")
+
+
 class WorkOrderUpdate(BaseModel):
     """
     工单更新Schema
@@ -693,7 +708,7 @@ class WorkOrderSchedulingQuickActionRequest(BaseModel):
     work_order_ids: list[int] = Field(..., min_length=1, max_length=50, description="工单ID列表")
     action: str = Field(
         ...,
-        description="快捷处置动作（confirm_delay/to_exception/apply_unfreeze）",
+        description="快捷处置动作（confirm_delay/to_exception/apply_unfreeze/reschedule_forward）",
     )
     reason: Optional[str] = Field(None, description="处置原因")
     auto_move_out_of_freeze_window: bool = Field(

@@ -15,6 +15,7 @@ import dayjs from 'dayjs';
 import { loadWorkOrderSelectOptions, normalizeCostListRows, type CostSelectOption } from '../costSelectData';
 import { formatCalculationType } from '../../../utils/costUiLabels';
 import { formatDateTime } from '../../../../../utils/format';
+import { toApiDateString } from '../../../../../utils/formDate';
 
 interface QualityCostResult {
   prevention_cost: number;
@@ -79,7 +80,7 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
         end_date: values.end_date ? values.end_date.format('YYYY-MM-DD') : undefined,
         material_id: values.material_id,
         work_order_id: values.work_order_id,
-        calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
+        calculation_date: toApiDateString(values.calculation_date),
       };
       const res = await qualityCostApi.calculate(data);
       setResult(res);

@@ -17,9 +17,8 @@ from loguru import logger
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from apps.common.base_service import AppBaseService
 from apps.master_data.models.material import Material, BOM
-from apps.master_data.models.process import ProcessRoute, Operation
+from apps.master_data.models.process import ProcessRoute
 from apps.kuaicaiwu.models.cost_calculation import CostCalculation
-from apps.kuaicaiwu.models.cost_rule import CostRule
 from apps.kuaizhizao.utils.bom_helper import (
     get_bom_items_by_material_id,
     calculate_material_requirements_from_bom,
@@ -533,63 +532,65 @@ class ProductionCostService:
         Returns:
             tuple[Decimal, List[Dict[str, Any]]]: (加工成本, 成本明细)
         """
+        from apps.kuaicaiwu.services.cost_service import CostCalculationService
+
         total_cost = Decimal(0)
         cost_breakdown = []
-        
-        # 获取工艺路线
-        process_route = material.process_route
-        if not process_route:
-            # 如果没有工艺路线，返回0
+
+        process_route_id = material.process_route_id
+        if not process_route_id:
             return Decimal(0), []
-        
+
         process_route_obj = await ProcessRoute.filter(
             tenant_id=tenant_id,
-            id=process_route.id,
+            id=process_route_id,
             deleted_at__isnull=True,
             is_active=True
         ).first()
-        
+
         if not process_route_obj:
             return Decimal(0), []
-        
-        # 获取工序序列
-        operation_sequence = process_route_obj.operation_sequence or []
-        
+
+        calc_svc = CostCalculationService()
+        rows = calc_svc._flatten_operation_sequence(process_route_obj.operation_sequence)
+        if not rows:
+            return Decimal(0), []
+
+        operation_map, uuid_to_operation = await calc_svc._load_operations_for_route_rows(
+            tenant_id, rows
+        )
+
         # TODO: 从成本规则或配置获取标准工时和工时单价
         standard_hourly_rate = Decimal(50.00)  # 默认工时单价
-        
-        for op_data in operation_sequence:
-            op_id = op_data.get("operation_id")
-            if not op_id:
+
+        for op_data in rows:
+            std_time = calc_svc._operation_std_time_hours(op_data)
+            if std_time <= 0:
                 continue
-            
-            operation = await Operation.filter(
-                tenant_id=tenant_id,
-                id=op_id,
-                deleted_at__isnull=True,
-                is_active=True
-            ).first()
-            
+
+            op_id = op_data.get("operation_id") or op_data.get("operationId")
+            operation = operation_map.get(int(op_id)) if op_id else None
+            if not operation:
+                op_uuid = op_data.get("uuid") or op_data.get("operation_uuid")
+                if op_uuid:
+                    operation = uuid_to_operation.get(str(op_uuid))
+
             if not operation:
                 continue
-            
-            # 获取标准工时（小时/件）
-            standard_time = Decimal(str(op_data.get("standard_time", 1.0)))
-            
-            # 计算工序成本
-            operation_cost = standard_time * quantity * standard_hourly_rate
+
+            operation_cost = std_time * quantity * standard_hourly_rate
             total_cost += operation_cost
-            
+
             cost_breakdown.append({
                 "operation_id": operation.id,
                 "operation_code": operation.code,
                 "operation_name": operation.name,
-                "standard_time": float(standard_time),
+                "standard_time": float(std_time),
                 "quantity": float(quantity),
                 "hourly_rate": float(standard_hourly_rate),
                 "cost": float(operation_cost),
             })
-        
+
         return total_cost, cost_breakdown
 
     async def _calculate_manufacturing_overhead(
@@ -600,85 +601,26 @@ class ProductionCostService:
         material_cost: Decimal,
         labor_cost: Decimal
     ) -> tuple[Decimal, List[Dict[str, Any]]]:
-        """
-        计算制造费用
-        
-        根据成本规则计算制造费用。
-        
-        Args:
-            tenant_id: 组织ID
-            material: 物料对象
-            quantity: 数量
-            material_cost: 材料成本
-            labor_cost: 人工成本
-            
-        Returns:
-            tuple[Decimal, List[Dict[str, Any]]]: (制造费用, 费用明细)
-        """
-        total_cost = Decimal(0)
-        cost_breakdown = []
-        
-        # 获取制造费用规则
-        rules = await CostRule.filter(
-            tenant_id=tenant_id,
-            rule_type="制造费用",
-            is_active=True,
-            deleted_at__isnull=True
-        ).all()
-        
-        for rule in rules:
-            rule_cost = Decimal(0)
-            
-            if rule.calculation_method == "按比例":
-                # 按材料成本比例
-                rate = Decimal(str(rule.rule_parameters.get("rate", 0.1))) if rule.rule_parameters else Decimal(0.1)
-                rule_cost = material_cost * rate
-            elif rule.calculation_method == "按工时":
-                # 按人工成本比例
-                rate = Decimal(str(rule.rule_parameters.get("rate", 0.2))) if rule.rule_parameters else Decimal(0.2)
-                rule_cost = labor_cost * rate
-            elif rule.calculation_method == "按固定值":
-                # 固定值
-                fixed_value = Decimal(str(rule.rule_parameters.get("fixed_value", 0))) if rule.rule_parameters else Decimal(0)
-                rule_cost = fixed_value * quantity
-            
-            total_cost += rule_cost
-            
-            cost_breakdown.append({
-                "rule_id": rule.id,
-                "rule_code": rule.code,
-                "rule_name": rule.name,
-                "calculation_method": rule.calculation_method,
-                "cost": float(rule_cost),
-            })
-        
-        return total_cost, cost_breakdown
+        """计算制造费用（统一走 CostCalculationService 规则口径）。"""
+        from apps.kuaicaiwu.services.cost_service import CostCalculationService
+
+        calc_svc = CostCalculationService()
+        total_cost = await calc_svc._calculate_product_manufacturing_cost(
+            tenant_id, material, quantity
+        )
+        return total_cost, [
+            {
+                "item": "制造费用",
+                "calculation_method": "规则汇总",
+                "cost": float(total_cost),
+            }
+        ]
 
     async def _get_material_unit_price(
         self,
         tenant_id: int,
         material: Material
     ) -> Decimal:
-        """
-        获取物料单价
-        
-        从物料的默认值或价格表获取单价。
-        
-        Args:
-            tenant_id: 组织ID
-            material: 物料对象
-            
-        Returns:
-            Decimal: 单价
-        """
-        # TODO: 从物料默认值（defaults.purchase.standard_price）或价格表获取
-        # 这里简化处理，使用默认值
-        defaults = material.defaults or {}
-        purchase_defaults = defaults.get("purchase", {})
-        standard_price = purchase_defaults.get("standard_price")
-        
-        if standard_price:
-            return Decimal(str(standard_price))
-        
-        # 默认单价
-        return Decimal(100.00)
+        from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+
+        return await InventoryCostService().require_material_unit_cost(tenant_id, material.id)

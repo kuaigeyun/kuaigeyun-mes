@@ -53,7 +53,7 @@ from apps.kuaizhizao.services.inspection_policy_service import (
 
 defect_record_service = DefectRecordService()
 
-router = APIRouter(tags=["App · Kuaige Zhizao · Quality Execution"])
+router = APIRouter(tags=["App - Kuaige Zhizao - Quality Execution"])
 
 
 def _http_exception_with_trace(

@@ -39,7 +39,7 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
 
-router = APIRouter(prefix="/sales-invoices", tags=["App · Kuaicaiwu · Finance"])
+router = APIRouter(prefix="/sales-invoices", tags=["App - Kuaicaiwu - Finance"])
 business_config_service = BusinessConfigService()
 receivable_service = ReceivableService()
 invoice_service = InvoiceService()
@@ -187,6 +187,12 @@ async def _maybe_auto_generate_receivable_for_sales_invoice(
     if Decimal(invoice.total_amount or 0) <= 0:
         return None, None
 
+    from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
+
+    biz_date = invoice.invoice_date or date.today()
+    due = await resolve_partner_due_date(
+        tenant_id, "customer", int(invoice.partner_id), biz_date
+    )
     receivable = await receivable_service.create_receivable(
         tenant_id=tenant_id,
         receivable_data=ReceivableCreate(
@@ -198,8 +204,8 @@ async def _maybe_auto_generate_receivable_for_sales_invoice(
             total_amount=Decimal(invoice.total_amount or 0),
             received_amount=Decimal("0.00"),
             remaining_amount=Decimal(invoice.total_amount or 0),
-            due_date=invoice.invoice_date,
-            business_date=invoice.invoice_date,
+            due_date=due,
+            business_date=biz_date,
             status="未收款",
             invoice_issued=True,
             invoice_number=invoice.invoice_number,
@@ -259,7 +265,13 @@ async def create_sales_invoice(
         if pull_preview:
             source_document_code = str(pull_preview.get("source_code") or source_document_code or "")
 
+        from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
+
         code = await _generate_sales_invoice_code(tenant_id)
+        _, tax_amount, total_amount = compute_tax_from_excluding(
+            Decimal(data.invoice_amount),
+            Decimal(data.tax_rate),
+        )
         create_payload = {
             "tenant_id": tenant_id,
             "invoice_code": code,
@@ -269,10 +281,10 @@ async def create_sales_invoice(
             "invoice_type": data.invoice_type or "增值税专用发票",
             "partner_id": data.customer_id,
             "partner_name": data.customer_name,
-            "tax_rate": data.tax_rate / 100,  # convert 13 -> 0.13
+            "tax_rate": data.tax_rate / 100,  # API 百分比 → 落库小数
             "amount_excluding_tax": data.invoice_amount,
-            "tax_amount": data.tax_amount,
-            "total_amount": data.total_amount,
+            "tax_amount": tax_amount,
+            "total_amount": total_amount,
             "source_document_code": source_document_code,
             "attachment_uuid": data.attachment_path,
             "attachments": data.attachments,
@@ -461,6 +473,8 @@ async def update_sales_invoice(
         raise _http_exception_with_trace(
             400, "已审核、已作废或已红冲的发票不能修改", "/sales-invoices/{id}", tenant_id
         )
+    from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
+
     update_data: dict = {}
     if data.invoice_number is not None:
         update_data["invoice_number"] = data.invoice_number
@@ -468,14 +482,19 @@ async def update_sales_invoice(
         update_data["invoice_date"] = data.invoice_date
     if data.invoice_type is not None:
         update_data["invoice_type"] = data.invoice_type
+    amount_excl = data.invoice_amount if data.invoice_amount is not None else invoice.amount_excluding_tax
+    tax_rate_percent = data.tax_rate if data.tax_rate is not None else Decimal(str(invoice.tax_rate or 0)) * Decimal("100")
     if data.tax_rate is not None:
         update_data["tax_rate"] = data.tax_rate / 100
     if data.invoice_amount is not None:
         update_data["amount_excluding_tax"] = data.invoice_amount
-    if data.tax_amount is not None:
-        update_data["tax_amount"] = data.tax_amount
-    if data.total_amount is not None:
-        update_data["total_amount"] = data.total_amount
+    if data.invoice_amount is not None or data.tax_rate is not None:
+        _, tax_amount, total_amount = compute_tax_from_excluding(
+            Decimal(amount_excl),
+            Decimal(tax_rate_percent),
+        )
+        update_data["tax_amount"] = tax_amount
+        update_data["total_amount"] = total_amount
     if data.notes is not None:
         update_data["description"] = data.notes
     if data.attachments is not None:

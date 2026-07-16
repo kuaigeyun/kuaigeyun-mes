@@ -416,7 +416,7 @@ const KuaiplmDashboard: React.FC = () => {
 
                     <a onClick={() => navigate(`/apps/kuaiplm/rd-projects/detail/${record.id}`)}>
 
-                      {[code, record.project_name].filter(Boolean).join(' · ') || `#${record.id}`}
+                      {[code, record.project_name].filter(Boolean).join(' - ') || `#${record.id}`}
 
                     </a>
 

@@ -14,7 +14,7 @@ from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as get_current_user_dep
 from infra.models.user import User
 
-router = APIRouter(prefix="/tenant-init", tags=["Core · Tenant Init"])
+router = APIRouter(prefix="/tenant-init", tags=["Core - Tenant Init"])
 
 
 class RunInitRequest(BaseModel):

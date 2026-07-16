@@ -34,7 +34,7 @@ from apps.kuaizhizao.schemas.shipment_notice import (
 )
 
 shipment_notice_service = ShipmentNoticeService()
-router = APIRouter(prefix="/shipment-notices", tags=["App · Kuaige Zhizao · Shipment Notice"])
+router = APIRouter(prefix="/shipment-notices", tags=["App - Kuaige Zhizao - Shipment Notice"])
 
 
 def _http_exception_with_trace(

@@ -280,7 +280,7 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
                           onClose={readOnly ? undefined : () => removeCustomIssue(index)}
                         >
                           {item.text}
-                          {item.addToCommon ? ' · 常见问题' : ''}
+                          {item.addToCommon ? ' - 常见问题' : ''}
                         </Tag>
                       ))}
                     </Space>

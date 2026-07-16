@@ -84,7 +84,7 @@ function resolveQualityAutoTitle(
     const parts = [values.customer_name, values.material_code, values.problem_description]
       .map((v) => String(v ?? '').trim())
       .filter(Boolean);
-    if (parts.length) return truncate(parts.join(' · '));
+    if (parts.length) return truncate(parts.join(' - '));
   }
   const description = String(values.problem_description ?? '').trim();
   if (description) return truncate(description);

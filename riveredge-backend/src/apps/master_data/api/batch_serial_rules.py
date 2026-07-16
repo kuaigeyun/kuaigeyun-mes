@@ -23,7 +23,7 @@ from apps.master_data.schemas.batch_serial_rule_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/materials", tags=["App · Master Data · Batch & Serial Rules"])
+router = APIRouter(prefix="/materials", tags=["App - Master Data - Batch & Serial Rules"])
 
 
 def _http_exception_with_trace(

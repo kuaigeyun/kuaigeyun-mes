@@ -427,12 +427,12 @@ const DocumentReconciliationPage: React.FC = () => {
                   {' '}
                   ¥
                   {formatQuantity(step.quantity)}
-                  {' · '}
+                  {' - '}
                   {t(`${S}.preview.col.settledAmount`)}
                   {' '}
                   ¥
                   {formatQuantity(step.pushed_quantity ?? 0)}
-                  {' · '}
+                  {' - '}
                   {t(`${S}.preview.col.settleableAmount`)}
                   {' '}
                   ¥

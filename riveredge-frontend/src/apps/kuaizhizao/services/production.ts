@@ -665,4 +665,44 @@ export const visualSchedulingApi = {
       { method: 'POST', data }
     );
   },
+  rateCoverage: async (
+    items: Array<{ worker_id: number; operation_id: number; material_id?: number | null }>
+  ) => {
+    return apiRequest<{
+      items: Array<{
+        worker_id: number;
+        operation_id: number;
+        material_id?: number | null;
+        missing: string[];
+        calc_mode?: string | null;
+      }>;
+    }>('/apps/kuaizhizao/scheduling/rate-coverage', { method: 'POST', data: { items } });
+  },
+  autoReschedule: async (data: {
+    work_order_ids?: number[];
+    scope?: 'selected' | 'overdue' | 'unscheduled';
+    plan_date?: string;
+  }) => {
+    return apiRequest<{
+      proposal: {
+        summary?: string | null;
+        warnings: string[];
+        unfreezed?: number[];
+        work_order_adjustments: Array<{
+          work_order_id: number;
+          planned_start_date: string;
+          planned_end_date: string;
+        }>;
+        operation_adjustments: Array<{
+          operation_id: number;
+          planned_start_date: string;
+          planned_end_date: string;
+        }>;
+        operation_station_adjustments: Array<{
+          operation_id: number;
+          assigned_station_id: number;
+        }>;
+      };
+    }>('/apps/kuaizhizao/scheduling/auto-reschedule', { method: 'POST', data });
+  },
 };

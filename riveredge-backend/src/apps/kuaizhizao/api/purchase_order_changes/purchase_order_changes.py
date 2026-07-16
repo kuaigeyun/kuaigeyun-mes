@@ -23,7 +23,7 @@ from apps.kuaizhizao.services.purchase_order_change_service import (
     PURCHASE_ORDER_CHANGE_SORTABLE_FIELDS,
 )
 
-router = APIRouter(prefix="/purchase-order-change-orders", tags=["App · Kuaige Zhizao · Purchase Order Change"])
+router = APIRouter(prefix="/purchase-order-change-orders", tags=["App - Kuaige Zhizao - Purchase Order Change"])
 service = PurchaseOrderChangeService()
 
 

@@ -49,10 +49,12 @@ import {
 } from '../../../utils/financeListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
 type PullPayableCandidate = PaymentPullCandidate;
 
 const P = 'app.kuaicaiwu.payment';
+const PAYMENT_RESOURCE = 'kuaicaiwu:payment';
 
 const PaymentsPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
@@ -75,6 +77,7 @@ const PaymentsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const pullFromPayableAction = getKuaicaiwuDocumentAction('payment.pull_from_payable');
+  const paymentPerms = useResourcePermissions(PAYMENT_RESOURCE);
 
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
   const paymentSettlementTypeOptions = useMemo(() => getPaymentSettlementTypeOptions(t), [t]);
@@ -144,7 +147,7 @@ const PaymentsPage: React.FC = () => {
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
     };
-    await apiRequest('/apps/kuaicaiwu/payments', { method: 'POST', data });
+    await paymentService.create(data);
     messageApi.success(t(`${P}.createSuccess`));
     setCreateModalVisible(false);
     actionRef.current?.reload();
@@ -274,7 +277,7 @@ const PaymentsPage: React.FC = () => {
       content: t(`${P}.confirmContent`, { code: record.payment_code }),
       onOk: async () => {
         try {
-          await apiRequest(`/apps/kuaicaiwu/payments/${record.id}/confirm`, { method: 'POST' });
+          await paymentService.confirmPayment(record.id);
           messageApi.success(t(`${P}.confirmSuccess`));
           actionRef.current?.reload();
         } catch (e: any) {
@@ -290,7 +293,7 @@ const PaymentsPage: React.FC = () => {
       content: t(`${P}.voidContent`, { code: record.payment_code }),
       onOk: async () => {
         try {
-          await apiRequest(`/apps/kuaicaiwu/payments/${record.id}/cancel`, { method: 'POST' });
+          await paymentService.cancelPayment(record.id);
           messageApi.success(t(`${P}.voidSuccess`));
           actionRef.current?.reload();
         } catch (e: any) {
@@ -303,7 +306,7 @@ const PaymentsPage: React.FC = () => {
   const handleBatchConfirm = async (keys: React.Key[]) => {
     try {
       for (const key of keys) {
-        await apiRequest(`/apps/kuaicaiwu/payments/${key}/confirm`, { method: 'POST' });
+        await paymentService.confirmPayment(Number(key));
       }
       messageApi.success(t(`${P}.batchConfirmed`, { count: keys.length }));
       setSelectedRowKeys([]);
@@ -316,7 +319,7 @@ const PaymentsPage: React.FC = () => {
   const handleBatchCancel = async (keys: React.Key[]) => {
     try {
       for (const key of keys) {
-        await apiRequest(`/apps/kuaicaiwu/payments/${key}/cancel`, { method: 'POST' });
+        await paymentService.cancelPayment(Number(key));
       }
       messageApi.success(t(`${P}.batchVoided`, { count: keys.length }));
       setSelectedRowKeys([]);
@@ -514,7 +517,7 @@ const PaymentsPage: React.FC = () => {
             <Button {...rowActionKind('read')} key="det" onClick={() => openDetail(record)}>
               {t('common.detail')}
             </Button>,
-            record.status === 'Draft' ? (
+            record.status === 'Draft' && paymentPerms.canAction?.('audit') ? (
               <Button {...rowActionKind('audit')} key="cf" onClick={() => handleConfirm(record)}>
                 {t('app.kuaicaiwu.common.confirm')}
               </Button>
@@ -524,14 +527,14 @@ const PaymentsPage: React.FC = () => {
                 {t('app.kuaicaiwu.common.settle')}
               </Button>
             ) : null,
-            record.status !== 'Cancelled' && record.settled_amount === 0 ? (
+            record.status !== 'Cancelled' && record.settled_amount === 0 && paymentPerms.canAction?.('revoke') ? (
               <Button {...rowActionKind('revoke')} key="ca" onClick={() => handleCancelVoucher(record)}>
                 {t('app.kuaicaiwu.common.void')}
               </Button>
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
     },
-  ], [t, navigate, supplierOptions, paymentSettlementTypeOptions]);
+  ], [t, navigate, supplierOptions, paymentSettlementTypeOptions, paymentPerms]);
 
   return (
     <ListPageTemplate>

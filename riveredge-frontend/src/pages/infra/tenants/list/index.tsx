@@ -233,7 +233,7 @@ const SuperAdminTenantList: React.FC = () => {
         <Divider style={{ margin: '4px 0 8px' }} />
         {sharedQuota.tenants.map((item) => (
           <Typography.Text key={item.tenant_id}>
-            {item.is_subtenant ? '子组织' : '主组织'} · {item.tenant_name}（ID: {item.tenant_id}）：{item.user_count}
+            {item.is_subtenant ? '子组织' : '主组织'} - {item.tenant_name}（ID: {item.tenant_id}）：{item.user_count}
           </Typography.Text>
         ))}
       </div>

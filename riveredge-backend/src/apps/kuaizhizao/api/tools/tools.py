@@ -24,7 +24,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(
     prefix="/tools",
-    tags=["App · Kuaige Zhizao · Tools"],
+    tags=["App - Kuaige Zhizao - Tools"],
 )
 
 

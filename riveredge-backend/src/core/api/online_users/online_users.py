@@ -21,7 +21,7 @@ from infra.exceptions.exceptions import NotFoundError
 from core.models.user_activity import UserActivity
 from loguru import logger
 
-router = APIRouter(prefix="/online-users", tags=["Core · Online Users"])
+router = APIRouter(prefix="/online-users", tags=["Core - Online Users"])
 
 
 @router.get("", response_model=OnlineUserListResponse)

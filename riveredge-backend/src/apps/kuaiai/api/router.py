@@ -12,7 +12,7 @@ from .knowledge import router as knowledge_router
 from .suggestions import router as suggestions_router
 from .training import router as training_router
 
-router = APIRouter(tags=["App · KU-AI · Overview"])
+router = APIRouter(tags=["App - KU-AI - Overview"])
 
 router.include_router(suggestions_router)
 router.include_router(chat_router)

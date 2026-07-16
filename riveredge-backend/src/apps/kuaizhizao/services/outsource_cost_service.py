@@ -422,23 +422,21 @@ class OutsourceCostService:
         unit_price = outsource_work_order.unit_price
         
         if not unit_price or unit_price == 0:
-            # 如果没有单价，从物料的source_config获取
             material = await Material.filter(
                 tenant_id=outsource_work_order.tenant_id,
                 id=outsource_work_order.product_id,
                 deleted_at__isnull=True
             ).first()
-            
             if material:
                 source_config = material.source_config or {}
-                unit_price = source_config.get("unit_price")
-                if unit_price:
-                    unit_price = Decimal(str(unit_price))
-                else:
-                    # 使用默认值
-                    unit_price = Decimal(100.00)
-            else:
-                unit_price = Decimal(100.00)
+                raw = source_config.get("unit_price")
+                if raw:
+                    unit_price = Decimal(str(raw))
+            if not unit_price or unit_price == 0:
+                from infra.exceptions.exceptions import ValidationError
+                raise ValidationError(
+                    f"委外工单 {outsource_work_order.code} 未配置委外单价，请在工单或物料 source_config 中维护"
+                )
         else:
             unit_price = Decimal(str(unit_price))
         
@@ -460,26 +458,6 @@ class OutsourceCostService:
         tenant_id: int,
         material: Material
     ) -> Decimal:
-        """
-        获取物料单价
-        
-        从物料的默认值或价格表获取单价。
-        
-        Args:
-            tenant_id: 组织ID
-            material: 物料对象
-            
-        Returns:
-            Decimal: 单价
-        """
-        # TODO: 从物料默认值（defaults.purchase.standard_price）或价格表获取
-        # 这里简化处理，使用默认值
-        defaults = material.defaults or {}
-        purchase_defaults = defaults.get("purchase", {})
-        standard_price = purchase_defaults.get("standard_price")
-        
-        if standard_price:
-            return Decimal(str(standard_price))
-        
-        # 默认单价
-        return Decimal(100.00)
+        from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+
+        return await InventoryCostService().require_material_unit_cost(tenant_id, material.id)

@@ -32,7 +32,6 @@ import {
   Row,
   Col,
   Empty,
-  Modal,
   Divider,
   Alert,
   Typography,
@@ -41,7 +40,6 @@ import {
 } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
 import {
-  EyeOutlined,
   CalculatorOutlined,
   BarChartOutlined,
   LineChartOutlined,
@@ -59,11 +57,12 @@ import {
   DetailDrawerTemplate,
   DetailDrawerSection,
   MultiTabListPageTemplate,
+  FormModalTemplate,
   DRAWER_CONFIG,
+  MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
-import { getCostCalculationLifecycle } from '../../../utils/costLifecycle';
 import { costCalculationApi, costComparisonApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
@@ -81,6 +80,7 @@ import OutsourceCostPage from '../outsource-cost';
 import PurchaseCostPage from '../purchase-cost';
 import QualityCostPage from '../quality-cost';
 import CostOptimizationPanel from '../CostOptimizationPanel';
+import { CostCalculationFactorsPanel, type CostCalculationReadiness } from '../CostCalculationFactorsPanel';
 import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import { formatCalculationType,
   formatSourceType,
@@ -95,7 +95,7 @@ import {
   costDocCreatedUpdatedColumns,
   resolveCostCalculationListParams,
 } from '../../../utils/costListCore';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateRangeFormItemProps, toApiDateString } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 type TopCat = 'ledger' | 'compare' | 'analyze' | 'optimization' | 'trial';
@@ -254,6 +254,12 @@ const CostCalculationPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [costCalculationDetail, setCostCalculationDetail] = useState<CostCalculation | null>(null);
   const [execModal, setExecModal] = useState<null | 'work_order' | 'product'>(null);
+  const [workOrderCalcResult, setWorkOrderCalcResult] = useState<CostCalculation | null>(null);
+  const [productCalcResult, setProductCalcResult] = useState<CostCalculation | null>(null);
+  const [execCalcLoading, setExecCalcLoading] = useState(false);
+  const [workOrderReadiness, setWorkOrderReadiness] = useState<CostCalculationReadiness | null>(null);
+  const [productReadiness, setProductReadiness] = useState<CostCalculationReadiness | null>(null);
+  const [readinessLoading, setReadinessLoading] = useState<null | 'work_order' | 'product'>(null);
 
   const [compareData, setCompareData] = useState<any>(null);
   const [materialCompareList, setMaterialCompareList] = useState<any[]>([]);
@@ -356,19 +362,127 @@ const CostCalculationPage: React.FC = () => {
   );
 
   useEffect(() => {
-    if (execModal !== 'work_order') return;
-    workOrderFormRef.current?.resetFields();
-    workOrderFormRef.current?.setFieldsValue({ calculation_date: dayjs() });
+    if (execModal === 'work_order') {
+      setWorkOrderCalcResult(null);
+      setWorkOrderReadiness(null);
+    } else if (execModal === 'product') {
+      setProductCalcResult(null);
+      setProductReadiness(null);
+    } else {
+      setWorkOrderCalcResult(null);
+      setProductCalcResult(null);
+      setWorkOrderReadiness(null);
+      setProductReadiness(null);
+    }
   }, [execModal]);
 
-  useEffect(() => {
-    if (execModal !== 'product') return;
-    productFormRef.current?.resetFields();
-    productFormRef.current?.setFieldsValue({
-      calculation_date: dayjs(),
-      calculation_type: '标准成本',
-    });
-  }, [execModal]);
+  const loadWorkOrderReadiness = useCallback(async (workOrderId?: number) => {
+    if (!workOrderId) {
+      setWorkOrderReadiness(null);
+      return;
+    }
+    setReadinessLoading('work_order');
+    try {
+      const res = await costCalculationApi.previewWorkOrderReadiness(workOrderId);
+      setWorkOrderReadiness(res as CostCalculationReadiness);
+    } catch {
+      setWorkOrderReadiness(null);
+    } finally {
+      setReadinessLoading((prev) => (prev === 'work_order' ? null : prev));
+    }
+  }, []);
+
+  const loadProductReadiness = useCallback(async (productId?: number, quantity?: number) => {
+    if (!productId) {
+      setProductReadiness(null);
+      return;
+    }
+    setReadinessLoading('product');
+    try {
+      const res = await costCalculationApi.previewProductReadiness(productId, Number(quantity) > 0 ? Number(quantity) : 1);
+      setProductReadiness(res as CostCalculationReadiness);
+    } catch {
+      setProductReadiness(null);
+    } finally {
+      setReadinessLoading((prev) => (prev === 'product' ? null : prev));
+    }
+  }, []);
+
+  const calcResultSummaryColumns = useMemo(
+    () => [
+      { title: t('app.kuaicaiwu.costCalculation.col.calculationNo'), dataIndex: 'calculation_no' },
+      { title: t('app.kuaicaiwu.costCalculation.col.workOrderCode'), dataIndex: 'work_order_code' },
+      { title: t('app.kuaicaiwu.costCalculation.col.productCode'), dataIndex: 'product_code' },
+      { title: t('app.kuaicaiwu.costCalculation.col.productName'), dataIndex: 'product_name' },
+      { title: t('app.kuaicaiwu.costCommon.col.quantity'), dataIndex: 'quantity' },
+      { title: t('app.kuaicaiwu.costCommon.col.materialCost'), dataIndex: 'material_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.laborCost'), dataIndex: 'labor_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.manufacturingCost'), dataIndex: 'manufacturing_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.totalCost'), dataIndex: 'total_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.unitCost'), dataIndex: 'unit_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.calculationType'), dataIndex: 'calculation_type' },
+      { title: t('app.kuaicaiwu.costCommon.col.calculationDate'), dataIndex: 'calculation_date' },
+    ],
+    [t],
+  );
+
+  const buildCalcResultSummary = useCallback(
+    (result: CostCalculation) => {
+      const money = (v?: number) => (v != null ? `¥${Number(v).toFixed(2)}` : '-');
+      return {
+        calculation_no: result.calculation_no ?? '-',
+        work_order_code: result.work_order_code ?? undefined,
+        product_code: result.product_code ?? '-',
+        product_name: result.product_name ?? '-',
+        quantity: result.quantity ?? '-',
+        material_cost: money(result.material_cost),
+        labor_cost: money(result.labor_cost),
+        manufacturing_cost: money(result.manufacturing_cost),
+        total_cost: (
+          <span style={{ fontSize: 16, fontWeight: 600, color: '#1677ff' }}>{money(result.total_cost)}</span>
+        ),
+        unit_cost: money(result.unit_cost),
+        calculation_type: result.calculation_type ? formatCalculationType(result.calculation_type, t) : '-',
+        calculation_date: result.calculation_date
+          ? formatDateTime(result.calculation_date, 'YYYY-MM-DD')
+          : '-',
+      };
+    },
+    [t],
+  );
+
+  const renderCalcResult = useCallback(
+    (result: CostCalculation) => {
+      const columns = calcResultSummaryColumns.filter((col) => {
+        if (col.dataIndex === 'work_order_code') {
+          return Boolean(result.work_order_code);
+        }
+        return true;
+      });
+      return (
+        <>
+          <ProDescriptions
+            bordered
+            column={2}
+            size="small"
+            dataSource={buildCalcResultSummary(result)}
+            columns={columns}
+          />
+          {result.cost_details ? (
+            <>
+              <Divider orientation="left" style={{ marginTop: 16 }}>
+                {t('app.kuaicaiwu.costCalculation.calculationFactors')}
+              </Divider>
+              <div style={{ maxHeight: 360, overflow: 'auto' }}>
+                <StructuredCostDataView data={result.cost_details} />
+              </div>
+            </>
+          ) : null}
+        </>
+      );
+    },
+    [buildCalcResultSummary, calcResultSummaryColumns, t],
+  );
 
   const handleTopTabChange = (key: string) => {
     setCatWithSub(key as TopCat);
@@ -389,36 +503,50 @@ const CostCalculationPage: React.FC = () => {
   };
 
   const handleSaveWorkOrderCalculation = async (values: any) => {
+    if (workOrderReadiness && !workOrderReadiness.ready) {
+      messageApi.warning(t('app.kuaicaiwu.costCalculation.factorsFixBeforeCalculate'));
+      return;
+    }
     try {
-      await costCalculationApi.calculateWorkOrderCost({
+      setExecCalcLoading(true);
+      const res = await costCalculationApi.calculateWorkOrderCost({
         work_order_id: values.work_order_id,
-        calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
+        calculation_date: toApiDateString(values.calculation_date),
         remark: values.remark,
       });
+      setWorkOrderCalcResult(res);
       messageApi.success(t('app.kuaicaiwu.costCalculation.workOrderSuccess'));
-      setExecModal(null);
       setLedger();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaicaiwu.costCalculation.workOrderFailed'));
+    } finally {
+      setExecCalcLoading(false);
     }
   };
 
   const handleSaveProductCalculation = async (values: any) => {
+    if (productReadiness && !productReadiness.ready) {
+      messageApi.warning(t('app.kuaicaiwu.costCalculation.factorsFixBeforeCalculate'));
+      return;
+    }
     try {
-      await costCalculationApi.calculateProductCost({
+      setExecCalcLoading(true);
+      const res = await costCalculationApi.calculateProductCost({
         product_id: values.product_id,
         quantity: values.quantity,
-        calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
+        calculation_date: toApiDateString(values.calculation_date),
         calculation_type: values.calculation_type,
         remark: values.remark,
       });
+      setProductCalcResult(res);
       messageApi.success(t('app.kuaicaiwu.costCalculation.productSuccess'));
-      setExecModal(null);
       setLedger();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaicaiwu.costCalculation.productFailed'));
+    } finally {
+      setExecCalcLoading(false);
     }
   };
 
@@ -441,7 +569,7 @@ const CostCalculationPage: React.FC = () => {
         purchase_order_id: values.purchase_order_id,
         purchase_order_item_id: values.purchase_order_item_id,
         outsource_work_order_id: values.outsource_work_order_id,
-        calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
+        calculation_date: toApiDateString(values.calculation_date),
       };
       const result = await costComparisonApi.compare(data);
       setMaterialCompareResult(result);
@@ -626,24 +754,13 @@ const CostCalculationPage: React.FC = () => {
       },
       ...costDocCreatedUpdatedColumns<CostCalculation>(t),
       {
-        title: t('app.kuaicaiwu.costCommon.section.lifecycle'),
-        dataIndex: 'lifecycle_stage',
-        key: 'lifecycle',
-        width: 200,
-        fixed: 'right',
-        align: 'left',
-        search: false,
-        render: (_, record) => (
-          <UniLifecycle {...getCostCalculationLifecycle(record as Record<string, unknown>, t)} showCircleTooltip={false} />
-        ),
-      },
-      {
         title: t('app.kuaicaiwu.costCommon.action'),
+        valueType: 'option',
         key: 'action',
         width: 100,
         fixed: 'right',
         render: (_: any, record: CostCalculation) => (
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+          <Button {...rowActionKind('read')} size="small" onClick={() => handleDetail(record)}>
             {t('app.kuaicaiwu.costCommon.detail')}
           </Button>
         ),
@@ -722,92 +839,6 @@ const CostCalculationPage: React.FC = () => {
 
   const calculationDetailBaseItems = detailItems;
 
-  const closeWorkOrderModal = () => {
-    setExecModal(null);
-    workOrderFormRef.current?.resetFields();
-  };
-
-  const closeProductModal = () => {
-    setExecModal(null);
-    productFormRef.current?.resetFields();
-  };
-
-  const workOrderPanel = (
-    <Card variant="borderless">
-      <ProForm
-        formRef={workOrderFormRef}
-        onFinish={handleSaveWorkOrderCalculation}
-        submitter={{
-          searchConfig: { submitText: t('app.kuaicaiwu.costCalculation.calculate') },
-          resetButtonProps: { style: { display: 'none' } },
-        }}
-      >
-        <ProFormSelect
-          name="work_order_id"
-          label={t('app.kuaicaiwu.costCalculation.field.workOrder')}
-          placeholder={t('app.kuaicaiwu.costCalculation.field.workOrderPlaceholder')}
-          rules={[{ required: true, message: t('app.kuaicaiwu.costCalculation.field.workOrderRequired') }]}
-          options={costReferenceOptions.workOrders}
-          showSearch
-          fieldProps={{
-            optionFilterProp: 'label',
-            filterOption: (input: string, option: any) =>
-              String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-          }}
-        />
-        <ProFormDatePicker name="calculation_date" label={t('app.kuaicaiwu.costCommon.col.calculationDate')} placeholder={t('app.kuaicaiwu.costCommon.field.calculationDatePlaceholder')} />
-        <ProFormTextArea name="remark" label={t('app.kuaicaiwu.costCommon.remark')} placeholder={t('app.kuaicaiwu.costCommon.remarkPlaceholder')} fieldProps={{ rows: 3 }} />
-      </ProForm>
-    </Card>
-  );
-
-  const productPanel = (
-    <Card variant="borderless">
-      <ProForm
-        formRef={productFormRef}
-        onFinish={handleSaveProductCalculation}
-        submitter={{
-          searchConfig: { submitText: t('app.kuaicaiwu.costCalculation.calculate') },
-          resetButtonProps: { style: { display: 'none' } },
-        }}
-      >
-        <ProFormSelect
-          name="product_id"
-          label={t('app.kuaicaiwu.costCalculation.field.productMaterial')}
-          placeholder={t('app.kuaicaiwu.costCalculation.field.productMaterialPlaceholder')}
-          rules={[{ required: true, message: t('app.kuaicaiwu.costCalculation.field.productRequired') }]}
-          options={productMaterialSelectOptions}
-          showSearch
-          fieldProps={{
-            optionFilterProp: 'label',
-            filterOption: (input: string, option: any) =>
-              String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-          }}
-        />
-        <ProFormDigit
-          name="quantity"
-          label={t('app.kuaicaiwu.costCommon.col.quantity')}
-          placeholder={t('app.kuaicaiwu.costCommon.field.quantityPlaceholder')}
-          rules={[{ required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') }]}
-          min={0}
-          fieldProps={{ precision: 2 }}
-        />
-        <ProFormSelect
-          name="calculation_type"
-          label={t('app.kuaicaiwu.costCalculation.col.calculationType')}
-          placeholder={t('app.kuaicaiwu.costCalculation.field.calculationTypePlaceholder')}
-          options={[
-            { label: t('app.kuaicaiwu.costCommon.calculationType.standard'), value: '标准成本' },
-            { label: t('app.kuaicaiwu.costCommon.calculationType.actual'), value: '实际成本' },
-          ]}
-          rules={[{ required: true, message: t('app.kuaicaiwu.costCalculation.field.calculationTypeRequired') }]}
-        />
-        <ProFormDatePicker name="calculation_date" label={t('app.kuaicaiwu.costCommon.col.calculationDate')} placeholder={t('app.kuaicaiwu.costCommon.field.calculationDatePlaceholder')} />
-        <ProFormTextArea name="remark" label={t('app.kuaicaiwu.costCommon.remark')} placeholder={t('app.kuaicaiwu.costCommon.remarkPlaceholder')} fieldProps={{ rows: 3 }} />
-      </ProForm>
-    </Card>
-  );
-
   const ledgerPanel = (
     <ListPageTemplate>
       <UniTable<CostCalculation>
@@ -855,28 +886,206 @@ const CostCalculationPage: React.FC = () => {
           </Button>,
         ]}
       />
-      <Modal
-        title={t('app.kuaicaiwu.costCalculation.workOrderModalTitle')}
+      <FormModalTemplate
+        title={
+          workOrderCalcResult
+            ? t('app.kuaicaiwu.costCommon.resultTitle')
+            : t('app.kuaicaiwu.costCalculation.workOrderModalTitle')
+        }
         open={execModal === 'work_order'}
-        onCancel={closeWorkOrderModal}
-        footer={null}
-        destroyOnHidden
-        width={520}
-        maskClosable={false}
+        onClose={() => {
+          setExecModal(null);
+          setWorkOrderCalcResult(null);
+          setWorkOrderReadiness(null);
+        }}
+        formRef={workOrderFormRef}
+        onFinish={handleSaveWorkOrderCalculation}
+        onValuesChange={(changed, allValues) => {
+          if ('work_order_id' in changed) {
+            void loadWorkOrderReadiness(changed.work_order_id);
+          }
+        }}
+        initialValues={{ calculation_date: dayjs() }}
+        submitText={t('app.kuaicaiwu.costCalculation.calculate')}
+        submitHidden={
+          Boolean(workOrderCalcResult) ||
+          readinessLoading === 'work_order' ||
+          (workOrderReadiness != null && !workOrderReadiness.ready)
+        }
+        loading={execCalcLoading}
+        width={
+          workOrderCalcResult || workOrderReadiness
+            ? MODAL_CONFIG.SMALL_WIDTH
+            : MODAL_CONFIG.TINY_WIDTH
+        }
+        extraFooterAfter={
+          workOrderCalcResult ? (
+            <Button
+              type="primary"
+              onClick={() => {
+                setWorkOrderCalcResult(null);
+                workOrderFormRef.current?.resetFields();
+                workOrderFormRef.current?.setFieldsValue({ calculation_date: dayjs() });
+              }}
+            >
+              {t('app.kuaicaiwu.costCalculation.calculateAgain')}
+            </Button>
+          ) : undefined
+        }
       >
-        {workOrderPanel}
-      </Modal>
-      <Modal
-        title={t('app.kuaicaiwu.costCalculation.productModalTitle')}
+        {workOrderCalcResult ? (
+          renderCalcResult(workOrderCalcResult)
+        ) : (
+          <>
+            <ProFormSelect
+              name="work_order_id"
+              label={t('app.kuaicaiwu.costCalculation.field.workOrder')}
+              placeholder={t('app.kuaicaiwu.costCalculation.field.workOrderPlaceholder')}
+              rules={[{ required: true, message: t('app.kuaicaiwu.costCalculation.field.workOrderRequired') }]}
+              options={costReferenceOptions.workOrders}
+              showSearch
+              fieldProps={{
+                optionFilterProp: 'label',
+                filterOption: (input: string, option: any) =>
+                  String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                onChange: (value: number) => {
+                  void loadWorkOrderReadiness(value);
+                },
+              }}
+            />
+            <CostCalculationFactorsPanel
+              readiness={workOrderReadiness}
+              loading={readinessLoading === 'work_order'}
+            />
+            <ProFormDatePicker
+              name="calculation_date"
+              label={t('app.kuaicaiwu.costCommon.col.calculationDate')}
+              placeholder={t('app.kuaicaiwu.costCommon.field.calculationDatePlaceholder')}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+            <ProFormTextArea
+              name="remark"
+              label={t('app.kuaicaiwu.costCommon.remark')}
+              placeholder={t('app.kuaicaiwu.costCommon.remarkPlaceholder')}
+              fieldProps={{ rows: 3 }}
+            />
+          </>
+        )}
+      </FormModalTemplate>
+      <FormModalTemplate
+        title={
+          productCalcResult
+            ? t('app.kuaicaiwu.costCommon.resultTitle')
+            : t('app.kuaicaiwu.costCalculation.productModalTitle')
+        }
         open={execModal === 'product'}
-        onCancel={closeProductModal}
-        footer={null}
-        destroyOnHidden
-        width={520}
-        maskClosable={false}
+        onClose={() => {
+          setExecModal(null);
+          setProductCalcResult(null);
+          setProductReadiness(null);
+        }}
+        formRef={productFormRef}
+        onFinish={handleSaveProductCalculation}
+        onValuesChange={(changed, allValues) => {
+          if ('product_id' in changed || 'quantity' in changed) {
+            void loadProductReadiness(allValues.product_id, allValues.quantity);
+          }
+        }}
+        initialValues={{ calculation_date: dayjs(), calculation_type: '标准成本', quantity: 1 }}
+        submitText={t('app.kuaicaiwu.costCalculation.calculate')}
+        submitHidden={
+          Boolean(productCalcResult) ||
+          readinessLoading === 'product' ||
+          (productReadiness != null && !productReadiness.ready)
+        }
+        loading={execCalcLoading}
+        width={
+          productCalcResult || productReadiness ? MODAL_CONFIG.SMALL_WIDTH : MODAL_CONFIG.TINY_WIDTH
+        }
+        extraFooterAfter={
+          productCalcResult ? (
+            <Button
+              type="primary"
+              onClick={() => {
+                setProductCalcResult(null);
+                productFormRef.current?.resetFields();
+                productFormRef.current?.setFieldsValue({
+                  calculation_date: dayjs(),
+                  calculation_type: '标准成本',
+                  quantity: 1,
+                });
+              }}
+            >
+              {t('app.kuaicaiwu.costCalculation.calculateAgain')}
+            </Button>
+          ) : undefined
+        }
       >
-        {productPanel}
-      </Modal>
+        {productCalcResult ? (
+          renderCalcResult(productCalcResult)
+        ) : (
+          <>
+            <ProFormSelect
+              name="product_id"
+              label={t('app.kuaicaiwu.costCalculation.field.productMaterial')}
+              placeholder={t('app.kuaicaiwu.costCalculation.field.productMaterialPlaceholder')}
+              rules={[{ required: true, message: t('app.kuaicaiwu.costCalculation.field.productRequired') }]}
+              options={productMaterialSelectOptions}
+              showSearch
+              fieldProps={{
+                optionFilterProp: 'label',
+                filterOption: (input: string, option: any) =>
+                  String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                onChange: (value: number) => {
+                  const qty = productFormRef.current?.getFieldValue('quantity');
+                  void loadProductReadiness(value, qty);
+                },
+              }}
+            />
+            <ProFormDigit
+              name="quantity"
+              label={t('app.kuaicaiwu.costCommon.col.quantity')}
+              placeholder={t('app.kuaicaiwu.costCommon.field.quantityPlaceholder')}
+              rules={[{ required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') }]}
+              min={0}
+              fieldProps={{
+                precision: 2,
+                style: { width: '100%' },
+                onChange: (value: number | null) => {
+                  const pid = productFormRef.current?.getFieldValue('product_id');
+                  void loadProductReadiness(pid, value ?? undefined);
+                },
+              }}
+            />
+            <CostCalculationFactorsPanel
+              readiness={productReadiness}
+              loading={readinessLoading === 'product'}
+            />
+            <ProFormSelect
+              name="calculation_type"
+              label={t('app.kuaicaiwu.costCalculation.col.calculationType')}
+              placeholder={t('app.kuaicaiwu.costCalculation.field.calculationTypePlaceholder')}
+              options={[
+                { label: t('app.kuaicaiwu.costCommon.calculationType.standard'), value: '标准成本' },
+                { label: t('app.kuaicaiwu.costCommon.calculationType.actual'), value: '实际成本' },
+              ]}
+              rules={[{ required: true, message: t('app.kuaicaiwu.costCalculation.field.calculationTypeRequired') }]}
+            />
+            <ProFormDatePicker
+              name="calculation_date"
+              label={t('app.kuaicaiwu.costCommon.col.calculationDate')}
+              placeholder={t('app.kuaicaiwu.costCommon.field.calculationDatePlaceholder')}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+            <ProFormTextArea
+              name="remark"
+              label={t('app.kuaicaiwu.costCommon.remark')}
+              placeholder={t('app.kuaicaiwu.costCommon.remarkPlaceholder')}
+              fieldProps={{ rows: 3 }}
+            />
+          </>
+        )}
+      </FormModalTemplate>
       <DetailDrawerTemplate
         title={t('app.kuaicaiwu.costCalculation.detailTitle')}
         open={drawerVisible}
@@ -899,15 +1108,6 @@ const CostCalculationPage: React.FC = () => {
                   )}
                 />
               </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.lifecycle')}>
-                <UniLifecycle
-                  {...getCostCalculationLifecycle(costCalculationDetail as Record<string, unknown>, t)}
-                  showCircleTooltip={false}
-                />
-                <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
-                  {t('app.kuaicaiwu.costCalculation.lifecycleHint')}
-                </Typography.Paragraph>
-              </DetailDrawerSection>
               <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.details')}>
                 <div style={{ maxHeight: 420, overflow: 'auto', minWidth: 320 }}>
                   {costCalculationDetail.cost_details ? (
@@ -924,11 +1124,11 @@ const CostCalculationPage: React.FC = () => {
                       color: 'green',
                       children: (
                         <>
-                          {t('app.kuaicaiwu.costCommon.log.created')} ·{' '}
+                          {t('app.kuaicaiwu.costCommon.log.created')}{' '}
                           {costCalculationDetail.created_at
                             ? formatDateTime(costCalculationDetail.created_at, 'YYYY-MM-DD HH:mm:ss')
                             : '-'}
-                          {costCalculationDetail.created_by_name ? ` · ${costCalculationDetail.created_by_name}` : ''}
+                          {costCalculationDetail.created_by_name ? ` - ${costCalculationDetail.created_by_name}` : ''}
                         </>
                       ),
                     },
@@ -936,11 +1136,11 @@ const CostCalculationPage: React.FC = () => {
                       color: 'blue',
                       children: (
                         <>
-                          {t('app.kuaicaiwu.costCommon.log.updated')} ·{' '}
+                          {t('app.kuaicaiwu.costCommon.log.updated')}{' '}
                           {costCalculationDetail.updated_at
                             ? formatDateTime(costCalculationDetail.updated_at, 'YYYY-MM-DD HH:mm:ss')
                             : '-'}
-                          {costCalculationDetail.updated_by_name ? ` · ${costCalculationDetail.updated_by_name}` : ''}
+                          {costCalculationDetail.updated_by_name ? ` - ${costCalculationDetail.updated_by_name}` : ''}
                         </>
                       ),
                     },

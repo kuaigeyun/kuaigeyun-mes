@@ -33,7 +33,7 @@ from core.api.deps.access import require_access, get_auth_context, ensure_permis
 from core.api.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
-router = APIRouter(tags=["App · Kuaige Zhizao · Quality Improvement"])
+router = APIRouter(tags=["App - Kuaige Zhizao - Quality Improvement"])
 
 quality_8d_service = Quality8DService()
 defect_record_service = DefectRecordService()

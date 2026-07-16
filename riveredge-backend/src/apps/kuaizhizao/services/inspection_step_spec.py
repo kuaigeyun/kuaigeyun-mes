@@ -314,7 +314,7 @@ def prepare_plan_step_dict(step_dict: Dict[str, Any]) -> Dict[str, Any]:
         auto = format_acceptance_criteria(vt, out["value_spec"])
         if out.get("sampling_type") == "sampling":
             sampling_text = format_sampling_criteria(out["value_spec"])
-            auto = " · ".join(x for x in [auto, sampling_text] if x)
+            auto = " - ".join(x for x in [auto, sampling_text] if x)
         if auto:
             out["acceptance_criteria"] = auto
     return out
@@ -475,7 +475,7 @@ def plan_step_to_snapshot_item(step: Any) -> Dict[str, Any]:
     ac = getattr(step, "acceptance_criteria", None) or format_acceptance_criteria(vt, spec)
     if sampling_type == "sampling":
         sampling_text = format_sampling_criteria(spec)
-        ac = " · ".join(x for x in [ac, sampling_text] if x)
+        ac = " - ".join(x for x in [ac, sampling_text] if x)
     return {
         "step_key": step_key,
         "sequence": getattr(step, "sequence", 0),

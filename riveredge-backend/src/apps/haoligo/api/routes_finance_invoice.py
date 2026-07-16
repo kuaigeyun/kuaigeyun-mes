@@ -41,7 +41,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/finance/invoices",
-    tags=["App · HaoliGO · 财务管理 · 验票"],
+    tags=["App - HaoliGO - 财务管理 - 验票"],
     dependencies=[Depends(require_haoligo_module_access("finance-invoice-verify"))],
 )
 

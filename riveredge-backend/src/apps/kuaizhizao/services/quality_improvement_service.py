@@ -925,7 +925,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             )
             label = f"{notice.notice_code or nid}"
             if getattr(notice, "customer_name", None):
-                label = f"{label} · {notice.customer_name}"
+                label = f"{label} - {notice.customer_name}"
             rows.append(
                 {
                     "id": nid,
@@ -1013,7 +1013,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             )
             label = f"{delivery.delivery_code or did}"
             if getattr(delivery, "customer_name", None):
-                label = f"{label} · {delivery.customer_name}"
+                label = f"{label} - {delivery.customer_name}"
             rows.append(
                 {
                     "id": did,

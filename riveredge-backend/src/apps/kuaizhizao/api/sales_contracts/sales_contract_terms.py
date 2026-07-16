@@ -26,7 +26,7 @@ from apps.kuaizhizao.services.sales_contract_term_service import SalesContractTe
 term_service = SalesContractTermService()
 router = APIRouter(
     prefix="/sales-contracts",
-    tags=["App · Kuaige Zhizao · Sales Contract Terms"],
+    tags=["App - Kuaige Zhizao - Sales Contract Terms"],
     dependencies=[Depends(require_kuaizhizao_module_access("sales-contract"))],
 )
 

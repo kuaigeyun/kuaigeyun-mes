@@ -64,7 +64,7 @@ const ProcessInspectionModal: React.FC<ProcessInspectionModalProps> = ({
         qualified_quantity: isPass ? 1 : 0,
         unqualified_quantity: isPass ? 0 : 1,
         inspection_quantity: 1,
-        notes: [values.inspection_type, values.remarks].filter(Boolean).join(' · '),
+        notes: [values.inspection_type, values.remarks].filter(Boolean).join(' - '),
       });
       message.success(t('app.kuaizhizao.workOrder.kioskInspectionSubmitted'));
       form.resetFields();

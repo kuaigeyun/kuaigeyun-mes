@@ -125,7 +125,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
       ]);
       setEquipmentOptions(
         (equipmentRes.items || []).map((eq) => ({
-          label: `${eq.asset_code || ''} · ${eq.name || ''}`.trim() || `#${eq.id}`,
+          label: `${eq.asset_code || ''} - ${eq.name || ''}`.trim() || `#${eq.id}`,
           value: eq.id,
         })),
       );

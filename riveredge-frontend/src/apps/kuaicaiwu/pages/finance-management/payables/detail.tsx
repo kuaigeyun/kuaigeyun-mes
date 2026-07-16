@@ -23,11 +23,14 @@ import { getPayableLifecycle } from '../../../utils/payableLifecycle';
 import { getPaymentMethodOptions } from '../../../utils/financeSharedOptions';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
 const P = 'app.kuaicaiwu.payable';
+const PAYABLE_RESOURCE = 'kuaicaiwu:payable';
 
 const PayableDetail: React.FC = () => {
   const { t } = useTranslation();
+  const payablePerms = useResourcePermissions(PAYABLE_RESOURCE);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,7 +41,7 @@ const PayableDetail: React.FC = () => {
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
 
   const pageTitle = data?.payable_code
-    ? `${t(`${P}.detailTitle`)} · ${data.payable_code}`
+    ? `${t(`${P}.detailTitle`)} - ${data.payable_code}`
     : t(`${P}.detailTitle`);
 
   useEffect(() => {
@@ -96,22 +99,24 @@ const PayableDetail: React.FC = () => {
       <Button onClick={() => navigate(-1)}>{t('app.kuaicaiwu.common.back')}</Button>
       <UniWorkflowActions
         record={data}
+        apiPrefix="/apps/kuaicaiwu/payables"
+        entityType="payable"
         entityName={t(`${P}.entityName`)}
         statusField="status"
         reviewStatusField="review_status"
         draftStatuses={[]}
         pendingStatuses={['待审核']}
-        approvedStatuses={['已审核', '通过']}
+        approvedStatuses={['已审核']}
         rejectedStatuses={['已驳回', '驳回']}
         theme="default"
         size="small"
         onSuccess={loadData}
       />
-      {data.status !== '已结清' && (
+      {data.status !== '已结清' && payablePerms.canUpdate ? (
         <Button type="primary" onClick={() => setPaymentModalVisible(true)}>
           {t(`${P}.recordPayment`)}
         </Button>
-      )}
+      ) : null}
     </>
   ) : null;
 

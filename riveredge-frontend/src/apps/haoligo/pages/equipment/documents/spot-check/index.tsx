@@ -676,7 +676,7 @@ const SpotCheckDocumentsPage: React.FC = () => {
         : '';
     const meta = [valueTypeLabel(row.value_type), row.unit ? row.unit : null, rangeLabel || null]
       .filter(Boolean)
-      .join(' · ');
+      .join(' - ');
 
     return (
       <Card

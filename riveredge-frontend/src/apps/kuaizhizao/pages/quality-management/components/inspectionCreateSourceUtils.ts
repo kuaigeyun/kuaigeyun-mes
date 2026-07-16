@@ -82,7 +82,7 @@ export async function fetchShipmentNoticesForOqc(
     params,
   );
   return rows.map((notice) => ({
-    label: `${notice.notice_code ?? ''} · ${notice.customer_name ?? ''}`.trim(),
+    label: `${notice.notice_code ?? ''} - ${notice.customer_name ?? ''}`.trim(),
     value: notice.id as number,
   }));
 }
@@ -97,7 +97,7 @@ export async function fetchSalesDeliveriesForOqc(
     params,
   );
   return rows.map((delivery) => ({
-    label: `${delivery.delivery_code ?? ''} · ${delivery.customer_name ?? ''}`.trim(),
+    label: `${delivery.delivery_code ?? ''} - ${delivery.customer_name ?? ''}`.trim(),
     value: delivery.id as number,
   }));
 }

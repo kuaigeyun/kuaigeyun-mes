@@ -1,12 +1,14 @@
-import React, { useMemo, useRef } from 'react';
-import { App, Typography } from 'antd';
+import React, { useMemo, useRef, useState, useCallback } from 'react';
+import { App, Typography, Alert } from 'antd';
 import { ProFormDateTimePicker, ProFormSelect } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { FormModalTemplate } from '../../../../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../../../../components/layout-templates/constants';
 import type { WorkOrderForGantt, WorkstationResource } from '../../../../components/GanttSchedulingChart/types';
+import { visualSchedulingApi } from '../../../../services/production';
 import type {
   OperationNeedingStation,
   WorkOrderSchedulingMissingField,
@@ -26,13 +28,18 @@ export interface SchedulingWorkOrderPrepValues {
   planned_end_date?: string;
   operationStations: Array<{ operation_id: number; assigned_station_id: number }>;
   operationDates: Array<{ operation_id: number; planned_start_date: string; planned_end_date: string }>;
+  operationAssignments: Array<{
+    operation_id: number;
+    assigned_worker_id?: number | null;
+    assigned_equipment_id?: number | null;
+    assigned_mold_id?: number | null;
+  }>;
 }
 
-interface SchedulingWorkCenterOption {
+interface SchedulingResourceOption {
   id: number;
   name: string;
   code?: string;
-  workstationIds?: number[];
 }
 
 interface SchedulingWorkOrderPrepModalProps {
@@ -42,6 +49,9 @@ interface SchedulingWorkOrderPrepModalProps {
   operationsNeedingStation: OperationNeedingStation[];
   workstations: WorkstationResource[];
   workCenters: SchedulingWorkCenterOption[];
+  workers?: SchedulingResourceOption[];
+  equipments?: SchedulingResourceOption[];
+  molds?: SchedulingResourceOption[];
   loading?: boolean;
   onCancel: () => void;
   onSubmit: (values: SchedulingWorkOrderPrepValues) => Promise<void>;
@@ -75,6 +85,25 @@ function operationFieldName(operationId: number): string {
   return `station_${operationId}`;
 }
 
+function workerFieldName(operationId: number): string {
+  return `worker_${operationId}`;
+}
+
+function equipmentFieldName(operationId: number): string {
+  return `equipment_${operationId}`;
+}
+
+function moldFieldName(operationId: number): string {
+  return `mold_${operationId}`;
+}
+
+interface SchedulingWorkCenterOption {
+  id: number;
+  name: string;
+  code?: string;
+  workstationIds?: number[];
+}
+
 const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> = ({
   open,
   workOrder,
@@ -82,6 +111,9 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
   operationsNeedingStation,
   workstations,
   workCenters,
+  workers = [],
+  equipments = [],
+  molds = [],
   loading = false,
   onCancel,
   onSubmit,
@@ -90,9 +122,67 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
   const cascadingRef = useRef(false);
+  const [rateWarnings, setRateWarnings] = useState<string[]>([]);
   const sortedOperations = useMemo(
     () => [...operationsNeedingStation].sort((a, b) => a.sequence - b.sequence),
     [operationsNeedingStation]
+  );
+
+  const workerOptions = useMemo(
+    () =>
+      workers.map((item) => ({
+        value: item.id,
+        label: item.code ? `${item.code} ${item.name}` : item.name,
+      })),
+    [workers]
+  );
+  const equipmentOptions = useMemo(
+    () =>
+      equipments.map((item) => ({
+        value: item.id,
+        label: item.code ? `${item.code} ${item.name}` : item.name,
+      })),
+    [equipments]
+  );
+  const moldOptions = useMemo(
+    () =>
+      molds.map((item) => ({
+        value: item.id,
+        label: item.code ? `${item.code} ${item.name}` : item.name,
+      })),
+    [molds]
+  );
+
+  const checkRateCoverage = useCallback(
+    async (operationId: number, workerId: number) => {
+      if (!workOrder || workerId <= 0) {
+        setRateWarnings([]);
+        return;
+      }
+      try {
+        const res = await visualSchedulingApi.rateCoverage([
+          {
+            worker_id: workerId,
+            operation_id: operationId,
+            material_id: workOrder.product_id ?? null,
+          },
+        ]);
+        const item = res.items?.[0];
+        if (!item?.missing?.length) {
+          setRateWarnings([]);
+          return;
+        }
+        const labels = item.missing.map((key) =>
+          key === 'piece_rate'
+            ? t('app.kuaizhizao.scheduling.prep.missingPieceRate')
+            : t('app.kuaizhizao.scheduling.prep.missingHourlyRate')
+        );
+        setRateWarnings(labels);
+      } catch {
+        setRateWarnings([]);
+      }
+    },
+    [t, workOrder]
   );
 
   const initialValues = useMemo(() => {
@@ -105,6 +195,24 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
       operationsNeedingStation.map((op) => [
         operationFieldName(op.operationId),
         op.assignedStationId && op.assignedStationId > 0 ? op.assignedStationId : undefined,
+      ])
+    );
+    const workerValues = Object.fromEntries(
+      operationsNeedingStation.map((op) => [
+        workerFieldName(op.operationId),
+        op.assignedWorkerId && op.assignedWorkerId > 0 ? op.assignedWorkerId : undefined,
+      ])
+    );
+    const equipmentValues = Object.fromEntries(
+      operationsNeedingStation.map((op) => [
+        equipmentFieldName(op.operationId),
+        op.assignedEquipmentId && op.assignedEquipmentId > 0 ? op.assignedEquipmentId : undefined,
+      ])
+    );
+    const moldValues = Object.fromEntries(
+      operationsNeedingStation.map((op) => [
+        moldFieldName(op.operationId),
+        op.assignedMoldId && op.assignedMoldId > 0 ? op.assignedMoldId : undefined,
       ])
     );
     const rawDateValues = Object.fromEntries(
@@ -128,9 +236,30 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
       planned_start_date: start,
       planned_end_date: end,
       ...stationValues,
+      ...workerValues,
+      ...equipmentValues,
+      ...moldValues,
       ...normalizedDates,
     };
   }, [operationsNeedingStation, workOrder]);
+
+  const handleAssignmentValuesChange = (changedValues: Record<string, unknown>) => {
+    const changedKey = Object.keys(changedValues)[0];
+    if (!changedKey?.startsWith('worker_') || !workOrder) return;
+    const opId = Number(changedKey.replace(/^worker_/, ''));
+    const workerId = Number(changedValues[changedKey]);
+    if (Number.isInteger(opId) && Number.isInteger(workerId)) {
+      void checkRateCoverage(opId, workerId);
+    }
+  };
+
+  const handleFormValuesChange = (
+    changedValues: Record<string, unknown>,
+    allValues: Record<string, unknown>
+  ) => {
+    handleAssignmentValuesChange(changedValues);
+    handleScheduleValuesChange(changedValues, allValues);
+  };
 
   const scheduleCascadeOptions = useMemo(
     () => ({
@@ -208,6 +337,7 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
     }
 
     const operationStations: SchedulingWorkOrderPrepValues['operationStations'] = [];
+    const operationAssignments: SchedulingWorkOrderPrepValues['operationAssignments'] = [];
     for (const op of operationsNeedingStation) {
       const stationId = Number(values[operationFieldName(op.operationId)]);
       if (!Number.isInteger(stationId) || stationId <= 0) {
@@ -218,6 +348,21 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
         operation_id: op.operationId,
         assigned_station_id: stationId,
       });
+      const workerId = Number(values[workerFieldName(op.operationId)]);
+      const equipmentId = Number(values[equipmentFieldName(op.operationId)]);
+      const moldId = Number(values[moldFieldName(op.operationId)]);
+      if (
+        (Number.isInteger(workerId) && workerId > 0) ||
+        (Number.isInteger(equipmentId) && equipmentId > 0) ||
+        (Number.isInteger(moldId) && moldId > 0)
+      ) {
+        operationAssignments.push({
+          operation_id: op.operationId,
+          assigned_worker_id: Number.isInteger(workerId) && workerId > 0 ? workerId : null,
+          assigned_equipment_id: Number.isInteger(equipmentId) && equipmentId > 0 ? equipmentId : null,
+          assigned_mold_id: Number.isInteger(moldId) && moldId > 0 ? moldId : null,
+        });
+      }
     }
 
     let planned_start_date: string | undefined;
@@ -245,6 +390,7 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
       planned_end_date,
       operationStations,
       operationDates: scheduleResult.dates,
+      operationAssignments,
     });
   };
 
@@ -258,7 +404,7 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
       width={MODAL_CONFIG.LARGE_WIDTH}
       initialValues={initialValues}
       formRef={formRef}
-      onValuesChange={handleScheduleValuesChange}
+      onValuesChange={handleFormValuesChange}
       onFinish={submitPrepForm}
     >
       <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
@@ -266,6 +412,19 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
           code: workOrder?.code || workOrder?.id,
         })}
       </Typography.Paragraph>
+      {rateWarnings.length > 0 ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('app.kuaizhizao.scheduling.prep.rateWarningTitle', { items: rateWarnings.join('、') })}
+          description={
+            <Link to="/apps/kuaizhizao/performance/employee-configs">
+              {t('app.kuaizhizao.scheduling.prep.gotoPerformanceConfig')}
+            </Link>
+          }
+        />
+      ) : null}
       {needsStations ? (
         <>
           <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
@@ -275,6 +434,9 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
             <div className="scheduling-prep-station-grid__head">
               <span>{t('app.kuaizhizao.scheduling.prep.colOperation')}</span>
               <span>{t('app.kuaizhizao.scheduling.prep.colStation')}</span>
+              <span>{t('app.kuaizhizao.scheduling.prep.colWorker')}</span>
+              <span>{t('app.kuaizhizao.scheduling.prep.colEquipment')}</span>
+              <span>{t('app.kuaizhizao.scheduling.prep.colMold')}</span>
               <span>{t('app.kuaizhizao.scheduling.prep.colStart')}</span>
               <span>{t('app.kuaizhizao.scheduling.prep.colEnd')}</span>
             </div>
@@ -299,6 +461,45 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
                           ? t('app.kuaizhizao.scheduling.prep.selectStation')
                           : t('app.kuaizhizao.scheduling.prep.noStationsAvailable'),
                       disabled: stationOptions.length === 0 || loading,
+                      style: { width: '100%' },
+                    }}
+                  />
+                  <ProFormSelect
+                    name={workerFieldName(op.operationId)}
+                    formItemProps={{ style: { marginBottom: 0 } }}
+                    options={workerOptions}
+                    fieldProps={{
+                      size: 'small',
+                      allowClear: true,
+                      showSearch: true,
+                      optionFilterProp: 'label',
+                      placeholder: t('app.kuaizhizao.scheduling.prep.selectWorker'),
+                      style: { width: '100%' },
+                    }}
+                  />
+                  <ProFormSelect
+                    name={equipmentFieldName(op.operationId)}
+                    formItemProps={{ style: { marginBottom: 0 } }}
+                    options={equipmentOptions}
+                    fieldProps={{
+                      size: 'small',
+                      allowClear: true,
+                      showSearch: true,
+                      optionFilterProp: 'label',
+                      placeholder: t('app.kuaizhizao.scheduling.prep.selectEquipment'),
+                      style: { width: '100%' },
+                    }}
+                  />
+                  <ProFormSelect
+                    name={moldFieldName(op.operationId)}
+                    formItemProps={{ style: { marginBottom: 0 } }}
+                    options={moldOptions}
+                    fieldProps={{
+                      size: 'small',
+                      allowClear: true,
+                      showSearch: true,
+                      optionFilterProp: 'label',
+                      placeholder: t('app.kuaizhizao.scheduling.prep.selectMold'),
                       style: { width: '100%' },
                     }}
                   />

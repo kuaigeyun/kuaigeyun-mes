@@ -4,7 +4,7 @@ from .dashboard import router as dashboard_router
 from .data_source import router as data_source_router
 from apps.kuaireport.constants import ChartType
 
-router = APIRouter(tags=["App · KuanReport · Overview"])
+router = APIRouter(tags=["App - KuanReport - Overview"])
 
 
 @router.get("/chart-types", summary="List chart types")

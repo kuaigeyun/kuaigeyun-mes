@@ -142,7 +142,7 @@ export const DocumentTrackingTimelineBody: React.FC<{
     const label = typeLabel[item.type] || item.type;
     const time = item.at ? new Date(item.at).toLocaleString() : '';
     const fieldChanges = item.type === 'edit' && item.field_changes && item.field_changes.length > 0;
-    const metaStr = [item.by, time].filter(Boolean).join(' · ');
+    const metaStr = [item.by, time].filter(Boolean).join(' - ');
 
     const isStateTransition = item.type === 'state_transition' && item.from_state != null && item.to_state != null;
     const isSameStateWithReason = isStateTransition && item.from_state === item.to_state && item.detail;
@@ -168,7 +168,7 @@ export const DocumentTrackingTimelineBody: React.FC<{
       </span>
     );
 
-    /** 单行主轴：类型 · 详情 · 操作人 · 时间（窄屏自动折行） */
+    /** 单行主轴：类型 - 详情 - 操作人 - 时间（窄屏自动折行） */
     const mainRow = (
       <div
         style={{

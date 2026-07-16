@@ -1,5 +1,5 @@
 /**
- * 工艺型物料 · 加工原料配置向导（Tier 2/3）
+ * 工艺型物料 - 加工原料配置向导（Tier 2/3）
  * 引导用户为工艺型自制件配置 BOM 原料行，可选新建或选用已有采购件。
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -329,7 +329,7 @@ const FabricationRawMaterialWizard: React.FC<FabricationRawMaterialWizardProps> 
                     message={t('app.master-data.fabricationWizard.summaryTitle')}
                     description={
                       <span>
-                        {fabricationCode} · {fabricationMaterial?.name}
+                        {fabricationCode} - {fabricationMaterial?.name}
                         {' → '}
                         {summaryRawName}
                       </span>

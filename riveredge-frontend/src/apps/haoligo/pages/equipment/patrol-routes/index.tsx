@@ -141,7 +141,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
       if (seenIds.has(w.id) || (codeKey && seenCodes.has(codeKey))) continue;
       seenIds.add(w.id);
       if (codeKey) seenCodes.add(codeKey);
-      out.push({ label: `${w.code} · ${w.name}`, value: w.id });
+      out.push({ label: `${w.code} - ${w.name}`, value: w.id });
     }
     return out;
   }, [workshops]);
@@ -332,7 +332,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
       return equipments
         .filter((eq) => !used.has(eq.id))
         .filter((eq) => workshopId == null || normalizeWorkshopId(eq.workshop_id) === workshopId)
-        .map((eq) => ({ label: `${eq.asset_code} · ${eq.name}`, value: eq.id }));
+        .map((eq) => ({ label: `${eq.asset_code} - ${eq.name}`, value: eq.id }));
     },
     [editorCreateMode, usedEquipIdsCreate, usedEquipIdsEdit],
   );
@@ -455,7 +455,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
     {
       title: t('app.haoligo.equipment.patrolRoutes.stepColEquipment'),
       dataIndex: 'asset_code',
-      render: (_, r) => `${r.asset_code} · ${r.equipment_name}`,
+      render: (_, r) => `${r.asset_code} - ${r.equipment_name}`,
     },
   ];
 
@@ -468,7 +468,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
       render: (_, r) => {
         if (r.workshop_id == null) return t('app.haoligo.equipment.ledger.commonDash');
         const w = wsMap.get(r.workshop_id);
-        return w ? `${w.code} · ${w.name}` : r.workshop_id;
+        return w ? `${w.code} - ${w.name}` : r.workshop_id;
       },
     },
   ];
@@ -481,7 +481,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
     },
     {
       title: t('app.haoligo.equipment.patrolRoutes.stepColEquipment'),
-      render: (_, r) => `${'asset_code' in r ? r.asset_code : ''} · ${'equipment_name' in r ? r.equipment_name : ''}`,
+      render: (_, r) => `${'asset_code' in r ? r.asset_code : ''} - ${'equipment_name' in r ? r.equipment_name : ''}`,
     },
   ];
 
@@ -563,7 +563,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
       render: (_, r) => {
         if (r.workshop_id == null) return t('app.haoligo.equipment.ledger.commonDash');
         const w = wsMap.get(r.workshop_id);
-        return w ? `${w.code} · ${w.name}` : r.workshop_id;
+        return w ? `${w.code} - ${w.name}` : r.workshop_id;
       },
     },
     {
@@ -750,7 +750,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
       <DetailDrawerTemplate
         title={
           detailRecord
-            ? `${t('common.detail')} · ${detailRecord.code}`
+            ? `${t('common.detail')} - ${detailRecord.code}`
             : t('app.haoligo.equipment.patrolRoutes.title')
         }
         open={detailOpen}

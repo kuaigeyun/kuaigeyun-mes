@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import {
   ActionType,
   ProColumns,
@@ -31,11 +31,7 @@ import {
 import type { UploadProps } from 'antd';
 import { FormListDetailTable } from '../../../../../components/form-list-detail-table';
 import {
-  DeleteOutlined,
-  EditOutlined,
-  EyeOutlined,
   FilePdfOutlined,
-  PrinterOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -881,7 +877,7 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
     try {
       const acc = await getOrCreateFinanceAcceptanceFromInvoice(record.id);
       setPrintAcceptanceId(acc.id);
-      setPrintAcceptanceTitle(`材料验收单 · ${acc.sheet_no}`);
+      setPrintAcceptanceTitle(`材料验收单 - ${acc.sheet_no}`);
       setPrintAcceptanceOpen(true);
       invoiceActionRef.current?.reload();
     } catch (e) {
@@ -959,45 +955,25 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
         const editable = record.status === '已登记' || record.status === '待核对';
         const printable = record.status !== '已拒收';
         return [
-          <Button
-            key="view"
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => void openInvoiceDetail(record)}
-          >
-            详情
-          </Button>,
-          editable && perms.canUpdate ? (
-            <Button
-              key="edit"
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => void openEditInvoice(record)}
-            >
-              编辑
-            </Button>
+          <Button key="view" {...rowActionKind('read')} onClick={() => void openInvoiceDetail(record)} />,
+          editable ? (
+            <Button key="edit" {...rowActionKind('update')} onClick={() => void openEditInvoice(record)} />
           ) : null,
-          printable && perms.canPrint ? (
+          printable ? (
             <Button
               key="print-acc"
-              type="link"
-              size="small"
-              icon={<PrinterOutlined />}
+              {...rowActionKind('print')}
+              {...rowActionLabelKeep()}
               loading={printAcceptanceLoadingId === record.id}
               onClick={() => void handlePrintAcceptanceFromInvoice(record)}
             >
               打印验收单
             </Button>
           ) : null,
-          editable && perms.canDelete ? (
+          editable ? (
             <Button
               key="del"
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
+              {...rowActionKind('delete')}
               onClick={() => {
                 Modal.confirm({
                   title: '删除发票',
@@ -1010,9 +986,7 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
                   },
                 });
               }}
-            >
-              删除
-            </Button>
+            />
           ) : null,
         ].filter(Boolean);
       },
@@ -1026,6 +1000,7 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
           actionRef={invoiceActionRef}
           rowKey="id"
           columns={invoiceColumns}
+          permissionResource={HAOLIGO_FINANCE_INVOICE_VERIFY_RESOURCE}
           showAdvancedSearch
           showCreateButton
           createButtonText="录入发票"
@@ -1037,7 +1012,6 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
             });
             return { data: rows, success: true, total: rows.length };
           }}
-          rowActionKind={rowActionKind.link}
         />
       </ListPageTemplate>
 
@@ -1259,7 +1233,7 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
       </FormModalTemplate>
 
       <Modal
-        title={detailInvoice ? `发票详情 · ${detailInvoice.invoice_no}` : '发票详情'}
+        title={detailInvoice ? `发票详情 - ${detailInvoice.invoice_no}` : '发票详情'}
         open={detailOpen}
         onCancel={() => {
           setDetailOpen(false);

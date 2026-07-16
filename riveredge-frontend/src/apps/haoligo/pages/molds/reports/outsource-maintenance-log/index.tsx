@@ -78,7 +78,7 @@ const MoldOutsourceMaintenanceLogReportPage: React.FC = () => {
         for (const it of items) {
           const rr = (it.repair_result && String(it.repair_result).trim()) || '';
           const rc = (it.repair_content && String(it.repair_content).trim()) || '';
-          if (rr || rc) parts.push([rr, rc].filter(Boolean).join(' · '));
+          if (rr || rc) parts.push([rr, rc].filter(Boolean).join(' - '));
         }
         return parts.length ? parts.join('；') : '—';
       },

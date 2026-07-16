@@ -226,7 +226,7 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
     );
     const typeCriteria = formatAcceptanceCriteriaPreview(vt, spec, t);
     const samplingCriteria = formatSamplingCriteriaPreview(samplingType, spec, t);
-    const autoCriteria = [typeCriteria, samplingCriteria].filter(Boolean).join(' · ');
+    const autoCriteria = [typeCriteria, samplingCriteria].filter(Boolean).join(' - ');
     const criteria = (vals.acceptance_criteria as string)?.trim() || autoCriteria || undefined;
     return {
       sequence: existing?.sequence ?? steps.length,

@@ -14,7 +14,7 @@ from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
-router = APIRouter(prefix="/knowledge", tags=["App · KU-AI · Knowledge"])
+router = APIRouter(prefix="/knowledge", tags=["App - KU-AI - Knowledge"])
 
 
 class TextDocumentCreate(BaseModel):

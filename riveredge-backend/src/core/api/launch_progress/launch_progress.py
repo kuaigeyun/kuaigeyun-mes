@@ -17,7 +17,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from loguru import logger
 
-router = APIRouter(prefix="/launch-progress", tags=["Core · Launch Progress"])
+router = APIRouter(prefix="/launch-progress", tags=["Core - Launch Progress"])
 
 launch_progress_service = LaunchProgressService()
 

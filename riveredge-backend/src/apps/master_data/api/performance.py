@@ -53,7 +53,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(
     prefix="/performance",
-    tags=["App · Master Data · Performance"],
+    tags=["App - Master Data - Performance"],
     dependencies=[Depends(require_performance_module_access())],
 )
 

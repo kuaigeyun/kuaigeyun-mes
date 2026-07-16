@@ -39,7 +39,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(
     prefix="/process",
-    tags=["App · Master Data · Process"],
+    tags=["App - Master Data - Process"],
     dependencies=[Depends(require_master_data_module_access("process"))],
 )
 

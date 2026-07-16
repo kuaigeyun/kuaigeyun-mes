@@ -18,7 +18,7 @@ from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError
 
-router = APIRouter(prefix="/user-messages", tags=["Core · User Messages"])
+router = APIRouter(prefix="/user-messages", tags=["Core - User Messages"])
 
 
 @router.get("", response_model=UserMessageListResponse)

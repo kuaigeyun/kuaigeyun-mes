@@ -93,6 +93,7 @@ import { UniTable } from '../../../../../components/uni-table'
 import { UniBatchButton, UniBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch'
 import {
   UniTableStackedPrimaryCell,
+  UniTableStackedLineBadge,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn'
 import { useUserPreferenceStore } from '../../../../../stores/userPreferenceStore'
@@ -942,7 +943,7 @@ function renderWorkOrderBatchSerialLine(
   const parts: string[] = []
   if (batch) parts.push(`批 ${batch}`)
   if (serial) parts.push(`序 ${serial}`)
-  const label = parts.join(' · ')
+  const label = parts.join(' - ')
   return (
     <Typography.Text
       type="secondary"
@@ -1279,8 +1280,6 @@ function WorkOrderTreeProductCodeCell({ record }: { record: WorkOrder }) {
 
 function WorkOrderPlannedRangeCell({ record }: { record: WorkOrder }) {
   const { t } = useTranslation()
-  const { token } = theme.useToken()
-  const secondaryTagStyle = getWorkOrderStackedSecondaryTagStyle(token)
   const overdue = isWorkOrderPlannedEndOverdue(record)
   return (
     <UniTableStackedPrimaryCell
@@ -1290,9 +1289,9 @@ function WorkOrderPlannedRangeCell({ record }: { record: WorkOrder }) {
       secondaryBadge={t('common.end')}
       secondaryExtra={
         overdue ? (
-          <Tag color="error" variant="solid" style={secondaryTagStyle}>
+          <UniTableStackedLineBadge tone="danger">
             {t('app.kuaizhizao.workOrder.tagOverdue')}
-          </Tag>
+          </UniTableStackedLineBadge>
         ) : undefined
       }
       secondaryCopyable={false}
@@ -8543,7 +8542,7 @@ const WorkOrdersPage: React.FC = () => {
                           code: sourceItems[0]._order_code,
                           name:
                             sourceItems[0]._order_code && sourceItems[0]._customer_name
-                              ? `${sourceItems[0]._order_code} · ${sourceItems[0]._customer_name}`
+                              ? `${sourceItems[0]._order_code} - ${sourceItems[0]._customer_name}`
                               : sourceItems[0]._order_code || sourceItems[0]._customer_name,
                         },
                       }

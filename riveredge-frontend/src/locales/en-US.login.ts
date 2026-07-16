@@ -31,7 +31,7 @@ export default {
   'pages.login.provenanceLabel': 'Build provenance',
   'pages.login.telemetryDisclosure': 'Telemetry disclosure',
   'components.iterationFloatButton.provenanceStatus.official_self_hosted': 'Official repository self-hosted',
-  'components.iterationFloatButton.provenanceStatus.official_unknown_commit': 'Official source · commit unverified',
+  'components.iterationFloatButton.provenanceStatus.official_unknown_commit': 'Official source - commit unverified',
   'components.iterationFloatButton.provenanceStatus.unverified_commit': 'Unverified commit',
   'components.iterationFloatButton.provenanceStatus.unverified_build': 'Unverified build',
   'components.iterationFloatButton.provenanceStatus.unknown': 'Unknown source',

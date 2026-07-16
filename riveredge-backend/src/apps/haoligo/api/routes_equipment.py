@@ -47,7 +47,7 @@ from infra.models.user import User
 
 router = APIRouter(
     prefix="/equipment",
-    tags=["App · HaoliGO · 设备"],
+    tags=["App - HaoliGO - 设备"],
 )
 
 _workshops_router = APIRouter()

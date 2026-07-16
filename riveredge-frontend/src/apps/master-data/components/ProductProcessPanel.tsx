@@ -352,7 +352,7 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
           <Space>
             {auditHint ? (
               <Typography.Text type="secondary">
-                {auditHint.operator} · {auditHint.time}
+                {auditHint.operator} - {auditHint.time}
               </Typography.Text>
             ) : null}
             <Button

@@ -32,7 +32,7 @@ from apps.kuaizhizao.schemas.delivery_notice import (
 delivery_notice_service = DeliveryNoticeService()
 router = APIRouter(
     prefix="/delivery-notices",
-    tags=["App · Kuaige Zhizao · Delivery Notice"],
+    tags=["App - Kuaige Zhizao - Delivery Notice"],
     dependencies=[Depends(require_kuaizhizao_module_access("delivery-notice", resolve_print=False))],
 )
 

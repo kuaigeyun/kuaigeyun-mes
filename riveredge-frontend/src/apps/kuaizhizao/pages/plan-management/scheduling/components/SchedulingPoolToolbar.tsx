@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Button, Input, Segmented, Space } from 'antd';
+import { Button, Checkbox, Input, Segmented, Space } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { PoolStatusFilter } from '../schedulingPoolUtils';
@@ -17,6 +17,9 @@ interface SchedulingPoolToolbarProps {
   onConfirmDelay?: () => void;
   onToException?: () => void;
   onApplyUnfreeze?: () => void;
+  onRescheduleForward?: () => void;
+  overdueOnly?: boolean;
+  onOverdueOnlyChange?: (value: boolean) => void;
 }
 
 const SchedulingPoolToolbar: React.FC<SchedulingPoolToolbarProps> = ({
@@ -32,6 +35,9 @@ const SchedulingPoolToolbar: React.FC<SchedulingPoolToolbarProps> = ({
   onConfirmDelay,
   onToException,
   onApplyUnfreeze,
+  onRescheduleForward,
+  overdueOnly = false,
+  onOverdueOnlyChange,
 }) => {
   const { t } = useTranslation();
 
@@ -69,8 +75,17 @@ const SchedulingPoolToolbar: React.FC<SchedulingPoolToolbarProps> = ({
       <Button size="small" icon={<ReloadOutlined />} onClick={onReset}>
         {t('app.kuaizhizao.scheduling.poolToolbar.reset')}
       </Button>
+      <Checkbox
+        checked={overdueOnly}
+        onChange={(e) => onOverdueOnlyChange?.(e.target.checked)}
+      >
+        {t('app.kuaizhizao.scheduling.poolToolbar.overdueOnly')}
+      </Checkbox>
       {canUpdate ? (
         <>
+          <Button size="small" disabled={selectedCount === 0} loading={actionLoading} onClick={onRescheduleForward}>
+            {t('app.kuaizhizao.scheduling.poolToolbar.rescheduleForward')}
+          </Button>
           <Button size="small" disabled={selectedCount === 0} loading={actionLoading} onClick={onConfirmDelay}>
             {t('app.kuaizhizao.scheduling.poolToolbar.confirmDelay')}
           </Button>

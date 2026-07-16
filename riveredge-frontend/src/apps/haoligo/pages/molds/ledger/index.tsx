@@ -649,7 +649,7 @@ const MoldLedgerPage: React.FC = () => {
         list.map((s) => ({
           key: s.uuid,
           value: s.name,
-          label: s.code ? `${s.code} · ${s.name}` : s.name,
+          label: s.code ? `${s.code} - ${s.name}` : s.name,
         })),
       );
     } catch {
@@ -685,7 +685,7 @@ const MoldLedgerPage: React.FC = () => {
       setUpkeepSetOptions(
         rows.map((s: MoldUpkeepParamSetRow) => ({
           value: s.id,
-          label: `${s.code} · ${s.name}`,
+          label: `${s.code} - ${s.name}`,
         })),
       );
     } catch {
@@ -1379,7 +1379,7 @@ const MoldLedgerPage: React.FC = () => {
       </ListPageTemplate>
 
       <UniDetail
-        title={moldDetail ? `模具详情 · ${moldDetail.mold_code}` : '模具详情'}
+        title={moldDetail ? `模具详情 - ${moldDetail.mold_code}` : '模具详情'}
         open={detailDrawerVisible}
         onClose={handleCloseMoldDetail}
         loading={detailLoading}
@@ -1403,7 +1403,7 @@ const MoldLedgerPage: React.FC = () => {
       />
 
       <UniDetail
-        title={moldDetail ? `模具履历 · ${moldDetail.mold_code}` : '模具履历'}
+        title={moldDetail ? `模具履历 - ${moldDetail.mold_code}` : '模具履历'}
         open={historyDrawerVisible}
         onClose={handleCloseMoldHistory}
         loading={historyLoading}
@@ -1733,7 +1733,7 @@ const MoldLedgerPage: React.FC = () => {
       </Modal>
 
       <Modal
-        title="模具台账 · ERP 数据集"
+        title="模具台账 - ERP 数据集"
         open={bindingModalOpen}
         onCancel={() => setBindingModalOpen(false)}
         width={640}

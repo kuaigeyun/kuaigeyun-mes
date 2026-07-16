@@ -32,7 +32,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Conflict
 from typing import Any
 
 # 创建路由
-router = APIRouter(prefix="/tenants", tags=["Platform · Tenants"])
+router = APIRouter(prefix="/tenants", tags=["Platform - Tenants"])
 
 
 async def _rollback_created_tenant(tenant_id: int) -> None:

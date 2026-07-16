@@ -7,8 +7,8 @@
  * @date 2026-01-27
  */
 
-import { Modal, message, notification } from 'antd';
 import { ExclamationCircleOutlined, CloseCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { getAntdMessage, getAntdModal, getAntdNotification } from './antdAppApis';
 import { handleError as baseHandleError } from './errorHandler';
 
 /**
@@ -284,6 +284,7 @@ export function showEnhancedError(
   }
 ): void {
   const errorInfo = handleEnhancedError(error, options);
+  const notification = getAntdNotification();
 
   // 根据错误级别选择不同的提示方式
   switch (errorInfo.level) {
@@ -315,7 +316,7 @@ export function showEnhancedError(
       break;
 
     case ErrorLevel.CRITICAL:
-      Modal.error({
+      getAntdModal().error({
         title: errorInfo.title,
         content: (
           <div>
@@ -346,7 +347,7 @@ export function showEnhancedError(
       break;
 
     default:
-      message.error(errorInfo.message);
+      getAntdMessage().error(errorInfo.message);
   }
 }
 

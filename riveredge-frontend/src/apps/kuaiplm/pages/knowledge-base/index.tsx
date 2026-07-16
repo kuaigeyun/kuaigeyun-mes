@@ -646,7 +646,7 @@ const KnowledgeBasePage: React.FC = () => {
                   const preferred = resolvePlmPreferredAudit(activeArticle as Record<string, unknown>);
                   return (
                     <Typography.Text type="secondary">
-                      {preferred.operator} · {preferred.time}
+                      {preferred.operator} - {preferred.time}
                     </Typography.Text>
                   );
                 })()}

@@ -20,7 +20,7 @@ from tortoise.exceptions import IntegrityError
 
 from infra.exceptions.exceptions import ValidationError
 
-router = APIRouter(prefix="/permission-policies", tags=["Core · Permission Policies"])
+router = APIRouter(prefix="/permission-policies", tags=["Core - Permission Policies"])
 
 
 @router.get("/me/field-masks")

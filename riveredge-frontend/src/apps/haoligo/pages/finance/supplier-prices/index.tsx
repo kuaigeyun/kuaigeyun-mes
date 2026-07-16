@@ -16,10 +16,8 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Tag } from 'antd';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
-import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { resolveFactoryImportHeaderIndexMap } from '../../../../../utils/spreadsheetImportTemplate';
 import {
   createFinanceSupplierPriceLedger,
@@ -66,7 +64,6 @@ const PRICE_IMPORT_TEMPLATE = {
 
 const FinanceSupplierPricesPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const perms = useResourcePermissions(HAOLIGO_FINANCE_SUPPLIER_PRICES_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
 
@@ -116,7 +113,7 @@ const FinanceSupplierPricesPage: React.FC = () => {
   const handleDelete = (record: FinanceSupplierPriceLedgerRow) => {
     Modal.confirm({
       title: '确认删除',
-      content: `确定删除「${record.supplier_name} · ${record.spec ?? record.material_code}」的价格明细？`,
+      content: `确定删除「${record.supplier_name} - ${record.spec ?? record.material_code}」的价格明细？`,
       okType: 'danger',
       onOk: async () => {
         await deleteFinanceSupplierPriceLedger(record.id);
@@ -239,24 +236,9 @@ const FinanceSupplierPricesPage: React.FC = () => {
       width: 120,
       fixed: 'right',
       render: (_, record) => [
-        perms.canUpdate ? (
-          <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-        ) : null,
-        perms.canDelete ? (
-          <Button
-            key="delete"
-            type="link"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record)}
-          >
-            删除
-          </Button>
-        ) : null,
-      ].filter(Boolean),
+        <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+        <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDelete(record)} />,
+      ],
     },
   ];
 
@@ -367,7 +349,6 @@ const FinanceSupplierPricesPage: React.FC = () => {
             const rows = await listFinanceSupplierPriceLedger({ keyword });
             return { data: rows, success: true, total: rows.length };
           }}
-          rowActionKind={rowActionKind.link}
         />
       </ListPageTemplate>
 

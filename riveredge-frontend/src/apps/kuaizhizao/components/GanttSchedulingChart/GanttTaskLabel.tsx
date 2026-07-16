@@ -47,7 +47,7 @@ export const GanttTaskLabel: React.FC<GanttTaskLabelProps> = ({
   const badgeText = showNumericBadge ? String(badgeCount) : legacyBadge;
   const badgeHint = badgeTitle?.trim() || legacyBadge;
   const tooltip =
-    titleAttr || [primary, badgeHint || code].filter(Boolean).join(' · ');
+    titleAttr || [primary, badgeHint || code].filter(Boolean).join(' - ');
 
   if (showNumericBadge || showLegacyBadge) {
     return (

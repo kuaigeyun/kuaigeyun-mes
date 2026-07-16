@@ -16,7 +16,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from loguru import logger
 
-router = APIRouter(prefix="/launch-checklist", tags=["Core · Launch Checklist"])
+router = APIRouter(prefix="/launch-checklist", tags=["Core - Launch Checklist"])
 
 launch_checklist_service = LaunchChecklistService()
 

@@ -273,11 +273,11 @@ const DocumentTimingPage: React.FC = () => {
                     color: 'blue',
                     children: (
                       <>
-                        {n.node_name || n.node_code || '节点'} ·{' '}
+                        {n.node_name || n.node_code || '节点'} 
                         {n.end_time || n.start_time
                           ? `${n.start_time ?? ''} → ${n.end_time ?? ''}`
                           : '-'}
-                        {n.operator_name ? ` · ${n.operator_name}` : ''}
+                        {n.operator_name ? ` - ${n.operator_name}` : ''}
                       </>
                     ),
                   }))}

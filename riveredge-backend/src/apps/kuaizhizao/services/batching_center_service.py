@@ -25,7 +25,6 @@ from apps.kuaizhizao.schemas.batching_order import BatchingCenterTaskItem, Batch
 from apps.kuaizhizao.services.material_call_service import MaterialCallService
 from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
-from apps.kuaizhizao.utils.inventory_helper import batch_get_material_inventory
 from apps.kuaizhizao.utils.issue_method_resolver import ISSUE_METHOD_PICK, is_batching_material
 
 
@@ -106,7 +105,24 @@ class BatchingCenterService:
 
         issue_map = {r.component_id: r.issue_method for r in reqs}
         comp_ids = [r.component_id for r in reqs]
-        inventory_map = await batch_get_material_inventory(tenant_id, comp_ids)
+        # 配料缺料只看线边就绪（已领 + 线边仓），不含主仓批次库存
+        line_side_map: Dict[int, Decimal] = {mid: Decimal("0") for mid in comp_ids}
+        try:
+            from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
+
+            line_items = await LineSideInventory.filter(
+                tenant_id=tenant_id,
+                material_id__in=comp_ids,
+                deleted_at__isnull=True,
+                status="available",
+            ).all()
+            for item in line_items:
+                mid = int(item.material_id)
+                available = (item.quantity or Decimal("0")) - (item.reserved_quantity or Decimal("0"))
+                if available > 0 and mid in line_side_map:
+                    line_side_map[mid] += available
+        except Exception:
+            line_side_map = {mid: Decimal("0") for mid in comp_ids}
         picked_map = await self._batch_picked_quantities(tenant_id, wo.id, comp_ids)
 
         batching_shortages: List[_BatchingShortageLine] = []
@@ -120,12 +136,12 @@ class BatchingCenterService:
             batching_item_count += 1
             required = Decimal(str(req.gross_requirement))
             picked = picked_map.get(req.component_id, Decimal("0"))
-            inv = inventory_map.get(req.component_id, Decimal("0"))
-            total_avail = picked + inv
-            if total_avail >= required:
+            line_side = line_side_map.get(req.component_id, Decimal("0"))
+            line_ready = picked + line_side
+            if line_ready >= required:
                 fully_kitted_count += 1
                 continue
-            shortage = required - total_avail
+            shortage = required - line_ready
             if shortage <= 0:
                 fully_kitted_count += 1
                 continue
