@@ -23,6 +23,7 @@ import {
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedColumns,
   normalizeMasterListResponse,
@@ -41,7 +42,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
@@ -632,7 +633,7 @@ const ProductionLinesPage: React.FC = () => {
       render: (_, record) => {
         const isActive = record?.isActive;
         return (
-          <Tag color={isActive ? 'success' : 'default'}>
+          <Tag color={isActive ? 'success' : 'default'} variant="solid">
             {isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
@@ -705,7 +706,7 @@ const ProductionLinesPage: React.FC = () => {
       render: (_, record) => {
         const isActive = record?.isActive;
         return (
-          <Tag color={isActive ? 'success' : 'default'}>
+          <Tag color={isActive ? 'success' : 'default'} variant="solid">
             {isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
@@ -727,9 +728,9 @@ const ProductionLinesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ProductionLine>
-        columnPersistenceId="apps.master-data.pages.factory.production-lines"
+        columnPersistenceId="apps.master-data.pages.factory.production-lines.status-v2"
         actionRef={actionRef}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+        columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const pageSize = params.pageSize || 20;
           const skip = ((params.current || 1) - 1) * pageSize;

@@ -210,23 +210,23 @@ export function getQualityTypeText(t: TFunction, type?: string | null): string {
 export function renderQualityResultTag(t: TFunction, result?: string | null): React.ReactNode {
   const text = getQualityResultText(t, result);
   const color = RESULT_COLORS[String(result ?? 'pending')] ?? 'default';
-  return React.createElement(Tag, { color }, text);
+  return React.createElement(Tag, { color, variant: 'solid' }, text);
 }
 
 export function renderQualityDocStatusTag(t: TFunction, status?: string | null): React.ReactNode {
   const text = getQualityDocStatusText(t, status);
   const color = DOC_STATUS_COLORS[String(status)] ?? 'default';
-  return React.createElement(Tag, { color }, text);
+  return React.createElement(Tag, { color, variant: 'solid' }, text);
 }
 
 export function renderQualityQualityStatusTag(t: TFunction, status?: string | null): React.ReactNode {
   if (!status) {
-    return React.createElement(Tag, null, t('app.kuaizhizao.quality.common.qualityStatus.pending'));
+    return React.createElement(Tag, { variant: 'solid' }, t('app.kuaizhizao.quality.common.qualityStatus.pending'));
   }
   const key = QUALITY_QUALITY_STATUS_I18N[status];
   const text = key ? t(key) : status;
   const color = status === '合格' ? 'success' : 'error';
-  return React.createElement(Tag, { color }, text);
+  return React.createElement(Tag, { color, variant: 'solid' }, text);
 }
 
 const RELEASE_DECISION_COLORS: Record<string, string> = {
@@ -238,13 +238,13 @@ const RELEASE_DECISION_COLORS: Record<string, string> = {
 export function renderReleaseDecisionTag(t: TFunction, decision?: string | null): React.ReactNode {
   const text = getQualityReleaseDecisionText(t, decision);
   const color = RELEASE_DECISION_COLORS[String(decision ?? 'pending')] ?? 'default';
-  return React.createElement(Tag, { color }, text);
+  return React.createElement(Tag, { color, variant: 'solid' }, text);
 }
 
 export function renderNcLedgerStatusTag(t: TFunction, status?: string | null): React.ReactNode {
   const text = getQualityNcLedgerStatusText(t, status);
   const color = status === 'processed' ? 'success' : 'processing';
-  return React.createElement(Tag, { color }, text);
+  return React.createElement(Tag, { color, variant: 'solid' }, text);
 }
 
 export function buildQualityReportIncomingColumns(t: TFunction): ProColumns[] {

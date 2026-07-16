@@ -55,11 +55,12 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { convertUnitPriceByPriceType } from '../../../utils/resolve-partner-material-price';
 import { formatDateTime } from '../../../../../utils/format';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   masterCrudCreatedUpdatedColumns,
+  GLOBAL_DOC_LIST_FIELD_RANK,
   partnerPriceBookPartnerSearchColumn,
   resolvePartnerPriceBookListParams,
 } from '../../../utils/supplyChainListCore';
@@ -444,8 +445,8 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         title: t('app.master-data.materialForm.mainCode', '物料'),
         render: () => (detail ? `${detail.materialCode ?? ''} - ${detail.materialName ?? ''}`.trim() || '—' : '—'),
       },
-      { title: t('app.master-data.codeMapping.customerCode', '伙伴料号'), dataIndex: 'partnerMaterialCode' },
-      { title: t('app.master-data.codeMapping.name', '伙伴品名'), dataIndex: 'partnerMaterialName' },
+      { title: isCustomer ? t('app.master-data.priceBook.customerMaterialCode') : t('app.master-data.priceBook.supplierMaterialCode'), dataIndex: 'partnerMaterialCode' },
+      { title: isCustomer ? t('app.master-data.priceBook.customerMaterialName') : t('app.master-data.priceBook.supplierMaterialName'), dataIndex: 'partnerMaterialName' },
       { title: t('app.master-data.priceBook.standardUnitPrice', '标准价'), dataIndex: 'unitPrice' },
       {
         title: t('app.kuaizhizao.salesOrder.priceType', '价类'),
@@ -464,7 +465,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         title: t('field.defectType.isActive', '状态'),
         dataIndex: 'isActive',
         render: (_, r) => (
-          <Tag color={r?.isActive ? 'success' : 'default'}>
+          <Tag color={r?.isActive ? 'success' : 'default'} variant="solid">
             {r?.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
           </Tag>
         ),
@@ -496,13 +497,17 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         render: (_, r) => `${r.materialCode ?? ''} ${r.materialName ?? ''}`.trim() || '—',
       },
       {
-        title: t('app.master-data.codeMapping.customerCode', '伙伴料号'),
+        title: isCustomer
+          ? t('app.master-data.priceBook.customerMaterialCode')
+          : t('app.master-data.priceBook.supplierMaterialCode'),
         dataIndex: 'partnerMaterialCode',
         width: 120,
         ellipsis: true,
       },
       {
-        title: t('app.master-data.codeMapping.name', '伙伴品名'),
+        title: isCustomer
+          ? t('app.master-data.priceBook.customerMaterialName')
+          : t('app.master-data.priceBook.supplierMaterialName'),
         dataIndex: 'partnerMaterialName',
         width: 120,
         ellipsis: true,
@@ -561,7 +566,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         sorter: true,
         valueEnum: priceBookActiveValueEnum,
         render: (_, r) => (
-          <Tag color={r.isActive ? 'success' : 'default'}>
+          <Tag color={r.isActive ? 'success' : 'default'} variant="solid">
             {r.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
           </Tag>
         ),
@@ -626,7 +631,8 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           enableRowSelection
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
-          columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+          columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
+          columnPersistenceId={`apps.master-data.pages.supply-chain.partner-price-books.${partnerType}.status-v2`}
           headerTitle={pageTitle}
           showCreateButton
           createButtonText={createButtonLabel}
@@ -763,8 +769,8 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
                     name="partnerMaterialCode"
                     label={
                       isCustomer
-                        ? t('app.master-data.codeMapping.customerCode', '客户编号')
-                        : t('app.master-data.codeMapping.supplierCode', '供应商编号')
+                        ? t('app.master-data.priceBook.customerMaterialCode')
+                        : t('app.master-data.priceBook.supplierMaterialCode')
                     }
                     rules={[
                       {
@@ -772,22 +778,32 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
                           const sync = form.getFieldValue('syncPartnerAlias');
                           if (sync && !value?.trim()) {
                             throw new Error(
-                              t('app.master-data.priceBook.partnerCodeRequiredWhenSync', '开启同步时请填写伙伴料号'),
+                              t('app.master-data.priceBook.partnerCodeRequiredWhenSync'),
                             );
                           }
                         },
                       },
                     ]}
                   >
-                    <Input placeholder={t('app.master-data.codeMapping.codePlaceholder', '编号')} />
+                    <Input
+                      placeholder={
+                        isCustomer
+                          ? t('app.master-data.priceBook.customerMaterialCodePlaceholder')
+                          : t('app.master-data.priceBook.supplierMaterialCodePlaceholder')
+                      }
+                    />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={8}>
                   <Form.Item
                     name="partnerMaterialName"
-                    label={t('app.master-data.codeMapping.nameOptional', '名称（可选）')}
+                    label={
+                      isCustomer
+                        ? t('app.master-data.priceBook.customerMaterialNameOptional')
+                        : t('app.master-data.priceBook.supplierMaterialNameOptional')
+                    }
                   >
-                    <Input placeholder={t('app.master-data.codeMapping.nameOptional', '名称（可选）')} />
+                    <Input placeholder={t('app.master-data.priceBook.partnerMaterialNamePlaceholder')} />
                   </Form.Item>
                 </Col>
               </>

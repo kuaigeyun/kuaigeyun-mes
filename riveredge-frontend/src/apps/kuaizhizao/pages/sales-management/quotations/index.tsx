@@ -1027,7 +1027,7 @@ const QuotationsPage: React.FC = () => {
       hideInSearch: true,
       order: 13,
       render: (_, r) => (
-        <Tag color="blue" bordered={false}>
+        <Tag color="blue" bordered={false} variant="filled">
           {t('app.kuaizhizao.quotation.versionDisplay', { n: r.version_no ?? 1 })}
         </Tag>
       ),
@@ -2476,9 +2476,9 @@ const QuotationsPage: React.FC = () => {
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span>{t('app.kuaizhizao.quotation.versionDisplay', { n: r.version_no ?? 1 })}</span>
           {r.is_latest_in_series === false ? (
-            <Tag>{t('app.kuaizhizao.quotation.historyTag')}</Tag>
+            <Tag variant="filled">{t('app.kuaizhizao.quotation.historyTag')}</Tag>
           ) : (
-            <Tag color="blue">{t('app.kuaizhizao.quotation.latestTag')}</Tag>
+            <Tag color="blue" variant="filled">{t('app.kuaizhizao.quotation.latestTag')}</Tag>
           )}
         </span>
       ),

@@ -280,14 +280,6 @@ const OWO_STAT_SPARK_1 = [2, 3, 4, 3, 5, 4, 6];
 const OWO_STAT_SPARK_2 = [1, 2, 1, 0, 2, 1, 1];
 const OWO_STAT_SPARK_3 = [3, 4, 5, 6, 5, 7, 8];
 
-const OUTSOURCE_WORK_ORDER_LIST_FIELD_RANK = {
-  ...SALES_DOC_LIST_FIELD_RANK,
-  supplier_name: 9.9,
-  planned_start_date: 10.1,
-  planned_end_date: 10.2,
-  outsource_operation: 25.2,
-  unit_price: 59.9,
-};
 
 export const OutsourceWorkOrdersTable: React.FC = () => {
   const navigate = useNavigate();
@@ -1687,7 +1679,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         render: (_, record) =>
           renderOwoRowActions(renderOwoRowActionNodes(record), `owo-${record.id ?? 'row'}`),
       },
-    ], OUTSOURCE_WORK_ORDER_LIST_FIELD_RANK),
+    ], SALES_DOC_LIST_FIELD_RANK),
     [getOwoPriorityTag, owoCustomFieldColumns, outsourceWorkOrderLifecycleValueEnum, prioritySearchValueEnum, supplierSearchValueEnum, t],
   );
 

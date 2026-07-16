@@ -67,6 +67,7 @@ import type {
   LoadStandardPartsPresetResponse,
 } from '../types/material';
 import type { MaterialHealthCheckResult } from '../types/materialHealth';
+import type { MaterialDedupCheckParams, MaterialDedupCheckResult } from '../types/materialDedup';
 
 /** 列表/详情接口可能返回 snake_case 或 camelCase，统一便于表格绑定 */
 function normalizeMaterialRow(item: Material): Material {
@@ -142,6 +143,8 @@ function mapBomFromApi(raw: Record<string, unknown>): BOM {
     isActive: (raw.is_active ?? raw.isActive) !== false,
     createdAt: (raw.created_at ?? raw.createdAt) as string,
     updatedAt: (raw.updated_at ?? raw.updatedAt) as string,
+    createdByName: (raw.created_by_name ?? raw.createdByName) as string | undefined,
+    updatedByName: (raw.updated_by_name ?? raw.updatedByName) as string | undefined,
     deletedAt: (raw.deleted_at ?? raw.deletedAt) as string | undefined,
   };
 }
@@ -401,6 +404,31 @@ export const materialApi = {
       groupId: params?.groupId,
       mastersOnly: params?.mastersOnly ?? true,
     });
+  },
+
+  /** 物料防重助手：按配置字段精确一致比对 */
+  checkDuplicates: async (params: MaterialDedupCheckParams): Promise<MaterialDedupCheckResult> => {
+    const raw = await api.post<Record<string, any>>('/apps/master-data/materials/check-duplicates', {
+      matchFields: params.matchFields,
+      values: params.values,
+      excludeUuid: params.excludeUuid,
+      mastersOnly: params.mastersOnly ?? true,
+    });
+    const matches = Array.isArray(raw?.matches)
+      ? raw.matches.map((m: Record<string, any>) => ({
+          uuid: String(m.uuid ?? ''),
+          mainCode: String(m.mainCode ?? m.main_code ?? ''),
+          name: String(m.name ?? ''),
+          specification: m.specification ?? null,
+          model: m.model ?? null,
+        }))
+      : [];
+    return {
+      matched: Boolean(raw?.matched),
+      matches,
+      skipped: Boolean(raw?.skipped),
+      skipReason: raw?.skipReason ?? raw?.skip_reason ?? null,
+    };
   },
 
   /**

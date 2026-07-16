@@ -14,7 +14,7 @@ import { formatBusinessDateOnly } from '../../../../../utils/format';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import {
-  BATCH_SERIAL_LEDGER_LIST_FIELD_RANK,
+  GLOBAL_DOC_LIST_FIELD_RANK,
   batchSerialLedgerNoSearchColumn,
   masterCrudCreatedUpdatedColumns,
   resolveBatchSerialLedgerListParams,
@@ -270,7 +270,7 @@ const BatchesPage: React.FC = () => {
         headerTitle={t('app.master-data.menu.materials.batches')}
         actionRef={actionRef}
         rowKey="uuid"
-        columns={alignProColumns(columns, BATCH_SERIAL_LEDGER_LIST_FIELD_RANK)}
+        columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const { current = 1, pageSize = 20 } = params;
           const listParams = resolveBatchSerialLedgerListParams(searchFormValues, sort, {

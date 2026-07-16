@@ -19,6 +19,7 @@ import { storageAreaApi, warehouseApi } from '../../../services/warehouse';
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedColumns,
   normalizeMasterListResponse,
@@ -38,7 +39,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
@@ -627,7 +628,7 @@ const StorageAreasPage: React.FC = () => {
       valueEnum: storageAreaActiveValueEnum,
       render: (_, record) => {
         return (
-          <Tag color={record?.isActive ? 'success' : 'default'}>
+          <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
             {record?.isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
@@ -699,7 +700,7 @@ const StorageAreasPage: React.FC = () => {
       dataIndex: 'isActive',
       render: (_, record) => {
         return (
-          <Tag color={record?.isActive ? 'success' : 'default'}>
+          <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
             {record?.isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
@@ -721,9 +722,9 @@ const StorageAreasPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<StorageArea>
-        columnPersistenceId="apps.master-data.pages.warehouse.storage-areas"
+        columnPersistenceId="apps.master-data.pages.warehouse.storage-areas.status-v2"
         actionRef={actionRef}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+        columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const pageSize = params.pageSize || 20;
           const skip = ((params.current || 1) - 1) * pageSize;

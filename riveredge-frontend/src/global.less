@@ -10,6 +10,8 @@
   /**
    * 全局「草稿」状态徽章（Ant Tag 使用类名 `re-status-badge-draft`）
    * 由主题文字色与填充色混合，避免页面硬编码；暗色主题见下方覆盖
+   *
+   * Tag 变体：ConfigProvider 默认 solid（状态类）；分类/模式等标识须显式 variant="filled"。
    */
   --re-badge-draft-bg: color-mix(
     in srgb,
@@ -18,6 +20,11 @@
   );
   --re-badge-draft-color: var(--ant-color-text-light-solid, #ffffff);
   --re-badge-draft-border: transparent;
+  /**
+   * solid + default（禁用/未启用等）：antd 默认近黑过强，降为中灰实心
+   */
+  --re-badge-default-solid-bg: #8c8c8c;
+  --re-badge-default-solid-color: #ffffff;
 }
 
 [data-theme='dark'] {
@@ -28,6 +35,8 @@
     var(--ant-color-text, rgba(255, 255, 255, 0.85)) 62%,
     var(--ant-color-fill-tertiary, #303030)
   );
+  --re-badge-default-solid-bg: #595959;
+  --re-badge-default-solid-color: rgba(255, 255, 255, 0.85);
 }
 
 /* 与 src/constants/statusBadges.ts 中 RE_STATUS_BADGE_DRAFT_CLASS 配套 */
@@ -36,6 +45,13 @@
   background: var(--re-badge-draft-bg) !important;
   color: var(--re-badge-draft-color) !important;
   border-color: var(--re-badge-draft-border) !important;
+}
+
+/* solid 默认色：避免「禁用」等徽章呈近黑、视觉过重 */
+.ant-tag.ant-tag-solid.ant-tag-default {
+  background: var(--re-badge-default-solid-bg) !important;
+  color: var(--re-badge-default-solid-color) !important;
+  border-color: transparent !important;
 }
 
 * {

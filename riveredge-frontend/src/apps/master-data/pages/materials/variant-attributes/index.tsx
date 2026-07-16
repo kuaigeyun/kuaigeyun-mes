@@ -12,6 +12,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import {
+  MASTER_DATA_LIST_FIELD_RANK,
   buildMasterCrudActiveValueEnum,
   masterCrudCreatedUpdatedSnakeColumns,
   resolveVariantAttributeListParams,
@@ -24,7 +25,7 @@ import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import type { VariantAttributeDefinition } from '../../../types/variant-attribute';
 import { variantAttributeApi, type PresetAttributeItem } from '../../../services/variant-attribute';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const VariantAttributesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -179,7 +180,7 @@ const VariantAttributesPage: React.FC = () => {
       hideInSearch: true,
       valueEnum: attributeActiveValueEnum,
       render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
+        <Tag color={record.is_active ? 'success' : 'default'} variant="solid">
           {record.is_active ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
         </Tag>
       ),
@@ -368,10 +369,10 @@ const VariantAttributesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<VariantAttributeDefinition>
-          columnPersistenceId="apps.master-data.pages.materials.variant-attributes"
+          columnPersistenceId="apps.master-data.pages.materials.variant-attributes.status-v2"
           headerTitle={t('app.master-data.menu.materials.variant-attributes')}
           actionRef={actionRef}
-          columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+          columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
           pinnedTabsField={VARIANT_ATTRIBUTE_PINNED_ACTIVE_FIELD}

@@ -16,6 +16,10 @@ import type { ColumnsType } from 'antd/es/table';
 import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, HighlightOutlined, MoreOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined, CopyOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
@@ -58,7 +62,6 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { masterCrudCreatedUpdatedColumns } from '../../../utils/materialListCore';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 
@@ -943,7 +946,7 @@ const BOMPage: React.FC = () => {
     
     const statusInfo = statusMap[status] || statusMap.draft;
     return (
-      <Tag color={statusInfo.color} icon={statusInfo.icon}>
+      <Tag color={statusInfo.color} icon={statusInfo.icon} variant="solid">
         {statusInfo.text}
       </Tag>
     );
@@ -1411,23 +1414,43 @@ const BOMPage: React.FC = () => {
     resetBomFormFieldValues();
   };
 
+  /** 堆叠列用：名称主行、编号次行 */
+  const getMaterialParts = (
+    materialId: number | undefined | null,
+  ): { code: string; name: string; spec: string; missing: boolean } => {
+    if (materialId == null) {
+      return { code: '', name: '-', spec: '', missing: true };
+    }
+    const material = materialsById.get(materialId);
+    if (!material) {
+      console.error('[BOM] material master missing for display', materialId);
+      return {
+        code: '',
+        name: t('app.master-data.bom.materialNameMissing', {
+          id: materialId,
+          defaultValue: `物料主数据未加载（ID: ${materialId}）`,
+        }),
+        spec: '',
+        missing: true,
+      };
+    }
+    return {
+      code: material.code || material.mainCode || '',
+      name: material.name || '-',
+      spec: material.specification || '',
+      missing: false,
+    };
+  };
+
   /**
    * 获取物料名称（用于列表主物料/子物料列展示）
    * 列表请求会先按 BOM 引用 ID 精确补齐物料主数据；此处不再用「物料ID」软兜底掩盖未加载。
    */
   const getMaterialName = (materialId: number | undefined | null): string => {
-    if (materialId == null) return '-';
-    const material = materialsById.get(materialId);
-    if (!material) {
-      console.error('[BOM] material master missing for display', materialId);
-      return t('app.master-data.bom.materialNameMissing', {
-        id: materialId,
-        defaultValue: `物料主数据未加载（ID: ${materialId}）`,
-      });
-    }
-    const code = material.code || material.mainCode || '';
-    const spec = material.specification ? ` (${material.specification})` : '';
-    return `${code} - ${material.name}${spec}`;
+    const parts = getMaterialParts(materialId);
+    if (parts.missing) return parts.name;
+    const spec = parts.spec ? ` (${parts.spec})` : '';
+    return `${parts.code} - ${parts.name}${spec}`;
   };
 
   /**
@@ -2321,13 +2344,40 @@ const BOMPage: React.FC = () => {
   const groupColumns: MaterialBOMProColumn[] = [
     { 
       title: t('app.master-data.bom.materialTitle'), 
-      dataIndex: 'materialId', 
-      width: 200, 
+      dataIndex: 'materialId',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       hideInSearch: true,
       sorter: true,
       render: (_, r: any) => {
-        if (isRootRow(r)) return <span style={{ fontWeight: 500 }}>{getMaterialName(r.materialId)}</span>;
-        return getMaterialName(r.componentId);
+        if (isRootRow(r)) {
+          const parts = getMaterialParts(r.materialId);
+          return (
+            <UniTableStackedPrimaryCell
+              primary={parts.name}
+              secondary={parts.code}
+              secondaryCopyable={!parts.missing && Boolean(parts.code)}
+            />
+          );
+        }
+        const fromRowCode = String(r.componentCode ?? '').trim();
+        const fromRowName = String(r.componentName ?? '').trim();
+        if (fromRowCode || fromRowName) {
+          return (
+            <UniTableStackedPrimaryCell
+              primary={fromRowName || '-'}
+              secondary={fromRowCode}
+              secondaryCopyable={Boolean(fromRowCode)}
+            />
+          );
+        }
+        const parts = getMaterialParts(r.componentId);
+        return (
+          <UniTableStackedPrimaryCell
+            primary={parts.name}
+            secondary={parts.code}
+            secondaryCopyable={!parts.missing && Boolean(parts.code)}
+          />
+        );
       }
     },
     { 
@@ -2394,26 +2444,40 @@ const BOMPage: React.FC = () => {
     },
     { 
       title: t('app.master-data.bom.bomName'), 
-      dataIndex: 'bomName', 
-      width: 180, 
+      dataIndex: 'bomName',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      minWidth: 180,
       hideInSearch: true,
       sorter: true,
       render: (_, r: any) => {
-        if (isRootRow(r)) return r.bomName || r.firstItem?.bomName || '-';
-        return '-';
+        if (isRootRow(r)) {
+          const name = r.bomName || r.firstItem?.bomName || '';
+          const code = r.bomCode || r.firstItem?.bomCode || '';
+          return (
+            <UniTableStackedPrimaryCell
+              primary={name || '-'}
+              secondary={code}
+              secondaryCopyable={Boolean(code && code !== '-')}
+            />
+          );
+        }
+        const code = r._bomCode || '';
+        if (!code || code === '-') return '-';
+        return (
+          <UniTableStackedPrimaryCell
+            primary="-"
+            secondary={code}
+            secondaryCopyable
+          />
+        );
       }
     },
-    { 
-      title: t('app.master-data.bom.bomCode'), 
-      dataIndex: 'bomCode', 
-      width: 150, 
+    {
+      title: t('app.master-data.bom.bomCode'),
+      dataIndex: 'bomCode',
+      hideInTable: true,
       hideInSearch: true,
       sorter: true,
-      render: (_, r: any) => {
-        if (isRootRow(r)) return r.bomCode || '-';
-        if (r._bomCode) return r._bomCode;
-        return '-';
-      }
     },
     {
       title: t('app.master-data.materials.processRoute'),
@@ -2459,48 +2523,6 @@ const BOMPage: React.FC = () => {
         if (isRootRow(r)) return '-';
         return r.wasteRate ? `${r.wasteRate}%` : '0%';
       }
-    },
-    {
-      title: t('app.master-data.bom.alternativeTitle'),
-      dataIndex: 'isAlternative',
-      width: 90,
-      hideInSearch: true,
-      render: (_, r: any) => {
-        if (isRootRow(r)) return '-';
-        return (
-          <Tag color={r.isAlternative ? 'orange' : 'default'}>
-            {r.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-          </Tag>
-        );
-      },
-    },
-    {
-      title: t('app.master-data.bom.isConfigurableColumn'),
-      dataIndex: 'isConfigurable',
-      width: 100,
-      hideInSearch: true,
-      render: (_, r: any) => {
-        if (isRootRow(r)) return '-';
-        const manualCfg = r.isConfigurable === true;
-        const componentMaterial = materials.find((m) => m.id === r.componentId);
-        const autoCfg = !!componentMaterial?.variantManaged;
-        const isConfigurableItem = manualCfg || autoCfg;
-        return (
-          <Tag color={isConfigurableItem ? 'cyan' : 'default'}>
-            {isConfigurableItem ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-          </Tag>
-        );
-      },
-    },
-    {
-      title: t('app.master-data.bom.alternativeGroupIdLabel'),
-      dataIndex: 'alternativeGroupId',
-      width: 110,
-      hideInSearch: true,
-      render: (_, r: any) => {
-        if (isRootRow(r)) return '-';
-        return (r.isAlternative && r.alternativeGroupId != null) ? r.alternativeGroupId : '-';
-      },
     },
     {
       title: t('app.master-data.bom.approvalStatusTitle'),
@@ -2802,7 +2824,7 @@ const BOMPage: React.FC = () => {
       title: t('app.master-data.bom.enabledStatusTitle'),
       dataIndex: 'isActive',
       render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
+        <Tag color={record.isActive ? 'success' : 'default'} variant="solid">
           {record.isActive ? t('app.master-data.bom.enabled') : t('app.master-data.bom.disabled')}
         </Tag>
       ),
@@ -2944,7 +2966,7 @@ const BOMPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MaterialBOMRow>
-        columnPersistenceId="apps.master-data.pages.materials.bom"
+        columnPersistenceId="apps.master-data.pages.materials.bom.stacked-v2"
         actionRef={actionRef}
         columns={groupColumns}
         viewTypes={['productBom', 'semiProductBom', 'allBom', 'help']}

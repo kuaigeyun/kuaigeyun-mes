@@ -28,6 +28,7 @@ import {
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedColumns,
+  GLOBAL_DOC_LIST_FIELD_RANK,
   resolveSupplierListParams,
 } from '../../../utils/supplyChainListCore';
 import { SupplierFormModal } from '../../../components/SupplierFormModal';
@@ -50,7 +51,7 @@ import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -642,14 +643,6 @@ const SuppliersPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('field.supplier.payableRecognitionOverride'),
-      dataIndex: 'payableRecognitionOverride',
-      width: 160,
-      hideInSearch: true,
-      ellipsis: true,
-      render: (_, r) => partnerPayableRecognitionOverrideLabel(t, r.payableRecognitionOverride),
-    },
-    {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       hideInTable: true,
@@ -665,7 +658,7 @@ const SuppliersPage: React.FC = () => {
       hideInSearch: true,
       valueEnum: supplierActiveValueEnum,
       render: (_, record) => (
-        <Tag color={record?.isActive ? 'success' : 'default'}>
+        <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
           {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
@@ -735,7 +728,7 @@ const SuppliersPage: React.FC = () => {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       render: (_, record) => (
-        <Tag color={record?.isActive ? 'success' : 'default'}>
+        <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
           {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
@@ -821,9 +814,9 @@ const SuppliersPage: React.FC = () => {
     <>
       <ListPageTemplate>
       <UniTable<Supplier>
-        columnPersistenceId="apps.master-data.pages.supply-chain.suppliers"
+        columnPersistenceId="apps.master-data.pages.supply-chain.suppliers.status-v2"
         actionRef={actionRef}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+        columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, __filter, searchFormValues) => {
           const listParams = resolveSupplierListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;

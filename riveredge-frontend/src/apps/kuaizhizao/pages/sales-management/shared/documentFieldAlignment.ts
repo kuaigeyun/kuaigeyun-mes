@@ -1,7 +1,8 @@
 import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components'
 
 type FieldRankMap = Record<string, number>
-const DEFAULT_UNRANKED_FIELD_RANK = 91.5
+/** 未在 GLOBAL_DOC_LIST_FIELD_RANK 登记的字段落到此段（业务列与审计列之间） */
+export const DEFAULT_UNRANKED_FIELD_RANK = 91.5
 
 function normalizeFieldKey(dataIndex: unknown, fallbackKey?: unknown): string {
   if (typeof dataIndex === 'string' && dataIndex.trim()) return dataIndex.trim()
@@ -27,28 +28,19 @@ function sortByRank<T>(
     .map((x) => x.item)
 }
 
-export function alignProColumns<T extends Record<string, unknown>>(
-  columns: ProColumns<T>[],
-  rankMap: FieldRankMap,
-): ProColumns<T>[] {
-  return sortByRank(
-    columns,
-    (col) => normalizeFieldKey(col.dataIndex as unknown, col.key as unknown),
-    rankMap,
-  )
-}
-
-export function alignDescriptionColumns<T extends Record<string, unknown>>(
-  columns: ProDescriptionsItemProps<T>[],
-  rankMap: FieldRankMap,
-): ProDescriptionsItemProps<T>[] {
-  return sortByRank(
-    columns,
-    (col) => normalizeFieldKey(col.dataIndex as unknown, col.key as unknown),
-    rankMap,
-  )
-}
-
+/**
+ * 全应用列表列序唯一真源（仓储单据除外，见 WAREHOUSE_DOC_LIST_FIELD_RANK）。
+ * 新增列表字段时只改此处；禁止再开 PARTNER_* / MASTER_DATA_* 等旁路 map。
+ *
+ * 段位约定：
+ * - 10–20 主标识 / 伙伴
+ * - 20–40 联系 / 物料 / 责任人
+ * - 40–70 日期 / 分类 / 数量金额
+ * - 88–91.4 生命周期状态类
+ * - 91.5 未登记字段（保持声明顺序）
+ * - 91.6 isActive（紧挨更新时间之前）
+ * - 92–93 审计
+ */
 export const GLOBAL_DOC_LIST_FIELD_RANK = {
   // 主标识与客户
   code: 10,
@@ -67,22 +59,49 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   change_code: 10,
   demand_code: 10,
   computation_code: 10,
+  batchNo: 10,
+  serialNo: 10,
+  partnerId: 10.2,
+  partnerName: 10.3,
+  supplier_name: 10.4,
+  source_type: 10.5,
+  required_date: 10.55,
+  planned_start_date: 10.6,
+  planned_end_date: 10.65,
+  operation_name: 10.7,
+  outsource_operation: 10.75,
   source_code: 11,
   forecast_name: 11,
   name: 12,
+  shortName: 13,
   customer_name: 20,
   contact_person: 21,
+  contactPerson: 21,
+  contactTitle: 21.5,
   phone: 22,
   contact_phone: 22,
   mobile: 23,
+  email: 23.5,
+  address: 23.8,
   buyer_name: 24,
   buyer_id: 24.1,
+  buyerName: 24,
+  buyerId: 24.1,
   employee_name: 21,
   department_name: 22,
   position_name: 23,
   product_code: 24,
   product_name: 25,
-  // 关键日期
+  material_code: 25,
+  materialCode: 25,
+  material_name: 25.1,
+  materialName: 25.1,
+  material_id: 25.15,
+  materialId: 25.15,
+  materialModel: 25.2,
+  partnerMaterialCode: 26,
+  partnerMaterialName: 26.5,
+  // 业务日期
   occurred_at: 40,
   order_date: 40,
   quotation_date: 40,
@@ -99,9 +118,16 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   end_date: 42,
   valid_to: 43,
   delivery_date: 44,
-  // 商务责任人（销售员紧跟订单日期之后）
+  productionDate: 45,
+  expiryDate: 45.5,
+  factoryDate: 46,
+  effectiveFrom: 47,
+  effectiveTo: 47.5,
+  // 业务责任人（销售员紧跟订单日期之后）
   salesman_name: 40.5,
   salesman_id: 40.6,
+  salesmanName: 40.5,
+  salesmanId: 40.6,
   // 业务分类与金额
   forecast_period: 50,
   period: 50,
@@ -115,8 +141,13 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   contract_type: 51,
   activity_type_code: 53,
   pool_status: 54,
+  poolStatus: 54,
   calculation_status: 55,
   items_count: 59.5,
+  unitPrice: 59.7,
+  unit_price: 59.7,
+  outsource_quantity: 59.8,
+  variantPrices: 59.85,
   total_quantity: 60,
   quantity: 60,
   total_hours: 60,
@@ -134,20 +165,25 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   manufacturing_cost: 68,
   unit_cost: 69,
   content: 70,
-  is_active: 88,
-  isActive: 88,
+  received_quantity: 60.1,
+  /** 报工/检验：人员或检验数量紧挨合格/不合格之前 */
+  worker_name: 60.15,
+  inspection_quantity: 60.18,
+  sample_qty: 60.18,
+  qualified_quantity: 60.2,
+  unqualified_quantity: 60.3,
+  reported_quantity: 60.4,
   crossesMidnight: 88,
   timeRange: 42,
   holidayDate: 40,
-  updatedAt: 92,
-  createdAt: 93,
   standardHours: 60,
   sales_order_code: 55,
   work_order_code: 56,
   source_order_code: 56,
   change_category: 57,
+  change_reason: 56.5,
   change_version: 58,
-  delta_amount: 59,
+  delta_amount: 56.8,
   sales_delivery_code: 56,
   warehouse_name: 57,
   applied_at: 58,
@@ -170,15 +206,41 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   inspectorName: 91.9,
   version_no: 62.5,
   version: 62.5,
+  /** 启用状态：业务列之后、更新时间之前（勿再旁路覆盖） */
+  is_active: 91.6,
+  isActive: 91.6,
+  updatedAt: 92,
+  createdAt: 93,
   updated_at: 92,
   created_at: 93,
 } satisfies FieldRankMap
 
 /**
- * @deprecated Prefer GLOBAL_DOC_LIST_FIELD_RANK.
- * Kept for backward compatibility with existing imports.
+ * @deprecated 与 GLOBAL_DOC_LIST_FIELD_RANK 同一对象；保留别名兼容旧 import。
  */
 export const SALES_DOC_LIST_FIELD_RANK = GLOBAL_DOC_LIST_FIELD_RANK
+
+export function alignProColumns<T extends Record<string, unknown>>(
+  columns: ProColumns<T>[],
+  rankMap: FieldRankMap = GLOBAL_DOC_LIST_FIELD_RANK,
+): ProColumns<T>[] {
+  return sortByRank(
+    columns,
+    (col) => normalizeFieldKey(col.dataIndex as unknown, col.key as unknown),
+    rankMap,
+  )
+}
+
+export function alignDescriptionColumns<T extends Record<string, unknown>>(
+  columns: ProDescriptionsItemProps<T>[],
+  rankMap: FieldRankMap = GLOBAL_DOC_LIST_FIELD_RANK,
+): ProDescriptionsItemProps<T>[] {
+  return sortByRank(
+    columns,
+    (col) => normalizeFieldKey(col.dataIndex as unknown, col.key as unknown),
+    rankMap,
+  )
+}
 
 export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   // 单据标识
@@ -191,7 +253,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   customer_name: 20,
   customer_contact: 21,
   customer_phone: 22,
-  // 商务块
+  // 业务块
   salesman_name: 30,
   payment_terms: 31,
   currency_code: 32,

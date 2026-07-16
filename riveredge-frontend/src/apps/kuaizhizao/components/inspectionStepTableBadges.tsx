@@ -20,7 +20,7 @@ export function InspectionValueTypeTag({
 }) {
   const vt = normalizeValueType(valueType || 'boolean');
   return (
-    <Tag bordered color={VALUE_TYPE_TAG_COLOR[vt]} style={{ marginInlineEnd: 0 }}>
+    <Tag bordered color={VALUE_TYPE_TAG_COLOR[vt]} variant="filled" style={{ marginInlineEnd: 0 }}>
       {label}
     </Tag>
   );
@@ -38,7 +38,7 @@ export function InspectionSamplingTypeTag({
     ? t('app.kuaizhizao.quality.plans.step.sampling')
     : t('app.kuaizhizao.quality.plans.step.fullInspection');
   return (
-    <Tag bordered color={isSampling ? 'orange' : 'cyan'} style={{ marginInlineEnd: 0 }}>
+    <Tag bordered color={isSampling ? 'orange' : 'cyan'} variant="filled" style={{ marginInlineEnd: 0 }}>
       {label}
     </Tag>
   );

@@ -48,6 +48,7 @@ import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFi
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
+/** 仅覆盖跟进时间段位；其余字段用 GLOBAL_DOC_LIST_FIELD_RANK */
 const CUSTOMER_FOLLOW_UP_LIST_FIELD_RANK = {
   ...SALES_DOC_LIST_FIELD_RANK,
   occurred_at: 71,

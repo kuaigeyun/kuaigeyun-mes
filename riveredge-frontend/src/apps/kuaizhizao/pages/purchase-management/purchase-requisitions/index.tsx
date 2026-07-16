@@ -145,11 +145,6 @@ const PURCHASE_REQUISITION_RESOURCE = 'kuaizhizao:purchase-requisition';
 const PURCHASE_REQUISITION_LIST_PATH = '/apps/kuaizhizao/purchase-management/purchase-requisitions';
 const PURCHASE_REQUISITION_CREATE_PATH = `${PURCHASE_REQUISITION_LIST_PATH}/new`;
 const purchaseRequisitionEditPath = (id: number | string) => `${PURCHASE_REQUISITION_LIST_PATH}/${id}/edit`;
-const PURCHASE_REQUISITION_LIST_FIELD_RANK = {
-  ...SALES_DOC_LIST_FIELD_RANK,
-  source_type: 10.5,
-  required_date: 10.6,
-};
 
 const PurchaseRequisitionsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -1426,7 +1421,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         return parts;
       },
     },
-  ], PURCHASE_REQUISITION_LIST_FIELD_RANK), [t, purchaseRequestAuditEnabled, purchaseRequisitionAuditColumn, lifecycleValueEnum, handleDetail, handleEdit, handleDeleteOne, resolveRequisitionPushPercent]);
+  ], SALES_DOC_LIST_FIELD_RANK), [t, purchaseRequestAuditEnabled, purchaseRequisitionAuditColumn, lifecycleValueEnum, handleDetail, handleEdit, handleDeleteOne, resolveRequisitionPushPercent]);
 
   const renderPurchaseRequisitionForm = () => (
     <>

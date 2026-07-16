@@ -11,9 +11,12 @@
 
 import type { CSSProperties } from 'react';
 import type { TagProps } from 'antd';
-import { RE_STATUS_BADGE_DRAFT_CLASS } from '../constants/statusBadges';
+import { RE_STATUS_BADGE_DRAFT_CLASS, STATUS_TAG_VARIANT } from '../constants/statusBadges';
 
-const DRAFT_TAG: Pick<TagProps, 'className'> = { className: RE_STATUS_BADGE_DRAFT_CLASS };
+const DRAFT_TAG: Pick<TagProps, 'className' | 'variant'> = {
+  className: RE_STATUS_BADGE_DRAFT_CLASS,
+  variant: STATUS_TAG_VARIANT,
+};
 
 const UNKNOWN_STYLE: CSSProperties = {
   color: 'var(--ant-color-text-secondary, #595959)',
@@ -126,24 +129,24 @@ const LIFECYCLE_STAGE_TAG_LOOKUP: Record<string, Pick<TagProps, 'color' | 'style
 };
 
 /**
- * 根据生命周期当前阶段名（或状态码）返回 Ant Design Tag 的 color / className / style。
- * 未知阶段使用中等对比灰，避免 `default` 过淡。
+ * 根据生命周期当前阶段名（或状态码）返回 Ant Design Tag 的 color / className / style / variant。
+ * 未知阶段使用中等对比灰，避免 `default` 过淡。状态类统一 solid。
  */
 export function getDocumentLifecycleStageTagProps(
   stageNameOrCode: string | null | undefined,
-): Pick<TagProps, 'color' | 'style' | 'className'> {
+): Pick<TagProps, 'color' | 'style' | 'className' | 'variant'> {
   const raw = (stageNameOrCode ?? '').trim();
   if (!raw || raw === '-') {
-    return { style: UNKNOWN_STYLE };
+    return { style: UNKNOWN_STYLE, variant: STATUS_TAG_VARIANT };
   }
   const direct = LIFECYCLE_STAGE_TAG_LOOKUP[raw];
   if (direct) {
-    return direct;
+    return { ...direct, variant: STATUS_TAG_VARIANT };
   }
   const upper = raw.toUpperCase().replace(/[\s-]+/g, '_');
   const fromUpper = LIFECYCLE_STAGE_TAG_LOOKUP[upper];
   if (fromUpper) {
-    return fromUpper;
+    return { ...fromUpper, variant: STATUS_TAG_VARIANT };
   }
-  return { style: UNKNOWN_STYLE };
+  return { style: UNKNOWN_STYLE, variant: STATUS_TAG_VARIANT };
 }

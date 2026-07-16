@@ -23,6 +23,7 @@ import {
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedColumns,
   normalizeMasterListResponse,
@@ -42,7 +43,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
@@ -641,7 +642,7 @@ const WorkstationsPage: React.FC = () => {
       valueEnum: workstationActiveValueEnum,
       render: (_, record) => {
         return (
-          <Tag color={record?.isActive ? 'success' : 'default'}>
+          <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
             {record?.isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
@@ -712,7 +713,7 @@ const WorkstationsPage: React.FC = () => {
       dataIndex: 'isActive',
       render: (_, record) => {
         return (
-          <Tag color={record?.isActive ? 'success' : 'default'}>
+          <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
             {record?.isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
@@ -734,9 +735,9 @@ const WorkstationsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Workstation>
-        columnPersistenceId="apps.master-data.pages.factory.workstations"
+        columnPersistenceId="apps.master-data.pages.factory.workstations.status-v2"
         actionRef={actionRef}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+        columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const pageSize = params.pageSize || 20;
           const skip = ((params.current || 1) - 1) * pageSize;

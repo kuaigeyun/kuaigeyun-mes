@@ -54,6 +54,11 @@ from apps.master_data.schemas.material_health_schemas import (
     MaterialHealthCheckRequest,
     MaterialHealthCheckResponse,
 )
+from apps.master_data.schemas.material_dedup_schemas import (
+    MaterialDedupCheckRequest,
+    MaterialDedupCheckResponse,
+)
+from apps.master_data.services.material_dedup_service import MaterialDedupService
 from apps.master_data.services.bom_change_service import BOMChangeService
 from apps.master_data.schemas.bom_change_schemas import (
     BOMChangeCreate,
@@ -1784,6 +1789,37 @@ async def bulk_patch_material_defaults(
         return await MaterialService.bulk_patch_material_defaults(tenant_id, data)
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/check-duplicates",
+    response_model=MaterialDedupCheckResponse,
+    response_model_by_alias=True,
+    summary="Material dedup check (exact match on configured fields)",
+)
+async def check_material_duplicates(
+    data: MaterialDedupCheckRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    物料防重助手：按所选字段（含自定义字段）做精确一致比对，返回已存在物料。
+    """
+    try:
+        return await MaterialDedupService.check_exact_duplicates(
+            tenant_id=tenant_id,
+            match_fields=data.match_fields,
+            values=data.values,
+            exclude_uuid=data.exclude_uuid,
+            masters_only=data.masters_only,
+        )
+    except Exception as e:
+        logger.exception("material dedup check failed")
+        raise _http_error(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"防重检查失败: {str(e)}",
+            tenant_id=tenant_id,
+        )
 
 
 @router.post(

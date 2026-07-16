@@ -13,7 +13,10 @@ import {
 } from './masterListCore';
 
 export { formatMasterDateTimeCell, buildMasterCrudActiveValueEnum, masterCrudCreatedUpdatedColumns };
-export { MASTER_CRUD_PINNED_ACTIVE_FIELD } from './masterListCore';
+export { MASTER_CRUD_PINNED_ACTIVE_FIELD, MASTER_DATA_LIST_FIELD_RANK, GLOBAL_DOC_LIST_FIELD_RANK } from './masterListCore';
+
+/** @deprecated 列序唯一真源 GLOBAL_DOC_LIST_FIELD_RANK；别名仅兼容旧 import。 */
+export { GLOBAL_DOC_LIST_FIELD_RANK as BATCH_SERIAL_LEDGER_LIST_FIELD_RANK } from '../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 export const MATERIAL_PINNED_ACTIVE_FIELD = 'isActive';
 export const VARIANT_ATTRIBUTE_PINNED_ACTIVE_FIELD = 'is_active';
@@ -365,27 +368,9 @@ function resolveMaterialPreferredAudit(record: Record<string, unknown>): { opera
 }
 
 /**
- * 批号/序列号台账列表列序（勿套用销售单据 SALES_DOC_LIST_FIELD_RANK：
- * 后者把 quantity 排到 60，而 batchNo/serialNo 未登记会落到默认末段，导致数量居首）。
- *
- * 顺序：主标识 → 物料 → 状态 → 数量 → 日期 → 审计
+ * 批号/序列号台账列表列序：已并入 GLOBAL_DOC_LIST_FIELD_RANK（见 documentFieldAlignment）。
+ * @deprecated 使用 GLOBAL_DOC_LIST_FIELD_RANK / BATCH_SERIAL_LEDGER_LIST_FIELD_RANK 别名。
  */
-export const BATCH_SERIAL_LEDGER_LIST_FIELD_RANK: Record<string, number> = {
-  batchNo: 10,
-  serialNo: 10,
-  materialCode: 20,
-  materialName: 21,
-  materialModel: 22,
-  status: 30,
-  quantity: 40,
-  productionDate: 50,
-  expiryDate: 51,
-  factoryDate: 52,
-  updatedAt: 92,
-  createdAt: 93,
-  updated_at: 92,
-  created_at: 93,
-};
 
 export function batchSerialLedgerNoSearchColumn(
   title: string,

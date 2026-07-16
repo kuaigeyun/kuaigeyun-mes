@@ -17,6 +17,7 @@ import {
   buildMasterCrudActiveValueEnum,
   formatMasterDateTimeCell,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCreatedUpdatedColumns,
   masterRuleCodeNameSearchColumns,
   resolveRuleListParams,
@@ -29,7 +30,7 @@ import CodeRuleComponentBuilder from '../../../../../components/code-rule-compon
 import { BATCH_RULE_AVAILABLE_FIELDS, DEFAULT_BATCH_RULE_COMPONENTS } from '../../../constants/batchRuleConstants';
 import type { BatchRule, BatchRuleCreate, BatchRuleUpdate } from '../../../services/batchSerialRules';
 import type { CodeRuleComponent } from '../../../../../types/codeRuleComponent';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const BatchRulesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -202,7 +203,7 @@ const BatchRulesPage: React.FC = () => {
       hideInSearch: true,
       valueEnum: ruleActiveValueEnum,
       render: (_, r) => (
-        <Tag color={r.isActive ? 'success' : 'default'}>{r.isActive ? t('app.master-data.seqRules.enabled') : t('app.master-data.seqRules.disabled')}</Tag>
+        <Tag color={r.isActive ? 'success' : 'default'} variant="solid">{r.isActive ? t('app.master-data.seqRules.enabled') : t('app.master-data.seqRules.disabled')}</Tag>
       ),
     },
     ...masterCrudCreatedUpdatedColumns<BatchRule>(t),
@@ -238,11 +239,11 @@ const BatchRulesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<BatchRule>
-        columnPersistenceId="apps.master-data.pages.materials.batch-rules"
+        columnPersistenceId="apps.master-data.pages.materials.batch-rules.status-v2"
         headerTitle={t('app.master-data.batchRules.headerTitle')}
         actionRef={actionRef}
         rowKey="uuid"
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+        columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const { current = 1, pageSize = 20 } = params;
           const listParams = resolveRuleListParams(searchFormValues, sort);

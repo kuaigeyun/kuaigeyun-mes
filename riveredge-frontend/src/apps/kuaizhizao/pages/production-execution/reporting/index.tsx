@@ -1268,14 +1268,6 @@ const ReportingPage: React.FC = () => {
       hideInSearch: false,
     },
     {
-      title: t('app.kuaizhizao.workReporting.colReportedQty'),
-      dataIndex: 'reported_quantity',
-      width: 100,
-      align: 'right',
-      sorter: true,
-      hideInSearch: true,
-    },
-    {
       title: t('app.kuaizhizao.workReporting.colQualifiedQty'),
       dataIndex: 'qualified_quantity',
       width: 100,
@@ -1300,6 +1292,14 @@ const ReportingPage: React.FC = () => {
           {formatQuantity(record.unqualified_quantity ?? record.unqualifiedQuantity)}
         </Typography.Text>
       ),
+    },
+    {
+      title: t('app.kuaizhizao.workReporting.colReportedQty'),
+      dataIndex: 'reported_quantity',
+      width: 100,
+      align: 'right',
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.workReporting.colWorkHours'),
@@ -1384,12 +1384,12 @@ const ReportingPage: React.FC = () => {
             rejected: { text: t('app.kuaizhizao.workReporting.statusRejected'), color: 'error' },
           };
           const x = m[String(s)] || { text: String(s ?? '-'), color: 'default' };
-          return <Tag color={x.color}>{x.text}</Tag>;
+          return <Tag color={x.color} variant="solid">{x.text}</Tag>;
         },
       },
-      { title: t('app.kuaizhizao.workReporting.colReportedQty'), dataIndex: 'reported_quantity' },
       { title: t('app.kuaizhizao.workReporting.colQualifiedQty'), dataIndex: 'qualified_quantity' },
       { title: t('app.kuaizhizao.workReporting.colUnqualifiedQty'), dataIndex: 'unqualified_quantity' },
+      { title: t('app.kuaizhizao.workReporting.colReportedQty'), dataIndex: 'reported_quantity' },
       { title: t('app.kuaizhizao.workReporting.colWorkHours'), dataIndex: 'work_hours' },
       { title: t('app.kuaizhizao.workReporting.colReportedAt'), dataIndex: 'reported_at', valueType: 'dateTime' },
       { title: t('app.kuaizhizao.workReporting.colApprovedAt'), dataIndex: 'approved_at', valueType: 'dateTime' },
@@ -1410,7 +1410,7 @@ const ReportingPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
       <UniTable
         headerTitle={t('app.kuaizhizao.menu.production-execution.reporting')}
-        columnPersistenceId="apps.kuaizhizao.pages.production-execution.reporting"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.reporting.worker-qty-v2"
         actionRef={actionRef}
         rowKey="id"
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}

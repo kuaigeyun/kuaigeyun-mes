@@ -113,6 +113,7 @@ import { variantAttributeApi } from '../../services/variant-attribute'
 import type { VariantAttributeDefinition } from '../../types/variant-attribute'
 import FabricationRawMaterialWizard from '../../components/FabricationRawMaterialWizard'
 import { MaterialHealthAssistantTrigger } from '../../../kuaiai/components/material-health/MaterialHealthAssistant'
+import { MaterialDedupConfigTrigger } from '../../components/MaterialDedupAssistant'
 import {
   fabricationMaterialNeedsRawMaterialSetup,
   isFabricationFromValues,
@@ -2173,7 +2174,7 @@ const MaterialsManagementPage: React.FC = () => {
         title: t('app.master-data.materials.enabledStatusLabel'),
         dataIndex: 'isActive',
         render: (_, record) => (
-          <Tag color={record.isActive ? 'success' : 'default'}>
+          <Tag color={record.isActive ? 'success' : 'default'} variant="solid">
             {record.isActive ? t('app.master-data.materials.enabled') : t('app.master-data.materials.disabled')}
           </Tag>
         ),
@@ -2391,7 +2392,7 @@ const MaterialsManagementPage: React.FC = () => {
         render: (_, record) =>
           renderMasterCell(
             record,
-            <Tag color={record.isActive ? 'success' : 'default'}>
+            <Tag color={record.isActive ? 'success' : 'default'} variant="solid">
               {record.isActive ? t('app.master-data.materials.enabled') : t('app.master-data.materials.disabled')}
             </Tag>,
           ),
@@ -2623,6 +2624,7 @@ const MaterialsManagementPage: React.FC = () => {
                         },
                       ]}
                     />
+                    <MaterialDedupConfigTrigger customFields={customFields} />
                     <MaterialHealthAssistantTrigger
                       groupId={healthCheckGroupId}
                       onOpenMaterial={handleOpenMaterialForEdit}
@@ -3486,6 +3488,11 @@ const MaterialsManagementPage: React.FC = () => {
         onMaterialGroupsChange={loadMaterialGroups}
         loading={materialFormLoading}
         suspendedModalReturnPath="/apps/master-data/materials"
+        onOpenExistingMaterial={(uuid) => {
+          setMaterialModalVisible(false)
+          setMaterialRestoreInitialValues(null)
+          void handleOpenMaterialForEdit(uuid)
+        }}
         initialValues={
           materialRestoreInitialValues
             ? materialRestoreInitialValues

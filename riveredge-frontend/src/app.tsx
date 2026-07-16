@@ -771,6 +771,8 @@ export default function App() {
       locale={antLocale}
       componentSize={componentSize}
       spin={{ indicator: GLOBAL_SPIN_INDICATOR }}
+      /** 状态类徽章默认 solid；分类/模式/编组等标识须显式 variant="filled" */
+      tag={{ variant: 'solid' }}
     >
       <AntdApp>
         {appShellReady ? (

@@ -1,9 +1,8 @@
 /**
- * 仓储单据列表列序真源。
- * 勿套用销售单据 SALES_DOC_LIST_FIELD_RANK：后者把 quantity/total_quantity 提前、
- * 未登记的仓储字段落到默认末段，导致列序不贴合仓储语义。
+ * 仓储单据列表列序（唯一允许的领域旁路）。
  *
- * 目标顺序：主单号 → 类型/来源 → 数量 → 种类数 → 进度 → 状态 → 仓库 → 业务日期 → 责任人 → 审计 → 操作
+ * 仓储语义与 GLOBAL_DOC_LIST_FIELD_RANK 冲突（数量/状态/仓库需靠前），
+ * 故独立维护；其它应用域禁止再开旁路 map，一律改 GLOBAL_DOC_LIST_FIELD_RANK。
  */
 export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   // 主标识

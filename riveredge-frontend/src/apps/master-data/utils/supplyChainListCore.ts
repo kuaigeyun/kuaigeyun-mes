@@ -5,6 +5,8 @@ import {
   buildMasterCrudActiveValueEnum,
   formatMasterDateTimeCell,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  MASTER_DATA_LIST_FIELD_RANK,
+  GLOBAL_DOC_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedColumns,
   pickOptionalString,
@@ -14,9 +16,17 @@ export {
   buildMasterCrudActiveValueEnum,
   formatMasterDateTimeCell,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  MASTER_DATA_LIST_FIELD_RANK,
+  GLOBAL_DOC_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedColumns,
 };
+
+/** @deprecated 列序唯一真源 GLOBAL_DOC_LIST_FIELD_RANK；别名仅兼容旧 import。 */
+export {
+  GLOBAL_DOC_LIST_FIELD_RANK as PARTNER_LIST_FIELD_RANK,
+  GLOBAL_DOC_LIST_FIELD_RANK as PARTNER_PRICE_BOOK_LIST_FIELD_RANK,
+} from '../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const SUPPLY_CHAIN_SORT_MAP: Record<string, string> = {
   code: 'code',

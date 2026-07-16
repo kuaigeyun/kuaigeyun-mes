@@ -1,5 +1,8 @@
 /**
- * 工单工序步骤轴：与运营看板 BusinessBoardPage 固定 5 槽位窗口算法一致。
+ * 工单工序步骤轴工具。
+ *
+ * 列表「工序」列：展示全部节点 + 限宽拖动（见 WorkOrderOperationStepsStrip）。
+ * 运营看板仍可用固定槽位窗口算法。
  */
 
 export type WorkOrderOperationStepStatus = 'done' | 'active' | 'pending';
@@ -19,7 +22,22 @@ export type WorkOrderOperationStepSlot = {
 
 const DEFAULT_SLOT_COUNT = 5;
 
-/** 固定槽位窗口：不足补占位，超过则围绕 active 工序滑动窗口。 */
+/** 全部工序节点（无占位、不截断），供列表步骤轴使用 */
+export function buildAllWorkOrderOperationStepSlots(
+  steps: WorkOrderOperationStep[],
+): WorkOrderOperationStepSlot[] {
+  if (!steps?.length) return [];
+  return steps.map((step, idx) => ({
+    key: `s-${idx}-${step.name}`,
+    step,
+    placeholder: false,
+  }));
+}
+
+/**
+ * 固定槽位窗口：不足补占位，超过则围绕 active 工序滑动窗口。
+ * 供运营看板等仍需「固定 N 格」的场景；列表列请用 buildAllWorkOrderOperationStepSlots。
+ */
 export function buildWorkOrderOperationStepSlots(
   steps: WorkOrderOperationStep[],
   slotCount: number = DEFAULT_SLOT_COUNT,

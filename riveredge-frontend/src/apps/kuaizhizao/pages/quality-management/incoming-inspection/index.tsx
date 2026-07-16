@@ -1122,7 +1122,7 @@ const IncomingInspectionPage: React.FC = () => {
     >
       <UniTable<IncomingInspection>
         headerTitle={t('app.kuaizhizao.quality.incoming.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection.material-qty-v2"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

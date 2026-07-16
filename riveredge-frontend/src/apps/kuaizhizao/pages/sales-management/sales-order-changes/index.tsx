@@ -94,11 +94,6 @@ const isAppliedChangeStatus = (status?: string): boolean => {
   return normalized === 'APPLIED' || normalized === '已生效';
 };
 
-const SALES_ORDER_CHANGE_LIST_FIELD_RANK = {
-  ...GLOBAL_DOC_LIST_FIELD_RANK,
-  change_reason: 56.5,
-  delta_amount: 56.8,
-} as const;
 
 const SalesOrderChangesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -633,7 +628,7 @@ const SalesOrderChangesPage: React.FC = () => {
         ];
       },
     },
-  ], SALES_ORDER_CHANGE_LIST_FIELD_RANK),
+  ], GLOBAL_DOC_LIST_FIELD_RANK),
     [
       t,
       changeCategoryValueEnum,

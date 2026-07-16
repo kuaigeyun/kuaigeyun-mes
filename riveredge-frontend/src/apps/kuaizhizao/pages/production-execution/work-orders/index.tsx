@@ -640,14 +640,14 @@ const MANUFACTURING_MODE_TAG_STYLE: React.CSSProperties = {
 function manufacturingModeTag(mode: string | undefined | null) {
   if (mode === 'assembly') {
     return (
-      <Tag color="cyan" style={MANUFACTURING_MODE_TAG_STYLE}>
+      <Tag color="cyan" variant="filled" style={MANUFACTURING_MODE_TAG_STYLE}>
         装配型
       </Tag>
     )
   }
   if (mode === 'fabrication') {
     return (
-      <Tag color="geekblue" style={MANUFACTURING_MODE_TAG_STYLE}>
+      <Tag color="geekblue" variant="filled" style={MANUFACTURING_MODE_TAG_STYLE}>
         工艺型
       </Tag>
     )
@@ -823,7 +823,7 @@ function renderWorkOrderPriorityTag(
   if (!key || key === 'normal') return null
   const config = WORK_ORDER_PRIORITY_MAP[key] || { text: key, color: 'blue' }
   return (
-    <Tag color={config.color} style={tagStyle}>
+    <Tag color={config.color} variant="filled" style={tagStyle}>
       {config.text}
     </Tag>
   )
@@ -914,6 +914,49 @@ function renderWorkOrderSourceOrderLine(
   )
 }
 
+/** 有效投产批号 / 序列号（空或「-」视为无） */
+function resolveWorkOrderBatchSerialParts(record: WorkOrder): {
+  batch?: string
+  serial?: string
+} {
+  const batch = String(
+    record.effective_batch_no || record.confirmed_batch_no || record.planned_batch_no || '',
+  ).trim()
+  const serial = String(
+    record.effective_serial_no || record.confirmed_serial_no || record.planned_serial_no || '',
+  ).trim()
+  return {
+    batch: batch && batch !== '-' ? batch : undefined,
+    serial: serial && serial !== '-' ? serial : undefined,
+  }
+}
+
+function renderWorkOrderBatchSerialLine(
+  record: WorkOrder,
+  secondaryTextStyle: React.CSSProperties,
+): React.ReactNode {
+  const kind = record.row_kind || 'work_order'
+  if (kind === 'work_order_group' || kind === 'rework' || kind === 'outsource') return null
+  const { batch, serial } = resolveWorkOrderBatchSerialParts(record)
+  if (!batch && !serial) return null
+  const parts: string[] = []
+  if (batch) parts.push(`批 ${batch}`)
+  if (serial) parts.push(`序 ${serial}`)
+  const label = parts.join(' · ')
+  return (
+    <Typography.Text
+      type="secondary"
+      ellipsis={{ tooltip: label }}
+      style={secondaryTextStyle}
+    >
+      {label}
+    </Typography.Text>
+  )
+}
+
+/** 工单列表列结构版本：列增删改时递增，避免 HMR 下 columns useMemo 沿用旧缓存 */
+const WORK_ORDER_LIST_COLUMNS_REV = 'batch-in-product-v2'
+
 function summarizeWorkOrderTreeChildren(record: WorkOrder) {
   const children = record.children ?? []
   let split = 0
@@ -934,17 +977,17 @@ function renderWorkOrderTreeChildTags(record: WorkOrder, tagStyle: React.CSSProp
   return (
     <>
       {split > 0 ? (
-        <Tag color="cyan" style={tagStyle}>
+        <Tag color="cyan" variant="filled" style={tagStyle}>
           拆{split}
         </Tag>
       ) : null}
       {rework > 0 ? (
-        <Tag color="orange" style={tagStyle}>
+        <Tag color="orange" variant="filled" style={tagStyle}>
           返{rework}
         </Tag>
       ) : null}
       {outsource > 0 ? (
-        <Tag color="purple" style={tagStyle}>
+        <Tag color="purple" variant="filled" style={tagStyle}>
           委{outsource}
         </Tag>
       ) : null}
@@ -981,6 +1024,7 @@ function WorkOrderProductCodeCell({
           </>
         }
       />
+      {renderWorkOrderBatchSerialLine(record, secondaryTextStyle)}
       {renderWorkOrderSourceOrderLine(record, secondaryTextStyle)}
     </div>
   )
@@ -1136,7 +1180,7 @@ function renderWorkOrderGroupMemberCountTag(
   const count = record.member_count
   if (count == null || count <= 0) return null
   return (
-    <Tag color="geekblue" style={tagStyle}>
+    <Tag color="geekblue" variant="filled" style={tagStyle}>
       {count} 张
     </Tag>
   )
@@ -1154,7 +1198,7 @@ function WorkOrderListPrimaryCell({ record }: { record: WorkOrder }) {
       <UniTableStackedPrimaryCell
         primary={title}
         primaryExtra={
-          <Tag color="geekblue" style={{ margin: 0, ...splitTagStyle }}>
+          <Tag color="geekblue" variant="filled" style={{ margin: 0, ...splitTagStyle }}>
             工单组
           </Tag>
         }
@@ -1173,7 +1217,7 @@ function WorkOrderListPrimaryCell({ record }: { record: WorkOrder }) {
       <UniTableStackedPrimaryCell
         primary={operationLabel}
         primaryExtra={
-          <Tag color="orange" style={{ margin: 0, ...splitTagStyle }}>
+          <Tag color="orange" variant="filled" style={{ margin: 0, ...splitTagStyle }}>
             返工单
           </Tag>
         }
@@ -1191,7 +1235,7 @@ function WorkOrderListPrimaryCell({ record }: { record: WorkOrder }) {
       <UniTableStackedPrimaryCell
         primary={operationName}
         primaryExtra={
-          <Tag color="purple" style={{ margin: 0, ...splitTagStyle }}>
+          <Tag color="purple" variant="filled" style={{ margin: 0, ...splitTagStyle }}>
             委外单
           </Tag>
         }
@@ -1206,7 +1250,7 @@ function WorkOrderListPrimaryCell({ record }: { record: WorkOrder }) {
       <WorkOrderProductCodeCell
         record={record}
         primaryExtra={
-          <Tag color="cyan" style={{ margin: 0, ...splitTagStyle }}>
+          <Tag color="cyan" variant="filled" style={{ margin: 0, ...splitTagStyle }}>
             拆分工单
           </Tag>
         }
@@ -1219,13 +1263,17 @@ function WorkOrderListPrimaryCell({ record }: { record: WorkOrder }) {
 
 function WorkOrderTreeProductCodeCell({ record }: { record: WorkOrder }) {
   const { token } = theme.useToken()
+  const secondaryTextStyle = getWorkOrderStackedSecondaryTextStyle(token)
   const secondaryTagStyle = getWorkOrderStackedSecondaryTagStyle(token)
   return (
-    <UniTableStackedPrimaryCell
-      primary={String(record.product_name ?? record.product_code ?? '').trim() || '-'}
-      secondary={String(record.code ?? '')}
-      secondaryExtra={renderWorkOrderPriorityTag(record.priority, secondaryTagStyle)}
-    />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+      <UniTableStackedPrimaryCell
+        primary={String(record.product_name ?? record.product_code ?? '').trim() || '-'}
+        secondary={String(record.code ?? '')}
+        secondaryExtra={renderWorkOrderPriorityTag(record.priority, secondaryTagStyle)}
+      />
+      {renderWorkOrderBatchSerialLine(record, secondaryTextStyle)}
+    </div>
   )
 }
 
@@ -1242,7 +1290,7 @@ function WorkOrderPlannedRangeCell({ record }: { record: WorkOrder }) {
       secondaryBadge={t('common.end')}
       secondaryExtra={
         overdue ? (
-          <Tag color="error" style={secondaryTagStyle}>
+          <Tag color="error" variant="solid" style={secondaryTagStyle}>
             {t('app.kuaizhizao.workOrder.tagOverdue')}
           </Tag>
         ) : undefined
@@ -1403,8 +1451,9 @@ const WorkOrdersPage: React.FC = () => {
   const [workOrderListRowIndexVersion, setWorkOrderListRowIndexVersion] = useState(0)
   const operationPanelRecordByKeyRef = useRef<Map<string, WorkOrder>>(new Map())
 
+  /** 仅同步「当前表格展示页」行索引；禁止在 list request / prefetch 内调用 */
   const syncWorkOrderListRowIndexFromTableData = useCallback((rows: WorkOrder[]) => {
-    if (!Array.isArray(rows)) return rows
+    if (!Array.isArray(rows)) return
     const map = new Map<string, WorkOrder>()
     indexWorkOrderListRows(rows, map)
     workOrderRowByKeyRef.current = map
@@ -1432,7 +1481,6 @@ const WorkOrdersPage: React.FC = () => {
       }
       return [...next]
     })
-    return rows
   }, [])
 
   const selectedWorkOrderIds = useMemo(
@@ -1467,7 +1515,9 @@ const WorkOrdersPage: React.FC = () => {
           searchFormValues
         )
         if (result.success && Array.isArray(result.data)) {
-          syncWorkOrderListRowIndexFromTableData(result.data)
+          // 行索引不得在此同步：UniTable prefetchNextPage 也走本 request，
+          // 若此处重建 map 会用下一页数据覆盖当前页，导致下推误报「不在当前列表」。
+          // 唯一真源：onTableDataChange（仅当前展示页）。
           const enriched = await enrichWorkOrderRecordsWithCustomFields(result.data)
           return { ...result, data: enriched }
         }
@@ -1482,7 +1532,7 @@ const WorkOrdersPage: React.FC = () => {
         }
       }
     },
-    [messageApi, syncWorkOrderListRowIndexFromTableData, enrichWorkOrderRecordsWithCustomFields]
+    [messageApi, enrichWorkOrderRecordsWithCustomFields]
   )
 
   // 产品列表状态
@@ -3272,27 +3322,41 @@ const WorkOrdersPage: React.FC = () => {
             isCompleted ? { ...operation, status: 'completed' } : operation,
             qualifiedRate ?? progress,
           )
+    /** 待开始与进行中标题栏区分，避免徽章看起来「全是一种颜色」 */
     const themeAccent = isCompleted
       ? token.colorSuccess
-      : isOutsourced
-        ? outsourceTheme.accent
-        : token.colorPrimary
+      : isInProgress
+        ? isOutsourced
+          ? outsourceTheme.accent
+          : token.colorPrimary
+        : isOutsourced
+          ? outsourceTheme.accent
+          : token.colorTextSecondary
     const headerBg = themeAccent
+    const statusLabel = isCompleted ? '已完成' : isInProgress ? '进行中' : '待开始'
+    /** 标题栏已有底色，徽章需对比色：完成=浅绿底、进行中=金、待开始=灰 */
+    const statusTagColor = isCompleted ? 'success' : isInProgress ? 'gold' : 'default'
     const footerBg = isCompleted
       ? token.colorSuccessBg
       : isOutsourced
         ? outsourceTheme.bg
-        : token.colorPrimaryBg
+        : isInProgress
+          ? token.colorPrimaryBg
+          : token.colorFillQuaternary
     const footerAccent = isCompleted
       ? token.colorSuccess
       : isOutsourced
         ? outsourceTheme.footerText
-        : themeAccent
+        : isInProgress
+          ? token.colorPrimary
+          : token.colorTextSecondary
     const footerHoverBg = isCompleted
       ? token.colorSuccessBgHover
       : isOutsourced
         ? outsourceTheme.bgHover
-        : token.colorPrimaryBgHover
+        : isInProgress
+          ? token.colorPrimaryBgHover
+          : token.colorFillTertiary
 
     return (
       <React.Fragment key={operation.id || index}>
@@ -3348,32 +3412,15 @@ const WorkOrdersPage: React.FC = () => {
                 {operation.operation_name}
               </div>
               {isOutsourced ? (
-                <Tag
-                  style={{
-                    margin: 0,
-                    flexShrink: 0,
-                    background: 'rgba(255,255,255,0.18)',
-                    border: '1px solid rgba(255,255,255,0.32)',
-                    color: token.colorTextLightSolid,
-                  }}
-                >
+                <Tag color="purple" variant="solid" style={{ margin: 0, flexShrink: 0 }}>
                   委外
                 </Tag>
               ) : null}
             </div>
-            <Tag
-              style={{
-                margin: 0,
-                flexShrink: 0,
-                background: 'rgba(255,255,255,0.18)',
-                border: '1px solid rgba(255,255,255,0.32)',
-                color: token.colorTextLightSolid,
-              }}
-            >
-              {isCompleted ? '已完成' : isInProgress ? '进行中' : '待开始'}
+            <Tag color={statusTagColor} variant="solid" style={{ margin: 0, flexShrink: 0 }}>
+              {statusLabel}
             </Tag>
           </div>
-
           {/* 中部：进度与信息（参考图：环形图左、文字右） */}
           <div style={{ flex: 1, padding: '8px 10px', overflow: 'hidden', minHeight: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -3529,6 +3576,7 @@ const WorkOrdersPage: React.FC = () => {
                     return (
                       <Tag
                         color={getProcessInspectionStatusTagColor(qcStatus)}
+                        variant="solid"
                         style={{
                           marginInlineEnd: 0,
                           lineHeight: '18px',
@@ -4298,7 +4346,7 @@ const WorkOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.workOrder.colProductionMode'),
       dataIndex: 'production_mode',
       render: (_, record) => (
-        <Tag color={record.production_mode === 'MTO' ? 'blue' : 'green'}>
+        <Tag color={record.production_mode === 'MTO' ? 'blue' : 'green'} variant="filled">
           {record.production_mode === 'MTO' ? '按订单生产' : '按库存生产'}
         </Tag>
       ),
@@ -4329,8 +4377,8 @@ const WorkOrdersPage: React.FC = () => {
         const isOverdue = isWorkOrderPlannedEndOverdue(record)
         return (
           <Space>
-            <Tag color={color}>{lifecycle.stageName || '-'}</Tag>
-            {isOverdue && <Tag color="error">{t('app.kuaizhizao.workOrder.tagOverdue')}</Tag>}
+            <Tag color={color} variant="solid">{lifecycle.stageName || '-'}</Tag>
+            {isOverdue && <Tag color="error" variant="solid">{t('app.kuaizhizao.workOrder.tagOverdue')}</Tag>}
           </Space>
         )
       },
@@ -4343,7 +4391,7 @@ const WorkOrdersPage: React.FC = () => {
           text: record.priority || '正常',
           color: 'blue',
         }
-        return <Tag color={config.color}>{config.text}</Tag>
+        return <Tag color={config.color} variant="filled">{config.text}</Tag>
       },
     },
     {
@@ -5710,12 +5758,13 @@ const WorkOrdersPage: React.FC = () => {
             <Space>
               <Tag
                 color={statusColor}
+                variant="solid"
                 style={{ fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE, padding: '8px 16px' }}
               >
                 {lifecycle.stageName || '-'}
               </Tag>
               {isWorkOrderPlannedEndOverdue(workOrder) && (
-                  <Tag color="error">{t('app.kuaizhizao.workOrder.tagOverdue')}</Tag>
+                  <Tag color="error" variant="solid">{t('app.kuaizhizao.workOrder.tagOverdue')}</Tag>
                 )}
             </Space>
           </div>
@@ -5749,6 +5798,7 @@ const WorkOrdersPage: React.FC = () => {
             <strong>生产模式：</strong>
             <Tag
               color={workOrder.production_mode === 'MTO' ? 'blue' : 'default'}
+              variant="filled"
               style={{ marginLeft: 8 }}
             >
               {workOrder.production_mode === 'MTO' ? '按订单生产' : '按库存生产'}
@@ -5875,7 +5925,7 @@ const WorkOrdersPage: React.FC = () => {
         width: 130,
         render: (_: any, record: any) =>
           record.isParent ? null : (
-            record.production_mode === 'MTO' ? <Tag color="blue">{record.sales_order_code || '-'}</Tag> : <span style={{ color: '#999' }}>{t('app.kuaizhizao.workOrder.none')}</span>
+            record.production_mode === 'MTO' ? <Tag color="blue" variant="filled">{record.sales_order_code || '-'}</Tag> : <span style={{ color: '#999' }}>{t('app.kuaizhizao.workOrder.none')}</span>
           ),
       },
       {
@@ -5897,9 +5947,9 @@ const WorkOrdersPage: React.FC = () => {
           const isOverdue = isWorkOrderPlannedEndOverdue(record)
           return (
             <Space size={4}>
-              <Tag color={colorMap[lifecycle.status || 'normal'] || 'default'}>{lifecycle.stageName || '-'}</Tag>
-              {isOverdue && <Tag color="error">{t('app.kuaizhizao.workOrder.tagOverdue')}</Tag>}
-              {record.is_frozen && <Tag color="warning">{t('app.kuaizhizao.workOrder.tagFrozen')}</Tag>}
+              <Tag color={colorMap[lifecycle.status || 'normal'] || 'default'} variant="solid">{lifecycle.stageName || '-'}</Tag>
+              {isOverdue && <Tag color="error" variant="solid">{t('app.kuaizhizao.workOrder.tagOverdue')}</Tag>}
+              {record.is_frozen && <Tag color="warning" variant="solid">{t('app.kuaizhizao.workOrder.tagFrozen')}</Tag>}
             </Space>
           )
         },
@@ -6014,9 +6064,9 @@ const WorkOrdersPage: React.FC = () => {
           const isOverdue = isWorkOrderPlannedEndOverdue(record)
           return (
             <Space size={4}>
-              <Tag color={colorMap[lifecycle.status || 'normal'] || 'default'}>{lifecycle.stageName || '-'}</Tag>
-              {isOverdue && <Tag color="error">{t('app.kuaizhizao.workOrder.tagOverdue')}</Tag>}
-              {record.is_frozen && <Tag color="warning">{t('app.kuaizhizao.workOrder.tagFrozen')}</Tag>}
+              <Tag color={colorMap[lifecycle.status || 'normal'] || 'default'} variant="solid">{lifecycle.stageName || '-'}</Tag>
+              {isOverdue && <Tag color="error" variant="solid">{t('app.kuaizhizao.workOrder.tagOverdue')}</Tag>}
+              {record.is_frozen && <Tag color="warning" variant="solid">{t('app.kuaizhizao.workOrder.tagFrozen')}</Tag>}
             </Space>
           )
         },
@@ -6127,33 +6177,6 @@ const WorkOrdersPage: React.FC = () => {
           formatWorkOrderListQuantity(record)
         ),
     },
-    {
-      title: t('app.kuaizhizao.workOrder.colBatchSerial'),
-      key: 'production_batch_serial',
-      dataIndex: 'effective_batch_no',
-      width: 168,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      render: (_, record) => {
-        if (isWorkOrderGroupListRow(record)) {
-          return <Typography.Text type="secondary">—</Typography.Text>
-        }
-        const rowKind = record.row_kind || 'work_order'
-        if (rowKind === 'rework' || rowKind === 'outsource') {
-          return <Typography.Text type="secondary">—</Typography.Text>
-        }
-        const batchNo = record.effective_batch_no || record.confirmed_batch_no || record.planned_batch_no || '-'
-        const serialNo = record.effective_serial_no || record.confirmed_serial_no || record.planned_serial_no || '-'
-        return (
-          <UniTableStackedPrimaryCell
-            primary={batchNo}
-            secondary={serialNo}
-            secondaryCopyable={serialNo !== '-'}
-            primaryExtra={null}
-          />
-        )
-      },
-    },
       {
         title: t('app.kuaizhizao.workOrder.colMode'),
         key: 'productionManufacturingMode',
@@ -6241,8 +6264,7 @@ const WorkOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.workOrder.colOperations'),
       key: 'operation_steps',
       dataIndex: 'operation_steps',
-      minWidth: 240,
-      uniTablePrimaryFlex: true,
+      minWidth: 300,
       hideInSearch: true,
       render: (_, record) => {
         if (isWorkOrderGroupListRow(record)) {
@@ -6263,7 +6285,7 @@ const WorkOrdersPage: React.FC = () => {
         )
         if (!expandable) {
           return (
-            <div style={{ width: '100%', minWidth: 0, cursor: 'default' }}>{inner}</div>
+            <div style={{ width: 'max-content', maxWidth: 'none', minWidth: 0, cursor: 'default' }}>{inner}</div>
           )
         }
         return (
@@ -6280,7 +6302,7 @@ const WorkOrdersPage: React.FC = () => {
                 toggleWorkOrderOperationPanel(record, e)
               }
             }}
-            style={{ width: '100%', minWidth: 0, cursor: 'pointer' }}
+            style={{ width: 'max-content', maxWidth: 'none', minWidth: 0, cursor: 'pointer' }}
           >
             {inner}
           </div>
@@ -6390,7 +6412,7 @@ const WorkOrdersPage: React.FC = () => {
       render: (_, record) => {
         const kind = record.row_kind || 'work_order'
         if (kind === 'rework' || kind === 'outsource') {
-          return <Tag>{translateWorkOrderLifecycleStatus(t, record.status)}</Tag>
+          return <Tag variant="solid">{translateWorkOrderLifecycleStatus(t, record.status)}</Tag>
         }
         return renderWorkOrderListLifecycle(record)
       },
@@ -6614,7 +6636,7 @@ const WorkOrdersPage: React.FC = () => {
         )
       },
     },
-  ], [t, dissolveGroupLoading, workOrderCustomFieldColumns, workOrderLifecycleValueEnum])
+  ], [t, dissolveGroupLoading, workOrderCustomFieldColumns, workOrderLifecycleValueEnum, WORK_ORDER_LIST_COLUMNS_REV])
 
   const workOrderTableBodyColSpan = useMemo(() => {
     const visibleDataCols = columns.filter((col) => !col.hideInTable).length
@@ -6886,7 +6908,7 @@ const WorkOrdersPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
         <UniTable<WorkOrder>
           className="kuaizhizao-work-orders-table"
-          columnPersistenceId="apps.kuaizhizao.pages.production-execution.work-orders"
+          columnPersistenceId="apps.kuaizhizao.pages.production-execution.work-orders.batch-in-product-v2"
           headerTitle={t('app.kuaizhizao.workOrder.pageTitle')}
           formRef={tableSearchFormRef}
           searchParamsRef={tableSearchParamsRef}
@@ -6908,7 +6930,7 @@ const WorkOrdersPage: React.FC = () => {
             staleWhileRevalidate: true,
           }}
           request={handleWorkOrderTableRequest}
-          postData={syncWorkOrderListRowIndexFromTableData}
+          onTableDataChange={syncWorkOrderListRowIndexFromTableData}
           showCreateButton={false}
           createButtonText={t('app.kuaizhizao.workOrder.actionCreateWorkOrder')}
           onCreate={handleCreate}
@@ -9832,7 +9854,7 @@ const WorkOrdersPage: React.FC = () => {
                         </div>
                       </Col>
                       <Col span={6}>
-                        {result.workOrder.is_frozen && <Tag color="error">{t('app.kuaizhizao.workOrder.tagFrozen')}</Tag>}
+                        {result.workOrder.is_frozen && <Tag color="error" variant="solid">{t('app.kuaizhizao.workOrder.tagFrozen')}</Tag>}
                       </Col>
                     </Row>
                     {result.errors.length > 0 && (

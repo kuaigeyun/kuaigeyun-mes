@@ -164,7 +164,10 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
         title: t('app.master-data.warehouses.status'),
         dataIndex: 'isActive',
         render: (_, record) => (
-          <Tag color={(record?.isActive ?? (record as Customer & { is_active?: boolean })?.is_active) ? 'success' : 'default'}>
+          <Tag
+            color={(record?.isActive ?? (record as Customer & { is_active?: boolean })?.is_active) ? 'success' : 'default'}
+            variant="solid"
+          >
             {(record?.isActive ?? (record as Customer & { is_active?: boolean })?.is_active)
               ? t('common.enabled')
               : t('common.disabled')}

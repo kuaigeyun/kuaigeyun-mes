@@ -145,10 +145,10 @@ const BatchingCenterPage: React.FC = () => {
           Error: 'error',
           Warning: 'warning',
         };
-        return <Tag color={colorByProStatus[item.status ?? 'Default']}>{item.text}</Tag>;
+        return <Tag color={colorByProStatus[item.status ?? 'Default']} variant="solid">{item.text}</Tag>;
       }
       const label = translateWorkOrderLifecycleStatus(t, raw);
-      return <Tag>{label}</Tag>;
+      return <Tag variant="solid">{label}</Tag>;
     },
     [t, workOrderStatusValueEnum],
   );

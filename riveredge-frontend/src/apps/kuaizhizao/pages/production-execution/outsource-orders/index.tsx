@@ -89,19 +89,6 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 
 const OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_orders';
 
-const OUTSOURCE_ORDER_LIST_FIELD_RANK = {
-  ...SALES_DOC_LIST_FIELD_RANK,
-  supplier_name: 9.9,
-  planned_start_date: 10.0,
-  planned_end_date: 10.1,
-  operation_name: 10.2,
-  work_order_code: 10.3,
-  unit_price: 59.8,
-  outsource_quantity: 59.9,
-  total_amount: 60.0,
-  received_quantity: 60.1,
-  qualified_quantity: 60.2,
-};
 
 interface OutsourceOrder {
   id?: number;
@@ -1062,7 +1049,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         render: (_, record) =>
           renderOoRowActions(renderOoRowActionNodes(record), `oo-${record.id ?? 'row'}`),
       },
-    ], OUTSOURCE_ORDER_LIST_FIELD_RANK),
+    ], SALES_DOC_LIST_FIELD_RANK),
     [outsourceCustomFieldColumns, outsourceOrderLifecycleValueEnum, supplierSearchValueEnum, t],
   );
 

@@ -445,7 +445,7 @@ function AuditHubDetailPanel({
 
                       <Text strong>{node.label}</Text>
 
-                      <Tag color={statusMeta.color}>{statusMeta.text}</Tag>
+                      <Tag color={statusMeta.color} variant="solid">{statusMeta.text}</Tag>
 
                     </Space>
 
@@ -496,7 +496,7 @@ function AuditHubDetailPanel({
 
                               <Text>{ex.action_by_name || ex.action_by || '系统'}</Text>
 
-                              <Tag color={getExecutionActionTagColor(ex.action)}>
+                              <Tag color={getExecutionActionTagColor(ex.action)} variant="solid">
 
                                 {formatExecutionAction(ex.action, ex.action_label)}
 
@@ -979,7 +979,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
           <Typography.Text strong>{entityName}</Typography.Text>
 
-          {action && <Tag color={ACTION_TAG_COLOR[action]}>{actionTitle}</Tag>}
+          {action && <Tag color={ACTION_TAG_COLOR[action]} variant="solid">{actionTitle}</Tag>}
 
         </Space>
 

@@ -15,6 +15,7 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCreatedUpdatedColumns,
   masterRuleCodeNameSearchColumns,
   resolveRuleListParams,
@@ -27,7 +28,7 @@ import { serialRuleApi } from '../../../services/batchSerialRules';
 import { SERIAL_RULE_AVAILABLE_FIELDS, DEFAULT_SERIAL_RULE_COMPONENTS } from '../../../constants/serialRuleConstants';
 import type { SerialRule, SerialRuleCreate, SerialRuleUpdate } from '../../../services/batchSerialRules';
 import type { CodeRuleComponent } from '../../../../../types/codeRuleComponent';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const SerialRulesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -200,7 +201,7 @@ const SerialRulesPage: React.FC = () => {
       hideInSearch: true,
       valueEnum: ruleActiveValueEnum,
       render: (_, r) => (
-        <Tag color={r.isActive ? 'success' : 'default'}>{r.isActive ? t('app.master-data.seqRules.enabled') : t('app.master-data.seqRules.disabled')}</Tag>
+        <Tag color={r.isActive ? 'success' : 'default'} variant="solid">{r.isActive ? t('app.master-data.seqRules.enabled') : t('app.master-data.seqRules.disabled')}</Tag>
       ),
     },
     ...masterCrudCreatedUpdatedColumns<SerialRule>(t),
@@ -236,11 +237,11 @@ const SerialRulesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<SerialRule>
-        columnPersistenceId="apps.master-data.pages.materials.serial-rules"
+        columnPersistenceId="apps.master-data.pages.materials.serial-rules.status-v2"
         headerTitle={t('app.master-data.serialRules.headerTitle')}
         actionRef={actionRef}
         rowKey="uuid"
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+        columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const { current = 1, pageSize = 20 } = params;
           const listParams = resolveRuleListParams(searchFormValues, sort);

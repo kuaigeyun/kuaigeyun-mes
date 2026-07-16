@@ -17,6 +17,7 @@ import { storageLocationApi, storageAreaApi } from '../../../services/warehouse'
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedColumns,
   normalizeMasterListResponse,
@@ -37,7 +38,7 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
@@ -630,7 +631,7 @@ const StorageLocationsPage: React.FC = () => {
       valueEnum: storageLocationActiveValueEnum,
       render: (_, record) => {
         return (
-          <Tag color={record?.isActive ? 'success' : 'default'}>
+          <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
             {record?.isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
@@ -701,7 +702,7 @@ const StorageLocationsPage: React.FC = () => {
       dataIndex: 'isActive',
       render: (_, record) => {
         return (
-          <Tag color={record?.isActive ? 'success' : 'default'}>
+          <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
             {record?.isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
@@ -723,9 +724,9 @@ const StorageLocationsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<StorageLocation>
-        columnPersistenceId="apps.master-data.pages.warehouse.storage-locations"
+        columnPersistenceId="apps.master-data.pages.warehouse.storage-locations.status-v2"
         actionRef={actionRef}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+        columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const pageSize = params.pageSize || 20;
           const skip = ((params.current || 1) - 1) * pageSize;

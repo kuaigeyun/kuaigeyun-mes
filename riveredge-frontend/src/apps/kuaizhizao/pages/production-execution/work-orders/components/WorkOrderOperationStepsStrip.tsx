@@ -1,377 +1,181 @@
+/**
+ * 工单列表「工序」步骤轴：按实际节点数全部展开显示（不限宽）。
+ */
+
 import React, { useMemo } from 'react';
-
 import { Tooltip, theme } from 'antd';
-
 import { CheckOutlined } from '@ant-design/icons';
-
 import {
-
-  buildWorkOrderOperationStepSlots,
-
+  buildAllWorkOrderOperationStepSlots,
   type WorkOrderOperationStep,
-
 } from '../workOrderOperationSteps';
 
-
-
 export interface WorkOrderOperationStepsStripProps {
-
   steps?: WorkOrderOperationStep[] | null;
-
-  slotCount?: number;
-
+  /** 节点视觉尺寸 */
   compact?: boolean;
-
 }
-
-
 
 export function WorkOrderOperationStepsStrip({
-
   steps,
-
-  slotCount = 5,
-
   compact = true,
-
 }: WorkOrderOperationStepsStripProps) {
-
   const { token } = theme.useToken();
 
-  const slots = useMemo(
-
-    () => buildWorkOrderOperationStepSlots(steps ?? [], slotCount),
-
-    [steps, slotCount],
-
-  );
-
-
-
-  if (!slots.length) {
-
-    return null;
-
-  }
-
-
+  const slots = useMemo(() => {
+    const list = Array.isArray(steps) ? steps.filter((s) => s && String(s.name ?? '').trim()) : [];
+    return buildAllWorkOrderOperationStepSlots(list);
+  }, [steps]);
 
   const nodeSize = compact ? 28 : 32;
-
   const progressFontSize = compact ? 10 : 11;
-
   const labelFontSize = compact ? 11 : 12;
-
   const labelGap = compact ? 2 : 4;
+  const slotWidth = compact ? 56 : 64;
 
   const doneColor = token.colorSuccess;
-
   const activeColor = token.colorPrimary;
-
   const pendingBorder = token.colorBorderSecondary;
-
   const labelDim = token.colorTextSecondary;
-
   const labelActive = token.colorPrimary;
-
   const labelDone = token.colorSuccess;
-
   const nodeBg = token.colorBgContainer;
 
+  if (!slots.length) {
+    return null;
+  }
 
-
-  const renderNode = (step: WorkOrderOperationStep | undefined, placeholder: boolean) => {
-
-    const isDone = step?.status === 'done';
-
-    const isActive = step?.status === 'active';
-
-    const isPending = step?.status === 'pending';
-
-    const borderColor = placeholder
-
-      ? pendingBorder
-
-      : isPending
-
-        ? pendingBorder
-
-        : isDone
-
-          ? doneColor
-
-          : activeColor;
-
-
+  const renderNode = (step: WorkOrderOperationStep) => {
+    const isDone = step.status === 'done';
+    const isActive = step.status === 'active';
+    const isPending = step.status === 'pending';
+    const borderColor = isPending ? pendingBorder : isDone ? doneColor : activeColor;
 
     return (
-
       <div
-
         style={{
-
           position: 'relative',
-
           zIndex: 1,
-
           width: nodeSize,
-
           height: nodeSize,
-
           borderRadius: '50%',
-
           background: isDone ? doneColor : nodeBg,
-
           border: `2px solid ${borderColor}`,
-
           display: 'flex',
-
           alignItems: 'center',
-
           justifyContent: 'center',
-
           boxSizing: 'border-box',
-
           flexShrink: 0,
-
         }}
-
       >
-
-        {placeholder ? null : isDone ? (
-
+        {isDone ? (
           <CheckOutlined style={{ color: '#fff', fontSize: compact ? 12 : 14 }} />
-
         ) : isActive ? (
-
           <span
-
             style={{
-
               color: activeColor,
-
               fontSize: progressFontSize,
-
               fontWeight: 700,
-
               lineHeight: 1,
-
               whiteSpace: 'nowrap',
-
             }}
-
           >
-
-            {step!.progress}%
-
+            {step.progress}%
           </span>
-
         ) : null}
-
       </div>
-
     );
-
   };
 
-
+  const trackWidth = slots.length * slotWidth;
 
   return (
-
     <div
-
+      className="wo-ops-steps-strip"
       style={{
-
-        width: '100%',
-
-        minWidth: compact ? 180 : 260,
-
-        padding: compact ? '2px 4px 0' : '4px 8px 0',
-
+        width: trackWidth,
+        minWidth: trackWidth,
+        maxWidth: 'none',
+        padding: compact ? '2px 0 0' : '4px 0 0',
+        userSelect: 'none',
       }}
-
     >
-
       <div
-
         style={{
-
           position: 'relative',
-
           display: 'flex',
-
           alignItems: 'center',
-
-          justifyContent: 'space-between',
-
           height: nodeSize,
-
           marginBottom: labelGap,
-
+          width: trackWidth,
         }}
-
       >
-
         <div
-
           aria-hidden
-
           style={{
-
             position: 'absolute',
-
-            left: nodeSize / 2,
-
-            right: nodeSize / 2,
-
+            left: slotWidth / 2,
+            right: slotWidth / 2,
             top: '50%',
-
             transform: 'translateY(-50%)',
-
             height: 1,
-
             background: token.colorBorderSecondary,
-
             zIndex: 0,
-
           }}
-
         />
-
-        {slots.map(({ key, step, placeholder }) => {
-
-          const node = renderNode(step, placeholder);
-
+        {slots.map(({ key, step }) => {
+          if (!step) return null;
+          const node = renderNode(step);
           return (
-
             <div
-
               key={key}
-
               style={{
-
                 position: 'relative',
-
                 zIndex: 1,
-
-                flex: 1,
-
+                width: slotWidth,
+                flexShrink: 0,
                 display: 'flex',
-
                 justifyContent: 'center',
-
-                minWidth: 0,
-
               }}
-
             >
-
-              {!placeholder && step ? (
-
-                <Tooltip title={`${step.name}${step.status === 'active' ? ` · ${step.progress}%` : ''}`}>
-
-                  {node}
-
-                </Tooltip>
-
-              ) : (
-
-                node
-
-              )}
-
+              <Tooltip title={`${step.name}${step.status === 'active' ? ` · ${step.progress}%` : ''}`}>
+                {node}
+              </Tooltip>
             </div>
-
           );
-
         })}
-
       </div>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-
-        {slots.map(({ key, step, placeholder }) => {
-
-          const isDone = step?.status === 'done';
-
-          const isActive = step?.status === 'active';
-
-          const isPending = step?.status === 'pending';
-
-          const label = placeholder ? '—' : step!.name;
-
-          const labelColor = placeholder
-
-            ? 'transparent'
-
-            : isPending
-
-              ? labelDim
-
-              : isActive
-
-                ? labelActive
-
-                : isDone
-
-                  ? labelDone
-
-                  : labelDim;
-
-
-
+      <div style={{ display: 'flex', width: trackWidth }}>
+        {slots.map(({ key, step }) => {
+          if (!step) return null;
+          const isDone = step.status === 'done';
+          const isActive = step.status === 'active';
+          const isPending = step.status === 'pending';
+          const labelColor = isPending ? labelDim : isActive ? labelActive : isDone ? labelDone : labelDim;
           return (
-
             <span
-
               key={key}
-
-              title={placeholder ? undefined : step?.name}
-
+              title={step.name}
               style={{
-
-                flex: 1,
-
-                minWidth: 0,
-
+                width: slotWidth,
+                flexShrink: 0,
                 fontSize: labelFontSize,
-
                 color: labelColor,
-
                 textAlign: 'center',
-
                 whiteSpace: 'nowrap',
-
                 overflow: 'hidden',
-
                 textOverflow: 'ellipsis',
-
-                userSelect: 'none',
-
                 lineHeight: 1.2,
-
+                userSelect: 'none',
               }}
-
             >
-
-              {label}
-
+              {step.name}
             </span>
-
           );
-
         })}
-
       </div>
-
     </div>
-
   );
-
 }
 
-
-
 export default WorkOrderOperationStepsStrip;
-
-

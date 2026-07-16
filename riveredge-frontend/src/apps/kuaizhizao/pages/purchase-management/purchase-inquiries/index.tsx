@@ -90,6 +90,7 @@ type PullPurchaseRequisitionCandidate = {
 };
 
 const PURCHASE_INQUIRY_RESOURCE = 'kuaizhizao:purchase-inquiry';
+/** 仅覆盖 buyer_name：询价单需靠后展示采购员；其余字段用 GLOBAL_DOC_LIST_FIELD_RANK */
 const PURCHASE_INQUIRY_LIST_FIELD_RANK = {
   ...SALES_DOC_LIST_FIELD_RANK,
   buyer_name: 59.4,

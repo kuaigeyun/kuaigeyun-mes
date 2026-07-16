@@ -62,12 +62,6 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { purchaseOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 
 const PURCHASE_ORDER_CHANGE_RESOURCE = 'kuaizhizao:purchase-order-change';
-const PURCHASE_ORDER_CHANGE_LIST_FIELD_RANK = {
-  ...SALES_DOC_LIST_FIELD_RANK,
-  change_reason: 56.5,
-  delta_amount: 56.8,
-  change_category: 57,
-};
 
 type PullPurchaseOrderCandidate = PurchaseOrder & {
   id: number;
@@ -535,7 +529,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
           ) : null,
         ],
       },
-    ], PURCHASE_ORDER_CHANGE_LIST_FIELD_RANK),
+    ], SALES_DOC_LIST_FIELD_RANK),
     [message, modal, orderChangeLifecycleValueEnum, purchaseOrderChangeAuditColumn, purchaseOrderChangePerms.canDelete, purchaseOrderChangePerms.canUpdate, changeCategoryValueEnum, changeSupplierSearchOptions, suppliersLoading, t, renderDeltaAmount],
   );
 

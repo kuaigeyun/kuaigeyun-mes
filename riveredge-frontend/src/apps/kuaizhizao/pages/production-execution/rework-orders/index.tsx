@@ -120,11 +120,6 @@ const REWORK_TYPE_FALLBACK = (translate: (key: string) => string) => [
   { label: translate('app.kuaizhizao.reworkOrder.typeScrap'), value: '报废' },
 ];
 
-const REWORK_ORDER_LIST_FIELD_RANK = {
-  ...SALES_DOC_LIST_FIELD_RANK,
-  planned_start_date: 10.5,
-  planned_end_date: 10.6,
-};
 
 const ReworkOrdersPage: React.FC = () => {
   const { t } = useTranslation();
@@ -501,7 +496,7 @@ const ReworkOrdersPage: React.FC = () => {
         );
       },
     },
-  ], REWORK_ORDER_LIST_FIELD_RANK);
+  ], SALES_DOC_LIST_FIELD_RANK);
   }, [reworkListCustomFields, generateReworkCustomFieldColumns, reworkOrderLifecycleValueEnum, reworkTypeOptions, t]);
 
   /**

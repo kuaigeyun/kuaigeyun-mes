@@ -28,6 +28,7 @@ import { DRAWER_CONFIG } from '../../../../../components/layout-templates/consta
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedColumns,
   resolveProcessListParams,
@@ -47,7 +48,7 @@ import {
   resolvePresetOperationNameByName,
   resolvePresetOperationDefectName,
 } from '../../../../../utils/presetEntityI18n';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -160,7 +161,7 @@ const OperationsPage: React.FC = () => {
         title: t('field.route.isActive'),
         dataIndex: 'isActive',
         render: (_: unknown, record: Operation) => (
-          <Tag color={record.isActive ? 'success' : 'default'}>
+          <Tag color={record.isActive ? 'success' : 'default'} variant="solid">
             {record.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
           </Tag>
         ),
@@ -174,7 +175,7 @@ const OperationsPage: React.FC = () => {
           const arr = Array.isArray(dts) ? dts : [];
           if (!arr.length) return '-';
           return (
-            <Space size={[0, 4]} wrap>
+            <Space size="small" wrap>
               {arr.map((d: DefectTypeMinimal) => (
                 <Tag key={d.uuid}>{d.name ?? d.code}</Tag>
               ))}
@@ -191,7 +192,7 @@ const OperationsPage: React.FC = () => {
           const arr = Array.isArray(names) ? names : [];
           if (!arr.length) return '-';
           return (
-            <Space size={[0, 4]} wrap>
+            <Space size="small" wrap>
               {arr.map((name: string, idx: number) => (
                 <Tag key={idx}>{name}</Tag>
               ))}
@@ -594,7 +595,7 @@ const OperationsPage: React.FC = () => {
         const arr = Array.isArray(dts) ? dts : [];
         if (!arr.length) return '-';
         return (
-          <Space size={[0, 4]} wrap>
+          <Space size="small" wrap>
             {arr.slice(0, 3).map((d: DefectTypeMinimal) => (
               <Tag key={d.uuid}>{d.name ?? d.code}</Tag>
             ))}
@@ -614,7 +615,7 @@ const OperationsPage: React.FC = () => {
         const arr = Array.isArray(names) ? names : [];
         if (!arr.length) return '-';
         return (
-          <Space size={[0, 4]} wrap>
+          <Space size="small" wrap>
             {arr.slice(0, 3).map((name: string, idx: number) => (
               <Tag key={idx}>{name}</Tag>
             ))}
@@ -639,7 +640,7 @@ const OperationsPage: React.FC = () => {
       hideInSearch: true,
       valueEnum: operationActiveValueEnum,
       render: (_: any, record: Operation) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
+        <Tag color={record.isActive ? 'success' : 'default'} variant="solid">
           {record.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
         </Tag>
       ),
@@ -689,9 +690,9 @@ const OperationsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<Operation>
-        columnPersistenceId="apps.master-data.pages.process.operations"
+        columnPersistenceId="apps.master-data.pages.process.operations.status-v2"
         actionRef={actionRef}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+        columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolveProcessListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;

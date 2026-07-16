@@ -39,6 +39,7 @@ import { sopApi, operationApi, processRouteApi, unwrapProcessPagedList } from '.
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedColumns,
   resolveSopListParams,
@@ -52,7 +53,7 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
 import { formatDateTime } from '../../../../../utils/format';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 /**
  * 标准操作SOP管理列表页面组件
@@ -623,7 +624,7 @@ const SOPPage: React.FC = () => {
         render: (_: unknown, record: SOP) => {
           const isActive = record?.isActive ?? (record as any)?.is_active;
           return (
-            <Tag color={isActive ? 'success' : 'default'}>
+            <Tag color={isActive ? 'success' : 'default'} variant="solid">
               {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
             </Tag>
           );
@@ -896,7 +897,7 @@ const SOPPage: React.FC = () => {
       render: (_, record) => {
         const isActive = record?.isActive ?? (record as any)?.is_active;
         return (
-          <Tag color={isActive ? 'success' : 'default'}>
+          <Tag color={isActive ? 'success' : 'default'} variant="solid">
             {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
           </Tag>
         );
@@ -965,9 +966,9 @@ const SOPPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<SOP>
-        columnPersistenceId="apps.master-data.pages.process.sop"
+        columnPersistenceId="apps.master-data.pages.process.sop.status-v2"
         actionRef={actionRef}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+        columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolveSopListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;

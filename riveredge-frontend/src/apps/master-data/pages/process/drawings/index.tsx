@@ -60,7 +60,8 @@ import {
 } from './drawingTreeNav';
 import { isStepFile } from '../../../../../utils/filePreviewKind';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { MASTER_DATA_LIST_FIELD_RANK } from '../../../utils/masterListCore';
 import { masterCrudCreatedUpdatedColumns } from '../../../utils/masterListCore';
 import {
   CustomFieldsDetailSection,
@@ -650,7 +651,7 @@ const DrawingsPage: React.FC = () => {
       {
         title: t('app.master-data.drawings.status'),
         dataIndex: 'status',
-        render: (_, r) => <Tag color={STATUS_COLOR[r.status]}>{statusLabel(r.status)}</Tag>,
+        render: (_, r) => <Tag color={STATUS_COLOR[r.status]} variant="solid">{statusLabel(r.status)}</Tag>,
       },
       {
         title: t('app.master-data.drawings.file'),
@@ -795,7 +796,7 @@ const DrawingsPage: React.FC = () => {
           Released: { text: t('app.master-data.drawings.status.Released') },
           Obsolete: { text: t('app.master-data.drawings.status.Obsolete') },
         },
-        render: (_, r) => <Tag color={STATUS_COLOR[r.status]}>{statusLabel(r.status)}</Tag>,
+        render: (_, r) => <Tag color={STATUS_COLOR[r.status]} variant="solid">{statusLabel(r.status)}</Tag>,
       },
       {
         title: t('app.master-data.drawings.linkedBom'),
@@ -908,9 +909,9 @@ const DrawingsPage: React.FC = () => {
         <UniTable<EngineeringDrawing>
           actionRef={actionRef}
           rowKey="uuid"
-          columnPersistenceId="apps.master-data.pages.process.drawings"
+          columnPersistenceId="apps.master-data.pages.process.drawings.status-v2"
           tanstackQuery={{ queryKeyPrefix: tableQueryKey }}
-          columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+          columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           headerTitle={t('app.master-data.menu.process.drawings')}
           beforeSearchButtons={
             <>
@@ -1109,7 +1110,7 @@ const DrawingsPage: React.FC = () => {
                         >
                           {t('app.master-data.drawings.revision')} {rev.revision}
                         </Button>
-                        <Tag color={STATUS_COLOR[rev.status]}>{statusLabel(rev.status)}</Tag>
+                        <Tag color={STATUS_COLOR[rev.status]} variant="solid">{statusLabel(rev.status)}</Tag>
                       </Space>
                       {rev.releasedAt ? (
                         <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>

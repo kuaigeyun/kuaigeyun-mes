@@ -26,6 +26,7 @@ import {
   buildMasterCrudActiveValueEnum,
   masterCrudCreatedUpdatedColumns,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  MASTER_DATA_LIST_FIELD_RANK,
   normalizeMasterListResponse,
   resolveMasterCrudListParams,
 } from '../../../utils/masterListCore';
@@ -42,7 +43,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
@@ -564,7 +565,7 @@ const PlantsPage: React.FC = () => {
         valueEnum: plantActiveValueEnum,
         render: (_, record) => {
           return (
-            <Tag color={record?.isActive ? 'success' : 'default'}>
+            <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
               {record?.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
             </Tag>
           );
@@ -625,7 +626,7 @@ const PlantsPage: React.FC = () => {
       title: t('app.master-data.plants.status'),
       dataIndex: 'isActive',
       render: (_: React.ReactNode, record: Plant) => (
-        <Tag color={record?.isActive ? 'success' : 'default'}>
+        <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
           {record?.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
         </Tag>
       ),
@@ -638,9 +639,9 @@ const PlantsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Plant>
-          columnPersistenceId="apps.master-data.pages.factory.plants"
+          columnPersistenceId="apps.master-data.pages.factory.plants.status-v2"
           actionRef={actionRef}
-          columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+          columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           viewTypes={['table', 'help']}
           defaultViewType="table"
           loadingDelay={200}

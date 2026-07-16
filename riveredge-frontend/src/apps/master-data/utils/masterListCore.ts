@@ -10,6 +10,13 @@ import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stacke
 
 export const MASTER_CRUD_PINNED_ACTIVE_FIELD = 'isActive';
 
+/** @deprecated 列表列序唯一真源为 GLOBAL_DOC_LIST_FIELD_RANK；此别名仅兼容旧 import。 */
+export {
+  GLOBAL_DOC_LIST_FIELD_RANK,
+  GLOBAL_DOC_LIST_FIELD_RANK as MASTER_DATA_LIST_FIELD_RANK,
+  GLOBAL_DOC_LIST_FIELD_RANK as SALES_DOC_LIST_FIELD_RANK,
+} from '../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+
 export function normalizeMasterListResponse<T>(
   res: FactoryPaginatedList<T> | T[] | null | undefined,
 ): { data: T[]; total: number } {

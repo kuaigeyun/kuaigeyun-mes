@@ -29,6 +29,7 @@ import {
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedColumns,
+  GLOBAL_DOC_LIST_FIELD_RANK,
   resolveCustomerListParams,
 } from '../../../utils/supplyChainListCore';
 import { CustomerFormModal } from '../../../components/CustomerFormModal';
@@ -55,7 +56,7 @@ import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -123,15 +124,6 @@ const CustomersPage: React.FC = () => {
       setTimeout(() => actionRef.current?.reload(), 200);
     }
   }, [customFields.length]);
-
-  const renderPoolStatus = useCallback(
-    (status?: string) => {
-      if (status === 'pool') return <Tag color="blue">{t('field.customer.poolStatusPool')}</Tag>;
-      if (status === 'owned') return <Tag color="green">{t('field.customer.poolStatusOwned')}</Tag>;
-      return '—';
-    },
-    [t],
-  );
 
   const openDetailByUuid = useCallback(
     async (uuid: string) => {
@@ -596,8 +588,6 @@ const CustomersPage: React.FC = () => {
         t('field.customer.email'),
         t('field.customer.address'),
         t('field.customer.salesman'),
-        t('field.customer.poolStatus'),
-        t('field.customer.recycleAt'),
         t('app.master-data.warehouses.status'),
         t('common.createdAt'),
       ];
@@ -619,12 +609,6 @@ const CustomersPage: React.FC = () => {
           item.email || '',
           item.address || '',
           item.salesmanName || '',
-          item.poolStatus === 'owned'
-            ? t('field.customer.poolStatusOwned')
-            : item.poolStatus === 'pool'
-              ? t('field.customer.poolStatusPool')
-              : '',
-          item.recycleAt ? new Date(item.recycleAt).toLocaleString() : '',
           (item.isActive ?? (item as any)?.is_active) ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
         ];
@@ -744,28 +728,6 @@ const CustomersPage: React.FC = () => {
       },
     },
     {
-      title: t('field.customer.poolStatus'),
-      dataIndex: 'poolStatus',
-      width: 100,
-      hideInSearch: true,
-      render: (_, r) => renderPoolStatus(r.poolStatus),
-    },
-    {
-      title: t('field.customer.recycleAt'),
-      dataIndex: 'recycleAt',
-      width: 165,
-      hideInSearch: true,
-      valueType: 'dateTime',
-    },
-    {
-      title: t('field.customer.revenueRecognitionOverride'),
-      dataIndex: 'revenueRecognitionOverride',
-      width: 160,
-      hideInSearch: true,
-      ellipsis: true,
-      render: (_, r) => partnerRevenueRecognitionOverrideLabel(t, r.revenueRecognitionOverride),
-    },
-    {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       hideInTable: true,
@@ -781,7 +743,7 @@ const CustomersPage: React.FC = () => {
       hideInSearch: true,
       valueEnum: customerActiveValueEnum,
       render: (_, record) => (
-        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
+        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'} variant="solid">
           {(record?.isActive ?? (record as any)?.is_active) ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
@@ -825,7 +787,7 @@ const CustomersPage: React.FC = () => {
       ),
     },
     ];
-  }, [customFields, t, dictLabel, salesmanValueEnum, salesmanOptions, renderPoolStatus, customerActiveValueEnum]);
+  }, [customFields, t, dictLabel, salesmanValueEnum, salesmanOptions, customerActiveValueEnum]);
 
   /** 详情列：与表单 Tab「基本信息 / 开票资料 / 业务与扩展」一致 */
   const detailColumnsBasic: ProDescriptionsItemProps<Customer>[] = [
@@ -847,21 +809,6 @@ const CustomersPage: React.FC = () => {
     { title: t('field.customer.email'), dataIndex: 'email' },
     { title: t('field.customer.salesman'), dataIndex: 'salesmanName' },
     {
-      title: t('field.customer.poolStatus'),
-      dataIndex: 'poolStatus',
-      render: (_, r) =>
-        r.poolStatus === 'owned'
-          ? t('field.customer.poolStatusOwned')
-          : r.poolStatus === 'pool'
-            ? t('field.customer.poolStatusPool')
-            : '—',
-    },
-    {
-      title: t('field.customer.recycleAt'),
-      dataIndex: 'recycleAt',
-      valueType: 'dateTime',
-    },
-    {
       title: t('field.customer.assignedAt'),
       dataIndex: 'assignedAt',
       valueType: 'dateTime',
@@ -876,7 +823,7 @@ const CustomersPage: React.FC = () => {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       render: (_, record) => (
-        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
+        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'} variant="solid">
           {(record?.isActive ?? (record as any)?.is_active) ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
@@ -967,9 +914,9 @@ const CustomersPage: React.FC = () => {
     <>
       <ListPageTemplate>
       <UniTable<Customer>
-        columnPersistenceId="apps.master-data.pages.supply-chain.customers"
+        columnPersistenceId="apps.master-data.pages.supply-chain.customers.status-v2"
         actionRef={actionRef}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+        columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, __filter, searchFormValues) => {
           const listParams = resolveCustomerListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;

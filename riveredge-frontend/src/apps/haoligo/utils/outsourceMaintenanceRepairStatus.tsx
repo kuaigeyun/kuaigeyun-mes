@@ -13,5 +13,5 @@ export function outsourceMaintenanceRepairStatusTag(
   const s = (status || '').trim();
   if (!s || !(s in OUTSOURCE_MAINTENANCE_REPAIR_STATUS_ENUM)) return '—';
   const color = s === '维修完成' ? 'success' : s === '完修待审' ? 'processing' : 'blue';
-  return <Tag color={color}>{s}</Tag>;
+  return <Tag color={color} variant="solid">{s}</Tag>;
 }

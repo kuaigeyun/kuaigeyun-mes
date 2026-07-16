@@ -19,6 +19,7 @@ import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Co
 import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
+import { MaterialDedupCreateGuard } from './MaterialDedupAssistant';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { UniDropdown } from '../../../components/uni-dropdown';
@@ -150,6 +151,8 @@ export interface MaterialFormProps {
   suspendedModalReturnPath?: string;
   /** 物料分组列表变更后回调（如快速新增分组后刷新父级列表） */
   onMaterialGroupsChange?: () => void;
+  /** 防重提示中打开已存在物料（新建时） */
+  onOpenExistingMaterial?: (uuid: string) => void;
 }
 
 /**
@@ -166,6 +169,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   initialValues,
   suspendedModalReturnPath,
   onMaterialGroupsChange,
+  onOpenExistingMaterial,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -1334,6 +1338,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         loading={loading}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        modalRender={(modal) => (
+          <div data-smart-suggestion-anchor="material-form">{modal}</div>
+        )}
         initialValues={(() => {
           let vals = !isEdit && !(initialValues?.baseUnit != null && initialValues?.baseUnit !== '')
             ? { ...initialValues, baseUnit: DEFAULT_MATERIAL_BASE_UNIT }
@@ -1379,6 +1386,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           }
         }}
       >
+        <MaterialDedupCreateGuard
+          open={open}
+          enabled={!isEdit}
+          onOpenMaterial={onOpenExistingMaterial}
+        />
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
@@ -2494,7 +2506,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
           name: r.internalCode,
           description: r.description,
           extra: (
-            <Tag color={r.isActive ? 'success' : 'default'}>{r.isActive ? t('app.master-data.codeMapping.enabled') : t('app.master-data.codeMapping.disabled')}</Tag>
+            <Tag color={r.isActive ? 'success' : 'default'} variant="solid">{r.isActive ? t('app.master-data.codeMapping.enabled') : t('app.master-data.codeMapping.disabled')}</Tag>
           ),
         });
       });

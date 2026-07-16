@@ -27,6 +27,7 @@ import { batchImportParsedRows } from '../../../../../utils/import';
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedColumns,
   resolveProcessListParams,
@@ -40,7 +41,7 @@ import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -127,7 +128,7 @@ const DefectTypesPage: React.FC = () => {
         render: (_: unknown, record: DefectType) => {
           const isActive = record?.isActive ?? false;
           return (
-            <Tag color={isActive ? 'success' : 'default'}>
+            <Tag color={isActive ? 'success' : 'default'} variant="solid">
               {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
             </Tag>
           );
@@ -480,7 +481,7 @@ const DefectTypesPage: React.FC = () => {
       render: (_: any, record: DefectType) => {
         const isActive = record?.isActive ?? false;
         return (
-          <Tag color={isActive ? 'success' : 'default'}>
+          <Tag color={isActive ? 'success' : 'default'} variant="solid">
             {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
           </Tag>
         );
@@ -536,9 +537,9 @@ const DefectTypesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<DefectType>
-        columnPersistenceId="apps.master-data.pages.process.defect-types"
+        columnPersistenceId="apps.master-data.pages.process.defect-types.status-v2"
         actionRef={actionRef}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+        columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolveProcessListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;

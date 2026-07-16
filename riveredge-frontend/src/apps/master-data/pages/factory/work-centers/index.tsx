@@ -23,6 +23,7 @@ import {
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedColumns,
   normalizeMasterListResponse,
@@ -40,7 +41,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
@@ -492,7 +493,7 @@ const WorkCentersPage: React.FC = () => {
       sorter: true,
       valueEnum: workCenterActiveValueEnum,
       render: (_, record) => (
-        <Tag color={record?.isActive ? 'success' : 'default'}>
+        <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
           {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
@@ -560,7 +561,7 @@ const WorkCentersPage: React.FC = () => {
       title: t('field.workCenter.isActive'),
       dataIndex: 'isActive',
       render: (_: React.ReactNode, record: WorkCenter) => (
-        <Tag color={record?.isActive ? 'success' : 'default'}>
+        <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
           {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
@@ -573,9 +574,9 @@ const WorkCentersPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<WorkCenter>
-          columnPersistenceId="apps.master-data.pages.factory.work-centers"
+          columnPersistenceId="apps.master-data.pages.factory.work-centers.status-v2"
           actionRef={actionRef}
-          columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+          columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           viewTypes={['table', 'help']}
           defaultViewType="table"
           loadingDelay={200}

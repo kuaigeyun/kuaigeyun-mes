@@ -23,6 +23,7 @@ import { processRouteApi } from '../../../services/process';
 import type { ProcessRoute } from '../../../types/process';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import {
+  MASTER_DATA_LIST_FIELD_RANK,
   buildMasterCrudActiveValueEnum,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedSnakeColumns,
@@ -39,7 +40,7 @@ import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -121,7 +122,7 @@ const ProcessRoutesPage: React.FC = () => {
         render: (_: unknown, record: ProcessRoute) => {
           const isActive = record?.is_active ?? (record as any)?.isActive;
           return (
-            <Tag color={isActive ? 'success' : 'default'}>
+            <Tag color={isActive ? 'success' : 'default'} variant="solid">
               {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
             </Tag>
           );
@@ -508,7 +509,7 @@ const ProcessRoutesPage: React.FC = () => {
       render: (_: any, record: ProcessRoute) => {
         const isActive = record?.is_active ?? (record as any)?.isActive;
         return (
-          <Tag color={isActive ? 'success' : 'default'}>
+          <Tag color={isActive ? 'success' : 'default'} variant="solid">
             {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
           </Tag>
         );
@@ -559,9 +560,9 @@ const ProcessRoutesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<ProcessRoute>
-        columnPersistenceId="apps.master-data.pages.process.routes"
+        columnPersistenceId="apps.master-data.pages.process.routes.status-v2"
         actionRef={actionRef}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+        columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolveProcessListParams(searchFormValues, sort, {
             activeField: PROCESS_ROUTE_PINNED_ACTIVE_FIELD,

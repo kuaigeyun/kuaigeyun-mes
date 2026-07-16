@@ -482,7 +482,7 @@ const OQCInspectionPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           permissionResource={OQC_RESOURCE}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.oqc-inspection"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.oqc-inspection.material-qty-v2"
           showAdvancedSearch
           pinnedTabsField={QUALITY_INSPECTION_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter

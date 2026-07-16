@@ -12,7 +12,7 @@ export function normalizeMoldSheetAuditStatus(status: string | null | undefined)
 export function moldSheetAuditStatusTag(status: string | null | undefined): React.ReactNode {
   const s = normalizeMoldSheetAuditStatus(status);
   const color = s === '已通过' ? 'success' : s === '已驳回' ? 'error' : 'warning';
-  return <Tag color={color}>{s}</Tag>;
+  return <Tag color={color} variant="solid">{s}</Tag>;
 }
 
 /** @deprecated 使用 reviewPermissionCodes(resource) */

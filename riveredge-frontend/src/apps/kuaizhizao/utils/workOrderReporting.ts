@@ -263,7 +263,7 @@ export function getProcessInspectionStatusTagColor(
 ): 'default' | 'processing' | 'warning' | 'success' | 'error' {
   switch (status) {
     case 'pending':
-      return 'processing';
+      return 'warning';
     case 'inspected':
       return 'success';
     case 'not_started':
