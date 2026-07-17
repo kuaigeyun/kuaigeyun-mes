@@ -16,7 +16,7 @@ class MaterialCallRequest(BaseModel):
     用于记录生产车间/工作中心向仓库发起的物料配送请求。
     """
     tenant_id = fields.IntField(description="租户ID")
-    code = fields.CharField(max_length=50, unique=True, description="叫料单号")
+    code = fields.CharField(max_length=50, db_index=True, description="叫料单号")  # 租户内未删除唯一，见迁移 462
     
     # 关联信息
     work_order_id = fields.IntField(description="关联工单ID")

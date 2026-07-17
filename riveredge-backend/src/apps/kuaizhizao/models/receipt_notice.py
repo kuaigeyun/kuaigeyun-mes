@@ -18,7 +18,7 @@ class ReceiptNotice(BaseModel):
     采购创建，通知仓库收货；不直接动库存。
     """
     tenant_id = fields.IntField(description="租户ID")
-    notice_code = fields.CharField(max_length=50, unique=True, description="通知单编码")
+    notice_code = fields.CharField(max_length=50, db_index=True, description="通知单编码")  # 租户内未删除唯一，见迁移 462
 
     # 关联单据
     purchase_order_id = fields.IntField(description="采购订单ID")

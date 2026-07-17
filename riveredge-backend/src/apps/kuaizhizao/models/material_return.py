@@ -18,7 +18,7 @@ class MaterialReturn(BaseModel):
     用于记录借料归还，关联借料单
     """
     tenant_id = fields.IntField(description="租户ID")
-    return_code = fields.CharField(max_length=50, unique=True, description="还料单编码")
+    return_code = fields.CharField(max_length=50, db_index=True, description="还料单编码")  # 租户内未删除唯一，见迁移 462
 
     # 关联借料单
     borrow_id = fields.IntField(description="借料单ID")

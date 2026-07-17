@@ -19,7 +19,7 @@ class SalesForecast(BaseModel):
     用于记录产品销售预测数据，支持MTS（Make-To-Stock）模式的需求计划
     """
     tenant_id = fields.IntField(description="租户ID")
-    forecast_code = fields.CharField(max_length=50, unique=True, description="预测编码")
+    forecast_code = fields.CharField(max_length=50, db_index=True, description="预测编码")  # 租户内未删除唯一，见迁移 462
 
     # 预测基本信息
     forecast_name = fields.CharField(max_length=200, description="预测名称")

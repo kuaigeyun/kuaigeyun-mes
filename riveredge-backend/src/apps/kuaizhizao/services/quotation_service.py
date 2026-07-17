@@ -602,7 +602,9 @@ class QuotationService:
                 total_amount=getattr(quotation_data, "total_amount", None),
             )
             q_dict = quotation_data.model_dump(exclude={"items"})
-            operator_name = await self.get_user_name(created_by)
+            from apps.common.base_service import AppBaseService
+
+            operator_name = await AppBaseService().get_user_name(created_by)
             q_dict["created_by"] = created_by
             q_dict["created_by_name"] = operator_name
             q_dict["updated_by"] = created_by
@@ -1592,7 +1594,9 @@ class QuotationService:
         row_price_type = str(
             overrides.get("price_type", getattr(latest, "price_type", None) or DEFAULT_SALES_PRICE_TYPE)
         )
-        operator_name = await self.get_user_name(created_by)
+        from apps.common.base_service import AppBaseService
+
+        operator_name = await AppBaseService().get_user_name(created_by)
 
         async with in_transaction():
             new_row = await Quotation.create(

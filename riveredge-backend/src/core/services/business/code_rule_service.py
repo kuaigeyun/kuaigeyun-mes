@@ -122,7 +122,8 @@ class CodeRuleService:
         )
         if active_only:
             q = q.filter(is_active=True)
-        return await q.first()
+        # 同 code 若存在多条启用规则（历史脏数据），取最早创建的一条，避免无序号记录的重复规则抢占生成
+        return await q.order_by("id").first()
 
     @staticmethod
     async def map_rules_by_codes(tenant_id: int, codes: List[str]) -> Dict[str, CodeRule]:

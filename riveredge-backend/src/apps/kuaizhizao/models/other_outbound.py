@@ -18,7 +18,7 @@ class OtherOutbound(BaseModel):
     用于记录无上游单据的杂项出库，通过 reason_type 区分（盘亏/样品/报废/其他）
     """
     tenant_id = fields.IntField(description="租户ID")
-    outbound_code = fields.CharField(max_length=50, unique=True, description="出库单编码")
+    outbound_code = fields.CharField(max_length=50, db_index=True, description="出库单编码")  # 租户内未删除唯一，见迁移 462
 
     # 出库原因
     reason_type = fields.CharField(max_length=20, description="原因类型：盘亏/样品/报废/其他")

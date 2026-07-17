@@ -18,7 +18,7 @@ class FinishedGoodsInspection(BaseModel):
     用于记录成品入库前或出厂前的最终质量检验信息
     """
     tenant_id = fields.IntField(description="租户ID")
-    inspection_code = fields.CharField(max_length=50, unique=True, description="检验单编码")
+    inspection_code = fields.CharField(max_length=50, db_index=True, description="检验单编码")  # 租户内未删除唯一，见迁移 462
 
     # 关联报工（自动触发时幂等关联）
     reporting_record_id = fields.IntField(null=True, description="报工记录ID（自动触发成品检验时关联）")

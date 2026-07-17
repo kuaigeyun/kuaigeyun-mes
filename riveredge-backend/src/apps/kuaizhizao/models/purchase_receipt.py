@@ -18,7 +18,7 @@ class PurchaseReceipt(BaseModel):
     用于记录采购物料入库的详细信息
     """
     tenant_id = fields.IntField(description="租户ID")
-    receipt_code = fields.CharField(max_length=50, unique=True, description="入库单编码")
+    receipt_code = fields.CharField(max_length=50, db_index=True, description="入库单编码")  # 租户内未删除唯一，见迁移 462
 
     # 采购订单信息
     purchase_order_id = fields.IntField(description="采购订单ID")

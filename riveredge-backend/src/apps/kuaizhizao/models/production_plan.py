@@ -18,7 +18,7 @@ class ProductionPlan(BaseModel):
     存储MRP/LRP运算结果的生产计划
     """
     tenant_id = fields.IntField(description="租户ID")
-    plan_code = fields.CharField(max_length=50, unique=True, description="计划编码")
+    plan_code = fields.CharField(max_length=50, db_index=True, description="计划编码")  # 租户内未删除唯一，见迁移 462
 
     # 计划基本信息
     plan_name = fields.CharField(max_length=200, description="计划名称")

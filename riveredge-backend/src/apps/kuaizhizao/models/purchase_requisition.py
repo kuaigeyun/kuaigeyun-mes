@@ -19,7 +19,7 @@ class PurchaseRequisition(BaseModel):
     支持审批、合并、选供应商等操作。是否经采购申请由流程开关 require_purchase_requisition 控制。
     """
     tenant_id = fields.IntField(description="租户ID")
-    requisition_code = fields.CharField(max_length=50, unique=True, description="申请编码")
+    requisition_code = fields.CharField(max_length=50, db_index=True, description="申请编码")  # 租户内未删除唯一，见迁移 462
 
     # 基本信息
     requisition_name = fields.CharField(max_length=200, null=True, description="申请名称")

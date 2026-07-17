@@ -7,7 +7,7 @@ from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
 
 class PurchaseOrderChangeOrder(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
-    change_code = fields.CharField(max_length=50, unique=True, description="变更单编码")
+    change_code = fields.CharField(max_length=50, db_index=True, description="变更单编码")  # 租户内未删除唯一，见迁移 462
 
     source_order_id = fields.IntField(description="原采购订单ID")
     source_order_code = fields.CharField(max_length=50, description="原采购订单编码")

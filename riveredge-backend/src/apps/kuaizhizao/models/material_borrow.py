@@ -18,7 +18,7 @@ class MaterialBorrow(BaseModel):
     用于记录无工单的物料借出，如工具间、研发借料
     """
     tenant_id = fields.IntField(description="租户ID")
-    borrow_code = fields.CharField(max_length=50, unique=True, description="借料单编码")
+    borrow_code = fields.CharField(max_length=50, db_index=True, description="借料单编码")  # 租户内未删除唯一，见迁移 462
 
     # 借出仓库
     warehouse_id = fields.IntField(description="借出仓库ID")

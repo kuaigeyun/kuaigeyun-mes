@@ -1151,21 +1151,13 @@ class SalesOrderService:
 
         await self._validate_sales_order_contract(tenant_id, sales_order_data)
 
-        if not sales_order_data.order_code:
-            sales_order_data.order_code = await self._generate_order_code(
-                tenant_id, sales_order_data.order_date
-            )
-
-        try:
-            return await self._create_sales_order_in_tx(
-                tenant_id=tenant_id,
-                sales_order_data=sales_order_data,
-                created_by=created_by,
-            )
-        except IntegrityError:
-            sales_order_data.order_code = await self._generate_order_code(
-                tenant_id, sales_order_data.order_date
-            )
+        # 自动占号场景：即使前端已带 order_code，冲突时仍在服务端重占号重试
+        last_error: Exception | None = None
+        for attempt in range(5):
+            if not sales_order_data.order_code or attempt > 0:
+                sales_order_data.order_code = await self._generate_order_code(
+                    tenant_id, sales_order_data.order_date
+                )
             try:
                 return await self._create_sales_order_in_tx(
                     tenant_id=tenant_id,
@@ -1173,7 +1165,15 @@ class SalesOrderService:
                     created_by=created_by,
                 )
             except IntegrityError as e:
-                raise ValidationError("销售订单编码已存在，请关闭弹窗后重新新建") from e
+                last_error = e
+                logger.warning(
+                    "销售订单编码冲突，重试占号 attempt={} code={} err={}",
+                    attempt + 1,
+                    sales_order_data.order_code,
+                    e,
+                )
+                sales_order_data.order_code = None
+        raise ValidationError("销售订单编码已存在，请关闭弹窗后重新新建") from last_error
 
     async def _create_sales_order_in_tx(
         self,

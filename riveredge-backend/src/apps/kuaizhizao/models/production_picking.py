@@ -18,7 +18,7 @@ class ProductionPicking(BaseModel):
     用于记录生产工单领料的详细信息
     """
     tenant_id = fields.IntField(description="租户ID")
-    picking_code = fields.CharField(max_length=50, unique=True, description="领料单编码")
+    picking_code = fields.CharField(max_length=50, db_index=True, description="领料单编码")  # 租户内未删除唯一，见迁移 462
     work_order_id = fields.IntField(description="工单ID")
     work_order_code = fields.CharField(max_length=50, description="工单编码")
     workshop_id = fields.IntField(null=True, description="车间ID")

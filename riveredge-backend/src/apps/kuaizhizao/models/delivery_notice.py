@@ -18,7 +18,7 @@ class DeliveryNotice(BaseModel):
     用于在销售出库前/后向客户发送发货通知，记录物流信息
     """
     tenant_id = fields.IntField(description="租户ID")
-    notice_code = fields.CharField(max_length=50, unique=True, description="通知单编码")
+    notice_code = fields.CharField(max_length=50, db_index=True, description="通知单编码")  # 租户内未删除唯一，见迁移 462
 
     # 关联单据
     sales_delivery_id = fields.IntField(null=True, description="销售出库单ID")

@@ -21068,6 +21068,14 @@ export default {
   'pages.system.menus.customLayoutButton': 'Custom menu mapping',
   'pages.system.menus.customLayoutTitle': 'Custom menu',
   'pages.system.menus.customLayoutEnabled': 'Enable',
+  'pages.system.menus.customLayoutLoadDefault': 'Load system default',
+  'pages.system.menus.customLayoutLoadDefaultConfirmTitle': 'Load system default menu?',
+  'pages.system.menus.customLayoutLoadDefaultConfirmContent':
+    'This replaces the custom APP layout on the right with the current system application menu structure. You can keep editing afterward. Nothing is applied until you save.',
+  'pages.system.menus.customLayoutLoadDefaultSuccess':
+    'System default menu loaded. Continue editing, then save.',
+  'pages.system.menus.customLayoutLoadDefaultEmpty': 'No application menus available to load',
+  'pages.system.menus.customLayoutUngrouped': 'Ungrouped',
   'pages.system.menus.customLayoutTransferSource': 'Menus',
   'pages.system.menus.customLayoutTransferTarget': 'Custom APP',
   'pages.system.menus.customLayoutAddAppGroup': 'Add APP group',

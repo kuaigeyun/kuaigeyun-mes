@@ -50,7 +50,7 @@ class BatchingOrder(BaseModel):
         ]
 
     id = fields.IntField(pk=True, description="主键ID")
-    code = fields.CharField(max_length=50, unique=True, description="配料单号")
+    code = fields.CharField(max_length=50, db_index=True, description="配料单号")  # 租户内未删除唯一，见迁移 462
 
     warehouse_id = fields.IntField(description="拣选源仓库ID")
     warehouse_name = fields.CharField(max_length=200, description="拣选源仓库名称")

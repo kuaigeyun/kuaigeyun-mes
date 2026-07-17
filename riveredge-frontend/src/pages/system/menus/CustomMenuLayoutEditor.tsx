@@ -19,7 +19,12 @@ import {
 import { useTranslation } from 'react-i18next';
 import MenuIconPicker from '../../../components/MenuIconPicker';
 import type { CustomMenuLayoutNode, MenuTree } from '../../../services/menu';
-import { translateAppMenuItemName, translateMenuName } from '../../../utils/menuTranslation';
+import {
+  extractAppCodeFromPath,
+  getAppDisplayName,
+  translateAppMenuItemName,
+  translateMenuName,
+} from '../../../utils/menuTranslation';
 
 export type CustomLayoutGroupNode = {
   id: string;
@@ -42,10 +47,20 @@ export type CustomLayoutEditorState = {
 };
 
 const MAX_CUSTOM_GROUP_DEPTH = 2;
-/** 左右栏列表滚动区统一高度（与左栏待选菜单列表一致） */
-const CUSTOM_LAYOUT_SCROLL_HEIGHT = 420;
-/** 右栏 Card body 最小高度，与左栏（搜索 + 提示 + 列表）对齐 */
-const CUSTOM_LAYOUT_PANEL_BODY_MIN_HEIGHT = 504;
+/** 左右栏 Card body 同高，避免右栏再套一层限高内框 */
+const CUSTOM_LAYOUT_PANEL_BODY_HEIGHT = 504;
+/** 左右栏 Card 标题行同高（右栏有「添加 APP」时也不撑高） */
+const CUSTOM_LAYOUT_PANEL_HEADER_STYLE: React.CSSProperties = {
+  minHeight: 40,
+  padding: '0 12px',
+};
+const CUSTOM_LAYOUT_PANEL_BODY_STYLE: React.CSSProperties = {
+  height: CUSTOM_LAYOUT_PANEL_BODY_HEIGHT,
+  padding: 12,
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
+};
 /** 分组行内控件间距（Tag / 名称 / 图标 / 操作按钮） */
 const CUSTOM_LAYOUT_INLINE_GAP = 8;
 const CUSTOM_LAYOUT_GROUP_TITLE_WIDTH = 140;
@@ -244,6 +259,159 @@ export function parseCustomLayoutEditorState(
   return { enabled: false, appGroups, menuOverrides };
 }
 
+function collectLeafMenuUuids(nodes: MenuTree[]): string[] {
+  const uuids: string[] = [];
+  const walk = (items: MenuTree[]) => {
+    items.forEach((node) => {
+      if (isSystemLevelMenuNode(node) || isVirtualAppRootMenuNode(node)) {
+        if (node.children?.length) walk(node.children);
+        return;
+      }
+      if (isAppLevelMenuNode(node)) {
+        const childAppMenus = (node.children || []).filter(
+          (c) => !isSystemLevelMenuNode(c) && isAppLevelMenuNode(c),
+        );
+        if (childAppMenus.length === 0) {
+          uuids.push(node.uuid);
+          return;
+        }
+      }
+      if (node.children?.length) walk(node.children);
+    });
+  };
+  walk(nodes);
+  return uuids;
+}
+
+function isMenuFolderNode(node: MenuTree): boolean {
+  if (isSystemLevelMenuNode(node) || isVirtualAppRootMenuNode(node)) return false;
+  const childAppMenus = (node.children || []).filter(
+    (c) => !isSystemLevelMenuNode(c) && (isAppLevelMenuNode(c) || isMenuFolderNode(c)),
+  );
+  return childAppMenus.length > 0;
+}
+
+/**
+ * 将系统导航树（应用菜单）转为自组菜单初始结构，便于在默认布局上微调。
+ * APP 根 → app_group；中间目录 → custom_group；叶子菜单挂到分组上。
+ */
+export function buildSystemDefaultCustomLayout(
+  sourceTree: MenuTree[],
+  t: (key: string, options?: { defaultValue?: string }) => string,
+): Pick<CustomLayoutEditorState, 'appGroups' | 'menuOverrides'> {
+  let seq = 0;
+  const nextId = (prefix: string) => {
+    seq += 1;
+    return `${prefix}-sys-${seq}`;
+  };
+
+  const buildCustomGroupFromFolder = (folder: MenuTree, depth: number): CustomLayoutGroupNode => {
+    const group: CustomLayoutGroupNode = {
+      id: nextId('custom_group'),
+      type: 'custom_group',
+      title: resolveMenuTitle(folder, t),
+      icon: folder.icon || undefined,
+      menuUuids: [],
+      children: [],
+    };
+
+    const children = folder.children || [];
+    const leafUuids: string[] = [];
+    const subFolders: MenuTree[] = [];
+
+    children.forEach((child) => {
+      if (isSystemLevelMenuNode(child) || isVirtualAppRootMenuNode(child)) return;
+      if (isMenuFolderNode(child)) {
+        subFolders.push(child);
+        return;
+      }
+      if (isAppLevelMenuNode(child)) {
+        leafUuids.push(child.uuid);
+      }
+    });
+
+    group.menuUuids = leafUuids;
+
+    if (depth >= MAX_CUSTOM_GROUP_DEPTH) {
+      // 超出自组允许深度：子目录内叶子扁平并入当前分组
+      subFolders.forEach((sub) => {
+        group.menuUuids.push(...collectLeafMenuUuids([sub]));
+      });
+      return group;
+    }
+
+    group.children = subFolders.map((sub) => buildCustomGroupFromFolder(sub, depth + 1));
+    return group;
+  };
+
+  const collectAppRoots = (nodes: MenuTree[]): MenuTree[] => {
+    const roots: MenuTree[] = [];
+    const walk = (items: MenuTree[]) => {
+      items.forEach((node) => {
+        if (isSystemLevelMenuNode(node)) {
+          if (node.children?.length) walk(node.children);
+          return;
+        }
+        if (isVirtualAppRootMenuNode(node) || node.application_uuid) {
+          roots.push(node);
+          return;
+        }
+        if (node.children?.length) walk(node.children);
+      });
+    };
+    walk(nodes);
+    return roots;
+  };
+
+  const appRoots = collectAppRoots(sourceTree);
+  const appGroups: CustomLayoutGroupNode[] = appRoots.map((root) => {
+    const appCode = extractAppCodeFromPath(root.path || '') || '';
+    const title =
+      (appCode && getAppDisplayName(appCode, t, '')) ||
+      resolveMenuTitle(root, t) ||
+      t('pages.system.menus.customLayoutDefaultAppGroup');
+    const appGroup: CustomLayoutGroupNode = {
+      id: nextId('app_group'),
+      type: 'app_group',
+      title,
+      icon: root.icon || undefined,
+      menuUuids: [],
+      children: [],
+    };
+
+    const children = root.children || [];
+    const directLeaves: string[] = [];
+    const folders: MenuTree[] = [];
+
+    children.forEach((child) => {
+      if (isSystemLevelMenuNode(child) || isVirtualAppRootMenuNode(child)) return;
+      if (isMenuFolderNode(child)) {
+        folders.push(child);
+        return;
+      }
+      if (isAppLevelMenuNode(child)) {
+        directLeaves.push(child.uuid);
+      }
+    });
+
+    appGroup.children = folders.map((folder) => buildCustomGroupFromFolder(folder, 1));
+
+    if (directLeaves.length > 0) {
+      appGroup.children.push({
+        id: nextId('custom_group'),
+        type: 'custom_group',
+        title: t('pages.system.menus.customLayoutUngrouped'),
+        menuUuids: directLeaves,
+        children: [],
+      });
+    }
+
+    return appGroup;
+  });
+
+  return { appGroups, menuOverrides: {} };
+}
+
 export function buildCustomLayoutPayload(
   state: Pick<CustomLayoutEditorState, 'enabled' | 'appGroups' | 'menuOverrides'>,
   menuLookup: Map<string, MenuTree>,
@@ -297,7 +465,7 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
   onActiveGroupIdChange,
   onMenuSearchChange,
 }) => {
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal } = App.useApp();
   const { t } = useTranslation();
 
   const menuLookup = useMemo(() => {
@@ -376,6 +544,42 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
     onActiveGroupIdChange(id);
   }, [onActiveGroupIdChange, setAppGroups, t]);
 
+  const handleLoadSystemDefault = useCallback(() => {
+    const apply = () => {
+      const next = buildSystemDefaultCustomLayout(sourceTree, t);
+      if (!next.appGroups.length) {
+        messageApi.warning(t('pages.system.menus.customLayoutLoadDefaultEmpty'));
+        return;
+      }
+      onStateChange({
+        appGroups: next.appGroups,
+        menuOverrides: next.menuOverrides,
+      });
+      onActiveGroupIdChange(next.appGroups[0]?.id);
+      messageApi.success(t('pages.system.menus.customLayoutLoadDefaultSuccess'));
+    };
+
+    if (state.appGroups.length > 0) {
+      modal.confirm({
+        title: t('pages.system.menus.customLayoutLoadDefaultConfirmTitle'),
+        content: t('pages.system.menus.customLayoutLoadDefaultConfirmContent'),
+        okText: t('common.confirm'),
+        cancelText: t('common.cancel'),
+        onOk: apply,
+      });
+      return;
+    }
+    apply();
+  }, [
+    messageApi,
+    modal,
+    onActiveGroupIdChange,
+    onStateChange,
+    sourceTree,
+    state.appGroups.length,
+    t,
+  ]);
+
   const handleAddChildGroup = useCallback(
     (parentId: string) => {
       const depth = getCustomGroupDepth(state.appGroups, parentId);
@@ -430,111 +634,161 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
     [activeGroupId, messageApi, setAppGroups, state.appGroups, t],
   );
 
-  const renderGroupMenus = (group: CustomLayoutGroupNode) => (
-    <Space direction="vertical" style={{ width: '100%', marginTop: CUSTOM_LAYOUT_INLINE_GAP }} size={CUSTOM_LAYOUT_INLINE_GAP}>
-      <Select
-        mode="multiple"
-        size="small"
-        style={{ width: '100%' }}
-        value={group.menuUuids}
-        disabled={group.type === 'app_group'}
-        onChange={(value) =>
-          setAppGroups((prev) =>
-            updateGroupTree(prev, group.id, (node) => ({ ...node, menuUuids: value as string[] })),
-          )
-        }
-        options={appMenuLibrary.map((item) => ({ value: item.key, label: item.title }))}
-        placeholder={t('pages.system.menus.customLayoutGroupMenus')}
-      />
-      {group.menuUuids.map((menuUuid, menuIndex) => {
-        const source = menuLookup.get(menuUuid);
-        if (!source) return null;
-        const override = state.menuOverrides[menuUuid] || {};
-        return (
-          <Space key={`${group.id}-${menuUuid}`} style={{ width: '100%', justifyContent: 'space-between' }} align="center" size={CUSTOM_LAYOUT_INLINE_GAP}>
-            <Space align="center" size={CUSTOM_LAYOUT_INLINE_GAP}>
-              <Button
-                size="small"
-                disabled={menuIndex === 0}
-                onClick={() =>
-                  setAppGroups((prev) =>
-                    updateGroupTree(prev, group.id, (node) => {
-                      const nextMenus = [...node.menuUuids];
-                      [nextMenus[menuIndex - 1], nextMenus[menuIndex]] = [nextMenus[menuIndex], nextMenus[menuIndex - 1]];
-                      return { ...node, menuUuids: nextMenus };
-                    }),
-                  )
-                }
+  const renderGroupMenus = (group: CustomLayoutGroupNode, depth: number) => {
+    // 三级嵌套可用宽度更窄：标题/覆盖输入可收缩，避免「移除」顶出右边框
+    const compact = depth >= 2;
+    const titleMaxWidth = compact ? 120 : 160;
+    const overrideWidth = compact ? 110 : 140;
+    const iconWidth = compact ? 96 : CUSTOM_LAYOUT_GROUP_ICON_WIDTH;
+
+    return (
+      <Space
+        direction="vertical"
+        style={{ width: '100%', marginTop: CUSTOM_LAYOUT_INLINE_GAP, minWidth: 0 }}
+        size={CUSTOM_LAYOUT_INLINE_GAP}
+      >
+        <Select
+          mode="multiple"
+          size="small"
+          style={{ width: '100%' }}
+          value={group.menuUuids}
+          disabled={group.type === 'app_group'}
+          onChange={(value) =>
+            setAppGroups((prev) =>
+              updateGroupTree(prev, group.id, (node) => ({ ...node, menuUuids: value as string[] })),
+            )
+          }
+          options={appMenuLibrary.map((item) => ({ value: item.key, label: item.title }))}
+          placeholder={t('pages.system.menus.customLayoutGroupMenus')}
+        />
+        {group.menuUuids.map((menuUuid, menuIndex) => {
+          const source = menuLookup.get(menuUuid);
+          if (!source) return null;
+          const override = state.menuOverrides[menuUuid] || {};
+          return (
+            <div
+              key={`${group.id}-${menuUuid}`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: CUSTOM_LAYOUT_INLINE_GAP,
+                flexWrap: 'wrap',
+                width: '100%',
+                minWidth: 0,
+                boxSizing: 'border-box',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: CUSTOM_LAYOUT_INLINE_GAP,
+                  minWidth: 0,
+                  flex: '1 1 140px',
+                }}
               >
-                ↑
-              </Button>
-              <Button
-                size="small"
-                disabled={menuIndex === group.menuUuids.length - 1}
-                onClick={() =>
-                  setAppGroups((prev) =>
-                    updateGroupTree(prev, group.id, (node) => {
-                      const nextMenus = [...node.menuUuids];
-                      [nextMenus[menuIndex + 1], nextMenus[menuIndex]] = [nextMenus[menuIndex], nextMenus[menuIndex + 1]];
-                      return { ...node, menuUuids: nextMenus };
-                    }),
-                  )
-                }
+                <Button
+                  size="small"
+                  disabled={menuIndex === 0}
+                  onClick={() =>
+                    setAppGroups((prev) =>
+                      updateGroupTree(prev, group.id, (node) => {
+                        const nextMenus = [...node.menuUuids];
+                        [nextMenus[menuIndex - 1], nextMenus[menuIndex]] = [
+                          nextMenus[menuIndex],
+                          nextMenus[menuIndex - 1],
+                        ];
+                        return { ...node, menuUuids: nextMenus };
+                      }),
+                    )
+                  }
+                >
+                  ↑
+                </Button>
+                <Button
+                  size="small"
+                  disabled={menuIndex === group.menuUuids.length - 1}
+                  onClick={() =>
+                    setAppGroups((prev) =>
+                      updateGroupTree(prev, group.id, (node) => {
+                        const nextMenus = [...node.menuUuids];
+                        [nextMenus[menuIndex + 1], nextMenus[menuIndex]] = [
+                          nextMenus[menuIndex],
+                          nextMenus[menuIndex + 1],
+                        ];
+                        return { ...node, menuUuids: nextMenus };
+                      }),
+                    )
+                  }
+                >
+                  ↓
+                </Button>
+                <Typography.Text style={{ flex: 1, minWidth: 0, maxWidth: titleMaxWidth }} ellipsis>
+                  {resolveMenuTitle(source, t)}
+                </Typography.Text>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: CUSTOM_LAYOUT_INLINE_GAP,
+                  flex: '0 1 auto',
+                  flexWrap: 'wrap',
+                  minWidth: 0,
+                }}
               >
-                ↓
-              </Button>
-              <Typography.Text style={{ width: 180 }} ellipsis>
-                {resolveMenuTitle(source, t)}
-              </Typography.Text>
-            </Space>
-            <Space size={CUSTOM_LAYOUT_INLINE_GAP}>
-              <Input
-                size="small"
-                value={override.title}
-                onChange={(e) =>
-                  onStateChange({
-                    menuOverrides: {
-                      ...state.menuOverrides,
-                      [menuUuid]: { ...state.menuOverrides[menuUuid], title: e.target.value || undefined },
-                    },
-                  })
-                }
-                placeholder={t('pages.system.menus.customLayoutMenuTitleOverride')}
-                style={{ width: 140 }}
-              />
-              <MenuIconPicker
-                size="small"
-                style={{ width: CUSTOM_LAYOUT_GROUP_ICON_WIDTH }}
-                value={override.icon}
-                onChange={(icon) =>
-                  onStateChange({
-                    menuOverrides: {
-                      ...state.menuOverrides,
-                      [menuUuid]: { ...state.menuOverrides[menuUuid], icon: icon || undefined },
-                    },
-                  })
-                }
-              />
-              <Button
-                size="small"
-                danger
-                onClick={() =>
-                  setAppGroups((prev) =>
-                    updateGroupTree(prev, group.id, (node) => ({
-                      ...node,
-                      menuUuids: node.menuUuids.filter((id) => id !== menuUuid),
-                    })),
-                  )
-                }
-              >
-                {t('common.remove')}
-              </Button>
-            </Space>
-          </Space>
-        );
-      })}
-    </Space>
-  );
+                <Input
+                  size="small"
+                  value={override.title}
+                  onChange={(e) =>
+                    onStateChange({
+                      menuOverrides: {
+                        ...state.menuOverrides,
+                        [menuUuid]: {
+                          ...state.menuOverrides[menuUuid],
+                          title: e.target.value || undefined,
+                        },
+                      },
+                    })
+                  }
+                  placeholder={t('pages.system.menus.customLayoutMenuTitleOverride')}
+                  style={{ width: overrideWidth, maxWidth: '100%' }}
+                />
+                <MenuIconPicker
+                  size="small"
+                  style={{ width: iconWidth, maxWidth: '100%' }}
+                  value={override.icon}
+                  onChange={(icon) =>
+                    onStateChange({
+                      menuOverrides: {
+                        ...state.menuOverrides,
+                        [menuUuid]: { ...state.menuOverrides[menuUuid], icon: icon || undefined },
+                      },
+                    })
+                  }
+                />
+                <Button
+                  size="small"
+                  danger
+                  onClick={() =>
+                    setAppGroups((prev) =>
+                      updateGroupTree(prev, group.id, (node) => ({
+                        ...node,
+                        menuUuids: node.menuUuids.filter((id) => id !== menuUuid),
+                      })),
+                    )
+                  }
+                >
+                  {t('common.remove')}
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </Space>
+    );
+  };
 
   const renderGroupCard = (
     group: CustomLayoutGroupNode,
@@ -544,20 +798,27 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
   ) => {
     const isActive = activeGroupId === group.id;
     const canAddChildGroup = depth < MAX_CUSTOM_GROUP_DEPTH;
+    const bodyPadding =
+      group.type === 'app_group' && !group.children.length ? 0 : depth >= 2 ? 8 : 12;
     return (
-      <div key={group.id} style={{ marginLeft: depth > 0 ? 16 : 0 }}>
+      <div key={group.id} style={{ marginLeft: depth > 0 ? 8 : 0, minWidth: 0, maxWidth: '100%' }}>
         <Card
           size="small"
           style={{
             marginBottom: CUSTOM_LAYOUT_INLINE_GAP,
-            borderColor: isActive ? '#1677ff' : undefined,
-            boxShadow: isActive ? '0 0 0 1px #1677ff' : undefined,
+            borderColor: isActive ? '#1677ff' : depth > 0 ? '#f0f0f0' : undefined,
+            background: depth > 0 ? '#fafafa' : undefined,
+            overflow: 'hidden',
+            maxWidth: '100%',
           }}
           onClick={(e) => {
             e.stopPropagation();
             onActiveGroupIdChange(group.id);
           }}
-          styles={{ header: { minHeight: 'auto', padding: '8px 12px' } }}
+          styles={{
+            header: { minHeight: 'auto', padding: depth >= 2 ? '8px' : '8px 12px' },
+            body: { padding: bodyPadding, minWidth: 0, overflow: 'hidden' },
+          }}
           title={
             <div
               style={{
@@ -567,6 +828,7 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
                 gap: CUSTOM_LAYOUT_INLINE_GAP,
                 flexWrap: 'wrap',
                 width: '100%',
+                minWidth: 0,
               }}
             >
               <Space size={CUSTOM_LAYOUT_INLINE_GAP} align="center">
@@ -648,9 +910,15 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
             </div>
           }
         >
-          {group.type !== 'app_group' && renderGroupMenus(group)}
+          {group.type !== 'app_group' && renderGroupMenus(group, depth)}
           {group.children.length > 0 && (
-            <div style={{ marginTop: group.type !== 'app_group' ? CUSTOM_LAYOUT_INLINE_GAP : 0 }}>
+            <div
+              style={{
+                marginTop: group.type !== 'app_group' ? CUSTOM_LAYOUT_INLINE_GAP : 0,
+                minWidth: 0,
+                maxWidth: '100%',
+              }}
+            >
               {group.children.map((child, childIndex) =>
                 renderGroupCard(child, group.children, childIndex, depth + 1),
               )}
@@ -663,84 +931,96 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size={12}>
-      <Space align="center" size={12}>
+      <Space align="center" size={12} wrap>
         <Typography.Text>{t('pages.system.menus.customLayoutEnabled')}</Typography.Text>
         <Switch
           checked={state.enabled}
           onChange={(enabled) => onStateChange({ enabled })}
         />
+        <Button onClick={handleLoadSystemDefault}>
+          {t('pages.system.menus.customLayoutLoadDefault')}
+        </Button>
       </Space>
-      <Row gutter={12}>
+      <Row gutter={12} align="stretch">
         <Col span={10}>
           <Card
             title={t('pages.system.menus.customLayoutTransferSource')}
             size="small"
-            styles={{ body: { minHeight: CUSTOM_LAYOUT_PANEL_BODY_MIN_HEIGHT } }}
+            styles={{
+              header: CUSTOM_LAYOUT_PANEL_HEADER_STYLE,
+              body: CUSTOM_LAYOUT_PANEL_BODY_STYLE,
+            }}
           >
-            <Space direction="vertical" style={{ width: '100%' }} size={8}>
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
               <Input
                 value={menuSearch}
                 onChange={(e) => onMenuSearchChange(e.target.value)}
                 placeholder={t('pages.system.menus.customLayoutSearchMenuPlaceholder')}
               />
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {t('pages.system.menus.customLayoutAppMenuHint')}
-              </Typography.Text>
-              <div style={{ maxHeight: CUSTOM_LAYOUT_SCROLL_HEIGHT, overflowY: 'auto' }}>
-                <Space direction="vertical" style={{ width: '100%' }} size={6}>
-                  {availableAppMenus.length === 0 ? (
-                    <Empty
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description={t('pages.system.menus.customLayoutNoAvailableMenus')}
-                    />
-                  ) : (
-                    availableAppMenus.map((item) => (
-                      <Card key={item.key} size="small" styles={{ body: { padding: '8px 10px' } }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0 }}>
-                          <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                            <Typography.Text strong ellipsis={{ tooltip: item.title }}>
-                              {item.title}
-                            </Typography.Text>
-                            <Typography.Text
-                              type="secondary"
-                              ellipsis={{ tooltip: item.path }}
-                              style={{ display: 'block', fontSize: 12, lineHeight: '18px' }}
-                            >
-                              {item.path}
-                            </Typography.Text>
-                          </div>
-                          <Button
-                            size="small"
-                            type="primary"
-                            style={{ flexShrink: 0 }}
-                            onClick={() => handleQuickAddToActiveGroup(item.key)}
+            </div>
+            <Typography.Text
+              type="secondary"
+              style={{ fontSize: 12, flexShrink: 0, marginBottom: 8, display: 'block' }}
+            >
+              {t('pages.system.menus.customLayoutAppMenuHint')}
+            </Typography.Text>
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              <Space direction="vertical" style={{ width: '100%' }} size={6}>
+                {availableAppMenus.length === 0 ? (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={t('pages.system.menus.customLayoutNoAvailableMenus')}
+                  />
+                ) : (
+                  availableAppMenus.map((item) => (
+                    <Card key={item.key} size="small" styles={{ body: { padding: '8px 10px' } }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0 }}>
+                        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                          <Typography.Text strong ellipsis={{ tooltip: item.title }}>
+                            {item.title}
+                          </Typography.Text>
+                          <Typography.Text
+                            type="secondary"
+                            ellipsis={{ tooltip: item.path }}
+                            style={{ display: 'block', fontSize: 12, lineHeight: '18px' }}
                           >
-                            {t('pages.system.menus.customLayoutQuickAdd')}
-                          </Button>
+                            {item.path}
+                          </Typography.Text>
                         </div>
-                      </Card>
-                    ))
-                  )}
-                </Space>
-              </div>
-            </Space>
+                        <Button
+                          size="small"
+                          type="primary"
+                          style={{ flexShrink: 0 }}
+                          onClick={() => handleQuickAddToActiveGroup(item.key)}
+                        >
+                          {t('pages.system.menus.customLayoutQuickAdd')}
+                        </Button>
+                      </div>
+                    </Card>
+                  ))
+                )}
+              </Space>
+            </div>
           </Card>
         </Col>
         <Col span={14}>
           <Card
             title={t('pages.system.menus.customLayoutTransferTarget')}
             size="small"
-            styles={{ body: { minHeight: CUSTOM_LAYOUT_PANEL_BODY_MIN_HEIGHT } }}
+            styles={{
+              header: CUSTOM_LAYOUT_PANEL_HEADER_STYLE,
+              body: CUSTOM_LAYOUT_PANEL_BODY_STYLE,
+            }}
             extra={
-              <Button type="primary" onClick={handleAddAppGroup}>
+              <Button type="primary" size="small" onClick={handleAddAppGroup}>
                 {t('pages.system.menus.customLayoutAddApp')}
               </Button>
             }
           >
             <div
               style={{
-                maxHeight: CUSTOM_LAYOUT_SCROLL_HEIGHT,
-                minHeight: CUSTOM_LAYOUT_SCROLL_HEIGHT,
+                flex: 1,
+                minHeight: 0,
                 overflowY: 'auto',
                 display: 'flex',
                 flexDirection: 'column',

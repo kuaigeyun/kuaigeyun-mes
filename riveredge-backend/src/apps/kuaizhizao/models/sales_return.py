@@ -18,7 +18,7 @@ class SalesReturn(BaseModel):
     用于记录销售退货的详细信息，关联到销售出库单
     """
     tenant_id = fields.IntField(description="租户ID")
-    return_code = fields.CharField(max_length=50, unique=True, description="退货单编码")
+    return_code = fields.CharField(max_length=50, db_index=True, description="退货单编码")  # 租户内未删除唯一，见迁移 462
 
     # 销售出库单信息（关联原出库单）
     sales_delivery_id = fields.IntField(null=True, description="销售出库单ID")

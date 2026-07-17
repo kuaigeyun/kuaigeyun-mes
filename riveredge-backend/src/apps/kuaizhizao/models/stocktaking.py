@@ -61,7 +61,7 @@ class Stocktaking(BaseModel):
     id = fields.IntField(pk=True, description="主键ID")
 
     # 业务编码
-    code = fields.CharField(max_length=50, unique=True, description="盘点单号")
+    code = fields.CharField(max_length=50, db_index=True, description="盘点单号")  # 租户内未删除唯一，见迁移 462
 
     # 仓库信息
     warehouse_id = fields.IntField(description="仓库ID")

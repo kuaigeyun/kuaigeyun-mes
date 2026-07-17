@@ -10,7 +10,7 @@ class SemiFinishedGoodsReceipt(BaseModel):
     """半成品入库单：记录生产完工后半成品入库信息。"""
 
     tenant_id = fields.IntField(description="租户ID")
-    receipt_code = fields.CharField(max_length=50, unique=True, description="入库单编码")
+    receipt_code = fields.CharField(max_length=50, db_index=True, description="入库单编码")  # 租户内未删除唯一，见迁移 462
     work_order_id = fields.IntField(description="工单ID")
     work_order_code = fields.CharField(max_length=50, description="工单编码")
 

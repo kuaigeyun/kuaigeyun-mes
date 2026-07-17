@@ -18,7 +18,7 @@ class PurchaseReturn(BaseModel):
     用于记录采购退货的详细信息，关联到采购入库单
     """
     tenant_id = fields.IntField(description="租户ID")
-    return_code = fields.CharField(max_length=50, unique=True, description="退货单编码")
+    return_code = fields.CharField(max_length=50, db_index=True, description="退货单编码")  # 租户内未删除唯一，见迁移 462
 
     # 采购入库单信息（关联原入库单）
     purchase_receipt_id = fields.IntField(null=True, description="采购入库单ID")

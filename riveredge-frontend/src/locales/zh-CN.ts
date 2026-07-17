@@ -21635,6 +21635,13 @@ export default {
   'pages.system.menus.customLayoutButton': '自组菜单',
   'pages.system.menus.customLayoutTitle': '自组菜单',
   'pages.system.menus.customLayoutEnabled': '启用',
+  'pages.system.menus.customLayoutLoadDefault': '加载系统默认',
+  'pages.system.menus.customLayoutLoadDefaultConfirmTitle': '加载系统默认菜单？',
+  'pages.system.menus.customLayoutLoadDefaultConfirmContent':
+    '将用系统当前应用菜单结构覆盖右侧自定义 APP，之后可继续调整。未保存前不会生效。',
+  'pages.system.menus.customLayoutLoadDefaultSuccess': '已加载系统默认菜单，可继续调整后保存',
+  'pages.system.menus.customLayoutLoadDefaultEmpty': '当前没有可加载的应用菜单',
+  'pages.system.menus.customLayoutUngrouped': '未分组',
   'pages.system.menus.customLayoutTransferSource': '菜单',
   'pages.system.menus.customLayoutTransferTarget': '自定义APP',
   'pages.system.menus.customLayoutAddAppGroup': '添加 APP 级分组',

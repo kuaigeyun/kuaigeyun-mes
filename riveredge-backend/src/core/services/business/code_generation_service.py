@@ -15,6 +15,7 @@ import re
 import importlib
 
 from loguru import logger
+from tortoise.transactions import in_transaction
 
 from core.models.code_rule import CodeRule
 from core.models.code_sequence import CodeSequence
@@ -329,60 +330,87 @@ class CodeGenerationService:
             seq_step = rule.seq_step
             seq_reset_rule = rule.seq_reset_rule or "never"
         
-        # 获取或创建序号记录（不使用嵌套事务，避免死锁）
-        sequence = await CodeSequence.get_or_none(
-            code_rule_id=rule.id,
-            tenant_id=tenant_id,
-            scope_key=scope_key,
-            deleted_at__isnull=True
-        )
-        if not sequence:
-            sequence = await CodeSequence.create(
-                code_rule_id=rule.id,
-                tenant_id=tenant_id,
-                scope_key=scope_key,
-                current_seq=seq_start - seq_step
+        # 事务内对序号行加锁再递增，否则 FOR UPDATE 在语句结束后立即释放
+        async with in_transaction():
+            sequence = (
+                await CodeSequence.filter(
+                    code_rule_id=rule.id,
+                    tenant_id=tenant_id,
+                    scope_key=scope_key,
+                    deleted_at__isnull=True,
+                )
+                .select_for_update()
+                .first()
             )
-        
-        # 检查是否需要重置序号
-        if seq_reset_rule and seq_reset_rule != "never":
-            now = date.today()
-            # 如果 reset_date 为空，初始化它但不重置序号（或者是第一次创建）
-            if not sequence.reset_date:
-                sequence.reset_date = now
-            elif sequence.reset_date != now:
-                if seq_reset_rule == "daily":
-                    sequence.current_seq = seq_start - seq_step
-                    sequence.reset_date = now
-                elif seq_reset_rule == "monthly":
-                    if sequence.reset_date.month != now.month or sequence.reset_date.year != now.year:
-                        sequence.current_seq = seq_start - seq_step
-                        sequence.reset_date = now
-                elif seq_reset_rule == "yearly":
-                    if sequence.reset_date.year != now.year:
-                        sequence.current_seq = seq_start - seq_step
-                        sequence.reset_date = now
+            if not sequence:
+                try:
+                    sequence = await CodeSequence.create(
+                        code_rule_id=rule.id,
+                        tenant_id=tenant_id,
+                        scope_key=scope_key,
+                        current_seq=seq_start - seq_step,
+                    )
+                except Exception:
+                    # 并发创建时回读并加锁
+                    sequence = (
+                        await CodeSequence.filter(
+                            code_rule_id=rule.id,
+                            tenant_id=tenant_id,
+                            scope_key=scope_key,
+                            deleted_at__isnull=True,
+                        )
+                        .select_for_update()
+                        .first()
+                    )
+                    if not sequence:
+                        raise
+                else:
+                    sequence = (
+                        await CodeSequence.filter(id=sequence.id)
+                        .select_for_update()
+                        .first()
+                    )
 
-        # 序列号校准：导入数据后库中可能已有更大序号，使 current_seq 不低于库中最大序号
-        await CodeGenerationService._recalibrate_sequence_from_db(
-            tenant_id=tenant_id,
-            rule=rule,
-            request_rule_code=rule_code,
-            scope_key=scope_key,
-            sequence=sequence,
-            seq_step=seq_step,
-            components=components,
-            context=context,
-        )
-        
-        # 递增序号（在外部事务中保存）
-        sequence.current_seq += seq_step
-        await sequence.save()
-        
+            # 检查是否需要重置序号
+            if seq_reset_rule and seq_reset_rule != "never":
+                now = date.today()
+                # 如果 reset_date 为空，初始化它但不重置序号（或者是第一次创建）
+                if not sequence.reset_date:
+                    sequence.reset_date = now
+                elif sequence.reset_date != now:
+                    if seq_reset_rule == "daily":
+                        sequence.current_seq = seq_start - seq_step
+                        sequence.reset_date = now
+                    elif seq_reset_rule == "monthly":
+                        if sequence.reset_date.month != now.month or sequence.reset_date.year != now.year:
+                            sequence.current_seq = seq_start - seq_step
+                            sequence.reset_date = now
+                    elif seq_reset_rule == "yearly":
+                        if sequence.reset_date.year != now.year:
+                            sequence.current_seq = seq_start - seq_step
+                            sequence.reset_date = now
+
+            # 序列号校准：导入数据后库中可能已有更大序号，使 current_seq 不低于库中最大序号
+            await CodeGenerationService._recalibrate_sequence_from_db(
+                tenant_id=tenant_id,
+                rule=rule,
+                request_rule_code=rule_code,
+                scope_key=scope_key,
+                sequence=sequence,
+                seq_step=seq_step,
+                components=components,
+                context=context,
+            )
+
+            # 递增序号（持有行锁期间保存）
+            sequence.current_seq += seq_step
+            await sequence.save()
+            current_seq = sequence.current_seq
+
         if not components:
             raise ValidationError(f"编码规则 {rule_code} 缺少 rule_components，请在编码规则页面重新保存")
         return CodeRuleComponentService.render_components(
-            components, sequence.current_seq, context
+            components, current_seq, context
         )
     
     @staticmethod

@@ -18,7 +18,7 @@ class SalesDelivery(BaseModel):
     用于记录销售出库的详细信息
     """
     tenant_id = fields.IntField(description="租户ID")
-    delivery_code = fields.CharField(max_length=50, unique=True, description="出库单编码")
+    delivery_code = fields.CharField(max_length=50, db_index=True, description="出库单编码")  # 租户内未删除唯一，见迁移 462
 
     # 销售订单信息（MTO模式，MTS模式可为空）
     sales_order_id = fields.IntField(null=True, description="销售订单ID（MTO模式）")

@@ -95,10 +95,10 @@ async def create_quotation(
     except ValidationError as e:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.error("创建报价单失败: %s", e)
+        logger.exception("创建报价单失败: %s", e)
         raise HTTPException(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="创建报价单失败",
+            detail=f"创建报价单失败: {e}",
         )
 
 

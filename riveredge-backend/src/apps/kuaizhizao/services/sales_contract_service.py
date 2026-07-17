@@ -354,25 +354,10 @@ class SalesContractService(AppBaseService[SalesContract]):
             tenant_id, data.term_group_id, data.contract_terms
         )
         contract_code = (data.contract_code or "").strip() if data.contract_code else ""
-        if not contract_code:
-            contract_code = await self._generate_contract_code(tenant_id, data.contract_date)
-
-        try:
-            return await self._create_contract_in_tx(
-                tenant_id=tenant_id,
-                data=data,
-                contract_code=contract_code,
-                total_qty=total_qty,
-                net_amt=net_amt,
-                discount=discount,
-                term_group_id=term_group_id,
-                term_group_name=term_group_name,
-                contract_terms=contract_terms,
-                created_by=created_by,
-                auto_submit=auto_submit,
-            )
-        except IntegrityError:
-            contract_code = await self._generate_contract_code(tenant_id, data.contract_date)
+        last_error: Optional[Exception] = None
+        for attempt in range(5):
+            if not contract_code or attempt > 0:
+                contract_code = await self._generate_contract_code(tenant_id, data.contract_date)
             try:
                 return await self._create_contract_in_tx(
                     tenant_id=tenant_id,
@@ -388,7 +373,15 @@ class SalesContractService(AppBaseService[SalesContract]):
                     auto_submit=auto_submit,
                 )
             except IntegrityError as e:
-                raise ValidationError("销售合同编码已存在，请关闭页面后重新新建") from e
+                last_error = e
+                logger.warning(
+                    "销售合同编码冲突，重试占号 attempt={} code={} err={}",
+                    attempt + 1,
+                    contract_code,
+                    e,
+                )
+                contract_code = ""
+        raise ValidationError("销售合同编码已存在，请关闭页面后重新新建") from last_error
 
     async def _create_contract_in_tx(
         self,

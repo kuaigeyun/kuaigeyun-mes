@@ -20,7 +20,7 @@ class SalesOrder(BaseModel):
     用于记录客户销售订单信息，支持MTO（Make-To-Order）模式的生产
     """
     tenant_id = fields.IntField(description="租户ID")
-    order_code = fields.CharField(max_length=50, unique=True, description="订单编码")
+    order_code = fields.CharField(max_length=50, db_index=True, description="订单编码")  # 租户内未删除唯一，见迁移 462
 
     # 客户信息
     customer_id = fields.IntField(description="客户ID")

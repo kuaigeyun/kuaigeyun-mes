@@ -30,7 +30,7 @@ class PurchaseOrder(BaseModel):
     记录采购订单的基本信息和状态
     """
     tenant_id = fields.IntField(description="租户ID")
-    order_code = fields.CharField(max_length=50, unique=True, description="订单编码")
+    order_code = fields.CharField(max_length=50, db_index=True, description="订单编码")  # 租户内未删除唯一，见迁移 462
 
     # 供应商信息
     supplier_id = fields.IntField(description="供应商ID")
