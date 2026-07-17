@@ -516,10 +516,12 @@ export function QualityTicketPage<T extends BaseRow>({
               if (viewMode === 'register' && step !== 'register') return null;
               if (viewMode === 'handle' && step === 'register') return null;
               const workflowText = step === 'register' ? '登记提交' : WORKFLOW_STEP_LABEL[step];
+              const workflowAction =
+                step === 'register' ? 'submit' : step === 'close' ? 'complete' : 'execute';
               return (
               <Button
                 key="workflow"
-                {...rowActionKind('execute')}
+                {...rowActionKind(workflowAction)}
                 {...rowActionLabelKeep()}
                 onClick={() => void beginWorkflowFromRow(row)}
               >
@@ -843,7 +845,7 @@ export function QualityTicketPage<T extends BaseRow>({
             combinedHandleMeasures,
           ),
         );
-        await submitHandleMeasuresFn(editingId, payload as {
+        const updated = await submitHandleMeasuresFn(editingId, payload as {
           responsible_user_ids: number[];
           overdue_notify_user_ids: number[];
           temporary_overdue_notify_user_ids?: number[];
@@ -855,6 +857,27 @@ export function QualityTicketPage<T extends BaseRow>({
           long_term_due_at?: string;
           long_term_action_image_uuids?: string[];
         });
+        if (combinedHandleMeasures) {
+          const nextStep = resolveWorkflowStep(updated, true);
+          setLoadedDetail(updated);
+          if (nextStep === 'measures') {
+            const missing: string[] = [];
+            if (!updated.temporary_submitted_at) missing.push('临时措施');
+            if (!updated.long_term_submitted_at) missing.push('长期措施');
+            messageApi.success(
+              `已保存本次处理措施。请继续填写并提交${missing.join('与')}后，才能进行结案确认。`,
+            );
+            setWorkflowStep('measures');
+            actionRef.current?.reload();
+            return;
+          }
+          if (nextStep === 'close') {
+            messageApi.success('处理措施已提交，请进行结案确认');
+            setWorkflowStep('close');
+            actionRef.current?.reload();
+            return;
+          }
+        }
       } else if (workflowStep === 'temporary' && submitTemporaryActionFn) {
         const responsibleUserIds = parseNotifyUserIds(values.responsible_user_ids);
         if (!responsibleUserIds.length) {
