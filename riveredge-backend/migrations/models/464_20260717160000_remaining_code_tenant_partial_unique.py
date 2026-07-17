@@ -53,11 +53,10 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
                     RETURN;
                 END IF;
                 {_drop_old(table, old_names)}
+                CREATE UNIQUE INDEX IF NOT EXISTS "{new_name}"
+                ON "{table}" ({col_list})
+                WHERE "deleted_at" IS NULL;
             END $$;
-
-            CREATE UNIQUE INDEX IF NOT EXISTS "{new_name}"
-            ON "{table}" ({col_list})
-            WHERE "deleted_at" IS NULL;
             """
         )
     return "\n".join(blocks)
