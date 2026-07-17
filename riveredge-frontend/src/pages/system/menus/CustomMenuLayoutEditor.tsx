@@ -15,6 +15,7 @@ import {
   Switch,
   Tag,
   Typography,
+  theme,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import MenuIconPicker from '../../../components/MenuIconPicker';
@@ -466,6 +467,7 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
   onMenuSearchChange,
 }) => {
   const { message: messageApi, modal } = App.useApp();
+  const { token } = theme.useToken();
   const { t } = useTranslation();
 
   const menuLookup = useMemo(() => {
@@ -800,14 +802,20 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
     const canAddChildGroup = depth < MAX_CUSTOM_GROUP_DEPTH;
     const bodyPadding =
       group.type === 'app_group' && !group.children.length ? 0 : depth >= 2 ? 8 : 12;
+    const nestedBg = depth > 0 ? token.colorFillAlter : token.colorBgContainer;
+    const cardBorder = isActive
+      ? token.colorPrimary
+      : depth > 0
+        ? token.colorBorderSecondary
+        : token.colorBorder;
     return (
       <div key={group.id} style={{ marginLeft: depth > 0 ? 8 : 0, minWidth: 0, maxWidth: '100%' }}>
         <Card
           size="small"
           style={{
             marginBottom: CUSTOM_LAYOUT_INLINE_GAP,
-            borderColor: isActive ? '#1677ff' : depth > 0 ? '#f0f0f0' : undefined,
-            background: depth > 0 ? '#fafafa' : undefined,
+            borderColor: cardBorder,
+            background: nestedBg,
             overflow: 'hidden',
             maxWidth: '100%',
           }}
@@ -816,8 +824,18 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
             onActiveGroupIdChange(group.id);
           }}
           styles={{
-            header: { minHeight: 'auto', padding: depth >= 2 ? '8px' : '8px 12px' },
-            body: { padding: bodyPadding, minWidth: 0, overflow: 'hidden' },
+            header: {
+              minHeight: 'auto',
+              padding: depth >= 2 ? '8px' : '8px 12px',
+              background: nestedBg,
+              borderBottomColor: token.colorBorderSecondary,
+            },
+            body: {
+              padding: bodyPadding,
+              minWidth: 0,
+              overflow: 'hidden',
+              background: nestedBg,
+            },
           }}
           title={
             <div

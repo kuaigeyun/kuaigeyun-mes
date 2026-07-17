@@ -184,6 +184,10 @@ class CustomMenuLayoutUpdate(BaseModel):
     """更新租户级自组菜单布局。"""
 
     enabled: bool = Field(False, description="是否启用自组菜单")
+    show_app_names: bool = Field(
+        True,
+        description="侧栏是否显示 APP 名称分组标题（默认菜单与自组菜单均生效）",
+    )
     nodes: List[CustomMenuLayoutNode] = Field(default_factory=list, description="根节点列表")
 
 

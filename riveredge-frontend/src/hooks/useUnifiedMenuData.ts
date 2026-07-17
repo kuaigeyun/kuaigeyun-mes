@@ -244,6 +244,8 @@ export function useUnifiedMenuData(
   /** 未设置或非 false 时视为开启（兼容历史租户） */
   const launchWizardEnabled = useConfigStore((s) => s.configs.enable_launch_wizard !== false);
   const systemDashboardEnabled = useConfigStore((s) => s.configs.enable_system_dashboard !== false);
+  /** 侧栏 APP 名称分组标题；站点设置 show_app_menu_names，缺省显示 */
+  const showAppMenuNames = useConfigStore((s) => s.configs.show_app_menu_names !== false);
   const queryClient = useQueryClient();
 
   const applicationMenuVersion = useGlobalStore((s) => s.applicationMenuVersion ?? 0);
@@ -322,7 +324,7 @@ export function useUnifiedMenuData(
         const visibleChildren = filterMenuItemsByPermission(convertedChildren, menuPermissionUser);
         if (!visibleChildren.length) return;
 
-        if (!collapsed) {
+        if (!collapsed && showAppMenuNames) {
           const findFirstAppPath = (list: any[]): string | null => {
             for (const c of list) {
               if (c?.path) return c.path;
@@ -387,6 +389,7 @@ export function useUnifiedMenuData(
     filteredApplicationMenus,
     convertMenuTreeToMenuDataItem,
     collapsed,
+    showAppMenuNames,
     t,
     currentUser?.is_infra_admin,
   ]);

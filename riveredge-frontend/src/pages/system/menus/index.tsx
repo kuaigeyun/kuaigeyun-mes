@@ -19,7 +19,7 @@ import {
   HomeOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
-import { App, Button, Tag, Space, Popconfirm, Tooltip, Descriptions, Col, Modal, Spin } from 'antd';
+import { App, Button, Tag, Space, Popconfirm, Tooltip, Descriptions, Col, Modal, Spin, Switch, Typography } from 'antd';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import { UniTable } from '../../../components/uni-table';
@@ -43,6 +43,7 @@ import {
 } from '../../../services/menu';
 import { getApplicationList } from '../../../services/application';
 import { useGlobalStore } from '../../../stores';
+import { useConfigStore } from '../../../stores/configStore';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -195,6 +196,14 @@ const MenuListPage: React.FC = () => {
   const [customLayoutSourceTree, setCustomLayoutSourceTree] = useState<MenuTree[]>([]);
   const [customLayoutMenuSearch, setCustomLayoutMenuSearch] = useState('');
   const [customLayoutActiveGroupId, setCustomLayoutActiveGroupId] = useState<string | undefined>(undefined);
+  const [showAppMenuNames, setShowAppMenuNames] = useState(true);
+  const [showAppMenuNamesSaving, setShowAppMenuNamesSaving] = useState(false);
+  const configShowAppMenuNames = useConfigStore((s) => s.configs.show_app_menu_names !== false);
+  const patchShowAppMenuNamesConfig = useCallback((show: boolean) => {
+    useConfigStore.setState((s) => ({
+      configs: { ...s.configs, show_app_menu_names: show },
+    }));
+  }, []);
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -223,6 +232,27 @@ const MenuListPage: React.FC = () => {
     return byUuid;
   }, [customLayoutSourceTree]);
 
+  useEffect(() => {
+    setShowAppMenuNames(configShowAppMenuNames);
+  }, [configShowAppMenuNames]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getMenuCustomLayout()
+      .then((layout) => {
+        if (cancelled) return;
+        const show = layout.show_app_names !== false;
+        setShowAppMenuNames(show);
+        patchShowAppMenuNamesConfig(show);
+      })
+      .catch(() => {
+        /* 无菜单读权限时沿用 configStore / 默认显示 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [patchShowAppMenuNamesConfig]);
+
   const handleOpenCustomLayoutModal = useCallback(async () => {
     try {
       setCustomLayoutLoading(true);
@@ -235,6 +265,7 @@ const MenuListPage: React.FC = () => {
       const parsed = parseCustomLayoutEditorState(layout.nodes || [], t);
       setCustomLayoutEditorState({ ...parsed, enabled: !!layout.enabled });
       setCustomLayoutActiveGroupId(parsed.appGroups[0]?.id);
+      setShowAppMenuNames(layout.show_app_names !== false);
     } catch (error: any) {
       messageApi.error(error?.message || t('pages.system.menus.customLayoutLoadFailed'));
     } finally {
@@ -246,7 +277,11 @@ const MenuListPage: React.FC = () => {
     try {
       setCustomLayoutSaving(true);
       const payload = buildCustomLayoutPayload(customLayoutEditorState, customLayoutMenuLookup);
-      await updateMenuCustomLayout(payload);
+      await updateMenuCustomLayout({
+        ...payload,
+        show_app_names: showAppMenuNames,
+      });
+      patchShowAppMenuNamesConfig(showAppMenuNames);
       messageApi.success(t('pages.system.menus.customLayoutSaveSuccess'));
       setCustomLayoutModalOpen(false);
       refreshLayoutMenus();
@@ -256,7 +291,44 @@ const MenuListPage: React.FC = () => {
     } finally {
       setCustomLayoutSaving(false);
     }
-  }, [customLayoutEditorState, customLayoutMenuLookup, messageApi, refreshLayoutMenus, t]);
+  }, [
+    customLayoutEditorState,
+    customLayoutMenuLookup,
+    messageApi,
+    patchShowAppMenuNamesConfig,
+    refreshLayoutMenus,
+    showAppMenuNames,
+    t,
+  ]);
+
+  const handleToggleShowAppMenuNames = useCallback(
+    async (checked: boolean) => {
+      const previous = showAppMenuNames;
+      setShowAppMenuNames(checked);
+      setShowAppMenuNamesSaving(true);
+      try {
+        const layout = await getMenuCustomLayout();
+        await updateMenuCustomLayout({
+          enabled: !!layout.enabled,
+          show_app_names: checked,
+          nodes: layout.nodes || [],
+        });
+        patchShowAppMenuNamesConfig(checked);
+        refreshLayoutMenus();
+        messageApi.success(
+          checked
+            ? t('pages.system.menus.showAppNamesEnabled')
+            : t('pages.system.menus.showAppNamesDisabled'),
+        );
+      } catch (error: any) {
+        setShowAppMenuNames(previous);
+        messageApi.error(error?.message || t('pages.system.menus.showAppNamesSaveFailed'));
+      } finally {
+        setShowAppMenuNamesSaving(false);
+      }
+    },
+    [messageApi, patchShowAppMenuNamesConfig, refreshLayoutMenus, showAppMenuNames, t],
+  );
 
   const handleSetBackendHome = useCallback(
     async (record: Menu) => {
@@ -786,6 +858,16 @@ const MenuListPage: React.FC = () => {
                 >
                     {expandedRowKeys.length > 0 ? t('pages.system.menus.collapseAll') : t('pages.system.menus.expandAll')}
                 </Button>,
+            ]}
+            toolBarActionsAfterDelete={[
+              <Space key="showAppNames" align="center" size={8}>
+                <Typography.Text>{t('pages.system.menus.showAppNames')}</Typography.Text>
+                <Switch
+                  checked={showAppMenuNames}
+                  loading={showAppMenuNamesSaving}
+                  onChange={(checked) => void handleToggleShowAppMenuNames(checked)}
+                />
+              </Space>,
             ]}
             pagination={{ defaultPageSize: 50, showSizeChanger: true }}
              expandable={{

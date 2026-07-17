@@ -334,13 +334,21 @@ export function translateAppMenuItemName(
 
   // 1. 若 name 本身是翻译 key（如 app.kuaizhizao.menu.warehouse-management.inbound-group），优先直接翻译
   // 修复：分组菜单的 title 为 i18n key 时，此前被路径推导逻辑覆盖，导致二级菜单均显示父级名称
-  if (name.includes('.') && !name.startsWith('/')) {
+  const nameLooksLikeI18nKey = name.includes('.') && !name.startsWith('/');
+  if (nameLooksLikeI18nKey) {
     if (!isAppNameKeyMisassignedToNonRootPath(name, path, children)) {
       const directTranslated = t(name, { defaultValue: name });
       if (directTranslated !== name && directTranslated.trim() !== '') {
         return directTranslated;
       }
     }
+  }
+
+  // 1b. 无 path 且 name 已是展示文案（非 i18n key）：禁止用子孙 path 反推标题。
+  // 否则自组菜单分组（子节点常含 …/reports/…）会被倒数第二段误译为「账款报表」。
+  if (!path && !nameLooksLikeI18nKey) {
+    const displayName = sanitizeHaoligoMenuDisplayTitle(name, path, children);
+    return displayName || name;
   }
 
   let appCode = extractAppCodeFromPath(path);
@@ -370,9 +378,10 @@ export function translateAppMenuItemName(
       appCode = extractAppCodeFromPath(firstChildPath);
       if (appCode) {
         const childRel = firstChildPath.replace(`/apps/${appCode}/`, '');
-        const segments = childRel.split('/');
-        // 取倒数第二段作为分组 key（如 warehouse-management/inbound → warehouse-management）
-        relativePath = segments.length > 1 ? segments[segments.length - 2] : segments[0];
+        const segments = childRel.split('/').filter(Boolean);
+        // 优先用首段作为模块分组（sales-management/reports/xxx → sales-management）。
+        // 旧逻辑取倒数第二段，会在三级路径下把「销售管理」误推成 reports→账款报表。
+        relativePath = segments[0] || null;
       }
     }
   }

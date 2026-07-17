@@ -434,6 +434,7 @@ class MenuService:
     def _default_custom_menu_layout() -> Dict[str, Any]:
         return {
             "enabled": False,
+            "show_app_names": True,
             "version": 0,
             "nodes": [],
         }
@@ -444,12 +445,19 @@ class MenuService:
         if not isinstance(raw, dict):
             return base
         enabled = bool(raw.get("enabled", False))
+        # 缺省为 True；仅显式 false/0/"false" 视为关闭
+        raw_show = raw.get("show_app_names", True)
+        if isinstance(raw_show, str):
+            show_app_names = raw_show.strip().lower() not in ("0", "false", "off", "no")
+        else:
+            show_app_names = bool(raw_show)
         version = int(raw.get("version", 0) or 0)
         nodes = raw.get("nodes")
         if not isinstance(nodes, list):
             nodes = []
         return {
             "enabled": enabled,
+            "show_app_names": show_app_names,
             "version": max(0, version),
             "nodes": nodes,
         }
@@ -517,9 +525,22 @@ class MenuService:
     @staticmethod
     async def get_custom_menu_layout(tenant_id: int) -> CustomMenuLayoutResponse:
         settings_row = await SiteSettingService.get_settings(tenant_id)
+        settings = dict(settings_row.settings or {})
         payload = MenuService._normalize_custom_menu_layout(
-            (settings_row.settings or {}).get(_CUSTOM_MENU_LAYOUT_KEY)
+            settings.get(_CUSTOM_MENU_LAYOUT_KEY)
         )
+        # 顶层键供全体登录用户经站点设置读取；与布局内字段保持一致
+        if "show_app_menu_names" in settings:
+            raw_show = settings.get("show_app_menu_names")
+            if isinstance(raw_show, str):
+                payload["show_app_names"] = raw_show.strip().lower() not in (
+                    "0",
+                    "false",
+                    "off",
+                    "no",
+                )
+            else:
+                payload["show_app_names"] = bool(raw_show)
         validated = CustomMenuLayoutResponse.model_validate(payload)
         return validated
 
@@ -541,13 +562,17 @@ class MenuService:
         current = MenuService._normalize_custom_menu_layout(
             (settings_row.settings or {}).get(_CUSTOM_MENU_LAYOUT_KEY)
         )
+        show_app_names = bool(data.show_app_names)
         next_layout = {
             "enabled": bool(data.enabled),
+            "show_app_names": show_app_names,
             "version": int(current.get("version", 0) or 0) + 1,
             "nodes": data.model_dump(mode="json").get("nodes", []),
         }
         merged_settings = dict(settings_row.settings or {})
         merged_settings[_CUSTOM_MENU_LAYOUT_KEY] = next_layout
+        # 镜像到顶层，侧栏经 configStore / 站点设置即可读取（默认与自组均生效）
+        merged_settings["show_app_menu_names"] = show_app_names
         settings_row.settings = merged_settings
         await settings_row.save(update_fields=["settings"])
         await MenuService._clear_menu_cache(tenant_id)

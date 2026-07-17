@@ -78,6 +78,8 @@ export interface CustomMenuLayoutNode {
 
 export interface CustomMenuLayout {
   enabled: boolean;
+  /** 侧栏是否显示 APP 名称分组标题；默认 true */
+  show_app_names?: boolean;
   version: number;
   nodes: CustomMenuLayoutNode[];
 }
@@ -135,6 +137,7 @@ export async function getMenuCustomLayout(): Promise<CustomMenuLayout> {
 /** 更新租户级自组菜单布局 */
 export async function updateMenuCustomLayout(data: {
   enabled: boolean;
+  show_app_names?: boolean;
   nodes: CustomMenuLayoutNode[];
 }): Promise<CustomMenuLayout> {
   return apiRequest<CustomMenuLayout>('/core/menus/custom-layout', {
