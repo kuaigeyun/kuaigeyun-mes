@@ -23,7 +23,7 @@ class Payment(BaseModel):
 
     id = fields.IntField(pk=True, description="主键ID")
     tenant_id = fields.IntField(description="租户ID")
-    payment_code = fields.CharField(max_length=50, unique=True, description="付款单号")
+    payment_code = fields.CharField(max_length=50, db_index=True, description="付款单号")  # 租户内未删除唯一，见迁移 463
 
     supplier_id = fields.IntField(description="供应商ID")
     supplier_name = fields.CharField(max_length=200, description="供应商名称")

@@ -66,23 +66,20 @@ const PurchaseInvoiceDetail: React.FC = () => {
   const pageActions = data ? (
     <>
       <Button onClick={() => navigate(-1)}>{t('app.kuaicaiwu.common.back')}</Button>
-      {data.review_status === '待审核' && (
-        <UniWorkflowActions
-          record={data}
-          apiPrefix="/apps/kuaicaiwu/purchase-invoices"
-          entityType="purchase_invoice"
-          entityName={t(`${P}.entityName`)}
-          statusField="status"
-          reviewStatusField="review_status"
-          draftStatuses={[]}
-          pendingStatuses={['待审核']}
-          approvedStatuses={['已审核']}
-          rejectedStatuses={['已驳回', '驳回']}
-          theme="default"
-          size="small"
-          onSuccess={loadData}
-        />
-      )}
+      <UniWorkflowActions
+        record={data}
+        apiPrefix="/apps/kuaicaiwu/purchase-invoices"
+        entityType="purchase_invoice"
+        entityName={t(`${P}.entityName`)}
+        statusField="status"
+        reviewStatusField="review_status"
+        draftStatuses={['草稿', 'draft']}
+        pendingStatuses={['待审核']}
+        approvedStatuses={['已审核']}
+        rejectedStatuses={['已驳回', '驳回']}
+        theme="default"
+        onSuccess={loadData}
+      />
     </>
   ) : null;
 

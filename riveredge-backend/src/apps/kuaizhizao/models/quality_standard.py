@@ -60,7 +60,7 @@ class QualityStandard(BaseModel):
     id = fields.IntField(pk=True, description="主键ID")
 
     # 基本信息
-    standard_code = fields.CharField(max_length=50, unique=True, description="标准编码")
+    standard_code = fields.CharField(max_length=50, db_index=True, description="标准编码")  # 租户内未删除唯一，见迁移 464
     standard_name = fields.CharField(max_length=200, description="标准名称")
     standard_type = fields.CharField(max_length=50, description="标准类型（incoming/process/finished）")
 

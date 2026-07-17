@@ -104,12 +104,11 @@ const PayableDetail: React.FC = () => {
         entityName={t(`${P}.entityName`)}
         statusField="status"
         reviewStatusField="review_status"
-        draftStatuses={[]}
+        draftStatuses={['草稿', 'draft']}
         pendingStatuses={['待审核']}
         approvedStatuses={['已审核']}
         rejectedStatuses={['已驳回', '驳回']}
         theme="default"
-        size="small"
         onSuccess={loadData}
       />
       {data.status !== '已结清' && payablePerms.canUpdate ? (

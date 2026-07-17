@@ -18,7 +18,7 @@ class PurchaseInvoice(BaseModel):
     用于记录采购业务的发票信息，支持多张发票关联同一个采购订单
     """
     tenant_id = fields.IntField(description="租户ID")
-    invoice_code = fields.CharField(max_length=50, unique=True, description="发票编码")
+    invoice_code = fields.CharField(max_length=50, db_index=True, description="发票编码")  # 租户内未删除唯一，见迁移 463
 
     # 关联采购订单
     purchase_order_id = fields.IntField(description="采购订单ID")
@@ -46,7 +46,7 @@ class PurchaseInvoice(BaseModel):
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
     review_time = fields.DatetimeField(null=True, description="审核时间")
-    review_status = fields.CharField(max_length=20, default="待审核", description="审核状态")
+    review_status = fields.CharField(max_length=20, default="草稿", description="审核状态")
     review_remarks = fields.TextField(null=True, description="审核备注")
 
     # 关联应付单（可选）

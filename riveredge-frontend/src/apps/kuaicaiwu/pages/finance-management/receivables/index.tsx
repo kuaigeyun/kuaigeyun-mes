@@ -159,7 +159,7 @@ const ReceivableList: React.FC = () => {
             due_date: values.due_date || today,
             business_date: values.business_date || today,
             status: '未收款',
-            review_status: '待审核',
+            review_status: '草稿',
             notes: values.notes,
             attachments: normalizeDocumentAttachments(values.attachments),
         };
@@ -304,7 +304,7 @@ const ReceivableList: React.FC = () => {
                 due_date: formatDateTime(values.due_date || dayjs().add(30, 'day'), 'YYYY-MM-DD'),
                 business_date: formatDateTime(values.business_date || dayjs(), 'YYYY-MM-DD'),
                 status: '未收款',
-                review_status: '待审核',
+                review_status: '草稿',
                 notes:
                     String(values.notes ?? '').trim() ||
                     t('app.kuaicaiwu.common.createdFromSourceNote', {
@@ -580,7 +580,7 @@ const ReceivableList: React.FC = () => {
                             entityName={t(`${P}.entityName`)}
                             statusField="status"
                             reviewStatusField="review_status"
-                            draftStatuses={[]}
+                            draftStatuses={['草稿', 'draft']}
                             pendingStatuses={['待审核']}
                             approvedStatuses={['已审核']}
                             rejectedStatuses={['已驳回', '驳回']}
@@ -733,7 +733,7 @@ const ReceivableList: React.FC = () => {
                             due_date: dueDate,
                             business_date: bizDate,
                             status: '未收款',
-                            review_status: '待审核',
+                            review_status: '草稿',
                         });
                     }
                     if (items.length === 0) {

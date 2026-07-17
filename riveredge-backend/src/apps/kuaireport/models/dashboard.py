@@ -9,7 +9,7 @@ class Dashboard(BaseModel):
     用于存储大屏布局与组件配置
     """
     tenant_id = fields.IntField(description="租户ID")
-    code = fields.CharField(max_length=50, unique=True, description="看板编码")
+    code = fields.CharField(max_length=50, db_index=True, description="看板编码")  # 租户内未删除唯一，见迁移 464
     name = fields.CharField(max_length=100, description="看板名称")
     
     # 核心配置

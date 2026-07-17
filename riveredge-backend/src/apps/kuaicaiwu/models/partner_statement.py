@@ -25,7 +25,7 @@ class PartnerStatement(BaseModel):
 
     id = fields.IntField(pk=True, description="主键ID")
     tenant_id = fields.IntField(description="租户ID")
-    statement_code = fields.CharField(max_length=50, unique=True, description="对账单号")
+    statement_code = fields.CharField(max_length=50, db_index=True, description="对账单号")  # 租户内未删除唯一，见迁移 463
 
     partner_id = fields.IntField(description="往来单位ID")
     partner_name = fields.CharField(max_length=200, description="往来单位名称")

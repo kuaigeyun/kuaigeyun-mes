@@ -12,6 +12,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal
 from tortoise.transactions import in_transaction
+from tortoise.exceptions import IntegrityError
 from tortoise.functions import Sum
 from loguru import logger
 
@@ -105,40 +106,73 @@ class PayableService(AppBaseService[Payable]):
             tenant_id=tenant_id,
             source_type=payable_data.source_type,
             source_id=payable_data.source_id,
+            deleted_at__isnull=True,
         )
         if existing:
             return PayableResponse.model_validate(existing)
-        async with in_transaction():
-            user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
-            code = await self.generate_code(tenant_id, "PAYABLE_CODE", prefix=f"PY{today}")
+        user_info = await self.get_user_info(created_by)
+        last_error: Optional[Exception] = None
+        for attempt in range(5):
+            try:
+                created_id: Optional[int] = None
+                async with in_transaction():
+                    today = datetime.now().strftime("%Y%m%d")
+                    code = await self.generate_code(tenant_id, "PAYABLE_CODE", prefix=f"PY{today}")
+                    payable = await Payable.create(
+                        tenant_id=tenant_id,
+                        payable_code=code,
+                        created_by=created_by,
+                        created_by_name=user_info["name"],
+                        updated_by=created_by,
+                        updated_by_name=user_info["name"],
+                        review_status="草稿",
+                        **payable_data.model_dump(
+                            exclude_unset=True,
+                            exclude={
+                                'created_by',
+                                'pull_source_type',
+                                'pull_source_id',
+                                'review_status',
+                                'reviewer_id',
+                                'reviewer_name',
+                                'review_time',
+                                'review_remarks',
+                            },
+                        )
+                    )
+                    await self.accounting_event_service.record_event(
+                        tenant_id=tenant_id,
+                        event_type="PAYABLE_CREATED",
+                        business_type="payable",
+                        target_doc_type="Payable",
+                        target_doc_id=payable.id,
+                        target_doc_code=payable.payable_code,
+                        amount=payable.total_amount,
+                        currency="CNY",
+                        operator_id=created_by,
+                        operator_name=(user_info or {}).get("name"),
+                        payload={"status": payable.status},
+                    )
+                    created_id = payable.id
+                from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 
-            payable = await Payable.create(
-                tenant_id=tenant_id,
-                payable_code=code,
-                created_by=created_by,
-                created_by_name=user_info["name"],
-                updated_by=created_by,
-                updated_by_name=user_info["name"],
-                **payable_data.model_dump(
-                    exclude_unset=True,
-                    exclude={'created_by', 'pull_source_type', 'pull_source_id'},
+                await submit_finance_review(
+                    model=Payable,
+                    tenant_id=tenant_id,
+                    doc_id=int(created_id),
+                    updated_by=created_by,
+                    doc_label="应付单",
+                    node_key="payable",
                 )
-            )
-            await self.accounting_event_service.record_event(
-                tenant_id=tenant_id,
-                event_type="PAYABLE_CREATED",
-                business_type="payable",
-                target_doc_type="Payable",
-                target_doc_id=payable.id,
-                target_doc_code=payable.payable_code,
-                amount=payable.total_amount,
-                currency="CNY",
-                operator_id=created_by,
-                operator_name=(user_info or {}).get("name"),
-                payload={"status": payable.status},
-            )
-            return PayableResponse.model_validate(payable)
+                return await self.get_payable_by_id(tenant_id, int(created_id))
+            except IntegrityError as e:
+                last_error = e
+                logger.warning(
+                    "应付单编码冲突，重试占号 attempt={} err={}",
+                    attempt + 1,
+                    e,
+                )
+        raise ValidationError("应付单编码已存在，请关闭弹窗后重新新建") from last_error
 
     async def get_payable_by_id(self, tenant_id: int, payable_id: int) -> PayableResponse:
         """根据ID获取应付单"""
@@ -280,6 +314,7 @@ class PayableService(AppBaseService[Payable]):
                 doc_id=payable_id,
                 updated_by=submitted_by,
                 doc_label="应付单",
+                node_key="payable",
             )
             return await self.get_payable_by_id(tenant_id, payable_id)
 
@@ -306,6 +341,7 @@ class PayableService(AppBaseService[Payable]):
                 doc_id=payable_id,
                 updated_by=revoked_by,
                 doc_label="应付单",
+                node_key="payable",
             )
             return await self.get_payable_by_id(tenant_id, payable_id)
 
@@ -427,6 +463,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         skip_legacy_amount_gate: bool = False,
     ) -> PurchaseInvoiceResponse:
         """创建采购发票"""
+        created_id: Optional[int] = None
         async with in_transaction():
             if not skip_legacy_amount_gate:
                 await self._validate_purchase_invoice_amount_gate(tenant_id=tenant_id, invoice_data=invoice_data)
@@ -438,7 +475,16 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
 
             payload = invoice_data.model_dump(
                 exclude_unset=True,
-                exclude={"created_by", "source_type", "source_id"},
+                exclude={
+                    "created_by",
+                    "source_type",
+                    "source_id",
+                    "review_status",
+                    "reviewer_id",
+                    "reviewer_name",
+                    "review_time",
+                    "review_remarks",
+                },
             )
             _, tax_amount, total_amount = compute_tax_from_excluding(
                 Decimal(payload["invoice_amount"]),
@@ -454,6 +500,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 created_by_name=user_info["name"],
                 updated_by=created_by,
                 updated_by_name=user_info["name"],
+                review_status="草稿",
                 **payload,
             )
             await self.accounting_event_service.record_event(
@@ -475,7 +522,18 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 invoice=invoice,
                 created_by=created_by,
             )
-            return PurchaseInvoiceResponse.model_validate(invoice)
+            created_id = invoice.id
+        from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
+
+        await submit_finance_review(
+            model=PurchaseInvoice,
+            tenant_id=tenant_id,
+            doc_id=int(created_id),
+            updated_by=created_by,
+            doc_label="采购发票",
+            node_key="purchase_invoice",
+        )
+        return await self.get_purchase_invoice_by_id(tenant_id, int(created_id))
 
     async def _maybe_auto_generate_payable_for_purchase_invoice(
         self,
@@ -644,6 +702,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 doc_id=invoice_id,
                 updated_by=submitted_by,
                 doc_label="采购发票",
+                node_key="purchase_invoice",
             )
             return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
 
@@ -670,6 +729,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 doc_id=invoice_id,
                 updated_by=revoked_by,
                 doc_label="采购发票",
+                node_key="purchase_invoice",
             )
             return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
 
@@ -731,40 +791,73 @@ class ReceivableService(AppBaseService[Receivable]):
             tenant_id=tenant_id,
             source_type=receivable_data.source_type,
             source_id=receivable_data.source_id,
+            deleted_at__isnull=True,
         )
         if existing:
             return ReceivableResponse.model_validate(existing)
-        async with in_transaction():
-            user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
-            code = await self.generate_code(tenant_id, "RECEIVABLE_CODE", prefix=f"YS{today}")
+        user_info = await self.get_user_info(created_by)
+        last_error: Optional[Exception] = None
+        for attempt in range(5):
+            try:
+                created_id: Optional[int] = None
+                async with in_transaction():
+                    today = datetime.now().strftime("%Y%m%d")
+                    code = await self.generate_code(tenant_id, "RECEIVABLE_CODE", prefix=f"YS{today}")
+                    receivable = await Receivable.create(
+                        tenant_id=tenant_id,
+                        receivable_code=code,
+                        created_by=created_by,
+                        created_by_name=user_info["name"],
+                        updated_by=created_by,
+                        updated_by_name=user_info["name"],
+                        review_status="草稿",
+                        **receivable_data.model_dump(
+                            exclude_unset=True,
+                            exclude={
+                                'created_by',
+                                'pull_source_type',
+                                'pull_source_id',
+                                'review_status',
+                                'reviewer_id',
+                                'reviewer_name',
+                                'review_time',
+                                'review_remarks',
+                            },
+                        )
+                    )
+                    await self.accounting_event_service.record_event(
+                        tenant_id=tenant_id,
+                        event_type="RECEIVABLE_CREATED",
+                        business_type="receivable",
+                        target_doc_type="Receivable",
+                        target_doc_id=receivable.id,
+                        target_doc_code=receivable.receivable_code,
+                        amount=receivable.total_amount,
+                        currency="CNY",
+                        operator_id=created_by,
+                        operator_name=(user_info or {}).get("name"),
+                        payload={"status": receivable.status},
+                    )
+                    created_id = receivable.id
+                from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 
-            receivable = await Receivable.create(
-                tenant_id=tenant_id,
-                receivable_code=code,
-                created_by=created_by,
-                created_by_name=user_info["name"],
-                updated_by=created_by,
-                updated_by_name=user_info["name"],
-                **receivable_data.model_dump(
-                    exclude_unset=True,
-                    exclude={'created_by', 'pull_source_type', 'pull_source_id'},
+                await submit_finance_review(
+                    model=Receivable,
+                    tenant_id=tenant_id,
+                    doc_id=int(created_id),
+                    updated_by=created_by,
+                    doc_label="应收单",
+                    node_key="receivable",
                 )
-            )
-            await self.accounting_event_service.record_event(
-                tenant_id=tenant_id,
-                event_type="RECEIVABLE_CREATED",
-                business_type="receivable",
-                target_doc_type="Receivable",
-                target_doc_id=receivable.id,
-                target_doc_code=receivable.receivable_code,
-                amount=receivable.total_amount,
-                currency="CNY",
-                operator_id=created_by,
-                operator_name=(user_info or {}).get("name"),
-                payload={"status": receivable.status},
-            )
-            return ReceivableResponse.model_validate(receivable)
+                return await self.get_receivable_by_id(tenant_id, int(created_id))
+            except IntegrityError as e:
+                last_error = e
+                logger.warning(
+                    "应收单编码冲突，重试占号 attempt={} err={}",
+                    attempt + 1,
+                    e,
+                )
+        raise ValidationError("应收单编码已存在，请关闭弹窗后重新新建") from last_error
 
     async def get_receivable_by_id(self, tenant_id: int, receivable_id: int) -> ReceivableResponse:
         """根据ID获取应收单"""
@@ -895,6 +988,7 @@ class ReceivableService(AppBaseService[Receivable]):
                 doc_id=receivable_id,
                 updated_by=submitted_by,
                 doc_label="应收单",
+                node_key="receivable",
             )
             return await self.get_receivable_by_id(tenant_id, receivable_id)
 
@@ -921,6 +1015,7 @@ class ReceivableService(AppBaseService[Receivable]):
                 doc_id=receivable_id,
                 updated_by=revoked_by,
                 doc_label="应收单",
+                node_key="receivable",
             )
             return await self.get_receivable_by_id(tenant_id, receivable_id)
 

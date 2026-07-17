@@ -134,7 +134,7 @@ const PurchaseInvoiceList: React.FC = () => {
         invoice_amount: invoiceAmount,
         notes: values.notes,
         status: '未审核',
-        review_status: '待审核',
+        review_status: '草稿',
         attachments: normalizeDocumentAttachments(values.attachments),
       };
 
@@ -290,7 +290,7 @@ const PurchaseInvoiceList: React.FC = () => {
             code: pullPreviewData.source_code,
           }),
         status: '未审核',
-        review_status: '待审核',
+        review_status: '草稿',
         attachments: normalizeDocumentAttachments(values.attachments),
       });
       messageApi.success(t(`${P}.pullCreateSuccess`, { target: pullFromPurchaseOrderAction.targetLabel }));
@@ -434,25 +434,23 @@ const PurchaseInvoiceList: React.FC = () => {
             >
               {t('common.detail')}
             </Button>,
-            record.review_status === '待审核' ? (
-              <UniWorkflowActions
-                {...rowActionKind('skip')}
-                key="wf"
-                record={record}
-                apiPrefix="/apps/kuaicaiwu/purchase-invoices"
-                entityType="purchase_invoice"
-                entityName={t(`${P}.entityName`)}
-                statusField="status"
-                reviewStatusField="review_status"
-                draftStatuses={[]}
-                pendingStatuses={['待审核']}
-                approvedStatuses={['已审核']}
-                rejectedStatuses={['已驳回', '驳回']}
-                theme="link"
-                size="small"
-                onSuccess={() => actionRef.current?.reload()}
-              />
-            ) : null,
+            <UniWorkflowActions
+              {...rowActionKind('skip')}
+              key="wf"
+              record={record}
+              apiPrefix="/apps/kuaicaiwu/purchase-invoices"
+              entityType="purchase_invoice"
+              entityName={t(`${P}.entityName`)}
+              statusField="status"
+              reviewStatusField="review_status"
+              draftStatuses={['草稿', 'draft']}
+              pendingStatuses={['待审核']}
+              approvedStatuses={['已审核']}
+              rejectedStatuses={['已驳回', '驳回']}
+              theme="link"
+              size="small"
+              onSuccess={() => actionRef.current?.reload()}
+            />,
           ].filter(Boolean) as React.ReactNode[],
       },
     ],

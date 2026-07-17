@@ -18,7 +18,7 @@ class Payable(BaseModel):
     用于记录企业采购货物或服务后产生的应付账款
     """
     tenant_id = fields.IntField(description="租户ID")
-    payable_code = fields.CharField(max_length=50, unique=True, description="应付单编码")
+    payable_code = fields.CharField(max_length=50, db_index=True, description="应付单编码")  # 租户内未删除唯一，见迁移 463
 
     # 来源单据关联
     source_type = fields.CharField(max_length=20, description="来源单据类型")
@@ -50,7 +50,7 @@ class Payable(BaseModel):
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
     review_time = fields.DatetimeField(null=True, description="审核时间")
-    review_status = fields.CharField(max_length=20, default="待审核", description="审核状态")
+    review_status = fields.CharField(max_length=20, default="草稿", description="审核状态")
     review_remarks = fields.TextField(null=True, description="审核备注")
 
     notes = fields.TextField(null=True, description="备注")

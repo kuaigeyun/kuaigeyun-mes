@@ -23,7 +23,7 @@ class Receipt(BaseModel):
 
     id = fields.IntField(pk=True, description="主键ID")
     tenant_id = fields.IntField(description="租户ID")
-    receipt_code = fields.CharField(max_length=50, unique=True, description="收款单号")
+    receipt_code = fields.CharField(max_length=50, db_index=True, description="收款单号")  # 租户内未删除唯一，见迁移 463
 
     customer_id = fields.IntField(description="客户ID")
     customer_name = fields.CharField(max_length=200, description="客户名称")

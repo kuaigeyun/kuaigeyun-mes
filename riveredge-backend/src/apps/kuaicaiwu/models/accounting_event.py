@@ -25,7 +25,7 @@ class AccountingEvent(BaseModel):
 
     id = fields.IntField(pk=True, description="主键ID")
     tenant_id = fields.IntField(description="租户ID")
-    event_code = fields.CharField(max_length=50, unique=True, description="事件编号")
+    event_code = fields.CharField(max_length=50, db_index=True, description="事件编号")  # 租户内未删除唯一，见迁移 463
     event_type = fields.CharField(max_length=50, description="事件类型")
     business_type = fields.CharField(max_length=50, description="业务类型")
 

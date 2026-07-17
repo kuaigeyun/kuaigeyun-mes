@@ -145,12 +145,13 @@ def derive_audit_phase(
         else:
             allowed = []
 
-    # 审核关闭（自动通过）：不提供人工审/驳回；已通过态仍保留 revoke，便于撤回后再编辑
+    # 审核关闭（自动通过）：不提供人工审/驳回；已通过态仍保留 revoke，便于撤回后再编辑。
+    # pending 仍保留 submit：用于误入待审时再次提交即自动通过。
     if not enabled:
         if phase in ("draft", "rejected"):
             allowed = ["submit"]
         elif phase == "pending":
-            allowed = ["withdraw"]
+            allowed = ["submit", "withdraw"]
         elif phase == "approved":
             allowed = [a for a in allowed if a == "revoke"]
         else:

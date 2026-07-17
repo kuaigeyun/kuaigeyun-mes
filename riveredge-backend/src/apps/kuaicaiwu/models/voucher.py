@@ -21,7 +21,7 @@ class Voucher(BaseModel):
 
     id = fields.IntField(pk=True, description="主键ID")
     tenant_id = fields.IntField(description="租户ID")
-    voucher_code = fields.CharField(max_length=50, unique=True, description="凭证号")
+    voucher_code = fields.CharField(max_length=50, db_index=True, description="凭证号")  # 租户内未删除唯一，见迁移 463
     voucher_date = fields.DateField(description="凭证日期")
     period_year = fields.IntField(description="会计年度")
     period_month = fields.IntField(description="会计月份")

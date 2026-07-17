@@ -21,7 +21,7 @@ class Invoice(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
 
     # 基础信息
-    invoice_code = fields.CharField(max_length=50, description="发票系统编号", unique=True)
+    invoice_code = fields.CharField(max_length=50, db_index=True, description="发票系统编号")  # 租户内未删除唯一，见迁移 463
     invoice_number = fields.CharField(max_length=50, description="发票号码")
     invoice_details_code = fields.CharField(max_length=50, null=True, description="发票代码")
 
