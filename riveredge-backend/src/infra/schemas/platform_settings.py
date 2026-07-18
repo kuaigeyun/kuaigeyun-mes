@@ -35,6 +35,10 @@ class PlatformSettingsBase(BaseSchema):
     icp_license_en: Optional[str] = Field(None, max_length=100, description="ICP备案信息（英文）")
     theme_color: Optional[str] = Field("#1890ff", max_length=20, description="主题颜色")
     tenant_auto_approve: Optional[bool] = Field(False, description="是否自动审核：开启后，新注册的租户组织自动通过审核")
+    default_tenant_id: Optional[int] = Field(
+        None,
+        description="平台默认登录租户 ID（私有单体部署时可跳过选组织直接企微扫码）",
+    )
     float_button_enabled: Optional[bool] = Field(True, description="是否显示右下角悬浮按钮")
     login_guest_enabled: Optional[bool] = Field(True, description="登录页是否显示免注册体验登录")
     login_client_win_enabled: Optional[bool] = Field(True, description="登录页是否显示 Windows 工位机安装包下载")
@@ -70,6 +74,10 @@ class PlatformSettingsUpdate(BaseSchema):
     icp_license_en: Optional[str] = Field(None, max_length=100, description="ICP备案信息（英文）")
     theme_color: Optional[str] = Field(None, max_length=20, description="主题颜色")
     tenant_auto_approve: Optional[bool] = Field(None, description="是否自动审核：开启后，新注册的租户组织自动通过审核")
+    default_tenant_id: Optional[int] = Field(
+        None,
+        description="平台默认登录租户 ID；传 null 清除。私有单体部署时可跳过选组织直接企微扫码",
+    )
     float_button_enabled: Optional[bool] = Field(None, description="是否显示右下角悬浮按钮")
     login_guest_enabled: Optional[bool] = Field(None, description="登录页是否显示免注册体验登录")
     login_client_win_enabled: Optional[bool] = Field(None, description="登录页是否显示 Windows 工位机安装包下载")

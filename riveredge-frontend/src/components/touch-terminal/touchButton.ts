@@ -65,11 +65,8 @@ export function touchButtonProps({
         ? {
             background: HMI_DESIGN_TOKENS.STATUS_OK,
             borderColor: HMI_DESIGN_TOKENS.STATUS_OK,
-            boxShadow: HMI_DESIGN_TOKENS.BTN_SUCCESS_SHADOW,
           }
-        : variant === 'primary'
-          ? { boxShadow: HMI_DESIGN_TOKENS.BTN_PRIMARY_SHADOW }
-          : {};
+        : {};
 
   return {
     type: isPrimary ? 'primary' : 'default',

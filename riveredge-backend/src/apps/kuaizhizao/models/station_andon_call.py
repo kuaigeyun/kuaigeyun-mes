@@ -32,6 +32,16 @@ class StationAndonCall(BaseModel):
     caller_id = fields.IntField(description="发起人ID")
     caller_name = fields.CharField(max_length=100, description="发起人姓名")
     remarks = fields.TextField(null=True, description="备注")
+    # 联动下游单据：equipment_fault / material_call / process_inspection / message
+    related_doc_type = fields.CharField(max_length=50, null=True, description="关联单据类型")
+    related_doc_uuid = fields.CharField(max_length=36, null=True, description="关联单据UUID")
+    related_doc_code = fields.CharField(max_length=100, null=True, description="关联单据编号")
+    equipment_uuid = fields.CharField(max_length=36, null=True, description="联动设备UUID")
+    fault_level = fields.CharField(max_length=50, null=True, description="设备安灯故障级别")
+    material_call_mode = fields.CharField(
+        max_length=32, null=True, description="物料安灯模式 FULL_ORDER/CUSTOM"
+    )
+    supervisor_user_id = fields.IntField(null=True, description="班长安灯通知用户ID")
     acknowledged_at = fields.DatetimeField(null=True, description="响应时间")
     acknowledged_by = fields.IntField(null=True, description="响应人ID")
     acknowledged_by_name = fields.CharField(max_length=100, null=True, description="响应人姓名")

@@ -1,7 +1,9 @@
 """工位终端 API Schema"""
 
 from datetime import datetime
-from typing import Optional
+from decimal import Decimal
+from typing import List, Optional
+
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -13,12 +15,20 @@ class StationAndonCreate(BaseModel):
     workstation_id: Optional[int] = None
     workstation_name: Optional[str] = None
     remarks: Optional[str] = None
+    # 联动参数
+    equipment_uuid: Optional[str] = Field(None, description="设备安灯：设备UUID")
+    fault_level: Optional[str] = Field(None, description="设备安灯：故障级别 轻微/一般/严重/紧急")
+    material_call_mode: Optional[str] = Field(
+        None, description="物料安灯：FULL_ORDER（齐套缺料）"
+    )
+    supervisor_user_id: Optional[int] = Field(None, description="班长安灯：通知用户ID")
 
 
 class StationAndonResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    uuid: Optional[str] = None
     call_type: str
     status: str
     work_order_id: Optional[int] = None
@@ -29,8 +39,18 @@ class StationAndonResponse(BaseModel):
     caller_id: int
     caller_name: str
     remarks: Optional[str] = None
+    related_doc_type: Optional[str] = None
+    related_doc_uuid: Optional[str] = None
+    related_doc_code: Optional[str] = None
+    equipment_uuid: Optional[str] = None
+    fault_level: Optional[str] = None
+    material_call_mode: Optional[str] = None
+    supervisor_user_id: Optional[int] = None
     created_at: datetime
     acknowledged_at: Optional[datetime] = None
+    acknowledged_by: Optional[int] = None
+    acknowledged_by_name: Optional[str] = None
+    closed_at: Optional[datetime] = None
 
 
 class StationSopAckCreate(BaseModel):
@@ -53,3 +73,118 @@ class OperationPauseRequest(BaseModel):
 
 class OperationCompleteRequest(BaseModel):
     remarks: Optional[str] = None
+
+
+class FaceEnrollRequest(BaseModel):
+    user_id: int
+    descriptor: List[float]
+    quality: Optional[float] = None
+    device_info: Optional[str] = None
+
+
+class FaceIdentifyRequest(BaseModel):
+    descriptor: List[float]
+
+
+class FaceIdentifyResponse(BaseModel):
+    matched: bool
+    score: float
+    user_id: int
+    username: str
+    full_name: str
+    template_id: int
+
+
+class FaceTemplateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    quality: Optional[float] = None
+    device_info: Optional[str] = None
+    created_at: datetime
+
+
+class SkillCheckRequest(BaseModel):
+    user_id: int
+    operation_id: int = Field(..., description="主数据工序ID或工单工序行ID（服务端兼容）")
+    work_order_id: Optional[int] = None
+
+
+class SkillCheckResponse(BaseModel):
+    qualified: bool
+    user_id: int
+    operation_id: int
+    operation_name: Optional[str] = None
+    message: str
+
+
+class OperatorSkillCreate(BaseModel):
+    user_id: int
+    user_name: Optional[str] = None
+    operation_id: int
+    operation_code: Optional[str] = None
+    operation_name: Optional[str] = None
+    skill_level: str = "qualified"
+    remarks: Optional[str] = None
+
+
+class OperatorSkillResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    uuid: str
+    user_id: int
+    user_name: Optional[str] = None
+    operation_id: int
+    operation_code: Optional[str] = None
+    operation_name: Optional[str] = None
+    skill_level: str
+    is_active: bool
+    created_at: datetime
+
+
+class ShiftSummaryQuery(BaseModel):
+    workstation_id: Optional[int] = None
+    shift_start: datetime
+    shift_end: Optional[datetime] = None
+
+
+class ShiftSummaryResponse(BaseModel):
+    workstation_id: Optional[int] = None
+    shift_start: datetime
+    shift_end: datetime
+    planned_qty: Decimal = Decimal("0")
+    completed_qty: Decimal = Decimal("0")
+    unqualified_qty: Decimal = Decimal("0")
+    downtime_minutes: Decimal = Decimal("0")
+    andon_count: int = 0
+    reporting_count: int = 0
+
+
+class ShiftHandoverCreate(BaseModel):
+    workstation_id: Optional[int] = None
+    workstation_name: Optional[str] = None
+    shift_start: datetime
+    shift_end: Optional[datetime] = None
+    remarks: Optional[str] = None
+
+
+class ShiftHandoverResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    uuid: str
+    workstation_id: Optional[int] = None
+    workstation_name: Optional[str] = None
+    operator_id: int
+    operator_name: str
+    shift_start: datetime
+    shift_end: datetime
+    planned_qty: Decimal
+    completed_qty: Decimal
+    unqualified_qty: Decimal
+    downtime_minutes: Decimal
+    andon_count: int
+    remarks: Optional[str] = None
+    created_at: datetime

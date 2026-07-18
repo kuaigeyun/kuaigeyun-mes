@@ -40,6 +40,16 @@ class Department(BaseModel):
     code = fields.CharField(max_length=50, null=True, description="部门代码（可选，用于程序识别）")
     description = fields.TextField(null=True, description="部门描述")
     manager_id = fields.IntField(null=True, description="部门负责人ID（外键，关联 core_users，内部使用自增ID）")
+    external_source = fields.CharField(
+        max_length=32,
+        null=True,
+        description="外部系统来源（如 wecom / feishu / dingtalk）",
+    )
+    external_id = fields.CharField(
+        max_length=64,
+        null=True,
+        description="外部系统部门 ID",
+    )
 
     # 树形结构：自关联外键
     parent = fields.ForeignKeyField(
@@ -67,6 +77,7 @@ class Department(BaseModel):
             ("manager_id",),
             ("sort_order",),
             ("created_at",),
+            ("tenant_id", "external_source", "external_id"),
         ]
     
     def __str__(self):

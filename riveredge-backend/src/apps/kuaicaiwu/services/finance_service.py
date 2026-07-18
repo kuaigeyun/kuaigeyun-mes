@@ -235,26 +235,35 @@ class PayableService(AppBaseService[Payable]):
             return await self.get_payable_by_id(tenant_id, payable_id)
 
     async def record_payment(self, tenant_id: int, payable_id: int, payment_data: PaymentRecordCreate, recorded_by: int) -> PayableResponse:
-        """登记付款：创建付款单并核销至当前应付单"""
+        """登记付款：创建付款单并核销至当前应付单。
+
+        核销单号在事务外生成，避免「外层事务 + generate_code 内 SELECT FOR UPDATE」
+        嵌套占住连接导致 idle in transaction / 连接池耗尽。
+        """
+        payable = await self.get_payable_by_id(tenant_id, payable_id)
+        if payable.status == '已结清':
+            raise BusinessLogicError("应付单已结清，无法继续付款")
+        payment_amount = self._money(payment_data.payment_amount)
+        if payment_amount > payable.remaining_amount:
+            raise ValidationError("付款金额不能超过剩余金额")
+
+        today = datetime.now().strftime("%Y%m%d")
+        count = await Payment.filter(tenant_id=tenant_id).count()
+        code = f"PK{today}{count + 1:04d}"
+
+        note_parts: list[str] = []
+        if payment_data.notes:
+            note_parts.append(payment_data.notes.strip())
+        note_parts.append(f"应付单 {payable.payable_code}")
+        notes = " - ".join(note_parts)
+
+        user_info = await self.get_user_info(recorded_by)
+        settlement_service = AccountSettlementService()
+        settlement_code = await settlement_service.generate_code(
+            tenant_id, "SETTLEMENT_CODE", prefix=f"HX{today}"
+        )
+
         async with in_transaction():
-            payable = await self.get_payable_by_id(tenant_id, payable_id)
-            if payable.status == '已结清':
-                raise BusinessLogicError("应付单已结清，无法继续付款")
-            payment_amount = self._money(payment_data.payment_amount)
-            if payment_amount > payable.remaining_amount:
-                raise ValidationError("付款金额不能超过剩余金额")
-
-            today = datetime.now().strftime("%Y%m%d")
-            count = await Payment.filter(tenant_id=tenant_id).count()
-            code = f"PK{today}{count + 1:04d}"
-
-            note_parts: list[str] = []
-            if payment_data.notes:
-                note_parts.append(payment_data.notes.strip())
-            note_parts.append(f"应付单 {payable.payable_code}")
-            notes = " - ".join(note_parts)
-
-            user_info = await self.get_user_info(recorded_by)
             payment = await Payment.create(
                 tenant_id=tenant_id,
                 payment_code=code,
@@ -274,13 +283,13 @@ class PayableService(AppBaseService[Payable]):
                 updated_by_name=user_info["name"],
             )
 
-            settlement_service = AccountSettlementService()
-            await settlement_service.settle_payable(
-                tenant_id,
-                payable_id,
-                payment.id,
-                payment_amount,
-                recorded_by,
+            await settlement_service.apply_payable_settlement(
+                tenant_id=tenant_id,
+                payable_id=payable_id,
+                payment_id=payment.id,
+                amount=payment_amount,
+                operator_id=recorded_by,
+                settlement_code=settlement_code,
             )
 
             return await self.get_payable_by_id(tenant_id, payable_id)
@@ -909,26 +918,34 @@ class ReceivableService(AppBaseService[Receivable]):
         return await enrich_items(tenant_id, "receivable", rows), total
 
     async def record_receipt(self, tenant_id: int, receivable_id: int, receipt_data: ReceiptRecordCreate, recorded_by: int) -> ReceivableResponse:
-        """登记收款：创建收款单并核销至当前应收单"""
+        """登记收款：创建收款单并核销至当前应收单。
+
+        核销单号在事务外生成，避免嵌套事务 + 编码锁占住连接。
+        """
+        receivable = await self.get_receivable_by_id(tenant_id, receivable_id)
+        if receivable.status == '已结清':
+            raise BusinessLogicError("应收单已结清，无法继续收款")
+        receipt_amount = self._money(receipt_data.receipt_amount)
+        if receipt_amount > receivable.remaining_amount:
+            raise ValidationError("收款金额不能超过剩余金额")
+
+        today = datetime.now().strftime("%Y%m%d")
+        count = await Receipt.filter(tenant_id=tenant_id).count()
+        code = f"SK{today}{count + 1:04d}"
+
+        note_parts: list[str] = []
+        if receipt_data.notes:
+            note_parts.append(receipt_data.notes.strip())
+        note_parts.append(f"应收单 {receivable.receivable_code}")
+        notes = " - ".join(note_parts)
+
+        user_info = await self.get_user_info(recorded_by)
+        settlement_service = AccountSettlementService()
+        settlement_code = await settlement_service.generate_code(
+            tenant_id, "SETTLEMENT_CODE", prefix=f"HX{today}"
+        )
+
         async with in_transaction():
-            receivable = await self.get_receivable_by_id(tenant_id, receivable_id)
-            if receivable.status == '已结清':
-                raise BusinessLogicError("应收单已结清，无法继续收款")
-            receipt_amount = self._money(receipt_data.receipt_amount)
-            if receipt_amount > receivable.remaining_amount:
-                raise ValidationError("收款金额不能超过剩余金额")
-
-            today = datetime.now().strftime("%Y%m%d")
-            count = await Receipt.filter(tenant_id=tenant_id).count()
-            code = f"SK{today}{count + 1:04d}"
-
-            note_parts: list[str] = []
-            if receipt_data.notes:
-                note_parts.append(receipt_data.notes.strip())
-            note_parts.append(f"应收单 {receivable.receivable_code}")
-            notes = " - ".join(note_parts)
-
-            user_info = await self.get_user_info(recorded_by)
             receipt = await Receipt.create(
                 tenant_id=tenant_id,
                 receipt_code=code,
@@ -948,13 +965,13 @@ class ReceivableService(AppBaseService[Receivable]):
                 updated_by_name=user_info["name"],
             )
 
-            settlement_service = AccountSettlementService()
-            await settlement_service.settle_receivable(
-                tenant_id,
-                receivable_id,
-                receipt.id,
-                receipt_amount,
-                recorded_by,
+            await settlement_service.apply_receivable_settlement(
+                tenant_id=tenant_id,
+                receivable_id=receivable_id,
+                receipt_id=receipt.id,
+                amount=receipt_amount,
+                operator_id=recorded_by,
+                settlement_code=settlement_code,
             )
 
             return await self.get_receivable_by_id(tenant_id, receivable_id)
@@ -1423,290 +1440,345 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
         payment_exchange_rate: Optional[Decimal] = None,
     ) -> SettlementRecord:
         """
-        执行核销：将收款单金额分配到应收单
+        执行核销：将收款单金额分配到应收单。
+        编码在事务外生成，避免嵌套事务占用连接。
         """
+        today = datetime.now()
+        settlement_code = await self.generate_code(
+            tenant_id, "SETTLEMENT_CODE", prefix=f"HX{today.strftime('%Y%m%d')}"
+        )
         async with in_transaction():
-            receivable = await Receivable.get_or_none(tenant_id=tenant_id, id=receivable_id)
-            receipt = await Receipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
-            
-            if not receivable or not receipt:
-                raise NotFoundError("应收单或收款单不存在")
-            
-            amount = Decimal(amount).quantize(Decimal("0.01"))
-            if amount > receivable.remaining_amount or amount > receipt.unsettled_amount:
-                raise ValidationError("核销金额超过单据剩余金额")
-
-            user_name = await self.get_user_name(operator_id)
-            today = datetime.now()
-            code = await self.generate_code(tenant_id, "SETTLEMENT_CODE", prefix=f"HX{today.strftime('%Y%m%d')}")
-            fx_snapshot = self._build_fx_snapshot(
+            return await self.apply_receivable_settlement(
+                tenant_id=tenant_id,
+                receivable_id=receivable_id,
+                receipt_id=receipt_id,
                 amount=amount,
+                operator_id=operator_id,
+                settlement_code=settlement_code,
+                currency=currency,
                 invoice_exchange_rate=invoice_exchange_rate,
                 payment_exchange_rate=payment_exchange_rate,
-                business_type="receivable",
-                currency=currency,
             )
 
-            # 1. 创建核销记录
-            settlement = await SettlementRecord.create(
-                tenant_id=tenant_id,
-                settlement_code=code,
-                partner_id=receivable.customer_id,
-                partner_name=receivable.customer_name,
-                debit_doc_type="Receivable",
-                debit_doc_id=receivable_id,
-                debit_doc_code=receivable.receivable_code,
-                credit_doc_type="Receipt",
-                credit_doc_id=receipt_id,
-                credit_doc_code=receipt.receipt_code,
-                amount=amount,
-                currency=currency,
-                settlement_date=today.date(),
-                operator_id=operator_id,
-                operator_name=user_name,
-                notes=json.dumps({"fx": fx_snapshot}, ensure_ascii=False) if fx_snapshot else None,
+    async def apply_receivable_settlement(
+        self,
+        tenant_id: int,
+        receivable_id: int,
+        receipt_id: int,
+        amount: Decimal,
+        operator_id: int,
+        settlement_code: str,
+        currency: str = "CNY",
+        invoice_exchange_rate: Optional[Decimal] = None,
+        payment_exchange_rate: Optional[Decimal] = None,
+    ) -> SettlementRecord:
+        """应收核销写入（调用方负责外层事务；settlement_code 须已在事务外生成）。"""
+        receivable = await Receivable.get_or_none(tenant_id=tenant_id, id=receivable_id)
+        receipt = await Receipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
+
+        if not receivable or not receipt:
+            raise NotFoundError("应收单或收款单不存在")
+
+        amount = Decimal(amount).quantize(Decimal("0.01"))
+        if amount > receivable.remaining_amount or amount > receipt.unsettled_amount:
+            raise ValidationError("核销金额超过单据剩余金额")
+
+        user_name = await self.get_user_name(operator_id)
+        today = datetime.now()
+        fx_snapshot = self._build_fx_snapshot(
+            amount=amount,
+            invoice_exchange_rate=invoice_exchange_rate,
+            payment_exchange_rate=payment_exchange_rate,
+            business_type="receivable",
+            currency=currency,
+        )
+
+        # 1. 创建核销记录
+        settlement = await SettlementRecord.create(
+            tenant_id=tenant_id,
+            settlement_code=settlement_code,
+            partner_id=receivable.customer_id,
+            partner_name=receivable.customer_name,
+            debit_doc_type="Receivable",
+            debit_doc_id=receivable_id,
+            debit_doc_code=receivable.receivable_code,
+            credit_doc_type="Receipt",
+            credit_doc_id=receipt_id,
+            credit_doc_code=receipt.receipt_code,
+            amount=amount,
+            currency=currency,
+            settlement_date=today.date(),
+            operator_id=operator_id,
+            operator_name=user_name,
+            notes=json.dumps({"fx": fx_snapshot}, ensure_ascii=False) if fx_snapshot else None,
+        )
+
+        write_off_limit = self._money(
+            Decimal(
+                str(await self.business_config_service.get_finance_auto_write_off_precision_limit(tenant_id))
+            )
+        )
+
+        # 2. 更新应收单
+        new_received = (receivable.received_amount + amount).quantize(Decimal("0.01"))
+        new_rem_receivable = (receivable.total_amount - new_received).quantize(Decimal("0.01"))
+        new_rem_receivable, receivable_writeoff_applied = self._apply_rounding_writeoff_value(
+            value=new_rem_receivable,
+            limit=write_off_limit,
+        )
+        await Receivable.filter(tenant_id=tenant_id, id=receivable_id).update(
+            received_amount=new_received,
+            remaining_amount=new_rem_receivable,
+            status="已结清" if new_rem_receivable <= Decimal("0.00") else "部分收款",
+            updated_by=operator_id,
+            updated_by_name=user_name,
+        )
+        if new_rem_receivable <= Decimal("0.00"):
+            from apps.kuaizhizao.services.contract_milestone_billing_service import (
+                ContractMilestoneBillingService,
             )
 
-            write_off_limit = self._money(
-                Decimal(
-                    str(await self.business_config_service.get_finance_auto_write_off_precision_limit(tenant_id))
-                )
+            await ContractMilestoneBillingService().sync_milestone_on_receivable_settled(
+                tenant_id, receivable_id
             )
+        await self._log_settlement_amount_audit(
+            tenant_id=tenant_id,
+            operator_id=operator_id,
+            object_type="Receivable",
+            object_id=receivable_id,
+            scene="settle_receivable",
+            before={
+                "received_amount": receivable.received_amount,
+                "remaining_amount": receivable.remaining_amount,
+            },
+            after={
+                "received_amount": new_received,
+                "remaining_amount": new_rem_receivable,
+                "writeoff_applied": receivable_writeoff_applied,
+            },
+        )
 
-            # 2. 更新应收单
-            new_received = (receivable.received_amount + amount).quantize(Decimal("0.01"))
-            new_rem_receivable = (receivable.total_amount - new_received).quantize(Decimal("0.01"))
-            new_rem_receivable, receivable_writeoff_applied = self._apply_rounding_writeoff_value(
-                value=new_rem_receivable,
-                limit=write_off_limit,
-            )
-            await Receivable.filter(tenant_id=tenant_id, id=receivable_id).update(
-                received_amount=new_received,
-                remaining_amount=new_rem_receivable,
-                status="已结清" if new_rem_receivable <= Decimal("0.00") else "部分收款",
-                updated_by=operator_id,
-                updated_by_name=user_name,
-            )
-            if new_rem_receivable <= Decimal("0.00"):
-                from apps.kuaizhizao.services.contract_milestone_billing_service import (
-                    ContractMilestoneBillingService,
-                )
+        # 3. 更新收款单
+        new_settled = (receipt.settled_amount + amount).quantize(Decimal("0.01"))
+        new_unsettled = (receipt.total_amount - new_settled).quantize(Decimal("0.01"))
+        new_unsettled, receipt_writeoff_applied = self._apply_rounding_writeoff_value(
+            value=new_unsettled,
+            limit=write_off_limit,
+        )
+        await Receipt.filter(tenant_id=tenant_id, id=receipt_id).update(
+            settled_amount=new_settled,
+            unsettled_amount=new_unsettled,
+            status="Confirmed",
+            updated_by=operator_id,
+            updated_by_name=user_name,
+        )
+        await self._log_settlement_amount_audit(
+            tenant_id=tenant_id,
+            operator_id=operator_id,
+            object_type="Receipt",
+            object_id=receipt_id,
+            scene="settle_receipt_balance",
+            before={
+                "settled_amount": receipt.settled_amount,
+                "unsettled_amount": receipt.unsettled_amount,
+            },
+            after={
+                "settled_amount": new_settled,
+                "unsettled_amount": new_unsettled,
+                "writeoff_applied": receipt_writeoff_applied,
+            },
+        )
+        await self.accounting_event_service.record_event(
+            tenant_id=tenant_id,
+            event_type="SETTLEMENT_RECEIVABLE_COMPLETED",
+            business_type="settlement",
+            source_doc_type="Receivable",
+            source_doc_id=receivable_id,
+            source_doc_code=receivable.receivable_code,
+            target_doc_type="Settlement",
+            target_doc_id=settlement.id,
+            target_doc_code=settlement.settlement_code,
+            amount=amount,
+            currency=currency,
+            operator_id=operator_id,
+            operator_name=user_name,
+            payload={
+                "receipt_id": receipt_id,
+                "writeoff_applied": receivable_writeoff_applied or receipt_writeoff_applied,
+                "fx": fx_snapshot,
+            },
+        )
 
-                await ContractMilestoneBillingService().sync_milestone_on_receivable_settled(
-                    tenant_id, receivable_id
-                )
-            await self._log_settlement_amount_audit(
-                tenant_id=tenant_id,
-                operator_id=operator_id,
-                object_type="Receivable",
-                object_id=receivable_id,
-                scene="settle_receivable",
-                before={
-                    "received_amount": receivable.received_amount,
-                    "remaining_amount": receivable.remaining_amount,
-                },
-                after={
-                    "received_amount": new_received,
-                    "remaining_amount": new_rem_receivable,
-                    "writeoff_applied": receivable_writeoff_applied,
-                },
-            )
-
-            # 3. 更新收款单
-            new_settled = (receipt.settled_amount + amount).quantize(Decimal("0.01"))
-            new_unsettled = (receipt.total_amount - new_settled).quantize(Decimal("0.01"))
-            new_unsettled, receipt_writeoff_applied = self._apply_rounding_writeoff_value(
-                value=new_unsettled,
-                limit=write_off_limit,
-            )
-            await Receipt.filter(tenant_id=tenant_id, id=receipt_id).update(
-                settled_amount=new_settled,
-                unsettled_amount=new_unsettled,
-                status="Confirmed",  # 已核销完也可以保持 Confirmed，或者加个 FullySettled
-                updated_by=operator_id,
-                updated_by_name=user_name,
-            )
-            await self._log_settlement_amount_audit(
-                tenant_id=tenant_id,
-                operator_id=operator_id,
-                object_type="Receipt",
-                object_id=receipt_id,
-                scene="settle_receipt_balance",
-                before={
-                    "settled_amount": receipt.settled_amount,
-                    "unsettled_amount": receipt.unsettled_amount,
-                },
-                after={
-                    "settled_amount": new_settled,
-                    "unsettled_amount": new_unsettled,
-                    "writeoff_applied": receipt_writeoff_applied,
-                },
-            )
-            await self.accounting_event_service.record_event(
-                tenant_id=tenant_id,
-                event_type="SETTLEMENT_RECEIVABLE_COMPLETED",
-                business_type="settlement",
-                source_doc_type="Receivable",
-                source_doc_id=receivable_id,
-                source_doc_code=receivable.receivable_code,
-                target_doc_type="Settlement",
-                target_doc_id=settlement.id,
-                target_doc_code=settlement.settlement_code,
-                amount=amount,
-                currency=currency,
-                operator_id=operator_id,
-                operator_name=user_name,
-                payload={
-                    "receipt_id": receipt_id,
-                    "writeoff_applied": receivable_writeoff_applied or receipt_writeoff_applied,
-                    "fx": fx_snapshot,
-                },
-            )
-
-            return settlement
+        return settlement
 
     async def settle_payable(
-        self, 
-        tenant_id: int, 
-        payable_id: int, 
-        payment_id: int, 
-        amount: Decimal, 
+        self,
+        tenant_id: int,
+        payable_id: int,
+        payment_id: int,
+        amount: Decimal,
         operator_id: int,
         currency: str = "CNY",
         invoice_exchange_rate: Optional[Decimal] = None,
         payment_exchange_rate: Optional[Decimal] = None,
     ) -> SettlementRecord:
         """
-        执行核销：将付款单金额分配到应付单
+        执行核销：将付款单金额分配到应付单。
+        编码在事务外生成，避免嵌套事务占用连接。
         """
+        today = datetime.now()
+        settlement_code = await self.generate_code(
+            tenant_id, "SETTLEMENT_CODE", prefix=f"HX{today.strftime('%Y%m%d')}"
+        )
         async with in_transaction():
-            payable = await Payable.get_or_none(tenant_id=tenant_id, id=payable_id)
-            payment = await Payment.get_or_none(tenant_id=tenant_id, id=payment_id)
-            
-            if not payable or not payment:
-                raise NotFoundError("应付单或付款单不存在")
-            
-            amount = Decimal(amount).quantize(Decimal("0.01"))
-            if amount > payable.remaining_amount or amount > payment.unsettled_amount:
-                raise ValidationError("核销金额超过单据剩余金额")
-
-            user_name = await self.get_user_name(operator_id)
-            today = datetime.now()
-            code = await self.generate_code(tenant_id, "SETTLEMENT_CODE", prefix=f"HX{today.strftime('%Y%m%d')}")
-            fx_snapshot = self._build_fx_snapshot(
+            return await self.apply_payable_settlement(
+                tenant_id=tenant_id,
+                payable_id=payable_id,
+                payment_id=payment_id,
                 amount=amount,
+                operator_id=operator_id,
+                settlement_code=settlement_code,
+                currency=currency,
                 invoice_exchange_rate=invoice_exchange_rate,
                 payment_exchange_rate=payment_exchange_rate,
-                business_type="payable",
-                currency=currency,
             )
 
-            # 1. 创建核销记录
-            settlement = await SettlementRecord.create(
-                tenant_id=tenant_id,
-                settlement_code=code,
-                partner_id=payable.supplier_id,
-                partner_name=payable.supplier_name,
-                debit_doc_type="Payable",
-                debit_doc_id=payable_id,
-                debit_doc_code=payable.payable_code,
-                credit_doc_type="Payment",
-                credit_doc_id=payment_id,
-                credit_doc_code=payment.payment_code,
-                amount=amount,
-                currency=currency,
-                settlement_date=today.date(),
-                operator_id=operator_id,
-                operator_name=user_name,
-                notes=json.dumps({"fx": fx_snapshot}, ensure_ascii=False) if fx_snapshot else None,
-            )
+    async def apply_payable_settlement(
+        self,
+        tenant_id: int,
+        payable_id: int,
+        payment_id: int,
+        amount: Decimal,
+        operator_id: int,
+        settlement_code: str,
+        currency: str = "CNY",
+        invoice_exchange_rate: Optional[Decimal] = None,
+        payment_exchange_rate: Optional[Decimal] = None,
+    ) -> SettlementRecord:
+        """应付核销写入（调用方负责外层事务；settlement_code 须已在事务外生成）。"""
+        payable = await Payable.get_or_none(tenant_id=tenant_id, id=payable_id)
+        payment = await Payment.get_or_none(tenant_id=tenant_id, id=payment_id)
 
-            write_off_limit = self._money(
-                Decimal(
-                    str(await self.business_config_service.get_finance_auto_write_off_precision_limit(tenant_id))
-                )
-            )
+        if not payable or not payment:
+            raise NotFoundError("应付单或付款单不存在")
 
-            # 2. 更新应付单
-            new_paid = (payable.paid_amount + amount).quantize(Decimal("0.01"))
-            new_rem_payable = (payable.total_amount - new_paid).quantize(Decimal("0.01"))
-            new_rem_payable, payable_writeoff_applied = self._apply_rounding_writeoff_value(
-                value=new_rem_payable,
-                limit=write_off_limit,
-            )
-            await Payable.filter(tenant_id=tenant_id, id=payable_id).update(
-                paid_amount=new_paid,
-                remaining_amount=new_rem_payable,
-                status="已结清" if new_rem_payable <= Decimal("0.00") else "部分付款",
-                updated_by=operator_id,
-                updated_by_name=user_name,
-            )
-            await self._log_settlement_amount_audit(
-                tenant_id=tenant_id,
-                operator_id=operator_id,
-                object_type="Payable",
-                object_id=payable_id,
-                scene="settle_payable",
-                before={
-                    "paid_amount": payable.paid_amount,
-                    "remaining_amount": payable.remaining_amount,
-                },
-                after={
-                    "paid_amount": new_paid,
-                    "remaining_amount": new_rem_payable,
-                    "writeoff_applied": payable_writeoff_applied,
-                },
-            )
+        amount = Decimal(amount).quantize(Decimal("0.01"))
+        if amount > payable.remaining_amount or amount > payment.unsettled_amount:
+            raise ValidationError("核销金额超过单据剩余金额")
 
-            # 3. 更新付款单
-            new_settled = (payment.settled_amount + amount).quantize(Decimal("0.01"))
-            new_unsettled = (payment.total_amount - new_settled).quantize(Decimal("0.01"))
-            new_unsettled, payment_writeoff_applied = self._apply_rounding_writeoff_value(
-                value=new_unsettled,
-                limit=write_off_limit,
-            )
-            await Payment.filter(tenant_id=tenant_id, id=payment_id).update(
-                settled_amount=new_settled,
-                unsettled_amount=new_unsettled,
-                status="Confirmed",
-                updated_by=operator_id,
-                updated_by_name=user_name,
-            )
-            await self._log_settlement_amount_audit(
-                tenant_id=tenant_id,
-                operator_id=operator_id,
-                object_type="Payment",
-                object_id=payment_id,
-                scene="settle_payment_balance",
-                before={
-                    "settled_amount": payment.settled_amount,
-                    "unsettled_amount": payment.unsettled_amount,
-                },
-                after={
-                    "settled_amount": new_settled,
-                    "unsettled_amount": new_unsettled,
-                    "writeoff_applied": payment_writeoff_applied,
-                },
-            )
-            await self.accounting_event_service.record_event(
-                tenant_id=tenant_id,
-                event_type="SETTLEMENT_PAYABLE_COMPLETED",
-                business_type="settlement",
-                source_doc_type="Payable",
-                source_doc_id=payable_id,
-                source_doc_code=payable.payable_code,
-                target_doc_type="Settlement",
-                target_doc_id=settlement.id,
-                target_doc_code=settlement.settlement_code,
-                amount=amount,
-                currency=currency,
-                operator_id=operator_id,
-                operator_name=user_name,
-                payload={
-                    "payment_id": payment_id,
-                    "writeoff_applied": payable_writeoff_applied or payment_writeoff_applied,
-                    "fx": fx_snapshot,
-                },
-            )
+        user_name = await self.get_user_name(operator_id)
+        today = datetime.now()
+        fx_snapshot = self._build_fx_snapshot(
+            amount=amount,
+            invoice_exchange_rate=invoice_exchange_rate,
+            payment_exchange_rate=payment_exchange_rate,
+            business_type="payable",
+            currency=currency,
+        )
 
-            return settlement
+        settlement = await SettlementRecord.create(
+            tenant_id=tenant_id,
+            settlement_code=settlement_code,
+            partner_id=payable.supplier_id,
+            partner_name=payable.supplier_name,
+            debit_doc_type="Payable",
+            debit_doc_id=payable_id,
+            debit_doc_code=payable.payable_code,
+            credit_doc_type="Payment",
+            credit_doc_id=payment_id,
+            credit_doc_code=payment.payment_code,
+            amount=amount,
+            currency=currency,
+            settlement_date=today.date(),
+            operator_id=operator_id,
+            operator_name=user_name,
+            notes=json.dumps({"fx": fx_snapshot}, ensure_ascii=False) if fx_snapshot else None,
+        )
+
+        write_off_limit = self._money(
+            Decimal(
+                str(await self.business_config_service.get_finance_auto_write_off_precision_limit(tenant_id))
+            )
+        )
+
+        new_paid = (payable.paid_amount + amount).quantize(Decimal("0.01"))
+        new_rem_payable = (payable.total_amount - new_paid).quantize(Decimal("0.01"))
+        new_rem_payable, payable_writeoff_applied = self._apply_rounding_writeoff_value(
+            value=new_rem_payable,
+            limit=write_off_limit,
+        )
+        await Payable.filter(tenant_id=tenant_id, id=payable_id).update(
+            paid_amount=new_paid,
+            remaining_amount=new_rem_payable,
+            status="已结清" if new_rem_payable <= Decimal("0.00") else "部分付款",
+            updated_by=operator_id,
+            updated_by_name=user_name,
+        )
+        await self._log_settlement_amount_audit(
+            tenant_id=tenant_id,
+            operator_id=operator_id,
+            object_type="Payable",
+            object_id=payable_id,
+            scene="settle_payable",
+            before={
+                "paid_amount": payable.paid_amount,
+                "remaining_amount": payable.remaining_amount,
+            },
+            after={
+                "paid_amount": new_paid,
+                "remaining_amount": new_rem_payable,
+                "writeoff_applied": payable_writeoff_applied,
+            },
+        )
+
+        new_settled = (payment.settled_amount + amount).quantize(Decimal("0.01"))
+        new_unsettled = (payment.total_amount - new_settled).quantize(Decimal("0.01"))
+        new_unsettled, payment_writeoff_applied = self._apply_rounding_writeoff_value(
+            value=new_unsettled,
+            limit=write_off_limit,
+        )
+        await Payment.filter(tenant_id=tenant_id, id=payment_id).update(
+            settled_amount=new_settled,
+            unsettled_amount=new_unsettled,
+            status="Confirmed",
+            updated_by=operator_id,
+            updated_by_name=user_name,
+        )
+        await self._log_settlement_amount_audit(
+            tenant_id=tenant_id,
+            operator_id=operator_id,
+            object_type="Payment",
+            object_id=payment_id,
+            scene="settle_payment_balance",
+            before={
+                "settled_amount": payment.settled_amount,
+                "unsettled_amount": payment.unsettled_amount,
+            },
+            after={
+                "settled_amount": new_settled,
+                "unsettled_amount": new_unsettled,
+                "writeoff_applied": payment_writeoff_applied,
+            },
+        )
+        await self.accounting_event_service.record_event(
+            tenant_id=tenant_id,
+            event_type="SETTLEMENT_PAYABLE_COMPLETED",
+            business_type="settlement",
+            source_doc_type="Payable",
+            source_doc_id=payable_id,
+            source_doc_code=payable.payable_code,
+            target_doc_type="Settlement",
+            target_doc_id=settlement.id,
+            target_doc_code=settlement.settlement_code,
+            amount=amount,
+            currency=currency,
+            operator_id=operator_id,
+            operator_name=user_name,
+            payload={
+                "payment_id": payment_id,
+                "writeoff_applied": payable_writeoff_applied or payment_writeoff_applied,
+                "fx": fx_snapshot,
+            },
+        )
+
+        return settlement

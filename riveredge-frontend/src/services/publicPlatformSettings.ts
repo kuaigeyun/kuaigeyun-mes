@@ -24,6 +24,8 @@ export interface PlatformSettings {
   icp_license_en?: string;
   theme_color?: string;
   tenant_auto_approve?: boolean;
+  /** 平台默认登录租户（私有单体部署可跳过企微选组织） */
+  default_tenant_id?: number | null;
   float_button_enabled?: boolean;
   login_guest_enabled?: boolean;
   login_client_win_enabled?: boolean;

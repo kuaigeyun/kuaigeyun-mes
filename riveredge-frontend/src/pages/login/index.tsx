@@ -1251,8 +1251,17 @@ export default function LoginPage() {
         // 域名解析失败时继续走组织选择
       }
     }
+    // 平台默认租户（私有单体部署）：未指定组织时直接企微扫码
+    const platformDefaultTenantId = platformSettings?.default_tenant_id;
+    if (
+      typeof platformDefaultTenantId === 'number' &&
+      Number.isFinite(platformDefaultTenantId) &&
+      platformDefaultTenantId > 0
+    ) {
+      return platformDefaultTenantId;
+    }
     return null;
-  }, [selectedTenant]);
+  }, [selectedTenant, platformSettings?.default_tenant_id]);
 
   const handleWechatWorkLogin = async () => {
     try {

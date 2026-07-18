@@ -53,7 +53,7 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     name: '企业微信',
     type: 'wecom',
     category: 'collaboration',
-    description: '企业微信自建应用',
+    description: '企业微信自建应用（登录、消息、通讯录同步）',
     icon: <MessageOutlined />,
     defaultConfig: { corp_id: '', corp_secret: '', agent_id: '', token: '', encoding_aes_key: '' },
   },

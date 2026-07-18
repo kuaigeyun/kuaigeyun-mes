@@ -11,12 +11,14 @@ from typing import Optional
 
 from core.utils.timezone_utils import now_utc
 from infra.models.platform_settings import PlatformSettings
+from infra.models.tenant import Tenant, TenantStatus
 from infra.schemas.platform_settings import (
     PlatformSettingsCreate,
     PlatformSettingsUpdate,
     PlatformSettingsResponse
 )
-from infra.exceptions.exceptions import NotFoundError
+from infra.exceptions.exceptions import NotFoundError, ValidationError
+
 
 class PlatformSettingsService:
     """
@@ -56,6 +58,18 @@ class PlatformSettingsService:
             )
         return PlatformSettingsResponse.model_validate(settings)
     
+    async def _validate_default_tenant_id(self, default_tenant_id: Optional[int]) -> None:
+        """校验默认登录租户存在且为激活状态；None 表示清除。"""
+        if default_tenant_id is None:
+            return
+        if default_tenant_id <= 0:
+            raise ValidationError("默认登录组织 ID 无效")
+        tenant = await Tenant.get_or_none(id=default_tenant_id)
+        if not tenant:
+            raise ValidationError("默认登录组织不存在")
+        if tenant.status != TenantStatus.ACTIVE:
+            raise ValidationError("默认登录组织须为激活状态")
+
     async def create_settings(
         self,
         data: PlatformSettingsCreate
@@ -77,7 +91,8 @@ class PlatformSettingsService:
         existing = await PlatformSettings.first()
         if existing:
             raise ValueError("平台设置已存在，请使用更新接口")
-        
+
+        await self._validate_default_tenant_id(data.default_tenant_id)
         settings = await PlatformSettings.create(**data.model_dump())
         return PlatformSettingsResponse.model_validate(settings)
     
@@ -96,6 +111,10 @@ class PlatformSettingsService:
         Returns:
             PlatformSettingsResponse: 更新后的平台设置信息
         """
+        update_data = data.model_dump(exclude_unset=True)
+        if "default_tenant_id" in update_data:
+            await self._validate_default_tenant_id(update_data.get("default_tenant_id"))
+
         settings = await PlatformSettings.first()
         
         if not settings:
@@ -120,6 +139,7 @@ class PlatformSettingsService:
                 icp_license_en=data.icp_license_en,
                 theme_color=data.theme_color,
                 tenant_auto_approve=data.tenant_auto_approve if data.tenant_auto_approve is not None else False,
+                default_tenant_id=data.default_tenant_id,
                 float_button_enabled=data.float_button_enabled if data.float_button_enabled is not None else True,
                 login_guest_enabled=data.login_guest_enabled if data.login_guest_enabled is not None else True,
                 login_client_win_enabled=data.login_client_win_enabled if data.login_client_win_enabled is not None else True,
@@ -130,10 +150,8 @@ class PlatformSettingsService:
             settings = await PlatformSettings.create(**create_data.model_dump(exclude_unset=True))
         else:
             # 更新现有设置
-            from datetime import datetime
             from core.utils.login_page_settings import resolve_login_visual_layers, validate_login_visual_layers
 
-            update_data = data.model_dump(exclude_unset=True)
             visual_layer_keys = {
                 "login_decoration_enabled",
                 "login_background_enabled",

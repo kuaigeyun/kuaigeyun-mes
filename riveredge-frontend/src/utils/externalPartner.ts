@@ -17,10 +17,17 @@ export function userIsExternalPartner(user: CurrentUser | undefined | null): boo
 }
 
 /** 账号类型展示：缺 role_type 时不猜测，显示 — */
-export function accountTypeLabel(user: CurrentUser | undefined | null): '厂内' | '外协' | '—' {
+export function accountTypeLabel(
+  user: CurrentUser | undefined | null,
+): '厂内' | '外协' | '触屏' | '—' {
   const roles = user?.roles ?? [];
   if (!roles.length) return '—';
   const hasRoleType = roles.some((r) => String(r.role_type ?? '').trim().length > 0);
   if (!hasRoleType) return '—';
-  return userIsExternalPartner(user) ? '外协' : '厂内';
+  if (userIsExternalPartner(user)) return '外协';
+  const hasStation = roles.some(
+    (r) => String(r.role_type ?? '').trim().toLowerCase() === 'station',
+  );
+  if (hasStation) return '触屏';
+  return '厂内';
 }

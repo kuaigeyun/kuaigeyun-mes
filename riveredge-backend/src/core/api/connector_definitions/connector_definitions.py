@@ -22,7 +22,7 @@ router = APIRouter(prefix="/connector-definitions", tags=["Core - Connector Defi
 PRESET_APP_CONNECTORS: List[Dict[str, Any]] = [
     {"id": "feishu", "name": "飞书", "type": "feishu", "category": "collaboration", "description": "飞书开放平台自建应用", "icon": "MessageOutlined", "default_config": {"app_id": "", "app_secret": "", "encrypt_key": "", "verification_token": ""}},
     {"id": "dingtalk", "name": "钉钉", "type": "dingtalk", "category": "collaboration", "description": "钉钉企业内部应用", "icon": "MessageOutlined", "default_config": {"corpid": "", "agent_id": "", "app_key": "", "app_secret": "", "aes_key": "", "token": ""}},
-    {"id": "wecom", "name": "企业微信", "type": "wecom", "category": "collaboration", "description": "企业微信自建应用", "icon": "MessageOutlined", "default_config": {"corp_id": "", "corp_secret": "", "agent_id": "", "token": "", "encoding_aes_key": ""}},
+    {"id": "wecom", "name": "企业微信", "type": "wecom", "category": "collaboration", "description": "企业微信自建应用（登录、消息、通讯录同步）", "icon": "MessageOutlined", "default_config": {"corp_id": "", "corp_secret": "", "agent_id": "", "token": "", "encoding_aes_key": ""}},
     # ERP
     {"id": "kingdee", "name": "金蝶", "type": "kingdee", "category": "erp", "description": "金蝶云星空 / 星辰 / KIS云 API", "icon": "CloudOutlined", "default_config": {"base_url": "", "app_id": "", "app_secret": "", "acct_id": "", "lcid": "2052"}},
     {"id": "yonyou", "name": "用友", "type": "yonyou", "category": "erp", "description": "用友 YonBIP / U8 / U9 / NC 开放平台", "icon": "CloudOutlined", "default_config": {"base_url": "", "app_key": "", "app_secret": "", "corp_id": "", "user_id": ""}},

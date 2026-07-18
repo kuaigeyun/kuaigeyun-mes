@@ -75,6 +75,7 @@ PERMISSION_CODE_DISPLAY_LABELS: dict[str, str] = {
     "haoligo:equipment-documents-acceptance:submit": "调试",
     "haoligo:equipment-documents-acceptance:execute": "试产",
     "haoligo:equipment-documents-acceptance:complete": "台账结案",
+    "system:application-connection:execute": "同步通讯录",
 }
 
 

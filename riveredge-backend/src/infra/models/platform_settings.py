@@ -153,6 +153,12 @@ class PlatformSettings(Model):
         description="是否自动审核：开启后，新注册的租户组织自动通过审核"
     )
 
+    # 私有单体部署：登录（含企微扫码）在未指定组织时使用的默认租户
+    default_tenant_id = fields.IntField(
+        null=True,
+        description="平台默认登录租户 ID（私有单体部署可跳过选组织）",
+    )
+
     # 右下角悬浮按钮（迭代提示、意见反馈）
     float_button_enabled = fields.BooleanField(
         default=True,

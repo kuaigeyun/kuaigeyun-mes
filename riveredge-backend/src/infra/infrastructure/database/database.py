@@ -157,6 +157,7 @@ TORTOISE_ORM = {
                 "infra.models.tenant_activity_log",
                 "infra.models.user",
                 "infra.models.biometric",  # 生物识别信息模型
+                "infra.models.face_template",  # 工位人脸特征模板
                 "infra.models.infra_superadmin",  # 平台超级管理员模型
                 "infra.models.package",
                 "infra.models.saved_search",  # 保存搜索条件模型
@@ -344,6 +345,8 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.station_andon_call",  # 工位安灯
                 "apps.kuaizhizao.models.station_sop_acknowledgment",  # 工位SOP确认
                 "apps.kuaizhizao.models.station_operation_downtime",  # 工位停机
+                "apps.kuaizhizao.models.operator_skill",  # 操作员上岗资质
+                "apps.kuaizhizao.models.station_shift_handover",  # 工位交接班
                 "apps.kuaizhizao.models.material_return",  # 物料退回（非生产）模型
                 "apps.kuaizhizao.models.material_return_item",  # 物料退回明细模型
                 "apps.kuaizhizao.models.material_shortage_exception",  # 缺料异常模型

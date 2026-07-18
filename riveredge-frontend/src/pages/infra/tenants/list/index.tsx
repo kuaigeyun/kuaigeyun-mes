@@ -5,14 +5,14 @@
  * 支持组织注册审核、启用/禁用等功能。
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance, ProFormGroup } from '@ant-design/pro-components';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Modal, Progress, List, Typography, Divider, Descriptions, Spin, Alert } from 'antd';
-import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, EditOutlined, DeleteOutlined, SyncOutlined } from '@ant-design/icons';
+import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, EditOutlined, DeleteOutlined, SyncOutlined, StarOutlined, StarFilled } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
@@ -33,6 +33,7 @@ import {
   getSharedUserQuota,
   syncTenantLimitsFromPlan,
 } from '../../../../services/tenant';
+import { getPlatformSettings, updatePlatformSettings } from '../../../../services/platformSettings';
 // 使用 apiRequest 统一处理 HTTP 请求
 
 // @ts-ignore
@@ -71,6 +72,43 @@ const SuperAdminTenantList: React.FC = () => {
   const [sharedQuotaLoading, setSharedQuotaLoading] = useState(false);
   const [syncLimitsLoading, setSyncLimitsLoading] = useState(false);
   const [editingIsSubtenant, setEditingIsSubtenant] = useState(false);
+  const [defaultTenantId, setDefaultTenantId] = useState<number | null>(null);
+  const [defaultTenantLoadingId, setDefaultTenantLoadingId] = useState<number | null>(null);
+
+  const loadDefaultTenantId = useCallback(async () => {
+    try {
+      const settings = await getPlatformSettings();
+      const id = settings.default_tenant_id;
+      setDefaultTenantId(typeof id === 'number' && id > 0 ? id : null);
+    } catch {
+      setDefaultTenantId(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDefaultTenantId();
+  }, [loadDefaultTenantId]);
+
+  const handleSetDefaultTenant = async (tenantId: number | null) => {
+    const loadingKey = tenantId ?? defaultTenantId ?? 0;
+    setDefaultTenantLoadingId(loadingKey);
+    try {
+      const updated = await updatePlatformSettings({ default_tenant_id: tenantId });
+      const id = updated.default_tenant_id;
+      setDefaultTenantId(typeof id === 'number' && id > 0 ? id : null);
+      message.success(
+        tenantId
+          ? t('pages.infra.tenant.setDefaultSuccess')
+          : t('pages.infra.tenant.clearDefaultSuccess'),
+      );
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : t('pages.infra.tenant.setDefaultFailed');
+      message.error(errMsg);
+    } finally {
+      setDefaultTenantLoadingId(null);
+    }
+  };
 
   const packagePlanOptions = useMemo(
     () =>
@@ -962,30 +1000,16 @@ const SuperAdminTenantList: React.FC = () => {
       ellipsis: true,
       sorter: true,
       responsive: ['md'],
-      fieldProps: {
-        // 自动完成功能：从后端获取组织名称选项（暂时移除，先完成基础功能）
-        // autoCompleteApi: async (keyword: string) => {
-        //   if (!keyword || keyword.length < 1) {
-        //     return [];
-        //   }
-        //   try {
-        //     const result = await getTenantList(
-        //       {
-        //         page: 1,
-        //         page_size: 20,
-        //         name: keyword,
-        //       },
-        //       true // 超级管理员接口
-        //     );
-        //     return result.items.map((tenant) => ({
-        //       label: `${tenant.name} (${tenant.domain})`,
-        //       value: tenant.name,
-        //     }));
-        //   } catch (error) {
-        //     return [];
-        //   }
-        // },
-      },
+      render: (_, record) => (
+        <Space size={6} wrap>
+          <span>{record.name}</span>
+          {defaultTenantId === record.id && (
+            <Tag color="gold" icon={<StarFilled />}>
+              {t('pages.infra.tenant.defaultLoginTag')}
+            </Tag>
+          )}
+        </Space>
+      ),
     },
     {
       title: t('pages.infra.tenant.domain'),
@@ -1100,12 +1124,15 @@ const SuperAdminTenantList: React.FC = () => {
     {
       title: t('pages.infra.tenant.actions'),
       valueType: 'option',
-      width: 360,
+      width: 440,
       fixed: 'right',
+      // 保证「设为/取消默认」留在主行，使用 Popconfirm 气泡而非折叠进「更多」后的 Modal
+      uniActionRenderOptions: { directMax: 6 },
       render: (_, record) => {
         const isInactive = record.status === TenantStatus.INACTIVE;
         const isActive = record.status === TenantStatus.ACTIVE;
         const isSuspended = record.status === TenantStatus.SUSPENDED;
+        const isDefaultLogin = defaultTenantId === record.id;
 
         return (
           <Space wrap size={[4, 4]}>
@@ -1195,6 +1222,42 @@ const SuperAdminTenantList: React.FC = () => {
               >
                 <Button type="link" size="small" danger icon={<PauseCircleOutlined />}>
                   {t('pages.infra.tenant.deactivate')}
+                </Button>
+              </Popconfirm>
+            )}
+            {isActive && !isDefaultLogin && (
+              <Popconfirm
+                key="set-default"
+                {...rowActionKind('update')}
+                data-action-priority={21}
+                title={t('pages.infra.tenant.setDefaultConfirm')}
+                onConfirm={() => handleSetDefaultTenant(record.id)}
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<StarOutlined />}
+                  loading={defaultTenantLoadingId === record.id}
+                >
+                  {t('pages.infra.tenant.setDefault')}
+                </Button>
+              </Popconfirm>
+            )}
+            {isDefaultLogin && (
+              <Popconfirm
+                key="clear-default"
+                {...rowActionKind('update')}
+                data-action-priority={21}
+                title={t('pages.infra.tenant.clearDefaultConfirm')}
+                onConfirm={() => handleSetDefaultTenant(null)}
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<StarFilled />}
+                  loading={defaultTenantLoadingId === record.id}
+                >
+                  {t('pages.infra.tenant.clearDefault')}
                 </Button>
               </Popconfirm>
             )}

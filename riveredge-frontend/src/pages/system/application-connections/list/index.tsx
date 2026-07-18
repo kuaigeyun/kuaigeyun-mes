@@ -40,6 +40,7 @@ import {
   RocketOutlined,
   InteractionOutlined,
   ApartmentOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import {
@@ -61,12 +62,14 @@ import {
   deleteApplicationConnection,
   testApplicationConnection,
   testApplicationConnectionConfig,
+  syncApplicationConnectionContacts,
   ApplicationConnection,
 } from '../../../../services/applicationConnection';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../utils/spreadsheetImportTemplate';
+import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 
 const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
   feishu: { color: 'blue', icon: <MessageOutlined /> },
@@ -160,8 +163,11 @@ const ApplicationConnectionsListPage: React.FC = () => {
   const [detailData, setDetailData] = useState<ApplicationConnection | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
+  const [syncingContactsUuid, setSyncingContactsUuid] = useState<string | null>(null);
   const [allConnections, setAllConnections] = useState<ApplicationConnection[]>([]);
   const [connectorMarketVisible, setConnectorMarketVisible] = useState(false);
+  const connectionPerms = useResourcePermissions('system:application-connection');
+  const canSyncContacts = !connectionPerms.enabled || !!connectionPerms.canAction?.('execute');
   const formRef = useRef<ProFormInstance>(null);
 
   const applicationConnectionImportTemplate = useMemo(
@@ -367,6 +373,35 @@ const ApplicationConnectionsListPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.applicationConnections.testFailed'));
+    }
+  };
+
+  const handleSyncContacts = async (record: ApplicationConnection) => {
+    if (record.type !== 'wecom') return;
+    try {
+      setSyncingContactsUuid(record.uuid);
+      messageApi.loading({
+        content: t('pages.system.applicationConnections.syncContactsRunning'),
+        key: 'wecom-sync-contacts',
+        duration: 0,
+      });
+      const result = await syncApplicationConnectionContacts(record.uuid);
+      messageApi.destroy('wecom-sync-contacts');
+      if (result.success) {
+        messageApi.success(result.message || t('pages.system.applicationConnections.syncContactsSuccess'));
+      } else {
+        messageApi.error(result.message || result.error || t('pages.system.applicationConnections.syncContactsFailed'));
+      }
+      actionRef.current?.reload();
+      if (detailData?.uuid === record.uuid) {
+        const detail = await getApplicationConnectionByUuid(record.uuid);
+        setDetailData(detail);
+      }
+    } catch (error: any) {
+      messageApi.destroy('wecom-sync-contacts');
+      messageApi.error(error?.message || t('pages.system.applicationConnections.syncContactsFailed'));
+    } finally {
+      setSyncingContactsUuid(null);
     }
   };
 
@@ -753,6 +788,26 @@ const ApplicationConnectionsListPage: React.FC = () => {
             >
               {t('pages.system.applicationConnections.testConnection')}
             </Button>,
+            record.type === 'wecom' && canSyncContacts ? (
+              <Popconfirm
+                {...rowActionKind('execute')}
+                key="sync-contacts"
+                title={t('pages.system.applicationConnections.syncContactsConfirmTitle')}
+                description={t('pages.system.applicationConnections.syncContactsConfirmContent')}
+                onConfirm={() => handleSyncContacts(record)}
+                okText={t('common.confirm')}
+                cancelText={t('common.cancel')}
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<SyncOutlined />}
+                  loading={syncingContactsUuid === record.uuid}
+                >
+                  {t('pages.system.applicationConnections.syncContacts')}
+                </Button>
+              </Popconfirm>
+            ) : null,
             <Popconfirm {...rowActionKind('delete')}
               key="delete"
               title={t('pages.system.applicationConnections.deleteConfirmTitle')}
@@ -764,7 +819,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
                 {t('pages.system.applicationConnections.delete')}
               </Button>
             </Popconfirm>,
-          ],
+          ].filter(Boolean),
     },
   ];
 
@@ -1051,6 +1106,22 @@ const ApplicationConnectionsListPage: React.FC = () => {
               <Button icon={<ThunderboltOutlined />} onClick={() => handleTestConnection(detailData)}>
                 {t('pages.system.applicationConnections.testConnection')}
               </Button>
+              {detailData.type === 'wecom' && canSyncContacts ? (
+                <Popconfirm
+                  title={t('pages.system.applicationConnections.syncContactsConfirmTitle')}
+                  description={t('pages.system.applicationConnections.syncContactsConfirmContent')}
+                  onConfirm={() => handleSyncContacts(detailData)}
+                  okText={t('common.confirm')}
+                  cancelText={t('common.cancel')}
+                >
+                  <Button
+                    icon={<SyncOutlined />}
+                    loading={syncingContactsUuid === detailData.uuid}
+                  >
+                    {t('pages.system.applicationConnections.syncContacts')}
+                  </Button>
+                </Popconfirm>
+              ) : null}
               <Popconfirm
                 title={t('pages.system.applicationConnections.deleteConfirmTitle')}
                 onConfirm={() => { handleDelete(detailData); setDrawerVisible(false); }}

@@ -2659,7 +2659,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             return {
                 "has_shortage": False,
                 "shortage_items": [],
-                "total_shortage_count": 0
+                "total_shortage_count": 0,
+                "work_order_id": work_order_id,
+                "work_order_code": work_order.code or "",
+                "work_order_name": work_order.name or "",
             }
 
         shortage_items = []
@@ -2701,8 +2704,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             "shortage_items": shortage_items,
             "total_shortage_count": len(shortage_items),
             "work_order_id": work_order_id,
-            "work_order_code": work_order.code,
-            "work_order_name": work_order.name
+            "work_order_code": work_order.code or "",
+            "work_order_name": work_order.name or "",
         }
 
     async def release_work_order(
@@ -4069,7 +4072,22 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             # 检查工序状态
             if work_order_operation.status != 'pending':
-                raise BusinessLogicError(f"只能开始待开始状态的工序，当前状态：{work_order_operation.status}")
+                op_status_labels = {
+                    'pending': '待开工',
+                    'in_progress': '进行中',
+                    'processing': '进行中',
+                    'paused': '已暂停',
+                    'completed': '已完成',
+                }
+                status = work_order_operation.status or ''
+                if status in ('in_progress', 'processing'):
+                    raise BusinessLogicError('当前工序已在进行中，无需再次开工')
+                if status == 'paused':
+                    raise BusinessLogicError('当前工序已暂停，请先恢复后再继续')
+                if status == 'completed':
+                    raise BusinessLogicError('当前工序已完成，无法再次开工')
+                label = op_status_labels.get(status, status)
+                raise BusinessLogicError(f'只能开工「待开工」状态的工序，当前为「{label}」')
 
             # 检查跳转规则：工单或工序任一方允许跳转则放宽；节点工序在允许跳转时仍不可跳过
             from apps.kuaizhizao.services.operation_jump_rules import (

@@ -138,6 +138,24 @@ export async function testApplicationConnectionConfig(
   });
 }
 
+export interface SyncContactsResponse {
+  success: boolean;
+  message: string;
+  departments?: { created?: number; updated?: number; skipped?: number };
+  users?: { created?: number; updated?: number; skipped?: number; bound?: number };
+  synced_at?: string;
+  error?: string;
+}
+
+/** 同步企业微信通讯录（部门 + 成员） */
+export async function syncApplicationConnectionContacts(
+  uuid: string,
+): Promise<SyncContactsResponse> {
+  return apiRequest<SyncContactsResponse>(`/core/application-connections/${uuid}/sync-contacts`, {
+    method: 'POST',
+  });
+}
+
 export interface ConnectorDefinition {
   id: string;
   name: string;

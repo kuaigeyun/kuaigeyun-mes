@@ -40,12 +40,12 @@ class Role(BaseModel):
     role_type = fields.CharField(
         max_length=20,
         default="internal",
-        description="角色类型：internal(内部)/external(外部)"
+        description="角色类型：internal(内部)/external(外部)/station(触屏专用)",
     )
     external_partner_type = fields.CharField(
         max_length=20,
         null=True,
-        description="外部角色合作方类型：customer/supplier；内部角色为空"
+        description="外部角色合作方类型：customer/supplier；内部与触屏专用为空",
     )
     is_system = fields.BooleanField(default=False, description="是否系统角色（系统角色不可删除）")
     is_active = fields.BooleanField(default=True, description="是否启用")

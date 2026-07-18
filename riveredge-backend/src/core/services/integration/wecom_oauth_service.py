@@ -231,6 +231,28 @@ async def bind_wecom_userid_to_user(*, user: User, wecom_userid: str) -> User:
     return user
 
 
+_WECOM_USERID_KEYS = ("wecom_userid", "wecom_user_id", "wx_work_userid")
+
+
+async def unbind_wecom_userid_from_user(*, user: User) -> User:
+    """清除用户 contact_info 中的企微绑定标识。"""
+    contact = dict(user.contact_info) if isinstance(user.contact_info, dict) else {}
+    for key in _WECOM_USERID_KEYS:
+        contact.pop(key, None)
+    user.contact_info = contact
+    await user.save(update_fields=["contact_info", "updated_at"])
+    return user
+
+
+async def unbind_wecom_user_for_current_user(*, tenant_id: int, user: User) -> User:
+    """已登录用户在个人资料中解绑企微。"""
+    if user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="组织上下文不匹配")
+    if not _extract_wecom_user_id(user):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前账号未绑定企业微信")
+    return await unbind_wecom_userid_from_user(user=user)
+
+
 async def resolve_user_for_wecom_login(*, tenant_id: int, wecom_userid: str) -> User:
     """
     企微扫码登录用户解析：已绑定则直接返回；否则按通讯录手机号/邮箱/账号自动绑定。

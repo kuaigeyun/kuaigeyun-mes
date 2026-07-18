@@ -34,6 +34,7 @@ DEFAULT_PLATFORM_SETTINGS = PlatformSettingsResponse(
     login_content=None,
     icp_license=None,
     theme_color="#1890ff",
+    default_tenant_id=None,
     enable_register=True,
     created_at=now_utc(),
     updated_at=now_utc(),

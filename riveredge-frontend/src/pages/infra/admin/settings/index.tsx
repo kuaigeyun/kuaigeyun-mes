@@ -10,9 +10,9 @@
 
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Card, Button, Space, Upload, Form, ColorPicker, Row, Col, Input, Switch, Typography } from 'antd';
+import { App, Card, Button, Space, Upload, Form, ColorPicker, Row, Col, Input, Switch, Typography, Select } from 'antd';
 import { UploadOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { UploadFile, UploadProps } from 'antd';
 import { ListPageTemplate } from '../../../../components/layout-templates';
@@ -23,6 +23,7 @@ import {
   type PlatformSettings,
   type PlatformSettingsUpdateRequest,
 } from '../../../../services/platformSettings';
+import { getTenantList, TenantStatus } from '../../../../services/tenant';
 import { uploadFile, getFilePreview, getSiteLogoPreview, FileUploadResponse } from '../../../../services/file';
 import ImageCropper from '../../../../components/image-cropper';
 import { applyFavicon } from '../../../../utils/favicon';
@@ -88,6 +89,28 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
     placeholderData: (prev) => prev,
   });
 
+  const { data: activeTenants = [] } = useQuery({
+    queryKey: ['infraActiveTenantsForDefault'],
+    queryFn: async () => {
+      const result = await getTenantList(
+        { page: 1, page_size: 200, status: TenantStatus.ACTIVE },
+        true,
+      );
+      return result.items;
+    },
+    enabled: mode === 'basic',
+    staleTime: 60_000,
+  });
+
+  const defaultTenantOptions = useMemo(
+    () =>
+      activeTenants.map((tenant) => ({
+        label: `${tenant.name} (${tenant.domain})`,
+        value: tenant.id,
+      })),
+    [activeTenants],
+  );
+
   // 更新平台设置
   const updateMutation = useMutation({
     mutationFn: (data: PlatformSettingsUpdateRequest) => updatePlatformSettings(data),
@@ -111,6 +134,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         icp_license_en: data.icp_license_en,
         theme_color: data.theme_color || '#1890ff',
         tenant_auto_approve: data.tenant_auto_approve ?? false,
+        default_tenant_id: data.default_tenant_id ?? null,
         float_button_enabled: data.float_button_enabled ?? true,
         login_guest_enabled: data.login_guest_enabled ?? true,
         login_client_win_enabled: data.login_client_win_enabled ?? true,
@@ -304,6 +328,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         icp_license_en: settings.icp_license_en,
         theme_color: settings.theme_color || '#1890ff',
         tenant_auto_approve: settings.tenant_auto_approve ?? false,
+        default_tenant_id: settings.default_tenant_id ?? null,
         float_button_enabled: settings.float_button_enabled ?? true,
         login_guest_enabled: settings.login_guest_enabled ?? true,
         login_client_win_enabled: settings.login_client_win_enabled ?? true,
@@ -791,6 +816,21 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                     valuePropName="checked"
                   >
                     <Switch />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="default_tenant_id"
+                    label={t('pages.infra.platform.defaultTenant')}
+                    tooltip={t('pages.infra.platform.defaultTenantTooltip')}
+                  >
+                    <Select
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      placeholder={t('pages.infra.platform.defaultTenantPlaceholder')}
+                      options={defaultTenantOptions}
+                    />
                   </Form.Item>
                 </Col>
               </Row>

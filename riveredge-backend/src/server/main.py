@@ -41,6 +41,7 @@ from infra.api.init.init_wizard import router as init_wizard_router
 from infra.api.templates.templates import router as industry_template_router
 from infra.api.platform_settings.platform_settings import router as platform_settings_router
 from infra.api.license_center.license_center import router as license_center_router
+from infra.api.station_logo_license.public import router as station_logo_license_public_router
 from infra.api.platform_settings.public import router as platform_settings_public_router
 from infra.api.client_releases.client_releases import public_router as client_releases_public_router
 from infra.api.client_releases.client_releases import router as client_releases_router
@@ -852,6 +853,7 @@ app.include_router(init_wizard_router, prefix="/api/v1/infra")
 app.include_router(industry_template_router, prefix="/api/v1/infra")
 app.include_router(platform_settings_router, prefix="/api/v1/infra")
 app.include_router(license_center_router, prefix="/api/v1/infra")
+app.include_router(station_logo_license_public_router, prefix="/api/v1/infra")
 app.include_router(business_config_router, prefix="/api/v1/infra")
 app.include_router(client_releases_public_router, prefix="/api/v1/infra")
 app.include_router(client_releases_router, prefix="/api/v1/infra")

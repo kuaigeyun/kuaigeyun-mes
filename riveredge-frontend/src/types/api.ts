@@ -56,7 +56,7 @@ export interface CurrentUser {
     uuid: string;
     name: string;
     code: string;
-    role_type?: 'internal' | 'external' | string;
+    role_type?: 'internal' | 'external' | 'station' | string;
     external_partner_type?: string | null;
   }>;
   /** 登录身份：infra_superadmin 为平台超级管理员 */

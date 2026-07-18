@@ -683,6 +683,9 @@ const RolesPermissionsPage: React.FC = () => {
             {role.role_type === 'external' && role.external_partner_type === 'customer' && (
               <Tag color="geekblue">{t('pages.system.roles.externalCustomer', { defaultValue: '客户' })}</Tag>
             )}
+            {role.role_type === 'station' && (
+              <Tag color="purple">{t('field.role.roleTypeStation', { defaultValue: '触屏专用' })}</Tag>
+            )}
             {role.is_system && <Tag color="default">{t('pages.system.roles.system')}</Tag>}
             {!role.is_active && <Tag color="default">{t('pages.system.roles.disabled')}</Tag>}
           </Space>

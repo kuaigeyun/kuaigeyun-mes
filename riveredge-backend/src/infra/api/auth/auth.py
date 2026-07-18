@@ -40,6 +40,7 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthenticationError
 from core.services.integration.wecom_oauth_service import (
     bind_wecom_user_for_current_user,
+    unbind_wecom_user_for_current_user,
     build_wecom_oauth_authorize_url,
     decode_wecom_oauth_state,
     encode_wecom_oauth_state,
@@ -82,6 +83,10 @@ class WeComWWLoginConfigResponse(BaseModel):
 class WeComBindResponse(BaseModel):
     wecom_userid: str
     message: str = "企业微信账号绑定成功"
+
+
+class WeComUnbindResponse(BaseModel):
+    message: str = "企业微信账号已解绑"
 
 
 # 创建路由
@@ -239,6 +244,18 @@ async def wecom_bind(
         wecom_userid=wecom_userid,
     )
     return WeComBindResponse(wecom_userid=wecom_userid)
+
+
+@router.post("/wecom/unbind", response_model=WeComUnbindResponse)
+async def wecom_unbind(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    已登录用户在个人资料中解绑企业微信（清除 contact_info 中的企微 UserID）。
+    """
+    await unbind_wecom_user_for_current_user(tenant_id=tenant_id, user=current_user)
+    return WeComUnbindResponse()
 
 
 @router.get("/me", response_model=CurrentUserResponse)

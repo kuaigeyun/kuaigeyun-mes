@@ -33,7 +33,7 @@ class RoleService:
     提供角色的 CRUD 操作和权限分配功能。
     """
     
-    ALLOWED_ROLE_TYPES = {"internal", "external"}
+    ALLOWED_ROLE_TYPES = {"internal", "external", "station"}
     ALLOWED_EXTERNAL_PARTNER_TYPES = {"customer", "supplier"}
 
     @staticmethod
@@ -57,9 +57,10 @@ class RoleService:
         rt = (role_type or "internal").strip().lower()
         pt = (external_partner_type or "").strip().lower() or None
         if rt not in RoleService.ALLOWED_ROLE_TYPES:
-            raise ValidationError("角色类型仅支持 internal / external")
-        if rt == "internal":
-            return "internal", None
+            raise ValidationError("角色类型仅支持 internal / external / station")
+        # 内部、触屏专用：均不绑定外协合作方
+        if rt in {"internal", "station"}:
+            return rt, None
         if pt not in RoleService.ALLOWED_EXTERNAL_PARTNER_TYPES:
             raise ValidationError("外部角色必须指定合作方类型：customer / supplier")
         return "external", pt

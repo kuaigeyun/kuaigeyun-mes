@@ -79,6 +79,8 @@ from .material_call_request_item import MaterialCallRequestItem
 from .station_andon_call import StationAndonCall
 from .station_sop_acknowledgment import StationSopAcknowledgment
 from .station_operation_downtime import StationOperationDowntime
+from .operator_skill import OperatorSkillQualification
+from .station_shift_handover import StationShiftHandover
 
 # 采购管理模块
 from .purchase_order import PurchaseOrder, PurchaseOrderItem

@@ -267,7 +267,9 @@ async def record_payment(
     try:
         payable = await payable_service.record_payment(tenant_id, id, data, current_user.id)
         return payable
-    except BusinessLogicError as e:
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/payables/{id}/payment", tenant_id)
+    except (BusinessLogicError, ValidationError) as e:
         raise _http_exception_with_trace(400, str(e), "/payables/{id}/payment", tenant_id)
 
 

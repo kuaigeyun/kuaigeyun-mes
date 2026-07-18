@@ -14,9 +14,12 @@ from core.schemas.integration_config import (
     IntegrationConfigResponse,
     TestConfigRequest,
     TestConnectionResponse,
+    SyncContactsResponse,
 )
 from core.services.integration.integration_config_service import IntegrationConfigService
+from core.services.integration.wecom_contact_sync_service import WeComContactSyncService
 from core.api.deps.deps import get_current_tenant
+from core.api.deps.access import require_permission_codes
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -216,3 +219,51 @@ async def test_application_connection_config(
         data=result.get("data"),
         error=result.get("error"),
     )
+
+
+@router.post(
+    "/{uuid}/sync-contacts",
+    response_model=SyncContactsResponse,
+    dependencies=[Depends(require_permission_codes("system:application-connection:execute"))],
+)
+async def sync_application_connection_contacts(
+    uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """同步企业微信通讯录（部门树 + 成员）到本系统组织架构与用户。"""
+    try:
+        ic = await IntegrationConfigService.get_integration_by_uuid(
+            tenant_id=tenant_id, uuid=str(uuid)
+        )
+        if ic.type != "wecom":
+            raise ValidationError("仅企业微信连接器支持通讯录同步")
+        result = await WeComContactSyncService.sync_contacts(
+            tenant_id=tenant_id,
+            integration_uuid=str(uuid),
+        )
+        dept = result.get("departments") or {}
+        users = result.get("users") or {}
+        message = (
+            f"同步完成：部门新增 {dept.get('created', 0)}、更新 {dept.get('updated', 0)}；"
+            f"成员新增 {users.get('created', 0)}、更新 {users.get('updated', 0)}、"
+            f"绑定 {users.get('bound', 0)}、跳过 {users.get('skipped', 0)}"
+        )
+        return SyncContactsResponse(
+            success=True,
+            message=message,
+            departments=dept,
+            users=users,
+            synced_at=result.get("synced_at"),
+        )
+    except NotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="应用连接不存在")
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"同步通讯录失败: {str(e)}",
+        )

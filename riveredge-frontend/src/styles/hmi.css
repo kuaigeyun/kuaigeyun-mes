@@ -143,13 +143,15 @@
   min-height: 76px;
   padding: 14px 16px;
   margin-bottom: 8px;
-  border-radius: 8px;
+  border-radius: 4px;
   cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .hmi-root .hmi-list-item--selected {
-  border-color: rgba(0, 200, 83, 0.5);
+  border: 1px solid rgba(22, 119, 255, 0.55);
+  background: rgba(22, 119, 255, 0.14);
+  box-shadow: none;
 }
 
 .hmi-root .hmi-list-item__title {

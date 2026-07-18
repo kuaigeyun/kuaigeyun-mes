@@ -105,6 +105,7 @@ class PermissionRegistryService:
         "system:application-connection:create",
         "system:application-connection:delete",
         "system:application-connection:update",
+        "system:application-connection:execute",
         "system:dataset:read",
         "system:dataset:create",
         "system:dataset:delete",

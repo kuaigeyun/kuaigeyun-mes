@@ -116,3 +116,13 @@ class TestConnectionResponse(BaseModel):
     data: Optional[Dict[str, Any]] = Field(None, description="测试结果数据")
     error: Optional[str] = Field(None, description="错误信息")
 
+
+class SyncContactsResponse(BaseModel):
+    """通讯录同步结果。"""
+    success: bool = Field(..., description="是否成功")
+    message: str = Field(..., description="消息")
+    departments: Optional[Dict[str, int]] = Field(None, description="部门同步统计")
+    users: Optional[Dict[str, int]] = Field(None, description="成员同步统计")
+    synced_at: Optional[str] = Field(None, description="同步完成时间（ISO8601）")
+    error: Optional[str] = Field(None, description="错误信息")
+

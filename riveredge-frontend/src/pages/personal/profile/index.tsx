@@ -8,13 +8,18 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormTextArea, ProFormText, ProFormInstance } from '@ant-design/pro-components';
-import { App, Card, message, Upload, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions, Grid, Spin, Modal } from 'antd';
+import { App, Card, message, Upload, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions, Grid, Spin, Modal, Popconfirm, Tooltip, Input } from 'antd';
 import { WWLoginLangType } from '@wecom/jssdk';
 import { WecomWWLoginPanel } from '../../../components/WecomWWLoginPanel';
 import { getWecomWWLoginConfig, type WeComWWLoginConfigResponse } from '../../../services/publicAuth';
 import { saveWecomOAuthState } from '../../../utils/wecomAuth';
 import { ThemedSegmented } from '../../../components/themed-segmented';
-import { UserOutlined, UploadOutlined, DeleteOutlined, SyncOutlined } from '@ant-design/icons';
+import { UserOutlined, UploadOutlined, DeleteOutlined, SyncOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import wechatLogo from '../../../assets/social/wechat.svg';
+import qqLogo from '../../../assets/social/qq.svg';
+import wecomLogo from '../../../assets/social/qwei.svg';
+import dingtalkLogo from '../../../assets/social/dingtalk.svg';
+import feishuLogo from '../../../assets/social/feishu.svg';
 
 // ... (other imports)
 import { 
@@ -29,6 +34,7 @@ import {
   updateUserProfile,
   changePassword,
   bindWecomAccount,
+  unbindWecomAccount,
   UserProfile,
   UpdateUserProfileData,
 } from '../../../services/userProfile';
@@ -47,6 +53,91 @@ import { getUserInfo, getTenantId, setTenantId, setUserInfo } from '../../../uti
 import { useGlobalStore } from '../../../stores';
 
 const { Title, Text } = Typography;
+
+const SOCIAL_BRAND = {
+  wechat: '#07C160',
+  qq: '#12B7F5',
+  wecom: '#78C340',
+  dingtalk: '#0075FF',
+  feishu: '#3370FF',
+} as const;
+
+type SocialContactCardProps = {
+  logo: string;
+  brandColor: string;
+  title: string;
+  hint?: string;
+  /** 标题行右侧附加内容（如「已绑定：xxx」），与标题同行以保证卡片高度一致 */
+  titleExtra?: React.ReactNode;
+  children: React.ReactNode;
+};
+
+/** 联系方式社交渠道卡片（与登录页同款 LOGO） */
+const SocialContactCard: React.FC<SocialContactCardProps> = ({
+  logo,
+  brandColor,
+  title,
+  hint,
+  titleExtra,
+  children,
+}) => {
+  const { token } = theme.useToken();
+  return (
+    <Card
+      size="small"
+      styles={{ body: { padding: 16 } }}
+      style={{
+        height: '100%',
+        borderRadius: 12,
+        background: token.colorFillAlter,
+      }}
+    >
+      <Space align="start" size={16} style={{ width: '100%' }}>
+        <div
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 12,
+            backgroundColor: brandColor,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <img src={logo} alt={title} style={{ width: 28, height: 28 }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginBottom: 8,
+              minWidth: 0,
+              flexWrap: 'wrap',
+            }}
+          >
+            <Space size={4} style={{ flexShrink: 0 }}>
+              <Text strong>{title}</Text>
+              {hint ? (
+                <Tooltip title={hint}>
+                  <QuestionCircleOutlined style={{ color: token.colorTextSecondary }} />
+                </Tooltip>
+              ) : null}
+            </Space>
+            {titleExtra ? (
+              <Text type="secondary" ellipsis style={{ flex: 1, minWidth: 0 }}>
+                {titleExtra}
+              </Text>
+            ) : null}
+          </div>
+          {children}
+        </div>
+      </Space>
+    </Card>
+  );
+};
 
 /**
  * 个人资料页面组件
@@ -73,11 +164,30 @@ const UserProfilePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('basic');
   const [wecomBindModalOpen, setWecomBindModalOpen] = useState(false);
   const [wecomBindLoading, setWecomBindLoading] = useState(false);
+  const [wecomUnbindLoading, setWecomUnbindLoading] = useState(false);
   const [wecomBindConfig, setWecomBindConfig] = useState<WeComWWLoginConfigResponse | null>(null);
   const setGlobalUser = useGlobalStore((s) => s.setCurrentUser);
   const currentUser = useGlobalStore((s) => s.currentUser);
 
   const boundWecomUserid = profileData?.contact_info?.wecom_userid?.trim() || '';
+
+  const handleUnbindWecom = useCallback(async () => {
+    try {
+      setWecomUnbindLoading(true);
+      await unbindWecomAccount();
+      messageApi.success(t('pages.personal.profile.wecomUnbindSuccess'));
+      const updatedData = await getUserProfile();
+      setProfileData(updatedData);
+      formRef.current?.setFieldsValue({
+        contact_wecom_userid: '',
+      });
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : t('pages.personal.profile.wecomUnbindFailed');
+      messageApi.error(errMsg);
+    } finally {
+      setWecomUnbindLoading(false);
+    }
+  }, [messageApi, t]);
 
   const handleOpenWecomBind = useCallback(async () => {
     const tenantId = getTenantId();
@@ -172,7 +282,8 @@ const UserProfilePage: React.FC = () => {
         // 联系方式字段（已移除 contact_phone，因为上面已有手机号字段）
         contact_wechat: data.contact_info?.wechat || '',
         contact_qq: data.contact_info?.qq || '',
-        contact_address: data.contact_info?.address || '',
+        contact_dingtalk: data.contact_info?.dingtalk || '',
+        contact_feishu: data.contact_info?.feishu || '',
         contact_wecom_userid: data.contact_info?.wecom_userid || '',
       });
       
@@ -522,8 +633,11 @@ const UserProfilePage: React.FC = () => {
       if (values.contact_qq !== undefined && values.contact_qq !== null) {
         contact_info.qq = values.contact_qq.trim() || null;
       }
-      if (values.contact_address !== undefined && values.contact_address !== null) {
-        contact_info.address = values.contact_address.trim() || null;
+      if (values.contact_dingtalk !== undefined && values.contact_dingtalk !== null) {
+        contact_info.dingtalk = values.contact_dingtalk.trim() || null;
+      }
+      if (values.contact_feishu !== undefined && values.contact_feishu !== null) {
+        contact_info.feishu = values.contact_feishu.trim() || null;
       }
       
       // 只发送可编辑的字段：username、email、full_name、phone、bio、gender、contact_info
@@ -592,7 +706,8 @@ const UserProfilePage: React.FC = () => {
           // 联系方式字段（已移除 contact_phone，因为上面已有手机号字段）
           contact_wechat: updatedData.contact_info?.wechat || '',
           contact_qq: updatedData.contact_info?.qq || '',
-          contact_address: updatedData.contact_info?.address || '',
+          contact_dingtalk: updatedData.contact_info?.dingtalk || '',
+          contact_feishu: updatedData.contact_info?.feishu || '',
           contact_wecom_userid: updatedData.contact_info?.wecom_userid || '',
         });
         
@@ -712,8 +827,11 @@ const UserProfilePage: React.FC = () => {
                     {profileData.contact_info.qq && (
                       <div>{t('pages.personal.profile.qq')}：{profileData.contact_info.qq}</div>
                     )}
-                    {profileData.contact_info.address && (
-                      <div>{t('pages.personal.profile.address')}：{profileData.contact_info.address}</div>
+                    {profileData.contact_info.dingtalk && (
+                      <div>{t('pages.personal.profile.dingtalk')}：{profileData.contact_info.dingtalk}</div>
+                    )}
+                    {profileData.contact_info.feishu && (
+                      <div>{t('pages.personal.profile.feishu')}：{profileData.contact_info.feishu}</div>
                     )}
                     {profileData.contact_info.wecom_userid && (
                       <div>{t('pages.personal.profile.wecomUserid')}：{profileData.contact_info.wecom_userid}</div>
@@ -777,7 +895,8 @@ const UserProfilePage: React.FC = () => {
                         gender: profileData?.gender,
                         contact_wechat: profileData?.contact_info?.wechat || '',
                         contact_qq: profileData?.contact_info?.qq || '',
-                        contact_address: profileData?.contact_info?.address || '',
+                        contact_dingtalk: profileData?.contact_info?.dingtalk || '',
+                        contact_feishu: profileData?.contact_info?.feishu || '',
                         contact_wecom_userid: profileData?.contact_info?.wecom_userid || '',
                       }}
                       submitter={{
@@ -885,30 +1004,33 @@ const UserProfilePage: React.FC = () => {
                 </Space>
               </ProForm.Item>
               
-              <ProFormText
-                name="username"
-                label={t('pages.personal.profile.username')}
-                fieldProps={{
-                  placeholder: t('pages.login.usernamePlaceholder'),
-                  maxLength: 50,
-                  style: { width: 280 },
-                }}
-                rules={[
-                  { required: true, message: t('pages.login.usernameRequired') },
-                  { min: 1, message: t('pages.login.usernameRequired') },
-                  { max: 50, message: t('pages.login.usernameLen') },
-                ]}
-              />
-              
-              <ProFormText
-                name="full_name"
-                label={t('pages.personal.profile.fullName')}
-                fieldProps={{
-                  placeholder: t('pages.personal.profile.fullName'),
-                  maxLength: 100,
-                  style: { width: 280 },
-                }}
-              />
+              <Row gutter={16}>
+                <Col xs={24} sm={12}>
+                  <ProFormText
+                    name="username"
+                    label={t('pages.personal.profile.username')}
+                    fieldProps={{
+                      placeholder: t('pages.login.usernamePlaceholder'),
+                      maxLength: 50,
+                    }}
+                    rules={[
+                      { required: true, message: t('pages.login.usernameRequired') },
+                      { min: 1, message: t('pages.login.usernameRequired') },
+                      { max: 50, message: t('pages.login.usernameLen') },
+                    ]}
+                  />
+                </Col>
+                <Col xs={24} sm={12}>
+                  <ProFormText
+                    name="full_name"
+                    label={t('pages.personal.profile.fullName')}
+                    fieldProps={{
+                      placeholder: t('pages.personal.profile.fullName'),
+                      maxLength: 100,
+                    }}
+                  />
+                </Col>
+              </Row>
               
               <ProForm.Item
                 name="gender"
@@ -935,54 +1057,57 @@ const UserProfilePage: React.FC = () => {
                 </Form.Item>
               </ProForm.Item>
               
-              <ProFormText
-                name="phone"
-                label={t('pages.personal.profile.phone')}
-                fieldProps={{
-                  placeholder: t('pages.login.phonePlaceholder'),
-                  maxLength: 20,
-                  style: { width: 280 },
-                }}
-                rules={[
-                  {
-                    validator: (_, value) => {
-                      if (!value || value.trim() === '') {
-                        return Promise.resolve();
-                      }
-                      const phoneRegex = /^1[3-9]\d{9}$/;
-                      if (phoneRegex.test(value.trim())) {
-                        return Promise.resolve();
-                      }
-                      return Promise.reject(new Error(t('pages.login.phoneInvalid')));
-                    },
-                  },
-                ]}
-              />
-              
-              <ProFormText
-                name="email"
-                label={t('pages.personal.profile.email')}
-                fieldProps={{
-                  placeholder: t('pages.login.emailPlaceholder'),
-                  type: 'email',
-                  maxLength: 255,
-                  style: { width: 360 },
-                }}
-                rules={[
-                  {
-                    validator: (_, value) => {
-                      if (!value || value.trim() === '') {
-                        return Promise.resolve();
-                      }
-                      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                      if (emailRegex.test(value.trim())) {
-                        return Promise.resolve();
-                      }
-                      return Promise.reject(new Error(t('pages.login.emailInvalid')));
-                    },
-                  },
-                ]}
-              />
+              <Row gutter={16}>
+                <Col xs={24} sm={12}>
+                  <ProFormText
+                    name="phone"
+                    label={t('pages.personal.profile.phone')}
+                    fieldProps={{
+                      placeholder: t('pages.login.phonePlaceholder'),
+                      maxLength: 20,
+                    }}
+                    rules={[
+                      {
+                        validator: (_, value) => {
+                          if (!value || value.trim() === '') {
+                            return Promise.resolve();
+                          }
+                          const phoneRegex = /^1[3-9]\d{9}$/;
+                          if (phoneRegex.test(value.trim())) {
+                            return Promise.resolve();
+                          }
+                          return Promise.reject(new Error(t('pages.login.phoneInvalid')));
+                        },
+                      },
+                    ]}
+                  />
+                </Col>
+                <Col xs={24} sm={12}>
+                  <ProFormText
+                    name="email"
+                    label={t('pages.personal.profile.email')}
+                    fieldProps={{
+                      placeholder: t('pages.login.emailPlaceholder'),
+                      type: 'email',
+                      maxLength: 255,
+                    }}
+                    rules={[
+                      {
+                        validator: (_, value) => {
+                          if (!value || value.trim() === '') {
+                            return Promise.resolve();
+                          }
+                          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                          if (emailRegex.test(value.trim())) {
+                            return Promise.resolve();
+                          }
+                          return Promise.reject(new Error(t('pages.login.emailInvalid')));
+                        },
+                      },
+                    ]}
+                  />
+                </Col>
+              </Row>
               
               <ProFormTextArea
                 name="bio"
@@ -995,52 +1120,112 @@ const UserProfilePage: React.FC = () => {
               />
               
               <Divider titlePlacement="left">{t('pages.personal.profile.contactInfo')}</Divider>
-              
-              <ProFormText
-                name="contact_wechat"
-                label={t('pages.personal.profile.wechat')}
-                placeholder={t('pages.personal.profile.wechat')}
-                fieldProps={{
-                  maxLength: 50,
-                  style: { width: 280 },
-                }}
-              />
-              
-              <ProFormText
-                name="contact_qq"
-                label={t('pages.personal.profile.qq')}
-                placeholder={t('pages.personal.profile.qq')}
-                fieldProps={{
-                  maxLength: 20,
-                  style: { width: 280 },
-                }}
-              />
-              
-              <Form.Item
-                label={t('pages.personal.profile.wecomUserid')}
-                tooltip={t('pages.personal.profile.wecomUseridHint')}
-              >
-                <Space direction="vertical" size={8}>
-                  <Text type={boundWecomUserid ? undefined : 'secondary'}>
-                    {boundWecomUserid
-                      ? t('pages.personal.profile.wecomBound', { userid: boundWecomUserid })
-                      : t('pages.personal.profile.wecomNotBound')}
-                  </Text>
-                  <Button loading={wecomBindLoading} onClick={() => void handleOpenWecomBind()}>
-                    {t('pages.personal.profile.wecomBindButton')}
-                  </Button>
-                </Space>
-              </Form.Item>
-              
-              <ProFormText
-                name="contact_address"
-                label={t('pages.personal.profile.address')}
-                placeholder={t('pages.personal.profile.address')}
-                fieldProps={{
-                  maxLength: 200,
-                  style: { width: '100%' },
-                }}
-              />
+
+              <Row gutter={[16, 16]} style={{ marginBottom: 8 }}>
+                <Col xs={24} md={12}>
+                  <SocialContactCard
+                    logo={wechatLogo}
+                    brandColor={SOCIAL_BRAND.wechat}
+                    title={t('pages.personal.profile.wechat')}
+                    hint={t('pages.personal.profile.wechatHint')}
+                  >
+                    <Form.Item name="contact_wechat" noStyle>
+                      <Input
+                        placeholder={t('pages.personal.profile.wechatPlaceholder')}
+                        maxLength={50}
+                        allowClear
+                      />
+                    </Form.Item>
+                  </SocialContactCard>
+                </Col>
+                <Col xs={24} md={12}>
+                  <SocialContactCard
+                    logo={qqLogo}
+                    brandColor={SOCIAL_BRAND.qq}
+                    title={t('pages.personal.profile.qq')}
+                    hint={t('pages.personal.profile.qqHint')}
+                  >
+                    <Form.Item name="contact_qq" noStyle>
+                      <Input
+                        placeholder={t('pages.personal.profile.qqPlaceholder')}
+                        maxLength={20}
+                        allowClear
+                      />
+                    </Form.Item>
+                  </SocialContactCard>
+                </Col>
+                <Col xs={24} md={12}>
+                  <SocialContactCard
+                    logo={wecomLogo}
+                    brandColor={SOCIAL_BRAND.wecom}
+                    title={t('pages.personal.profile.wecomUserid')}
+                    hint={t('pages.personal.profile.wecomUseridHint')}
+                    titleExtra={
+                      boundWecomUserid
+                        ? t('pages.personal.profile.wecomBound', { userid: boundWecomUserid })
+                        : t('pages.personal.profile.wecomNotBound')
+                    }
+                  >
+                    <Space wrap size={8}>
+                      {!boundWecomUserid ? (
+                        <Button
+                          type="primary"
+                          loading={wecomBindLoading}
+                          onClick={() => void handleOpenWecomBind()}
+                        >
+                          {t('pages.personal.profile.wecomBindButton')}
+                        </Button>
+                      ) : (
+                        <>
+                          <Button loading={wecomBindLoading} onClick={() => void handleOpenWecomBind()}>
+                            {t('pages.personal.profile.wecomRebindButton')}
+                          </Button>
+                          <Popconfirm
+                            title={t('pages.personal.profile.wecomUnbindConfirm')}
+                            onConfirm={() => void handleUnbindWecom()}
+                          >
+                            <Button danger loading={wecomUnbindLoading}>
+                              {t('pages.personal.profile.wecomUnbindButton')}
+                            </Button>
+                          </Popconfirm>
+                        </>
+                      )}
+                    </Space>
+                  </SocialContactCard>
+                </Col>
+                <Col xs={24} md={12}>
+                  <SocialContactCard
+                    logo={dingtalkLogo}
+                    brandColor={SOCIAL_BRAND.dingtalk}
+                    title={t('pages.personal.profile.dingtalk')}
+                    hint={t('pages.personal.profile.dingtalkHint')}
+                  >
+                    <Form.Item name="contact_dingtalk" noStyle>
+                      <Input
+                        placeholder={t('pages.personal.profile.dingtalkPlaceholder')}
+                        maxLength={64}
+                        allowClear
+                      />
+                    </Form.Item>
+                  </SocialContactCard>
+                </Col>
+                <Col xs={24} md={12}>
+                  <SocialContactCard
+                    logo={feishuLogo}
+                    brandColor={SOCIAL_BRAND.feishu}
+                    title={t('pages.personal.profile.feishu')}
+                    hint={t('pages.personal.profile.feishuHint')}
+                  >
+                    <Form.Item name="contact_feishu" noStyle>
+                      <Input
+                        placeholder={t('pages.personal.profile.feishuPlaceholder')}
+                        maxLength={64}
+                        allowClear
+                      />
+                    </Form.Item>
+                  </SocialContactCard>
+                </Col>
+              </Row>
                     </ProForm>
                   ),
                 },

@@ -215,14 +215,19 @@ function toMenuItem(node: React.ReactNode, key: string) {
     let onClick = typeof props.onClick === 'function' ? (props.onClick as () => void) : undefined
     const destructive = tone.mode === 'destructive'
 
-    // 折叠到「更多」后，Popconfirm 不会自动触发；这里显式转成 Modal.confirm 以保留二次确认。
+    // 折叠到「更多」后，Popconfirm 不会自动触发；转成与 Popconfirm 同构的确认（问句贴图标，避免空正文 Modal）。
     if (popconfirm) {
       const popProps = (popconfirm.props || {}) as Record<string, unknown>
       onClick = () => {
         const onConfirm = popProps.onConfirm
+        const titleNode = (popProps.title as React.ReactNode) ?? text
+        const descriptionNode = popProps.description as React.ReactNode
+        const hasDescription =
+          descriptionNode != null && descriptionNode !== false && descriptionNode !== ''
         Modal.confirm({
-          title: (popProps.title as React.ReactNode) ?? text,
-          content: popProps.description as React.ReactNode,
+          // 无 description 时把问句放在 content，布局接近行内 Popconfirm（图标 + 文案）
+          title: hasDescription ? titleNode : undefined,
+          content: hasDescription ? descriptionNode : titleNode,
           okText: (popProps.okText as string) || i18next.t('common.confirm', { defaultValue: 'Confirm' }),
           cancelText:
             (popProps.cancelText as string) || i18next.t('common.cancel', { defaultValue: 'Cancel' }),

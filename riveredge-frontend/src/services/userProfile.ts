@@ -79,3 +79,16 @@ export async function bindWecomAccount(data: {
     data,
   });
 }
+
+export interface UnbindWecomAccountResponse {
+  message: string;
+}
+
+/**
+ * 已登录用户解绑企业微信
+ */
+export async function unbindWecomAccount(): Promise<UnbindWecomAccountResponse> {
+  return apiRequest<UnbindWecomAccountResponse>('/auth/wecom/unbind', {
+    method: 'POST',
+  });
+}

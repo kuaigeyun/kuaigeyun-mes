@@ -36,7 +36,9 @@ export const roleFormSchema: FieldConfig[] = [
     options: [
       { labelKey: 'field.role.roleTypeInternal', value: 'internal' },
       { labelKey: 'field.role.roleTypeExternal', value: 'external' },
+      { labelKey: 'field.role.roleTypeStation', value: 'station' },
     ],
+    extraKey: 'field.role.roleTypeExtra',
   },
   {
     name: 'external_partner_type',

@@ -54,6 +54,24 @@ export interface PremiumTerminalTemplateProps {
   children: ReactNode;
   /** 顶栏右侧额外内容 */
   headerExtra?: ReactNode;
+  /** 顶栏中间空白区（告警条 / 提示） */
+  headerCenter?: ReactNode;
+  /** 时钟之后的额外内容（如：退出系统） */
+  headerAfterClock?: ReactNode;
+  /** 顶栏最左侧模式徽章（如：固定工位 / 共享报工） */
+  modeBadge?: ReactNode;
+  /** 工位面包屑后的额外内容（如：切换工位） */
+  headerLeftExtra?: ReactNode;
+  /** 隐藏工位面包屑（共享报工模式） */
+  hideStationBreadcrumb?: boolean;
+  /** 时钟显示：完整日期时间，或仅 HH:mm */
+  clockFormat?: 'full' | 'hm';
+  /** 隐藏模板内全屏按钮（工位客户端由窗口标题栏控制全屏） */
+  hideFullscreenToggle?: boolean;
+  /** 隐藏模板左侧操作员块（工位端用 headerExtra 的徽章，避免重复） */
+  hideOperatorBlock?: boolean;
+  /** 内容区内边距；工位三卡布局传 0，由 workbench 统一控制 gutter */
+  contentPadding?: number | string;
 }
 
 const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
@@ -67,6 +85,15 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
   stationLine,
   children,
   headerExtra,
+  headerCenter,
+  headerAfterClock,
+  modeBadge,
+  headerLeftExtra,
+  hideStationBreadcrumb = false,
+  clockFormat = 'full',
+  hideFullscreenToggle = false,
+  hideOperatorBlock = false,
+  contentPadding = 24,
 }) => {
   const { t } = useTranslation();
   const displayOperatorName = operatorName ?? t('components.layoutTemplates.premiumTerminal.notLoggedIn');
@@ -135,7 +162,7 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
     width: '100vw',
     height: '100vh',
     zIndex: 9999,
-    background: HMI_DESIGN_TOKENS.BG_GRADIENT_MAIN,
+    background: HMI_DESIGN_TOKENS.BG_PRIMARY,
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
@@ -160,7 +187,7 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
           width: '100%',
           maxWidth: '100%',
           overflow: 'hidden',
-          background: HMI_DESIGN_TOKENS.BG_GRADIENT_MAIN,
+          background: HMI_DESIGN_TOKENS.BG_PRIMARY,
           position: 'relative',
           boxSizing: 'border-box',
           display: 'flex',
@@ -170,7 +197,7 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
       >
         <style>{`
           #premium-terminal-layout .ant-layout-header {
-            background: linear-gradient(135deg, #0a1f3c 0%, #061428 50%, #000814 100%) !important;
+            background: ${HMI_DESIGN_TOKENS.BG_PANEL} !important;
             color: #ffffff !important;
           }
           #premium-terminal-layout .ant-layout-header .ant-typography,
@@ -188,19 +215,10 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
             margin-left: 20px;
           }
         `}</style>
-        {/* 背景装饰：与渐变协调的淡纹理（弱化以突出景深） */}
-        <div style={{
-          position: 'absolute',
-          top: 0, left: 0, right: 0, bottom: 0,
-          pointerEvents: 'none',
-          background: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%231677ff\' fill-opacity=\'0.02\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2v-4h4v-2h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2v-4h4v-2H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
-          opacity: 0.6
-        }} />
-
         {/* 顶部状态栏 */}
         <Header style={{ 
-          backgroundColor: '#061428',
-          background: 'linear-gradient(180deg, #0a1f3c 0%, #061428 50%, #000814 100%)',
+          backgroundColor: HMI_DESIGN_TOKENS.BG_PANEL,
+          background: HMI_DESIGN_TOKENS.BG_PANEL,
           borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
           padding: '0 24px',
           height: HMI_LAYOUT.HEADER_HEIGHT,
@@ -213,83 +231,120 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
           overflowY: 'hidden',
           flexShrink: 0,
         }}>
-          {/* 左侧区域：工位信息(一行) / 员工信息 */}
+          {/* 左侧：工位语境组（模式 / 面包屑 / 切换）+ 员工信息 */}
           <div className="header-left-block">
-            <div className="header-station-breadcrumb">
-              {[stationArea, stationWorkshop, stationLine, stationName].filter(Boolean).length > 0
-                ? [stationArea, stationWorkshop, stationLine, stationName].filter(Boolean).map((item, i, arr) => (
-                    <span
-                      key={i}
-                      className={`header-station-segment ${i === arr.length - 1 ? 'header-station-segment-current' : ''}`}
-                    >
-                      {item}
-                    </span>
-                  ))
-                : (
-                  <span className="header-station-segment header-station-segment-current">
-                    {displayStationFallback}
-                  </span>
-                )}
-            </div>
-            <Divider orientation="vertical" className="header-divider-v" />
-            <div className="header-operator-block">
-              <span className="header-operator-avatar">
-                {operatorAvatar ? (
-                  <img src={operatorAvatar} alt="" />
-                ) : (
-                  <UserOutlined style={{ fontSize: 20, color: HMI_DESIGN_TOKENS.TEXT_TERTIARY }} />
-                )}
-              </span>
-              <div className="header-operator-info">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className="header-operator-name">{displayOperatorName}</span>
-                    {operatorRole && (
-                        <Tag 
-                            variant="filled" 
-                            style={{ 
-                                margin: 0, 
-                                background: isAdminRoleBadge(operatorRole) ? 'linear-gradient(135deg, #FF9000 0%, #F56A00 100%)' : 'rgba(255,255,255,0.15)',
-                                color: '#fff',
-                                border: '1px solid rgba(255,255,255,0.2)',
-                                fontSize: 10,
-                                lineHeight: '18px',
-                                padding: '0 6px',
-                                borderRadius: 4,
-                            }}
-                        >
-                            {operatorRole}
-                        </Tag>
+            {modeBadge || !hideStationBreadcrumb || headerLeftExtra ? (
+              <div className="header-station-cluster">
+                {modeBadge ? (
+                  <div className="header-mode-badge">
+                    {typeof modeBadge === 'string' ? (
+                      <span className="header-mode-badge__label">{modeBadge}</span>
+                    ) : (
+                      modeBadge
                     )}
-                </div>
-                {operatorEmail && <span className="header-operator-email">{operatorEmail}</span>}
+                  </div>
+                ) : null}
+                {!hideStationBreadcrumb ? (
+                  <div className="header-station-breadcrumb">
+                    {[stationArea, stationWorkshop, stationLine, stationName].filter(Boolean).length > 0
+                      ? [stationArea, stationWorkshop, stationLine, stationName].filter(Boolean).map((item, i, arr) => (
+                          <span
+                            key={i}
+                            className={`header-station-segment ${i === arr.length - 1 ? 'header-station-segment-current' : ''}`}
+                          >
+                            {item}
+                          </span>
+                        ))
+                      : (
+                        <span className="header-station-segment header-station-segment-current">
+                          {displayStationFallback}
+                        </span>
+                      )}
+                  </div>
+                ) : null}
+                {headerLeftExtra ? (
+                  <div className="header-station-cluster__action">{headerLeftExtra}</div>
+                ) : null}
               </div>
-            </div>
+            ) : null}
+            {!hideOperatorBlock ? (
+              <>
+                <Divider orientation="vertical" className="header-divider-v" />
+                <div className="header-operator-block">
+                  <span className="header-operator-avatar">
+                    {operatorAvatar ? (
+                      <img src={operatorAvatar} alt="" />
+                    ) : (
+                      <UserOutlined style={{ fontSize: 20, color: HMI_DESIGN_TOKENS.TEXT_TERTIARY }} />
+                    )}
+                  </span>
+                  <div className="header-operator-info">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className="header-operator-name">{displayOperatorName}</span>
+                      {operatorRole && (
+                        <Tag
+                          variant="filled"
+                          style={{
+                            margin: 0,
+                            background: isAdminRoleBadge(operatorRole)
+                              ? 'rgba(255, 179, 0, 0.35)'
+                              : 'rgba(255,255,255,0.12)',
+                            color: isAdminRoleBadge(operatorRole) ? '#ffe58f' : '#fff',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            fontSize: 12,
+                            lineHeight: '18px',
+                            padding: '0 6px',
+                            borderRadius: HMI_DESIGN_TOKENS.RADIUS_CHIP,
+                          }}
+                        >
+                          {operatorRole}
+                        </Tag>
+                      )}
+                    </div>
+                    {operatorEmail && <span className="header-operator-email">{operatorEmail}</span>}
+                  </div>
+                </div>
+              </>
+            ) : null}
           </div>
 
-          {/* 中间自适应占位 */}
-          <div style={{ flex: 1, minWidth: 20 }} />
+          {/* 中间：告警 / 提示（无内容时仍占位） */}
+          <div className="header-center-slot">
+            {headerCenter}
+          </div>
 
-          {/* 右侧区域：全屏、刷新、切换工位、时间 */}
+          {/* 右侧：全屏 / 操作区 / 时间 */}
           <div className="header-right-group">
             <div className="header-extra-container">
-              <Button 
-                type="default"
-                icon={isTerminalFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} 
-                onClick={toggleTerminalFullscreen}
-              >
-                {isTerminalFullscreen
-                  ? t('components.layoutTemplates.premiumTerminal.exitFullscreen')
-                  : t('components.layoutTemplates.premiumTerminal.fullscreen')}
-              </Button>
+              {!hideFullscreenToggle ? (
+                <Button
+                  type="default"
+                  icon={isTerminalFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+                  onClick={toggleTerminalFullscreen}
+                >
+                  {isTerminalFullscreen
+                    ? t('components.layoutTemplates.premiumTerminal.exitFullscreen')
+                    : t('components.layoutTemplates.premiumTerminal.fullscreen')}
+                </Button>
+              ) : null}
               {headerExtra}
             </div>
             <div className="header-controls">
-              <div className="time-display">
+              <div className={`time-display${clockFormat === 'hm' ? ' time-display--hm' : ''}`}>
                 <div className="time-display-text">
-                  <span className="time-display-time">{time.split(' ')[1]}</span>
-                  <span className="time-display-date">{time.split(' ')[0]}</span>
+                  <span className="time-display-time">
+                    {clockFormat === 'hm'
+                      ? (time.split(' ')[1] || '').slice(0, 5)
+                      : time.split(' ')[1]}
+                  </span>
+                  {clockFormat === 'full' ? (
+                    <span className="time-display-date">{time.split(' ')[0]}</span>
+                  ) : null}
                 </div>
               </div>
+              {headerAfterClock ? (
+                <div className="header-after-clock">{headerAfterClock}</div>
+              ) : null}
             </div>
           </div>
 
@@ -305,11 +360,20 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
               padding: 2px 12px !important;
               background: ${HMI_DESIGN_TOKENS.BG_ELEVATED} !important;
               color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
-              border-radius: 4px !important;
+              border-radius: ${HMI_DESIGN_TOKENS.RADIUS_CHIP}px !important;
               white-space: nowrap !important;
               font-size: ${HMI_DESIGN_TOKENS.FONT_BODY_MIN}px !important;
             }
             
+            #premium-terminal-layout .header-center-slot {
+              flex: 1 1 auto !important;
+              min-width: 20px !important;
+              display: flex !important;
+              align-items: center !important;
+              justify-content: flex-start !important;
+              padding: 0 12px !important;
+              overflow: hidden !important;
+            }
             #premium-terminal-layout .header-right-group {
               display: flex !important;
               align-items: center !important;
@@ -331,8 +395,9 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
               gap: ${HMI_DESIGN_TOKENS.BUTTON_GAP}px !important;
               flex-shrink: 0 !important;
             }
-            /* 刷新 / 切换工位 / 全屏：与工位面包屑对齐，图标与文字间距统一 */
-            #premium-terminal-layout .header-extra-container .ant-btn {
+            /* 刷新 / 切换工位 / 全屏 / 时钟后按钮：统一顶栏次级按钮样式 */
+            #premium-terminal-layout .header-extra-container .ant-btn,
+            #premium-terminal-layout .header-after-clock .ant-btn {
               flex-shrink: 0 !important;
               white-space: nowrap !important;
               width: auto !important;
@@ -347,12 +412,13 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
               font-weight: 600 !important;
               line-height: 1.4 !important;
               gap: 8px !important;
-              background: ${HMI_DESIGN_TOKENS.HEADER_FLOATING_BG} !important;
+              background: ${HMI_DESIGN_TOKENS.BG_ELEVATED} !important;
               border: 1px solid var(--river-border-color) !important;
               color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
             }
-            #premium-terminal-layout .header-extra-container .ant-btn:hover {
-              background: linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.09) 100%) !important;
+            #premium-terminal-layout .header-extra-container .ant-btn:hover,
+            #premium-terminal-layout .header-after-clock .ant-btn:hover {
+              background: rgba(255,255,255,0.12) !important;
               border-color: ${HMI_DESIGN_TOKENS.BORDER} !important;
               color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
             }
@@ -363,16 +429,24 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
             #premium-terminal-layout .header-extra-buttons .ant-btn {
               flex-shrink: 0 !important;
             }
-            #premium-terminal-layout .header-extra-container .ant-btn .anticon {
+            #premium-terminal-layout .header-extra-container .ant-btn .anticon,
+            #premium-terminal-layout .header-after-clock .ant-btn .anticon {
               color: #fff !important;
             }
-            #premium-terminal-layout .header-extra-container .ant-btn .anticon svg {
+            #premium-terminal-layout .header-extra-container .ant-btn .anticon svg,
+            #premium-terminal-layout .header-after-clock .ant-btn .anticon svg {
               fill: #fff !important;
               stroke: #fff !important;
               color: #fff !important;
             }
 
             #premium-terminal-layout .header-controls {
+              display: flex !important;
+              align-items: center !important;
+              gap: ${HMI_DESIGN_TOKENS.BUTTON_GAP}px !important;
+              flex-shrink: 0 !important;
+            }
+            #premium-terminal-layout .header-after-clock {
               display: flex !important;
               align-items: center !important;
               gap: ${HMI_DESIGN_TOKENS.BUTTON_GAP}px !important;
@@ -412,14 +486,14 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
               letter-spacing: 0.02em !important;
               line-height: 1.4 !important;
               white-space: nowrap !important;
-              background: ${HMI_DESIGN_TOKENS.HEADER_FLOATING_BG} !important;
+              background: ${HMI_DESIGN_TOKENS.BG_ELEVATED} !important;
               color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
               margin-left: 0 !important;
             }
             /* 首段：左直 | 右箭头 >（尖朝右），略亮于普通段 */
             #premium-terminal-layout .header-station-segment:first-child {
               padding-left: 18px !important;
-              background: linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.08) 100%) !important;
+              background: rgba(255,255,255,0.1) !important;
               color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
               clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%) !important;
             }
@@ -431,7 +505,7 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
             /* 末段：左 >（尖朝右） 右直 | */
             #premium-terminal-layout .header-station-segment + .header-station-segment.header-station-segment-current {
               padding-left: 20px !important;
-              background: ${HMI_DESIGN_TOKENS.HEADER_FLOATING_BG} !important;
+              background: ${HMI_DESIGN_TOKENS.BG_ELEVATED} !important;
               color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
               clip-path: polygon(0 0, 10px 50%, 0 100%, 100% 100%, 100% 0) !important;
             }
@@ -532,7 +606,7 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
 
         {/* 内容区域：适配父容器剩余高度，flex 子项填满 */}
         <Content style={{ 
-          padding: '24px 24px 24px 24px', 
+          padding: contentPadding,
           flex: 1,
           minHeight: 0,
           overflow: 'hidden',

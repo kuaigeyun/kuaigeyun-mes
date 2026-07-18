@@ -149,6 +149,7 @@ class DynamicDatabaseConfigService:
             "infra.models.install_registration",
             "infra.models.invitation_code",
             "infra.models.biometric",
+            "infra.models.face_template",
 
             # Aerich 模型（数据库迁移）
             "aerich.models",

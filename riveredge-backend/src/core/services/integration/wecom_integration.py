@@ -1,4 +1,4 @@
-"""企业微信连接器公共能力（OAuth / 消息发送唯一真源：IntegrationConfig type=wecom）。"""
+"""企业微信连接器公共能力（OAuth / 消息 / 通讯录唯一真源：IntegrationConfig type=wecom）。"""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ from typing import Any, Optional
 
 from core.models.integration_config import IntegrationConfig
 from infra.infrastructure.http.client import get_http_client
+
+WECOM_API_BASE = "https://qyapi.weixin.qq.com/cgi-bin"
 
 
 @dataclass(frozen=True)
@@ -48,7 +50,7 @@ async def get_wecom_credentials(tenant_id: int) -> Optional[WeComCredentials]:
 
 async def fetch_wecom_access_token(corp_id: str, corp_secret: str) -> str:
     resp = await get_http_client().get(
-        "https://qyapi.weixin.qq.com/cgi-bin/gettoken",
+        f"{WECOM_API_BASE}/gettoken",
         params={"corpid": corp_id, "corpsecret": corp_secret},
         timeout=10.0,
     )
@@ -66,3 +68,44 @@ async def fetch_wecom_access_token_for_tenant(tenant_id: int) -> str:
     if not creds:
         raise ValueError("未配置启用的企业微信连接器")
     return await fetch_wecom_access_token(creds.corp_id, creds.corp_secret)
+
+
+async def list_wecom_departments(access_token: str) -> list[dict[str, Any]]:
+    """拉取企业微信全部部门（需应用具备通讯录只读权限）。"""
+    resp = await get_http_client().get(
+        f"{WECOM_API_BASE}/department/list",
+        params={"access_token": access_token},
+        timeout=30.0,
+    )
+    data = resp.json()
+    if data.get("errcode") != 0:
+        raise ValueError(data.get("errmsg") or "获取企业微信部门列表失败")
+    departments = data.get("department")
+    if not isinstance(departments, list):
+        return []
+    return [d for d in departments if isinstance(d, dict)]
+
+
+async def list_wecom_users(
+    access_token: str,
+    *,
+    department_id: int,
+    fetch_child: bool = True,
+) -> list[dict[str, Any]]:
+    """拉取指定部门下成员详情（fetch_child=True 含子部门）。"""
+    resp = await get_http_client().get(
+        f"{WECOM_API_BASE}/user/list",
+        params={
+            "access_token": access_token,
+            "department_id": department_id,
+            "fetch_child": 1 if fetch_child else 0,
+        },
+        timeout=60.0,
+    )
+    data = resp.json()
+    if data.get("errcode") != 0:
+        raise ValueError(data.get("errmsg") or "获取企业微信成员列表失败")
+    userlist = data.get("userlist")
+    if not isinstance(userlist, list):
+        return []
+    return [u for u in userlist if isinstance(u, dict)]
