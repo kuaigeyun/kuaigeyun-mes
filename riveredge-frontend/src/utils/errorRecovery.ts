@@ -194,6 +194,25 @@ export async function withErrorRecovery<T>(
   }
 }
 
+/** 工位客户端：html 上挂有 station-client，Confirm 走 HmiModal 同系样式 */
+function isStationClient(): boolean {
+  return typeof document !== 'undefined'
+    && document.documentElement.classList.contains('station-client');
+}
+
+function stationConfirmModalProps() {
+  if (!isStationClient()) return {};
+  return {
+    className: 'hmi-modal',
+    centered: true as const,
+    width: 560,
+    okButtonProps: {
+      size: 'large' as const,
+      className: 'hmi-btn hmi-btn--primary hmi-btn--modal',
+    },
+  };
+}
+
 /**
  * 网络错误恢复
  * 
@@ -207,8 +226,9 @@ export function handleNetworkError(error: any): void {
   if (isNetworkError) {
     getAntdModal().error({
       title: '服务连接中断',
-      content: '暂时无法连接服务，请稍后重试。若多次重试仍失败，请检查网络后再试。',
+      content: '暂时无法连接服务，请稍后重试。若多次重试仍失败，请检查网络或「服务器设置」后再试。',
       okText: '重试',
+      ...stationConfirmModalProps(),
       onOk: () => {
         window.location.reload();
       },
@@ -231,6 +251,7 @@ export function handleServerError(error: any): void {
       title: '服务器暂时不可用',
       content: '服务器正在维护或暂时不可用，请稍后重试。',
       okText: '重试',
+      ...stationConfirmModalProps(),
       onOk: () => {
         window.location.reload();
       },

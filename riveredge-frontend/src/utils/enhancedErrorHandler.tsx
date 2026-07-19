@@ -315,7 +315,10 @@ export function showEnhancedError(
       });
       break;
 
-    case ErrorLevel.CRITICAL:
+    case ErrorLevel.CRITICAL: {
+      const stationClient =
+        typeof document !== 'undefined'
+        && document.documentElement.classList.contains('station-client');
       getAntdModal().error({
         title: errorInfo.title,
         content: (
@@ -340,11 +343,17 @@ export function showEnhancedError(
             )}
           </div>
         ),
-        width: 600,
+        width: stationClient ? 560 : 600,
+        centered: stationClient || undefined,
+        className: stationClient ? 'hmi-modal' : undefined,
+        okButtonProps: stationClient
+          ? { size: 'large', className: 'hmi-btn hmi-btn--primary hmi-btn--modal' }
+          : undefined,
         okText: errorInfo.retryable && errorInfo.onRetry ? '重试' : '确定',
         onOk: errorInfo.retryable && errorInfo.onRetry ? errorInfo.onRetry : undefined,
       });
       break;
+    }
 
     default:
       getAntdMessage().error(errorInfo.message);

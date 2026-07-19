@@ -4885,7 +4885,7 @@
                                 "label": "送货单",
                                 "icon": "file",
                                 "route": "/wms/delivery-notices",
-                                "permission": "kuaizhizao:shipment-notice:read"
+                                "permission": "kuaizhizao:delivery-notice:read"
                             },
                             {
                                 "key": "other-inbound",
@@ -4954,21 +4954,21 @@
                                 "key": "process-scan",
                                 "label": "过程检验",
                                 "icon": "scan",
-                                "route": "/quality/process-scan",
-                                "permission": "kuaizhizao:quality-management-process-inspection:create"
+                                "route": "/quality/process",
+                                "permission": "kuaizhizao:quality-management-process-inspection:read"
                             },
                             {
                                 "key": "incoming",
                                 "label": "来料检验",
                                 "icon": "shopping",
-                                "route": "/quality?type=incoming",
+                                "route": "/quality/incoming",
                                 "permission": "kuaizhizao:quality-management-incoming-inspection:read"
                             },
                             {
                                 "key": "finished",
                                 "label": "成品检验",
                                 "icon": "inbox",
-                                "route": "/quality?type=finished",
+                                "route": "/quality/finished",
                                 "permission": "kuaizhizao:quality-management-finished-goods-inspection:read"
                             },
                             {
@@ -5040,7 +5040,7 @@
                             {
                                 "key": "maintenance-executions",
                                 "label": "保养执行",
-                                "icon": "gear",
+                                "icon": "maintain",
                                 "route": "/equipment/maintenance-executions",
                                 "permission": "kuaizhizao:maintenance-plan:read"
                             },
@@ -5085,7 +5085,7 @@
                             {
                                 "key": "mold-maintenances",
                                 "label": "模具保养",
-                                "icon": "gear",
+                                "icon": "maintain",
                                 "route": "/mold/maintenances",
                                 "permission": "kuaizhizao:mold-maintenance:read"
                             },
