@@ -148,6 +148,7 @@ class AcceptanceSheetOut(BaseModel):
     arrived_at: Optional[datetime] = None
     install_location: Optional[str] = None
     equipment_name: Optional[str] = None
+    remark: Optional[str] = None
     commissioning_user_ids: List[int] = Field(default_factory=list)
     submitted_notify_user_ids: List[int] = Field(default_factory=list)
     equipment_id: Optional[int] = None
@@ -169,6 +170,7 @@ class AcceptanceSheetCreate(BaseModel):
     arrived_at: Optional[datetime] = None
     install_location: Optional[str] = Field(None, max_length=500)
     equipment_name: str = Field(min_length=1, max_length=200)
+    remark: Optional[str] = None
     commissioning_user_ids: List[int] = Field(default_factory=list)
     submitted_notify_user_ids: List[int] = Field(default_factory=list)
 
@@ -187,6 +189,7 @@ class AcceptanceSheetUpdate(BaseModel):
     arrived_at: Optional[datetime] = None
     install_location: Optional[str] = Field(None, max_length=500)
     equipment_name: Optional[str] = Field(None, max_length=200)
+    remark: Optional[str] = None
     commissioning_user_ids: Optional[List[int]] = None
     submitted_notify_user_ids: Optional[List[int]] = None
 
@@ -301,6 +304,7 @@ async def _serialize_sheet(
         arrived_at=row.arrived_at,
         install_location=row.install_location,
         equipment_name=row.equipment_name,
+        remark=row.remark,
         commissioning_user_ids=_norm_user_ids(row.commissioning_user_ids),
         submitted_notify_user_ids=_norm_user_ids(row.submitted_notify_user_ids),
         equipment_id=row.equipment_id,
@@ -348,6 +352,7 @@ async def list_acceptance_sheets(
             Q(sheet_no__icontains=k)
             | Q(equipment_name__icontains=k)
             | Q(install_location__icontains=k)
+            | Q(remark__icontains=k)
             | Q(manufacturer_name__icontains=k)
             | Q(equipment__asset_code__icontains=k)
         )
@@ -381,6 +386,7 @@ async def create_acceptance_sheet(
             arrived_at=body.arrived_at,
             install_location=_strip_opt(body.install_location),
             equipment_name=body.equipment_name.strip(),
+            remark=_strip_opt(body.remark),
             commissioning_user_ids=commissioning_ids,
             submitted_notify_user_ids=[],
             workflow_status=WORKFLOW_COMMISSIONING,
@@ -427,6 +433,8 @@ async def update_acceptance_sheet(
         data["equipment_name"] = str(data["equipment_name"]).strip()
     if "install_location" in data:
         data["install_location"] = _strip_opt(data.get("install_location"))
+    if "remark" in data:
+        data["remark"] = _strip_opt(data.get("remark"))
     if "commissioning_user_ids" in data and data["commissioning_user_ids"] is not None:
         data["commissioning_user_ids"] = _norm_user_ids(data["commissioning_user_ids"])
     if "submitted_notify_user_ids" in data and data["submitted_notify_user_ids"] is not None:

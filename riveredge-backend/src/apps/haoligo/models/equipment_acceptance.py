@@ -25,6 +25,7 @@ class HaoligoEquipmentAcceptanceSheet(HaoligoTenantModel):
     arrived_at = fields.DatetimeField(null=True, description="设备进场时间")
     install_location = fields.CharField(max_length=500, null=True, description="安装位置")
     equipment_name = fields.CharField(max_length=200, null=True, description="设备名称")
+    remark = fields.TextField(null=True, description="备注")
     commissioning_user_ids = fields.JSONField(default=list, description="调试人员用户 ID 列表")
     submitted_notify_user_ids = fields.JSONField(
         default=list,

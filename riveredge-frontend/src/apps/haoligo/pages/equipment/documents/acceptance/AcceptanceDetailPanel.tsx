@@ -521,6 +521,9 @@ const AcceptanceDetailPanel: React.FC<AcceptanceDetailPanelProps> = ({
         <Descriptions.Item label={t('app.haoligo.equipment.documents.acceptance.colInstallLocation')}>
           {detail.install_location || '—'}
         </Descriptions.Item>
+        <Descriptions.Item label={t('app.haoligo.equipment.documents.acceptance.colRemark')} span={2}>
+          {detail.remark || '—'}
+        </Descriptions.Item>
         <Descriptions.Item label={t('app.haoligo.equipment.documents.acceptance.colCurrentRound')}>
           {detail.current_round}
         </Descriptions.Item>

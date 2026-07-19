@@ -757,7 +757,7 @@
                 "key": "hazard-list",
                 "label": "隐患治理",
                 "icon": "format-list-bulleted",
-                "route": "/patrol/form?status=已登记&assigned_to_me=true",
+                "route": "/patrol/form",
                 "permission": "haoligo:patrol-hazards:read",
                 "internal_only": true,
                 "icon_group": "patrolHazard"
@@ -795,7 +795,7 @@
                 "key": "quality-issues-handle",
                 "label": "品质问题处理",
                 "icon": "format-list-bulleted",
-                "route": "/quality/issues/handle?assigned_to_me=true",
+                "route": "/quality/issues/handle",
                 "permission": "haoligo:quality-issue-tracking:read",
                 "internal_only": true
               },
@@ -811,7 +811,7 @@
                 "key": "quality-complaints-handle",
                 "label": "客户投诉处理",
                 "icon": "format-list-bulleted",
-                "route": "/quality/complaints/handle?assigned_to_me=true",
+                "route": "/quality/complaints/handle",
                 "permission": "haoligo:customer-complaint:read",
                 "internal_only": true
               },
@@ -827,7 +827,7 @@
                 "key": "quality-line-stops-handle",
                 "label": "停线反馈处理",
                 "icon": "format-list-bulleted",
-                "route": "/quality/line-stops/handle?assigned_to_me=true",
+                "route": "/quality/line-stops/handle",
                 "permission": "haoligo:line-stop-feedback:read",
                 "internal_only": true
               },
@@ -913,7 +913,7 @@
                 "key": "trial",
                 "label": "试模待审",
                 "icon": "flask-outline",
-                "route": "/mold/trial?status=待审核&assigned_to_me=true",
+                "route": "/mold/trial?status=待审核",
                 "review_resource": "haoligo:molds-documents-trial",
                 "icon_group": "moldTrial",
                 "nature": "audit"
@@ -922,7 +922,7 @@
                 "key": "upkeep",
                 "label": "保养待审",
                 "icon": "wrench-outline",
-                "route": "/mold/upkeep?status=待审核&assigned_to_me=true",
+                "route": "/mold/upkeep?status=待审核",
                 "review_resource": "haoligo:molds-documents-upkeep",
                 "internal_only": true,
                 "icon_group": "moldUpkeep",
@@ -932,7 +932,7 @@
                 "key": "repair",
                 "label": "维修待审",
                 "icon": "hammer",
-                "route": "/mold/repair?status=待审核&assigned_to_me=true",
+                "route": "/mold/repair?status=待审核",
                 "review_resource": "haoligo:molds-documents-repair",
                 "internal_only": true,
                 "icon_group": "moldRepair",
@@ -942,7 +942,7 @@
                 "key": "outsource-maint",
                 "label": "外协维修待审",
                 "icon": "truck-delivery-outline",
-                "route": "/mold/outsource-maint?status=待审核&assigned_to_me=true",
+                "route": "/mold/outsource-maint?status=待审核",
                 "review_resource": "haoligo:molds-documents-outsource-maintenance",
                 "icon_group": "moldOutsource",
                 "nature": "audit"
@@ -951,7 +951,7 @@
                 "key": "pending-audit",
                 "label": "外协维修完成待审",
                 "icon": "clipboard-check-outline",
-                "route": "/mold/pending-audit?assigned_to_me=true",
+                "route": "/mold/pending-audit",
                 "review_resource": "haoligo:molds-documents-outsource-complete",
                 "icon_group": "moldOutsource",
                 "nature": "audit"
@@ -960,7 +960,7 @@
                 "key": "trial-failed",
                 "label": "试模不合格",
                 "icon": "alert-outline",
-                "route": "/mold/trial-failed?assigned_to_me=true",
+                "route": "/mold/trial-failed",
                 "permission": "haoligo:molds-documents-trial:read",
                 "internal_only": true,
                 "nature": "handle"
@@ -969,7 +969,7 @@
                 "key": "upkeep-complete",
                 "label": "保养待完修",
                 "icon": "check-circle-outline",
-                "route": "/mold/upkeep-complete?assigned_to_me=true",
+                "route": "/mold/upkeep-complete",
                 "permission": "haoligo:molds-documents-upkeep-complete:read",
                 "permissions_any": [
                   "complete_create:haoligo:molds-documents-upkeep:haoligo:molds-documents-upkeep-complete"
@@ -982,7 +982,7 @@
                 "key": "repair-complete",
                 "label": "维修待完修",
                 "icon": "shield-check-outline",
-                "route": "/mold/repair-complete?assigned_to_me=true",
+                "route": "/mold/repair-complete",
                 "permission": "haoligo:molds-documents-repair-complete:read",
                 "permissions_any": [
                   "complete_create:haoligo:molds-documents-repair:haoligo:molds-documents-repair-complete"
@@ -1002,7 +1002,7 @@
                 "key": "upkeep-sheet",
                 "label": "维保待完修",
                 "icon": "wrench-outline",
-                "route": "/equip/upkeep-sheet?open_for_complete=true&assigned_to_me=true",
+                "route": "/equip/upkeep-sheet?open_for_complete=true",
                 "permission": "haoligo:equipment-documents-upkeep-sheet:read",
                 "permissions_any": [
                   "complete_create:haoligo:equipment-documents-upkeep-sheet:haoligo:equipment-documents-upkeep-complete"
@@ -1022,7 +1022,7 @@
                 "key": "quality-issues-handle",
                 "label": "品质问题处理",
                 "icon": "format-list-bulleted",
-                "route": "/quality/issues/handle?assigned_to_me=true",
+                "route": "/quality/issues/handle",
                 "permission": "haoligo:quality-issue-tracking:read",
                 "internal_only": true,
                 "nature": "handle"
@@ -1031,7 +1031,7 @@
                 "key": "quality-complaints-handle",
                 "label": "客户投诉处理",
                 "icon": "format-list-bulleted",
-                "route": "/quality/complaints/handle?assigned_to_me=true",
+                "route": "/quality/complaints/handle",
                 "permission": "haoligo:customer-complaint:read",
                 "internal_only": true,
                 "nature": "handle"
@@ -1040,7 +1040,7 @@
                 "key": "quality-line-stops-handle",
                 "label": "停线反馈处理",
                 "icon": "format-list-bulleted",
-                "route": "/quality/line-stops/handle?assigned_to_me=true",
+                "route": "/quality/line-stops/handle",
                 "permission": "haoligo:line-stop-feedback:read",
                 "internal_only": true,
                 "nature": "handle"
@@ -1056,7 +1056,7 @@
                 "key": "hazard-list",
                 "label": "隐患治理",
                 "icon": "format-list-bulleted",
-                "route": "/patrol/form?status=已登记&assigned_to_me=true",
+                "route": "/patrol/form",
                 "permission": "haoligo:patrol-hazards:read",
                 "internal_only": true,
                 "icon_group": "patrolHazard",
@@ -1325,7 +1325,8 @@
       "install_location",
       "equipment_name",
       "commissioning_user_ids",
-      "submitted_notify_user_ids"
+      "submitted_notify_user_ids",
+      "remark"
     ],
     "equipment.acceptance.trial": [
       "product_name",

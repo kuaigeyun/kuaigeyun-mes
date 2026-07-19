@@ -12,6 +12,7 @@ import {
   ProFormInstance,
   ProFormSelect,
   ProFormText,
+  ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Col, Modal, Row, Space, Spin, Tag } from 'antd';
 import dayjs from 'dayjs';
@@ -305,6 +306,7 @@ const AcceptanceDocumentsPage: React.FC = () => {
         manufacturer_id: values.manufacturer_id != null ? Number(values.manufacturer_id) : undefined,
         arrived_at: arrivedAt,
         install_location: values.install_location != null ? String(values.install_location).trim() || undefined : undefined,
+        remark: values.remark != null ? String(values.remark).trim() || undefined : undefined,
         commissioning_user_ids: Array.isArray(values.commissioning_user_ids)
           ? values.commissioning_user_ids.map((v: unknown) => Number(v)).filter((id) => Number.isFinite(id) && id > 0)
           : [],
@@ -420,6 +422,13 @@ const AcceptanceDocumentsPage: React.FC = () => {
                       const selected = formRef.current?.getFieldValue('commissioning_user_ids') as number[] | undefined;
                       return searchNotifyUsers(keyWords, selected);
                     }}
+                  />
+                </Col>
+                <Col span={24}>
+                  <ProFormTextArea
+                    name="remark"
+                    label={t('app.haoligo.equipment.documents.acceptance.colRemark')}
+                    fieldProps={{ rows: 3, placeholder: '选填' }}
                   />
                 </Col>
               </Row>

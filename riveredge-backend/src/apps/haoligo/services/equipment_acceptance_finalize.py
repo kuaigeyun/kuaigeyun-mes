@@ -103,7 +103,12 @@ async def create_equipment_from_acceptance(
 
     await _validate_equipment_upkeep_param_set_id(tenant_id, upkeep_param_set_id)
 
-    remark_text = (remark or "").strip() or (header.install_location or "").strip() or None
+    remark_text = (
+        (remark or "").strip()
+        or (getattr(header, "remark", None) or "").strip()
+        or (header.install_location or "").strip()
+        or None
+    )
     status_value = await normalize_operational_status(tenant_id, operational_status or "standby")
 
     row = await HaoligoEquipment.create(

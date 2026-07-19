@@ -3297,6 +3297,7 @@ export default {
   'app.haoligo.equipment.documents.acceptance.colEquipmentName': '设备名称',
   'app.haoligo.equipment.documents.acceptance.colManufacturer': '厂家',
   'app.haoligo.equipment.documents.acceptance.colInstallLocation': '安装位置',
+  'app.haoligo.equipment.documents.acceptance.colRemark': '备注',
   'app.haoligo.equipment.documents.acceptance.colCurrentRound': '当前轮次',
   'app.haoligo.equipment.documents.acceptance.colArrivedAt': '进场时间',
   'app.haoligo.equipment.documents.acceptance.workflow.draft': '草稿',

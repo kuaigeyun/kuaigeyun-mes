@@ -1288,6 +1288,7 @@ export interface EquipmentAcceptanceSheetRow {
   arrived_at?: string | null;
   install_location?: string | null;
   equipment_name?: string | null;
+  remark?: string | null;
   commissioning_user_ids?: number[];
   submitted_notify_user_ids?: number[];
   equipment_id?: number | null;
@@ -1309,6 +1310,7 @@ export type EquipmentAcceptanceSheetCreatePayload = {
   arrived_at?: string | null;
   install_location?: string | null;
   equipment_name: string;
+  remark?: string | null;
   commissioning_user_ids?: number[];
   submitted_notify_user_ids?: number[];
 };
