@@ -310,6 +310,7 @@ async def list_reporting_records(
     work_order_name: Optional[str] = Query(None, description="工单名称（模糊搜索）"),
     operation_name: Optional[str] = Query(None, description="工序名称（模糊搜索）"),
     worker_name: Optional[str] = Query(None, description="操作工姓名（模糊搜索）"),
+    worker_id: Optional[int] = Query(None, description="操作工用户ID（我的报工）"),
     status: Optional[str] = Query(None, description="审核状态"),
     keyword: Optional[str] = Query(None, description="关键词（工单/工序/操作工等）"),
     reported_at_start: Optional[str] = Query(None, description="报工开始时间（ISO格式）"),
@@ -339,6 +340,7 @@ async def list_reporting_records(
         work_order_name=work_order_name,
         operation_name=operation_name,
         worker_name=worker_name,
+        worker_id=worker_id,
         status=status,
         keyword=keyword,
         reported_at_start=reported_at_start_dt,
@@ -351,6 +353,7 @@ async def list_reporting_records(
 async def get_reporting_statistics(
     date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),
     date_end: Optional[str] = Query(None, description="结束日期（ISO格式）"),
+    worker_id: Optional[int] = Query(None, description="操作工用户ID（可选）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ReportingDetailedStatisticsResponse:
@@ -366,6 +369,7 @@ async def get_reporting_statistics(
         tenant_id=tenant_id,
         date_start=date_start_dt,
         date_end=date_end_dt,
+        worker_id=worker_id,
     )
     return ReportingDetailedStatisticsResponse.model_validate(statistics)
 

@@ -41,6 +41,18 @@ class DeliveryDelayExceptionCreate(DeliveryDelayExceptionBase):
     pass
 
 
+class DeliveryDelayReportCreate(BaseModel):
+    """现场提报交期异常（移动端 / 车间）"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    work_order_id: int = Field(..., description="工单ID")
+    delay_reason: str = Field(..., min_length=1, max_length=500, description="延期原因")
+    delay_days: Optional[int] = Field(None, ge=0, description="延期天数（不传则按计划完工日推算）")
+    alert_level: Optional[str] = Field(None, description="预警级别 low/medium/high/critical")
+    remarks: Optional[str] = Field(None, description="备注 / 现场说明")
+
+
 class DeliveryDelayExceptionUpdate(BaseModel):
     """
     交期延期异常记录更新Schema

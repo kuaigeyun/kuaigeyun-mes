@@ -21,6 +21,7 @@ from infra.models.user import User
 from apps.kuaizhizao.schemas.delivery_delay_exception import (
     DeliveryDelayExceptionListResponse,
     DeliveryDelayExceptionResponse,
+    DeliveryDelayReportCreate,
 )
 from apps.kuaizhizao.schemas.exception_page import ExceptionListPageResponse
 from apps.kuaizhizao.schemas.exception_process_record import (
@@ -35,10 +36,12 @@ from apps.kuaizhizao.schemas.exception_process_record import (
 from apps.kuaizhizao.schemas.material_shortage_exception import (
     MaterialShortageExceptionListResponse,
     MaterialShortageExceptionResponse,
+    MaterialShortageReportCreate,
 )
 from apps.kuaizhizao.schemas.quality_exception import (
     QualityExceptionListResponse,
     QualityExceptionResponse,
+    QualityExceptionReportCreate,
 )
 from apps.kuaizhizao.services.exception_process_service import (
     ExceptionProcessService,
@@ -97,28 +100,69 @@ def _attach_visual_scheduling_guidance(handled: Any, *, action: str, plan_adjust
     return handled
 
 
-def _require_read(permission_code: str):
+def _require_perm(permission_code: str):
     return Depends(require_permission_codes(permission_code, check_abac=False))
 
 
-_MATERIAL_SHORTAGE_READ = _require_read(
+_MATERIAL_SHORTAGE_READ = _require_perm(
     "kuaizhizao:production-execution-material-shortage-exceptions:read",
 )
-_DELIVERY_DELAY_READ = _require_read(
+_MATERIAL_SHORTAGE_CREATE = _require_perm(
+    "kuaizhizao:production-execution-material-shortage-exceptions:create",
+)
+_MATERIAL_SHORTAGE_UPDATE = _require_perm(
+    "kuaizhizao:production-execution-material-shortage-exceptions:update",
+)
+_DELIVERY_DELAY_READ = _require_perm(
     "kuaizhizao:production-execution-delivery-delay-exceptions:read",
 )
-_QUALITY_READ = _require_read(
+_DELIVERY_DELAY_CREATE = _require_perm(
+    "kuaizhizao:production-execution-delivery-delay-exceptions:create",
+)
+_DELIVERY_DELAY_UPDATE = _require_perm(
+    "kuaizhizao:production-execution-delivery-delay-exceptions:update",
+)
+_QUALITY_READ = _require_perm(
     "kuaizhizao:production-execution-quality-exceptions:read",
 )
-_STATISTICS_READ = _require_read(
+_QUALITY_CREATE = _require_perm(
+    "kuaizhizao:production-execution-quality-exceptions:create",
+)
+_QUALITY_UPDATE = _require_perm(
+    "kuaizhizao:production-execution-quality-exceptions:update",
+)
+_STATISTICS_READ = _require_perm(
     "kuaizhizao:production-execution-exception-statistics:read",
 )
-_PROCESS_READ = _require_read(
+_PROCESS_READ = _require_perm(
     "kuaizhizao:production-execution-exception-process:read",
 )
-_PROCESS_WRITE = _require_read(
+_PROCESS_WRITE = _require_perm(
     "kuaizhizao:production-execution-exception-process:read",
 )
+
+
+@router.post(
+    "/exceptions/material-shortage",
+    response_model=MaterialShortageExceptionResponse,
+    summary="Report material shortage exception",
+    dependencies=[_MATERIAL_SHORTAGE_CREATE],
+)
+async def report_material_shortage_exception(
+    data: MaterialShortageReportCreate = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> MaterialShortageExceptionResponse:
+    try:
+        return await exception_service.report_material_shortage(
+            tenant_id=tenant_id,
+            data=data,
+            created_by=current_user.id,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/exceptions/material-shortage", tenant_id)
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/exceptions/material-shortage", tenant_id)
 
 
 @router.get(
@@ -167,11 +211,32 @@ async def list_material_shortage_exceptions(
     return ExceptionListPageResponse(items=items, total=total)
 
 
+@router.get(
+    "/exceptions/material-shortage/{exception_id}",
+    response_model=MaterialShortageExceptionResponse,
+    summary="Get material shortage exception",
+    dependencies=[_MATERIAL_SHORTAGE_READ],
+)
+async def get_material_shortage_exception(
+    exception_id: int = Path(..., description="异常记录ID"),
+    tenant_id: int = Depends(get_current_tenant),
+) -> MaterialShortageExceptionResponse:
+    try:
+        return await exception_service.get_material_shortage_exception(
+            tenant_id=tenant_id,
+            exception_id=exception_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404, str(e), "/exceptions/material-shortage/{exception_id}", tenant_id
+        )
+
+
 @router.post(
     "/exceptions/material-shortage/{exception_id}/handle",
     response_model=MaterialShortageExceptionResponse,
     summary="Handle material shortage exception",
-    dependencies=[_MATERIAL_SHORTAGE_READ],
+    dependencies=[_MATERIAL_SHORTAGE_UPDATE],
 )
 async def handle_material_shortage_exception(
     exception_id: int = Path(..., description="异常记录ID"),
@@ -210,6 +275,29 @@ async def detect_work_order_shortage(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
     )
+
+
+@router.post(
+    "/exceptions/delivery-delay",
+    response_model=DeliveryDelayExceptionResponse,
+    summary="Report delivery delay exception",
+    dependencies=[_DELIVERY_DELAY_CREATE],
+)
+async def report_delivery_delay_exception(
+    data: DeliveryDelayReportCreate = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DeliveryDelayExceptionResponse:
+    try:
+        return await exception_service.report_delivery_delay(
+            tenant_id=tenant_id,
+            data=data,
+            created_by=current_user.id,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/exceptions/delivery-delay", tenant_id)
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/exceptions/delivery-delay", tenant_id)
 
 
 @router.get(
@@ -256,11 +344,32 @@ async def list_delivery_delay_exceptions(
     return ExceptionListPageResponse(items=items, total=total)
 
 
+@router.get(
+    "/exceptions/delivery-delay/{exception_id}",
+    response_model=DeliveryDelayExceptionResponse,
+    summary="Get delivery delay exception",
+    dependencies=[_DELIVERY_DELAY_READ],
+)
+async def get_delivery_delay_exception(
+    exception_id: int = Path(..., description="异常记录ID"),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DeliveryDelayExceptionResponse:
+    try:
+        return await exception_service.get_delivery_delay_exception(
+            tenant_id=tenant_id,
+            exception_id=exception_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404, str(e), "/exceptions/delivery-delay/{exception_id}", tenant_id
+        )
+
+
 @router.post(
     "/exceptions/delivery-delay/{exception_id}/handle",
     response_model=DeliveryDelayExceptionResponse,
     summary="Handle delivery delay exception",
-    dependencies=[_DELIVERY_DELAY_READ],
+    dependencies=[_DELIVERY_DELAY_UPDATE],
 )
 async def handle_delivery_delay_exception(
     exception_id: int = Path(..., description="异常记录ID"),
@@ -299,6 +408,29 @@ async def detect_work_order_delay(
         work_order_id=work_order_id,
         days_threshold=days_threshold,
     )
+
+
+@router.post(
+    "/exceptions/quality",
+    response_model=QualityExceptionResponse,
+    summary="Report quality exception",
+    dependencies=[_QUALITY_CREATE],
+)
+async def report_quality_exception(
+    data: QualityExceptionReportCreate = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityExceptionResponse:
+    try:
+        return await exception_service.report_quality_exception(
+            tenant_id=tenant_id,
+            data=data,
+            created_by=current_user.id,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/exceptions/quality", tenant_id)
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/exceptions/quality", tenant_id)
 
 
 @router.get(
@@ -355,11 +487,32 @@ async def list_quality_exceptions(
     return ExceptionListPageResponse(items=items, total=total)
 
 
+@router.get(
+    "/exceptions/quality/{exception_id}",
+    response_model=QualityExceptionResponse,
+    summary="Get quality exception",
+    dependencies=[_QUALITY_READ],
+)
+async def get_quality_exception(
+    exception_id: int = Path(..., description="异常记录ID"),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityExceptionResponse:
+    try:
+        return await exception_service.get_quality_exception(
+            tenant_id=tenant_id,
+            exception_id=exception_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404, str(e), "/exceptions/quality/{exception_id}", tenant_id
+        )
+
+
 @router.post(
     "/exceptions/quality/{exception_id}/handle",
     response_model=QualityExceptionResponse,
     summary="Handle quality exception",
-    dependencies=[_QUALITY_READ],
+    dependencies=[_QUALITY_UPDATE],
 )
 async def handle_quality_exception(
     exception_id: int = Path(..., description="异常记录ID"),

@@ -247,6 +247,10 @@ class WorkOrderResponse(WorkOrderBase):
         None,
         description="制造模式（fabrication/assembly）：定义在物料主数据；工单 product_id 指向本单制造的产品物料，由后端从该物料 source_config 解析",
     )
+    material_spec: Optional[str] = Field(
+        None,
+        description="产品规格（来自物料主数据 specification）",
+    )
     split_remaining_quantity: Optional[Decimal] = Field(
         None,
         description="拆分剩余可分配数量（已拆分主工单：原数量减去子工单数量之和）",
@@ -302,6 +306,11 @@ class WorkOrderListResponse(BaseModel):
     code: str = Field(..., description="工单编码")
     name: Optional[str] = Field(None, description="工单名称（可选）")
     product_name: str = Field(..., description="产品名称")
+    product_code: Optional[str] = Field(None, description="产品编码")
+    material_spec: Optional[str] = Field(
+        None,
+        description="产品规格（来自物料主数据 specification，列表展示用）",
+    )
     quantity: Decimal = Field(..., description="计划生产数量")
     split_remaining_quantity: Optional[Decimal] = Field(
         None,

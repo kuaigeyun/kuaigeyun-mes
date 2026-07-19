@@ -51,6 +51,22 @@ class QualityExceptionCreate(QualityExceptionBase):
     pass
 
 
+class QualityExceptionReportCreate(BaseModel):
+    """现场提报质量异常（移动端 / 车间）"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    problem_description: str = Field(..., min_length=1, description="问题描述")
+    work_order_id: Optional[int] = Field(None, description="关联工单ID")
+    material_id: Optional[int] = Field(None, description="关联物料ID")
+    material_code: Optional[str] = Field(None, description="物料编码（无 material_id 时可用）")
+    material_name: Optional[str] = Field(None, description="物料名称")
+    batch_no: Optional[str] = Field(None, description="批次号")
+    severity: str = Field("minor", description="严重程度 minor/major/critical")
+    exception_type: str = Field("process_deviation", description="异常类型")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
 class QualityExceptionUpdate(BaseModel):
     """
     质量异常记录更新Schema

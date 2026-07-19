@@ -963,6 +963,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         work_order_name: Optional[str] = None,
         operation_name: Optional[str] = None,
         worker_name: Optional[str] = None,
+        worker_id: Optional[int] = None,
         status: Optional[str] = None,
         reported_at_start: Optional[datetime] = None,
         reported_at_end: Optional[datetime] = None,
@@ -980,6 +981,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             work_order_name: 工单名称（模糊搜索）
             operation_name: 工序名称（模糊搜索）
             worker_name: 操作工姓名（模糊搜索）
+            worker_id: 操作工用户ID（我的报工）
             status: 审核状态
             reported_at_start: 报工开始时间
             reported_at_end: 报工结束时间
@@ -1010,6 +1012,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
             query = query.filter(operation_name__icontains=operation_name)
         if worker_name:
             query = query.filter(worker_name__icontains=worker_name)
+        if worker_id is not None:
+            query = query.filter(worker_id=int(worker_id))
         if status:
             query = query.filter(status=status)
         if reported_at_start:
@@ -1023,10 +1027,45 @@ class ReportingService(AppBaseService[ReportingRecord]):
         from core.services.approval.audit_record_enricher import enrich_items
         from apps.kuaizhizao.services.document_lifecycle_service import get_reporting_record_lifecycle
 
+        # 批量补全产品名称/规格（同名产品靠规格区分）
+        wo_ids = list({int(r.work_order_id) for r in records if getattr(r, "work_order_id", None)})
+        wo_product_map: Dict[int, Dict[str, Any]] = {}
+        if wo_ids:
+            from apps.master_data.models.material import Material
+
+            work_orders = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                id__in=wo_ids,
+                deleted_at__isnull=True,
+            ).only("id", "product_id", "product_code", "product_name")
+            product_ids = list({int(wo.product_id) for wo in work_orders if wo.product_id})
+            spec_by_product: Dict[int, str] = {}
+            if product_ids:
+                materials = await Material.filter(
+                    tenant_id=tenant_id,
+                    id__in=product_ids,
+                    deleted_at__isnull=True,
+                ).only("id", "specification")
+                for m in materials:
+                    spec = (getattr(m, "specification", None) or "").strip()
+                    if spec:
+                        spec_by_product[int(m.id)] = spec
+            for wo in work_orders:
+                wo_product_map[int(wo.id)] = {
+                    "product_name": (wo.product_name or "").strip() or None,
+                    "product_code": (wo.product_code or "").strip() or None,
+                    "material_spec": spec_by_product.get(int(wo.product_id)) if wo.product_id else None,
+                }
+
         rows = []
         for record in records:
             resp = ReportingRecordListResponse.model_validate(record)
             resp.lifecycle = get_reporting_record_lifecycle(record)
+            product_info = wo_product_map.get(int(record.work_order_id)) if record.work_order_id else None
+            if product_info:
+                resp.product_name = product_info.get("product_name")
+                resp.product_code = product_info.get("product_code")
+                resp.material_spec = product_info.get("material_spec")
             rows.append(resp)
         rows = await enrich_items(tenant_id, "reporting_record", rows)
         enriched = enrich_reporting_record_list_capabilities(records, rows)
@@ -1374,6 +1413,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         tenant_id: int,
         date_start: Optional[datetime] = None,
         date_end: Optional[datetime] = None,
+        worker_id: Optional[int] = None,
     ) -> dict:
         """
         获取报工统计信息
@@ -1382,6 +1422,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             tenant_id: 组织ID
             date_start: 开始日期
             date_end: 结束日期
+            worker_id: 操作工用户ID（可选，移动端「我的绩效」）
 
         Returns:
             dict: 统计信息
@@ -1394,6 +1435,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
             query = query.filter(reported_at__gte=date_start)
         if date_end:
             query = query.filter(reported_at__lte=date_end)
+        if worker_id is not None:
+            query = query.filter(worker_id=worker_id)
 
         records = await query.all()
 

@@ -47,6 +47,20 @@ class MaterialShortageExceptionCreate(MaterialShortageExceptionBase):
     pass
 
 
+class MaterialShortageReportCreate(BaseModel):
+    """现场提报缺料异常（移动端 / 车间）"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    work_order_id: int = Field(..., description="工单ID")
+    material_id: int = Field(..., description="物料ID")
+    shortage_quantity: Decimal = Field(..., gt=0, description="缺料数量")
+    available_quantity: Optional[Decimal] = Field(None, ge=0, description="可用数量")
+    required_quantity: Optional[Decimal] = Field(None, gt=0, description="需求数量")
+    alert_level: Optional[str] = Field(None, description="预警级别 low/medium/high/critical")
+    remarks: Optional[str] = Field(None, description="备注 / 现场说明")
+
+
 class MaterialShortageExceptionUpdate(BaseModel):
     """
     缺料异常记录更新Schema

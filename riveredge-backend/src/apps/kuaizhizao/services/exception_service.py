@@ -22,17 +22,21 @@ from apps.kuaizhizao.schemas.material_shortage_exception import (
     MaterialShortageExceptionUpdate,
     MaterialShortageExceptionResponse,
     MaterialShortageExceptionListResponse,
+    MaterialShortageReportCreate,
 )
 from apps.kuaizhizao.schemas.quality_exception import (
     QualityExceptionResponse,
     QualityExceptionListResponse,
+    QualityExceptionReportCreate,
 )
 from apps.kuaizhizao.schemas.delivery_delay_exception import (
     DeliveryDelayExceptionResponse,
     DeliveryDelayExceptionListResponse,
+    DeliveryDelayReportCreate,
 )
 from apps.common.base_service import AppBaseService
-from apps.common.audit_actor import apply_update_audit
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
+from apps.master_data.models.material import Material
 from apps.kuaizhizao.services.work_order_service import WorkOrderService, WORK_ORDER_IN_PROGRESS_STATUS
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
@@ -116,6 +120,257 @@ class ExceptionService:
 
     def __init__(self):
         self.work_order_service = WorkOrderService()
+
+    async def _get_work_order(self, tenant_id: int, work_order_id: int) -> WorkOrder:
+        work_order = await WorkOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=work_order_id,
+            deleted_at__isnull=True,
+        )
+        if not work_order:
+            raise NotFoundError(f"工单不存在: {work_order_id}")
+        return work_order
+
+    async def _get_material(self, tenant_id: int, material_id: int) -> Material:
+        material = await Material.get_or_none(
+            tenant_id=tenant_id,
+            id=material_id,
+            deleted_at__isnull=True,
+        )
+        if not material:
+            raise NotFoundError(f"物料不存在: {material_id}")
+        return material
+
+    @staticmethod
+    def _normalize_alert_level(value: Optional[str], default: str = "medium") -> str:
+        allowed = {"low", "medium", "high", "critical"}
+        level = (value or default).strip().lower()
+        if level not in allowed:
+            raise ValidationError(f"预警级别无效: {value}")
+        return level
+
+    @staticmethod
+    def _normalize_severity(value: Optional[str], default: str = "minor") -> str:
+        allowed = {"minor", "major", "critical"}
+        severity = (value or default).strip().lower()
+        if severity not in allowed:
+            raise ValidationError(f"严重程度无效: {value}")
+        return severity
+
+    async def report_material_shortage(
+        self,
+        tenant_id: int,
+        data: MaterialShortageReportCreate,
+        created_by: Optional[int] = None,
+    ) -> MaterialShortageExceptionResponse:
+        """现场提报缺料异常。"""
+        work_order = await self._get_work_order(tenant_id, data.work_order_id)
+        material = await self._get_material(tenant_id, data.material_id)
+
+        existing = await MaterialShortageException.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order.id,
+            material_id=material.id,
+            status__in=ACTIVE_EXCEPTION_STATUSES,
+            deleted_at__isnull=True,
+        ).first()
+        if existing:
+            raise ValidationError(
+                f"该工单物料已有未处理缺料异常 #{existing.id}，请在异常追踪中跟进"
+            )
+
+        shortage_qty = Decimal(str(data.shortage_quantity))
+        available_qty = (
+            Decimal(str(data.available_quantity))
+            if data.available_quantity is not None
+            else Decimal("0")
+        )
+        required_qty = (
+            Decimal(str(data.required_quantity))
+            if data.required_quantity is not None
+            else shortage_qty
+        )
+        alert_level = (
+            self._normalize_alert_level(data.alert_level)
+            if data.alert_level
+            else _material_shortage_alert_level(shortage_qty, required_qty)
+        )
+
+        kwargs: dict = dict(
+            tenant_id=tenant_id,
+            work_order_id=work_order.id,
+            work_order_code=work_order.code or "",
+            material_id=material.id,
+            material_code=material.main_code or material.code or "",
+            material_name=material.name or "",
+            shortage_quantity=shortage_qty,
+            available_quantity=available_qty,
+            required_quantity=required_qty,
+            alert_level=alert_level,
+            status="pending",
+            suggested_action="purchase",
+            remarks=(data.remarks or "").strip() or None,
+        )
+        if created_by is not None:
+            user = await User.get_or_none(id=created_by)
+            apply_create_audit(kwargs, user)
+        exception = await MaterialShortageException.create(**kwargs)
+        logger.info(
+            "现场提报缺料异常: wo={} material={} exception_id={}",
+            work_order.id,
+            material.id,
+            exception.id,
+        )
+        return MaterialShortageExceptionResponse.model_validate(exception)
+
+    async def report_delivery_delay(
+        self,
+        tenant_id: int,
+        data: DeliveryDelayReportCreate,
+        created_by: Optional[int] = None,
+    ) -> DeliveryDelayExceptionResponse:
+        """现场提报交期异常。"""
+        work_order = await self._get_work_order(tenant_id, data.work_order_id)
+        reason = (data.delay_reason or "").strip()
+        if not reason:
+            raise ValidationError("请填写延期原因")
+
+        existing = await DeliveryDelayException.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order.id,
+            status__in=ACTIVE_EXCEPTION_STATUSES,
+            deleted_at__isnull=True,
+        ).first()
+        if existing:
+            raise ValidationError(
+                f"该工单已有未处理交期异常 #{existing.id}，请在异常追踪中跟进"
+            )
+
+        planned_end = work_order.planned_end_date
+        if planned_end is None and data.delay_days is None:
+            raise ValidationError("工单无计划完工日期，请填写延期天数")
+
+        if data.delay_days is not None:
+            delay_days = int(data.delay_days)
+        else:
+            now = datetime.now(planned_end.tzinfo) if planned_end and planned_end.tzinfo else datetime.now()
+            delay_days = max(0, (now.date() - planned_end.date()).days)
+
+        if data.alert_level:
+            alert_level = self._normalize_alert_level(data.alert_level)
+        elif delay_days >= 7:
+            alert_level = "critical"
+        elif delay_days >= 3:
+            alert_level = "high"
+        elif delay_days >= 1:
+            alert_level = "medium"
+        else:
+            alert_level = "low"
+
+        if "缺料" in reason or "物料" in reason:
+            suggested_action = "expedite"
+        elif "产能" in reason or "资源" in reason:
+            suggested_action = "increase_resources"
+        else:
+            suggested_action = "adjust_plan"
+
+        if planned_end is None:
+            planned_end = datetime.now()
+
+        kwargs: dict = dict(
+            tenant_id=tenant_id,
+            work_order_id=work_order.id,
+            work_order_code=work_order.code or "",
+            planned_end_date=planned_end,
+            actual_end_date=None,
+            delay_days=delay_days,
+            delay_reason=reason,
+            alert_level=alert_level,
+            status="pending",
+            suggested_action=suggested_action,
+            remarks=(data.remarks or "").strip() or None,
+        )
+        if created_by is not None:
+            user = await User.get_or_none(id=created_by)
+            apply_create_audit(kwargs, user)
+        exception = await DeliveryDelayException.create(**kwargs)
+        logger.info(
+            "现场提报交期异常: wo={} exception_id={}",
+            work_order.id,
+            exception.id,
+        )
+        return DeliveryDelayExceptionResponse.model_validate(exception)
+
+    async def report_quality_exception(
+        self,
+        tenant_id: int,
+        data: QualityExceptionReportCreate,
+        created_by: Optional[int] = None,
+    ) -> QualityExceptionResponse:
+        """现场提报质量异常。"""
+        description = (data.problem_description or "").strip()
+        if not description:
+            raise ValidationError("请填写问题描述")
+
+        work_order_id = None
+        work_order_code = None
+        if data.work_order_id is not None:
+            work_order = await self._get_work_order(tenant_id, data.work_order_id)
+            work_order_id = work_order.id
+            work_order_code = work_order.code or ""
+
+        material_id = data.material_id
+        material_code = (data.material_code or "").strip() or None
+        material_name = (data.material_name or "").strip() or None
+        if material_id is not None:
+            material = await self._get_material(tenant_id, material_id)
+            material_id = material.id
+            material_code = material.main_code or material.code or material_code
+            material_name = material.name or material_name
+        elif material_code:
+            material = await Material.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).filter(Q(main_code=material_code) | Q(code=material_code)).first()
+            if material:
+                material_id = material.id
+                material_code = material.main_code or material.code or material_code
+                material_name = material.name or material_name
+
+        severity = self._normalize_severity(data.severity)
+        exception_type = (data.exception_type or "process_deviation").strip()
+        allowed_types = {
+            "inspection_failure",
+            "process_deviation",
+            "customer_complaint",
+        }
+        if exception_type not in allowed_types:
+            raise ValidationError(f"异常类型无效: {data.exception_type}")
+
+        kwargs: dict = dict(
+            tenant_id=tenant_id,
+            exception_type=exception_type,
+            work_order_id=work_order_id,
+            work_order_code=work_order_code,
+            material_id=material_id,
+            material_code=material_code,
+            material_name=material_name,
+            batch_no=(data.batch_no or "").strip() or None,
+            problem_description=description,
+            severity=severity,
+            status="pending",
+            remarks=(data.remarks or "").strip() or None,
+        )
+        if created_by is not None:
+            user = await User.get_or_none(id=created_by)
+            apply_create_audit(kwargs, user)
+        exception = await QualityException.create(**kwargs)
+        logger.info(
+            "现场提报质量异常: wo={} exception_id={}",
+            work_order_id,
+            exception.id,
+        )
+        return QualityExceptionResponse.model_validate(exception)
 
     async def detect_material_shortage(
         self,
@@ -203,6 +458,20 @@ class ExceptionService:
                 await stale.save()
 
         return exceptions
+
+    async def get_material_shortage_exception(
+        self,
+        tenant_id: int,
+        exception_id: int,
+    ) -> MaterialShortageExceptionResponse:
+        exception = await MaterialShortageException.get_or_none(
+            id=exception_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not exception:
+            raise NotFoundError("缺料异常记录不存在")
+        return MaterialShortageExceptionResponse.model_validate(exception)
 
     async def list_material_shortage_exceptions(
         self,
@@ -336,9 +605,19 @@ class ExceptionService:
 
         # 更新异常记录
         if action == "substitute" and alternative_material_id:
-            # TODO: 获取替代物料信息
+            alt = await Material.get_or_none(
+                id=alternative_material_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not alt:
+                raise NotFoundError(f"替代物料不存在: {alternative_material_id}")
             exception.alternative_material_id = alternative_material_id
+            exception.alternative_material_code = getattr(alt, "main_code", None) or getattr(alt, "code", None)
+            exception.alternative_material_name = alt.name
             exception.suggested_action = "substitute"
+        elif action == "substitute" and not alternative_material_id:
+            raise ValidationError("替代料处理须指定 alternative_material_id")
         elif action == "purchase":
             exception.suggested_action = "purchase"
         elif action == "resolve":
@@ -441,6 +720,20 @@ class ExceptionService:
                 await stale.save()
 
         return exceptions
+
+    async def get_delivery_delay_exception(
+        self,
+        tenant_id: int,
+        exception_id: int,
+    ) -> DeliveryDelayExceptionResponse:
+        exception = await DeliveryDelayException.get_or_none(
+            id=exception_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not exception:
+            raise NotFoundError("延期异常记录不存在")
+        return DeliveryDelayExceptionResponse.model_validate(exception)
 
     async def list_delivery_delay_exceptions(
         self,
@@ -563,6 +856,20 @@ class ExceptionService:
         await exception.save()
 
         return DeliveryDelayExceptionResponse.model_validate(exception)
+
+    async def get_quality_exception(
+        self,
+        tenant_id: int,
+        exception_id: int,
+    ) -> QualityExceptionResponse:
+        exception = await QualityException.get_or_none(
+            id=exception_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not exception:
+            raise NotFoundError("质量异常记录不存在")
+        return QualityExceptionResponse.model_validate(exception)
 
     async def list_quality_exceptions(
         self,

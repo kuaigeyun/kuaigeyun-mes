@@ -2401,6 +2401,7 @@
         "kuaizhizao:mold-maintenance-scheme:update",
         "kuaizhizao:mold-maintenance:approve",
         "kuaizhizao:mold-maintenance:audit",
+        "kuaizhizao:mold-maintenance:complete",
         "kuaizhizao:mold-maintenance:create",
         "kuaizhizao:mold-maintenance:delete",
         "kuaizhizao:mold-maintenance:export",
@@ -2437,6 +2438,7 @@
         "kuaizhizao:mold-repair-scheme:update",
         "kuaizhizao:mold-repair:approve",
         "kuaizhizao:mold-repair:audit",
+        "kuaizhizao:mold-repair:complete",
         "kuaizhizao:mold-repair:create",
         "kuaizhizao:mold-repair:delete",
         "kuaizhizao:mold-repair:export",
@@ -2697,12 +2699,16 @@
         "kuaizhizao:production-execution-dashboard:print",
         "kuaizhizao:production-execution-dashboard:read",
         "kuaizhizao:production-execution-delivery-delay-exceptions:print",
+        "kuaizhizao:production-execution-delivery-delay-exceptions:create",
+        "kuaizhizao:production-execution-delivery-delay-exceptions:update",
         "kuaizhizao:production-execution-delivery-delay-exceptions:read",
         "kuaizhizao:production-execution-exception-process:print",
         "kuaizhizao:production-execution-exception-process:read",
         "kuaizhizao:production-execution-exception-statistics:print",
         "kuaizhizao:production-execution-exception-statistics:read",
         "kuaizhizao:production-execution-material-shortage-exceptions:print",
+        "kuaizhizao:production-execution-material-shortage-exceptions:create",
+        "kuaizhizao:production-execution-material-shortage-exceptions:update",
         "kuaizhizao:production-execution-material-shortage-exceptions:read",
         "kuaizhizao:production-execution-packing-binding:approve",
         "kuaizhizao:production-execution-packing-binding:audit",
@@ -2717,6 +2723,8 @@
         "kuaizhizao:production-execution-packing-binding:submit",
         "kuaizhizao:production-execution-packing-binding:update",
         "kuaizhizao:production-execution-quality-exceptions:print",
+        "kuaizhizao:production-execution-quality-exceptions:create",
+        "kuaizhizao:production-execution-quality-exceptions:update",
         "kuaizhizao:production-execution-quality-exceptions:read",
         "kuaizhizao:production-execution-reporting-statistics:export",
         "kuaizhizao:production-execution-reporting-statistics:print",
@@ -4745,6 +4753,242 @@
     ],
     "mobile_workbench": {
         "scopes": {
+            "workshop": {
+                "sections": [
+                    {
+                        "key": "production_exec",
+                        "title": "",
+                        "entries": [
+                            {
+                                "key": "scan-report",
+                                "label": "扫码报工",
+                                "icon": "scan",
+                                "route": "/mes/scan",
+                                "permission": "kuaizhizao:production-execution-reporting:create",
+                                "solo_row": true
+                            },
+                            {
+                                "key": "my-work-orders",
+                                "label": "我的工单",
+                                "icon": "file",
+                                "route": "/mes?my=1",
+                                "permission": "kuaizhizao:work-order:read"
+                            },
+                            {
+                                "key": "work-orders",
+                                "label": "全部工单",
+                                "icon": "list",
+                                "route": "/mes",
+                                "permission": "kuaizhizao:work-order:read"
+                            },
+                            {
+                                "key": "reporting-history",
+                                "label": "我的报工",
+                                "icon": "history",
+                                "route": "/mes/reporting-history",
+                                "permission": "kuaizhizao:production-execution-reporting:read"
+                            },
+                            {
+                                "key": "reporting-approve",
+                                "label": "报工审核",
+                                "icon": "check",
+                                "route": "/mes/reporting-approve",
+                                "permission": "kuaizhizao:production-execution-reporting:approve"
+                            },
+                            {
+                                "key": "packing-binding",
+                                "label": "装箱绑定",
+                                "icon": "inbox",
+                                "route": "/mes/packing",
+                                "permission": "kuaizhizao:production-execution-packing-binding:read"
+                            },
+                            {
+                                "key": "exception-report",
+                                "label": "异常提报",
+                                "icon": "plus-square",
+                                "route": "/exception/report",
+                                "permissions_any": [
+                                    "kuaizhizao:production-execution-material-shortage-exceptions:create",
+                                    "kuaizhizao:production-execution-delivery-delay-exceptions:create",
+                                    "kuaizhizao:production-execution-quality-exceptions:create"
+                                ]
+                            },
+                            {
+                                "key": "exceptions",
+                                "label": "异常追踪",
+                                "icon": "warning",
+                                "route": "/exception",
+                                "permissions_any": [
+                                    "kuaizhizao:production-execution-material-shortage-exceptions:read",
+                                    "kuaizhizao:production-execution-delivery-delay-exceptions:read",
+                                    "kuaizhizao:production-execution-quality-exceptions:read"
+                                ]
+                            },
+                            {
+                                "key": "performance",
+                                "label": "我的绩效",
+                                "icon": "chart",
+                                "route": "/performance",
+                                "permissions_any": [
+                                    "kuaizhizao:performance-summaries:read",
+                                    "kuaizhizao:production-execution-reporting:read",
+                                    "kuaizhizao:performance-reports-piece-rate-salary-summary:read"
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            "warehouse": {
+                "sections": [
+                    {
+                        "key": "warehouse_ops",
+                        "title": "仓储作业",
+                        "entries": [
+                            {
+                                "key": "pickings",
+                                "label": "生产领料",
+                                "icon": "export",
+                                "route": "/wms/pickings",
+                                "permission": "kuaizhizao:inbound:read"
+                            },
+                            {
+                                "key": "returns",
+                                "label": "生产退料",
+                                "icon": "rollback",
+                                "route": "/wms/returns",
+                                "permission": "kuaizhizao:inbound:read"
+                            },
+                            {
+                                "key": "fg-receipts",
+                                "label": "成品入库",
+                                "icon": "inbox",
+                                "route": "/wms/receipts",
+                                "permission": "kuaizhizao:inbound:read"
+                            },
+                            {
+                                "key": "purchase-receipts",
+                                "label": "采购收货",
+                                "icon": "shopping",
+                                "route": "/wms/purchase-receipts",
+                                "permission": "kuaizhizao:inbound:read"
+                            },
+                            {
+                                "key": "sales-deliveries",
+                                "label": "销售出库",
+                                "icon": "truck",
+                                "route": "/wms/sales-deliveries",
+                                "permission": "kuaizhizao:outbound:read"
+                            },
+                            {
+                                "key": "delivery-notices",
+                                "label": "送货单",
+                                "icon": "file",
+                                "route": "/wms/delivery-notices",
+                                "permission": "kuaizhizao:shipment-notice:read"
+                            },
+                            {
+                                "key": "other-inbound",
+                                "label": "其它入库",
+                                "icon": "plus-square",
+                                "route": "/wms/other-inbounds",
+                                "permission": "kuaizhizao:other-inbound:read"
+                            },
+                            {
+                                "key": "other-outbound",
+                                "label": "其它出库",
+                                "icon": "minus-square",
+                                "route": "/wms/other-outbounds",
+                                "permission": "kuaizhizao:other-outbound:read"
+                            },
+                            {
+                                "key": "stocktaking",
+                                "label": "移动盘点",
+                                "icon": "audit",
+                                "route": "/wms/stocktaking",
+                                "permission": "kuaizhizao:warehouse-management-stocktaking:read"
+                            },
+                            {
+                                "key": "inventory-query",
+                                "label": "库存查询",
+                                "icon": "search",
+                                "route": "/wms/inventory",
+                                "permission": "kuaizhizao:warehouse-management-inventory:read"
+                            },
+                            {
+                                "key": "inventory-transfer",
+                                "label": "调拨确认",
+                                "icon": "swap",
+                                "route": "/wms/transfers",
+                                "permission": "kuaizhizao:warehouse-management-inventory-transfer:read"
+                            },
+                            {
+                                "key": "inventory-alerts",
+                                "label": "库存预警",
+                                "icon": "bell",
+                                "route": "/wms/alerts",
+                                "permission": "kuaizhizao:warehouse-management-inventory-alert:read"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "quality": {
+                "sections": [
+                    {
+                        "key": "quality_ops",
+                        "title": "质量检验",
+                        "entries": [
+                            {
+                                "key": "quality-hub",
+                                "label": "待检验",
+                                "icon": "shield",
+                                "route": "/quality",
+                                "permissions_any": [
+                                    "kuaizhizao:quality-management-process-inspection:read",
+                                    "kuaizhizao:quality-management-incoming-inspection:read",
+                                    "kuaizhizao:quality-management-finished-goods-inspection:read"
+                                ]
+                            },
+                            {
+                                "key": "process-scan",
+                                "label": "过程检验",
+                                "icon": "scan",
+                                "route": "/quality/process-scan",
+                                "permission": "kuaizhizao:quality-management-process-inspection:create"
+                            },
+                            {
+                                "key": "incoming",
+                                "label": "来料检验",
+                                "icon": "shopping",
+                                "route": "/quality?type=incoming",
+                                "permission": "kuaizhizao:quality-management-incoming-inspection:read"
+                            },
+                            {
+                                "key": "finished",
+                                "label": "成品检验",
+                                "icon": "inbox",
+                                "route": "/quality?type=finished",
+                                "permission": "kuaizhizao:quality-management-finished-goods-inspection:read"
+                            },
+                            {
+                                "key": "oqc",
+                                "label": "出库检验",
+                                "icon": "check-circle",
+                                "route": "/quality/oqc",
+                                "permission": "kuaizhizao:quality-management-oqc-inspection:read"
+                            },
+                            {
+                                "key": "nonconforming",
+                                "label": "不合格品",
+                                "icon": "close-circle",
+                                "route": "/quality/nonconforming",
+                                "permission": "kuaizhizao:quality-management-nonconforming-ledger:read"
+                            }
+                        ]
+                    }
+                ]
+            },
             "equipment": {
                 "sections": [
                     {
@@ -4755,30 +4999,109 @@
                                 "key": "scan",
                                 "label": "扫码查设备",
                                 "icon": "scan",
-                                "route": "/m/kuaizhizao/equipment/scan",
-                                "permission": "kuaizhizao:equipment-management-equipment:read",
-                                "solo_row": true
+                                "route": "/equipment/scan",
+                                "permission": "kuaizhizao:equipment-management-equipment:read"
+                            },
+                            {
+                                "key": "spot-check-conduct",
+                                "label": "执行点检",
+                                "icon": "audit",
+                                "route": "/equipment/spot-check-conduct",
+                                "permission": "kuaizhizao:equipment-spot-check:create"
                             },
                             {
                                 "key": "spot-checks",
                                 "label": "点检记录",
                                 "icon": "check",
-                                "route": "/m/kuaizhizao/equipment/spot-checks",
+                                "route": "/equipment/spot-checks",
                                 "permission": "kuaizhizao:equipment-spot-check:read"
+                            },
+                            {
+                                "key": "route-patrols",
+                                "label": "路线巡检",
+                                "icon": "list",
+                                "route": "/equipment/route-patrols",
+                                "permission": "kuaizhizao:equipment-route-patrol:read"
                             },
                             {
                                 "key": "faults",
                                 "label": "故障报修",
-                                "icon": "tool",
-                                "route": "/m/kuaizhizao/equipment/faults",
+                                "icon": "warning",
+                                "route": "/equipment/faults",
                                 "permission": "kuaizhizao:equipment-fault:read"
+                            },
+                            {
+                                "key": "repairs",
+                                "label": "设备维修",
+                                "icon": "tool",
+                                "route": "/equipment/repairs",
+                                "permission": "kuaizhizao:equipment-fault:read"
+                            },
+                            {
+                                "key": "maintenance-executions",
+                                "label": "保养执行",
+                                "icon": "gear",
+                                "route": "/equipment/maintenance-executions",
+                                "permission": "kuaizhizao:maintenance-plan:read"
                             },
                             {
                                 "key": "maintenance-reminders",
                                 "label": "保养提醒",
                                 "icon": "bell",
-                                "route": "/m/kuaizhizao/equipment/maintenance-reminders",
+                                "route": "/equipment/maintenance-reminders",
                                 "permission": "kuaizhizao:maintenance-reminder:read"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "mold": {
+                "sections": [
+                    {
+                        "key": "mold_ops",
+                        "title": "模具作业",
+                        "entries": [
+                            {
+                                "key": "mold-scan",
+                                "label": "扫码查模具",
+                                "icon": "scan",
+                                "route": "/mold/scan",
+                                "permission": "kuaizhizao:equipment-management-molds:read"
+                            },
+                            {
+                                "key": "mold-borrows",
+                                "label": "模具领用",
+                                "icon": "export",
+                                "route": "/mold/borrows",
+                                "permission": "kuaizhizao:mold-borrow:read"
+                            },
+                            {
+                                "key": "mold-returns",
+                                "label": "模具归还",
+                                "icon": "import",
+                                "route": "/mold/returns",
+                                "permission": "kuaizhizao:mold-return:read"
+                            },
+                            {
+                                "key": "mold-maintenances",
+                                "label": "模具保养",
+                                "icon": "gear",
+                                "route": "/mold/maintenances",
+                                "permission": "kuaizhizao:mold-maintenance:read"
+                            },
+                            {
+                                "key": "mold-repairs",
+                                "label": "模具维修",
+                                "icon": "tool",
+                                "route": "/mold/repairs",
+                                "permission": "kuaizhizao:mold-repair:read"
+                            },
+                            {
+                                "key": "mold-reminders",
+                                "label": "模具保养提醒",
+                                "icon": "bell",
+                                "route": "/mold/reminders",
+                                "permission": "kuaizhizao:mold-maintenance-reminder:read"
                             }
                         ]
                     }

@@ -615,7 +615,7 @@ async def reject_mold_maintenance(
 @router.post(
     "/mold-maintenances/{row_id}/complete",
     response_model=MoldMaintenanceResponse,
-    dependencies=[Depends(require_permission_codes("kuaizhizao:mold-maintenance:update"))],
+    dependencies=[Depends(require_permission_codes("kuaizhizao:mold-maintenance:complete"))],
 )
 async def complete_mold_maintenance(row_id: int, tenant_id: int = Depends(get_current_tenant)):
     try:
@@ -822,7 +822,7 @@ async def reject_mold_repair(
 @router.post(
     "/mold-repairs/{row_id}/complete",
     response_model=MoldRepairResponse,
-    dependencies=[Depends(require_permission_codes("kuaizhizao:mold-repair:update"))],
+    dependencies=[Depends(require_permission_codes("kuaizhizao:mold-repair:complete"))],
 )
 async def complete_mold_repair(row_id: int, tenant_id: int = Depends(get_current_tenant)):
     try:

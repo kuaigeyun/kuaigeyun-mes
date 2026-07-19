@@ -3457,6 +3457,7 @@ class ReportService:
                     preferred[key] = s
             stats = [
                 {
+                    "employee_id": s.employee_id,
                     "employee_name": s.employee_name,
                     "period": s.period,
                     "total_hours": float(s.total_hours or 0),

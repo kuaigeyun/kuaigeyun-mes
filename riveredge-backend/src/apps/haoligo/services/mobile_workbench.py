@@ -180,7 +180,8 @@ def _filter_scope_sections(
         sections_out.append(
             {
                 "key": (section.get("key") or "").strip() or "section",
-                "title": (section.get("title") or "").strip() or "工作台",
+                # 空标题表示不展示分区名；禁止回退「工作台」
+                "title": (section.get("title") or "").strip(),
                 "entries": entries_out,
             }
         )

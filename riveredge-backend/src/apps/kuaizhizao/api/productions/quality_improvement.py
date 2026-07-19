@@ -523,6 +523,31 @@ async def create_oqc_from_sales_delivery(
     )
 
 
+@router.get("/oqc-inspections/export", summary="Export OQC inspections")
+async def export_oqc_inspections(
+    status: Optional[str] = Query(None),
+    _auth=_OQC_EXPORT,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _ = _auth
+    result = await oqc_service.list(tenant_id=tenant_id, skip=0, limit=10000, status=status)
+    return result
+
+
+@router.get(
+    "/oqc-inspections/{inspection_id}",
+    response_model=OQCInspectionResponse,
+    summary="Get OQC inspection",
+)
+async def get_oqc_inspection(
+    inspection_id: int = Path(..., description="出货检验单ID"),
+    _auth=_OQC_READ,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OQCInspectionResponse:
+    return await oqc_service.get_by_id(tenant_id=tenant_id, inspection_id=inspection_id)
+
+
 @router.post("/oqc-inspections/{inspection_id}/conduct", response_model=OQCInspectionResponse, summary="Conduct OQC inspection")
 async def conduct_oqc_inspection(
     payload: OQCInspectionConduct,
@@ -593,17 +618,6 @@ async def delete_oqc_inspection(
     _ = _auth
     await oqc_service.delete_inspection(tenant_id=tenant_id, inspection_id=inspection_id, user_id=current_user.id)
     return {"success": True}
-
-
-@router.get("/oqc-inspections/export", summary="Export OQC inspections")
-async def export_oqc_inspections(
-    status: Optional[str] = Query(None),
-    _auth=_OQC_EXPORT,
-    tenant_id: int = Depends(get_current_tenant),
-):
-    _ = _auth
-    result = await oqc_service.list(tenant_id=tenant_id, skip=0, limit=10000, status=status)
-    return result
 
 
 @router.post("/spc/samples", response_model=SPCSampleResponse, summary="Create SPC sample")

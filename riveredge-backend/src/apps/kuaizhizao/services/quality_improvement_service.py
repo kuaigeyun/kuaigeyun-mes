@@ -408,6 +408,21 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         )
         return OQCInspectionResponse.model_validate(row)
 
+    async def get_by_id(self, tenant_id: int, inspection_id: int) -> OQCInspectionResponse:
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_oqc_inspection_capabilities_on_response,
+        )
+
+        row = await OQCInspection.get_or_none(
+            id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("OQC 检验单不存在")
+        return enrich_oqc_inspection_capabilities_on_response(
+            row,
+            OQCInspectionResponse.model_validate(row),
+        )
+
     async def list(
         self,
         tenant_id: int,

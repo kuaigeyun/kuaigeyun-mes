@@ -1236,7 +1236,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         )
         milestones = await get_document_milestones(tenant_id, "work_order", work_order_id)
         response.lifecycle = get_work_order_lifecycle(work_order, milestones=milestones)
-        # 制造模式定义在物料主数据：工单 product_id 即本单制造的产品物料，从其 source_config 读取
+        # 制造模式 / 规格：物料主数据（product_id 即本单制造的产品物料）
         if work_order.product_id:
             product = await Material.get_or_none(
                 id=work_order.product_id,
@@ -1247,6 +1247,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 response.manufacturing_mode = product.source_config.get("manufacturing_mode") or "fabrication"
             else:
                 response.manufacturing_mode = "fabrication"
+            spec = (getattr(product, "specification", None) or "").strip() if product else ""
+            if spec:
+                response.material_spec = spec
         else:
             response.manufacturing_mode = "fabrication"
         if work_order.sales_order_id and not work_order.sales_order_code:
@@ -1465,21 +1468,25 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if await tree_svc.backfill_split_parent_links(tenant_id, child_ids=orphan_split_ids):
                 work_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
 
-        # 制造模式：定义在「产品物料」主数据的 source_config；工单通过 product_id（本单制造对象）关联物料后读取，与 get_work_order_by_id 一致
+        # 制造模式 / 规格：定义在「产品物料」主数据；工单通过 product_id 关联
         product_ids = list({wo.product_id for wo in work_orders if wo.product_id})
         manufacturing_mode_by_product: dict[int, str] = {}
+        material_spec_by_product: dict[int, str] = {}
         if product_ids:
             materials = await Material.filter(
                 tenant_id=tenant_id,
                 id__in=product_ids,
                 deleted_at__isnull=True,
-            ).only("id", "source_config")
+            ).only("id", "source_config", "specification")
             for m in materials:
                 sc = m.source_config or {}
                 if isinstance(sc, dict):
                     manufacturing_mode_by_product[m.id] = sc.get("manufacturing_mode") or "fabrication"
                 else:
                     manufacturing_mode_by_product[m.id] = "fabrication"
+                spec = (getattr(m, "specification", None) or "").strip()
+                if spec:
+                    material_spec_by_product[m.id] = spec
 
         # 列表展示：仅有 sales_order_id、缺编号/名称时，批量补全销售订单快照（历史数据或下推未写冗余字段）
         so_ids_missing_label = list(
@@ -1636,10 +1643,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 if include_operation_steps and wo.id is not None:
                     item_dict["operation_steps"] = operation_steps_map.get(wo.id, [])
 
-                # product_id → 工单制造的产品物料 → 该物料档案上的制造模式
+                # product_id → 工单制造的产品物料 → 该物料档案上的制造模式 / 规格
                 item_dict["manufacturing_mode"] = manufacturing_mode_by_product.get(
                     wo.product_id, "fabrication"
                 ) if wo.product_id else "fabrication"
+                if wo.product_id and wo.product_id in material_spec_by_product:
+                    item_dict["material_spec"] = material_spec_by_product[wo.product_id]
 
                 if wo.sales_order_id and not item_dict.get("sales_order_code"):
                     snap = so_snapshot_map.get(wo.sales_order_id)
