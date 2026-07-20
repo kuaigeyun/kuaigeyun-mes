@@ -23,9 +23,21 @@ import SystemRoutes from './SystemRoutes';
 import AppRoutes from './AppRoutes';
 import PageSkeleton from '../components/page-skeleton';
 
-// 报表/大屏分享页（按需加载，避免 kuaireport 进入主包）
-const ReportSharedView = React.lazy(() => import('../apps/kuaireport/pages/ReportSharedView'));
-const DashboardSharedView = React.lazy(() => import('../apps/kuaireport/pages/DashboardSharedView'));
+/** 专业包分享页：glob 可选，未 compose 时路由仍可注册但不拉起缺失模块 */
+const KUAIREPORT_SHARED_PAGES = import.meta.glob('../apps/kuaireport/pages/*SharedView.tsx');
+
+function lazyKuaireportShared(fileName: 'ReportSharedView' | 'DashboardSharedView') {
+  const path = Object.keys(KUAIREPORT_SHARED_PAGES).find((p) => p.endsWith(`/${fileName}.tsx`));
+  if (!path) {
+    return React.lazy(async () => ({
+      default: () => null,
+    }));
+  }
+  return React.lazy(KUAIREPORT_SHARED_PAGES[path] as () => Promise<{ default: React.ComponentType }>);
+}
+
+const ReportSharedView = lazyKuaireportShared('ReportSharedView');
+const DashboardSharedView = lazyKuaireportShared('DashboardSharedView');
 
 /**
  * 判断当前路径是否需要 BasicLayout

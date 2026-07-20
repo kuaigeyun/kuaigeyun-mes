@@ -82,7 +82,6 @@ const useSafeTranslation = () => {
 };
 import TenantSelector from '../components/tenant-selector';
 import TopBarSearch from '../components/TopBarSearch';
-import AiAssistant from '../components/ai-assistant';
 import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
 import { HeaderClientDownloadButton } from '../components/header-client-download';
@@ -90,6 +89,8 @@ import ThemeEditor from '../components/theme-editor';
 import IterationFloatButton from '../components/iteration-float-button';
 import { RouteTransition } from '../components/route-transition';
 const TenantBootstrapModal = React.lazy(() => import('../components/tenant-bootstrap-modal'));
+/** AI 助手按需加载，避免动画/AntX 栈进入启动主图 */
+const AiAssistant = React.lazy(() => import('../components/ai-assistant'));
 import { getCurrentUser } from '../services/auth';
 import { getCurrentInfraSuperAdmin } from '../services/infraAdmin';
 import { getTenantById, TenantPlan } from '../services/tenant';
@@ -114,7 +115,7 @@ import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
 import { CODE_FONT_FAMILY } from '../constants/fonts';
 import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
 import { getInstalledApplicationList } from '../services/application';
-import { getChatIntegrationStatus } from '../apps/kuaiai/services/chat';
+import { getChatIntegrationStatus } from '../services/deepseekChat';
 import { buildChatIntegrationStatusQueryKey } from '../hooks/useChatIntegrationStatus';
 import { hasPermission, resolveUserForMenuPermission } from '../utils/permission';
 import { getSiteLogoPreview, isSiteLogoUuidKnownMissing } from '../services/file';
@@ -5672,10 +5673,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
       {/* AI 助手：挂载后保持实例，避免路由切换重复检测 DeepSeek 状态 */}
       {aiAssistantMountedRef.current && (
-        <AiAssistant
-          open={aiAssistantOpen}
-          onClose={() => setAiAssistantOpen(false)}
-        />
+        <React.Suspense fallback={null}>
+          <AiAssistant
+            open={aiAssistantOpen}
+            onClose={() => setAiAssistantOpen(false)}
+          />
+        </React.Suspense>
       )}
 
       {/* 新手引导 */}

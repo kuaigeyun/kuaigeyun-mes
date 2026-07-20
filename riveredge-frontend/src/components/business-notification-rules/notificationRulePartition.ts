@@ -1,5 +1,3 @@
-import { isHaoligoNotificationDocument } from '../../apps/haoligo/constants/notificationRules';
-
 export function normalizeNotificationRulesFromParameters(notifications: unknown): any[] {
   if (notifications == null) return [];
   if (Array.isArray(notifications)) return notifications;
@@ -27,6 +25,7 @@ export function partitionRulesByAvailableDocuments(
   return { visible, hidden };
 }
 
+/** 与 haoligo 约定：定制提醒单据以 haoligo_ 为前缀（不静态依赖定制包） */
 export function isHaoligoNotificationDocumentCode(documentCode: string): boolean {
-  return isHaoligoNotificationDocument(documentCode);
+  return String(documentCode || '').startsWith('haoligo_');
 }

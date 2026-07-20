@@ -17,9 +17,8 @@ import { getMessageTemplateList, type MessageTemplate } from '../../services/mes
 import { getUserList, type User } from '../../services/user';
 import { getInstalledApplicationList } from '../../services/application';
 import { CORE_NOTIFICATION_RECIPIENT_SCOPES } from './coreNotificationRules';
-import { HAOLIGO_NOTIFICATION_RECIPIENT_SCOPES } from '../../apps/haoligo/constants/notificationRules';
 import { isHaoligoNotificationDocumentCode } from './notificationRulePartition';
-import { buildNotificationConfig } from './notificationAppModules';
+import { buildNotificationConfig, ensureNotificationAppModules } from './notificationAppModules';
 import {
   USER_SPECIFIED_NOTIFICATION_SCOPE,
   USER_SPECIFIED_SCOPE_OPTION,
@@ -88,6 +87,17 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
   const [notificationModalInitialValues, setNotificationModalInitialValues] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [loadingPresets, setLoadingPresets] = useState(false);
+  const [notificationModulesReady, setNotificationModulesReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void ensureNotificationAppModules().then(() => {
+      if (!cancelled) setNotificationModulesReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const { data: installedApps } = useQuery({
     queryKey: INSTALLED_APPS_QUERY_KEY,
@@ -100,7 +110,10 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
     [installedApps],
   );
 
-  const cfg = useMemo(() => buildNotificationConfig(installedAppCodes), [installedAppCodes]);
+  const cfg = useMemo(
+    () => buildNotificationConfig(installedAppCodes),
+    [installedAppCodes, notificationModulesReady],
+  );
 
   const { data: bizRes, isLoading: configLoading, isFetching, refetch: refetchBusinessConfig } = useQuery({
     queryKey: BUSINESS_CONFIG_QUERY_KEY,
@@ -263,8 +276,8 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
       }
       const fromCore = CORE_NOTIFICATION_RECIPIENT_SCOPES.find((it) => it.value === code);
       if (fromCore) return renderText(fromCore.labelKey, fromCore.fallback);
-      const fromHaoligo = HAOLIGO_NOTIFICATION_RECIPIENT_SCOPES.find((it) => it.value === code);
-      if (fromHaoligo) return renderText(fromHaoligo.labelKey, fromHaoligo.fallback);
+      const fromExtra = cfg.extraRecipientScopes.find((it) => it.value === code);
+      if (fromExtra) return renderText(fromExtra.labelKey, fromExtra.fallback);
       const key = `pages.system.configCenter.notification.scope.${code}`;
       return i18n.exists(key) ? t(key) : code;
     };

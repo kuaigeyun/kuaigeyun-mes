@@ -1,13 +1,9 @@
 /**
  * 已开通应用的消息提醒扩展注册（单据/动作/收件范围按 app code 挂载）
+ *
+ * 定制包（haoligo）通过 import.meta.glob 可选发现：未 compose 时不进入启动主图。
  */
 
-import {
-  HAOLIGO_NOTIFICATION_ACTION_OPTIONS,
-  HAOLIGO_NOTIFICATION_DOCUMENT_OPTIONS,
-  HAOLIGO_NOTIFICATION_RECIPIENT_SCOPES,
-} from '../../apps/haoligo/constants/notificationRules';
-import { loadHaoligoNotificationRulePresets } from '../../apps/haoligo/services/haoligo';
 import {
   CORE_NOTIFICATION_ACTION_OPTIONS,
   CORE_NOTIFICATION_DOCUMENT_OPTIONS,
@@ -31,7 +27,41 @@ export type NotificationAppModule = {
   loadPresets?: NotificationPresetLoader;
 };
 
-/** 各应用消息提醒能力注册（未开通的应用不会出现在配置中） */
+const HAOLIGO_NOTIFICATION_CONSTANTS = import.meta.glob(
+  '../../apps/haoligo/constants/notificationRules.ts',
+);
+
+const HAOLIGO_SERVICES = import.meta.glob('../../apps/haoligo/services/haoligo.ts');
+
+let haoligoModulePromise: Promise<NotificationAppModule | null> | null = null;
+
+async function loadHaoligoNotificationModule(): Promise<NotificationAppModule | null> {
+  const constEntry = Object.entries(HAOLIGO_NOTIFICATION_CONSTANTS)[0];
+  if (!constEntry) return null;
+  const [, loadConstants] = constEntry;
+  const constants = (await loadConstants()) as {
+    HAOLIGO_NOTIFICATION_DOCUMENT_OPTIONS: NotificationAppModule['documentOptions'];
+    HAOLIGO_NOTIFICATION_ACTION_OPTIONS: NotificationAppModule['actionOptions'];
+    HAOLIGO_NOTIFICATION_RECIPIENT_SCOPES: NotificationAppModule['extraRecipientScopes'];
+  };
+  const svcEntry = Object.entries(HAOLIGO_SERVICES)[0];
+  let loadPresets: NotificationPresetLoader | undefined;
+  if (svcEntry) {
+    const services = (await svcEntry[1]()) as {
+      loadHaoligoNotificationRulePresets?: NotificationPresetLoader;
+    };
+    loadPresets = services.loadHaoligoNotificationRulePresets;
+  }
+  return {
+    appCode: 'haoligo',
+    documentOptions: constants.HAOLIGO_NOTIFICATION_DOCUMENT_OPTIONS,
+    actionOptions: constants.HAOLIGO_NOTIFICATION_ACTION_OPTIONS,
+    extraRecipientScopes: [...constants.HAOLIGO_NOTIFICATION_RECIPIENT_SCOPES],
+    loadPresets,
+  };
+}
+
+/** 开源应用：静态注册。定制应用：ensureNotificationAppModules 后并入。 */
 export const NOTIFICATION_APP_MODULES: Record<string, NotificationAppModule> = {
   kuaizhizao: {
     appCode: 'kuaizhizao',
@@ -39,14 +69,18 @@ export const NOTIFICATION_APP_MODULES: Record<string, NotificationAppModule> = {
     actionOptions: CORE_NOTIFICATION_ACTION_OPTIONS,
     extraRecipientScopes: [],
   },
-  haoligo: {
-    appCode: 'haoligo',
-    documentOptions: HAOLIGO_NOTIFICATION_DOCUMENT_OPTIONS,
-    actionOptions: HAOLIGO_NOTIFICATION_ACTION_OPTIONS,
-    extraRecipientScopes: HAOLIGO_NOTIFICATION_RECIPIENT_SCOPES,
-    loadPresets: loadHaoligoNotificationRulePresets,
-  },
 };
+
+/** 确保定制包提醒模块已合并进 NOTIFICATION_APP_MODULES（可重复调用） */
+export async function ensureNotificationAppModules(): Promise<void> {
+  if (!haoligoModulePromise) {
+    haoligoModulePromise = loadHaoligoNotificationModule();
+  }
+  const haoligo = await haoligoModulePromise;
+  if (haoligo && !NOTIFICATION_APP_MODULES.haoligo) {
+    NOTIFICATION_APP_MODULES.haoligo = haoligo;
+  }
+}
 
 export function buildNotificationConfig(installedAppCodes: ReadonlySet<string>) {
   const documentOptions: NotificationDocumentOption[] = [];

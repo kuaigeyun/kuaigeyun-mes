@@ -16,7 +16,7 @@ import {
   parseKuaiChatErrorResponse,
   stripAssistantThinkContent,
   type ChatIntegrationStatus,
-} from '../../apps/kuaiai/services/chat'
+} from '../../services/deepseekChat'
 import { useChatIntegrationStatus } from '../../hooks/useChatIntegrationStatus'
 import assistAnimation from '../../../static/lottie/assist.json'
 import welcomeAnimation from '../../../static/lottie/welcome.json'

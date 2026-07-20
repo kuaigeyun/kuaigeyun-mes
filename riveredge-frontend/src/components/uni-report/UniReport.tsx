@@ -3,7 +3,6 @@ import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../uni-table';
 import { ListPageTemplate, type StatCard } from '../layout-templates';
-import { executeReport } from '../../apps/kuaireport/services/kuaireport';
 import { UniReportMetaHeader } from './UniReportMetaHeader';
 import { buildUniReportSummaryFooter } from './UniReportSummaryFooter';
 import {
@@ -18,6 +17,25 @@ import { getUniReportTemplate } from './templates';
 import { useUniReportExport } from './useUniReportExport';
 import { useUniReportPrint } from './useUniReportPrint';
 import type { UniReportProps } from './types';
+
+/** 专业包 kuaireport：未 compose 时不可用，避免壳层静态依赖导致主仓白屏 */
+const KUAIREPORT_SERVICE = import.meta.glob('../../apps/kuaireport/services/kuaireport.ts');
+
+async function executeReport(reportId: string | number, filters: Record<string, unknown>) {
+  const entry = Object.entries(KUAIREPORT_SERVICE)[0];
+  if (!entry) {
+    throw new Error('kuaireport is not composed into this workspace');
+  }
+  const mod = (await entry[1]()) as {
+    executeReport: (id: string | number, f: Record<string, unknown>) => Promise<{
+      data?: unknown[];
+      total?: number;
+      success?: boolean;
+      summary?: Record<string, number>;
+    }>;
+  };
+  return mod.executeReport(reportId, filters);
+}
 
 function prependIndexColumn<T>(columns: ProColumns<T>[], t: (k: string) => string): ProColumns<T>[] {
   const hasIndex = columns.some((c) => c.valueType === 'index' || c.valueType === 'indexBorder');

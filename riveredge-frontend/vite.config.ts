@@ -247,18 +247,32 @@ export default defineConfig({
             if (id.includes('@ant-design/pro-components')) return 'vendor-pro-components';
             if (id.includes('@ant-design/charts') || id.includes('@ant-design/plots')) return 'vendor-charts';
             if (id.includes('@ant-design/graphs')) return 'vendor-graphs';
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) return 'vendor-react';
+            // React 核心 + 动画库同包：framer-motion/lottie 在初始化时同步调用 React.createContext，
+            // 若拆成 vendor-animation 会与 vendor-react 形成环，生产环境白屏
+            // （禁止 includes('react') 误伤 lucide-react / @react-three）
+            {
+              const norm = id.replace(/\\/g, '/');
+              if (
+                /(?:^|\/)node_modules\/(?:react|react-dom|react-router|react-router-dom|scheduler)(?:\/|$)/.test(
+                  norm,
+                ) ||
+                norm.includes('framer-motion') ||
+                norm.includes('lottie-react') ||
+                norm.includes('/lottie-web/')
+              ) {
+                return 'vendor-react';
+              }
+            }
             if (id.includes('antd') || id.includes('@ant-design')) return 'vendor-antd';
-            if (id.includes('framer-motion') || id.includes('lottie')) return 'vendor-animation';
             return 'vendor-other';
           }
+          // 注意：不要再按 /apps/* 强制打成 app-* 巨石包。
+          // 否则 Rollup 会把壳层共享运行时（含 vite preload helper / auth）吞进
+          // app-haoligo，入口静态依赖定制包 → 未 compose 专业/定制包时白屏。
+          // 应用分包改由 pluginLoader 的 dynamic import() 自然拆分。
           if (id.includes('/components/uni-import')) return 'component-uni-import';
           if (id.includes('/components/uni-query')) return 'component-uni-query';
           if (id.includes('/pages/login')) return 'page-login';
-          if (id.includes('/apps/')) {
-            const appMatch = id.match(/\/apps\/([^/]+)/);
-            if (appMatch) return `app-${appMatch[1]}`;
-          }
           if (id.includes('/pages/system/')) return 'pages-system';
           if (id.includes('/pages/infra/')) return 'pages-infra';
           if (id.includes('/pages/personal/')) return 'pages-personal';

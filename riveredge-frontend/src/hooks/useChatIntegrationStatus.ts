@@ -6,7 +6,7 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getChatIntegrationStatus, type ChatIntegrationStatus } from '../apps/kuaiai/services/chat';
+import { getChatIntegrationStatus, type ChatIntegrationStatus } from '../services/deepseekChat';
 import { useGlobalStore } from '../stores';
 
 export const CHAT_INTEGRATION_STATUS_QUERY_KEY = 'chatIntegrationStatus';
