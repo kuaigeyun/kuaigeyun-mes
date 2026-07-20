@@ -227,7 +227,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   /** 拆出具体项作依赖，避免 fetchConfigs 更新后定时器仍闭包旧阈值 */
   const tokenCheckIntervalSec = useConfigStore((s) => s.configs['security.token_check_interval']);
   const inactivityTimeoutSec = useConfigStore((s) => s.configs['security.inactivity_timeout']);
-  const tenantId = getTenantId();
+  /** 用 store 中的 tenant_id 驱动重渲染；localStorage 单独变更不会触发 React 更新 */
+  const tenantId = currentUser?.tenant_id ?? getTenantId();
   /** 记录上次已拉取站点配置的租户：切换租户时必须 fetchConfigs(true)，避免 initialized 短路沿用上一租户内存 */
   const lastSiteSettingTenantRef = useRef<string | number | null>(null);
 

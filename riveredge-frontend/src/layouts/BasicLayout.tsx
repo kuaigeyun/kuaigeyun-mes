@@ -5563,6 +5563,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           <RouteTransition>{children}</RouteTransition>
         ) : (
         <UniTabs
+          key={currentUser?.tenant_id ?? getTenantId() ?? 'no-tenant'}
           menuConfig={filteredMenuData}
           isFullscreen={isFullscreen}
           onToggleFullscreen={handleToggleFullscreen}

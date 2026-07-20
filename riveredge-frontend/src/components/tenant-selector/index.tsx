@@ -8,11 +8,13 @@
 import React from 'react';
 import { Select, Spin, message, theme } from 'antd';
 import { SwapOutlined } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getTenantList, TenantStatus } from '../../services/tenant';
 import { getMyTenants, switchTenant, tenantNameFromLoginResponse } from '../../services/auth';
 import { setTenantId, getTenantId, isInfraSuperAdminUser, setToken, setUserInfo } from '../../utils/auth';
+import { applyTenantSwitchSideEffects } from '../../utils/applyTenantSwitch';
 import { useGlobalStore } from '../../stores';
 
 const { Option } = Select;
@@ -28,10 +30,12 @@ interface TenantSelectorProps {
 const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
   const isInfraSuperAdmin = isInfraSuperAdminUser(currentUser);
-  const currentTenantId = getTenantId();
+  const currentTenantId = currentUser?.tenant_id ?? getTenantId();
   const [switching, setSwitching] = React.useState(false);
 
   const { data: tenantOptions = [], isLoading } = useQuery({
@@ -48,18 +52,30 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
   });
 
   const handleTenantChange = async (tenantId: string) => {
+    const nextId = Number(tenantId);
+    if (!Number.isFinite(nextId) || nextId === currentTenantId) return;
+
     try {
+      setSwitching(true);
+
       if (isInfraSuperAdmin) {
-        setTenantId(tenantId);
+        const selected = tenantOptions.find((tenant) => Number(tenant.id) === nextId);
+        setTenantId(nextId);
+        const nextUser = {
+          ...(currentUser || {}),
+          tenant_id: nextId,
+          tenant_name: selected?.name || currentUser?.tenant_name || '',
+        };
+        setCurrentUser(nextUser as any);
+        setUserInfo(nextUser);
         message.success(t('ui.message.switchedTenant'));
-        window.location.reload();
+        applyTenantSwitchSideEffects(queryClient, navigate);
         return;
       }
-      const targetTenantId = Number(tenantId);
-      setSwitching(true);
-      const response = await switchTenant(targetTenantId);
+
+      const response = await switchTenant(nextId);
       setToken(response.access_token);
-      const selectedTenantId = response.user?.tenant_id || response.default_tenant_id || targetTenantId;
+      const selectedTenantId = response.user?.tenant_id || response.default_tenant_id || nextId;
       setTenantId(selectedTenantId);
       const tenantName = tenantNameFromLoginResponse(response) || currentUser?.tenant_name || '';
       const nextUser = {
@@ -71,7 +87,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
       setCurrentUser(nextUser as any);
       setUserInfo(nextUser);
       message.success(t('ui.message.switchedTenant'));
-      window.location.reload();
+      applyTenantSwitchSideEffects(queryClient, navigate);
     } catch (error: any) {
       message.error(error?.message || t('pages.login.tenantSelectFailed'));
     } finally {
@@ -82,10 +98,21 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
   React.useEffect(() => {
     if (isInfraSuperAdmin && !currentTenantId && tenantOptions.length > 0) {
       const firstTenant = tenantOptions[0];
-      setTenantId(firstTenant.id);
+      const firstId = Number(firstTenant.id);
+      setTenantId(firstId);
+      const user = useGlobalStore.getState().currentUser;
+      if (user) {
+        const nextUser = {
+          ...user,
+          tenant_id: firstId,
+          tenant_name: firstTenant.name,
+        };
+        setCurrentUser(nextUser as any);
+        setUserInfo(nextUser);
+      }
       message.info(t('ui.message.autoSelectedTenant', { name: firstTenant.name }));
     }
-  }, [isInfraSuperAdmin, currentTenantId, tenantOptions, t]);
+  }, [isInfraSuperAdmin, currentTenantId, tenantOptions, t, setCurrentUser]);
 
   const canSwitch = isInfraSuperAdmin || tenantOptions.length > 1;
   const textFontSize = token.fontSize;
