@@ -2,10 +2,13 @@
 # RiverEdge 统一部署入口（Git Bash / Linux / macOS）
 #
 # 用法:
-#   ./fast-deploy/deploy.sh              # 智能向导（全新安装 / 修改配置 / 更新系统）
+#   ./fast-deploy/deploy.sh              # 智能向导（全新安装 / 修改配置 / 更新系统 / 专业应用）
 #   ./fast-deploy/deploy.sh dev          # 开发模式向导
 #   ./fast-deploy/deploy.sh wizard       # 显式进入向导
 #   ./fast-deploy/deploy.sh configure    # 仅配置向导
+#   ./fast-deploy/deploy.sh pro-apps [pro|custom|all]  # 扩展应用（专业/定制 → compose）
+#   ./fast-deploy/deploy.sh install-custom             # 仅定制包 kuaigeyun-custom
+#   ./fast-deploy/deploy.sh install-client             # 终端仓 kuaigeyun-client
 #   ./fast-deploy/deploy.sh stop|status|update|...
 #
 # 环境变量:
@@ -47,7 +50,7 @@ case "$SUBCMD" in
 esac
 export DEPLOY_MODE="${DEPLOY_MODE:-prod}"
 
-KNOWN_CMDS="wizard check install configure migrate build start stop status update install-service uninstall-service deploy"
+KNOWN_CMDS="wizard check install configure migrate build start stop status update install-service uninstall-service deploy pro-apps install-pro install-custom install-client ext-apps pro-apps-status ext-apps-status"
 is_known_cmd() {
     case " ${KNOWN_CMDS} " in
         *" $1 "*) return 0 ;;
@@ -57,7 +60,7 @@ is_known_cmd() {
 
 if [ -n "$SUBCMD" ] && ! is_known_cmd "$SUBCMD"; then
     echo "未知命令: $SUBCMD" >&2
-    echo "用法: $0 [dev|prod] [check|install|configure|migrate|build|start|stop|status|update|install-service|uninstall-service]" >&2
+    echo "用法: $0 [dev|prod] [check|install|configure|migrate|build|start|stop|status|update|pro-apps|install-service|uninstall-service]" >&2
     exit 1
 fi
 
@@ -99,4 +102,8 @@ log_banner
 # shellcheck source=lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 load_deploy_env
-fd_dispatch "${SUBCMD:-}"
+# 透传子命令参数（如 pro-apps custom）
+if [ -n "${SUBCMD:-}" ]; then
+    shift || true
+fi
+fd_dispatch "${SUBCMD:-}" "$@"

@@ -31,8 +31,16 @@ export MODE=$MODE
 # 设置 UV 链接模式为复制，避免硬链接警告（Windows 环境下硬链接可能不支持）
 export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
 
-# 从环境变量获取端口和主机（如果未设置则使用默认值）
-BACKEND_HOST="${HOST:-127.0.0.1}"
+# 从 .env 读取 HOST/PORT（脚本显式传给 uvicorn，不会自动读 pydantic 的 .env）
+if [ -f ".env" ]; then
+    _env_host="$(grep -E '^[[:space:]]*HOST=' .env | tail -1 | cut -d= -f2- | sed 's/[\"'\'']//g' | tr -d '[:space:]')"
+    _env_port="$(grep -E '^[[:space:]]*PORT=' .env | tail -1 | cut -d= -f2- | sed 's/[\"'\'']//g' | tr -d '[:space:]')"
+    [ -n "${_env_host}" ] && HOST="${HOST:-${_env_host}}"
+    [ -n "${_env_port}" ] && PORT="${PORT:-${_env_port}}"
+    unset _env_host _env_port
+fi
+# 开发默认 0.0.0.0，使 localhost / 127.0.0.1 / 局域网 IP 均可访问；生产由 fast-deploy 设为 127.0.0.1
+BACKEND_HOST="${HOST:-0.0.0.0}"
 BACKEND_PORT="${PORT:-8200}"
 
 # 异步任务由 Taskiq + PostgreSQL 处理，无需单独启动 Inngest/Redis 服务

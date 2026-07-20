@@ -82,12 +82,17 @@ class PurchaseOrder(BaseModel):
     # 附件
     attachments = fields.JSONField(null=True, description="附件列表")
 
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
+
     # 关联订单行
     items: fields.ReverseRelation["PurchaseOrderItem"]
 
     class Meta:
         table = "apps_kuaizhizao_purchase_orders"
         table_description = "快格轻制造 - 采购订单"
+
+    class PydanticMeta:
+        exclude = ["deleted_at"]
 
 
 class PurchaseOrderItem(BaseModel):
@@ -138,9 +143,14 @@ class PurchaseOrderItem(BaseModel):
     landing_cost = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="分摊杂费/落地成本")
     additional_fees_details = fields.JSONField(null=True, description="杂费分摊明细 (JSON)")
 
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
+
     class Meta:
         table = "apps_kuaizhizao_purchase_order_items"
         table_description = "快格轻制造 - 采购订单明细"
+
+    class PydanticMeta:
+        exclude = ["deleted_at"]
 
 
 class PurchaseOrderChange(BaseModel):

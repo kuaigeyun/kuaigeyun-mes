@@ -1093,7 +1093,11 @@ class DatasetService:
                 if not url.startswith("http://") and not url.startswith("https://"):
                     # 相对路径，需要添加基础URL
                     from infra.config.infra_config import infra_settings as settings
-                    base_url = getattr(settings, "BASE_URL", "http://localhost:8000")
+                    base_url = (settings.BASE_URL or "").strip().rstrip("/")
+                    if not base_url:
+                        # 服务端 HTTP 客户端需要绝对 URL；开发未配 BASE_URL 时回环本机 API
+                        bind = "127.0.0.1" if settings.HOST in ("0.0.0.0", "::") else settings.HOST
+                        base_url = f"http://{bind}:{settings.PORT}"
                     url = f"{base_url}{url}"
                 
                 method = api.method.upper()

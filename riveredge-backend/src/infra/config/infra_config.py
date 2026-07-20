@@ -68,7 +68,9 @@ class InfraSettings(BaseSettings):
     )
 
     # 服务器配置
-    HOST: str = Field(default="127.0.0.1", description="服务器地址（Windows 使用 127.0.0.1，Linux/Mac 使用 0.0.0.0）")
+    # 开发默认 0.0.0.0：Windows/Linux 上 localhost、127.0.0.1、局域网 IP 均可连入。
+    # 生产（fast-deploy）会覆盖为 127.0.0.1，仅由本机 Caddy 反代，不对外直暴 API。
+    HOST: str = Field(default="0.0.0.0", description="监听地址：开发 0.0.0.0；生产建议 127.0.0.1（经反向代理）")
     PORT: int = Field(default=8200, description="后端服务端口")
 
     # API 文档（/redoc、/openapi.json、可选 /docs）HTTP Basic；二者均非空时才启用，留空则文档仍可匿名访问
@@ -201,27 +203,42 @@ class InfraSettings(BaseSettings):
     def get_cors_origins(self) -> List[str]:
         """
         获取 CORS 允许的来源列表
-        
-        如果 CORS_ORIGINS 为空或使用默认值，则自动从前端配置生成
-        
-        Returns:
-            List[str]: CORS 允许的来源列表
+
+        - 已显式配置 CORS_ORIGINS（生产/部署向导写入）：原样使用
+        - 仍为默认 loopback 列表时：自动补齐 localhost / 127.0.0.1 / FRONTEND_HOST /
+          本机局域网 IP，以及 PC 前端、Expo Web、工位端常用端口
         """
-        # 如果 CORS_ORIGINS 是默认值，则从前端配置生成，并包含移动端 Expo Web / 工位端 Vite 常用端口
         default_origins = ["http://127.0.0.1:8100", "http://localhost:8100"]
-        if self.CORS_ORIGINS == default_origins:
-            return [
-                f"http://{self.FRONTEND_HOST}:{self.FRONTEND_PORT}",
-                f"http://localhost:{self.FRONTEND_PORT}",
-                "http://127.0.0.1:8081",
-                "http://localhost:8081",
-                "http://127.0.0.1:8101",
-                "http://localhost:8101",
-                # riveredge-app-station Vite（8300）
-                "http://127.0.0.1:8300",
-                "http://localhost:8300",
-            ]
-        return self.CORS_ORIGINS
+        if self.CORS_ORIGINS != default_origins:
+            return self.CORS_ORIGINS
+
+        from infra.utils.network import detect_lan_ipv4
+
+        ports = sorted(
+            {
+                int(self.FRONTEND_PORT),
+                8081,  # Expo Web
+                8101,  # 前端备用端口
+                8300,  # riveredge-app-station Vite
+            }
+        )
+        hosts: List[str] = ["127.0.0.1", "localhost"]
+        fh = (self.FRONTEND_HOST or "").strip()
+        if fh and fh not in ("0.0.0.0", "::", *hosts):
+            hosts.append(fh)
+        lan = detect_lan_ipv4()
+        if lan and lan not in hosts:
+            hosts.append(lan)
+
+        origins: List[str] = []
+        seen: set[str] = set()
+        for host in hosts:
+            for port in ports:
+                origin = f"http://{host}:{port}"
+                if origin not in seen:
+                    seen.add(origin)
+                    origins.append(origin)
+        return origins
 
     # 日志配置
     LOG_LEVEL: str = Field(default="INFO", description="日志级别")

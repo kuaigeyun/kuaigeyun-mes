@@ -806,7 +806,7 @@ function Invoke-Configure {
         Set-EnvValue 'CORS_ORIGINS' $prodCors.Cors
     } else {
         Set-EnvValue 'HOST' '0.0.0.0'
-        Set-EnvValue 'CORS_ORIGINS' "http://${serverIp}:$($script:FRONTEND_PORT),http://127.0.0.1:$($script:FRONTEND_PORT),http://localhost:$($script:FRONTEND_PORT)"
+        Set-EnvValue 'CORS_ORIGINS' "http://${serverIp}:$($script:FRONTEND_PORT),http://127.0.0.1:$($script:FRONTEND_PORT),http://localhost:$($script:FRONTEND_PORT),http://${serverIp}:8081,http://127.0.0.1:8081,http://localhost:8081,http://${serverIp}:8300,http://127.0.0.1:8300,http://localhost:8300"
     }
 
     Write-LogInfo '测试数据库连接...'
@@ -1213,15 +1213,15 @@ function Start-FrontendDev {
     Stop-Port $script:FRONTEND_PORT
     Ensure-FrontendDeps
     Write-LogInfo "启动前端 (dev, :$($script:FRONTEND_PORT))..."
-    $viteConfig = Join-Path $script:FrontendDir 'vite.config.ts'
-    if (Test-Path $viteConfig) {
-        $c = Get-Content $viteConfig -Raw
-        $c = $c -replace "target: 'http://localhost:\d+'", "target: 'http://localhost:$($script:BACKEND_PORT)'"
-        Set-Content $viteConfig $c -Encoding UTF8
-    }
     Push-Location $script:FrontendDir
     try {
-        Start-ProcessBackground 'frontend' 'npx' @('vite',"--port",$script:FRONTEND_PORT,'--host','127.0.0.1') @{ WORKDIR = $script:FrontendDir }
+        $env:VITE_BACKEND_HOST = if ($env:VITE_BACKEND_HOST) { $env:VITE_BACKEND_HOST } else { '127.0.0.1' }
+        $env:VITE_BACKEND_PORT = if ($env:VITE_BACKEND_PORT) { $env:VITE_BACKEND_PORT } else { "$($script:BACKEND_PORT)" }
+        Start-ProcessBackground 'frontend' 'npx' @('vite',"--port",$script:FRONTEND_PORT,'--host','0.0.0.0') @{
+            WORKDIR = $script:FrontendDir
+            VITE_BACKEND_HOST = $env:VITE_BACKEND_HOST
+            VITE_BACKEND_PORT = $env:VITE_BACKEND_PORT
+        }
     } finally { Pop-Location }
     Write-LogOk '前端已启动'
 }
@@ -1369,8 +1369,13 @@ function Invoke-StartDev {
     Start-FrontendDev
     Ensure-PlaywrightChromiumPostInstall
     Write-LogOk 'RiverEdge 开发环境已就绪'
-    Write-Host "  Web:  http://127.0.0.1:$($script:FRONTEND_PORT)"
-    Write-Host "  API:  http://127.0.0.1:$($script:BACKEND_PORT)"
+    $lanIp = Detect-ServerIp
+    Write-Host "  Web:  http://127.0.0.1:$($script:FRONTEND_PORT)  |  http://localhost:$($script:FRONTEND_PORT)"
+    Write-Host "  API:  http://127.0.0.1:$($script:BACKEND_PORT)  |  http://localhost:$($script:BACKEND_PORT)"
+    if ($lanIp -and $lanIp -ne '127.0.0.1') {
+        Write-Host "  局域网 Web: http://${lanIp}:$($script:FRONTEND_PORT)"
+        Write-Host "  局域网 API: http://${lanIp}:$($script:BACKEND_PORT)"
+    }
     Write-SupportContact
 }
 

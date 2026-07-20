@@ -49,6 +49,7 @@ class FinishedGoodsReceiptItem(BaseModel):
     receipt_time = fields.DatetimeField(null=True, description="实际入库时间")
 
     notes = fields.TextField(null=True, description="备注")
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     class Meta:
         table = "apps_kuaizhizao_finished_goods_receipt_items"

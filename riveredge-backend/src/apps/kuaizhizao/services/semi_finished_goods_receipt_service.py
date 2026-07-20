@@ -569,8 +569,15 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         quota = await fg_svc._get_work_order_inbound_quota(tenant_id, work_order_id)
         received = quota["received"]
         pending = quota["pending"]
-        suggested = await fg_svc._resolve_work_order_suggested_receipt_quantity(tenant_id, work_order_id)
+        suggested = await fg_svc._resolve_work_order_suggested_receipt_quantity(
+            tenant_id, work_order_id, strict=False
+        )
         receipt_qty = min(suggested, pending) if pending > 0 else 0.0
+        hint = None
+        if pending <= 0:
+            hint = "工单可入库数量已用尽，无法再取单入库"
+        elif suggested <= 0:
+            hint = "暂无质检合格或末道已审报工数量，请手工填写入库数量"
 
         material = await Material.get_or_none(
             tenant_id=tenant_id,
@@ -594,6 +601,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
             work_order_code=work_order.code or str(work_order_id),
             inbound_doc_kind="semi_finished_goods",
             lines=[line],
+            message=hint,
         )
 
     async def quick_receipt_from_work_order(

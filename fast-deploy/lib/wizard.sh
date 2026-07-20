@@ -21,6 +21,9 @@ WIZARD_LOGO_W=48
 
 WIZARD_OFFICIAL_REPO_GITEE='https://gitee.com/kuaigeyun/kuaigeyun'
 WIZARD_OFFICIAL_REPO_GITHUB='https://github.com/kuaigeyun/kuaigeyun'
+WIZARD_PRO_REPO_GITEE='https://gitee.com/kuaigeyun/kuaigeyun-pro'
+WIZARD_CUSTOM_REPO_GITEE='https://gitee.com/kuaigeyun/kuaigeyun-custom'
+WIZARD_CLIENT_REPO_GITEE='https://gitee.com/kuaigeyun/kuaigeyun-client'
 
 wizard_supports_truecolor() {
     case "${COLORTERM:-}" in
@@ -147,6 +150,7 @@ wizard_print_kuaige_header() {
 
 wizard_show_official_repo_notice() {
     wizard_panel_line "${WIZARD_BOLD}${WIZARD_CYAN}OFFICIAL 正版仓库${WIZARD_RESET}  ${WIZARD_DIM}Gitee${WIZARD_RESET}  ${WIZARD_OFFICIAL_REPO_GITEE}  ${WIZARD_DIM}GitHub${WIZARD_RESET}  ${WIZARD_OFFICIAL_REPO_GITHUB}"
+    wizard_panel_line "${WIZARD_DIM}私有配套${WIZARD_RESET}  专业 ${WIZARD_PRO_REPO_GITEE}  ·  定制 ${WIZARD_CUSTOM_REPO_GITEE}  ·  终端 ${WIZARD_CLIENT_REPO_GITEE}"
     wizard_panel_line "${WIZARD_BOLD}${WIZARD_CYAN}NOTICE 渠道警示${WIZARD_RESET}  ${WIZARD_DIM}非上述官方仓库来源的分发、收费推广或所谓「官方授权版」，均与快格云制造无关联，请自行甄别。${WIZARD_RESET}"
     wizard_panel_mid
 }
@@ -357,8 +361,9 @@ wizard_show_home_panel() {
     wizard_panel_menu_item "1" "全新安装" "检测环境与依赖，完成配置后启动"
     wizard_panel_menu_item "2" "修改配置" "修改数据库、超管账号与访问地址"
     wizard_panel_menu_item "3" "更新系统" "fetch+reset 对齐远程，迁移并重启"
+    wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包（私有仓，需凭证）"
     wizard_panel_section "OPS 运维"
-    wizard_panel_menu_short "${WIZARD_CYAN}[4]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[5]${WIZARD_RESET} 启动  ${WIZARD_CYAN}[6]${WIZARD_RESET} 停止  ${WIZARD_CYAN}[7]${WIZARD_RESET} 重启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[9]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
+    wizard_panel_menu_short "${WIZARD_CYAN}[5]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[6]${WIZARD_RESET} 服务  ${WIZARD_CYAN}[7]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
     wizard_panel_bot
     echo ""
 }
@@ -406,6 +411,19 @@ wizard_pause_return_menu() {
     read -rp "$(echo -e "${WIZARD_DIM}Enter 返回主菜单${WIZARD_RESET} › ")" _ || true
 }
 
+wizard_show_service_menu() {
+    echo ""
+    wizard_panel_begin
+    wizard_panel_top
+    wizard_panel_section "SERVICE 服务"
+    wizard_panel_menu_item "1" "启动" "启动当前环境全部服务"
+    wizard_panel_menu_item "2" "停止" "停止当前环境全部服务"
+    wizard_panel_menu_item "3" "重启…" "全部或按组件重启"
+    wizard_panel_line "${WIZARD_DIM}[0]${WIZARD_RESET} 返回主菜单"
+    wizard_panel_bot
+    echo ""
+}
+
 wizard_show_restart_menu() {
     echo ""
     wizard_panel_begin
@@ -416,6 +434,54 @@ wizard_show_restart_menu() {
     wizard_panel_menu_item "3" "重启后端" "API 服务"
     wizard_panel_menu_item "4" "重启 worker" "Taskiq Worker 与 Scheduler"
     wizard_panel_menu_item "5" "重启 PostgreSQL" "本机数据库服务"
+    wizard_panel_line "${WIZARD_DIM}[0]${WIZARD_RESET} 返回上级"
+    wizard_panel_bot
+    echo ""
+}
+
+wizard_ext_repo_git_label() {
+    local path="$1"
+    if [ -d "$path/.git" ]; then
+        git -C "$path" rev-parse --short HEAD 2>/dev/null || echo present
+    else
+        echo "未克隆"
+    fi
+}
+
+wizard_show_pro_apps_menu() {
+    local pro_path custom_path client_path pro_url custom_url client_url pro_en custom_en client_en
+    load_deploy_env
+    pro_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
+    [ -n "$pro_path" ] || pro_path="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-pro"
+    custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
+    [ -n "$custom_path" ] || custom_path="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-custom"
+    client_path="$(read_deploy_env_value CLIENT_REPO_PATH || true)"
+    [ -n "$client_path" ] || client_path="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-client"
+    pro_url="$(read_deploy_env_value PRO_REPO_URL || echo "${WIZARD_PRO_REPO_GITEE}.git")"
+    custom_url="$(read_deploy_env_value CUSTOM_REPO_URL || echo "${WIZARD_CUSTOM_REPO_GITEE}.git")"
+    client_url="$(read_deploy_env_value CLIENT_REPO_URL || echo "${WIZARD_CLIENT_REPO_GITEE}.git")"
+    pro_en="$(read_deploy_env_value PRO_ENABLED || echo 0)"
+    custom_en="$(read_deploy_env_value CUSTOM_ENABLED || echo 0)"
+    client_en="$(read_deploy_env_value CLIENT_ENABLED || echo 0)"
+    echo ""
+    wizard_panel_begin
+    wizard_panel_top
+    wizard_panel_section "EXT 扩展应用"
+    wizard_panel_kv "专业包" "$([ "$pro_en" = "1" ] && echo 已启用 || echo 未启用) · $(wizard_ext_repo_git_label "$pro_path")"
+    wizard_panel_line "${WIZARD_DIM}  ${pro_url}${WIZARD_RESET}"
+    wizard_panel_kv "定制包" "$([ "$custom_en" = "1" ] && echo 已启用 || echo 未启用) · $(wizard_ext_repo_git_label "$custom_path")"
+    wizard_panel_line "${WIZARD_DIM}  ${custom_url}${WIZARD_RESET}"
+    wizard_panel_kv "终端仓" "$([ "$client_en" = "1" ] && echo 已启用 || echo 未启用) · $(wizard_ext_repo_git_label "$client_path")"
+    wizard_panel_line "${WIZARD_DIM}  ${client_url}${WIZARD_RESET}"
+    wizard_panel_blank
+    wizard_panel_menu_item "1" "安装专业包" "kuaigeyun-pro → compose"
+    wizard_panel_menu_item "2" "安装定制包" "kuaigeyun-custom → compose"
+    wizard_panel_menu_item "3" "安装终端仓" "kuaigeyun-client（mobile/station，不 compose）"
+    wizard_panel_menu_item "4" "安装专业+定制" "两仓同步并 compose"
+    wizard_panel_menu_item "5" "查看状态" "compose --status"
+    wizard_panel_menu_item "6" "配置专业仓" "URL / 路径 / Token"
+    wizard_panel_menu_item "7" "配置定制仓" "URL / 路径 / Token"
+    wizard_panel_menu_item "8" "配置终端仓" "URL / 路径 / Token"
     wizard_panel_line "${WIZARD_DIM}[0]${WIZARD_RESET} 返回主菜单"
     wizard_panel_bot
     echo ""
@@ -486,6 +552,39 @@ wizard_ask_boot_service_choice() {
     done
 }
 
+wizard_ask_service_choice() {
+    local choice
+    while true; do
+        wizard_show_service_menu
+        wizard_panel_prefix
+        echo -e "${WIZARD_BOLD}请选择${WIZARD_RESET} ${WIZARD_DIM}[0-3 · 默认 0]${WIZARD_RESET}"
+        wizard_panel_prefix
+        read -rp "$(echo -e "${WIZARD_DIM}›${WIZARD_RESET} ")" choice || true
+        case "${choice:-0}" in
+            0|q|Q|back)
+                return 0
+                ;;
+            1)
+                wizard_run_quick_action start || true
+                wizard_pause_return_menu
+                return 0
+                ;;
+            2)
+                wizard_run_quick_action stop || true
+                wizard_pause_return_menu
+                return 0
+                ;;
+            3|restart)
+                wizard_ask_restart_choice
+                return 0
+                ;;
+            *)
+                wizard_say_warn "无效选项，请重新选择"
+                ;;
+        esac
+    done
+}
+
 wizard_ask_restart_choice() {
     local choice
     while true; do
@@ -530,9 +629,182 @@ wizard_ask_restart_choice() {
     done
 }
 
+wizard_ask_pro_apps_choice() {
+    local choice
+    while true; do
+        wizard_show_pro_apps_menu
+        wizard_panel_prefix
+        echo -e "${WIZARD_BOLD}请选择${WIZARD_RESET} ${WIZARD_DIM}[0-8 · 默认 0]${WIZARD_RESET}"
+        wizard_panel_prefix
+        read -rp "$(echo -e "${WIZARD_DIM}›${WIZARD_RESET} ")" choice || true
+        case "${choice:-0}" in
+            0|q|Q|back)
+                return 0
+                ;;
+            1)
+                echo ""
+                cmd_install_extension_apps pro || true
+                wizard_say "专业应用启用时仍需在应用中心输入 License Key。"
+                wizard_pause_return_menu
+                return 0
+                ;;
+            2)
+                echo ""
+                cmd_install_extension_apps custom || true
+                wizard_say "定制应用组装完成后请重启服务；租户侧按需启用。"
+                wizard_pause_return_menu
+                return 0
+                ;;
+            3)
+                echo ""
+                cmd_install_client_repo || true
+                wizard_say "终端仓已同步到同级目录，不参与 workspace compose。"
+                wizard_pause_return_menu
+                return 0
+                ;;
+            4)
+                echo ""
+                cmd_install_extension_apps all || true
+                wizard_say "专业应用启用时仍需 License Key；定制应用按租户启用。"
+                wizard_pause_return_menu
+                return 0
+                ;;
+            5)
+                echo ""
+                cmd_pro_apps_status || true
+                wizard_pause_return_menu
+                return 0
+                ;;
+            6)
+                wizard_configure_pro_repo || true
+                wizard_pause_return_menu
+                return 0
+                ;;
+            7)
+                wizard_configure_custom_repo || true
+                wizard_pause_return_menu
+                return 0
+                ;;
+            8)
+                wizard_configure_client_repo || true
+                wizard_pause_return_menu
+                return 0
+                ;;
+            *)
+                wizard_say_warn "无效选项，请重新选择"
+                ;;
+        esac
+    done
+}
+
+wizard_prompt_git_token() {
+    # 用法: wizard_prompt_git_token <当前值> <提示前缀> → 结果写入 REPLY
+    local cur_token="$1" label="$2" input=""
+    if [ -n "$cur_token" ]; then
+        read -rsp "$(echo -e "${WIZARD_DIM}${label} Token [已配置，回车保留]${WIZARD_RESET} › ")" input || true
+        echo ""
+        if [ -n "${input:-}" ]; then
+            REPLY="$input"
+        else
+            REPLY="$cur_token"
+        fi
+    else
+        read -rsp "$(echo -e "${WIZARD_DIM}${label} Token（HTTPS 私仓；SSH 可留空）${WIZARD_RESET} › ")" input || true
+        echo ""
+        REPLY="${input:-}"
+    fi
+}
+
+wizard_configure_pro_repo() {
+    load_deploy_env
+    local cur_url cur_path cur_branch cur_token input
+    cur_url="$(read_deploy_env_value PRO_REPO_URL || echo "${WIZARD_PRO_REPO_GITEE}.git")"
+    cur_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
+    [ -n "$cur_path" ] || cur_path="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-pro"
+    cur_branch="$(read_deploy_env_value PRO_GIT_BRANCH || echo develop)"
+    cur_token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
+
+    echo ""
+    wizard_say "配置专业仓 → fast-deploy/config/deploy.env（勿提交 Token）"
+    read -rp "$(echo -e "${WIZARD_DIM}仓库 URL [${cur_url}]${WIZARD_RESET} › ")" input || true
+    [ -n "${input:-}" ] && cur_url="$input"
+    read -rp "$(echo -e "${WIZARD_DIM}本地路径 [${cur_path}]${WIZARD_RESET} › ")" input || true
+    [ -n "${input:-}" ] && cur_path="$input"
+    read -rp "$(echo -e "${WIZARD_DIM}分支 [${cur_branch}]${WIZARD_RESET} › ")" input || true
+    [ -n "${input:-}" ] && cur_branch="$input"
+    wizard_prompt_git_token "$cur_token" "专业仓"
+    cur_token="$REPLY"
+
+    set_deploy_env_value PRO_REPO_URL "$cur_url"
+    set_deploy_env_value PRO_REPO_PATH "$cur_path"
+    set_deploy_env_value PRO_GIT_BRANCH "$cur_branch"
+    set_deploy_env_value PRO_GIT_TOKEN "$cur_token"
+    [ -n "$(read_deploy_env_value WORKSPACE_COMPOSE_MODE || true)" ] \
+        || set_deploy_env_value WORKSPACE_COMPOSE_MODE "copy"
+    wizard_say_ok "专业仓配置已保存（安装时再标记 PRO_ENABLED=1）"
+}
+
+wizard_configure_custom_repo() {
+    load_deploy_env
+    local cur_url cur_path cur_branch cur_token input
+    cur_url="$(read_deploy_env_value CUSTOM_REPO_URL || echo "${WIZARD_CUSTOM_REPO_GITEE}.git")"
+    cur_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
+    [ -n "$cur_path" ] || cur_path="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-custom"
+    cur_branch="$(read_deploy_env_value CUSTOM_GIT_BRANCH || echo develop)"
+    cur_token="$(read_deploy_env_value CUSTOM_GIT_TOKEN || true)"
+    [ -n "$cur_token" ] || cur_token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
+
+    echo ""
+    wizard_say "配置定制仓 → fast-deploy/config/deploy.env（勿提交 Token）"
+    read -rp "$(echo -e "${WIZARD_DIM}仓库 URL [${cur_url}]${WIZARD_RESET} › ")" input || true
+    [ -n "${input:-}" ] && cur_url="$input"
+    read -rp "$(echo -e "${WIZARD_DIM}本地路径 [${cur_path}]${WIZARD_RESET} › ")" input || true
+    [ -n "${input:-}" ] && cur_path="$input"
+    read -rp "$(echo -e "${WIZARD_DIM}分支 [${cur_branch}]${WIZARD_RESET} › ")" input || true
+    [ -n "${input:-}" ] && cur_branch="$input"
+    wizard_prompt_git_token "$cur_token" "定制仓"
+    cur_token="$REPLY"
+
+    set_deploy_env_value CUSTOM_REPO_URL "$cur_url"
+    set_deploy_env_value CUSTOM_REPO_PATH "$cur_path"
+    set_deploy_env_value CUSTOM_GIT_BRANCH "$cur_branch"
+    set_deploy_env_value CUSTOM_GIT_TOKEN "$cur_token"
+    [ -n "$(read_deploy_env_value WORKSPACE_COMPOSE_MODE || true)" ] \
+        || set_deploy_env_value WORKSPACE_COMPOSE_MODE "copy"
+    wizard_say_ok "定制仓配置已保存（安装时再标记 CUSTOM_ENABLED=1）"
+}
+
+wizard_configure_client_repo() {
+    load_deploy_env
+    local cur_url cur_path cur_branch cur_token input
+    cur_url="$(read_deploy_env_value CLIENT_REPO_URL || echo "${WIZARD_CLIENT_REPO_GITEE}.git")"
+    cur_path="$(read_deploy_env_value CLIENT_REPO_PATH || true)"
+    [ -n "$cur_path" ] || cur_path="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-client"
+    cur_branch="$(read_deploy_env_value CLIENT_GIT_BRANCH || echo develop)"
+    cur_token="$(read_deploy_env_value CLIENT_GIT_TOKEN || true)"
+    [ -n "$cur_token" ] || cur_token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
+
+    echo ""
+    wizard_say "配置终端仓 → fast-deploy/config/deploy.env（勿提交 Token）"
+    read -rp "$(echo -e "${WIZARD_DIM}仓库 URL [${cur_url}]${WIZARD_RESET} › ")" input || true
+    [ -n "${input:-}" ] && cur_url="$input"
+    read -rp "$(echo -e "${WIZARD_DIM}本地路径 [${cur_path}]${WIZARD_RESET} › ")" input || true
+    [ -n "${input:-}" ] && cur_path="$input"
+    read -rp "$(echo -e "${WIZARD_DIM}分支 [${cur_branch}]${WIZARD_RESET} › ")" input || true
+    [ -n "${input:-}" ] && cur_branch="$input"
+    wizard_prompt_git_token "$cur_token" "终端仓"
+    cur_token="$REPLY"
+
+    set_deploy_env_value CLIENT_REPO_URL "$cur_url"
+    set_deploy_env_value CLIENT_REPO_PATH "$cur_path"
+    set_deploy_env_value CLIENT_GIT_BRANCH "$cur_branch"
+    set_deploy_env_value CLIENT_GIT_TOKEN "$cur_token"
+    wizard_say_ok "终端仓配置已保存（安装时再标记 CLIENT_ENABLED=1）"
+}
+
 wizard_prompt_choice() {
     wizard_panel_prefix
-    echo -e "${WIZARD_BOLD}请选择${WIZARD_RESET} ${WIZARD_DIM}[0-9 · 默认 1]${WIZARD_RESET}"
+    echo -e "${WIZARD_BOLD}请选择${WIZARD_RESET} ${WIZARD_DIM}[0-8 · 默认 1]${WIZARD_RESET}"
     wizard_panel_prefix
     read -rp "$(echo -e "${WIZARD_DIM}›${WIZARD_RESET} ")" choice || true
     REPLY="${choice:-1}"
@@ -577,31 +849,25 @@ wizard_ask_intent() {
             ;;
         2|config|configure) export WIZARD_INTENT=configure ;;
         3|update) export WIZARD_INTENT=update ;;
-        4)
+        4|pro|pro-apps|ext|ext-apps)
+            wizard_ask_pro_apps_choice
+            return 2
+            ;;
+        5|details|status)
             echo ""
             wizard_run_quick_action details || true
             wizard_pause_return_menu
             return 2
             ;;
-        5)
-            wizard_run_quick_action start || true
-            wizard_pause_return_menu
+        6|service|svc)
+            wizard_ask_service_choice
             return 2
             ;;
-        6)
-            wizard_run_quick_action stop || true
-            wizard_pause_return_menu
-            return 2
-            ;;
-        7|restart)
-            wizard_ask_restart_choice
-            return 2
-            ;;
-        8|boot|autostart)
+        7|boot|autostart)
             wizard_ask_boot_service_choice
             return 2
             ;;
-        9)
+        8|migrate)
             echo ""
             wizard_run_quick_action migrate || true
             wizard_pause_return_menu
@@ -1212,6 +1478,9 @@ wizard_update_app() {
     echo ""
 
     wizard_run_deploy_step pull "同步远程代码（fetch + reset --hard）" "$log" sync_git_from_origin || return 1
+    if [ "$(read_deploy_env_value PRO_ENABLED || echo 0)" = "1" ]; then
+        wizard_run_deploy_step pro_apps "同步扩展应用并 compose" "$log" cmd_install_extension_apps || true
+    fi
 
     if [ "$DEPLOY_MODE" = "prod" ]; then
         wizard_run_deploy_step stop "停止生产服务" "$log" cmd_stop_prod || return 1

@@ -267,7 +267,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         Returns:
             PurchaseOrderResponse: 订单详情
         """
-        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
@@ -311,7 +313,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         Returns:
             List[PurchaseOrderListResponse]: 订单列表
         """
-        query = PurchaseOrder.filter(tenant_id=tenant_id)
+        query = PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         if current_user:
             from core.services.authorization.data_scope_service import DataScopeService
@@ -689,7 +691,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             PurchaseOrderResponse: 更新后的订单信息
         """
         async with in_transaction():
-            order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+            order = await PurchaseOrder.get_or_none(
+                tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+            )
             if not order:
                 raise NotFoundError(f"采购订单不存在: {order_id}")
 
@@ -846,7 +850,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         Returns:
             PurchaseOrderResponse: 提交后的订单信息
         """
-        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
@@ -899,7 +905,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         withdrawn_by: int,
     ) -> PurchaseOrderResponse:
         """撤回提交：待审核 → 草稿（提交人撤回，非反审核）"""
-        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
         assert_purchase_order_capability(order, "withdraw_submit")
@@ -950,7 +958,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         """
         from core.services.approval.approval_instance_service import ApprovalInstanceService
 
-        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
@@ -1039,7 +1049,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from core.services.approval.uni_audit_service import UniAuditService
         from infra.services.business_config_service import BusinessConfigService
 
-        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
@@ -1099,7 +1111,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         Returns:
             PurchaseOrderResponse: 确认后的订单信息
         """
-        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
@@ -1131,7 +1145,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         Returns:
             bool: 是否删除成功
         """
-        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
@@ -1153,11 +1169,11 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             target_id=order_id,
         ).delete()
 
-        # 删除订单明细
+        # 明细硬删；订单头软删（与销售订单一致，兼容 tenant+code 部分唯一索引）
         await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).delete()
-
-        # 删除订单头
-        await order.delete()
+        await PurchaseOrder.filter(tenant_id=tenant_id, id=order_id).update(
+            deleted_at=datetime.now()
+        )
 
         return True
 
@@ -2016,7 +2032,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
         from apps.kuaizhizao.constants import DocumentStatus
 
-        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
         if not order:
             raise NotFoundError(f"订单不存在: {order_id}")
 

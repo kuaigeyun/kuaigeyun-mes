@@ -51,6 +51,7 @@ class SalesDeliveryItem(BaseModel):
     delivery_time = fields.DatetimeField(null=True, description="实际出库时间")
 
     notes = fields.TextField(null=True, description="备注")
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     class Meta:
         table = "apps_kuaizhizao_sales_delivery_items"

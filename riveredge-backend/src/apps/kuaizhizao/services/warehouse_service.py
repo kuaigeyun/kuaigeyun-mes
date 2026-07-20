@@ -2917,7 +2917,15 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         tenant_id: int,
         work_order_id: int,
         receipt_quantity: Optional[float] = None,
+        *,
+        strict: bool = True,
     ) -> float:
+        """
+        解析建议入库数量。
+
+        - strict=True（一键入库等）：缺质检/末道已审报工时抛错
+        - strict=False（取单预览）：返回 0，由前端让用户手工填数量
+        """
         from apps.kuaizhizao.models.reporting_record import ReportingRecord
         from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
         from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
@@ -2941,6 +2949,8 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             deleted_at__isnull=True,
         ).all()
         if not operations:
+            if not strict:
+                return 0.0
             raise ValidationError("工单无工序记录，无法自动获取入库数量")
 
         last_op = max(operations, key=lambda op: (op.sequence or 0, op.id or 0))
@@ -2956,9 +2966,13 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             deleted_at__isnull=True,
         ).all()
         if not reporting_records:
+            if not strict:
+                return 0.0
             raise ValidationError("工单没有质检合格记录，且末道工序无已审核报工记录，无法自动获取入库数量")
         total_qualified = sum(float(record.qualified_quantity or 0) for record in reporting_records)
         if total_qualified <= 0:
+            if not strict:
+                return 0.0
             raise ValidationError("末道工序报工合格数量为0，无法创建入库单")
         return total_qualified
 
@@ -2994,8 +3008,15 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         quota = await self._get_work_order_inbound_quota(tenant_id, work_order_id)
         received = quota["received"]
         pending = quota["pending"]
-        suggested = await self._resolve_work_order_suggested_receipt_quantity(tenant_id, work_order_id)
+        suggested = await self._resolve_work_order_suggested_receipt_quantity(
+            tenant_id, work_order_id, strict=False
+        )
         receipt_qty = min(suggested, pending) if pending > 0 else 0.0
+        hint = None
+        if pending <= 0:
+            hint = "工单可入库数量已用尽，无法再取单入库"
+        elif suggested <= 0:
+            hint = "暂无质检合格或末道已审报工数量，请手工填写入库数量"
 
         material = await Material.get_or_none(
             tenant_id=tenant_id,
@@ -3019,6 +3040,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             work_order_code=work_order.code or str(work_order_id),
             inbound_doc_kind="finished_goods",
             lines=[line],
+            message=hint,
         )
 
     async def quick_receipt_from_work_order(
@@ -5136,10 +5158,10 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 if purchase_order_item_id > 0:
                     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
 
-                    # PurchaseOrderItem 无 deleted_at 字段，勿使用 deleted_at__isnull
                     po_item = await PurchaseOrderItem.filter(
                         tenant_id=tenant_id,
                         id=purchase_order_item_id,
+                        deleted_at__isnull=True,
                     ).select_for_update().first()
                     if not po_item:
                         raise ValidationError(f"采购订单明细不存在: {purchase_order_item_id}")

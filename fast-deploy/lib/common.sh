@@ -1593,7 +1593,8 @@ apply_app_config() {
         set_env_value CORS_ORIGINS "$cors"
     else
         set_env_value HOST "0.0.0.0"
-        set_env_value CORS_ORIGINS "http://${server_ip}:${FRONTEND_PORT},http://127.0.0.1:${FRONTEND_PORT},http://localhost:${FRONTEND_PORT}"
+        # PC 前端 / Expo Web / 工位 Vite：loopback + 局域网 IP
+        set_env_value CORS_ORIGINS "http://${server_ip}:${FRONTEND_PORT},http://127.0.0.1:${FRONTEND_PORT},http://localhost:${FRONTEND_PORT},http://${server_ip}:8081,http://127.0.0.1:8081,http://localhost:8081,http://${server_ip}:8300,http://127.0.0.1:8300,http://localhost:8300"
     fi
 }
 
@@ -2464,13 +2465,12 @@ start_frontend_dev() {
     kill_port "$FRONTEND_PORT"
     ensure_frontend_deps
     log_info "启动前端 (dev, :${FRONTEND_PORT})..."
-    if [ -f "$FRONTEND_DIR/vite.config.ts" ]; then
-        sed -i "s|target: 'http://localhost:[0-9]\+'|target: 'http://localhost:${BACKEND_PORT}'|g" "$FRONTEND_DIR/vite.config.ts" 2>/dev/null || \
-        sed -i '' "s|target: 'http://localhost:[0-9]\+'|target: 'http://localhost:${BACKEND_PORT}'|g" "$FRONTEND_DIR/vite.config.ts" 2>/dev/null || true
-    fi
     (
         cd "$FRONTEND_DIR"
-        nohup npx vite --port "$FRONTEND_PORT" --host 127.0.0.1 > "$LOGS_DIR/frontend.log" 2>&1 &
+        # 0.0.0.0：与 package.json dev / vite 默认一致，局域网可访问
+        export VITE_BACKEND_HOST="${VITE_BACKEND_HOST:-127.0.0.1}"
+        export VITE_BACKEND_PORT="${VITE_BACKEND_PORT:-$BACKEND_PORT}"
+        nohup npx vite --port "$FRONTEND_PORT" --host 0.0.0.0 > "$LOGS_DIR/frontend.log" 2>&1 &
         echo $! > "$LOGS_DIR/frontend.pid"
     )
     log_ok "前端已启动"
@@ -2653,8 +2653,14 @@ cmd_start_dev() {
     start_frontend_dev
     ensure_playwright_chromium_postinstall
     log_ok "RiverEdge 开发环境已就绪"
-    echo "  Web:  http://127.0.0.1:${FRONTEND_PORT}"
-    echo "  API:  http://127.0.0.1:${BACKEND_PORT}"
+    local lan_ip
+    lan_ip="$(detect_server_ip)"
+    echo "  Web:  http://127.0.0.1:${FRONTEND_PORT}  |  http://localhost:${FRONTEND_PORT}"
+    echo "  API:  http://127.0.0.1:${BACKEND_PORT}  |  http://localhost:${BACKEND_PORT}"
+    if [ -n "$lan_ip" ] && [ "$lan_ip" != "127.0.0.1" ]; then
+        echo "  局域网 Web: http://${lan_ip}:${FRONTEND_PORT}"
+        echo "  局域网 API: http://${lan_ip}:${BACKEND_PORT}"
+    fi
     print_support_contact
 }
 
@@ -3758,8 +3764,324 @@ sync_git_from_origin() {
     fi
 }
 
+# ---------- 专业 / 定制应用（私有仓 + workspace compose）----------
+
+# 私有配套仓默认地址（与 Gitee 仓库名一致）
+DEFAULT_PRO_REPO_URL='https://gitee.com/kuaigeyun/kuaigeyun-pro.git'
+DEFAULT_CUSTOM_REPO_URL='https://gitee.com/kuaigeyun/kuaigeyun-custom.git'
+DEFAULT_CLIENT_REPO_URL='https://gitee.com/kuaigeyun/kuaigeyun-client.git'
+
+_pro_default_repo_path() {
+    echo "$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-pro"
+}
+
+_custom_default_repo_path() {
+    echo "$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-custom"
+}
+
+_client_default_repo_path() {
+    echo "$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-client"
+}
+
+_git_auth_url() {
+    # 将 https URL 注入 oauth2:token（Gitee/GitHub 常见写法）；SSH 原样返回
+    local url="$1" token="$2"
+    if [ -z "$token" ]; then
+        echo "$url"
+        return 0
+    fi
+    case "$url" in
+        git@*|ssh://*)
+            echo "$url"
+            ;;
+        https://*)
+            echo "$url" | sed -E "s#https://([^/]+)/#https://oauth2:${token}@\1/#"
+            ;;
+        http://*)
+            echo "$url" | sed -E "s#http://([^/]+)/#http://oauth2:${token}@\1/#"
+            ;;
+        *)
+            echo "$url"
+            ;;
+    esac
+}
+
+_git_strip_auth_url() {
+    local url="$1"
+    echo "$url" | sed -E 's#(https?://)[^/@]+@#\1#'
+}
+
+sync_sibling_git_repo() {
+    # 参数: name url path branch token
+    local name="$1" url="$2" path="$3" branch="${4:-develop}" token="${5:-}"
+    local auth_url clean_url
+    [ -n "$url" ] || { log_error "${name}: 未配置仓库 URL"; return 1; }
+    [ -n "$path" ] || { log_error "${name}: 未配置本地路径"; return 1; }
+    auth_url="$(_git_auth_url "$url" "$token")"
+    clean_url="$(_git_strip_auth_url "$url")"
+
+    if [ ! -d "$path/.git" ]; then
+        log_info "克隆 ${name}: ${clean_url} → ${path}"
+        mkdir -p "$(dirname "$path")"
+        if ! git clone --branch "$branch" --single-branch "$auth_url" "$path"; then
+            # 空仓或默认分支非 develop 时再试不指定 branch
+            rm -rf "$path"
+            git clone "$auth_url" "$path" || {
+                log_error "克隆 ${name} 失败（检查私仓权限 / Token / SSH）"
+                return 1
+            }
+            git -C "$path" checkout -B "$branch" "origin/${branch}" 2>/dev/null \
+                || git -C "$path" checkout -B "$branch" "origin/main" 2>/dev/null \
+                || true
+        fi
+        git -C "$path" remote set-url origin "$clean_url"
+    else
+        log_info "同步 ${name}: ${path} (${branch})"
+        (
+            cd "$path"
+            # 临时注入鉴权 URL，同步后立刻还原，避免 Token 落在 .git/config
+            git remote set-url origin "$auth_url"
+            git fetch origin --prune --tags
+            git fetch origin "$branch" || git fetch origin
+            git remote set-url origin "$clean_url"
+            if git rev-parse --verify "origin/${branch}" >/dev/null 2>&1; then
+                git checkout -B "$branch" "origin/${branch}"
+            elif git rev-parse --verify "origin/main" >/dev/null 2>&1; then
+                git checkout -B main "origin/main"
+            else
+                log_error "${name}: 远程无 ${branch}/main"
+                exit 1
+            fi
+        ) || {
+            git -C "$path" remote set-url origin "$clean_url" 2>/dev/null || true
+            log_error "同步 ${name} 失败"
+            return 1
+        }
+    fi
+    log_ok "${name} @ $(git -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?')"
+}
+
+write_workspace_yaml_from_deploy_env() {
+    load_deploy_env
+    local mode pro_path custom_path pro_rel custom_rel yaml pro_en custom_en plugin_count=0
+    mode="$(read_deploy_env_value WORKSPACE_COMPOSE_MODE || echo copy)"
+    pro_en="$(read_deploy_env_value PRO_ENABLED || echo 0)"
+    custom_en="$(read_deploy_env_value CUSTOM_ENABLED || echo 0)"
+    pro_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
+    [ -n "$pro_path" ] || pro_path="$(_pro_default_repo_path)"
+    custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
+    [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
+
+    # workspace.yaml 中 repo 用相对主仓根的路径
+    pro_rel="$(python -c "import os.path; print(os.path.relpath(r'''$pro_path''', r'''$PROJECT_ROOT'''))" 2>/dev/null \
+        || echo "../kuaigeyun-pro")"
+    custom_rel="$(python -c "import os.path; print(os.path.relpath(r'''$custom_path''', r'''$PROJECT_ROOT'''))" 2>/dev/null \
+        || echo "../kuaigeyun-custom")"
+
+    if [ "$pro_en" != "1" ] && [ "$custom_en" != "1" ]; then
+        log_error "PRO_ENABLED / CUSTOM_ENABLED 均为未启用，无法生成 workspace.yaml"
+        return 1
+    fi
+
+    yaml="$PROJECT_ROOT/workspace.yaml"
+    {
+        echo "# generated by fast-deploy — do not commit secrets"
+        echo "mode: ${mode}"
+        echo ""
+        echo "plugins:"
+        if [ "$pro_en" = "1" ]; then
+            echo "  - repo: ${pro_rel}"
+            echo "    apps:"
+            echo "      - kuaiai"
+            echo "      - kuaireport"
+            echo "      - kuaiiot"
+            plugin_count=$((plugin_count + 1))
+        fi
+        if [ "$custom_en" = "1" ]; then
+            echo "  - repo: ${custom_rel}"
+            echo "    apps:"
+            echo "      - haoligo"
+            plugin_count=$((plugin_count + 1))
+        fi
+    } >"$yaml"
+    log_ok "已写入 ${yaml} (mode=${mode}, plugins=${plugin_count})"
+}
+
+run_workspace_compose() {
+    local py="$PROJECT_ROOT/tools/workspace/compose.py" python_bin=""
+    [ -f "$py" ] || { log_error "缺少 ${py}"; return 1; }
+    if [ -x "$PROJECT_ROOT/riveredge-backend/.venv/bin/python" ]; then
+        python_bin="$PROJECT_ROOT/riveredge-backend/.venv/bin/python"
+    elif [ -x "$PROJECT_ROOT/riveredge-backend/.venv/Scripts/python.exe" ]; then
+        python_bin="$PROJECT_ROOT/riveredge-backend/.venv/Scripts/python.exe"
+    elif command -v python3 >/dev/null 2>&1; then
+        python_bin="python3"
+    elif command -v python >/dev/null 2>&1; then
+        python_bin="python"
+    else
+        log_error "未找到 Python，无法执行 compose"
+        return 1
+    fi
+    if ! "$python_bin" -c "import yaml" 2>/dev/null; then
+        log_info "安装 PyYAML..."
+        "$python_bin" -m pip install -q pyyaml || {
+            log_error "请先安装 PyYAML: ${python_bin} -m pip install pyyaml"
+            return 1
+        }
+    fi
+    write_workspace_yaml_from_deploy_env || return 1
+    log_info "执行 workspace compose..."
+    (cd "$PROJECT_ROOT" && "$python_bin" "$py") || return 1
+}
+
+cmd_pro_apps_status() {
+    load_deploy_env
+    local py="$PROJECT_ROOT/tools/workspace/compose.py" python_bin="python3"
+    if [ -x "$PROJECT_ROOT/riveredge-backend/.venv/bin/python" ]; then
+        python_bin="$PROJECT_ROOT/riveredge-backend/.venv/bin/python"
+    elif [ -x "$PROJECT_ROOT/riveredge-backend/.venv/Scripts/python.exe" ]; then
+        python_bin="$PROJECT_ROOT/riveredge-backend/.venv/Scripts/python.exe"
+    elif command -v python >/dev/null 2>&1; then
+        python_bin="python"
+    fi
+    if [ ! -f "$PROJECT_ROOT/workspace.yaml" ]; then
+        log_warn "尚无 workspace.yaml，请先执行安装/更新或配置仓库"
+        return 1
+    fi
+    (cd "$PROJECT_ROOT" && "$python_bin" "$py" --status)
+}
+
+_warn_missing_https_token() {
+    local label="$1" url="$2" token="$3" hint="$4"
+    [ -n "$token" ] && return 0
+    case "$url" in
+        git@*|ssh://*) return 0 ;;
+    esac
+    log_warn "未配置 ${label} Token，且 URL 非 SSH；私仓可能拉取失败"
+    log_warn "请先菜单 [4]→配置，或在 deploy.env 写入 ${hint}"
+}
+
+cmd_install_extension_apps() {
+    # 参数: pro | custom | all（默认 all = 按已启用标志同步；若均未启用则装全部）
+    load_deploy_env
+    local scope="${1:-all}"
+    local do_pro=0 do_custom=0
+    local pro_url pro_path pro_branch pro_token
+    local custom_url custom_path custom_branch custom_token
+
+    case "$scope" in
+        pro)
+            do_pro=1
+            ;;
+        custom)
+            do_custom=1
+            ;;
+        all)
+            if [ "$(read_deploy_env_value PRO_ENABLED || echo 0)" = "1" ]; then
+                do_pro=1
+            fi
+            if [ "$(read_deploy_env_value CUSTOM_ENABLED || echo 0)" = "1" ]; then
+                do_custom=1
+            fi
+            # 首次「安装全部」或标志皆空：两仓都装
+            if [ "$do_pro" = "0" ] && [ "$do_custom" = "0" ]; then
+                do_pro=1
+                do_custom=1
+            fi
+            ;;
+        *)
+            log_error "未知范围: ${scope}（可用 pro|custom|all）"
+            return 1
+            ;;
+    esac
+
+    pro_url="$(read_deploy_env_value PRO_REPO_URL || echo "$DEFAULT_PRO_REPO_URL")"
+    pro_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
+    [ -n "$pro_path" ] || pro_path="$(_pro_default_repo_path)"
+    pro_branch="$(read_deploy_env_value PRO_GIT_BRANCH || echo develop)"
+    pro_token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
+    custom_url="$(read_deploy_env_value CUSTOM_REPO_URL || echo "$DEFAULT_CUSTOM_REPO_URL")"
+    custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
+    [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
+    custom_branch="$(read_deploy_env_value CUSTOM_GIT_BRANCH || echo develop)"
+    custom_token="$(read_deploy_env_value CUSTOM_GIT_TOKEN || true)"
+    [ -n "$custom_token" ] || custom_token="$pro_token"
+
+    [ -n "$(read_deploy_env_value WORKSPACE_COMPOSE_MODE || true)" ] \
+        || set_deploy_env_value WORKSPACE_COMPOSE_MODE "copy"
+
+    if [ "$do_pro" = "1" ]; then
+        _warn_missing_https_token "专业仓" "$pro_url" "$pro_token" "PRO_GIT_TOKEN"
+        set_deploy_env_value PRO_ENABLED "1"
+        set_deploy_env_value PRO_REPO_URL "$pro_url"
+        set_deploy_env_value PRO_REPO_PATH "$pro_path"
+        set_deploy_env_value PRO_GIT_BRANCH "$pro_branch"
+        sync_sibling_git_repo "kuaigeyun-pro" "$pro_url" "$pro_path" "$pro_branch" "$pro_token" || return 1
+    fi
+
+    if [ "$do_custom" = "1" ]; then
+        _warn_missing_https_token "定制仓" "$custom_url" "$custom_token" "CUSTOM_GIT_TOKEN"
+        set_deploy_env_value CUSTOM_ENABLED "1"
+        set_deploy_env_value CUSTOM_REPO_URL "$custom_url"
+        set_deploy_env_value CUSTOM_REPO_PATH "$custom_path"
+        set_deploy_env_value CUSTOM_GIT_BRANCH "$custom_branch"
+        sync_sibling_git_repo "kuaigeyun-custom" "$custom_url" "$custom_path" "$custom_branch" "$custom_token" || return 1
+    fi
+
+    # compose 时保留「先前已启用、本次未改」的另一侧
+    run_workspace_compose || return 1
+    log_ok "扩展应用已组装（scope=${scope}）。请重启后端/前端。"
+}
+
+# 兼容旧入口名
+cmd_install_pro_apps() {
+    cmd_install_extension_apps "${1:-all}"
+}
+
+cmd_install_client_repo() {
+    load_deploy_env
+    local url path branch token
+    url="$(read_deploy_env_value CLIENT_REPO_URL || echo "$DEFAULT_CLIENT_REPO_URL")"
+    path="$(read_deploy_env_value CLIENT_REPO_PATH || true)"
+    [ -n "$path" ] || path="$(_client_default_repo_path)"
+    branch="$(read_deploy_env_value CLIENT_GIT_BRANCH || echo develop)"
+    token="$(read_deploy_env_value CLIENT_GIT_TOKEN || true)"
+    [ -n "$token" ] || token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
+
+    _warn_missing_https_token "终端仓" "$url" "$token" "CLIENT_GIT_TOKEN"
+    set_deploy_env_value CLIENT_ENABLED "1"
+    set_deploy_env_value CLIENT_REPO_URL "$url"
+    set_deploy_env_value CLIENT_REPO_PATH "$path"
+    set_deploy_env_value CLIENT_GIT_BRANCH "$branch"
+    sync_sibling_git_repo "kuaigeyun-client" "$url" "$path" "$branch" "$token" || return 1
+    log_ok "终端仓已同步: ${path}（不参与 workspace compose）"
+}
+
+maybe_sync_pro_apps_on_update() {
+    load_deploy_env
+    local pro_en custom_en client_en
+    pro_en="$(read_deploy_env_value PRO_ENABLED || echo 0)"
+    custom_en="$(read_deploy_env_value CUSTOM_ENABLED || echo 0)"
+    client_en="$(read_deploy_env_value CLIENT_ENABLED || echo 0)"
+    if [ "$pro_en" = "1" ] || [ "$custom_en" = "1" ]; then
+        log_info "同步已启用的扩展应用（PRO_ENABLED=${pro_en} CUSTOM_ENABLED=${custom_en}）…"
+        cmd_install_extension_apps all || {
+            log_error "扩展应用同步失败（主仓更新已完成，可稍后菜单 [4] 重试）"
+            return 1
+        }
+    fi
+    if [ "$client_en" = "1" ]; then
+        log_info "CLIENT_ENABLED=1：同步终端仓…"
+        cmd_install_client_repo || {
+            log_error "终端仓同步失败（可稍后菜单 [4]→安装终端仓 重试）"
+            return 1
+        }
+    fi
+}
+
 run_update_dev() {
     sync_git_from_origin || return 1
+    maybe_sync_pro_apps_on_update || true
     cmd_stop_dev || return 1
     cmd_migrate || return 1
     record_deploy_release_metadata || return 1
@@ -3768,6 +4090,7 @@ run_update_dev() {
 
 run_update_prod() {
     sync_git_from_origin || return 1
+    maybe_sync_pro_apps_on_update || true
     cmd_stop_prod || return 1
     cmd_migrate || return 1
     cmd_ensure_frontend_dist || return 1
@@ -3791,6 +4114,7 @@ cmd_default() {
 
 fd_dispatch() {
     local cmd="${1:-}"
+    shift || true
     case "$cmd" in
         check)     cmd_check ;;
         install)
@@ -3812,10 +4136,22 @@ fd_dispatch() {
             ;;
         install-service)   cmd_install_service ;;
         uninstall-service) cmd_uninstall_service ;;
+        pro-apps|install-pro|ext-apps)
+            cmd_install_extension_apps "${1:-all}"
+            ;;
+        install-custom)
+            cmd_install_extension_apps custom
+            ;;
+        install-client)
+            cmd_install_client_repo
+            ;;
+        pro-apps-status|ext-apps-status)
+            cmd_pro_apps_status
+            ;;
         wizard|""|deploy) cmd_wizard ;;
         *)
             log_error "未知命令: $cmd"
-            echo "用法: wizard | check | install | configure | migrate | build | start | stop | status | update | install-service | uninstall-service"
+            echo "用法: wizard | check | install | configure | migrate | build | start | stop | status | update | pro-apps [pro|custom|all] | install-custom | install-service | uninstall-service"
             exit 1
             ;;
     esac

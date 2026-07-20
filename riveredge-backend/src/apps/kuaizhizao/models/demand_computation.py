@@ -57,8 +57,8 @@ class DemandComputation(BaseModel):
     
     # 备注
     notes = fields.TextField(null=True, description="备注")
-    
-    # 创建信息
+
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
     
     class Meta:
         table = "apps_kuaizhizao_demand_computations"

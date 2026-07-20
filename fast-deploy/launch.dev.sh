@@ -366,9 +366,10 @@ start_frontend() {
     log_info "正在拉起前端 (${FRONTEND_PORT})..."
     kill_port "${FRONTEND_PORT}" || true
     cd riveredge-frontend
-    sed -i "s|target: 'http://localhost:[0-9]\+'|target: 'http://localhost:${BACKEND_PORT}'|g" vite.config.ts 2>/dev/null || true
     [ -f "../.logs/frontend.pid" ] && rm -f "../.logs/frontend.pid"
-    nohup npx vite --port "${FRONTEND_PORT}" --host 127.0.0.1 > ../.logs/frontend.log 2>&1 &
+    export VITE_BACKEND_HOST="${VITE_BACKEND_HOST:-127.0.0.1}"
+    export VITE_BACKEND_PORT="${VITE_BACKEND_PORT:-${BACKEND_PORT}}"
+    nohup npx vite --port "${FRONTEND_PORT}" --host 0.0.0.0 > ../.logs/frontend.log 2>&1 &
     echo $! > ../.logs/frontend.pid
     cd ..
     log_success "前端已挂起!"
@@ -425,8 +426,9 @@ case "$1" in
         stop_all
         if start_backend 1 && start_worker && start_frontend; then
             log_success "🚀 RiverEdge 系统已恢复就绪!"
-            echo "  - Web端: http://localhost:${FRONTEND_PORT}"
-            echo "  - API: http://localhost:${BACKEND_PORT}"
+            echo "  - Web: http://127.0.0.1:${FRONTEND_PORT} / http://localhost:${FRONTEND_PORT}"
+            echo "  - API: http://127.0.0.1:${BACKEND_PORT} / http://localhost:${BACKEND_PORT}"
+            echo "  - 局域网用本机 IP 替换主机名（前后端均监听 0.0.0.0）"
         else
             log_error "启动未完成，请查看 .logs/backend.log / .logs/frontend.log"
             exit 1

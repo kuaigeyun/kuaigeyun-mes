@@ -8,7 +8,7 @@ Date: 2025-12-27
 """
 
 from typing import Optional, Any, Dict
-from fastapi import Depends
+from fastapi import Depends, Request
 from infra.services.service_registry import InfraServiceLocator
 from infra.services.interfaces.service_interface import (
     AuthServiceInterface,
@@ -307,28 +307,55 @@ def get_saved_search_service_with_fallback() -> Any:
         async def delete_saved_search(self, uuid: str, user_id: int) -> bool:
             return await self._saved_search_service.delete_saved_search(uuid, user_id)
     
-def get_biometric_service() -> Any:
+def get_biometric_service(request: Request) -> Any:
     """
     获取生物识别服务（依赖注入）
-    
-    用于处理 WebAuthn 注册和认证逻辑。
+
+    WebAuthn 的 rp_id / expected_origin 必须与浏览器地址栏主机一致。
+    从请求 Origin（或 Referer）解析，并校验落在 CORS / BASE_URL 允许集合内；
+    无合法 Origin 时回退 FRONTEND_HOST:FRONTEND_PORT。
     """
+    from urllib.parse import urlparse
+
     from infra.config.infra_config import infra_settings
     from infra.services.biometric_service import BiometricService
-    
-    # 构建 Origin 和 RP_ID
-    # 优先从跨域配置中获取第一个有效的 Origin，或者使用前端配置
-    origin = f"http://{infra_settings.FRONTEND_HOST}:{infra_settings.FRONTEND_PORT}"
-    rp_id = infra_settings.FRONTEND_HOST
-    
-    # 特殊处理 localhost
-    if rp_id == "127.0.0.1":
-        rp_id = "localhost"
-        origin = f"http://localhost:{infra_settings.FRONTEND_PORT}"
-    
+
+    def _normalize_origin(raw: str) -> str:
+        raw = (raw or "").strip()
+        if not raw:
+            return ""
+        parsed = urlparse(raw)
+        if not parsed.scheme or not parsed.netloc:
+            return ""
+        return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+    allowed: set[str] = {o.rstrip("/") for o in infra_settings.get_cors_origins()}
+    base = (infra_settings.BASE_URL or "").strip().rstrip("/")
+    if base:
+        allowed.add(base)
+
+    origin = _normalize_origin(request.headers.get("origin") or "")
+    if not origin:
+        origin = _normalize_origin(request.headers.get("referer") or "")
+
+    if origin and origin not in allowed:
+        # 生产显式 CORS 未含当前入口时，拒绝用错误 rp_id 蒙混，回退配置默认
+        origin = ""
+
+    if not origin:
+        fh = (infra_settings.FRONTEND_HOST or "127.0.0.1").strip()
+        # 浏览器在 localhost 上对 WebAuthn 有特殊放宽；127.0.0.1 与 localhost 视为同族回退
+        if fh in ("127.0.0.1", "localhost", "::1"):
+            origin = f"http://localhost:{infra_settings.FRONTEND_PORT}"
+        else:
+            origin = f"http://{fh}:{infra_settings.FRONTEND_PORT}"
+
+    parsed = urlparse(origin)
+    rp_id = parsed.hostname or "localhost"
+
     return BiometricService(
         rp_id=rp_id,
         rp_name=infra_settings.APP_NAME,
-        origin=origin
+        origin=origin,
     )
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-import socket
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +19,7 @@ from core.utils.timezone_utils import to_api_isoformat
 from infra.config.infra_config import infra_settings
 from infra.domain.timezone_utils import now
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.utils.network import detect_lan_ipv4
 
 PACKAGE_MAX_BYTES = 500 * 1024 * 1024
 VALID_PLATFORMS = frozenset({"android", "ios", "windows"})
@@ -48,19 +48,6 @@ def updates_dir(client_key: str) -> Path:
     path = client_release_root() / client_key / "updates"
     path.mkdir(parents=True, exist_ok=True)
     return path
-
-
-def detect_lan_ipv4() -> str | None:
-    """本机对外通信网卡的 IPv4（用于开发扫码下载，避免 127.0.0.1）。"""
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.connect(("8.8.8.8", 80))
-            ip = sock.getsockname()[0]
-            if ip and not ip.startswith("127."):
-                return ip
-    except OSError:
-        pass
-    return None
 
 
 def resolve_qr_download_origin(*, request_scheme: str, frontend_port: int | None) -> str | None:

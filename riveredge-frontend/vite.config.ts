@@ -17,7 +17,8 @@ const srcRootPosix = normalizePath(srcPath)
 const frontendRoot = __dirname
 
 function resolvePkg(name: string): string {
-  return resolve(frontendRoot, 'node_modules', name)
+  // Windows 上 alias replacement 必须用正斜杠，否则 Rollup 在 junction 真实路径下无法解析 bare import
+  return normalizePath(resolve(frontendRoot, 'node_modules', name))
 }
 
 
@@ -79,6 +80,14 @@ export default defineConfig({
     strictPort: false, // 如果端口被占用，自动寻找下一个可用端口
     open: false, // 不自动打开浏览器
     cors: true, // 启用CORS
+    // Vite 默认放行 localhost 与所有 IP；本地自定义域名时设 VITE_ALLOWED_HOSTS=dev.example.com,.local
+    ...(process.env.VITE_ALLOWED_HOSTS
+      ? {
+          allowedHosts: process.env.VITE_ALLOWED_HOSTS.split(',')
+            .map((h) => h.trim())
+            .filter(Boolean),
+        }
+      : {}),
     // ⚠️ 稳定性优化：代理配置（关键修复：添加错误处理，防止后端重启导致前端崩溃）
     proxy: {
       '/api': {
@@ -112,9 +121,9 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       } as ProxyOptions,
-      // 积木报表代理，使其感觉上是“融合”在同一个域名下
+      // 积木报表代理，使其感觉上是“融合”在同一个域名下（与 /api 同一后端目标）
       '/jeecg-boot': {
-        target: 'http://localhost:8200', // 假设积木报表服务运行在 8080
+        target: process.env.VITE_API_TARGET || `http://${process.env.VITE_BACKEND_HOST || '127.0.0.1'}:${process.env.VITE_BACKEND_PORT || '8200'}`,
         changeOrigin: true,
         secure: false,
       } as ProxyOptions,
@@ -205,7 +214,9 @@ export default defineConfig({
   // 构建配置 - 优化性能
   build: {
     // 输出到项目根目录的 dist，与面板/Caddy 期望的 riveredge-frontend/dist 一致
+    // root 为 src/，outDir 在上一级，需显式清空
     outDir: resolve(__dirname, 'dist'),
+    emptyOutDir: true,
     commonjsOptions: {
       transformMixedEsModules: true,
     },
@@ -289,7 +300,7 @@ export default defineConfig({
   },
   plugins: [
     fixUniverSafariLookbehindPlugin(),
-    // occt-import-js 为 Emscripten CJS，Vite 动态 import 不会自动补 default export
+    // occt-import-js 为 Emscripten CJS：仅在尚未有 ESM default 时补导出（commonjs 插件已包过则跳过）
     {
       name: 'occt-import-js-esm-bridge',
       enforce: 'post',
@@ -298,7 +309,7 @@ export default defineConfig({
         if (!normalizedId.includes('occt-import-js/dist/occt-import-js.js')) {
           return null;
         }
-        if (code.includes('export default occtimportjs')) {
+        if (/export\s+default\b/.test(code)) {
           return null;
         }
         return {
@@ -338,6 +349,9 @@ export default defineConfig({
     }),
   ],
   resolve: {
+    // workspace compose 用 junction/symlink 挂载 pro/custom 应用时：必须保留逻辑路径，
+    // 否则相对导入 ../../../services/* 会按私有仓真实路径解析而失败。
+    preserveSymlinks: true,
     // 与 tsconfig `@/*` -> `./src/*` 一致。仅用 `{ '@': src }` 时 `@/foo` 在 Rollup 中可能无法解析。
     alias: [
       {

@@ -63,6 +63,7 @@ class Invoice(BaseModel):
     original_invoice_id = fields.IntField(null=True, description="红字发票对应的蓝字发票ID")
     red_flush_invoice_id = fields.IntField(null=True, description="蓝字发票被红冲后生成的红字发票ID")
 
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     class Meta:
         table = "apps_kuaicaiwu_invoices"
@@ -73,6 +74,9 @@ class Invoice(BaseModel):
             ("partner_id",),
             ("tenant_id", "receivable_id"),
         ]
+
+    class PydanticMeta:
+        exclude = ["deleted_at"]
 
     def __str__(self):
         return f"{self.invoice_code} - {self.invoice_number}"
@@ -92,9 +96,14 @@ class InvoiceItem(BaseModel):
     tax_rate = fields.DecimalField(max_digits=6, decimal_places=4, description="税率")
     tax_amount = fields.DecimalField(max_digits=14, decimal_places=2, description="税额")
 
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
+
     class Meta:
         table = "apps_kuaicaiwu_invoice_items"
         table_description = "快财务 - 发票明细"
+
+    class PydanticMeta:
+        exclude = ["deleted_at"]
 
     def __str__(self):
         return f"{self.item_name} - {self.amount}"

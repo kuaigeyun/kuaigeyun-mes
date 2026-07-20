@@ -73,7 +73,9 @@ def _http_exception_with_trace(
 
 
 async def _get_or_404(tenant_id: int, invoice_id: int, route: str = "/sales-invoices/{id}") -> Invoice:
-    obj = await Invoice.get_or_none(tenant_id=tenant_id, id=invoice_id, category="OUT")
+    obj = await Invoice.get_or_none(
+        tenant_id=tenant_id, id=invoice_id, category="OUT", deleted_at__isnull=True
+    )
     if not obj:
         raise _http_exception_with_trace(404, f"销售发票不存在: {invoice_id}", route, tenant_id)
     return obj
@@ -340,7 +342,7 @@ async def list_sales_invoices(
     """获取销售发票列表"""
     from apps.kuaicaiwu.services.finance_list_core import apply_finance_invoice_list_filters
 
-    query = Invoice.filter(tenant_id=tenant_id, category="OUT")
+    query = Invoice.filter(tenant_id=tenant_id, category="OUT", deleted_at__isnull=True)
     if status:
         query = query.filter(status=status)
     if customer_id:
@@ -545,7 +547,9 @@ async def delete_sales_invoice(
             "/sales-invoices/{id}",
             tenant_id,
         )
-    await Invoice.filter(id=id).delete()
+    from datetime import datetime
+
+    await Invoice.filter(tenant_id=tenant_id, id=id).update(deleted_at=datetime.now())
 
 
 @router.post("/{id}/void", response_model=SalesInvoiceResponse)

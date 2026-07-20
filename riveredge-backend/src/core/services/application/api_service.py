@@ -361,7 +361,12 @@ class APIService:
         url = api.path
         if not url.startswith("http://") and not url.startswith("https://"):
             # 相对路径，需要添加基础URL
-            base_url = getattr(settings, "BASE_URL", "http://localhost:8000")
+            base_url = (getattr(settings, "BASE_URL", None) or "").strip().rstrip("/")
+            if not base_url:
+                host = getattr(settings, "HOST", "127.0.0.1")
+                port = getattr(settings, "PORT", 8200)
+                bind = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+                base_url = f"http://{bind}:{port}"
             url = f"{base_url}{url}"
         
         # 5. 发送请求

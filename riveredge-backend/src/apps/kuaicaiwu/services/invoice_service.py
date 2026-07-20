@@ -78,23 +78,32 @@ class InvoiceService(AppBaseService[Invoice]):
 
     async def get_invoice_by_uuid(self, tenant_id: int, code: str) -> Invoice:
         """根据编号获取发票详情（包含明细）"""
-        invoice = await Invoice.get_or_none(tenant_id=tenant_id, invoice_code=code).prefetch_related('items')
+        invoice = await Invoice.get_or_none(
+            tenant_id=tenant_id, invoice_code=code, deleted_at__isnull=True
+        ).prefetch_related('items')
         if not invoice:
             raise NotFoundError(f"发票不存在: {code}")
         return invoice
 
     async def get_invoice_by_id(self, tenant_id: int, invoice_id: int) -> Invoice:
         """根据ID获取发票详情"""
-        invoice = await Invoice.get_or_none(tenant_id=tenant_id, id=invoice_id).prefetch_related('items')
+        invoice = await Invoice.get_or_none(
+            tenant_id=tenant_id, id=invoice_id, deleted_at__isnull=True
+        ).prefetch_related('items')
         if not invoice:
             raise NotFoundError(f"发票不存在: {invoice_id}")
         return invoice
 
     async def get_invoice_statistics(self, tenant_id: int) -> Dict[str, Any]:
         """发票列表页指标：总张数、进/销项价税合计合计、待认证进项张数"""
-        total_count = await Invoice.filter(tenant_id=tenant_id).count()
-        agg_in = await Invoice.filter(tenant_id=tenant_id, category="IN").aggregate(in_total=Sum("total_amount"))
-        agg_out = await Invoice.filter(tenant_id=tenant_id, category="OUT").aggregate(out_total=Sum("total_amount"))
+        base = Invoice.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        total_count = await base.count()
+        agg_in = await Invoice.filter(
+            tenant_id=tenant_id, category="IN", deleted_at__isnull=True
+        ).aggregate(in_total=Sum("total_amount"))
+        agg_out = await Invoice.filter(
+            tenant_id=tenant_id, category="OUT", deleted_at__isnull=True
+        ).aggregate(out_total=Sum("total_amount"))
         in_total = float(agg_in.get("in_total") or 0)
         out_total = float(agg_out.get("out_total") or 0)
         # 进项已确认、尚未税务认证
@@ -103,6 +112,7 @@ class InvoiceService(AppBaseService[Invoice]):
             category="IN",
             status="CONFIRMED",
             verification_date__isnull=True,
+            deleted_at__isnull=True,
         ).count()
         return {
             "total_count": total_count,
@@ -125,7 +135,7 @@ class InvoiceService(AppBaseService[Invoice]):
         updated_end_date: Optional[str] = None,
     ) -> tuple[List[Invoice], int]:
         """获取发票列表"""
-        query = Invoice.filter(tenant_id=tenant_id)
+        query = Invoice.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if category:
             query = query.filter(category=category)
         if status:
@@ -146,7 +156,9 @@ class InvoiceService(AppBaseService[Invoice]):
         self, tenant_id: int, code: str, data: InvoiceUpdate, updated_by: int
     ) -> Invoice:
         """更新发票信息"""
-        invoice = await Invoice.get_or_none(tenant_id=tenant_id, invoice_code=code)
+        invoice = await Invoice.get_or_none(
+            tenant_id=tenant_id, invoice_code=code, deleted_at__isnull=True
+        )
         if not invoice:
             raise NotFoundError(f"发票不存在: {code}")
         update_data = data.model_dump(exclude_unset=True)
@@ -159,8 +171,14 @@ class InvoiceService(AppBaseService[Invoice]):
         return await self.get_invoice_by_uuid(tenant_id, code)
 
     async def delete_invoice(self, tenant_id: int, code: str):
-        """删除发票"""
-        invoice = await Invoice.get_or_none(tenant_id=tenant_id, invoice_code=code)
+        """删除发票（软删除）"""
+        from datetime import datetime
+
+        invoice = await Invoice.get_or_none(
+            tenant_id=tenant_id, invoice_code=code, deleted_at__isnull=True
+        )
         if not invoice:
             raise NotFoundError(f"发票不存在: {code}")
-        await invoice.delete()
+        await Invoice.filter(tenant_id=tenant_id, id=invoice.id).update(
+            deleted_at=datetime.now()
+        )

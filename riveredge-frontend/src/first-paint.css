@@ -1,0 +1,17 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.app-first-paint {
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: #fff;
+}

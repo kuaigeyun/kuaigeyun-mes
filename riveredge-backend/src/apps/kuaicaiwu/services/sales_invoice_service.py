@@ -82,6 +82,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 tenant_id=tenant_id,
                 id__in=invoice_ids,
                 category="OUT",
+                deleted_at__isnull=True,
             ).exclude(status__in=list(self._EXCLUDED_INVOICE_STATUSES))
             for inv in invoices:
                 sid = relation_by_invoice.get(int(inv.id))
@@ -95,6 +96,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 tenant_id=tenant_id,
                 category="OUT",
                 source_document_code__in=codes,
+                deleted_at__isnull=True,
             ).exclude(status__in=list(self._EXCLUDED_INVOICE_STATUSES))
             for inv in orphan_rows:
                 if int(inv.id) in relation_by_invoice:

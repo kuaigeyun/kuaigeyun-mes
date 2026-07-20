@@ -50,27 +50,20 @@ export VITE_INNGEST_PORT="${VITE_INNGEST_PORT:-8300}"
 export VITE_BACKEND_HOST="${VITE_BACKEND_HOST:-127.0.0.1}"
 export VITE_BACKEND_PORT="${VITE_BACKEND_PORT:-8200}"
 
-# 从环境变量获取端口和主机（如果未设置则使用默认值）
-FRONTEND_HOST="${VITE_HOST:-}"
+# npm run dev 固定 VITE_HOST=0.0.0.0，本机与局域网均可访问
 FRONTEND_PORT="${VITE_PORT:-8100}"
 
 echo "运行模式：SaaS 模式（SaaS Mode）"
 echo "  - 作为平台宿主，运行平台级功能"
 echo "  - 系统级功能由独立的 core 模块提供"
-if [ -z "$FRONTEND_HOST" ]; then
-    # 如果未设置主机，使用默认值（Windows 使用 127.0.0.1，其他系统使用 localhost）
-    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-        FRONTEND_HOST="127.0.0.1"
-    else
-        FRONTEND_HOST="localhost"
-    fi
-fi
-echo "  - 访问地址：http://${FRONTEND_HOST}:${FRONTEND_PORT}"
+echo "  - 本机：http://127.0.0.1:${FRONTEND_PORT} 或 http://localhost:${FRONTEND_PORT}"
+echo "  - 局域网：http://<本机IP>:${FRONTEND_PORT}（需后端 HOST=0.0.0.0）"
 echo ""
 echo "启动开发服务器..."
 echo ""
 
 # 启动开发服务器，确保环境变量传递给 Vite
+# 代理目标用 127.0.0.1，避免 Windows 上 localhost→::1 与后端 IPv4 监听不一致
 VITE_BACKEND_HOST="${VITE_BACKEND_HOST:-127.0.0.1}" \
 VITE_BACKEND_PORT="${VITE_BACKEND_PORT:-8200}" \
 VITE_INNGEST_HOST="${VITE_INNGEST_HOST:-127.0.0.1}" \

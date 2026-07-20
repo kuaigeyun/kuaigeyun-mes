@@ -41,15 +41,8 @@
         }, timeout);
       })();
     </script>
-    <style>
-      html,body{margin:0;padding:0;height:100%;box-sizing:border-box}
-      *{box-sizing:border-box}
-      .app-first-paint{
-        min-height:100vh;
-        font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-        background:#fff;
-      }
-    </style>
+    <!-- 外链样式：避免 Windows + preserveSymlinks 下 Vite html-inline-proxy 对 <style> 解析失败 -->
+    <link rel="stylesheet" href="./first-paint.css" />
     <script type="module" src="./main.tsx"></script>
 </body>
 

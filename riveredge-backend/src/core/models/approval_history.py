@@ -64,6 +64,7 @@ class ApprovalHistory(BaseModel):
     to_approver_id = fields.IntField(null=True, description="新审批人ID")
 
     change_payload = fields.JSONField(null=True, description="审核中改单等变更明细（field_changes）")
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
     
     def __str__(self):
         """字符串表示"""

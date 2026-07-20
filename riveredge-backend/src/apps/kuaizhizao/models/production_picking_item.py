@@ -45,6 +45,7 @@ class ProductionPickingItem(BaseModel):
     expiry_date = fields.DateField(null=True, description="到期日期")
 
     notes = fields.TextField(null=True, description="备注")
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     class Meta:
         table = "apps_kuaizhizao_production_picking_items"

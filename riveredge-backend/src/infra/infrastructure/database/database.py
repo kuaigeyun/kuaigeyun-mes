@@ -382,7 +382,7 @@ TORTOISE_ORM = {
 
 def _merge_plugin_orm_into_static_config() -> None:
     """将已组装可选应用的 ORM 模块并入静态 TORTOISE_ORM（aerich / 冷启动共用）。"""
-    from core.services.application.plugin_bootstrap import discover_plugin_orm_modules
+    from infra.infrastructure.database.plugin_orm import discover_plugin_orm_modules
 
     models = TORTOISE_ORM["apps"]["models"]["models"]
     existing = set(models)

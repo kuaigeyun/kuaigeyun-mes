@@ -13,6 +13,6 @@ plugins:
       - kuaiai
       - kuaireport
       - kuaiiot
-  - repo: ../riveredge-custom
+  - repo: ../kuaigeyun-custom
     apps:
       - haoligo

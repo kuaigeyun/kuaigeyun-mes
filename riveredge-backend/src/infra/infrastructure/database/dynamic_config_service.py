@@ -360,7 +360,7 @@ class DynamicDatabaseConfigService:
         logger.info(f"📋 发现的总应用模型模块: {len(active_app_models)} 个")
 
         # 可选应用（pro/custom）声明的 ORM 清单 — 补全 potential_modules 未枚举的模块
-        from core.services.application.plugin_bootstrap import discover_plugin_orm_modules
+        from infra.infrastructure.database.plugin_orm import discover_plugin_orm_modules
 
         plugin_orm = discover_plugin_orm_modules()
         logger.info(f"📋 可选应用 ORM 声明: {len(plugin_orm)} 个模块")

@@ -9,11 +9,8 @@
 
     <meta name="theme-color" content="#141414" />
 
-    <style>
-      html, body { margin: 0; padding: 0; height: 100%; box-sizing: border-box; }
-      *, *::before, *::after { box-sizing: border-box; }
-      #root { min-height: 100%; }
-    </style>
+    <!-- 外链样式：避免 Windows + preserveSymlinks 下 Vite html-inline-proxy 对 <style> 解析失败 -->
+    <link rel="stylesheet" href="./login-shell.css" />
 
     <!-- 入口脚本：构建后由 Vite 注入 hash -->
     <script type="module" src="./login.tsx"></script>
