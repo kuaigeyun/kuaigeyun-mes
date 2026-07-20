@@ -5,10 +5,11 @@
   "description": "多源数据聚合与经营分析决策中心",
   "icon": "fileBarChart",
   "author": "RiverEdge Team",
-  "is_pro": false,
+  "is_pro": true,
+  "market_category": "pro",
   "entry_point": "../apps/kuaireport/index.tsx",
   "route_path": "/apps/kuaireport",
-  "sort_order": 60,
+  "sort_order": 101,
   "menu_config": {
     "title": "app.kuaireport.name",
     "icon": "fileBarChart",

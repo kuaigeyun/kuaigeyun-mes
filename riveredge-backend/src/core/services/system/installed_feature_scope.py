@@ -25,8 +25,6 @@ KNOWN_MANIFEST_APP_CODES: FrozenSet[str] = frozenset(
         "kuaiai",
         "kuaireport",
         "kuaiiot",
-        "kuaimes",
-        "kuaierp",
     }
 )
 

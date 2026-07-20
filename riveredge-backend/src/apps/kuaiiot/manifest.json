@@ -7,8 +7,9 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaiiot/index.tsx",
     "route_path": "/apps/kuaiiot",
-    "sort_order": 55,
+    "sort_order": 102,
     "is_pro": true,
+    "market_category": "pro",
     "menu_config": {
         "title": "app.kuaiiot.name",
         "icon": "cpu",

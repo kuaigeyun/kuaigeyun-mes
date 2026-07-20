@@ -23,25 +23,18 @@ export function extractAppCodeFromPath(path: string | undefined): string | null 
   return match ? match[1] : null;
 }
 
-/** 虚拟拆分应用：菜单文案与快制造共用 locale（app.kuaizhizao.menu.*） */
-const KUAIZHIZAO_VIRTUAL_APP_CODES = new Set(['kuaierp', 'kuaimes']);
-
-function translateWithKuaizhizaoMenuFallback(
+function translateAppMenuKey(
   appCode: string,
   menuSuffix: string,
   t: (key: string, options?: { defaultValue?: string }) => string
 ): string {
   const primaryKey = `app.${appCode}.menu.${menuSuffix}`;
-  let translated = t(primaryKey, { defaultValue: '' });
+  const translated = t(primaryKey, { defaultValue: '' });
   if (translated && translated !== primaryKey && translated.trim() !== '') return translated;
-  if (!KUAIZHIZAO_VIRTUAL_APP_CODES.has(appCode)) return '';
-  const fallbackKey = `app.kuaizhizao.menu.${menuSuffix}`;
-  translated = t(fallbackKey, { defaultValue: '' });
-  if (translated && translated !== fallbackKey && translated.trim() !== '') return translated;
   return '';
 }
 
-/** 从 /apps/{code}/... 路径解析菜单 i18n 后缀并翻译（虚拟应用回退快制造） */
+/** 从 /apps/{code}/... 路径解析菜单 i18n 后缀并翻译 */
 function translateAppMenuByPath(
   path: string,
   t: (key: string, options?: { defaultValue?: string }) => string
@@ -59,18 +52,18 @@ function translateAppMenuByPath(
   if (patrolReportTitle) return patrolReportTitle;
 
   const pathKey = relativePath.replace(/\//g, '.');
-  let translated = translateWithKuaizhizaoMenuFallback(appCode, pathKey, t);
+  let translated = translateAppMenuKey(appCode, pathKey, t);
   if (translated) return translated;
 
   if (relativePath.includes('reports/')) {
     const reportSuffix = relativePath.split('reports/').pop()?.replace(/\//g, '.') || '';
-    translated = translateWithKuaizhizaoMenuFallback(appCode, `reports.${reportSuffix}`, t);
+    translated = translateAppMenuKey(appCode, `reports.${reportSuffix}`, t);
     if (translated) return translated;
   }
 
   if (relativePath.startsWith('performance/')) {
     const perfSuffix = `performance-management.${relativePath.replace('performance/', '').replace(/\//g, '.')}`;
-    translated = translateWithKuaizhizaoMenuFallback(appCode, perfSuffix, t);
+    translated = translateAppMenuKey(appCode, perfSuffix, t);
     if (translated) return translated;
   }
 
@@ -388,18 +381,18 @@ export function translateAppMenuItemName(
 
 
   if (appCode && relativePath) {
-    const translated = translateWithKuaizhizaoMenuFallback(appCode, relativePath.replace(/\//g, '.'), t);
+    const translated = translateAppMenuKey(appCode, relativePath.replace(/\//g, '.'), t);
     if (translated) return translated;
 
     if (relativePath.includes('reports/')) {
       const reportSuffix = relativePath.split('reports/').pop()?.replace(/\//g, '.') || '';
-      const reportTranslated = translateWithKuaizhizaoMenuFallback(appCode, `reports.${reportSuffix}`, t);
+      const reportTranslated = translateAppMenuKey(appCode, `reports.${reportSuffix}`, t);
       if (reportTranslated) return reportTranslated;
     }
 
     if (relativePath.startsWith('performance/')) {
       const perfSuffix = `performance-management.${relativePath.replace('performance/', '').replace(/\//g, '.')}`;
-      const perfTranslated = translateWithKuaizhizaoMenuFallback(appCode, perfSuffix, t);
+      const perfTranslated = translateAppMenuKey(appCode, perfSuffix, t);
       if (perfTranslated) return perfTranslated;
     }
 
@@ -485,16 +478,11 @@ export function translatePathTitle(path: string, t: any): string {
     }
   }
 
-  // 3. 尝试段翻译（虚拟应用禁止回退为英文 path 片段）
+  // 3. 尝试段翻译
   if (segment) {
     const segmentKey = `path.${segment}`;
     const segmentTranslated = t(segmentKey, { defaultValue: '' });
     if (segmentTranslated && segmentTranslated !== segmentKey) return segmentTranslated;
-
-    const appCode = extractAppCodeFromPath(pathname);
-    if (appCode && KUAIZHIZAO_VIRTUAL_APP_CODES.has(appCode)) {
-      return segment;
-    }
 
     return segment.charAt(0).toUpperCase() + segment.slice(1);
   }

@@ -83,10 +83,10 @@ class PluginLoader:
             
             # 动态导入插件 API 路由
             # 这里需要根据实际插件结构来导入
-            # 例如：from apps_kuaimes.api.orders.orders import router as kuaimes_orders_router
+            # 例如：from apps.kuaizhizao.api.router import router as kuaizhizao_router
             
             # 注册路由
-            # app.include_router(kuaimes_orders_router, prefix="/api/v1")
+            # app.include_router(kuaizhizao_router, prefix="/api/v1")
             
             return True
         except Exception as e:

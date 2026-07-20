@@ -45,10 +45,58 @@ import {
   RightOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
-import { ManufacturingIcons } from '../../../../utils/manufacturingIcons';
-import { ManufacturingAppStack, MANUFACTURING_STACK_CODES } from './ManufacturingAppStack';
-import './manufacturing-app-stack.less';
+import { Icon as IconifyIcon, addCollection } from '@iconify/react/dist/offline';
+import solarIcons from '@iconify-json/solar/icons.json';
 import './application-card.less';
+
+addCollection(solarIcons);
+
+/** 应用中心卡片：Solar Bold Duotone（按应用 code） */
+const APP_SOLAR_ICONS: Record<string, string> = {
+  kuaizhizao: 'solar:buildings-2-bold-duotone',
+  kuaicaiwu: 'solar:wallet-money-bold-duotone',
+  kuaireport: 'solar:chart-2-bold-duotone',
+  'master-data': 'solar:database-bold-duotone',
+  kuaiai: 'solar:magic-stick-3-bold-duotone',
+  kuaiiot: 'solar:cpu-bolt-bold-duotone',
+  kuaiplm: 'solar:layers-bold-duotone',
+  kuaisrm: 'solar:share-circle-bold-duotone',
+  kuaiems: 'solar:bolt-bold-duotone',
+  kuaicrm: 'solar:hand-shake-bold-duotone',
+  kuaitms: 'solar:delivery-bold-duotone',
+  kuaiasms: 'solar:headphones-round-bold-duotone',
+  kuailtms: 'solar:test-tube-bold-duotone',
+  kuaiip: 'solar:shield-check-bold-duotone',
+  haoligo: 'solar:smartphone-bold-duotone',
+  bi: 'solar:pie-chart-bold-duotone',
+  crm: 'solar:hand-shake-bold-duotone',
+  erp: 'solar:cart-large-2-bold-duotone',
+  mes: 'solar:settings-bold-duotone',
+  wms: 'solar:box-bold-duotone',
+  oa: 'solar:document-text-bold-duotone',
+  scm: 'solar:structure-bold-duotone',
+  hr: 'solar:users-group-rounded-bold-duotone',
+};
+
+/** manifest.icon（Lucide/旧别名）→ Solar */
+const MANIFEST_ICON_TO_SOLAR: Record<string, string> = {
+  production: 'solar:buildings-2-bold-duotone',
+  factory: 'solar:buildings-2-bold-duotone',
+  calculator: 'solar:calculator-bold-duotone',
+  fileBarChart: 'solar:chart-2-bold-duotone',
+  'bar-chart': 'solar:chart-bold-duotone',
+  database: 'solar:database-bold-duotone',
+  sparkles: 'solar:magic-stick-3-bold-duotone',
+  cpu: 'solar:cpu-bolt-bold-duotone',
+  layers: 'solar:layers-bold-duotone',
+  shop: 'solar:shop-2-bold-duotone',
+  warehouse: 'solar:box-bold-duotone',
+  smartphone: 'solar:smartphone-bold-duotone',
+  thunderbolt: 'solar:bolt-bold-duotone',
+  bolt: 'solar:bolt-bold-duotone',
+  widget: 'solar:widget-bold-duotone',
+  appstore: 'solar:widget-5-bold-duotone',
+};
 import { useGlobalStore } from '../../../../stores';
 import {
   getApplicationList,
@@ -90,18 +138,24 @@ const APP_ACTION_ICON = {
   uninstall: StopOutlined,
 } as const;
 
-/** 应用中心「其他」分类（占位应用 + 已上线扩展应用） */
-const OTHER_PLACEHOLDER_CODES = [
-  'kuaicrm',
-  'kuaisrm',
-  'kuaiasms',
-  'kuaitms',
-  'kuailtms',
-  'kuaiip',
-  'kuaiems',
+/**
+ * 应用中心分类（对齐未来仓库）：
+ * - 基础：主仓开源
+ * - 专业：专业版私有仓（通用高级插件）
+ * - 行业：同属专业版私有仓，单独标签便于区分
+ * - 定制：定制私有仓（is_dedicated）
+ */
+const BASIC_APP_CODES = ['master-data', 'kuaizhizao', 'kuaiplm', 'kuaicaiwu'];
+/** 专业版展示顺序：KU-AI → 快报表 → 快数采 → 快能源 → 快协同 */
+const PRO_APP_CODES = [
+  'kuaiai',
+  'kuaireport',
   'kuaiiot',
+  'kuaiems',
+  'kuaisrm',
 ];
-const INDUSTRY_VALUE_PACK_CODES = [
+/** 行业应用（代码仍归专业版仓库，筛选单独成档） */
+const INDUSTRY_APP_CODES = [
   'kuaimachinery',
   'kuaimolding',
   'kuaielectronics',
@@ -120,20 +174,16 @@ const INDUSTRY_VALUE_PACK_CODES = [
   'kuaisemiconductor',
 ];
 const APP_SORT_ORDER_OVERRIDES: Record<string, number> = {
-  // 通用应用
+  // 基础
   kuaiplm: 25,
   kuaicaiwu: 40,
-  kuaireport: 46,
-  // 其他类：从 100 开始
-  kuaicrm: 100,
-  kuaisrm: 102,
-  kuaiasms: 103,
-  kuaitms: 104,
-  kuailtms: 105,
-  kuaiip: 106,
-  kuaiems: 107,
-  kuaiiot: 108,
-  // 行业增值包：从 200 开始
+  // 专业（与 PRO_APP_CODES 顺序一致）
+  kuaiai: 100,
+  kuaireport: 101,
+  kuaiiot: 102,
+  kuaiems: 103,
+  kuaisrm: 104,
+  // 行业
   kuaimachinery: 200,
   kuaimolding: 201,
   kuaielectronics: 202,
@@ -157,50 +207,29 @@ const APP_DESCRIPTION_OVERRIDES: Record<string, string> = {
   kuaicaiwu: '聚焦管理会计与经营分析协同平台（不含总账）',
 };
 
-type AppCategoryFilter = 'all' | 'general' | 'industry' | 'basic' | 'pro' | 'other' | 'dedicated';
-
-const PRO_KNOWN_CODES = [
-  'kuaiiot',
-  'kuaiai',
-  'bi',
-  'kuaicrm',
-  'kuaisrm',
-  ...INDUSTRY_VALUE_PACK_CODES,
-  ...OTHER_PLACEHOLDER_CODES,
-];
+type AppCategoryFilter = 'basic' | 'pro' | 'industry' | 'dedicated';
 
 /** 应用中心需一次性拉齐清单再前端分类，否则 sort_order 靠后的应用（如定制应用）会落在分页之外 */
 const APPLICATION_CENTER_LIST_LIMIT = 500;
 
-const matchAppCategory = (app: any, filter: AppCategoryFilter): boolean => {
-  const code = String(app?.code || '');
-  const isDedicated = Boolean(app?.is_dedicated ?? app?.isDedicated);
-  const isIndustry = INDUSTRY_VALUE_PACK_CODES.includes(code);
-  const isOther = OTHER_PLACEHOLDER_CODES.includes(code);
-  const isPro = Boolean(app?.is_pro) || PRO_KNOWN_CODES.includes(code);
-  // “基础版”定义：不属于 PRO 的应用（并排除行业包/其他类）
-  const isBasic = !isPro && !isIndustry && !isOther;
-  const isGeneral = !isIndustry && !isOther;
+/** 专业版私有仓（含行业）：启用时走 License Key */
+const isProEdition = (edition: AppCategoryFilter): boolean =>
+  edition === 'pro' || edition === 'industry';
 
-  switch (filter) {
-    case 'all':
-      return true;
-    case 'dedicated':
-      return isDedicated;
-    case 'general':
-      return isGeneral && !isDedicated;
-    case 'industry':
-      return isIndustry && !isDedicated;
-    case 'basic':
-      return isBasic && !isDedicated;
-    case 'pro':
-      return isPro && !isDedicated;
-    case 'other':
-      return isOther && !isDedicated;
-    default:
-      return true;
-  }
+const resolveAppEdition = (
+  app: { code?: string; is_pro?: boolean; is_dedicated?: boolean; isDedicated?: boolean },
+): AppCategoryFilter => {
+  if (Boolean(app?.is_dedicated ?? app?.isDedicated)) return 'dedicated';
+  const code = String(app?.code || '');
+  if (INDUSTRY_APP_CODES.includes(code)) return 'industry';
+  if (PRO_APP_CODES.includes(code)) return 'pro';
+  if (BASIC_APP_CODES.includes(code)) return 'basic';
+  // 未列入清单的非定制应用默认归入基础（主仓）
+  return 'basic';
 };
+
+const matchAppCategory = (app: any, filter: AppCategoryFilter): boolean =>
+  resolveAppEdition(app) === filter;
 
 const isDedicatedApplication = (app: Application | Record<string, unknown>): boolean =>
   Boolean((app as Application).is_dedicated ?? (app as any).isDedicated);
@@ -218,64 +247,35 @@ const CARD_ROW_PADDING_Y = 12;
 const CARD_ROW_PADDING_X = 16;
 
 /**
- * 根据应用代码和图标配置获取图标组件
+ * 根据应用代码和图标配置获取图标（Solar Bold Duotone）
  *
  * @param code - 应用代码
- * @param icon - 图标配置（可以是图片路径或 lucide 图标名称）
+ * @param icon - 图标配置（图片 URL、solar:xxx，或旧 manifest 别名）
  * @param size - 图标尺寸（默认 72，卡片内使用 CARD_ICON_SIZE）
+ * @param color - 前景色（Duotone 次色会随 currentColor）
  */
-const getApplicationIcon = (code: string, icon?: string | null, size: number = 72) => {
+const getApplicationIcon = (
+  code: string,
+  icon?: string | null,
+  size: number = 72,
+  color?: string,
+) => {
   if (icon && (icon.startsWith('/') || icon.startsWith('http'))) {
     return <img src={icon} alt={code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
   }
-  if (icon && ManufacturingIcons[icon as keyof typeof ManufacturingIcons]) {
-    const IconComponent = ManufacturingIcons[icon as keyof typeof ManufacturingIcons];
-    return React.createElement(IconComponent, { size });
-  }
-  const iconMap: Record<string, React.ReactNode> = {
-    kuaimes: React.createElement(ManufacturingIcons.workflow, { size }),
-    kuaizhizao: React.createElement(ManufacturingIcons.factory, { size }),
-    kuaierp: React.createElement(ManufacturingIcons.shoppingCart, { size }),
-    kuaicaiwu: React.createElement(ManufacturingIcons.calculator, { size }),
-    kuaireport: React.createElement(ManufacturingIcons.fileBarChart, { size }),
-    'master-data': React.createElement(ManufacturingIcons.database, { size }),
-    kuaiai: React.createElement(ManufacturingIcons.sparkles, { size }),
-    kuaiiot: React.createElement(ManufacturingIcons['cloud-server'], { size }),
-    kuaicrm: React.createElement(ManufacturingIcons.handshake, { size }),
-    kuaiplm: React.createElement(ManufacturingIcons.layers, { size }),
-    kuaisrm: React.createElement(ManufacturingIcons.gitBranch, { size }),
-    kuaitms: React.createElement(ManufacturingIcons.car, { size }),
-    kuaiasms: React.createElement(ManufacturingIcons.headphones, { size }),
-    kuailtms: React.createElement(ManufacturingIcons.experiment, { size }),
-    kuaiip: React.createElement(ManufacturingIcons['shield-check'], { size }),
-    kuaiems: React.createElement(ManufacturingIcons.thunderbolt, { size }),
-    kuaimachinery: React.createElement(ManufacturingIcons.tool, { size }),
-    kuaimolding: React.createElement(ManufacturingIcons.process, { size }),
-    kuaielectronics: React.createElement(ManufacturingIcons.electronics, { size }),
-    kuaiautoparts: React.createElement(ManufacturingIcons.car, { size }),
-    kuaimedical: React.createElement(ManufacturingIcons.shield, { size }),
-    kuaifood: React.createElement(ManufacturingIcons.shoppingBag, { size }),
-    kuaipackaging: React.createElement(ManufacturingIcons.boxes, { size }),
-    kuaihardware: React.createElement(ManufacturingIcons.hammer, { size }),
-    kuaidiecasting: React.createElement(ManufacturingIcons.factoryBuilding, { size }),
-    kuaiwiring: React.createElement(ManufacturingIcons.network, { size }),
-    kuaimotor: React.createElement(ManufacturingIcons.machine, { size }),
-    kuaibattery: React.createElement(ManufacturingIcons.power, { size }),
-    kuainewequipment: React.createElement(ManufacturingIcons.automation, { size }),
-    kuaisheetmetal: React.createElement(ManufacturingIcons.mdConstruction, { size }),
-    kuaimold: React.createElement(ManufacturingIcons.mdPrecision, { size }),
-    kuaisemiconductor: React.createElement(ManufacturingIcons.microchip, { size }),
-    crm: React.createElement(ManufacturingIcons.handshake, { size }),
-    erp: React.createElement(ManufacturingIcons.shoppingCart, { size }),
-    mes: React.createElement(ManufacturingIcons.factory, { size }),
-    wms: React.createElement(ManufacturingIcons.warehouse, { size }),
-    oa: React.createElement(ManufacturingIcons.fileText, { size }),
-    scm: React.createElement(ManufacturingIcons.apartment, { size }),
-    bi: React.createElement(ManufacturingIcons.chartBar, { size }),
-    hr: React.createElement(ManufacturingIcons.users, { size }),
-    haoligo: React.createElement(ManufacturingIcons.smartphone, { size }),
-  };
-  return iconMap[code] || React.createElement(ManufacturingIcons.appstore, { size });
+  const solarIcon =
+    (icon && icon.startsWith('solar:') && icon) ||
+    APP_SOLAR_ICONS[code] ||
+    (icon ? MANIFEST_ICON_TO_SOLAR[icon] : undefined) ||
+    'solar:widget-5-bold-duotone';
+  return (
+    <IconifyIcon
+      icon={solarIcon}
+      width={size}
+      height={size}
+      style={color ? { color } : undefined}
+    />
+  );
 };
 
 /**
@@ -289,8 +289,6 @@ const CARD_HEADER_TINT: Record<string, string> = {
   'master-data': '#a78bfa',
   kuaiai: '#fb7185',
   kuaiiot: '#2dd4bf',
-  kuaierp: '#fb923c',
-  kuaimes: '#38bdf8',
   bi: '#4ade80',
   kuaicrm: '#fb923c',
   kuaiplm: '#a78bfa',
@@ -300,22 +298,6 @@ const CARD_HEADER_TINT: Record<string, string> = {
   kuailtms: '#a78bfa',
   kuaiip: '#94a3b8',
   kuaiems: '#22d3ee',
-  kuaimachinery: '#60a5fa',
-  kuaimolding: '#a78bfa',
-  kuaielectronics: '#22d3ee',
-  kuaiautoparts: '#fb923c',
-  kuaimedical: '#4ade80',
-  kuaifood: '#fbbf24',
-  kuaipackaging: '#94a3b8',
-  kuaihardware: '#60a5fa',
-  kuaidiecasting: '#94a3b8',
-  kuaiwiring: '#22d3ee',
-  kuaimotor: '#fb923c',
-  kuaibattery: '#4ade80',
-  kuainewequipment: '#a78bfa',
-  kuaisheetmetal: '#94a3b8',
-  kuaimold: '#2dd4bf',
-  kuaisemiconductor: '#818cf8',
 };
 
 const getCardGradient = (code: string, isActive: boolean, token: GlobalToken, isDark: boolean): string => {
@@ -340,8 +322,6 @@ const getCardGradient = (code: string, isActive: boolean, token: GlobalToken, is
     'master-data': 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)', // 丁香紫
     kuaiai: 'linear-gradient(135deg, #fff1f2 0%, #fecdd3 100%)',      // 玫瑰粉
     kuaiiot: 'linear-gradient(135deg, #e6fffb 0%, #b5f5ec 100%)',     // 青绿色
-    kuaierp: 'linear-gradient(135deg, #fffbeb 0%, #fed7aa 100%)',     // 温暖橙黄（进销存）
-    kuaimes: 'linear-gradient(135deg, #f0f9ff 0%, #bae6fd 100%)',     // 天蓝色
     bi: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%)',          // 翡翠绿
     kuaicrm: 'linear-gradient(135deg, #fff7ed 0%, #fdba74 100%)',     // 橙色
     kuaiplm: 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)',     // 丁香紫
@@ -351,22 +331,6 @@ const getCardGradient = (code: string, isActive: boolean, token: GlobalToken, is
     kuailtms: 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)',    // 实验紫
     kuaiip: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',      // 知产灰
     kuaiems: 'linear-gradient(135deg, #ecfeff 0%, #a5f3fc 100%)',     // 能源青
-    kuaimachinery: 'linear-gradient(135deg, #eff6ff 0%, #bfdbfe 100%)', // 机械蓝
-    kuaimolding: 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)',    // 注塑紫
-    kuaielectronics: 'linear-gradient(135deg, #ecfeff 0%, #a5f3fc 100%)', // 电子青
-    kuaiautoparts: 'linear-gradient(135deg, #fff7ed 0%, #fdba74 100%)',   // 汽配橙
-    kuaimedical: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%)',     // 医疗绿
-    kuaifood: 'linear-gradient(135deg, #fffbeb 0%, #fde68a 100%)',        // 食品金
-    kuaipackaging: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',   // 包装灰
-    kuaihardware: 'linear-gradient(135deg, #eff6ff 0%, #bfdbfe 100%)',    // 五金蓝
-    kuaidiecasting: 'linear-gradient(135deg, #f8fafc 0%, #cbd5e1 100%)',  // 压铸钢灰
-    kuaiwiring: 'linear-gradient(135deg, #ecfeff 0%, #a5f3fc 100%)',      // 线束青
-    kuaimotor: 'linear-gradient(135deg, #fff7ed 0%, #fdba74 100%)',       // 电机橙
-    kuaibattery: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%)',     // 电池绿
-    kuainewequipment: 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)', // 新能源设备紫
-    kuaisheetmetal: 'linear-gradient(135deg, #f1f5f9 0%, #cbd5e1 100%)',  // 钣金灰
-    kuaimold: 'linear-gradient(135deg, #e6fffb 0%, #b5f5ec 100%)',        // 模具青
-    kuaisemiconductor: 'linear-gradient(135deg, #eff6ff 0%, #c7d2fe 100%)', // 半导体蓝紫
   };
   return gradients[code] || 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)';
 };
@@ -586,7 +550,7 @@ const ApplicationListPage: React.FC = () => {
   useEffect(() => () => {
     if (tenantBindSearchTimerRef.current) clearTimeout(tenantBindSearchTimerRef.current);
   }, []);
-  const [appCategoryFilter, setAppCategoryFilter] = useState<AppCategoryFilter>('general');
+  const [appCategoryFilter, setAppCategoryFilter] = useState<AppCategoryFilter>('basic');
   /** 平台管理员默认看「全部」，否则「通用」分类会隐藏定制应用 */
   const infraCategoryDefaultAppliedRef = useRef(false);
   const currentUser = useGlobalStore((s) => s.currentUser);
@@ -645,7 +609,7 @@ const ApplicationListPage: React.FC = () => {
   useEffect(() => {
     if (infraCategoryDefaultAppliedRef.current || !currentUser?.is_infra_admin) return;
     infraCategoryDefaultAppliedRef.current = true;
-    setAppCategoryFilter('all');
+    setAppCategoryFilter('dedicated');
   }, [currentUser?.is_infra_admin]);
 
   // 分类切换后再触发刷新，避免与 setState 同帧导致 request 读取旧值
@@ -827,22 +791,6 @@ const ApplicationListPage: React.FC = () => {
   };
 
   /**
-   * 互斥应用组配置
-   * kuaizhizao（快制造）与 [kuaierp（进销存）, kuaimes（快车间）] 互斥
-   */
-  const MUTEX_GROUPS = [
-    { group: 'erp-split', members: ['kuaierp', 'kuaimes'] },
-    { group: 'all-in-one', members: ['kuaizhizao'] },
-  ];
-
-  /** 获取与指定应用互斥的对端应用 code 列表 */
-  const getMutuallyExclusiveCodes = (code: string): string[] => {
-    if (['kuaierp', 'kuaimes'].includes(code)) return ['kuaizhizao'];
-    if (code === 'kuaizhizao') return ['kuaierp', 'kuaimes'];
-    return [];
-  };
-
-  /**
    * 处理启用/禁用应用
    */
   const handleToggleActive = async (record: Application, checked: boolean) => {
@@ -852,7 +800,9 @@ const ApplicationListPage: React.FC = () => {
     }
     try {
       if (checked) {
-        const isProApp = record.is_pro || record.code === 'bi' || record.code === 'kuaiiot';
+        const isProApp =
+          record.is_pro ||
+          isProEdition(resolveAppEdition(record));
         if (isProApp && !record.can_access) {
           setProKeyTargetApp(record);
           setPendingEnableAfterActivation(true);
@@ -861,51 +811,6 @@ const ApplicationListPage: React.FC = () => {
             proKeyFormRef.current?.setFieldsValue({ license_key: '' });
           }, 0);
           return;
-        }
-
-        // 检查互斥应用是否有已启用的
-        const exclusiveCodes = getMutuallyExclusiveCodes(record.code);
-        if (exclusiveCodes.length > 0) {
-          // 获取当前列表来判断对端是否已启用
-          const allApps = await getApplicationList({ skip: 0, limit: 200 });
-          const activeExclusives = (allApps || []).filter(
-            (a) => exclusiveCodes.includes(a.code) && a.is_active && a.is_installed
-          );
-          if (activeExclusives.length > 0) {
-            const exclusiveNames = activeExclusives.map((a) => a.name).join('、');
-            const targetGroupLabel = ['kuaierp', 'kuaimes'].includes(record.code)
-              ? t('pages.system.applications.modeErpMes')
-              : t('pages.system.applications.modeKuaizhizao');
-            const mutualGroupLabel = record.code === 'kuaizhizao'
-              ? t('pages.system.applications.modeErpMesName')
-              : t('pages.system.applications.modeKuaizhizaoName');
-            await new Promise<void>((resolve, reject) => {
-              modalApi.confirm({
-                title: t('pages.system.applications.mutualExclusiveSwitchTitle'),
-                content: (
-                  <div>
-                    <p>{t('pages.system.applications.mutualExclusiveSwitchingTo', { target: targetGroupLabel })}</p>
-                    <p>
-                      {t('pages.system.applications.mutualExclusiveCurrentlyEnabled')}{' '}
-                      <strong>{exclusiveNames}</strong>（{mutualGroupLabel}）
-                      {t('pages.system.applications.mutualExclusiveWillAutoDisable')}
-                    </p>
-                    <p style={{ color: '#8c8c8c', fontSize: 12, marginTop: 8 }}>
-                      {t('pages.system.applications.mutualExclusiveDataShared')}
-                    </p>
-                  </div>
-                ),
-                okText: t('pages.system.applications.mutualExclusiveConfirm'),
-                cancelText: t('common.cancel'),
-                onOk: () => resolve(),
-                onCancel: () => reject(new Error('user_cancel')),
-              });
-            });
-            // 先禁用对端
-            for (const app of activeExclusives) {
-              await disableApplication(app.uuid);
-            }
-          }
         }
 
         await enableApplication(record.uuid);
@@ -917,7 +822,6 @@ const ApplicationListPage: React.FC = () => {
       actionRef.current?.reload();
       refreshApplicationMenusAfterBackendMenuChange();
     } catch (error: any) {
-      if (error?.message === 'user_cancel') return;
       messageApi.error(error.message || t('pages.system.applications.operationFailed'));
     }
   };
@@ -1311,28 +1215,14 @@ const ApplicationListPage: React.FC = () => {
   const renderApplicationCard = (
     application: Application,
     _index: number,
-    options?: { inManufacturingStack?: boolean },
   ) => {
-    const inManufacturingStack = options?.inManufacturingStack === true;
-    const cardRadius = inManufacturingStack
-      ? `0 ${themeToken.borderRadiusLG}px ${themeToken.borderRadiusLG}px 0`
-      : themeToken.borderRadiusLG;
-    const isPro =
-      application.is_pro ||
-      [
-        'bi',
-        'kuaiiot',
-        'kuaiai',
-        'kuaicrm',
-        'kuaisrm',
-        'kuaiasms',
-        ...OTHER_PLACEHOLDER_CODES,
-        ...INDUSTRY_VALUE_PACK_CODES,
-      ].includes(application.code);
-    const isFree = ['master-data', 'kuaizhizao', 'kuaierp', 'kuaimes', 'kuaiplm', 'kuaicaiwu', 'kuaireport'].includes(
-      application.code,
-    );
-    const hasTierBadge = isPro || isFree;
+    const cardRadius = themeToken.borderRadiusLG;
+    const edition = resolveAppEdition(application);
+    const isDedicated = edition === 'dedicated';
+    const isIndustry = edition === 'industry';
+    const isPro = edition === 'pro';
+    const isBasic = edition === 'basic';
+    const hasTierBadge = isDedicated || isIndustry || isPro || isBasic;
     const coverPaddingY = hasTierBadge ? CARD_TIER_BADGE_CLEARANCE : CARD_COVER_PADDING_Y;
     const menuItems = [
       {
@@ -1481,9 +1371,9 @@ const ApplicationListPage: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
           borderRadius: cardRadius,
-          border: inManufacturingStack ? 'none' : `1px solid ${themeToken.colorBorderSecondary}`,
+          border: `1px solid ${themeToken.colorBorderSecondary}`,
           overflow: 'hidden',
-          boxShadow: inManufacturingStack ? 'none' : isDark ? themeToken.boxShadowSecondary : undefined,
+          boxShadow: isDark ? themeToken.boxShadowSecondary : undefined,
           ['--app-center-card-row-padding-y' as string]: `${CARD_ROW_PADDING_Y}px`,
         }}
         cover={
@@ -1502,7 +1392,7 @@ const ApplicationListPage: React.FC = () => {
               ),
               padding: `${coverPaddingY}px 20px`,
               borderBottom: `1px solid ${themeToken.colorBorderSecondary}`,
-              borderTopLeftRadius: inManufacturingStack ? 0 : themeToken.borderRadiusLG,
+              borderTopLeftRadius: themeToken.borderRadiusLG,
               borderTopRightRadius: themeToken.borderRadiusLG,
             }}
           >
@@ -1518,7 +1408,13 @@ const ApplicationListPage: React.FC = () => {
                         right: 0,
                         padding: '2px 12px',
                         borderBottomLeftRadius: themeToken.borderRadiusLG,
-                        background: isPro ? themeToken.colorWarning : themeToken.colorSuccess,
+                        background: isDedicated
+                          ? '#722ed1'
+                          : isIndustry
+                            ? '#13c2c2'
+                            : isPro
+                              ? themeToken.colorWarning
+                              : themeToken.colorSuccess,
                         color: themeToken.colorTextLightSolid,
                         fontSize: 11,
                         fontWeight: 600,
@@ -1526,7 +1422,13 @@ const ApplicationListPage: React.FC = () => {
                         boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.35)' : '-2px 2px 5px rgba(0,0,0,0.05)',
                       }}
                     >
-                      {isPro ? t('pages.system.applications.tierPro') : t('pages.system.applications.tierFree')}
+                      {isDedicated
+                        ? t('pages.system.applications.tierDedicated')
+                        : isIndustry
+                          ? t('pages.system.applications.tierIndustry')
+                          : isPro
+                            ? t('pages.system.applications.tierPro')
+                            : t('pages.system.applications.tierBasic')}
                     </div>
                   )}
 
@@ -1550,23 +1452,14 @@ const ApplicationListPage: React.FC = () => {
                       marginRight: 16,
                     }}
                   >
-                    {(() => {
-                      const iconElement = getApplicationIcon(application.code, application.icon, CARD_ICON_SIZE);
-                      if (React.isValidElement(iconElement) && iconElement.type === 'img') {
-                        return React.cloneElement(iconElement as React.ReactElement, {
-                          style: { width: CARD_ICON_SIZE, height: CARD_ICON_SIZE, objectFit: 'contain' },
-                        });
-                      }
-                      return React.cloneElement(iconElement as React.ReactElement, {
-                        style: {
-                          fontSize: CARD_ICON_SIZE,
-                          color:
-                            application.is_active && application.is_installed
-                              ? themeToken.colorPrimary
-                              : themeToken.colorTextQuaternary,
-                        },
-                      });
-                    })()}
+                    {getApplicationIcon(
+                      application.code,
+                      application.icon,
+                      CARD_ICON_SIZE,
+                      application.is_active && application.is_installed
+                        ? themeToken.colorPrimary
+                        : themeToken.colorTextQuaternary,
+                    )}
                   </div>
                   
                   <div
@@ -1616,20 +1509,10 @@ const ApplicationListPage: React.FC = () => {
                               undefined,
                               { bg: themeToken.colorInfoBg, color: themeToken.colorInfoText },
                             )}
-                          {!INDUSTRY_VALUE_PACK_CODES.includes(application.code) &&
-                            [
-                              'kuaizhizao',
-                              'kuaierp',
-                              'kuaimes',
-                              'kuaicaiwu',
-                              'kuaireport',
-                              'bi',
-                              'kuaicrm',
-                              'kuaiplm',
-                              'kuaisrm',
-                              'kuaiasms',
-                              ...OTHER_PLACEHOLDER_CODES,
-                              ...INDUSTRY_VALUE_PACK_CODES,
+                          {[
+                              ...BASIC_APP_CODES,
+                              ...PRO_APP_CODES,
+                              ...INDUSTRY_APP_CODES,
                             ].includes(application.code) &&
                             renderBadge(
                               'APP',
@@ -1647,42 +1530,8 @@ const ApplicationListPage: React.FC = () => {
                               undefined,
                               { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
                             )}
-                          {['kuaizhizao'].includes(application.code) &&
-                            renderBadge(
-                              t('pages.system.applications.editionIntegratedTag'),
-                              { bg: '#fff7e6', color: '#d46b08' },
-                              undefined,
-                              { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
-                            )}
-                          {['kuaierp', 'kuaimes'].includes(application.code) &&
-                            renderBadge(
-                              t('pages.system.applications.editionSplitTag'),
-                              { bg: '#f0f9ff', color: '#1677ff' },
-                              undefined,
-                              { bg: themeToken.colorInfoBg, color: themeToken.colorInfoText },
-                            )}
-                          {INDUSTRY_VALUE_PACK_CODES.includes(application.code) &&
-                            renderBadge(
-                              t('pages.system.applications.valuePackTag'),
-                              { bg: '#fff7e6', color: '#ad6800' },
-                              undefined,
-                              { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
-                            )}
-                          {application.is_dedicated &&
-                            renderBadge(
-                              t('pages.system.applications.dedicatedTag'),
-                              { bg: '#f4f0ff', color: '#531dab' },
-                              undefined,
-                              { bg: themeToken.colorFillTertiary, color: '#d3adf7' },
-                            )}
-                          {OTHER_PLACEHOLDER_CODES.includes(application.code) &&
-                            renderBadge(
-                              t('pages.system.applications.otherCategoryTag'),
-                              { bg: '#f6ffed', color: '#389e0d' },
-                              undefined,
-                              { bg: themeToken.colorSuccessBg, color: themeToken.colorSuccessText },
-                            )}
-                          {(application.is_pro || ['bi', 'kuaiiot'].includes(application.code)) && !application.can_access && (
+                          {(application.is_pro || isProEdition(resolveAppEdition(application))) &&
+                            !application.can_access && (
                             <Tooltip title={t('pages.system.applications.proLockedTag')}>
                               <span
                                 style={{
@@ -1722,29 +1571,17 @@ const ApplicationListPage: React.FC = () => {
                             >
                               {resolveApplicationDisplayName(application, t)}
                             </span>
-                            <div style={{ flex: 1, minWidth: 8 }} />
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                              {application.is_installed
-                                ? renderBadge(
-                                    t('pages.system.applications.installed'),
-                                    { bg: '#f6ffed', color: '#52c41a' },
-                                    undefined,
-                                    { bg: themeToken.colorSuccessBg, color: themeToken.colorSuccessText },
-                                  )
-                                : renderBadge(
-                                    t('pages.system.applications.notInstalled'),
-                                    { bg: '#fff1f0', color: '#f5222d' },
-                                    undefined,
-                                    { bg: themeToken.colorErrorBg, color: themeToken.colorErrorText },
-                                  )}
-                              {application.is_system &&
-                                renderBadge(
+                            {application.is_system && (
+                              <>
+                                <div style={{ flex: 1, minWidth: 8 }} />
+                                {renderBadge(
                                   t('pages.system.applications.systemTag'),
                                   { bg: '#fafafa', color: '#8c8c8c' },
                                   undefined,
                                   { bg: themeToken.colorFillTertiary, color: themeToken.colorTextTertiary },
                                 )}
-                            </div>
+                              </>
+                            )}
                           </div>
                           <div
                             style={{
@@ -1833,11 +1670,21 @@ const ApplicationListPage: React.FC = () => {
           }}
         >
           <span>{t('pages.system.applications.codeLabel')}: {application.code}</span>
-          {application.version && (
-            <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
-              v{application.version}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <Tag
+              color={application.is_installed ? 'success' : 'error'}
+              style={{ margin: 0, fontSize: 11 }}
+            >
+              {application.is_installed
+                ? t('pages.system.applications.installed')
+                : t('pages.system.applications.notInstalled')}
             </Tag>
-          )}
+            {application.version && (
+              <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
+                v{application.version}
+              </Tag>
+            )}
+          </div>
         </div>
       </Card>
     );
@@ -1930,20 +1777,20 @@ const ApplicationListPage: React.FC = () => {
 
               const allData = await getApplicationList(apiParams);
 
-              // 纯前端预告应用（无后端数据库记录），sort_order 与迁移 212 保持一致
+              // 纯前端预告应用（无后端数据库记录）：快能源、快协同
               const placeholders: any[] = [
                 {
-                  uuid: 'placeholder-kuaicrm',
-                  code: 'kuaicrm',
-                  name: t('pages.system.applications.mock.kuaicrm.name', { defaultValue: '快客户' }),
-                  description: t('pages.system.applications.mock.kuaicrm.desc', { defaultValue: '新一代智能客户关系管理系统，敬请期待' }),
+                  uuid: 'placeholder-kuaiems',
+                  code: 'kuaiems',
+                  name: t('pages.system.applications.mock.kuaienergy.name', { defaultValue: '快能源' }),
+                  description: t('pages.system.applications.mock.kuaienergy.desc', { defaultValue: '能源数据监控与能效分析平台，敬请期待' }),
                   is_pro: true,
                   can_access: false,
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 100,
-                  version: 'Beta',
+                  sort_order: 103,
+                  version: 'PRO',
                 },
                 {
                   uuid: 'placeholder-kuaisrm',
@@ -1955,285 +1802,16 @@ const ApplicationListPage: React.FC = () => {
                   is_installed: false,
                   is_active: false,
                   is_system: false,
-                  sort_order: 102,
-                  version: 'Beta',
-                },
-                {
-                  uuid: 'placeholder-kuaimachinery',
-                  code: 'kuaimachinery',
-                  name: t('pages.system.applications.mock.kuaimachinery.name', { defaultValue: '机械加工增值包' }),
-                  description: t('pages.system.applications.mock.kuaimachinery.desc', { defaultValue: '基于快制造的机械加工行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 200,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaimolding',
-                  code: 'kuaimolding',
-                  name: t('pages.system.applications.mock.kuaimolding.name', { defaultValue: '注塑增值包' }),
-                  description: t('pages.system.applications.mock.kuaimolding.desc', { defaultValue: '基于快制造的注塑行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 201,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaielectronics',
-                  code: 'kuaielectronics',
-                  name: t('pages.system.applications.mock.kuaielectronics.name', { defaultValue: '电子增值包' }),
-                  description: t('pages.system.applications.mock.kuaielectronics.desc', { defaultValue: '基于快制造的电子行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 202,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaiautoparts',
-                  code: 'kuaiautoparts',
-                  name: t('pages.system.applications.mock.kuaiautoparts.name', { defaultValue: '汽配增值包' }),
-                  description: t('pages.system.applications.mock.kuaiautoparts.desc', { defaultValue: '基于快制造的汽配行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 203,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaimedical',
-                  code: 'kuaimedical',
-                  name: t('pages.system.applications.mock.kuaimedical.name', { defaultValue: '医疗器械增值包' }),
-                  description: t('pages.system.applications.mock.kuaimedical.desc', { defaultValue: '基于快制造的医疗器械行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 204,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaifood',
-                  code: 'kuaifood',
-                  name: t('pages.system.applications.mock.kuaifood.name', { defaultValue: '食品饮料增值包' }),
-                  description: t('pages.system.applications.mock.kuaifood.desc', { defaultValue: '基于快制造的食品饮料行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 205,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaipackaging',
-                  code: 'kuaipackaging',
-                  name: t('pages.system.applications.mock.kuaipackaging.name', { defaultValue: '包装印刷增值包' }),
-                  description: t('pages.system.applications.mock.kuaipackaging.desc', { defaultValue: '基于快制造的包装印刷行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 206,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaihardware',
-                  code: 'kuaihardware',
-                  name: t('pages.system.applications.mock.kuaihardware.name', { defaultValue: '五金冲压增值包' }),
-                  description: t('pages.system.applications.mock.kuaihardware.desc', { defaultValue: '基于快制造的五金冲压行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 207,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaidiecasting',
-                  code: 'kuaidiecasting',
-                  name: t('pages.system.applications.mock.kuaidiecasting.name', { defaultValue: '压铸增值包' }),
-                  description: t('pages.system.applications.mock.kuaidiecasting.desc', { defaultValue: '基于快制造的压铸行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 208,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaiwiring',
-                  code: 'kuaiwiring',
-                  name: t('pages.system.applications.mock.kuaiwiring.name', { defaultValue: '线束增值包' }),
-                  description: t('pages.system.applications.mock.kuaiwiring.desc', { defaultValue: '基于快制造的线束行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 209,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaimotor',
-                  code: 'kuaimotor',
-                  name: t('pages.system.applications.mock.kuaimotor.name', { defaultValue: '电机增值包' }),
-                  description: t('pages.system.applications.mock.kuaimotor.desc', { defaultValue: '基于快制造的电机行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 210,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaibattery',
-                  code: 'kuaibattery',
-                  name: t('pages.system.applications.mock.kuaibattery.name', { defaultValue: '电池增值包' }),
-                  description: t('pages.system.applications.mock.kuaibattery.desc', { defaultValue: '基于快制造的电池行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 211,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuainewequipment',
-                  code: 'kuainewequipment',
-                  name: t('pages.system.applications.mock.kuainewequipment.name', { defaultValue: '新能源设备增值包' }),
-                  description: t('pages.system.applications.mock.kuainewequipment.desc', { defaultValue: '基于快制造的新能源设备行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 212,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaisheetmetal',
-                  code: 'kuaisheetmetal',
-                  name: t('pages.system.applications.mock.kuaisheetmetal.name', { defaultValue: '钣金增值包' }),
-                  description: t('pages.system.applications.mock.kuaisheetmetal.desc', { defaultValue: '基于快制造的钣金行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 213,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaimold',
-                  code: 'kuaimold',
-                  name: t('pages.system.applications.mock.kuaimold.name', { defaultValue: '模具增值包' }),
-                  description: t('pages.system.applications.mock.kuaimold.desc', { defaultValue: '基于快制造的模具行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 214,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaisemiconductor',
-                  code: 'kuaisemiconductor',
-                  name: t('pages.system.applications.mock.kuaisemiconductor.name', { defaultValue: '半导体增值包' }),
-                  description: t('pages.system.applications.mock.kuaisemiconductor.desc', { defaultValue: '基于快制造的半导体行业专属能力包，欢迎客户联合共创' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 215,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaitms',
-                  code: 'kuaitms',
-                  name: t('pages.system.applications.mock.kuailogistics.name', { defaultValue: '快物流' }),
-                  description: t('pages.system.applications.mock.kuailogistics.desc', { defaultValue: '物流与运力协同管理平台，敬请期待' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
                   sort_order: 104,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaiasms',
-                  code: 'kuaiasms',
-                  name: t('pages.system.applications.mock.kuaiaftersales.name', { defaultValue: '快售后' }),
-                  description: t('pages.system.applications.mock.kuaiaftersales.desc', { defaultValue: '售后服务与闭环追踪管理平台，敬请期待' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 103,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuailtms',
-                  code: 'kuailtms',
-                  name: t('pages.system.applications.mock.kuaiexperiment.name', { defaultValue: '快实验' }),
-                  description: t('pages.system.applications.mock.kuaiexperiment.desc', { defaultValue: '实验流程与结果追溯管理平台，敬请期待' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 105,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaiip',
-                  code: 'kuaiip',
-                  name: t('pages.system.applications.mock.kuaiip.name', { defaultValue: '快知产' }),
-                  description: t('pages.system.applications.mock.kuaiip.desc', { defaultValue: '知识产权全周期管理平台，敬请期待' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 106,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaiems',
-                  code: 'kuaiems',
-                  name: t('pages.system.applications.mock.kuaienergy.name', { defaultValue: '快能源' }),
-                  description: t('pages.system.applications.mock.kuaienergy.desc', { defaultValue: '能源数据监控与能效分析平台，敬请期待' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 107,
-                  version: 'PRO',
+                  version: 'Beta',
                 },
               ];
 
-              let filteredData = [...(allData || []), ...placeholders].map(app => {
+              // 占位仅补全后端尚无记录的专业应用，避免与真实应用重复
+              const existingCodes = new Set((allData || []).map((app) => app.code));
+              const mergedPlaceholders = placeholders.filter((app) => !existingCodes.has(app.code));
+
+              let filteredData = [...(allData || []), ...mergedPlaceholders].map(app => {
                 const overriddenSortOrder = APP_SORT_ORDER_OVERRIDES[app.code as string];
                 const overriddenDescription = APP_DESCRIPTION_OVERRIDES[app.code as string];
                 const appWithSort = overriddenSortOrder !== undefined
@@ -2242,10 +1820,6 @@ const ApplicationListPage: React.FC = () => {
                 const appWithDisplay = overriddenDescription !== undefined
                   ? { ...appWithSort, description: overriddenDescription }
                   : appWithSort;
-                // BI 占位仍按未授权 PRO 展示（无 manifest 时前端兜底）
-                if (appWithDisplay.code === 'bi') {
-                  return { ...appWithDisplay, is_pro: true, can_access: false };
-                }
                 return appWithDisplay;
               });
 
@@ -2291,13 +1865,10 @@ const ApplicationListPage: React.FC = () => {
               size="middle"
               value={appCategoryFilter}
               options={[
-                { label: t('pages.system.applications.categoryAll'), value: 'all' },
-                { label: t('pages.system.applications.categoryGeneral'), value: 'general' },
-                { label: t('pages.system.applications.categoryOther'), value: 'other' },
-                { label: t('pages.system.applications.categoryIndustry'), value: 'industry' },
-                { label: t('pages.system.applications.categoryDedicated'), value: 'dedicated' },
                 { label: t('pages.system.applications.categoryBasic'), value: 'basic' },
                 { label: t('pages.system.applications.categoryPro'), value: 'pro' },
+                { label: t('pages.system.applications.categoryIndustry'), value: 'industry' },
+                { label: t('pages.system.applications.categoryDedicated'), value: 'dedicated' },
               ]}
               onChange={(value) => {
                 setAppCategoryFilter(value as AppCategoryFilter);
@@ -2363,14 +1934,6 @@ const ApplicationListPage: React.FC = () => {
             renderCard: renderApplicationCard,
             columns: { xs: 1, sm: 2, md: 3, lg: 4, xl: 4 },
             emptyCard: appCategoryFilter === 'dedicated' ? renderCustomAppsCategoryEmpty() : undefined,
-            cardStackGroups: [
-              {
-                codes: [...MANUFACTURING_STACK_CODES],
-                renderStack: (items, renderCard) => (
-                  <ManufacturingAppStack apps={items} renderCard={renderCard} />
-                ),
-              },
-            ],
           }}
         />
       </ListPageTemplate>

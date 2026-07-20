@@ -1002,8 +1002,8 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
      */
     emptyCard?: ReactNode
     /**
-     * 叠放组：同一组内应用合并为一个网格位（如快制造三卡叠加）
-     * codes 顺序为从后到前，末项为前景
+     * 叠放组：同一组内卡片合并为一个网格位
+     * codes 顺序决定组内展示顺序
      */
     cardStackGroups?: Array<{
       codes: string[]

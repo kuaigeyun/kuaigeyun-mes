@@ -88,8 +88,6 @@ const APP_LOADERS: Record<string, () => Promise<unknown>> = {
   kuaiai: () => import('../apps/kuaiai/index'),
   kuaiiot: () => import('../apps/kuaiiot/index'),
   haoligo: () => import('../apps/haoligo/index'),
-  kuaierp: () => import('../apps/kuaizhizao/index'),
-  kuaimes: () => import('../apps/kuaizhizao/index'),
 };
 
 /**

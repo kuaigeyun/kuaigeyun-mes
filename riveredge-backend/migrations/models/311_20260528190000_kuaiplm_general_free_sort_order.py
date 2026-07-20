@@ -3,8 +3,6 @@
 
 排序（与 manifest 一致）：
   20  快制造    kuaizhizao
-  21  进销存    kuaierp
-  22  快车间    kuaimes
   25  快研发    kuaiplm
   30  快财务    kuaicaiwu
 """
