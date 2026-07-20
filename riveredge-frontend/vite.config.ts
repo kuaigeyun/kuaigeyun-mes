@@ -231,8 +231,9 @@ export default defineConfig({
       output: {
         // 手动代码分割策略（顺序重要：优先匹配最具体的路径）
         manualChunks: (id) => {
-          if (id.includes('node_modules')) {
-            // 巨型可视化/文档/PDF 栈：各自独立 chunk，避免被并入 vendor-other 拖累首屏
+          if (id.includes('node_modules') || id.includes('\0') || /\/_virtual\//.test(id.replace(/\\/g, '/'))) {
+            // 仅拆真正巨型/按需栈；React/antd/dayjs/emotion/CJS helper 等必须留在同一 vendor，
+            // 否则 Rollup 互拆出环 → createContext 读 undefined 白屏。
             if (id.includes('@univerjs')) return 'vendor-univerjs';
             if (id.includes('monaco-editor') || id.includes('@monaco-editor')) return 'vendor-monaco';
             if (id.includes('three') && !id.includes('react-three')) return 'vendor-three';
@@ -244,27 +245,9 @@ export default defineConfig({
             if (id.includes('jspdf') || id.includes('pdf-lib') || id.includes('pdfjs-dist')) return 'vendor-pdf';
             if (id.includes('@ant-design/pro-flow')) return 'vendor-pro-flow';
             if (id.includes('@svar-ui/react-gantt')) return 'vendor-gantt';
-            if (id.includes('@ant-design/pro-components')) return 'vendor-pro-components';
             if (id.includes('@ant-design/charts') || id.includes('@ant-design/plots')) return 'vendor-charts';
             if (id.includes('@ant-design/graphs')) return 'vendor-graphs';
-            // React 核心 + 动画库同包：framer-motion/lottie 在初始化时同步调用 React.createContext，
-            // 若拆成 vendor-animation 会与 vendor-react 形成环，生产环境白屏
-            // （禁止 includes('react') 误伤 lucide-react / @react-three）
-            {
-              const norm = id.replace(/\\/g, '/');
-              if (
-                /(?:^|\/)node_modules\/(?:react|react-dom|react-router|react-router-dom|scheduler)(?:\/|$)/.test(
-                  norm,
-                ) ||
-                norm.includes('framer-motion') ||
-                norm.includes('lottie-react') ||
-                norm.includes('/lottie-web/')
-              ) {
-                return 'vendor-react';
-              }
-            }
-            if (id.includes('antd') || id.includes('@ant-design')) return 'vendor-antd';
-            return 'vendor-other';
+            return 'vendor';
           }
           // 注意：不要再按 /apps/* 强制打成 app-* 巨石包。
           // 否则 Rollup 会把壳层共享运行时（含 vite preload helper / auth）吞进
