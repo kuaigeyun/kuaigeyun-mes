@@ -359,12 +359,27 @@ class DynamicDatabaseConfigService:
 
         logger.info(f"📋 发现的总应用模型模块: {len(active_app_models)} 个")
 
-        # 合并所有模型
-        all_models = validated_base_models + active_app_models
-        logger.info(f"📋 合并后总共 {len(all_models)} 个模型模块 (基础: {len(validated_base_models)}, 应用: {len(active_app_models)})")
+        # 可选应用（pro/custom）声明的 ORM 清单 — 补全 potential_modules 未枚举的模块
+        from core.services.application.plugin_bootstrap import discover_plugin_orm_modules
 
-        # 已在 validated_base_models 和 active_app_models 构建时验证，无需重复检查
-        final_models = all_models
+        plugin_orm = discover_plugin_orm_modules()
+        logger.info(f"📋 可选应用 ORM 声明: {len(plugin_orm)} 个模块")
+
+        # 合并所有模型（去重保序）
+        merged: List[str] = []
+        seen = set()
+        for path in validated_base_models + active_app_models + plugin_orm:
+            if path in seen:
+                continue
+            seen.add(path)
+            merged.append(path)
+        logger.info(
+            f"📋 合并后总共 {len(merged)} 个模型模块 "
+            f"(基础: {len(validated_base_models)}, 应用扫描: {len(active_app_models)}, "
+            f"插件声明: {len(plugin_orm)})"
+        )
+
+        final_models = merged
         logger.info(f"📝 最终加载 {len(final_models)} 个验证通过的模型模块")
         logger.info(f"📋 === 获取活跃应用模型列表结束，返回 {len(final_models)} 个模型 ===")
         return final_models

@@ -370,30 +370,6 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.state_transition",  # 状态流转规则模型
                 "apps.kuaizhizao.models.stocktaking",  # 库存盘点模型
                 "apps.kuaizhizao.models.tool",  # 工装器具模型
-                # 好力 GO（客户专用，表前缀 haoligo_，与快制造设备/模具逻辑隔离）
-                "apps.haoligo.models.equipment",
-                "apps.haoligo.models.equipment_operations",
-                "apps.haoligo.models.equipment_upkeep",
-                "apps.haoligo.models.equipment_upkeep_param",
-                "apps.haoligo.models.equipment_status_log",
-                "apps.haoligo.models.mold",
-                "apps.haoligo.models.mold_upkeep",
-                "apps.haoligo.models.mold_warehouse",
-                "apps.haoligo.models.mold_borrow_sheet",
-                "apps.haoligo.models.mold_borrow_dataset_binding",
-                "apps.haoligo.models.mold_return_sheet",
-                "apps.haoligo.models.mold_trial_sheet",
-                "apps.haoligo.models.mold_trial_dataset_binding",
-                "apps.haoligo.models.mold_ledger_dataset_binding",
-                "apps.haoligo.models.mold_maintenance_complete_sheet",
-                "apps.haoligo.models.mold_maintenance_sheet",
-                "apps.haoligo.models.mold_outsource_maintenance_complete_sheet",
-                "apps.haoligo.models.mold_outsource_maintenance_sheet",
-                "apps.haoligo.models.patrol",
-                "apps.haoligo.models.quality",
-                "apps.haoligo.models.quality_dataset_binding",
-                # KU-AI
-                "apps.kuaiai.models.knowledge",
             ],
             "default_connection": "default",
         },
@@ -402,6 +378,21 @@ TORTOISE_ORM = {
     "use_tz": settings.USE_TZ,
     "timezone": settings.TIMEZONE,
 }
+
+
+def _merge_plugin_orm_into_static_config() -> None:
+    """将已组装可选应用的 ORM 模块并入静态 TORTOISE_ORM（aerich / 冷启动共用）。"""
+    from core.services.application.plugin_bootstrap import discover_plugin_orm_modules
+
+    models = TORTOISE_ORM["apps"]["models"]["models"]
+    existing = set(models)
+    for module_path in discover_plugin_orm_modules():
+        if module_path not in existing:
+            models.append(module_path)
+            existing.add(module_path)
+
+
+_merge_plugin_orm_into_static_config()
 
 # 全局数据库连接参数
 DB_CONFIG = {

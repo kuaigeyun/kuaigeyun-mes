@@ -172,9 +172,17 @@ async def create_deepseek_chat_completion(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """代理 DeepSeek Chat Completions（核心路由，不依赖 KU-AI 应用挂载）。"""
-    from apps.kuaiai.services.deepseek_service import DeepSeekService
+    """代理 DeepSeek Chat Completions；实现位于 KU-AI，须已 compose 进本环境。"""
+    import importlib.util
+
     from loguru import logger
+
+    if importlib.util.find_spec("apps.kuaiai.services.deepseek_service") is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="KU-AI 未组装到本环境，无法使用 DeepSeek 对话。请执行 workspace compose。",
+        )
+    from apps.kuaiai.services.deepseek_service import DeepSeekService
 
     try:
         return await DeepSeekService.create_chat_completion(

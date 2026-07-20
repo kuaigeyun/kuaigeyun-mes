@@ -1,8 +1,0 @@
-"""模具仓库类型常量。"""
-
-from __future__ import annotations
-
-MOLD_WAREHOUSE_TYPE_INTERNAL = "内部"
-MOLD_WAREHOUSE_TYPE_EXTERNAL = "外部"
-
-MOLD_WAREHOUSE_TYPES = frozenset({MOLD_WAREHOUSE_TYPE_INTERNAL, MOLD_WAREHOUSE_TYPE_EXTERNAL})

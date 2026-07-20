@@ -189,25 +189,24 @@ async def lifespan(app: FastAPI):
     )
 
     from core.services.authorization.data_scope_bootstrap import ensure_data_scope_framework
-    from apps.haoligo.authorization.data_scope_setup import register_haoligo_data_scope_profiles
     from apps.kuaizhizao.authorization.data_scope_setup import (
         register_kuaizhizao_data_scope_profiles,
     )
     from apps.master_data.authorization.data_scope_setup import (
         register_master_data_data_scope_profiles,
     )
+    from core.services.application.plugin_bootstrap import register_plugin_bootstraps
 
     ensure_data_scope_framework()
-    register_haoligo_data_scope_profiles()
     register_kuaizhizao_data_scope_profiles()
     register_master_data_data_scope_profiles()
     from apps.master_data.reference_display.setup import register_master_data_reference_display_providers
-    from apps.haoligo.reference_display.setup import register_haoligo_reference_display_providers
     from apps.kuaizhizao.reference_display.setup import register_kuaizhizao_reference_display_providers
 
     register_master_data_reference_display_providers()
-    register_haoligo_reference_display_providers()
     register_kuaizhizao_reference_display_providers()
+    # 可选应用（haoligo 等）：仅当 compose 进 src/apps 时执行其 bootstrap
+    register_plugin_bootstraps()
     logger.info("✅ 引用资源 DisplayProvider 已注册")
     logger.info("✅ 数据权限框架（DataScopeService）已注册")
 

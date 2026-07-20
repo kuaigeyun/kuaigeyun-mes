@@ -1,0 +1,18 @@
+# 复制为仓库根目录 workspace.yaml 后执行:
+#   python tools/workspace/compose.py
+#
+# mode:
+#   link  — Windows junction / Unix symlink（开发推荐）
+#   copy  — 复制目录（CI / 无 symlink 权限时）
+
+mode: link
+
+plugins:
+  - repo: ../kuaigeyun-pro
+    apps:
+      - kuaiai
+      - kuaireport
+      - kuaiiot
+  - repo: ../riveredge-custom
+    apps:
+      - haoligo

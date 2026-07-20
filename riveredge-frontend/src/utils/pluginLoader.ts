@@ -74,21 +74,32 @@ function getPluginSourcePath(pluginCode: string): string {
 }
 
 /**
- * 插件 APP 静态导入映射（生产环境）
- *
- * 使用静态 import 确保 Vite 将插件打包为独立 chunk（app-xxx-[hash].js），
- * 生产环境通过此映射加载，无需额外构建步骤。
+ * 开源主仓应用：静态 import，保证 Vite 打出独立 chunk。
+ * 专业/定制应用：由 import.meta.glob 在构建时发现（需先 compose 进 src/apps）。
  */
-const APP_LOADERS: Record<string, () => Promise<unknown>> = {
+const OPEN_SOURCE_APP_LOADERS: Record<string, () => Promise<unknown>> = {
   kuaizhizao: () => import('../apps/kuaizhizao/index'),
   kuaicaiwu: () => import('../apps/kuaicaiwu/index'),
   kuaiplm: () => import('../apps/kuaiplm/index'),
-  kuaireport: () => import('../apps/kuaireport/index'),
   'master-data': () => import('../apps/master-data/index'),
-  kuaiai: () => import('../apps/kuaiai/index'),
-  kuaiiot: () => import('../apps/kuaiiot/index'),
-  haoligo: () => import('../apps/haoligo/index'),
 };
+
+const GLOB_APP_MODULES = import.meta.glob('../apps/*/index.{ts,tsx}');
+
+function buildAppLoaders(): Record<string, () => Promise<unknown>> {
+  const loaders: Record<string, () => Promise<unknown>> = { ...OPEN_SOURCE_APP_LOADERS };
+  for (const [path, loader] of Object.entries(GLOB_APP_MODULES)) {
+    const match = path.match(/\/apps\/([^/]+)\/index\.(tsx|ts)$/);
+    if (!match) continue;
+    const code = match[1];
+    if (!loaders[code]) {
+      loaders[code] = loader as () => Promise<unknown>;
+    }
+  }
+  return loaders;
+}
+
+const APP_LOADERS = buildAppLoaders();
 
 /**
  * 预取插件 chunk（菜单 hover 时调用，缩短首次进入应用页时间）

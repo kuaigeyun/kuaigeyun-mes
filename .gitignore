@@ -1,0 +1,127 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+*.egg-info/
+*.egg
+# /dist/
+build/
+*.manifest
+*.bak
+*.backup
+*~
+
+# ===== Node =====
+node_modules/
+# Expo CLI 本地状态（本仓库前端为 Vite Web，勿提交）
+riveredge-frontend/.expo/
+.npm
+.pnpm-store/
+*.tsbuildinfo
+
+# ===== 构建产物 =====
+# riveredge-frontend/dist/ 不忽略：支持本机构建后提交，云服务器拉取即用（弱机器上现构建过慢）。
+# 误生成在 src 下的构建输出勿提交：
+riveredge-frontend/src/dist/
+riveredge-frontend/src/dev-dist/
+riveredge-mobile/dist/
+# riveredge-frontend/static/ 允许提交，含 social 图标等静态资源，生产环境需拉取
+riveredge-frontend/.vite/
+*.log
+.logs/
+.playwright-browsers/
+.caddy-data/
+.caddy-config/
+
+# ===== 部署面板 =====
+# riveredge-panel/ 已下线，见 fast-deploy/
+
+# ===== 环境与密钥 =====
+.env
+.env.local
+.env.*.local
+*.pem
+
+# ===== 运行时/缓存 =====
+riveredge-backend/uploads/
+riveredge-backend/backups/
+*.sqlite
+*.db
+
+# ===== IDE / Agent 本地产物 =====
+.agent/
+.cursor/
+.trae/
+.vscode/
+# CI：工作流在团队仓库中不跟踪（本地可自建 .github/workflows）
+.github/workflows/
+nul
+*.swp
+*.swo
+.DS_Store
+
+# ===== 本地/部署（不推送） =====
+# 移动端独立维护，不随主仓推送（本地保留 riveredge-mobile/）
+riveredge-mobile/
+# 闭源客户端（移动 App / 工位机），独立仓库或本地维护，不纳入主仓
+riveredge-app-mobile/
+riveredge-app-station/
+
+# 工作区组装（本机路径，勿提交）
+workspace.yaml
+
+# 专业 / 定制应用：源码在私有仓，经 tools/workspace/compose.py 组装
+riveredge-backend/src/apps/kuaiai/
+riveredge-backend/src/apps/kuaireport/
+riveredge-backend/src/apps/kuaiiot/
+riveredge-backend/src/apps/haoligo/
+riveredge-frontend/src/apps/kuaiai/
+riveredge-frontend/src/apps/kuaireport/
+riveredge-frontend/src/apps/kuaiiot/
+riveredge-frontend/src/apps/haoligo/
+
+# 本地构建发布脚本（各人自选保留，不提交）
+build-web.sh
+Build.web.sh
+
+bin/
+deploy/
+scripts/
+# 前端业务页：infra 脚本管理（勿被根目录 scripts/ 规则误伤）
+!riveredge-frontend/scripts/
+# 前端业务页：infra 脚本管理（勿被根目录 scripts/ 规则误伤）
+!riveredge-frontend/src/pages/infra/scripts/
+!riveredge-frontend/src/pages/infra/scripts/**
+
+# 部署面板脚本（勿被根目录 scripts/ 规则误伤）
+riveredge-panel/
+
+# ===== 后端脚本（不推送） =====
+riveredge-backend/scripts/
+
+# ===== 覆盖率 =====
+.coverage
+htmlcov/
+.tox/
+
+# ===== 审计报告（本地保留，Git 忽略） =====
+docs/optimize/
+
+# ===== 定制化应用（不入库）：规划文档、客户资料、独立移动端工程等 =====
+riveredge-adapt/
+
+# ===== fast-deploy 本地生成物 =====
+fast-deploy/caddy/
+fast-deploy/.tools/
+fast-deploy/config/deploy.env
+fast-deploy/config/boot-service.env
+
+# ===== Playwright E2E 运行产物 =====
+riveredge-frontend/e2e/output/
+riveredge-frontend/e2e/.auth/
+riveredge-frontend/e2e/routes.json
