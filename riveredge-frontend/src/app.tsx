@@ -235,7 +235,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   useEffect(() => {
     if (!currentUser || !tenantId || isPublicPath) return;
     const prev = lastSiteSettingTenantRef.current;
-    const tenantChanged = prev !== tenantId;
+    // 仅真实切换租户时 force；首进页若 theme/i18n 已 hydrate，勿再强制打 /site-settings
+    const tenantChanged = prev != null && prev !== tenantId;
     lastSiteSettingTenantRef.current = tenantId;
     fetchConfigs(tenantChanged);
   }, [currentUser, tenantId, isPublicPath, fetchConfigs]);

@@ -225,7 +225,20 @@ export default defineConfig({
     // 生产环境配置
     sourcemap: process.env.NODE_ENV === 'production' ? false : true, // 生产环境关闭sourcemap，减小体积
     minify: process.env.NODE_ENV === 'production' ? 'esbuild' : false, // 生产环境使用esbuild压缩，速度更快
-    // 代码分割配置（按依赖类型分割，不按路由分割，避免菜单加载慢）
+    // 刷新关键路径：只预加载主 vendor。默认会把 SystemRoutes 下全部 lazy 依赖
+    // （pages-system / Univer / three / charts…）一并 modulepreload，F5 可达 ~40MB。
+    modulePreload: {
+      resolveDependencies: (_filename, deps) =>
+        deps.filter((dep) => {
+          const base = dep.split('/').pop() || '';
+          // 主包形如 vendor-<hash>.js；排除 vendor-univerjs / vendor-three 等按需栈
+          if (!/^vendor-[A-Za-z0-9_-]+\.js$/.test(base)) return false;
+          return !/^vendor-(univerjs|three|libredwg|monaco|occt|xlsx|echarts|charts|graphs|gantt|pro-flow|pdf|html2canvas)-/.test(
+            base,
+          );
+        }),
+    },
+    // 代码分割配置（按依赖类型分割；页面 chunk 交给 React.lazy 自然拆分）
     rollupOptions: {
       // 生产构建单入口 index.html；开发环境见下方 login-mpa-rewrite（/login → login.html 独立入口）
       output: {
@@ -253,12 +266,11 @@ export default defineConfig({
           // 否则 Rollup 会把壳层共享运行时（含 vite preload helper / auth）吞进
           // app-haoligo，入口静态依赖定制包 → 未 compose 专业/定制包时白屏。
           // 应用分包改由 pluginLoader 的 dynamic import() 自然拆分。
+          // 也不要合并 /pages/system|infra|personal：巨石 pages-* 会被入口 lazy 图拖进
+          // modulepreload，刷新时连带 Univer/uni-query 等一并下载。
           if (id.includes('/components/uni-import')) return 'component-uni-import';
           if (id.includes('/components/uni-query')) return 'component-uni-query';
           if (id.includes('/pages/login')) return 'page-login';
-          if (id.includes('/pages/system/')) return 'pages-system';
-          if (id.includes('/pages/infra/')) return 'pages-infra';
-          if (id.includes('/pages/personal/')) return 'pages-personal';
         },
         // 文件命名规则
         chunkFileNames: 'assets/js/[name]-[hash].js',

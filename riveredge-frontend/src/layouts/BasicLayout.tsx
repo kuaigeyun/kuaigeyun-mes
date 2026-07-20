@@ -36,7 +36,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { RightOutlined } from '@ant-design/icons';
 import { Icon as IconifyIcon, addCollection } from '@iconify/react/dist/offline';
-import fluentColorIcons from '@iconify-json/fluent-color/icons.json';
+import fluentColorSystemPanelIcons from '../assets/icons/fluent-color-system-panel.json';
 import {
   translateMenuName,
   translatePathTitle,
@@ -57,7 +57,8 @@ import { DEFAULT_SITE_LOGO_URL, SITE_LOGO_FALLBACK_SVG_URL, nextSiteLogoUrlAfter
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
 import { formatDateTime } from '../utils/format';
 
-addCollection(fluentColorIcons);
+/** 仅注册系统面板用到的 fluent-color 图标，避免整包 ~1.7MB 进 vendor */
+addCollection(fluentColorSystemPanelIcons as Parameters<typeof addCollection>[0]);
 
 // 安全的翻译 hook，避免多语言初始化失败导致应用崩溃
 const useSafeTranslation = () => {

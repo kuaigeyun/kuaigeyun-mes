@@ -64,8 +64,9 @@ import UniSearch from '../uni-search'
 import UniView from '../uni-view'
 import { UniBatchDeleteButton } from '../uni-batch'
 import { UniSyncButton } from '../uni-sync'
-import { UniImportToolbarButton } from '../uni-import'
-import { UniExportMenuButton } from '../uni-export'
+// 深路径导入工具栏按钮，避免经 uni-import/uni-export barrel 静态拉起 Univer
+import { UniImportToolbarButton } from '../uni-import/UniImportToolbarButton'
+import { UniExportMenuButton } from '../uni-export/UniExportMenuButton'
 
 // 懒加载：UniImport 内含 UniverJS（约 2MB+），仅在用户点击导入时加载
 const LazyUniImport = lazy(() => import('../uni-import'))
@@ -1502,13 +1503,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     resolvedTanstackQuery,
     skipFuzzyPinyinClientFilter,
   }
-
-  // 预加载 UniImport（UniverSheet ~2MB）：直接在挂载时触发 import，让浏览器与页面其它资源并行下载。
-  // 不再用 requestIdleCallback 做"空闲时"调度，那属于不确定时序的妥协。
-  useEffect(() => {
-    if (!gatedShowImportButton || !onImport) return
-    import('../uni-import').catch(() => {})
-  }, [gatedShowImportButton, onImport])
 
   // 站点日期格式（用于表格日期列展示，变更时触发列重新计算）
   const dateFormatKey = getConfig('date_format', 'YYYY-MM-DD')

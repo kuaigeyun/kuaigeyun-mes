@@ -167,6 +167,9 @@ interface UserPreferenceState {
   rehydrateFromStorage: () => void;
 }
 
+/** theme / i18n 并行 init 时共用同一次拉取，后来者 await 而非直接 return */
+let fetchPreferencesInFlight: Promise<void> | null = null;
+
 export const useUserPreferenceStore = create<UserPreferenceState>()(
   persist(
     (set, get) => ({
@@ -175,38 +178,47 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
       initialized: false,
 
       fetchPreferences: async (options?: { force?: boolean }) => {
-        const { initialized, loading } = get();
-        if (loading) return;
+        const { initialized } = get();
         if (!options?.force && initialized) return;
+        if (fetchPreferencesInFlight) {
+          await fetchPreferencesInFlight;
+          if (!options?.force && get().initialized) return;
+        }
 
         purgeLegacyTableColumnPreferences();
         // 首帧占位：仅首次拉取前恢复本地缓存；force 或已 initialized 时跳过，避免本地覆盖云端
-        if (!options?.force && !initialized) {
+        if (!options?.force && !get().initialized) {
           get().rehydrateFromStorage();
         }
         set({ loading: true });
-        try {
-          const data = await getUserPreference();
-          const backendPrefs = data.preferences || {};
-          // 仅使用后端数据，保证与当前账户/租户一致，不做跨账户的本地合并
-          const finalPrefs = typeof backendPrefs === 'object' && backendPrefs !== null ? backendPrefs : {};
-          set({
-            preferences: finalPrefs,
-            loading: false,
-            initialized: true,
-          });
-          syncTableColumnsToLocalStorage(finalPrefs);
-        } catch (error) {
-          console.warn('Failed to fetch user preferences:', error);
-          // 拉取失败且尚无服务端数据时，才回退到本地缓存
-          if (!initialized && Object.keys(get().preferences).length === 0) {
-            get().rehydrateFromStorage();
+        fetchPreferencesInFlight = (async () => {
+          try {
+            const data = await getUserPreference();
+            const backendPrefs = data.preferences || {};
+            // 仅使用后端数据，保证与当前账户/租户一致，不做跨账户的本地合并
+            const finalPrefs = typeof backendPrefs === 'object' && backendPrefs !== null ? backendPrefs : {};
+            set({
+              preferences: finalPrefs,
+              loading: false,
+              initialized: true,
+            });
+            syncTableColumnsToLocalStorage(finalPrefs);
+          } catch (error) {
+            console.warn('Failed to fetch user preferences:', error);
+            // 拉取失败且尚无服务端数据时，才回退到本地缓存
+            if (!get().initialized && Object.keys(get().preferences).length === 0) {
+              get().rehydrateFromStorage();
+            }
+            set({ loading: false, initialized: true });
+          } finally {
+            fetchPreferencesInFlight = null;
           }
-          set({ loading: false, initialized: true });
-        }
+        })();
+        await fetchPreferencesInFlight;
       },
 
       clearForLogout: () => {
+        fetchPreferencesInFlight = null;
         set({ preferences: {}, loading: false, initialized: false });
         // 偏好缓存按 key 多存一份，不删；riveredge_theme_config 由 themeStore.clearForLogout 清除
         // 注意：不清除 riveredge_saved_tabs，以便同一用户再次登录时能恢复标签

@@ -78,6 +78,9 @@ export interface UpdateBranchOrganizationData {
   status?: string;
 }
 
+/** 壳层启动时 theme / i18n / fetchConfigs 并发调用，合并为同一次请求 */
+let siteSettingInFlight: Promise<SiteSetting> | null = null;
+
 /**
  * 获取站点设置
  * 
@@ -86,7 +89,12 @@ export interface UpdateBranchOrganizationData {
  * @returns 站点设置信息
  */
 export async function getSiteSetting(): Promise<SiteSetting> {
-  return apiRequest<SiteSetting>('/core/site-settings');
+  if (!siteSettingInFlight) {
+    siteSettingInFlight = apiRequest<SiteSetting>('/core/site-settings').finally(() => {
+      siteSettingInFlight = null;
+    });
+  }
+  return siteSettingInFlight;
 }
 
 /**
