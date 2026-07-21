@@ -2,10 +2,9 @@
 """将私有仓应用组装进主仓 src/apps（backend + frontend）。
 
 用法（仓库根目录）:
-  python tools/workspace/compose.py
-  python tools/workspace/compose.py --config workspace.yaml
-  python tools/workspace/compose.py --status
-  python tools/workspace/compose.py --remove
+  python fast-deploy/tools/workspace/compose.py
+  python fast-deploy/tools/workspace/compose.py --status
+  python fast-deploy/tools/workspace/compose.py --remove
 
 依赖: PyYAML（已在后端环境常见；无则: pip install pyyaml）
 """
@@ -26,16 +25,19 @@ except ImportError as exc:  # pragma: no cover
     ) from exc
 
 
-ROOT = Path(__file__).resolve().parents[2]
+# fast-deploy/tools/workspace/compose.py → 仓库根
+ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_CONFIG = Path(__file__).resolve().parent / "workspace.yaml"
 BACKEND_APPS = ROOT / "riveredge-backend" / "src" / "apps"
 FRONTEND_APPS = ROOT / "riveredge-frontend" / "src" / "apps"
+CONFIG_HINT = "fast-deploy/tools/workspace/workspace.yaml"
+EXAMPLE_HINT = "fast-deploy/tools/workspace/workspace.example.yaml"
 
 
 def _load_config(path: Path) -> dict:
     if not path.is_file():
         raise SystemExit(
-            f"未找到 {path}。请复制 tools/workspace/workspace.example.yaml "
-            f"为仓库根目录 workspace.yaml 并按本机路径修改。"
+            f"未找到 {path}。请复制 {EXAMPLE_HINT} 为 {CONFIG_HINT} 并按本机路径修改。"
         )
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(data, dict):
@@ -169,8 +171,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="组装私有仓应用到主仓")
     parser.add_argument(
         "--config",
-        default=str(ROOT / "workspace.yaml"),
-        help="workspace.yaml 路径",
+        default=str(DEFAULT_CONFIG),
+        help=f"workspace.yaml 路径（默认 {CONFIG_HINT}）",
     )
     parser.add_argument("--status", action="store_true", help="仅查看状态")
     parser.add_argument("--remove", action="store_true", help="移除已组装应用")

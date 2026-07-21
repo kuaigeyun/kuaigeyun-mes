@@ -1,5 +1,8 @@
-# 复制为仓库根目录 workspace.yaml 后执行:
-#   python tools/workspace/compose.py
+# 复制为同目录 workspace.yaml 后执行:
+#   cp fast-deploy/tools/workspace/workspace.example.yaml fast-deploy/tools/workspace/workspace.yaml
+#   python fast-deploy/tools/workspace/compose.py
+#
+# plugins[].repo 路径相对主仓根目录（不是相对本文件）。
 #
 # mode:
 #   link  — Windows junction / Unix symlink（开发推荐）

@@ -35,6 +35,7 @@ cd riveredge
 | **统一入口（推荐）** | [`deploy.sh`](deploy.sh) |
 | **本地快速启动**（开发机一键起停） | [`launch.dev.sh`](launch.dev.sh) |
 | **构建并发布**（dist + 改动 commit/push） | [`build.web.sh`](build.web.sh) |
+| **专业/定制应用组装** | [`tools/workspace/compose.py`](tools/workspace/compose.py)（说明见 [`tools/workspace/README.md`](tools/workspace/README.md)） |
 | Linux | [`linux/dev.sh`](linux/dev.sh) / [`linux/prod.sh`](linux/prod.sh) |
 | Windows PowerShell | [`windows/dev.ps1`](windows/dev.ps1) / [`windows/prod.ps1`](windows/prod.ps1) |
 | Windows 组件安装 | [`windows/install-component.ps1`](windows/install-component.ps1) |

@@ -72,10 +72,13 @@ riveredge-mobile/
 riveredge-app-mobile/
 riveredge-app-station/
 
-# 工作区组装（本机路径，勿提交）
-workspace.yaml
+# 工作区组装（本机/部署生成，勿提交）
+fast-deploy/tools/workspace/workspace.yaml
+# 历史路径；若本地仍残留可忽略
+tools/workspace/workspace.yaml
+/workspace.yaml
 
-# 专业 / 定制应用：源码在私有仓，经 tools/workspace/compose.py 组装
+# 专业 / 定制应用：源码在私有仓，经 fast-deploy/tools/workspace/compose.py 组装
 riveredge-backend/src/apps/kuaiai/
 riveredge-backend/src/apps/kuaireport/
 riveredge-backend/src/apps/kuaiiot/
@@ -113,6 +116,7 @@ htmlcov/
 docs/optimize/
 
 # ===== 定制化应用（不入库）：规划文档、客户资料、独立移动端工程等 =====
+.custom/
 riveredge-adapt/
 
 # ===== fast-deploy 本地生成物 =====
