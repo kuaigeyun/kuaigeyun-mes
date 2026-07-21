@@ -150,7 +150,6 @@ wizard_print_kuaige_header() {
 
 wizard_show_official_repo_notice() {
     wizard_panel_line "${WIZARD_BOLD}${WIZARD_CYAN}OFFICIAL 正版仓库${WIZARD_RESET}  ${WIZARD_DIM}Gitee${WIZARD_RESET}  ${WIZARD_OFFICIAL_REPO_GITEE}  ${WIZARD_DIM}GitHub${WIZARD_RESET}  ${WIZARD_OFFICIAL_REPO_GITHUB}"
-    wizard_panel_line "${WIZARD_DIM}私有配套${WIZARD_RESET}  专业 ${WIZARD_PRO_REPO_GITEE}  ·  定制 ${WIZARD_CUSTOM_REPO_GITEE}  ·  终端 ${WIZARD_CLIENT_REPO_GITEE}"
     wizard_panel_line "${WIZARD_BOLD}${WIZARD_CYAN}NOTICE 渠道警示${WIZARD_RESET}  ${WIZARD_DIM}非上述官方仓库来源的分发、收费推广或所谓「官方授权版」，均与快格云制造无关联，请自行甄别。${WIZARD_RESET}"
     wizard_panel_mid
 }
@@ -471,17 +470,17 @@ wizard_show_pro_apps_menu() {
     wizard_panel_line "${WIZARD_DIM}  ${pro_url}${WIZARD_RESET}"
     wizard_panel_kv "定制包" "$([ "$custom_en" = "1" ] && echo 已启用 || echo 未启用) · $(wizard_ext_repo_git_label "$custom_path")"
     wizard_panel_line "${WIZARD_DIM}  ${custom_url}${WIZARD_RESET}"
-    wizard_panel_kv "终端仓" "$([ "$client_en" = "1" ] && echo 已启用 || echo 未启用) · $(wizard_ext_repo_git_label "$client_path")"
+    wizard_panel_kv "移动端 H5" "$([ "$client_en" = "1" ] && echo 已启用 || echo 未启用) · 源仓 $(wizard_ext_repo_git_label "$client_path") · $([ -f "$MOBILE_WEB_DIR/index.html" ] && echo 已部署 || echo 未部署)"
     wizard_panel_line "${WIZARD_DIM}  ${client_url}${WIZARD_RESET}"
     wizard_panel_blank
     wizard_panel_menu_item "1" "安装专业包" "kuaigeyun-pro → compose"
     wizard_panel_menu_item "2" "安装定制包" "kuaigeyun-custom → compose"
-    wizard_panel_menu_item "3" "安装终端仓" "kuaigeyun-client（mobile/station，不 compose）"
+    wizard_panel_menu_item "3" "安装 H5" "拉 kuaigeyun-client → 部署 /mobile web-dist"
     wizard_panel_menu_item "4" "安装专业+定制" "两仓同步并 compose"
     wizard_panel_menu_item "5" "查看状态" "compose --status"
     wizard_panel_menu_item "6" "配置专业仓" "URL / 路径 / Token"
     wizard_panel_menu_item "7" "配置定制仓" "URL / 路径 / Token"
-    wizard_panel_menu_item "8" "配置终端仓" "URL / 路径 / Token"
+    wizard_panel_menu_item "8" "配置 H5 仓" "URL / 路径 / Token"
     wizard_panel_line "${WIZARD_DIM}[0]${WIZARD_RESET} 返回主菜单"
     wizard_panel_bot
     echo ""
@@ -658,7 +657,7 @@ wizard_ask_pro_apps_choice() {
             3)
                 echo ""
                 cmd_install_client_repo || true
-                wizard_say "终端仓已同步到同级目录，不参与 workspace compose。"
+                wizard_say "移动端 H5 已同步并部署到 riveredge-app/mobile/web-dist（Caddy /mobile）。生产环境请再执行 start/update 以刷新网关。"
                 wizard_pause_return_menu
                 return 0
                 ;;
@@ -785,21 +784,21 @@ wizard_configure_client_repo() {
     [ -n "$cur_token" ] || cur_token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
 
     echo ""
-    wizard_say "配置终端仓 → fast-deploy/config/deploy.env（勿提交 Token）"
+    wizard_say "配置移动端 H5 源仓（kuaigeyun-client）→ fast-deploy/config/deploy.env（勿提交 Token）"
     read -rp "$(echo -e "${WIZARD_DIM}仓库 URL [${cur_url}]${WIZARD_RESET} › ")" input || true
     [ -n "${input:-}" ] && cur_url="$input"
     read -rp "$(echo -e "${WIZARD_DIM}本地路径 [${cur_path}]${WIZARD_RESET} › ")" input || true
     [ -n "${input:-}" ] && cur_path="$input"
     read -rp "$(echo -e "${WIZARD_DIM}分支 [${cur_branch}]${WIZARD_RESET} › ")" input || true
     [ -n "${input:-}" ] && cur_branch="$input"
-    wizard_prompt_git_token "$cur_token" "终端仓"
+    wizard_prompt_git_token "$cur_token" "H5 仓"
     cur_token="$REPLY"
 
     set_deploy_env_value CLIENT_REPO_URL "$cur_url"
     set_deploy_env_value CLIENT_REPO_PATH "$cur_path"
     set_deploy_env_value CLIENT_GIT_BRANCH "$cur_branch"
     set_deploy_env_value CLIENT_GIT_TOKEN "$cur_token"
-    wizard_say_ok "终端仓配置已保存（安装时再标记 CLIENT_ENABLED=1）"
+    wizard_say_ok "H5 仓配置已保存（安装时再标记 CLIENT_ENABLED=1）"
 }
 
 wizard_prompt_choice() {

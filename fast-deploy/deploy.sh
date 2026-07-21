@@ -8,7 +8,8 @@
 #   ./fast-deploy/deploy.sh configure    # 仅配置向导
 #   ./fast-deploy/deploy.sh pro-apps [pro|custom|all]  # 扩展应用（专业/定制 → compose）
 #   ./fast-deploy/deploy.sh install-custom             # 仅定制包 kuaigeyun-custom
-#   ./fast-deploy/deploy.sh install-client             # 终端仓 kuaigeyun-client
+#   ./fast-deploy/deploy.sh install-h5                 # 移动端 H5（拉 kuaigeyun-client → web-dist）
+#   ./fast-deploy/deploy.sh install-client             # 同上（兼容旧名）
 #   ./fast-deploy/deploy.sh stop|status|update|...
 #
 # 环境变量:
@@ -50,7 +51,7 @@ case "$SUBCMD" in
 esac
 export DEPLOY_MODE="${DEPLOY_MODE:-prod}"
 
-KNOWN_CMDS="wizard check install configure migrate build start stop status update install-service uninstall-service deploy pro-apps install-pro install-custom install-client ext-apps pro-apps-status ext-apps-status"
+KNOWN_CMDS="wizard check install configure migrate build start stop status update install-service uninstall-service deploy pro-apps install-pro install-custom install-client install-h5 ext-apps pro-apps-status ext-apps-status"
 is_known_cmd() {
     case " ${KNOWN_CMDS} " in
         *" $1 "*) return 0 ;;
@@ -60,7 +61,7 @@ is_known_cmd() {
 
 if [ -n "$SUBCMD" ] && ! is_known_cmd "$SUBCMD"; then
     echo "未知命令: $SUBCMD" >&2
-    echo "用法: $0 [dev|prod] [check|install|configure|migrate|build|start|stop|status|update|pro-apps|install-service|uninstall-service]" >&2
+    echo "用法: $0 [dev|prod] [check|install|configure|migrate|build|start|stop|status|update|pro-apps|install-h5|install-service|uninstall-service]" >&2
     exit 1
 fi
 

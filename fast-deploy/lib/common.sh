@@ -4048,6 +4048,46 @@ cmd_install_pro_apps() {
     cmd_install_extension_apps "${1:-all}"
 }
 
+# 从私仓 kuaigeyun-client 定位已入库的 Expo Web 产物目录
+_resolve_client_web_dist_dir() {
+    local client_root="$1" candidate
+    for candidate in \
+        "$client_root/riveredge-app-mobile/web-dist" \
+        "$client_root/mobile/web-dist" \
+        "$client_root/riveredge-app/mobile/web-dist"
+    do
+        if [ -f "$candidate/index.html" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# 将私仓 web-dist 安装到主仓 Caddy 路径 riveredge-app/mobile/web-dist
+install_mobile_h5_from_client_repo() {
+    local client_root="$1"
+    local src_dist dest_dist
+    src_dist="$(_resolve_client_web_dist_dir "$client_root")" || {
+        log_error "私仓中未找到 web-dist/index.html（期望 riveredge-app-mobile/web-dist）"
+        log_error "请先在有 Node 的环境执行 ./fast-deploy/build.mobile.web.sh 并推送到 kuaigeyun-client"
+        return 1
+    }
+    dest_dist="$MOBILE_WEB_DIR"
+    mkdir -p "$(dirname "$dest_dist")"
+    rm -rf "$dest_dist"
+    mkdir -p "$dest_dist"
+    if ! cp -a "$src_dist/." "$dest_dist/"; then
+        log_error "复制 H5 失败: $src_dist → $dest_dist"
+        return 1
+    fi
+    [ -f "$dest_dist/index.html" ] || {
+        log_error "安装后缺少 $dest_dist/index.html"
+        return 1
+    }
+    log_ok "移动端 H5 已安装 → $dest_dist（Caddy /mobile）"
+}
+
 cmd_install_client_repo() {
     load_deploy_env
     local url path branch token
@@ -4058,13 +4098,14 @@ cmd_install_client_repo() {
     token="$(read_deploy_env_value CLIENT_GIT_TOKEN || true)"
     [ -n "$token" ] || token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
 
-    _warn_missing_https_token "终端仓" "$url" "$token" "CLIENT_GIT_TOKEN"
+    _warn_missing_https_token "移动端 H5 仓" "$url" "$token" "CLIENT_GIT_TOKEN"
     set_deploy_env_value CLIENT_ENABLED "1"
     set_deploy_env_value CLIENT_REPO_URL "$url"
     set_deploy_env_value CLIENT_REPO_PATH "$path"
     set_deploy_env_value CLIENT_GIT_BRANCH "$branch"
     sync_sibling_git_repo "kuaigeyun-client" "$url" "$path" "$branch" "$token" || return 1
-    log_ok "终端仓已同步: ${path}（不参与 workspace compose）"
+    install_mobile_h5_from_client_repo "$path" || return 1
+    log_ok "移动端 H5 源仓已同步: ${path}"
 }
 
 maybe_sync_pro_apps_on_update() {
@@ -4081,9 +4122,9 @@ maybe_sync_pro_apps_on_update() {
         }
     fi
     if [ "$client_en" = "1" ]; then
-        log_info "CLIENT_ENABLED=1：同步终端仓…"
+        log_info "CLIENT_ENABLED=1：同步并安装移动端 H5…"
         cmd_install_client_repo || {
-            log_error "终端仓同步失败（可稍后菜单 [4]→安装终端仓 重试）"
+            log_error "移动端 H5 安装失败（可稍后扩展应用 → 安装 H5 重试）"
             return 1
         }
     fi
@@ -4152,7 +4193,7 @@ fd_dispatch() {
         install-custom)
             cmd_install_extension_apps custom
             ;;
-        install-client)
+        install-client|install-h5)
             cmd_install_client_repo
             ;;
         pro-apps-status|ext-apps-status)
