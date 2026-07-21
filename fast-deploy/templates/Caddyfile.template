@@ -125,9 +125,9 @@
     }
 
     # Expo Web（riveredge-app/mobile web-dist，baseUrl=/mobile）
-    handle /mobile {
-        redir /mobile/ permanent
-    }
+    # 注意：handle /mobile 是前缀匹配，会吃掉 /mobile/*；必须用 path 精确匹配再 308
+    @mobile_exact path /mobile
+    redir @mobile_exact /mobile/ 308
     handle_path /mobile/* {
         root * {{MOBILE_WEB_ROOT}}
         try_files {path} /index.html
