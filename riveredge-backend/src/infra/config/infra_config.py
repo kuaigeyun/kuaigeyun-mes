@@ -219,7 +219,7 @@ class InfraSettings(BaseSettings):
                 int(self.FRONTEND_PORT),
                 8081,  # Expo Web
                 8101,  # 前端备用端口
-                8300,  # riveredge-app-station Vite
+                8300,  # riveredge-app/station Vite
             }
         )
         hosts: List[str] = ["127.0.0.1", "localhost"]

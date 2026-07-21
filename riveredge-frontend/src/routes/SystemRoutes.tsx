@@ -34,7 +34,6 @@ const InitWizardPage = React.lazy(() => import('../pages/init/wizard'));
 const TemplateSelectPage = React.lazy(() => import('../pages/init/template-select'));
 const QRCodeScanPage = React.lazy(() => import('../pages/qrcode/scan'));
 const DocsPage = React.lazy(() => import('../pages/docs'));
-const MobileRoutes = React.lazy(() => import('./MobileRoutes'));
 
 /**
  * 延迟显示的 Fallback 组件
@@ -187,7 +186,6 @@ const SystemRoutes: React.FC = () => (
     <Route path="/init/template-select" element={<Suspense fallback={<PageSkeleton />}><TemplateSelectPage /></Suspense>} />
     <Route path="/qrcode/scan" element={<Suspense fallback={<PageSkeleton />}><QRCodeScanPage /></Suspense>} />
     <Route path="/docs" element={<Suspense fallback={<PageSkeleton />}><DocsPage /></Suspense>} />
-    <Route path="/m/*" element={<Suspense fallback={<PageSkeleton />}><MobileRoutes /></Suspense>} />
 
     <Route path="/system/dashboard" element={<Navigate to="/system/dashboard/workplace" replace />} />
     <Route

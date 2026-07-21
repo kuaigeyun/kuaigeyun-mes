@@ -10,6 +10,8 @@ if (-not (Test-Path (Join-Path $script:ProjectRoot 'riveredge-backend'))) {
 
 $script:BackendDir = Join-Path $script:ProjectRoot 'riveredge-backend'
 $script:FrontendDir = Join-Path $script:ProjectRoot 'riveredge-frontend'
+$script:MobileAppDir = Join-Path $script:ProjectRoot 'riveredge-app\mobile'
+$script:MobileWebDir = Join-Path $script:MobileAppDir 'web-dist'
 $script:EnvFile = Join-Path $script:BackendDir '.env'
 $script:ConfigDir = Join-Path $script:FastDeployDir 'config'
 $script:DeployEnvFile = Join-Path $script:ConfigDir 'deploy.env'
@@ -1106,6 +1108,10 @@ function New-Caddyfile {
 
     $backendAddr = "127.0.0.1:$($script:BACKEND_PORT)"
     $frontendRoot = (Join-Path $script:FrontendDir 'dist') -replace '\\','/'
+    $mobileWebRoot = $script:MobileWebDir -replace '\\','/'
+    if (-not (Test-Path (Join-Path $script:MobileWebDir 'index.html'))) {
+        throw "缺少 $($script:MobileWebDir)\index.html。请先: cd riveredge-app/mobile && npm run build:web"
+    }
 
     if ($script:CADDY_DOMAIN) {
         $addr = Get-CaddySiteAddrForDomain $script:CADDY_DOMAIN
@@ -1124,7 +1130,7 @@ function New-Caddyfile {
         (Join-Path $script:BackendDir 'uploads') -replace '\\','/'
     }
 
-    $content = (Get-Content $script:CaddyTemplate -Raw).Replace('{{ADDR}}', $addr).Replace('{{BACKEND_ADDR}}', $backendAddr).Replace('{{FRONTEND_ROOT}}', $frontendRoot).Replace('{{CLIENT_RELEASE_ROOT}}', $clientReleaseRoot).Replace('{{FILE_UPLOAD_ROOT}}', $fileUploadRoot)
+    $content = (Get-Content $script:CaddyTemplate -Raw).Replace('{{ADDR}}', $addr).Replace('{{BACKEND_ADDR}}', $backendAddr).Replace('{{FRONTEND_ROOT}}', $frontendRoot).Replace('{{MOBILE_WEB_ROOT}}', $mobileWebRoot).Replace('{{CLIENT_RELEASE_ROOT}}', $clientReleaseRoot).Replace('{{FILE_UPLOAD_ROOT}}', $fileUploadRoot)
 
     $tmp = "$script:Caddyfile.tmp"
     Set-Content -Path $tmp -Value $content -Encoding UTF8

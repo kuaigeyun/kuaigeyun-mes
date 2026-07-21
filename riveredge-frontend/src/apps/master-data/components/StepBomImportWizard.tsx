@@ -21,13 +21,12 @@ import {
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { getFilePreview } from '../../../services/file';
 import type { EngineeringDrawing } from '../services/drawing';
 import { drawingApi } from '../services/drawing';
 import { materialApi, materialGroupApi } from '../services/material';
 import type { Material } from '../types/material';
 import { isStepFile } from '../../../utils/filePreviewKind';
-import { parseStepAssemblyFromUrl } from '../../../utils/stepFileLoader';
+import { parseStepAssemblyFromUuid } from '../../../utils/stepFileLoader';
 import {
   sanitizeStepMaterialCode,
   stepAssemblyToTreeData,
@@ -188,16 +187,13 @@ export const StepBomImportWizard: React.FC<StepBomImportWizardProps> = ({
         const fileUuid = drawing?.file?.uuid ?? drawing?.fileUuid;
         if (!fileUuid) throw new Error(t('app.master-data.drawings.stepBomWizard.noFile'));
 
-        const preview = await getFilePreview(fileUuid);
-        if (!preview?.preview_url) throw new Error(t('app.master-data.drawings.previewFailed'));
-
         const source = {
           fileName: drawing?.file?.originalName,
           fileExtension: drawing?.file?.fileExtension,
         };
         if (!isStepFile(source)) throw new Error(t('app.master-data.drawings.stepBomWizard.notStepFile'));
 
-        const parsed = await parseStepAssemblyFromUrl(preview.preview_url);
+        const parsed = await parseStepAssemblyFromUuid(fileUuid);
         if (cancelled) return;
         if (!parsed.bomEdges.length) {
           throw new Error(t('app.master-data.drawings.stepBomWizard.noAssemblyStructure'));

@@ -55,7 +55,7 @@ const useShouldRenderLayout = (): boolean => {
 
   // 不需要 BasicLayout 的路径列表
   const publicRoutes = ['/', '/login', '/infra/login', '/lock-screen', '/docs'];
-  const publicRoutePrefixes = ['/init/', '/m/'];
+  const publicRoutePrefixes = ['/init/'];
   // 报表/大屏分享页（全屏展示，无需布局）
   const sharedViewPaths = ['/apps/kuaireport/dashboards/shared', '/apps/kuaireport/reports/shared'];
 

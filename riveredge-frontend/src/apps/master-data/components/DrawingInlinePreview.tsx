@@ -5,6 +5,7 @@
 import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Empty, Image, Spin, theme } from 'antd';
+import { CadPreviewLoading } from '../../../components/cad-preview/CadPreviewLoading';
 import { getFileByUuid, getFilePreview } from '../../../services/file';
 import { getFileExt, isCad2dFile, isImageFile, isPdfFile, isStepFile, type FilePreviewSource } from '../../../utils/filePreviewKind';
 import { preloadStepOcctModule } from '../../../utils/stepFileLoader';
@@ -40,14 +41,7 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
   const [error, setError] = useState('');
   const [metaLoading, setMetaLoading] = useState(false);
 
-  const renderLoadingState = (text: string) => (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-        <Spin size="large" />
-        <div style={{ whiteSpace: 'nowrap', writingMode: 'horizontal-tb', textAlign: 'center' }}>{text}</div>
-      </div>
-    </div>
-  );
+  const renderLoadingState = (text: string) => <CadPreviewLoading text={text} minHeight="100%" />;
 
   const initialSource = useMemo<FilePreviewSource>(
     () => ({ fileName, fileExtension, fileType }),

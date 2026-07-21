@@ -101,7 +101,6 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       'docs',
       'debug',
       'qrcode',
-      'm',
     ]);
     if (!reserved.has(segments[0])) return segments[0].toLowerCase();
     if (segments[0] === 'login' && segments[1] && !reserved.has(segments[1])) return segments[1].toLowerCase();
@@ -110,7 +109,6 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const tenantDomainFromPath = resolveTenantDomainFromPathname(pathname);
   const isPublicPath = pathname === '/' ||
     pathname.startsWith('/login') ||
-    pathname.startsWith('/m/') ||
     pathname === '/infra/login' ||
     pathname.startsWith('/lock-screen') ||
     pathname.startsWith('/init/') ||

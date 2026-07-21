@@ -1,6 +1,9 @@
 #!/bin/bash
 # RiverEdge SaaS 多组织框架 - 一键启动脚本 (重构稳定版)
-# 用法: ./fast-deploy/launch.dev.sh [stop|status|be|fe]
+# 用法:
+#   ./fast-deploy/launch.dev.sh              # 后端 + Worker + PC 前端
+#   ./fast-deploy/launch.dev.sh with-h5      # 同上，并启动手机 Expo Web（别名: withh5 / with5）
+#   ./fast-deploy/launch.dev.sh stop|status|be|fe|me
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -9,8 +12,11 @@ cd "$PROJECT_ROOT" || exit 1
 # 环境参数
 BACKEND_PORT=8200
 FRONTEND_PORT=8100
+MOBILE_PORT=8081
+MOBILE_APP_DIR="$PROJECT_ROOT/riveredge-app/mobile"
 BACKEND_START_TIMEOUT=90
 PORT_KILL_MAX_ROUNDS=6
+WITH_H5=0
 
 log_info() { echo -e "\033[0;34m[$(date +'%H:%M:%S')] INFO: $1\033[0m"; }
 log_warn() { echo -e "\033[1;33m[$(date +'%H:%M:%S')] WARN: $1\033[0m"; }
@@ -375,6 +381,64 @@ start_frontend() {
     log_success "前端已挂起!"
 }
 
+start_mobile() {
+    if [ ! -f "${MOBILE_APP_DIR}/package.json" ]; then
+        log_error "缺少手机端工程: ${MOBILE_APP_DIR}"
+        log_error "请将闭源 mobile 组装到 riveredge-app/mobile 后再用 with-h5"
+        return 1
+    fi
+    log_info "正在拉起手机 Expo Web (${MOBILE_PORT})..."
+    kill_port "${MOBILE_PORT}" || true
+    if [ -f ".logs/mobile.pid" ]; then
+        local old_pid
+        old_pid="$(cat .logs/mobile.pid 2>/dev/null)"
+        [ -n "$old_pid" ] && graceful_kill_pid "$old_pid"
+        rm -f .logs/mobile.pid
+    fi
+    cd "${MOBILE_APP_DIR}"
+    if [ ! -d node_modules ]; then
+        log_info "手机端首次安装依赖..."
+        npm install || { cd "$PROJECT_ROOT"; return 1; }
+    fi
+    # 开发模式默认打本机后端；勿自动弹浏览器
+    export BROWSER=none
+    export EXPO_NO_TELEMETRY=1
+    nohup npx expo start --web --port "${MOBILE_PORT}" --non-interactive \
+        > "${PROJECT_ROOT}/.logs/mobile.log" 2>&1 &
+    echo $! > "${PROJECT_ROOT}/.logs/mobile.pid"
+    cd "$PROJECT_ROOT"
+
+    local retries=0
+    while [ "$retries" -lt 45 ]; do
+        if mobile_http_ready; then
+            log_success "手机 H5 已就绪! → http://127.0.0.1:${MOBILE_PORT}/mobile"
+            return 0
+        fi
+        if [ -f .logs/mobile.pid ]; then
+            local launcher
+            launcher="$(cat .logs/mobile.pid 2>/dev/null)"
+            if [ -n "$launcher" ] && ! pid_is_alive "$launcher"; then
+                log_error "手机端进程已退出，请查看 .logs/mobile.log"
+                return 1
+            fi
+        fi
+        sleep 1
+        retries=$((retries + 1))
+    done
+    log_warn "手机端尚未响应 HTTP（可能仍在打包），请稍后打开 /mobile 或查看 .logs/mobile.log"
+    return 0
+}
+
+stop_mobile() {
+    if [ -f ".logs/mobile.pid" ]; then
+        local pid
+        pid="$(cat .logs/mobile.pid 2>/dev/null)"
+        [ -n "$pid" ] && graceful_kill_pid "$pid"
+        rm -f .logs/mobile.pid
+    fi
+    kill_port "${MOBILE_PORT}" || true
+}
+
 stop_all() {
     log_info "停止所有服务..."
     for pidfile in .logs/worker.pid .logs/scheduler.pid; do
@@ -388,10 +452,16 @@ stop_all() {
     kill_taskiq_processes
     cleanup_backend_processes || log_warn "后端清理未完全成功，请检查 .logs/backend.log"
     kill_port "${FRONTEND_PORT}" || true
+    stop_mobile
 }
 
 frontend_http_ready() {
     curl -sf --max-time 2 "http://127.0.0.1:${FRONTEND_PORT}/" >/dev/null 2>&1
+}
+
+mobile_http_ready() {
+    curl -sf --max-time 2 "http://127.0.0.1:${MOBILE_PORT}/mobile" >/dev/null 2>&1 \
+        || curl -sf --max-time 2 "http://127.0.0.1:${MOBILE_PORT}/" >/dev/null 2>&1
 }
 
 pidfile_alive() {
@@ -403,11 +473,36 @@ pidfile_alive() {
     pid_is_alive "$pid"
 }
 
-case "$1" in
+# 解析 with-h5（可与子命令组合，如: with-h5 status 无效；仅全量启动时生效）
+CMD=""
+for arg in "$@"; do
+    case "$arg" in
+        with-h5|withh5|with5|--with-h5)
+            WITH_H5=1
+            ;;
+        stop|status|be|fe|me|h5)
+            CMD="$arg"
+            ;;
+        "")
+            ;;
+        *)
+            if [ -z "$CMD" ]; then
+                CMD="$arg"
+            else
+                log_error "未知参数: $arg"
+                echo "用法: ./fast-deploy/launch.dev.sh [with-h5] [stop|status|be|fe|me]"
+                exit 1
+            fi
+            ;;
+    esac
+done
+
+case "$CMD" in
     stop) stop_all ;;
     status)
         backend_http_ready && log_success "Backend [OK] ($(get_listening_pids "${BACKEND_PORT}" | tr '\n' ' '))" || log_warn "Backend [OFF]"
         frontend_http_ready && log_success "Frontend [OK]" || log_warn "Frontend [OFF]"
+        mobile_http_ready && log_success "Mobile H5 [OK] (http://127.0.0.1:${MOBILE_PORT}/mobile)" || log_warn "Mobile H5 [OFF]"
         if pidfile_alive ".logs/worker.pid" || taskiq_service_running broker; then
             log_success "Worker [OK]"
         else
@@ -421,17 +516,40 @@ case "$1" in
         ;;
     be) start_backend ;;
     fe) kill_port "${FRONTEND_PORT}"; start_frontend ;;
-    *)
+    me|h5)
+        mkdir -p .logs
+        start_mobile || exit 1
+        echo "  - Mobile H5: http://127.0.0.1:${MOBILE_PORT}/mobile"
+        echo "  - API 默认: http://127.0.0.1:${BACKEND_PORT}（需后端已启动）"
+        ;;
+    "")
         mkdir -p .logs
         stop_all
         if start_backend 1 && start_worker && start_frontend; then
+            if [ "$WITH_H5" = "1" ]; then
+                start_mobile || {
+                    log_error "PC 端已起，手机端失败，请查看 .logs/mobile.log"
+                    exit 1
+                }
+            fi
             log_success "🚀 RiverEdge 系统已恢复就绪!"
             echo "  - Web: http://127.0.0.1:${FRONTEND_PORT} / http://localhost:${FRONTEND_PORT}"
             echo "  - API: http://127.0.0.1:${BACKEND_PORT} / http://localhost:${BACKEND_PORT}"
+            if [ "$WITH_H5" = "1" ]; then
+                echo "  - Mobile H5: http://127.0.0.1:${MOBILE_PORT}/mobile"
+            fi
             echo "  - 局域网用本机 IP 替换主机名（前后端均监听 0.0.0.0）"
+            if [ "$WITH_H5" != "1" ]; then
+                echo "  - 提示: 加 with-h5 可同时启动手机端 → ./fast-deploy/launch.dev.sh with-h5"
+            fi
         else
             log_error "启动未完成，请查看 .logs/backend.log / .logs/frontend.log"
             exit 1
         fi
+        ;;
+    *)
+        log_error "未知命令: $CMD"
+        echo "用法: ./fast-deploy/launch.dev.sh [with-h5] [stop|status|be|fe|me]"
+        exit 1
         ;;
 esac

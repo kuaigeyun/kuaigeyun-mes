@@ -12,6 +12,7 @@ import { PreviewOverlayToolButton, UniPdfPreview, UniPreviewOverlay } from '../u
 import { getFileExt, isCad2dFile, isImageFile, isInlineDocumentPreview, isPdfFile, isStepFile, type FilePreviewSource } from '../../utils/filePreviewKind';
 import type { DwgSvgViewerRef } from '../dwg-preview/DwgSvgViewer';
 import type { StepModelViewerRef } from '../step-preview/StepModelViewer';
+import { CadPreviewLoading } from '../cad-preview/CadPreviewLoading';
 
 const StepPreviewPane = lazy(() =>
   import('../step-preview/StepPreviewPane').then((m) => ({ default: m.StepPreviewPane })),
@@ -268,11 +269,11 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       >
         <Suspense
           fallback={
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Spin tip={t('app.master-data.drawings.stepPreviewLoading')}>
-                <div style={{ minHeight: 24 }} />
-              </Spin>
-            </div>
+            <CadPreviewLoading
+              text={t('app.master-data.drawings.stepPreviewLoading')}
+              tone="light"
+              minHeight="100%"
+            />
           }
         >
           <StepPreviewPane
@@ -301,11 +302,11 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       >
         <Suspense
           fallback={
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Spin tip={t('app.master-data.drawings.dwgPreviewLoading')}>
-                <div style={{ minHeight: 24 }} />
-              </Spin>
-            </div>
+            <CadPreviewLoading
+              text={t('app.master-data.drawings.dwgPreviewLoading')}
+              tone="light"
+              minHeight="100%"
+            />
           }
         >
           <DwgPreviewPane
@@ -315,6 +316,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             fileExtension={fileSource.fileExtension}
             height="100%"
             viewerRef={dwgViewerRef}
+            darkChrome
           />
         </Suspense>
       </UniPreviewOverlay>

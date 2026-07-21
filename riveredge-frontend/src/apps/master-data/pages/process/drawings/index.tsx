@@ -33,6 +33,7 @@ import { DRAWER_CONFIG } from '../../../../../components/layout-templates/consta
 import { DrawingFormModal } from '../../../components/DrawingFormModal';
 import { StepBomImportWizard } from '../../../components/StepBomImportWizard';
 import FilePreviewModal from '../../../../../components/file-preview';
+import { CadPreviewLoading } from '../../../../../components/cad-preview/CadPreviewLoading';
 import { materialApi } from '../../../services/material';
 import { processRouteApi, unwrapProcessPagedList } from '../../../services/process';
 import {
@@ -179,18 +180,12 @@ const InlinePreviewPane = React.memo(function InlinePreviewPane({
               pointerEvents: 'none',
             }}
           >
-            <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')}>
-              <div style={{ minHeight: 24 }} />
-            </Spin>
+            <CadPreviewLoading text={t('app.master-data.drawings.stepPreviewLoading')} />
           </div>
         )}
         <Suspense
           fallback={
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')}>
-                <div style={{ minHeight: 24 }} />
-              </Spin>
-            </div>
+            <CadPreviewLoading text={t('app.master-data.drawings.stepPreviewLoading')} minHeight="100%" />
           }
         >
           <LazyDrawingInlinePreview

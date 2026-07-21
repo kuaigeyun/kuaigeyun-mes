@@ -14,7 +14,6 @@ import { App, Card, Spin, message } from 'antd';
 import { QRCodeScanner } from '../../components/qrcode';
 import { qrcodeApi, type QRCodeParseResponse } from '../../services/qrcode';
 import { buildDocumentQrcodeNavigateUrl } from '../../apps/kuaizhizao/utils/documentQrcodeRoutes';
-import { buildMobileEquipmentHubPath } from '../../mobile/kuaizhizao/equipment/paths';
 import { buildEquipmentDetailPath } from '../../apps/kuaizhizao/pages/equipment-management/equipment/equipmentPaths';
 
 /**
@@ -71,12 +70,7 @@ const QRCodeScanPage: React.FC = () => {
         case 'EQ': {
           const equipmentUuid = data.equipment_uuid;
           if (equipmentUuid) {
-            const mobileContext = window.location.pathname.startsWith('/m/kuaizhizao/equipment');
-            navigate(
-              mobileContext
-                ? buildMobileEquipmentHubPath(String(equipmentUuid))
-                : buildEquipmentDetailPath(String(equipmentUuid)),
-            );
+            navigate(buildEquipmentDetailPath(String(equipmentUuid)));
             messageApi.success(t('pages.qrcode.scan.navigatingToEquipment'));
           } else {
             messageApi.error(t('pages.qrcode.scan.equipmentDataIncomplete'));

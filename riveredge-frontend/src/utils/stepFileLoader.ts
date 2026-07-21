@@ -3,6 +3,7 @@
  */
 
 import * as THREE from 'three';
+import { fetchCoreFileBytes } from './fetchCoreFileBytes';
 import {
   parseStepAssemblyFromOcctRoot,
   type OcctAssemblyNodeRaw,
@@ -126,9 +127,9 @@ export async function loadOcctModule(): Promise<OcctModule> {
   return occtPromise;
 }
 
-function buildParseCacheKey(fileUrl: string, options?: StepParseOptions): string {
+function buildParseCacheKey(sourceKey: string, options?: StepParseOptions): string {
   const tessellation = options?.tessellation === undefined ? 'preview-default' : JSON.stringify(options.tessellation);
-  return `${fileUrl}|asm:${options?.includeAssembly !== false}|t:${tessellation}`;
+  return `${sourceKey}|asm:${options?.includeAssembly !== false}|t:${tessellation}`;
 }
 
 function rememberParseCache(key: string, promise: Promise<StepParseResult>): Promise<StepParseResult> {
@@ -163,17 +164,38 @@ async function parseStepBuffer(
 export async function parseStepFileFromUrl(
   fileUrl: string,
   options?: StepParseOptions,
+  fileUuid?: string,
 ): Promise<StepParseResult> {
-  const cacheKey = buildParseCacheKey(fileUrl, options);
+  const cacheKey = buildParseCacheKey(`url:${fileUrl}|uuid:${fileUuid || ''}`, options);
   const cached = parseCache.get(cacheKey);
   if (cached) return cached;
 
   const promise = (async () => {
-    const response = await fetch(fileUrl);
-    if (!response.ok) {
-      throw new Error(`STEP load failed: ${response.status}`);
-    }
-    const buffer = new Uint8Array(await response.arrayBuffer());
+    const buffer = await fetchCoreFileBytes({
+      fileUrl,
+      fileUuid,
+      errorLabel: 'STEP load failed',
+    });
+    return parseStepBuffer(buffer, options);
+  })();
+
+  return rememberParseCache(cacheKey, promise);
+}
+
+/** 优先鉴权直下，避免错误 BASE_URL 下的 preview_url 404 */
+export async function parseStepFileFromUuid(
+  fileUuid: string,
+  options?: StepParseOptions,
+): Promise<StepParseResult> {
+  const cacheKey = buildParseCacheKey(`uuid:${fileUuid}`, options);
+  const cached = parseCache.get(cacheKey);
+  if (cached) return cached;
+
+  const promise = (async () => {
+    const buffer = await fetchCoreFileBytes({
+      fileUuid,
+      errorLabel: 'STEP load failed',
+    });
     return parseStepBuffer(buffer, options);
   })();
 
@@ -183,8 +205,28 @@ export async function parseStepFileFromUrl(
 export async function parseStepAssemblyFromUrl(
   fileUrl: string,
   options?: Omit<StepParseOptions, 'includeAssembly'>,
+  fileUuid?: string,
 ): Promise<StepAssemblyParseResult> {
-  const parsed = await parseStepFileFromUrl(fileUrl, {
+  const parsed = await parseStepFileFromUrl(
+    fileUrl,
+    {
+      ...options,
+      tessellation: options?.tessellation ?? STEP_ASSEMBLY_TESSELLATION,
+      includeAssembly: true,
+    },
+    fileUuid,
+  );
+  if (!parsed.assembly) {
+    throw new Error('STEP assembly tree parse failed');
+  }
+  return parsed.assembly;
+}
+
+export async function parseStepAssemblyFromUuid(
+  fileUuid: string,
+  options?: Omit<StepParseOptions, 'includeAssembly'>,
+): Promise<StepAssemblyParseResult> {
+  const parsed = await parseStepFileFromUuid(fileUuid, {
     ...options,
     tessellation: options?.tessellation ?? STEP_ASSEMBLY_TESSELLATION,
     includeAssembly: true,

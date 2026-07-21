@@ -1,6 +1,6 @@
 /**
  * 工业触屏终端设计 Token（精炼深色工业风）
- * 与 riveredge-app-station/src/hmi/tokens/design.ts 保持同值，避免漂移
+ * 与 riveredge-app/station/src/hmi/tokens/design.ts 保持同值，避免漂移
  */
 export const HMI_DESIGN_TOKENS = {
   STATUS_OK: '#00C853',

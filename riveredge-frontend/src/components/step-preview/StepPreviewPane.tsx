@@ -4,9 +4,15 @@
 
 import React, { startTransition, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Spin } from 'antd';
-import { getFilePreview } from '../../services/file';
-import { parseStepFileFromUrl, preloadStepOcctModule, STEP_PREVIEW_TESSELLATION, type OcctMesh } from '../../utils/stepFileLoader';
+import { Alert } from 'antd';
+import { CadPreviewLoading } from '../cad-preview/CadPreviewLoading';
+import {
+  parseStepFileFromUuid,
+  parseStepFileFromUrl,
+  preloadStepOcctModule,
+  STEP_PREVIEW_TESSELLATION,
+  type OcctMesh,
+} from '../../utils/stepFileLoader';
 import { yieldToMain } from '../../utils/yieldToMain';
 import { StepModelViewer, type StepModelViewerRef } from './StepModelViewer';
 
@@ -56,18 +62,14 @@ export const StepPreviewPane: React.FC<StepPreviewPaneProps> = ({
       setMeshes(null);
       await yieldToMain();
       try {
-        let url = fileUrl;
-        if (!url && fileUuid) {
-          const preview = await getFilePreview(fileUuid);
-          if (!preview?.preview_url) {
-            throw new Error(t('app.master-data.drawings.previewUnsupported'));
-          }
-          url = preview.preview_url;
-        }
-        const result = await parseStepFileFromUrl(url!, {
-          includeAssembly: false,
+        const parseOptions = {
+          includeAssembly: false as const,
           tessellation: STEP_PREVIEW_TESSELLATION,
-        });
+        };
+        // UUID 鉴权直下优先，避免 preview_url 绝对地址指错主机导致 404
+        const result = fileUuid
+          ? await parseStepFileFromUuid(fileUuid, parseOptions)
+          : await parseStepFileFromUrl(fileUrl!, parseOptions);
         if (!cancelled) {
           startTransition(() => {
             if (!cancelled) setMeshes(result.meshes);
@@ -91,22 +93,12 @@ export const StepPreviewPane: React.FC<StepPreviewPaneProps> = ({
 
   if (loading) {
     return (
-      <div
-        style={{
-          height,
-          minHeight: 200,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'var(--ant-color-fill-quaternary, #f5f5f5)',
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-          <Spin size="large" />
-          <div style={{ whiteSpace: 'nowrap', writingMode: 'horizontal-tb', textAlign: 'center' }}>
-            {t('app.master-data.drawings.stepPreviewLoading')}
-          </div>
-        </div>
+      <div style={{ height, minHeight: 200, display: 'flex', flexDirection: 'column' }}>
+        <CadPreviewLoading
+          text={t('app.master-data.drawings.stepPreviewLoading')}
+          tone={showControls ? 'light' : 'default'}
+          minHeight={height}
+        />
       </div>
     );
   }

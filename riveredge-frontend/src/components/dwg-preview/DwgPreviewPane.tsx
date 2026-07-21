@@ -4,10 +4,10 @@
 
 import React, { startTransition, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Spin } from 'antd';
-import { getFilePreview } from '../../services/file';
+import { Alert } from 'antd';
+import { CadPreviewLoading } from '../cad-preview/CadPreviewLoading';
 import { getFileExt, isDwgFile, isDxfFile, type FilePreviewSource } from '../../utils/filePreviewKind';
-import { parseCad2dFromUrl } from '../../utils/cad2dFileLoader';
+import { parseCad2dFromUuid, parseCad2dFromUrl } from '../../utils/cad2dFileLoader';
 import { yieldToMain } from '../../utils/yieldToMain';
 import { DwgSvgViewer, type DwgSvgViewerRef } from './DwgSvgViewer';
 
@@ -18,6 +18,8 @@ export interface DwgPreviewPaneProps {
   fileExtension?: string;
   height?: number | string;
   viewerRef?: React.Ref<DwgSvgViewerRef>;
+  /** 全屏深色预览时加载文案用浅色 */
+  darkChrome?: boolean;
 }
 
 export const DwgPreviewPane: React.FC<DwgPreviewPaneProps> = ({
@@ -27,6 +29,7 @@ export const DwgPreviewPane: React.FC<DwgPreviewPaneProps> = ({
   fileExtension,
   height = '100%',
   viewerRef,
+  darkChrome = false,
 }) => {
   const { t } = useTranslation();
   const [svg, setSvg] = useState('');
@@ -60,15 +63,9 @@ export const DwgPreviewPane: React.FC<DwgPreviewPaneProps> = ({
       setImageDataUrl('');
       await yieldToMain();
       try {
-        let url = fileUrl;
-        if (!url && fileUuid) {
-          const preview = await getFilePreview(fileUuid);
-          if (!preview?.preview_url) {
-            throw new Error(t('app.master-data.drawings.previewUnsupported'));
-          }
-          url = preview.preview_url;
-        }
-        const result = await parseCad2dFromUrl(url!, cadExt);
+        const result = fileUuid
+          ? await parseCad2dFromUuid(fileUuid, cadExt)
+          : await parseCad2dFromUrl(fileUrl!, cadExt);
         if (cancelled) return;
         startTransition(() => {
           if (cancelled) return;
@@ -101,13 +98,12 @@ export const DwgPreviewPane: React.FC<DwgPreviewPaneProps> = ({
 
   if (loading) {
     return (
-      <div style={{ ...paneStyle, minHeight: 280, alignItems: 'center', justifyContent: 'center', background: 'var(--ant-color-fill-quaternary, #f5f5f5)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-          <Spin size="large" />
-          <div style={{ whiteSpace: 'nowrap', writingMode: 'horizontal-tb', textAlign: 'center' }}>
-            {t('app.master-data.drawings.dwgPreviewLoading')}
-          </div>
-        </div>
+      <div style={paneStyle}>
+        <CadPreviewLoading
+          text={t('app.master-data.drawings.dwgPreviewLoading')}
+          tone={darkChrome ? 'light' : 'default'}
+          minHeight={280}
+        />
       </div>
     );
   }

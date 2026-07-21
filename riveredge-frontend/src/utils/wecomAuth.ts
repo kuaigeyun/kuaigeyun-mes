@@ -13,16 +13,6 @@ export function isWeComBrowser(): boolean {
   return false;
 }
 
-export function shouldAutoWecomOAuth(pathname: string): boolean {
-  // /m/ 为企微 H5 专用入口；不依赖 UA（PC 企微内置浏览器可能不含 wxwork）
-  return pathname.startsWith('/m/');
-}
-
-/** 企微 H5 OAuth 回调地址（不含 query，tenant 写入 state） */
-export function buildWecomMobileOAuthRedirectUri(pathname: string): string {
-  return `${window.location.origin}${pathname}`;
-}
-
 export function saveWecomOAuthState(state: string): void {
   sessionStorage.setItem(WECOM_OAUTH_STATE_KEY, state);
 }

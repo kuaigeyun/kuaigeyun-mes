@@ -9,6 +9,8 @@ FAST_DEPLOY_CONFIG_DIR="$FAST_DEPLOY_DIR/config"
 INSTALL_SCRIPTS_JSON="$FAST_DEPLOY_CONFIG_DIR/install-scripts.json"
 BACKEND_DIR="$PROJECT_ROOT/riveredge-backend"
 FRONTEND_DIR="$PROJECT_ROOT/riveredge-frontend"
+MOBILE_APP_DIR="$PROJECT_ROOT/riveredge-app/mobile"
+MOBILE_WEB_DIR="$MOBILE_APP_DIR/web-dist"
 ENV_FILE="$BACKEND_DIR/.env"
 DEPLOY_ENV_FILE="$FAST_DEPLOY_CONFIG_DIR/deploy.env"
 DEPLOY_ENV_EXAMPLE="$FAST_DEPLOY_CONFIG_DIR/deploy.env.example"
@@ -2314,10 +2316,17 @@ gen_caddyfile() {
     mkdir -p "$CADDY_DIR"
     [ -f "$CADDY_TEMPLATE" ] || { log_error "缺少模板 $CADDY_TEMPLATE"; exit 1; }
 
-    local addr backend_addr frontend_root
+    local addr backend_addr frontend_root mobile_web_root
     backend_addr="127.0.0.1:${BACKEND_PORT}"
     frontend_root="$(caddy_native_path "$FRONTEND_DIR/dist")"
     [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/index.html，请先 build"; exit 1; }
+    mobile_web_root="$(caddy_native_path "$MOBILE_WEB_DIR")"
+    if [ ! -f "$MOBILE_WEB_DIR/index.html" ]; then
+        log_error "缺少 $MOBILE_WEB_DIR/index.html"
+        log_error "请在本地执行: cd riveredge-app/mobile && npm run build:web"
+        log_error "或: ./fast-deploy/build.mobile.web.sh"
+        exit 1
+    fi
 
     if [ -n "$CADDY_DOMAIN" ]; then
         addr="$(caddy_site_addr_for_domain "$CADDY_DOMAIN")"
@@ -2333,6 +2342,7 @@ gen_caddyfile() {
     sed -e "s|{{ADDR}}|${addr}|g" \
         -e "s|{{BACKEND_ADDR}}|${backend_addr}|g" \
         -e "s|{{FRONTEND_ROOT}}|${frontend_root}|g" \
+        -e "s|{{MOBILE_WEB_ROOT}}|${mobile_web_root}|g" \
         -e "s|{{CLIENT_RELEASE_ROOT}}|${client_release_root}|g" \
         -e "s|{{FILE_UPLOAD_ROOT}}|${file_upload_root}|g" \
         "$CADDY_TEMPLATE" > "$CADDYFILE.tmp"

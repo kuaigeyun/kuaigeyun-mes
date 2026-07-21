@@ -1421,53 +1421,7 @@ export default function LoginPage() {
       return;
     }
 
-    // 从企微 H5 重定向到登录页时，自动发起 OAuth（不依赖 UA，兼容 PC 企微内置浏览器）
-    if (!getToken() && !code && !provider) {
-      const redirect = urlParams.get('redirect')?.trim();
-      if (redirect?.startsWith('/m/')) {
-        let tenantId: number | null = null;
-        try {
-          const redirectUrl = new URL(redirect, window.location.origin);
-          const tid = redirectUrl.searchParams.get('tenant_id');
-          if (tid) {
-            const parsed = Number(tid);
-            if (Number.isFinite(parsed) && parsed > 0) {
-              tenantId = parsed;
-            }
-          }
-        } catch {
-          tenantId = null;
-        }
-        if (!tenantId) {
-          const stored = getTenantId();
-          if (stored && stored > 0) {
-            tenantId = stored;
-          }
-        }
-        if (tenantId) {
-          sessionStorage.setItem('wecom_mobile_tenant_id', String(tenantId));
-          void (async () => {
-            try {
-              message.loading(t('pages.login.loading'), 0);
-              const postRedirect = redirect;
-              const redirectUri = `${window.location.origin}/login?provider=wecom_work`;
-              const { authorize_url, state: oauthState } = await getWecomAuthorizeUrl({
-                redirect_uri: redirectUri,
-                tenant_id: tenantId,
-                redirect: postRedirect,
-              });
-              saveWecomOAuthState(oauthState);
-              message.destroy();
-              window.location.href = authorize_url;
-            } catch (error: unknown) {
-              message.destroy();
-              const errMsg = error instanceof Error ? error.message : t('pages.login.wecomRedirectFailed');
-              message.error(errMsg);
-            }
-          })();
-        }
-      }
-    }
+    // 企微移动 H5 已迁至 Expo /mobile，由该应用自举 OAuth；PC 登录页不再处理 /m 或 /mobile 跳转
   }, []);
 
   /**

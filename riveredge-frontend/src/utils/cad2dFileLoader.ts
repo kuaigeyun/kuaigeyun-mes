@@ -4,6 +4,7 @@
 
 import { createModule, Dwg_File_Type, LibreDwg } from '@mlightcad/libredwg-web';
 import DxfParser from 'dxf-parser';
+import { fetchCoreFileBytes } from './fetchCoreFileBytes';
 import { yieldToMain } from './yieldToMain';
 
 export type Cad2dParseResult = {
@@ -313,12 +314,34 @@ export async function parseCad2dFromBuffer(buffer: ArrayBuffer, ext: 'dwg' | 'dx
   return { svg, format: 'dxf' };
 }
 
-export async function parseCad2dFromUrl(fileUrl: string, ext: 'dwg' | 'dxf'): Promise<Cad2dParseResult> {
-  const response = await fetch(fileUrl);
-  if (!response.ok) {
-    throw new Error(`CAD load failed: ${response.status}`);
-  }
-  const buffer = await response.arrayBuffer();
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
+export async function parseCad2dFromUrl(
+  fileUrl: string,
+  ext: 'dwg' | 'dxf',
+  fileUuid?: string,
+): Promise<Cad2dParseResult> {
+  const bytes = await fetchCoreFileBytes({
+    fileUrl,
+    fileUuid,
+    errorLabel: 'CAD load failed',
+  });
   await yieldToMain();
-  return parseCad2dFromBuffer(buffer, ext);
+  return parseCad2dFromBuffer(toArrayBuffer(bytes), ext);
+}
+
+export async function parseCad2dFromUuid(
+  fileUuid: string,
+  ext: 'dwg' | 'dxf',
+): Promise<Cad2dParseResult> {
+  const bytes = await fetchCoreFileBytes({
+    fileUuid,
+    errorLabel: 'CAD load failed',
+  });
+  await yieldToMain();
+  return parseCad2dFromBuffer(toArrayBuffer(bytes), ext);
 }

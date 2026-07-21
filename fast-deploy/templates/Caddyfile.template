@@ -1,5 +1,5 @@
 # RiverEdge Caddy 配置模板（由 fast-deploy 脚本渲染）
-# 占位符：{{ADDR}} {{BACKEND_ADDR}} {{FRONTEND_ROOT}} {{CLIENT_RELEASE_ROOT}} {{FILE_UPLOAD_ROOT}}
+# 占位符：{{ADDR}} {{BACKEND_ADDR}} {{FRONTEND_ROOT}} {{MOBILE_WEB_ROOT}} {{CLIENT_RELEASE_ROOT}} {{FILE_UPLOAD_ROOT}}
 # 实际生成文件：fast-deploy/caddy/Caddyfile
 
 # 禁用 admin API 避免与系统 Caddy 端口 2019 冲突
@@ -88,10 +88,53 @@
             }
         }
     }
-    handle /mobile* {
-        header Content-Type "text/plain; charset=utf-8"
-        respond "RiverEdge 移动端请使用官方安卓应用。API 与 Web 管理端共用域名下的 /api。" 200
+
+    # 旧企微 H5 /m/* → Expo Web /mobile/*（永久重定向，保留 query）
+    @m_equip_scan path /m/kuaizhizao/equipment/scan
+    redir @m_equip_scan /mobile/equipment/scan?{query} permanent
+
+    @m_equip_spot_checks path /m/kuaizhizao/equipment/spot-checks
+    redir @m_equip_spot_checks /mobile/equipment/spot-checks?{query} permanent
+
+    @m_equip_faults path /m/kuaizhizao/equipment/faults
+    redir @m_equip_faults /mobile/equipment/faults?{query} permanent
+
+    @m_equip_maint_reminders path /m/kuaizhizao/equipment/maintenance-reminders
+    redir @m_equip_maint_reminders /mobile/equipment/maintenance-reminders?{query} permanent
+
+    @m_equip_spot_check_legacy path /m/kuaizhizao/equipment/spot-check
+    redir @m_equip_spot_check_legacy /mobile/equipment/spot-check-conduct?{query} permanent
+
+    @m_equip_uuid_spot path_regexp m_uuid_spot ^/m/kuaizhizao/equipment/([0-9a-fA-F-]{36})/spot-check/?$
+    redir @m_equip_uuid_spot /mobile/equipment/spot-check-conduct?uuid={re.m_uuid_spot.1}&{query} permanent
+
+    @m_equip_uuid_fault path_regexp m_uuid_fault ^/m/kuaizhizao/equipment/([0-9a-fA-F-]{36})/fault/?$
+    redir @m_equip_uuid_fault /mobile/equipment/faults?uuid={re.m_uuid_fault.1}&{query} permanent
+
+    @m_equip_uuid_status path_regexp m_uuid_status ^/m/kuaizhizao/equipment/([0-9a-fA-F-]{36})/status/?$
+    redir @m_equip_uuid_status /mobile/equipment/detail?uuid={re.m_uuid_status.1}&{query} permanent
+
+    @m_equip_uuid path_regexp m_uuid ^/m/kuaizhizao/equipment/([0-9a-fA-F-]{36})/?$
+    redir @m_equip_uuid /mobile/equipment/detail?uuid={re.m_uuid.1}&{query} permanent
+
+    @m_equip_root path /m/kuaizhizao/equipment /m/kuaizhizao/equipment/
+    redir @m_equip_root /mobile/equipment/scan?{query} permanent
+
+    handle /m/* {
+        redir * /mobile?{query} permanent
     }
+
+    # Expo Web（riveredge-app/mobile web-dist，baseUrl=/mobile）
+    handle /mobile {
+        redir /mobile/ permanent
+    }
+    handle_path /mobile/* {
+        root * {{MOBILE_WEB_ROOT}}
+        try_files {path} /index.html
+        file_server
+        header Cache-Control "no-cache"
+    }
+
     handle {
         root * {{FRONTEND_ROOT}}
         try_files {path} /index.html

@@ -309,20 +309,28 @@ export default defineConfig({
   },
   plugins: [
     fixUniverSafariLookbehindPlugin(),
-    // occt-import-js 为 Emscripten CJS：仅在尚未有 ESM default 时补导出（commonjs 插件已包过则跳过）
+    // occt-import-js：Emscripten UMD/CJS。禁止交给 commonjs 插件（会产出裸标识符 occtimportjs; 导致生产 ReferenceError）。
+    // 在 pre 阶段整文件包成 ESM：提供 module/exports，再 export default。
     {
       name: 'occt-import-js-esm-bridge',
-      enforce: 'post',
-      transform(code, id) {
+      enforce: 'pre',
+      load(id) {
         const normalizedId = id.replace(/\\/g, '/');
-        if (!normalizedId.includes('occt-import-js/dist/occt-import-js.js')) {
-          return null;
-        }
-        if (/export\s+default\b/.test(code)) {
-          return null;
-        }
+        const marker = '/occt-import-js/dist/occt-import-js.js';
+        const hit = normalizedId.indexOf(marker);
+        if (hit === -1) return null;
+        const after = normalizedId.slice(hit + marker.length);
+        if (after && !after.startsWith('?')) return null;
+
+        const filePath = id.split('?')[0];
+        const code = fs.readFileSync(filePath, 'utf-8');
         return {
-          code: `${code}\nexport default occtimportjs;\nexport { occtimportjs };\n`,
+          code: [
+            'const module = { exports: {} };',
+            'const exports = module.exports;',
+            code,
+            'export default module.exports;',
+          ].join('\n'),
           map: null,
         };
       },
