@@ -2310,6 +2310,33 @@ cmd_ensure_frontend_dist() {
     exit 1
 }
 
+# 确保 Caddy /mobile 所需 web-dist 存在：已有则跳过；私仓已有产物则复制；已启用则拉仓安装。
+ensure_mobile_web_dist() {
+    if [ -f "$MOBILE_WEB_DIR/index.html" ]; then
+        return 0
+    fi
+    load_deploy_env
+    local path client_en
+    path="$(read_deploy_env_value CLIENT_REPO_PATH || true)"
+    [ -n "$path" ] || path="$(_client_default_repo_path)"
+    if _resolve_client_web_dist_dir "$path" >/dev/null 2>&1; then
+        log_info "检测到私仓 H5 产物，正在安装到 ${MOBILE_WEB_DIR}…"
+        install_mobile_h5_from_client_repo "$path" || return 1
+        return 0
+    fi
+    client_en="$(read_deploy_env_value CLIENT_ENABLED || echo 0)"
+    if [ "$client_en" = "1" ]; then
+        log_info "CLIENT_ENABLED=1 且缺少 web-dist，执行安装 H5…"
+        cmd_install_client_repo || return 1
+        return 0
+    fi
+    log_error "缺少 $MOBILE_WEB_DIR/index.html（Caddy /mobile 需要移动端 H5）"
+    log_error "请先执行: ./fast-deploy/deploy.sh install-h5"
+    log_error "（向导：扩展应用 → [3] 安装 H5；需能访问私仓 kuaigeyun-client）"
+    log_error "开发机构建产物: ./fast-deploy/build.mobile.web.sh 后推送到私仓"
+    return 1
+}
+
 gen_caddyfile() {
     load_deploy_env
     sync_prod_app_urls
@@ -2320,13 +2347,8 @@ gen_caddyfile() {
     backend_addr="127.0.0.1:${BACKEND_PORT}"
     frontend_root="$(caddy_native_path "$FRONTEND_DIR/dist")"
     [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/index.html，请先 build"; exit 1; }
+    ensure_mobile_web_dist || exit 1
     mobile_web_root="$(caddy_native_path "$MOBILE_WEB_DIR")"
-    if [ ! -f "$MOBILE_WEB_DIR/index.html" ]; then
-        log_error "缺少 $MOBILE_WEB_DIR/index.html"
-        log_error "请在本地执行: cd riveredge-app/mobile && npm run build:web"
-        log_error "或: ./fast-deploy/build.mobile.web.sh"
-        exit 1
-    fi
 
     if [ -n "$CADDY_DOMAIN" ]; then
         addr="$(caddy_site_addr_for_domain "$CADDY_DOMAIN")"

@@ -1110,7 +1110,7 @@ function New-Caddyfile {
     $frontendRoot = (Join-Path $script:FrontendDir 'dist') -replace '\\','/'
     $mobileWebRoot = $script:MobileWebDir -replace '\\','/'
     if (-not (Test-Path (Join-Path $script:MobileWebDir 'index.html'))) {
-        throw "缺少 $($script:MobileWebDir)\index.html。请先: cd riveredge-app/mobile && npm run build:web"
+        throw "缺少 $($script:MobileWebDir)\index.html（Caddy /mobile）。请先: ./fast-deploy/deploy.sh install-h5"
     }
 
     if ($script:CADDY_DOMAIN) {
