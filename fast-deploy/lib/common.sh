@@ -4153,7 +4153,10 @@ maybe_sync_pro_apps_on_update() {
 }
 
 run_update_dev() {
-    sync_git_from_origin || return 1
+    # SKIP_GIT_SYNC=1：调用方已 sync（如向导拉取后 reload 脚本）
+    if [ "${SKIP_GIT_SYNC:-0}" != "1" ]; then
+        sync_git_from_origin || return 1
+    fi
     maybe_sync_pro_apps_on_update || true
     cmd_stop_dev || return 1
     cmd_migrate || return 1
@@ -4162,7 +4165,9 @@ run_update_dev() {
 }
 
 run_update_prod() {
-    sync_git_from_origin || return 1
+    if [ "${SKIP_GIT_SYNC:-0}" != "1" ]; then
+        sync_git_from_origin || return 1
+    fi
     maybe_sync_pro_apps_on_update || true
     cmd_stop_prod || return 1
     cmd_migrate || return 1

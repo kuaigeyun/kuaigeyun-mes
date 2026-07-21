@@ -359,7 +359,7 @@ wizard_show_home_panel() {
     wizard_panel_section "DEPLOY 部署"
     wizard_panel_menu_item "1" "全新安装" "检测环境与依赖，完成配置后启动"
     wizard_panel_menu_item "2" "修改配置" "修改数据库、超管账号与访问地址"
-    wizard_panel_menu_item "3" "更新系统" "fetch+reset 对齐远程，迁移并重启"
+    wizard_panel_menu_item "3" "更新系统" "与 deploy.sh update 相同（含扩展应用 / H5）"
     wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包（私有仓，需凭证）"
     wizard_panel_section "OPS 运维"
     wizard_panel_menu_short "${WIZARD_CYAN}[5]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[6]${WIZARD_RESET} 服务  ${WIZARD_CYAN}[7]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
@@ -823,7 +823,7 @@ wizard_ask_intent_hint() {
             wizard_say "将逐项展示当前配置，回车保持原值（密码可回车跳过）"
             ;;
         update)
-            wizard_say "将 fetch + reset --hard 对齐 origin/${GIT_BRANCH:-develop}，停止服务、迁移并重启"
+            wizard_say "将执行与 ./fast-deploy/deploy.sh update 相同的流程（fetch+reset、扩展应用/H5、迁移并重启）"
             ;;
         *)
             wizard_say "阶段 2 填写数据库、超管账号、访问 IP/域名 后，其余步骤将自动执行"
@@ -1472,26 +1472,24 @@ wizard_update_app() {
     : >"$log"
 
     wizard_say "更新分支: ${GIT_REMOTE:-origin}/${branch}"
-    wizard_say "流程: 同步代码 → 停止服务 → 迁移 → 启动（全自动，无需手动 git pull）"
+    wizard_say "流程与 ./fast-deploy/deploy.sh update 一致（拉代码后会重新加载脚本，避免用内存旧逻辑）"
     wizard_say "详细日志: ${log}"
     echo ""
 
     wizard_run_deploy_step pull "同步远程代码（fetch + reset --hard）" "$log" sync_git_from_origin || return 1
-    if [ "$(read_deploy_env_value PRO_ENABLED || echo 0)" = "1" ]; then
-        wizard_run_deploy_step pro_apps "同步扩展应用并 compose" "$log" cmd_install_extension_apps || true
-    fi
 
+    # reset 后磁盘脚本已变；必须重新 source，否则仍执行本次启动时装入的旧函数
+    # shellcheck source=/dev/null
+    source "$PROJECT_ROOT/fast-deploy/lib/common.sh"
+    load_deploy_env
+
+    # 与 deploy.sh update 共用 run_update_*（SKIP_GIT_SYNC：上面已 pull）
     if [ "$DEPLOY_MODE" = "prod" ]; then
-        wizard_run_deploy_step stop "停止生产服务" "$log" cmd_stop_prod || return 1
-        wizard_run_deploy_step migrate "执行数据库迁移" "$log" cmd_migrate || return 1
-        wizard_run_deploy_step ensure_dist "检查 Web dist（有则跳过构建）" "$log" cmd_ensure_frontend_dist || return 1
-        wizard_run_deploy_step release_meta "记录发版信息" "$log" record_deploy_release_metadata || return 1
-        wizard_run_deploy_step start "启动生产服务" "$log" cmd_start_prod || return 1
+        SKIP_GIT_SYNC=1 wizard_run_deploy_step update \
+            "扩展应用/H5 → 迁移 → 启动（同 deploy.sh update）" "$log" run_update_prod || return 1
     else
-        wizard_run_deploy_step stop "停止开发服务" "$log" cmd_stop_dev || return 1
-        wizard_run_deploy_step migrate "执行数据库迁移" "$log" cmd_migrate || return 1
-        wizard_run_deploy_step release_meta "记录发版信息" "$log" record_deploy_release_metadata || return 1
-        wizard_run_deploy_step start "启动开发环境" "$log" cmd_start_dev || return 1
+        SKIP_GIT_SYNC=1 wizard_run_deploy_step update \
+            "扩展应用/H5 → 迁移 → 启动（同 deploy.sh update）" "$log" run_update_dev || return 1
     fi
 }
 
