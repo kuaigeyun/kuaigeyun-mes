@@ -7,6 +7,7 @@ Author: Luigi Lu
 Date: 2025-01-01
 """
 
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
@@ -1319,6 +1320,332 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 max_idx = max(max_idx, int(match.group(2)))
         return max_idx + 1
 
+    async def _work_order_summaries_for_scan(
+        self,
+        tenant_id: int,
+        work_order_ids: Iterable[int],
+        *,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """扫码定位用的工单摘要（优先进行中 / 已下达）。"""
+        ids = [int(i) for i in work_order_ids if i is not None]
+        if not ids:
+            return []
+        rows = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            id__in=ids,
+            deleted_at__isnull=True,
+            parent_work_order_id__isnull=True,
+        ).exclude(status__in=["completed", "cancelled"]).order_by("-updated_at").limit(limit).all()
+        # 进行中 / 已下达优先
+        priority = {"in_progress": 0, "released": 1, "confirmed": 2, "paused": 3}
+        rows = sorted(
+            rows,
+            key=lambda w: (priority.get(str(w.status or ""), 9), -(w.updated_at.timestamp() if w.updated_at else 0)),
+        )
+        return [
+            {
+                "id": wo.id,
+                "code": wo.code,
+                "name": wo.name,
+                "product_name": wo.product_name,
+                "product_code": wo.product_code,
+                "status": wo.status,
+                "planned_quantity": float(wo.quantity or 0),
+                "completed_quantity": float(wo.completed_quantity or 0),
+            }
+            for wo in rows[:limit]
+        ]
+
+    async def resolve_work_orders_by_scan(
+        self,
+        tenant_id: int,
+        raw: str,
+        *,
+        limit: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        扫码报工定位：支持工单码 / 设备码 / 人员码 / 工位码。
+
+        - 标准 JSON：type=WO|EQ|EMP|STATION|WS
+        - 工位历史码可能误打成 type=EQ（设备字段塞工位 uuid/code），EQ 未命中设备时回退工位
+        - 纯文本：精确匹配工单编码 → 设备编码 → 工位编码 → 用户名
+        """
+        from apps.kuaizhizao.models.equipment import Equipment
+        from apps.master_data.models.factory import Workstation
+        from infra.models.user import User as UserModel
+
+        text = (raw or "").strip()
+        if not text:
+            return {
+                "match_type": "none",
+                "matched": None,
+                "work_orders": [],
+                "message": "扫码内容为空",
+            }
+
+        qr_type: Optional[str] = None
+        data: Dict[str, Any] = {}
+        try:
+            parsed = json.loads(text) if text.startswith("{") else None
+            if isinstance(parsed, dict) and parsed.get("type"):
+                qr_type = str(parsed.get("type") or "").strip().upper()
+                data = parsed.get("data") if isinstance(parsed.get("data"), dict) else {}
+        except Exception:
+            parsed = None
+
+        async def by_worker(user_id: int, matched: Dict[str, Any]) -> Dict[str, Any]:
+            wo_ids = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                assigned_worker_id=user_id,
+                deleted_at__isnull=True,
+            ).values_list("work_order_id", flat=True)
+            orders = await self._work_order_summaries_for_scan(tenant_id, wo_ids, limit=limit)
+            return {
+                "match_type": "employee",
+                "matched": matched,
+                "work_orders": orders,
+                "message": None if orders else "该人员暂无派工工单",
+            }
+
+        async def by_equipment(eq_id: int, matched: Dict[str, Any]) -> Dict[str, Any]:
+            wo_ids = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                assigned_equipment_id=eq_id,
+                deleted_at__isnull=True,
+            ).values_list("work_order_id", flat=True)
+            orders = await self._work_order_summaries_for_scan(tenant_id, wo_ids, limit=limit)
+            return {
+                "match_type": "equipment",
+                "matched": matched,
+                "work_orders": orders,
+                "message": None if orders else "该设备暂无派工工单",
+            }
+
+        async def by_station(st_id: int, matched: Dict[str, Any]) -> Dict[str, Any]:
+            wo_ids = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                assigned_station_id=st_id,
+                deleted_at__isnull=True,
+            ).values_list("work_order_id", flat=True)
+            orders = await self._work_order_summaries_for_scan(tenant_id, wo_ids, limit=limit)
+            return {
+                "match_type": "station",
+                "matched": matched,
+                "work_orders": orders,
+                "message": None if orders else "该工位暂无派工工单",
+            }
+
+        # —— 结构化二维码 ——
+        if qr_type == "WO":
+            code = str(data.get("work_order_code") or data.get("code") or "").strip()
+            uuid_val = str(data.get("work_order_uuid") or data.get("uuid") or "").strip()
+            wo = None
+            if uuid_val:
+                wo = await WorkOrder.get_or_none(
+                    tenant_id=tenant_id, uuid=uuid_val, deleted_at__isnull=True
+                )
+            if not wo and code:
+                wo = await WorkOrder.get_or_none(
+                    tenant_id=tenant_id, code=code, deleted_at__isnull=True
+                )
+            if not wo:
+                return {
+                    "match_type": "none",
+                    "matched": None,
+                    "work_orders": [],
+                    "message": "未找到该工单",
+                }
+            orders = await self._work_order_summaries_for_scan(tenant_id, [wo.id], limit=limit)
+            if not orders:
+                # 已完成等仍返回该工单本身，便于查看
+                orders = [{
+                    "id": wo.id,
+                    "code": wo.code,
+                    "name": wo.name,
+                    "product_name": wo.product_name,
+                    "product_code": wo.product_code,
+                    "status": wo.status,
+                    "planned_quantity": float(wo.quantity or 0),
+                    "completed_quantity": float(wo.completed_quantity or 0),
+                }]
+            return {
+                "match_type": "work_order",
+                "matched": {"id": wo.id, "code": wo.code, "name": wo.name},
+                "work_orders": orders,
+                "message": None,
+            }
+
+        if qr_type == "EMP":
+            emp_uuid = str(data.get("employee_uuid") or data.get("uuid") or "").strip()
+            emp_code = str(data.get("employee_code") or data.get("code") or "").strip()
+            user = None
+            if emp_uuid:
+                user = await UserModel.get_or_none(
+                    tenant_id=tenant_id, uuid=emp_uuid, deleted_at__isnull=True
+                )
+            if not user and emp_code:
+                user = await UserModel.get_or_none(
+                    tenant_id=tenant_id, username=emp_code, deleted_at__isnull=True
+                )
+            if not user:
+                return {
+                    "match_type": "none",
+                    "matched": None,
+                    "work_orders": [],
+                    "message": "未找到该人员",
+                }
+            return await by_worker(
+                user.id,
+                {
+                    "id": user.id,
+                    "code": user.username,
+                    "name": user.full_name or user.username,
+                },
+            )
+
+        if qr_type in ("STATION", "WS"):
+            st_uuid = str(
+                data.get("station_uuid")
+                or data.get("workstation_uuid")
+                or data.get("uuid")
+                or data.get("equipment_uuid")
+                or ""
+            ).strip()
+            st_code = str(
+                data.get("station_code")
+                or data.get("workstation_code")
+                or data.get("code")
+                or data.get("equipment_code")
+                or ""
+            ).strip()
+            station = None
+            if st_uuid:
+                station = await Workstation.get_or_none(
+                    tenant_id=tenant_id, uuid=st_uuid, deleted_at__isnull=True
+                )
+            if not station and st_code:
+                station = await Workstation.get_or_none(
+                    tenant_id=tenant_id, code=st_code, deleted_at__isnull=True
+                )
+            if not station:
+                return {
+                    "match_type": "none",
+                    "matched": None,
+                    "work_orders": [],
+                    "message": "未找到该工位",
+                }
+            return await by_station(
+                station.id,
+                {"id": station.id, "code": station.code, "name": station.name},
+            )
+
+        if qr_type == "EQ":
+            eq_uuid = str(data.get("equipment_uuid") or data.get("uuid") or "").strip()
+            eq_code = str(data.get("equipment_code") or data.get("code") or "").strip()
+            equipment = None
+            if eq_uuid:
+                equipment = await Equipment.get_or_none(
+                    tenant_id=tenant_id, uuid=eq_uuid, deleted_at__isnull=True
+                )
+            if not equipment and eq_code:
+                equipment = await Equipment.get_or_none(
+                    tenant_id=tenant_id, code=eq_code, deleted_at__isnull=True
+                )
+            if equipment:
+                return await by_equipment(
+                    equipment.id,
+                    {
+                        "id": equipment.id,
+                        "code": equipment.code,
+                        "name": equipment.name,
+                    },
+                )
+            # 兼容：工位详情曾用 type=EQ 生成工位码
+            station = None
+            if eq_uuid:
+                station = await Workstation.get_or_none(
+                    tenant_id=tenant_id, uuid=eq_uuid, deleted_at__isnull=True
+                )
+            if not station and eq_code:
+                station = await Workstation.get_or_none(
+                    tenant_id=tenant_id, code=eq_code, deleted_at__isnull=True
+                )
+            if station:
+                return await by_station(
+                    station.id,
+                    {"id": station.id, "code": station.code, "name": station.name},
+                )
+            return {
+                "match_type": "none",
+                "matched": None,
+                "work_orders": [],
+                "message": "未找到该设备或工位",
+            }
+
+        # —— 纯文本精确匹配 ——
+        code = text
+        wo = await WorkOrder.get_or_none(
+            tenant_id=tenant_id, code=code, deleted_at__isnull=True
+        )
+        if wo:
+            orders = await self._work_order_summaries_for_scan(tenant_id, [wo.id], limit=limit)
+            if not orders:
+                orders = [{
+                    "id": wo.id,
+                    "code": wo.code,
+                    "name": wo.name,
+                    "product_name": wo.product_name,
+                    "product_code": wo.product_code,
+                    "status": wo.status,
+                    "planned_quantity": float(wo.quantity or 0),
+                    "completed_quantity": float(wo.completed_quantity or 0),
+                }]
+            return {
+                "match_type": "work_order",
+                "matched": {"id": wo.id, "code": wo.code, "name": wo.name},
+                "work_orders": orders,
+                "message": None,
+            }
+
+        equipment = await Equipment.get_or_none(
+            tenant_id=tenant_id, code=code, deleted_at__isnull=True
+        )
+        if equipment:
+            return await by_equipment(
+                equipment.id,
+                {"id": equipment.id, "code": equipment.code, "name": equipment.name},
+            )
+
+        station = await Workstation.get_or_none(
+            tenant_id=tenant_id, code=code, deleted_at__isnull=True
+        )
+        if station:
+            return await by_station(
+                station.id,
+                {"id": station.id, "code": station.code, "name": station.name},
+            )
+
+        user = await UserModel.get_or_none(
+            tenant_id=tenant_id, username=code, deleted_at__isnull=True
+        )
+        if user:
+            return await by_worker(
+                user.id,
+                {
+                    "id": user.id,
+                    "code": user.username,
+                    "name": user.full_name or user.username,
+                },
+            )
+
+        return {
+            "match_type": "none",
+            "matched": None,
+            "work_orders": [],
+            "message": "未匹配到工单、设备、工位或人员",
+        }
+
     async def list_work_orders(
         self,
         tenant_id: int,
@@ -1557,6 +1884,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                                 "work_center_name": op.work_center_name,
                                 "planned_start_date": op.planned_start_date,
                                 "planned_end_date": op.planned_end_date,
+                                "assigned_worker_id": op.assigned_worker_id,
+                                "assigned_worker_name": op.assigned_worker_name,
+                                "assigned_team_id": op.assigned_team_id,
+                                "assigned_team_name": op.assigned_team_name,
                                 "assigned_station_id": op.assigned_station_id,
                                 "assigned_station_name": op.assigned_station_name,
                                 "assigned_equipment_id": op.assigned_equipment_id,

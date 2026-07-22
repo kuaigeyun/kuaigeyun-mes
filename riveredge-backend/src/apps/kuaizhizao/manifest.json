@@ -4768,6 +4768,13 @@
                                 "solo_row": true
                             },
                             {
+                                "key": "work-order-assign",
+                                "label": "工单指派",
+                                "icon": "user",
+                                "route": "/mes/assign",
+                                "permission": "kuaizhizao:work-order:assign"
+                            },
+                            {
                                 "key": "my-work-orders",
                                 "label": "我的工单",
                                 "icon": "file",

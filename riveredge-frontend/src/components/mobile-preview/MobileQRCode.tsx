@@ -36,15 +36,16 @@ export const MobileQRCode: React.FC = () => {
         const port = window.location.port;
         const targetIp = ip || hostname;
 
-        // 生产环境：Caddy 在同一域名下提供 /mobile，无独立端口
-        // 开发环境：手机端在 8101 独立进程（localhost）
-        const isProduction = hostname !== 'localhost' && hostname !== '127.0.0.1';
+        // 生产：同域 /mobile/；开发：仅换端口根路径（8081/，不带 /mobile）
+        const isLoopback = hostname === 'localhost' || hostname === '127.0.0.1';
+        const isDevPcPort = port === '8100' || port === '5173';
 
-        if (isProduction) {
+        if (!isLoopback && !isDevPcPort) {
             const portPart = port ? `:${port}` : '';
-            return `${protocol}//${targetIp}${portPart}/mobile`;
+            return `${protocol}//${targetIp}${portPart}/mobile/`;
         }
-        return `${protocol}//${targetIp}:8101`;
+        const mobilePort = import.meta.env.VITE_MOBILE_DEV_PORT || '8081';
+        return `${protocol}//${targetIp}:${mobilePort}/`;
     };
 
     const mobileUrl = getMobileUrl();

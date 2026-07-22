@@ -813,13 +813,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   const screens = Grid.useBreakpoint?.() ?? {};
   const touchScreen = useTouchScreen();
-  
-  // 决定是否使用移动端/平板布局
-  // 如果开启了触屏模式且是竖屏，强制使用移动端布局
-  // 否则，根据分辨率判断（lg = 992px）
-  const isMobileOrTablet = touchScreen.isTouchScreenMode 
-    ? touchScreen.isPortrait 
-    : (screens.lg === false);
+
+  // PC / H5 二分：宽度中间档不再走平板壳；仅「触屏工位 + 竖屏」保留紧凑顶栏
+  // 普通浏览器缩到 <1200 已跳 H5，此处勿再按 screens.lg / 宽度切平板模式
+  const isMobileOrTablet = touchScreen.isTouchScreenMode && touchScreen.isPortrait;
 
   // 工作区最大化模式 (由 UniTab 控制)
   const [isFullscreen, setIsFullscreen] = useState(false);

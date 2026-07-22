@@ -190,6 +190,8 @@ async def search_users_for_display(
     keyword: Optional[str] = Query(None, description="姓名或账号关键词"),
     department_uuid: Optional[str] = Query(None, description="部门 UUID 筛选"),
     position_uuid: Optional[str] = Query(None, description="岗位 UUID 筛选"),
+    role_uuid: Optional[str] = Query(None, description="角色 UUID 筛选"),
+    role_code: Optional[str] = Query(None, description="角色编码筛选（如 PRODUCTION_STAFF）"),
     is_active: Optional[bool] = Query(True, description="是否仅启用用户"),
     _auth: object = Depends(_require_user_picker_access),
     tenant_id: int = Depends(get_current_tenant),
@@ -206,6 +208,8 @@ async def search_users_for_display(
         keyword=keyword,
         department_uuid=department_uuid,
         position_uuid=position_uuid,
+        role_uuid=role_uuid,
+        role_code=role_code,
         is_active=is_active,
     )
     return UserDisplayListResponse(**result)

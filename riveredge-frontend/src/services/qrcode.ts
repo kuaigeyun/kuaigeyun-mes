@@ -12,7 +12,7 @@ import { api } from './api';
 /**
  * 二维码类型
  */
-export type QRCodeType = 'MAT' | 'WO' | 'OP' | 'EQ' | 'EMP' | 'BOX' | 'TRACE' | 'DOC';
+export type QRCodeType = 'MAT' | 'WO' | 'OP' | 'EQ' | 'EMP' | 'STATION' | 'BOX' | 'TRACE' | 'DOC';
 
 /**
  * 错误纠正级别

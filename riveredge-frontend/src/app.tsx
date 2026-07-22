@@ -674,26 +674,9 @@ export default function App() {
     };
   }, [resolved.algorithm, resolved.isDark, resolved.themeStyle, resolved.token]);
 
-  // 响应式布局优化：针对小屏设备（平板/手机）自动缩小组件尺寸和边距
-  const [screenSize, setScreenSize] = React.useState({
-    isMobile: typeof window !== 'undefined' && window.innerWidth < 768,
-    isTablet: typeof window !== 'undefined' && window.innerWidth >= 768 && window.innerWidth < 1024,
-  });
-
-  useEffect(() => {
-    const handleResize = () => {
-      setScreenSize({
-        isMobile: window.innerWidth < 768,
-        isTablet: window.innerWidth >= 768 && window.innerWidth < 1024,
-      });
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
+  // PC / H5 二分：<1200 已跳 H5；留在 PC 的一律桌面令牌，无中间平板档
   const responsiveThemeConfig = React.useMemo(() => {
     const { algorithm, token } = finalThemeConfig;
-    const isSmall = screenSize.isMobile || screenSize.isTablet;
     const isEnglishLocale = i18n.language?.startsWith('en');
     /** 与 @ant-design/pro-layout 侧栏 collapsedWidth=64 一致。默认 Menu 令牌的 collapsedWidth 常为 2*controlHeightLG(≈80)，
      * 与 64px 侧栏不同宽时，inline-collapsed 用「百分比 padding」的居中在错误宽度上计算，整列会表现成贴左。 */
@@ -710,15 +693,12 @@ export default function App() {
       token: {
         ...token,
         ...(isEnglishLocale ? { fontFamily: ENGLISH_UI_FONT_FAMILY } : {}),
-        // 全局去掉控件聚焦外圈光晕（保留边框色变化）
         controlOutlineWidth: 0,
         controlOutline: 'transparent',
-        // 缩小内容区边距
-        paddingContentHorizontal: isSmall ? 10 : 16,
-        paddingContentVertical: isSmall ? 10 : 16,
-        // 针对手机端进一步微调基础间距
-        padding: isSmall ? 12 : 16,
-        margin: isSmall ? 12 : 16,
+        paddingContentHorizontal: 16,
+        paddingContentVertical: 16,
+        padding: 16,
+        margin: 16,
       },
       components: {
         Menu: {
@@ -741,16 +721,15 @@ export default function App() {
         },
       },
     };
-  }, [finalThemeConfig, screenSize, i18n.language]);
+  }, [finalThemeConfig, i18n.language]);
 
   const antLocale = React.useMemo(
     () => ANT_LOCALE_MAP[i18n.language] || ANT_LOCALE_MAP[i18n.language?.split('-')[0]] || zhCN,
     [i18n.language]
   );
 
-  // 触屏模式下，即使是手机也建议使用 middle 尺寸，配合 CSS 优化确保触控精准
-  // 仅在非触屏模式的小屏（如 PC 缩放窗口）才使用 small 以获得最大内容密度
-  const componentSize = touchScreen.isTouchScreenMode ? 'middle' : (screenSize.isMobile ? 'small' : 'middle');
+  // 触屏工位模式用 middle；普通 PC 亦 middle（小屏已交 H5，不再用 small 平板档）
+  const componentSize = 'middle' as const;
 
   return (
     <ConfigProvider 

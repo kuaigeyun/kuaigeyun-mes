@@ -411,7 +411,7 @@ start_mobile() {
     local retries=0
     while [ "$retries" -lt 45 ]; do
         if mobile_http_ready; then
-            log_success "手机 H5 已就绪! → http://127.0.0.1:${MOBILE_PORT}/mobile"
+            log_success "手机 H5 已就绪! → http://127.0.0.1:${MOBILE_PORT}/"
             return 0
         fi
         if [ -f .logs/mobile.pid ]; then
@@ -425,7 +425,7 @@ start_mobile() {
         sleep 1
         retries=$((retries + 1))
     done
-    log_warn "手机端尚未响应 HTTP（可能仍在打包），请稍后打开 /mobile 或查看 .logs/mobile.log"
+    log_warn "手机端尚未响应 HTTP（可能仍在打包），请稍后打开 http://127.0.0.1:${MOBILE_PORT}/ 或查看 .logs/mobile.log"
     return 0
 }
 
@@ -460,8 +460,7 @@ frontend_http_ready() {
 }
 
 mobile_http_ready() {
-    curl -sf --max-time 2 "http://127.0.0.1:${MOBILE_PORT}/mobile" >/dev/null 2>&1 \
-        || curl -sf --max-time 2 "http://127.0.0.1:${MOBILE_PORT}/" >/dev/null 2>&1
+    curl -sf --max-time 2 "http://127.0.0.1:${MOBILE_PORT}/" >/dev/null 2>&1
 }
 
 pidfile_alive() {
@@ -502,7 +501,7 @@ case "$CMD" in
     status)
         backend_http_ready && log_success "Backend [OK] ($(get_listening_pids "${BACKEND_PORT}" | tr '\n' ' '))" || log_warn "Backend [OFF]"
         frontend_http_ready && log_success "Frontend [OK]" || log_warn "Frontend [OFF]"
-        mobile_http_ready && log_success "Mobile H5 [OK] (http://127.0.0.1:${MOBILE_PORT}/mobile)" || log_warn "Mobile H5 [OFF]"
+        mobile_http_ready && log_success "Mobile H5 [OK] (http://127.0.0.1:${MOBILE_PORT}/)" || log_warn "Mobile H5 [OFF]"
         if pidfile_alive ".logs/worker.pid" || taskiq_service_running broker; then
             log_success "Worker [OK]"
         else
@@ -519,7 +518,7 @@ case "$CMD" in
     me|h5)
         mkdir -p .logs
         start_mobile || exit 1
-        echo "  - Mobile H5: http://127.0.0.1:${MOBILE_PORT}/mobile"
+        echo "  - Mobile H5: http://127.0.0.1:${MOBILE_PORT}/"
         echo "  - API 默认: http://127.0.0.1:${BACKEND_PORT}（需后端已启动）"
         ;;
     "")
@@ -536,7 +535,7 @@ case "$CMD" in
             echo "  - Web: http://127.0.0.1:${FRONTEND_PORT} / http://localhost:${FRONTEND_PORT}"
             echo "  - API: http://127.0.0.1:${BACKEND_PORT} / http://localhost:${BACKEND_PORT}"
             if [ "$WITH_H5" = "1" ]; then
-                echo "  - Mobile H5: http://127.0.0.1:${MOBILE_PORT}/mobile"
+                echo "  - Mobile H5: http://127.0.0.1:${MOBILE_PORT}/"
             fi
             echo "  - 局域网用本机 IP 替换主机名（前后端均监听 0.0.0.0）"
             if [ "$WITH_H5" != "1" ]; then

@@ -50,6 +50,7 @@ QRCODE_TYPE_WO = "WO"  # 工单码
 QRCODE_TYPE_OP = "OP"  # 工序码
 QRCODE_TYPE_EQ = "EQ"  # 设备码
 QRCODE_TYPE_EMP = "EMP"  # 人员码
+QRCODE_TYPE_STATION = "STATION"  # 工位码
 QRCODE_TYPE_BOX = "BOX"  # 装箱码
 QRCODE_TYPE_TRACE = "TRACE"  # 追溯码
 QRCODE_TYPE_DOC = "DOC"  # 业务单据码（出入库等）
@@ -60,6 +61,7 @@ VALID_QRCODE_TYPES = [
     QRCODE_TYPE_OP,
     QRCODE_TYPE_EQ,
     QRCODE_TYPE_EMP,
+    QRCODE_TYPE_STATION,
     QRCODE_TYPE_BOX,
     QRCODE_TYPE_TRACE,
     QRCODE_TYPE_DOC,
@@ -345,6 +347,21 @@ class QRCodeService:
             "employee_name": employee_name,
         }
         return QRCodeService.generate_qrcode(data, QRCODE_TYPE_EMP, **kwargs)
+
+    @staticmethod
+    def generate_station_qrcode(
+        station_uuid: str,
+        station_code: str,
+        station_name: str,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """生成工位二维码。"""
+        data = {
+            "station_uuid": station_uuid,
+            "station_code": station_code,
+            "station_name": station_name,
+        }
+        return QRCodeService.generate_qrcode(data, QRCODE_TYPE_STATION, **kwargs)
     
     @staticmethod
     def generate_box_qrcode(

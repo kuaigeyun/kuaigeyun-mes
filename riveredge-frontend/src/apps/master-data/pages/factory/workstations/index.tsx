@@ -846,11 +846,11 @@ const WorkstationsPage: React.FC = () => {
               >
                 <QRCodeGenerator
                   data={{
-                    equipment_uuid: workstationDetail.uuid,
-                    equipment_code: workstationDetail.code,
-                    equipment_name: workstationDetail.name,
+                    station_uuid: workstationDetail.uuid,
+                    station_code: workstationDetail.code,
+                    station_name: workstationDetail.name,
                   }}
-                  qrcodeType="EQ"
+                  qrcodeType="STATION"
                   size={6}
                   noCard={true}
                 />

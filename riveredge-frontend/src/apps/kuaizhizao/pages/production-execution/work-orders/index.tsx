@@ -3007,13 +3007,14 @@ const WorkOrdersPage: React.FC = () => {
       const dispatchData = {
         workshop_id: values.workshop_id ?? null,
         workshop_name: workshop?.name ?? null,
-        work_center_id: values.work_center_id ?? null,
+        // 人员/资源来自 assigned_personnel / assigned_resource 前缀解析，勿读 values 上不存在的扁平字段
+        work_center_id: work_center_id ?? null,
         work_center_name: workCenter?.name ?? null,
-        assigned_station_id: values.assigned_station_id ?? null,
+        assigned_station_id: assigned_station_id ?? null,
         assigned_station_name: station?.name ?? null,
-        assigned_worker_id: values.assigned_worker_id ?? null,
+        assigned_worker_id: assigned_worker_id ?? null,
         assigned_worker_name: worker?.full_name || worker?.username || null,
-        assigned_team_id: values.assigned_team_id ?? null,
+        assigned_team_id: assigned_team_id ?? null,
         assigned_team_name: team?.name ?? null,
         assigned_equipment_id: values.assigned_equipment_id ?? null,
         assigned_equipment_name: equipment?.name || null,
@@ -3654,6 +3655,7 @@ const WorkOrdersPage: React.FC = () => {
               borderTop: `1px solid ${token.colorBorderSecondary}`,
             }}
           >
+            {workOrderPerms.canAction?.('assign') ? (
             <div
               onClick={() => !isCompleted && handleOpenDispatchModal(operation, workOrder)}
               style={{
@@ -3682,6 +3684,7 @@ const WorkOrdersPage: React.FC = () => {
               <TeamOutlined style={{ marginRight: 4, fontSize: 13 }} />
               派工
             </div>
+            ) : null}
             <div
               onClick={
                 operation.status === 'pending' && !isSplitParentWorkOrder(workOrder)

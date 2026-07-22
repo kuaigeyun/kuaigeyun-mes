@@ -522,9 +522,8 @@ export default function DashboardPage() {
     return convertMenuTreeToTreeData(quickEntryMenuTree, t);
   }, [quickEntryMenuTree, t]);
 
-  // 手机端工作台切换逻辑：触屏竖屏强制切换，或 PC 端浏览器宽度不足（< 1000px）时切换，确保布局始终美观
-  const isWidthTooNarrow = (typeof window !== 'undefined' && window.innerWidth < 1200);
-  if ((touchScreen.isTouchScreenMode && touchScreen.isPortrait) || isWidthTooNarrow) {
+  // PC / H5 二分：宽度不足已整页跳 H5。此处仅触屏工位竖屏保留 MobileWorkplace，勿再按 1200 切「假平板」
+  if (touchScreen.isTouchScreenMode && touchScreen.isPortrait) {
     return (
       <MobileWorkplace
         userInfo={{ ...userInfo, ...resolvedUserDetail }}
@@ -617,7 +616,7 @@ export default function DashboardPage() {
           <Row
               gutter={[DASHBOARD_LAYOUT_GUTTER, DASHBOARD_LAYOUT_GUTTER]}
               className="dashboard-four-cards-row dashboard-bento-main-row"
-              wrap={window.innerWidth < 1000}
+              wrap={false}
               style={{
                 flexShrink: 0,
                 display: 'flex',

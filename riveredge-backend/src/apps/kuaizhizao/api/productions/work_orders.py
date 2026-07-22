@@ -7,6 +7,7 @@
 from typing import List, Optional, Dict, Any
 from datetime import date, datetime
 from fastapi import APIRouter, Depends, Query, status as http_status, HTTPException
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from loguru import logger
 
@@ -526,6 +527,22 @@ async def list_work_orders(
 
 
 # 静态子路径须注册在 /work-orders/{work_order_id} 之前，否则 execution-config 会被当成整数 ID 解析（422）
+@router.post("/work-orders/resolve-by-scan", summary="Resolve work orders by scan code")
+async def resolve_work_orders_by_scan(
+    body: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    扫码报工定位：工单码 / 设备码 / 人员码 / 工位码 → 派工工单列表。
+
+    Body: { "raw": "<扫码原文>" }
+    """
+    raw = str((body or {}).get("raw") or (body or {}).get("code") or "").strip()
+    result = await WorkOrderService().resolve_work_orders_by_scan(tenant_id, raw)
+    return JSONResponse(content=jsonable_encoder(result), status_code=http_status.HTTP_200_OK)
+
+
 @router.get("/work-orders/execution-config", summary="Work order execution config")
 async def get_work_order_execution_config(
     current_user: User = Depends(get_current_user),
@@ -594,11 +611,12 @@ async def get_delayed_work_orders(
         days_threshold=days_threshold,
         status=status
     )
+    # datetime 必须先 jsonable_encoder，否则 JSONResponse 序列化失败，客户端表现为 Network Error
     return JSONResponse(
-        content={
+        content=jsonable_encoder({
             "total": len(delayed_orders),
-            "delayed_orders": delayed_orders
-        },
+            "delayed_orders": delayed_orders,
+        }),
         status_code=http_status.HTTP_200_OK
     )
 
@@ -621,7 +639,7 @@ async def analyze_delay_reasons(
         work_order_id=work_order_id
     )
     return JSONResponse(
-        content=result,
+        content=jsonable_encoder(result),
         status_code=http_status.HTTP_200_OK
     )
 

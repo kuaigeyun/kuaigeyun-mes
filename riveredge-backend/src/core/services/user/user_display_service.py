@@ -8,6 +8,8 @@ from tortoise.expressions import Q
 
 from core.models.department import Department
 from core.models.position import Position
+from core.models.role import Role
+from core.models.user_role import UserRole
 from core.schemas.user_display import UserDisplayItem, UserDisplayRoleItem
 from infra.models.user import User
 
@@ -83,6 +85,8 @@ class UserDisplayService:
         keyword: Optional[str] = None,
         department_uuid: Optional[str] = None,
         position_uuid: Optional[str] = None,
+        role_uuid: Optional[str] = None,
+        role_code: Optional[str] = None,
         is_active: Optional[bool] = True,
     ) -> dict:
         query = Q(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -106,6 +110,20 @@ class UserDisplayService:
             ).first()
             if position:
                 query &= Q(position_id=position.id)
+        role_uuid_s = (role_uuid or "").strip() or None
+        role_code_s = (role_code or "").strip() or None
+        if role_uuid_s or role_code_s:
+            role_q = Role.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if role_uuid_s:
+                role_q = role_q.filter(uuid=role_uuid_s)
+            if role_code_s:
+                role_q = role_q.filter(code=role_code_s)
+            role = await role_q.first()
+            if role:
+                user_ids = await UserRole.filter(role_id=role.id).values_list("user_id", flat=True)
+                query &= Q(id__in=list(user_ids) if user_ids else [])
+            else:
+                query &= Q(id__in=[])
         if is_active is not None:
             query &= Q(is_active=is_active)
 
