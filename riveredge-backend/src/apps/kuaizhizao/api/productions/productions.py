@@ -37,7 +37,6 @@ from apps.kuaizhizao.services.assembly_template_service import AssemblyTemplateS
 from apps.kuaizhizao.services.disassembly_order_service import DisassemblyOrderService
 from apps.kuaizhizao.services.exception_service import ExceptionService
 from apps.kuaizhizao.services.exception_process_service import ExceptionProcessService
-from apps.kuaizhizao.services.report_service import ReportService
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 
 # 初始化服务实例
@@ -54,7 +53,6 @@ assembly_template_service = AssemblyTemplateService()
 disassembly_order_service = DisassemblyOrderService()
 exception_service = ExceptionService()
 exception_process_service = ExceptionProcessService()
-report_service = ReportService()
 from apps.kuaizhizao.services.quality_service import (
     IncomingInspectionService,
     ProcessInspectionService,
@@ -1554,56 +1552,7 @@ async def export_sales_forecasts(
 # 已迁移至 document_relations_legacy.py
 
 
-# ============ 报表 API（库存/质量报表见 reports/reports.py，避免重复注册） ============
-
-@router.get("/reports/production", summary="Production report")
-async def get_production_report(
-    report_type: str = Query("efficiency", description="报表类型（efficiency/completion/reporting/equipment）"),
-    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
-    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
-    work_center_id: Optional[int] = Query(None, description="工作中心ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> dict:
-    """
-    获取生产报表数据
-
-    支持多种报表类型：
-    - efficiency: 生产效率分析
-    - completion: 工单完成情况报表
-    - reporting: 报工统计分析报表
-    - equipment: 设备利用率报表
-
-    - **report_type**: 报表类型
-    - **date_start**: 开始日期（可选）
-    - **date_end**: 结束日期（可选）
-    - **work_center_id**: 工作中心ID（可选）
-    """
-    from datetime import datetime
-    
-    date_start_dt = None
-    date_end_dt = None
-
-    if date_start:
-        try:
-            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
-        except ValueError:
-            raise ValidationError("开始日期格式错误，应为YYYY-MM-DD")
-
-    if date_end:
-        try:
-            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
-        except ValueError:
-            raise ValidationError("结束日期格式错误，应为YYYY-MM-DD")
-
-    return await report_service.get_production_report(
-        tenant_id=tenant_id,
-        report_type=report_type,
-        date_start=date_start_dt,
-        date_end=date_end_dt,
-        work_center_id=work_center_id,
-    )
-
+# 生产报表 API 见 reports/reports.py（/reports/production），勿在此重复注册
 
 # ============ 库存盘点 API ============
 
