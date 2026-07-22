@@ -65,7 +65,8 @@ import {
 } from '../../utils/wecomAuth';
 import { getLoginClientDownloads } from '../../services/clientRelease';
 import { applyFavicon } from '../../utils/favicon';
-import { LoginDescriptionContent } from '../../components/login-page-editor';
+// 直连文件，避免 barrel 连带 login-page-editor 其它重模块（如 ReactQuill）
+import LoginDescriptionContent from '../../components/login-page-editor/LoginDescriptionContent';
 import { isLoginVisualLayerEnabled } from '../../utils/loginVisualLayers';
 import {
   DEFAULT_SITE_LOGO_URL,

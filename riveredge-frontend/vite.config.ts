@@ -233,7 +233,7 @@ export default defineConfig({
           const base = dep.split('/').pop() || '';
           // 主包形如 vendor-<hash>.js；排除 vendor-univerjs / vendor-three 等按需栈
           if (!/^vendor-[A-Za-z0-9_-]+\.js$/.test(base)) return false;
-          return !/^vendor-(univerjs|three|libredwg|monaco|occt|xlsx|echarts|charts|graphs|gantt|pro-flow|pdf|html2canvas)-/.test(
+          return !/^vendor-(univerjs|three|libredwg|monaco|occt|xlsx|echarts|gantt|pdf|html2canvas)-/.test(
             base,
           );
         }),
@@ -260,12 +260,11 @@ export default defineConfig({
             if (id.includes('xlsx') || id.includes('exceljs')) return 'vendor-xlsx';
             if (id.includes('html2canvas')) return 'vendor-html2canvas';
             if (id.includes('jspdf') || id.includes('pdf-lib') || id.includes('pdfjs-dist')) return 'vendor-pdf';
-            if (id.includes('@ant-design/pro-flow')) return 'vendor-pro-flow';
             if (id.includes('@svar-ui/react-gantt')) return 'vendor-gantt';
-            if (id.includes('@ant-design/charts') || id.includes('@ant-design/plots')) return 'vendor-charts';
-            if (id.includes('@ant-design/graphs')) return 'vendor-graphs';
+            // 勿再强制 vendor-pro-flow / charts / graphs / uni-*：多入口下会把主应用巨石
+            // 错误挂到登录 MPA 的静态 import 图上（即使登录源码未引用这些包）。
             // React + antd css-in-js 必须单例同一 chunk，避免 createContext 白屏。
-            // 切勿再 catch-all 全部 node_modules → vendor：登录 MPA 会被迫下载主应用巨石包。
+            // 切勿 catch-all 全部 node_modules → vendor。
             if (
               /\/(react|react-dom|scheduler)\//.test(norm) ||
               norm.includes('/antd/') ||
@@ -283,15 +282,6 @@ export default defineConfig({
             }
             return;
           }
-          // 注意：不要再按 /apps/* 强制打成 app-* 巨石包。
-          // 否则 Rollup 会把壳层共享运行时（含 vite preload helper / auth）吞进
-          // app-haoligo，入口静态依赖定制包 → 未 compose 专业/定制包时白屏。
-          // 应用分包改由 pluginLoader 的 dynamic import() 自然拆分。
-          // 也不要合并 /pages/system|infra|personal：巨石 pages-* 会被入口 lazy 图拖进
-          // modulepreload，刷新时连带 Univer/uni-query 等一并下载。
-          if (id.includes('/components/uni-import')) return 'component-uni-import';
-          if (id.includes('/components/uni-query')) return 'component-uni-query';
-          if (id.includes('/pages/login')) return 'page-login';
         },
         // 文件命名规则
         chunkFileNames: 'assets/js/[name]-[hash].js',
