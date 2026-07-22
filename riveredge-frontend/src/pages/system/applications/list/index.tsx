@@ -14,6 +14,11 @@ import { ThemedSegmented } from '../../../../components/themed-segmented';
 const { Title, Paragraph, Text } = Typography;
 import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
 import { ApplicationClientReleasesPanel } from './ApplicationClientReleasesPanel';
+import {
+  PRO_APP_CODES,
+  buildProPlaceholders,
+  isPlaceholderApplication,
+} from '../proAppCatalog';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import { UniTable } from '../../../../components/uni-table';
 import { UniWiki, WikiItem, WikiTreeData } from '../../../../components';
@@ -146,14 +151,6 @@ const APP_ACTION_ICON = {
  * - 定制：定制私有仓（is_dedicated）
  */
 const BASIC_APP_CODES = ['master-data', 'kuaizhizao', 'kuaiplm', 'kuaicaiwu'];
-/** 专业版展示顺序：KU-AI → 快报表 → 快数采 → 快能源 → 快协同 */
-const PRO_APP_CODES = [
-  'kuaiai',
-  'kuaireport',
-  'kuaiiot',
-  'kuaiems',
-  'kuaisrm',
-];
 /** 行业应用（代码仍归专业版仓库，筛选单独成档） */
 const INDUSTRY_APP_CODES = [
   'kuaimachinery',
@@ -222,7 +219,7 @@ const resolveAppEdition = (
   if (Boolean(app?.is_dedicated ?? app?.isDedicated)) return 'dedicated';
   const code = String(app?.code || '');
   if (INDUSTRY_APP_CODES.includes(code)) return 'industry';
-  if (PRO_APP_CODES.includes(code)) return 'pro';
+  if ((PRO_APP_CODES as readonly string[]).includes(code)) return 'pro';
   if (BASIC_APP_CODES.includes(code)) return 'basic';
   // 未列入清单的非定制应用默认归入基础（主仓）
   return 'basic';
@@ -757,9 +754,32 @@ const ApplicationListPage: React.FC = () => {
   /**
    * 处理安装应用
    */
+  const showProUpgradeRequired = useCallback(
+    (record?: Application) => {
+      Modal.info({
+        title: t('pages.system.applications.proUpgradeRequiredTitle', {
+          defaultValue: '需升级专业版',
+        }),
+        content: t('pages.system.applications.proUpgradeRequiredDesc', {
+          name: record?.name || record?.code || '',
+          defaultValue:
+            '该应用属于专业版能力。请升级至专业版/企业版套餐，并完成专业包部署后安装使用。',
+        }),
+        okText: t('pages.system.applications.proUpgradeRequiredOk', {
+          defaultValue: '知道了',
+        }),
+      });
+    },
+    [t],
+  );
+
   const handleInstall = async (record: Application) => {
     if (!canManageAppLifecycle) {
       messageApi.warning(t('pages.system.applications.platformAdminOnlyLifecycle'));
+      return;
+    }
+    if (isPlaceholderApplication(record)) {
+      showProUpgradeRequired(record);
       return;
     }
     try {
@@ -796,6 +816,10 @@ const ApplicationListPage: React.FC = () => {
   const handleToggleActive = async (record: Application, checked: boolean) => {
     if (!canManageAppLifecycle) {
       messageApi.warning(t('pages.system.applications.platformAdminOnlyLifecycle'));
+      return;
+    }
+    if (isPlaceholderApplication(record)) {
+      showProUpgradeRequired(record);
       return;
     }
     try {
@@ -1181,6 +1205,19 @@ const ApplicationListPage: React.FC = () => {
               </Button>
             </Popconfirm>
           );
+        } else if (isPlaceholderApplication(record)) {
+          actions.push(
+            <Button
+              key="pro-upgrade"
+              {...rowActionLabelKeep()}
+              type="link"
+              size="small"
+              icon={<LockOutlined />}
+              onClick={() => showProUpgradeRequired(record)}
+            >
+              {t('pages.system.applications.proLockedTag', { defaultValue: '需升级专业版' })}
+            </Button>,
+          );
         } else {
           actions.push(
             <Popconfirm
@@ -1309,7 +1346,14 @@ const ApplicationListPage: React.FC = () => {
         type: 'divider' as const,
       },
       !application.is_installed
-        ? {
+        ? isPlaceholderApplication(application)
+          ? {
+              key: 'install',
+              label: t('pages.system.applications.proLockedTag', { defaultValue: '需升级专业版' }),
+              icon: <LockOutlined />,
+              onClick: () => showProUpgradeRequired(application),
+            }
+          : {
           key: 'install',
           label: (
             <Popconfirm
@@ -1532,8 +1576,25 @@ const ApplicationListPage: React.FC = () => {
                             )}
                           {(application.is_pro || isProEdition(resolveAppEdition(application))) &&
                             !application.can_access && (
-                            <Tooltip title={t('pages.system.applications.proLockedTag')}>
+                            <Tooltip
+                              title={t('pages.system.applications.proLockedTag', {
+                                defaultValue: '需升级专业版',
+                              })}
+                            >
                               <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  showProUpgradeRequired(application);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    showProUpgradeRequired(application);
+                                  }
+                                }}
                                 style={{
                                   height: 18,
                                   width: 18,
@@ -1544,7 +1605,7 @@ const ApplicationListPage: React.FC = () => {
                                   flexShrink: 0,
                                   backgroundColor: themeToken.colorFillTertiary,
                                   color: themeToken.colorTextSecondary,
-                                  cursor: 'help',
+                                  cursor: 'pointer',
                                 }}
                               >
                                 <LockOutlined style={{ fontSize: 11 }} />
@@ -1679,6 +1740,11 @@ const ApplicationListPage: React.FC = () => {
                 ? t('pages.system.applications.installed')
                 : t('pages.system.applications.notInstalled')}
             </Tag>
+            {isPlaceholderApplication(application) && (
+              <Tag color="warning" style={{ margin: 0, fontSize: 11 }}>
+                {t('pages.system.applications.proLockedTag', { defaultValue: '需升级专业版' })}
+              </Tag>
+            )}
             {application.version && (
               <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
                 v{application.version}
@@ -1777,39 +1843,11 @@ const ApplicationListPage: React.FC = () => {
 
               const allData = await getApplicationList(apiParams);
 
-              // 纯前端预告应用（无后端数据库记录）：快能源、快协同
-              const placeholders: any[] = [
-                {
-                  uuid: 'placeholder-kuaiems',
-                  code: 'kuaiems',
-                  name: t('pages.system.applications.mock.kuaienergy.name', { defaultValue: '快能源' }),
-                  description: t('pages.system.applications.mock.kuaienergy.desc', { defaultValue: '能源数据监控与能效分析平台，敬请期待' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 103,
-                  version: 'PRO',
-                },
-                {
-                  uuid: 'placeholder-kuaisrm',
-                  code: 'kuaisrm',
-                  name: t('pages.system.applications.mock.kuaisrm.name', { defaultValue: '快协同' }),
-                  description: t('pages.system.applications.mock.kuaisrm.desc', { defaultValue: '新一代供应链与供应商协同平台，敬请期待' }),
-                  is_pro: true,
-                  can_access: false,
-                  is_installed: false,
-                  is_active: false,
-                  is_system: false,
-                  sort_order: 104,
-                  version: 'Beta',
-                },
-              ];
-
-              // 占位仅补全后端尚无记录的专业应用，避免与真实应用重复
+              // 专业版占位：未 compose / 未入库时补齐 KU-AI、快报表、快数采、快能源、快协同
               const existingCodes = new Set((allData || []).map((app) => app.code));
-              const mergedPlaceholders = placeholders.filter((app) => !existingCodes.has(app.code));
+              const mergedPlaceholders = buildProPlaceholders(t).filter(
+                (app) => !existingCodes.has(app.code as string),
+              );
 
               let filteredData = [...(allData || []), ...mergedPlaceholders].map(app => {
                 const overriddenSortOrder = APP_SORT_ORDER_OVERRIDES[app.code as string];
@@ -1860,20 +1898,33 @@ const ApplicationListPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           beforeSearchButtons={
-            <ThemedSegmented
-              surfaceBackground
-              size="middle"
-              value={appCategoryFilter}
-              options={[
-                { label: t('pages.system.applications.categoryBasic'), value: 'basic' },
-                { label: t('pages.system.applications.categoryPro'), value: 'pro' },
-                { label: t('pages.system.applications.categoryIndustry'), value: 'industry' },
-                { label: t('pages.system.applications.categoryDedicated'), value: 'dedicated' },
-              ]}
-              onChange={(value) => {
-                setAppCategoryFilter(value as AppCategoryFilter);
-              }}
-            />
+            <Space size={12} wrap>
+              <ThemedSegmented
+                surfaceBackground
+                size="middle"
+                value={appCategoryFilter}
+                options={[
+                  { label: t('pages.system.applications.categoryBasic'), value: 'basic' },
+                  { label: t('pages.system.applications.categoryPro'), value: 'pro' },
+                  { label: t('pages.system.applications.categoryIndustry'), value: 'industry' },
+                  { label: t('pages.system.applications.categoryDedicated'), value: 'dedicated' },
+                ]}
+                onChange={(value) => {
+                  setAppCategoryFilter(value as AppCategoryFilter);
+                }}
+              />
+              {appCategoryFilter === 'pro' && (
+                <Alert
+                  type="info"
+                  showIcon
+                  banner
+                  style={{ padding: '2px 10px', margin: 0 }}
+                  message={t('pages.system.applications.proCategoryTip', {
+                    defaultValue: '专业应用需升级专业版；未部署专业包时以下为占位预告，安装/启用将提示升级。',
+                  })}
+                />
+              )}
+            </Space>
           }
           showImportButton={false}
           showExportButton={true}
