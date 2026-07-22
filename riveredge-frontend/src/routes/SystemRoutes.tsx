@@ -25,7 +25,7 @@ import IndexPage from '../pages';
 import NotFoundPage from '../pages/404';
 
 // 登录页懒加载（按需加载以减小主包）。Suspense fallback 不用骨架屏：与独立 login.html 入口一致，chunk 就绪前留白即可。
-// 独立 MPA：开发服 Vite 将 /login 指向 login.html；生产多为 index.html + 本路由懒加载。
+// 独立 MPA：开发/生产均优先 login.html；本懒加载路由作为主 SPA 内跳转与无 MPA 时的回退。
 const LoginPage = React.lazy(() => import('../pages/login'));
 // 公开页面按需懒加载，减小主包体积，加快登录首屏
 const InfraLoginPage = React.lazy(() => import('../pages/infra/login'));

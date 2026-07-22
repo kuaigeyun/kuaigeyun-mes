@@ -2301,7 +2301,11 @@ cmd_ensure_frontend_dist() {
     fi
 
     if [ -f "$frontend_index" ]; then
-        log_ok "已检测到 Web dist，跳过服务器构建（Caddy 直接代理 Git 中的 dist）"
+        if [ ! -f "$FRONTEND_DIR/dist/login.html" ]; then
+            log_error "缺少 $FRONTEND_DIR/dist/login.html（登录 MPA）。请重新执行 fast-deploy/build.web.sh 并推送"
+            exit 1
+        fi
+        log_ok "已检测到 Web dist（含 login.html），跳过服务器构建（Caddy 直接代理 Git 中的 dist）"
         return 0
     fi
 
@@ -2347,6 +2351,7 @@ gen_caddyfile() {
     backend_addr="127.0.0.1:${BACKEND_PORT}"
     frontend_root="$(caddy_native_path "$FRONTEND_DIR/dist")"
     [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/index.html，请先 build"; exit 1; }
+    [ -f "$FRONTEND_DIR/dist/login.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/login.html（登录 MPA），请先 build.web"; exit 1; }
     ensure_mobile_web_dist || exit 1
     mobile_web_root="$(caddy_native_path "$MOBILE_WEB_DIR")"
 

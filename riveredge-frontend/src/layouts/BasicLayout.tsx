@@ -109,7 +109,7 @@ import {
 } from '../services/menu';
 import { useUnifiedMenuData } from '../hooks/useUnifiedMenuData';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
-import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
+import { LucideIconByName } from '../utils/lucideDynamicIcon';
 import { getAvatarUrl, getAvatarText, getAvatarFontSize, getCachedAvatarUrl, toRelativeIfLocalhost, isTextAvatarDisplay, getTextAvatarCircleStyle, getImageAvatarCircleStyle } from '../utils/avatar';
 import { triggerNew, hasNewHandler } from '../utils/globalNewShortcut';
 import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
@@ -1198,27 +1198,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         if (IconComponent) {
           iconElement = React.createElement(IconComponent, { size: 16 });
         } else {
-          // 如果预定义映射和 Ant Design 映射都没有，尝试直接从 Lucide Icons 中获取
-          // 支持 PascalCase 图标名（如 "Factory", "Home"）或 kebab-case（如 "factory", "home"）
+          // 预定义映射未命中：按名称 DynamicIcon（按需加载单图标，避免 import *）
           const iconName = menu.icon as string;
-
-          // 尝试直接访问（PascalCase）
-          let DirectIcon = (LucideIcons as any)[iconName];
-
-          // 如果直接访问失败，尝试转换为 PascalCase
-          if (!DirectIcon) {
-            const pascalCaseName = iconName
-              .split(/[-_]/)
-              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-              .join('');
-            DirectIcon = (LucideIcons as any)[pascalCaseName];
-          }
-
-          if (DirectIcon && DirectIcon !== React.Fragment && typeof DirectIcon === 'function') {
-            iconElement = React.createElement(DirectIcon, { size: 16 });
-          } else if (process.env.NODE_ENV === 'development') {
-            console.warn(`Icon not found: ${menu.icon} for menu: ${menu.name || menu.path}. Tip: You can use Lucide icon names (PascalCase) directly, such as "Factory", "Home", etc.`);
-          }
+          iconElement = React.createElement(LucideIconByName, { name: iconName, size: 16 });
         }
       }
     }

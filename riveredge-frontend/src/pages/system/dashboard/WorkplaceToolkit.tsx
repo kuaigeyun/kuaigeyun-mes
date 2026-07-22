@@ -4,7 +4,17 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Popover, Space, theme } from 'antd';
-import * as LucideIcons from 'lucide-react';
+import {
+  Calculator,
+  Scale,
+  Globe,
+  Coins,
+  CaseUpper,
+  RefreshCw,
+  Key,
+  PenTool,
+  QrCode,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   TaxCalculator,
@@ -163,63 +173,63 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
   const allTools: ToolItem[] = [
     {
       key: 'tax',
-      icon: <LucideIcons.Calculator size={18} strokeWidth={2.2} />,
+      icon: <Calculator size={18} strokeWidth={2.2} />,
       label: t('pages.dashboard.toolkit.taxConversion'),
       color: '#64748b',
       render: <TaxCalculator />,
     },
     {
       key: 'weight',
-      icon: <LucideIcons.Scale size={18} strokeWidth={2.2} />,
+      icon: <Scale size={18} strokeWidth={2.2} />,
       label: t('pages.dashboard.toolkit.weightCalc'),
       color: '#5f8570',
       render: <WeightCalculator />,
     },
     {
       key: 'exchange',
-      icon: <LucideIcons.Globe size={18} strokeWidth={2.2} />,
+      icon: <Globe size={18} strokeWidth={2.2} />,
       label: t('pages.dashboard.toolkit.exchangeRate'),
       color: '#a67c52',
       render: <ExchangeCalculator />,
     },
     {
       key: 'rmb',
-      icon: <LucideIcons.Coins size={18} />,
+      icon: <Coins size={18} />,
       label: t('pages.dashboard.toolkit.amountToUppercase'),
       color: '#f59e0b',
       render: <RmbCapitalizer />,
     },
     {
       key: 'text',
-      icon: <LucideIcons.CaseUpper size={18} />,
+      icon: <CaseUpper size={18} />,
       label: t('pages.dashboard.toolkit.textCleanup'),
       color: '#10b981',
       render: <TextTransformer />,
     },
     {
       key: 'unit',
-      icon: <LucideIcons.RefreshCw size={18} />,
+      icon: <RefreshCw size={18} />,
       label: t('pages.dashboard.toolkit.unitConversion'),
       color: '#8b5cf6',
       render: <UnitConverter />,
     },
     {
       key: 'pwd',
-      icon: <LucideIcons.Key size={18} />,
+      icon: <Key size={18} />,
       label: t('pages.dashboard.toolkit.passwordGen'),
       color: '#ec4899',
       render: <PasswordGen />,
     },
     {
       key: 'memo',
-      icon: <LucideIcons.PenTool size={18} />,
+      icon: <PenTool size={18} />,
       label: t('pages.dashboard.toolkit.notes'),
       color: '#f97316',
       render: <MemoTool />,
     },
     {
       key: 'qr',
-      icon: <LucideIcons.QrCode size={18} />,
+      icon: <QrCode size={18} />,
       label: t('pages.dashboard.toolkit.qrcode'),
       color: '#22d3ee',
       render: <QrGenerator />,

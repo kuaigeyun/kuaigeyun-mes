@@ -135,6 +135,20 @@
         header Cache-Control "no-cache"
     }
 
+    # 登录 MPA：独立 login.html，避免 /login 落入主 SPA 而 preload 整包 vendor
+    @login_mpa path /login /login/
+    handle @login_mpa {
+        root * {{FRONTEND_ROOT}}
+        rewrite * /login.html
+        file_server
+        header Cache-Control "no-cache"
+    }
+    handle /login.html {
+        root * {{FRONTEND_ROOT}}
+        file_server
+        header Cache-Control "no-cache"
+    }
+
     handle {
         root * {{FRONTEND_ROOT}}
         try_files {path} /index.html

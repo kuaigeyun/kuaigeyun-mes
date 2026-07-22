@@ -240,13 +240,17 @@ export default defineConfig({
     },
     // 代码分割配置（按依赖类型分割；页面 chunk 交给 React.lazy 自然拆分）
     rollupOptions: {
-      // 生产构建单入口 index.html；开发环境见下方 login-mpa-rewrite（/login → login.html 独立入口）
+      // 生产多入口：主应用 index.html + 登录 MPA login.html（开发态另见 login-mpa-rewrite）
+      input: {
+        main: resolve(srcPath, 'index.html'),
+        login: resolve(srcPath, 'login.html'),
+      },
       output: {
         // 手动代码分割策略（顺序重要：优先匹配最具体的路径）
         manualChunks: (id) => {
-          if (id.includes('node_modules') || id.includes('\0') || /\/_virtual\//.test(id.replace(/\\/g, '/'))) {
-            // 仅拆真正巨型/按需栈；React/antd/dayjs/emotion/CJS helper 等必须留在同一 vendor，
-            // 否则 Rollup 互拆出环 → createContext 读 undefined 白屏。
+          const norm = id.replace(/\\/g, '/');
+          if (id.includes('node_modules') || id.includes('\0') || /\/_virtual\//.test(norm)) {
+            // 巨型/按需栈单独拆出，避免进首屏
             if (id.includes('@univerjs')) return 'vendor-univerjs';
             if (id.includes('monaco-editor') || id.includes('@monaco-editor')) return 'vendor-monaco';
             if (id.includes('three') && !id.includes('react-three')) return 'vendor-three';
@@ -260,7 +264,24 @@ export default defineConfig({
             if (id.includes('@svar-ui/react-gantt')) return 'vendor-gantt';
             if (id.includes('@ant-design/charts') || id.includes('@ant-design/plots')) return 'vendor-charts';
             if (id.includes('@ant-design/graphs')) return 'vendor-graphs';
-            return 'vendor';
+            // React + antd css-in-js 必须单例同一 chunk，避免 createContext 白屏。
+            // 切勿再 catch-all 全部 node_modules → vendor：登录 MPA 会被迫下载主应用巨石包。
+            if (
+              /\/(react|react-dom|scheduler)\//.test(norm) ||
+              norm.includes('/antd/') ||
+              norm.includes('/@ant-design/cssinjs') ||
+              norm.includes('/@ant-design/colors') ||
+              norm.includes('/@ant-design/fast-color') ||
+              norm.includes('/@ant-design/icons') ||
+              norm.includes('/@rc-component/') ||
+              /\/rc-[^/]+\//.test(norm) ||
+              norm.includes('/dayjs/') ||
+              norm.includes('/@emotion/') ||
+              norm.includes('/stylis/')
+            ) {
+              return 'vendor';
+            }
+            return;
           }
           // 注意：不要再按 /apps/* 强制打成 app-* 巨石包。
           // 否则 Rollup 会把壳层共享运行时（含 vite preload helper / auth）吞进
@@ -335,7 +356,7 @@ export default defineConfig({
         };
       },
     },
-    // 登录页 MPA：开发环境 /login 映射到 login.html（独立入口、无静态骨架；与 Caddy 生产配置一致）
+    // 登录页 MPA：开发 / 预览将 /login 映射到 login.html（生产由 Caddy rewrite，见 Caddyfile.template）
     {
       name: 'login-mpa-rewrite',
       configureServer(server) {
@@ -343,7 +364,17 @@ export default defineConfig({
           const url = req.url || '';
           const pathname = url.split('?')[0];
           if (pathname === '/login' || pathname === '/login/') {
-            req.url = '/login.html';
+            req.url = '/login.html' + (url.includes('?') ? url.slice(url.indexOf('?')) : '');
+          }
+          next();
+        });
+      },
+      configurePreviewServer(server) {
+        server.middlewares.use((req, res, next) => {
+          const url = req.url || '';
+          const pathname = url.split('?')[0];
+          if (pathname === '/login' || pathname === '/login/') {
+            req.url = '/login.html' + (url.includes('?') ? url.slice(url.indexOf('?')) : '');
           }
           next();
         });

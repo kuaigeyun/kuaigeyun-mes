@@ -1066,19 +1066,24 @@ function Invoke-Build {
         if ($LASTEXITCODE -ne 0) { throw '前端构建失败' }
     } finally { Pop-Location }
     if (-not (Test-Path (Join-Path $script:FrontendDir 'dist\index.html'))) { throw '缺少 dist/index.html' }
+    if (-not (Test-Path (Join-Path $script:FrontendDir 'dist\login.html'))) { throw '缺少 dist/login.html（登录 MPA）' }
     Write-LogOk '前端构建完成'
 }
 
 function Ensure-FrontendDist {
     Load-DeployEnv
     $index = Join-Path $script:FrontendDir 'dist\index.html'
+    $login = Join-Path $script:FrontendDir 'dist\login.html'
     if ($script:ALLOW_SERVER_BUILD -eq '1') {
         Write-LogWarn 'ALLOW_SERVER_BUILD=1，执行服务器构建（内存占用高，不推荐）...'
         Invoke-Build
         return
     }
     if (Test-Path $index) {
-        Write-LogOk '已检测到 Web dist，跳过服务器构建（Caddy 直接代理 Git 中的 dist）'
+        if (-not (Test-Path $login)) {
+            throw '缺少 dist/login.html（登录 MPA）。请重新执行 fast-deploy/build.web.sh 并推送'
+        }
+        Write-LogOk '已检测到 Web dist（含 login.html），跳过服务器构建（Caddy 直接代理 Git 中的 dist）'
         return
     }
     throw '缺少 dist/index.html。请在本地 fast-deploy/build.web.sh 构建并推送，或设置 ALLOW_SERVER_BUILD=1'

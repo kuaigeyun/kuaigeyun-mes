@@ -22,7 +22,15 @@ import {
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import * as LucideIcons from 'lucide-react';
+import {
+  List,
+  BarChart,
+  PlayCircle,
+  AlertTriangle,
+  Target,
+  ClipboardCheck,
+  ClipboardList,
+} from 'lucide-react';
 import WeatherWidget from '../../../components/weather/WeatherWidget';
 import { getWeatherCardGradient } from '../../../components/weather/weatherBackground';
 import { formatDateTime } from '../../../utils/format';
@@ -211,12 +219,12 @@ export const MobileWorkplace: React.FC<MobileWorkplaceProps> = ({
         </div>
         <Row gutter={[12, 12]}>
           {[
-            { label: t('pages.dashboard.statWorkOrderTotal'), value: formatDashboardMetric(statistics?.production?.total), suffix: t('pages.dashboard.unitOrder'), semantic: 'work_order_total', numeric: statistics?.production?.total, icon: <LucideIcons.List size={18} /> },
-            { label: t('pages.dashboard.statCompletedQuantity'), value: formatDashboardMetric(statistics?.production?.completed_quantity), suffix: t('pages.dashboard.unitPiece'), semantic: 'output_quantity', numeric: statistics?.production?.completed_quantity, icon: <LucideIcons.BarChart size={18} /> },
-            { label: t('pages.dashboard.statWorkOrderInProgress'), value: formatDashboardMetric(statistics?.production?.in_progress), suffix: t('pages.dashboard.unitOrder'), semantic: 'work_order_wip', numeric: statistics?.production?.in_progress, icon: <LucideIcons.PlayCircle size={18} /> },
-            { label: t('pages.dashboard.statInventoryAlert'), value: formatDashboardMetric(statistics?.inventory?.alert_count), suffix: t('pages.dashboard.unitAlert'), semantic: 'inventory_alert', numeric: statistics?.inventory?.alert_count, icon: <LucideIcons.AlertTriangle size={18} /> },
-            { label: t('pages.dashboard.statWorkOrderCompletion'), value: formatDashboardRate(statistics?.production?.completion_rate), suffix: '%', semantic: 'completion_rate', numeric: statistics?.production?.completion_rate, icon: <LucideIcons.Target size={18} /> },
-            { label: t('pages.dashboard.statQualitySummary'), value: formatDashboardRate(statistics?.quality?.quality_rate), suffix: '%', semantic: 'quality_rate', numeric: statistics?.quality?.quality_rate, icon: <LucideIcons.ClipboardCheck size={18} /> },
+            { label: t('pages.dashboard.statWorkOrderTotal'), value: formatDashboardMetric(statistics?.production?.total), suffix: t('pages.dashboard.unitOrder'), semantic: 'work_order_total', numeric: statistics?.production?.total, icon: <List size={18} /> },
+            { label: t('pages.dashboard.statCompletedQuantity'), value: formatDashboardMetric(statistics?.production?.completed_quantity), suffix: t('pages.dashboard.unitPiece'), semantic: 'output_quantity', numeric: statistics?.production?.completed_quantity, icon: <BarChart size={18} /> },
+            { label: t('pages.dashboard.statWorkOrderInProgress'), value: formatDashboardMetric(statistics?.production?.in_progress), suffix: t('pages.dashboard.unitOrder'), semantic: 'work_order_wip', numeric: statistics?.production?.in_progress, icon: <PlayCircle size={18} /> },
+            { label: t('pages.dashboard.statInventoryAlert'), value: formatDashboardMetric(statistics?.inventory?.alert_count), suffix: t('pages.dashboard.unitAlert'), semantic: 'inventory_alert', numeric: statistics?.inventory?.alert_count, icon: <AlertTriangle size={18} /> },
+            { label: t('pages.dashboard.statWorkOrderCompletion'), value: formatDashboardRate(statistics?.production?.completion_rate), suffix: '%', semantic: 'completion_rate', numeric: statistics?.production?.completion_rate, icon: <Target size={18} /> },
+            { label: t('pages.dashboard.statQualitySummary'), value: formatDashboardRate(statistics?.quality?.quality_rate), suffix: '%', semantic: 'quality_rate', numeric: statistics?.quality?.quality_rate, icon: <ClipboardCheck size={18} /> },
           ].map((item, idx) => (
             <Col span={12} key={idx}>
               <Card
@@ -329,7 +337,7 @@ export const MobileWorkplace: React.FC<MobileWorkplaceProps> = ({
                     justifyContent: 'center',
                     color: todo.priority === 'high' ? '#ef4444' : '#64748b'
                   }}>
-                    <LucideIcons.ClipboardList size={20} />
+                    <ClipboardList size={20} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

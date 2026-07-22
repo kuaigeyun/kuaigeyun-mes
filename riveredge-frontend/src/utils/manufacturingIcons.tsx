@@ -1,54 +1,339 @@
 /**
  * 制造业相关图标工具
- * 
- * 使用 Lucide React 提供统一的图标风格
- * 左侧菜单使用 Lucide 图标，其他系统布局图标使用 Ant Design Icons
- * 包含：设备、生产线、工具、工业流程等图标
- * 
- * 全量导入 Lucide React 所有图标，避免导入错误并支持动态访问
+ *
+ * 左侧菜单使用 Lucide 图标；仅按需导入预置表，避免 `import *` 打进主 vendor。
+ * 未知名称回退到 LucideIconByName（DynamicIcon 按需加载单图标）。
  */
 
 import React from 'react';
-// Lucide React - 全量导入所有图标
-import * as LucideIcons from 'lucide-react';
+import {
+  Activity,
+  AlertCircle,
+  AlertTriangle,
+  Archive,
+  ArrowDown,
+  ArrowDownCircle,
+  ArrowDownToLine,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpCircle,
+  ArrowUpFromLine,
+  Award,
+  Banknote,
+  BarChart3,
+  Bell,
+  Book,
+  BookOpen,
+  Bot,
+  Box,
+  Boxes,
+  Building2,
+  Calculator,
+  Calendar,
+  CalendarDays,
+  Car,
+  Check,
+  CheckCircle,
+  CheckCircle2,
+  ClipboardCheck,
+  ClipboardList,
+  Clock,
+  Cloud,
+  Code,
+  Cog,
+  Compass,
+  Construction,
+  Cpu,
+  CreditCard,
+  Crown,
+  Database,
+  DollarSign,
+  Download,
+  Edit,
+  Eye,
+  EyeOff,
+  Factory,
+  FileBarChart,
+  FileCheck,
+  FileCode,
+  FileEdit,
+  FileMinus,
+  FilePlus,
+  FileSearch,
+  FileSpreadsheet,
+  FileText,
+  Filter,
+  Flag,
+  Flame,
+  FlaskConical,
+  Folder,
+  FolderKanban,
+  FolderOpen,
+  Gauge,
+  GitBranch,
+  Globe,
+  Globe2,
+  Grid,
+  Hammer,
+  Handshake,
+  HardDrive,
+  HardHat,
+  Headphones,
+  HelpCircle,
+  History,
+  Home,
+  Inbox,
+  Info,
+  Key,
+  Languages,
+  Layers,
+  Layout,
+  LayoutDashboard,
+  LayoutGrid,
+  List,
+  Lock,
+  LogIn,
+  LogOut,
+  Mail,
+  Map,
+  MapPin,
+  MapPinned,
+  Menu,
+  Minus,
+  Monitor,
+  Moon,
+  MoreHorizontal,
+  MoreVertical,
+  Navigation,
+  Network,
+  Package,
+  Pencil,
+  Phone,
+  PieChart,
+  Pin,
+  PinOff,
+  PlayCircle,
+  Plus,
+  Printer,
+  Receipt,
+  RefreshCw,
+  RotateCcw,
+  ScanLine,
+  Search,
+  Server,
+  Settings,
+  Settings2,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldOff,
+  ShoppingBag,
+  ShoppingCart,
+  Smartphone,
+  SortAsc,
+  SortDesc,
+  Sparkles,
+  Star,
+  Store,
+  Sun,
+  Target,
+  Timer,
+  TrendingUp,
+  Trophy,
+  Truck,
+  Unlock,
+  Upload,
+  User,
+  UserCircle,
+  UserCog,
+  UserPlus,
+  Users,
+  Wallet,
+  Warehouse,
+  Workflow,
+  Wrench,
+  X,
+  XCircle,
+  Zap,
+} from 'lucide-react';
+import { LucideIconByName } from './lucideDynamicIcon';
+
+const LUCIDE_BY_NAME: Record<string, React.ComponentType<any>> = {
+  Activity,
+  AlertCircle,
+  AlertTriangle,
+  Archive,
+  ArrowDown,
+  ArrowDownCircle,
+  ArrowDownToLine,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpCircle,
+  ArrowUpFromLine,
+  Award,
+  Banknote,
+  BarChart3,
+  Bell,
+  Book,
+  BookOpen,
+  Bot,
+  Box,
+  Boxes,
+  Building2,
+  Calculator,
+  Calendar,
+  CalendarDays,
+  Car,
+  Check,
+  CheckCircle,
+  CheckCircle2,
+  ClipboardCheck,
+  ClipboardList,
+  Clock,
+  Cloud,
+  Code,
+  Cog,
+  Compass,
+  Construction,
+  Cpu,
+  CreditCard,
+  Crown,
+  Database,
+  DollarSign,
+  Download,
+  Edit,
+  Eye,
+  EyeOff,
+  Factory,
+  FileBarChart,
+  FileCheck,
+  FileCode,
+  FileEdit,
+  FileMinus,
+  FilePlus,
+  FileSearch,
+  FileSpreadsheet,
+  FileText,
+  Filter,
+  Flag,
+  Flame,
+  FlaskConical,
+  Folder,
+  FolderKanban,
+  FolderOpen,
+  Gauge,
+  GitBranch,
+  Globe,
+  Globe2,
+  Grid,
+  Hammer,
+  Handshake,
+  HardDrive,
+  HardHat,
+  Headphones,
+  HelpCircle,
+  History,
+  Home,
+  Inbox,
+  Info,
+  Key,
+  Languages,
+  Layers,
+  Layout,
+  LayoutDashboard,
+  LayoutGrid,
+  List,
+  Lock,
+  LogIn,
+  LogOut,
+  Mail,
+  Map,
+  MapPin,
+  MapPinned,
+  Menu,
+  Minus,
+  Monitor,
+  Moon,
+  MoreHorizontal,
+  MoreVertical,
+  Navigation,
+  Network,
+  Package,
+  Pencil,
+  Phone,
+  PieChart,
+  Pin,
+  PinOff,
+  PlayCircle,
+  Plus,
+  Printer,
+  Receipt,
+  RefreshCw,
+  RotateCcw,
+  ScanLine,
+  Search,
+  Server,
+  Settings,
+  Settings2,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldOff,
+  ShoppingBag,
+  ShoppingCart,
+  Smartphone,
+  SortAsc,
+  SortDesc,
+  Sparkles,
+  Star,
+  Store,
+  Sun,
+  Target,
+  Timer,
+  TrendingUp,
+  Trophy,
+  Truck,
+  Unlock,
+  Upload,
+  User,
+  UserCircle,
+  UserCog,
+  UserPlus,
+  Users,
+  Wallet,
+  Warehouse,
+  Workflow,
+  Wrench,
+  X,
+  XCircle,
+  Zap,
+};
 
 /**
- * 从 Lucide Icons 获取图标组件
- * 支持动态访问所有 Lucide 图标
- * 
- * @param iconName - 图标名称（PascalCase，如 'Factory', 'Home'）
- * @returns 图标组件，如果不存在则返回默认图标
+ * 从预置表取 Lucide 组件；未知名称走 DynamicIcon。
  */
 function getLucideIcon(iconName: string): React.ComponentType<any> {
-  // 尝试直接访问
-  const Icon = (LucideIcons as any)[iconName];
-  if (Icon) {
-    return Icon;
-  }
-  
-  // 如果直接访问失败，尝试转换为 PascalCase
+  const direct = LUCIDE_BY_NAME[iconName];
+  if (direct) return direct;
+
   const pascalCaseName = iconName
     .split(/[-_]/)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join('');
-  
-  const PascalIcon = (LucideIcons as any)[pascalCaseName];
-  if (PascalIcon) {
-    return PascalIcon;
+  const fromPascal = LUCIDE_BY_NAME[pascalCaseName];
+  if (fromPascal) return fromPascal;
+
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(`图标 "${iconName}" 未在预置表中，回退 DynamicIcon`);
   }
-  
-  // 如果都找不到，返回默认图标
-  console.warn(`图标 "${iconName}" 在 Lucide Icons 中不存在，使用默认图标 Factory`);
-  return LucideIcons.Factory || React.Fragment;
+  const Fallback = (props: any) =>
+    React.createElement(LucideIconByName, { name: iconName || 'factory', ...props });
+  Fallback.displayName = `LucideDynamic(${iconName})`;
+  return Fallback;
 }
 
-/**
- * 制造业图标映射
- * 提供常用制造业场景的图标映射
- * 所有图标使用 Lucide React，确保风格统一
- * 
- * 使用动态访问 Lucide Icons，支持所有可用图标
- */
 export const ManufacturingIcons = {
   // 工厂和设备
   factory: getLucideIcon('Factory'),

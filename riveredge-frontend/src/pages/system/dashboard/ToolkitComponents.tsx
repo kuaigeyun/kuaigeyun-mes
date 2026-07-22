@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Typography, Space, InputNumber, Select, Row, Col, Divider, Input, Button, message, Image, Segmented, Checkbox } from 'antd';
-import * as LucideIcons from 'lucide-react';
+import { ArrowDown, Copy } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
@@ -268,7 +268,7 @@ export const ExchangeCalculator = () => {
               <InputNumber style={{ width: '100%', marginTop: 4 }} value={amount} onChange={(v) => setAmount(v ?? 0)} size="small" min={0} precision={4} />
             </Col>
             <Col span={10} style={{ textAlign: 'center', paddingTop: 18 }}>
-              <LucideIcons.ArrowDown size={16} style={{ color: '#bfbfbf' }} />
+              <ArrowDown size={16} style={{ color: '#bfbfbf' }} />
             </Col>
           </Row>
         ) : (
@@ -278,7 +278,7 @@ export const ExchangeCalculator = () => {
               <InputNumber style={{ width: '100%', marginTop: 4 }} prefix="￥" value={amount} onChange={(v) => setAmount(v ?? 0)} size="small" min={0} precision={2} />
             </Col>
             <Col span={10} style={{ textAlign: 'center', paddingTop: 18 }}>
-              <LucideIcons.ArrowDown size={16} style={{ color: '#bfbfbf' }} />
+              <ArrowDown size={16} style={{ color: '#bfbfbf' }} />
             </Col>
           </Row>
         )}
@@ -517,7 +517,7 @@ export const TextTransformer = () => {
         <Button size="small" onClick={() => handleCase('half')}>
           {t('pages.dashboard.toolkit.fullToHalf')}
         </Button>
-        <Button size="small" icon={<LucideIcons.Copy size={12} />} onClick={() => { void navigator.clipboard.writeText(text); message.success(t('pages.dashboard.toolkit.copySuccess')); }} />
+        <Button size="small" icon={<Copy size={12} />} onClick={() => { void navigator.clipboard.writeText(text); message.success(t('pages.dashboard.toolkit.copySuccess')); }} />
       </div>
     </div>
   );
