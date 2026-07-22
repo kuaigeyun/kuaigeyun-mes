@@ -4135,34 +4135,12 @@ cmd_install_client_repo() {
     log_ok "移动端 H5 源仓已同步: ${path}"
 }
 
-maybe_sync_pro_apps_on_update() {
-    load_deploy_env
-    local pro_en custom_en client_en
-    pro_en="$(read_deploy_env_value PRO_ENABLED || echo 0)"
-    custom_en="$(read_deploy_env_value CUSTOM_ENABLED || echo 0)"
-    client_en="$(read_deploy_env_value CLIENT_ENABLED || echo 0)"
-    if [ "$pro_en" = "1" ] || [ "$custom_en" = "1" ]; then
-        log_info "同步已启用的扩展应用（PRO_ENABLED=${pro_en} CUSTOM_ENABLED=${custom_en}）…"
-        cmd_install_extension_apps all || {
-            log_error "扩展应用同步失败（主仓更新已完成，可稍后菜单 [4] 重试）"
-            return 1
-        }
-    fi
-    if [ "$client_en" = "1" ]; then
-        log_info "CLIENT_ENABLED=1：同步并安装移动端 H5…"
-        cmd_install_client_repo || {
-            log_error "移动端 H5 安装失败（可稍后扩展应用 → 安装 H5 重试）"
-            return 1
-        }
-    fi
-}
-
 run_update_dev() {
     # SKIP_GIT_SYNC=1：调用方已 sync（如向导拉取后 reload 脚本）
+    # 扩展应用 / H5 不随 update：仅菜单 [4] 或 deploy.sh pro-apps / install-h5
     if [ "${SKIP_GIT_SYNC:-0}" != "1" ]; then
         sync_git_from_origin || return 1
     fi
-    maybe_sync_pro_apps_on_update || true
     cmd_stop_dev || return 1
     cmd_migrate || return 1
     record_deploy_release_metadata || return 1
@@ -4170,10 +4148,10 @@ run_update_dev() {
 }
 
 run_update_prod() {
+    # 扩展应用 / H5 不随 update：仅菜单 [4] 或 deploy.sh pro-apps / install-h5
     if [ "${SKIP_GIT_SYNC:-0}" != "1" ]; then
         sync_git_from_origin || return 1
     fi
-    maybe_sync_pro_apps_on_update || true
     cmd_stop_prod || return 1
     cmd_migrate || return 1
     cmd_ensure_frontend_dist || return 1

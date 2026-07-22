@@ -359,8 +359,8 @@ wizard_show_home_panel() {
     wizard_panel_section "DEPLOY 部署"
     wizard_panel_menu_item "1" "全新安装" "检测环境与依赖，完成配置后启动"
     wizard_panel_menu_item "2" "修改配置" "修改数据库、超管账号与访问地址"
-    wizard_panel_menu_item "3" "更新系统" "与 deploy.sh update 相同（含扩展应用 / H5）"
-    wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包（私有仓，需凭证）"
+    wizard_panel_menu_item "3" "更新系统" "仅主仓：fetch+reset、迁移并重启（不含扩展/H5）"
+    wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包 / 移动端 H5（私有仓，需凭证）"
     wizard_panel_section "OPS 运维"
     wizard_panel_menu_short "${WIZARD_CYAN}[5]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[6]${WIZARD_RESET} 服务  ${WIZARD_CYAN}[7]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
     wizard_panel_bot
@@ -447,41 +447,133 @@ wizard_ext_repo_git_label() {
     fi
 }
 
-wizard_show_pro_apps_menu() {
+wizard_ext_default_path() {
+    # 参数: pro|custom|client → 打印本地路径
+    case "$1" in
+        pro)
+            local p
+            p="$(read_deploy_env_value PRO_REPO_PATH || true)"
+            [ -n "$p" ] || p="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-pro"
+            echo "$p"
+            ;;
+        custom)
+            local p
+            p="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
+            [ -n "$p" ] || p="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-custom"
+            echo "$p"
+            ;;
+        client|h5)
+            local p
+            p="$(read_deploy_env_value CLIENT_REPO_PATH || true)"
+            [ -n "$p" ] || p="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-client"
+            echo "$p"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+wizard_ext_require_cloned() {
+    # 更新前要求源仓已存在；参数: pro|custom|client 显示名
+    local kind="$1" label="$2" path
+    load_deploy_env
+    path="$(wizard_ext_default_path "$kind")" || return 1
+    if [ ! -d "$path/.git" ]; then
+        wizard_say_warn "${label}尚未安装（源仓未克隆）。请先到「安装」完成首次部署。"
+        return 1
+    fi
+    return 0
+}
+
+wizard_show_ext_status_lines() {
     local pro_path custom_path client_path pro_url custom_url client_url pro_en custom_en client_en
     load_deploy_env
-    pro_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
-    [ -n "$pro_path" ] || pro_path="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-pro"
-    custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
-    [ -n "$custom_path" ] || custom_path="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-custom"
-    client_path="$(read_deploy_env_value CLIENT_REPO_PATH || true)"
-    [ -n "$client_path" ] || client_path="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-client"
+    pro_path="$(wizard_ext_default_path pro)"
+    custom_path="$(wizard_ext_default_path custom)"
+    client_path="$(wizard_ext_default_path client)"
     pro_url="$(read_deploy_env_value PRO_REPO_URL || echo "${WIZARD_PRO_REPO_GITEE}.git")"
     custom_url="$(read_deploy_env_value CUSTOM_REPO_URL || echo "${WIZARD_CUSTOM_REPO_GITEE}.git")"
     client_url="$(read_deploy_env_value CLIENT_REPO_URL || echo "${WIZARD_CLIENT_REPO_GITEE}.git")"
     pro_en="$(read_deploy_env_value PRO_ENABLED || echo 0)"
     custom_en="$(read_deploy_env_value CUSTOM_ENABLED || echo 0)"
     client_en="$(read_deploy_env_value CLIENT_ENABLED || echo 0)"
-    echo ""
-    wizard_panel_begin
-    wizard_panel_top
-    wizard_panel_section "EXT 扩展应用"
     wizard_panel_kv "专业包" "$([ "$pro_en" = "1" ] && echo 已启用 || echo 未启用) · $(wizard_ext_repo_git_label "$pro_path")"
     wizard_panel_line "${WIZARD_DIM}  ${pro_url}${WIZARD_RESET}"
     wizard_panel_kv "定制包" "$([ "$custom_en" = "1" ] && echo 已启用 || echo 未启用) · $(wizard_ext_repo_git_label "$custom_path")"
     wizard_panel_line "${WIZARD_DIM}  ${custom_url}${WIZARD_RESET}"
     wizard_panel_kv "移动端 H5" "$([ "$client_en" = "1" ] && echo 已启用 || echo 未启用) · 源仓 $(wizard_ext_repo_git_label "$client_path") · $([ -f "$MOBILE_WEB_DIR/index.html" ] && echo 已部署 || echo 未部署)"
     wizard_panel_line "${WIZARD_DIM}  ${client_url}${WIZARD_RESET}"
+}
+
+wizard_show_pro_apps_menu() {
+    echo ""
+    wizard_panel_begin
+    wizard_panel_top
+    wizard_panel_section "EXT 扩展应用"
+    wizard_show_ext_status_lines
     wizard_panel_blank
-    wizard_panel_menu_item "1" "安装专业包" "kuaigeyun-pro → compose"
-    wizard_panel_menu_item "2" "安装定制包" "kuaigeyun-custom → compose"
-    wizard_panel_menu_item "3" "安装 H5" "拉 kuaigeyun-client → 部署 /mobile web-dist"
-    wizard_panel_menu_item "4" "安装专业+定制" "两仓同步并 compose"
-    wizard_panel_menu_item "5" "查看状态" "compose --status"
-    wizard_panel_menu_item "6" "配置专业仓" "URL / 路径 / Token"
-    wizard_panel_menu_item "7" "配置定制仓" "URL / 路径 / Token"
-    wizard_panel_menu_item "8" "配置 H5 仓" "URL / 路径 / Token"
+    wizard_panel_menu_item "1" "安装" "首次克隆并组装 / 部署（单项互不影响）"
+    wizard_panel_menu_item "2" "更新" "拉取最新并重新组装 / 部署（单项互不影响）"
+    wizard_panel_menu_item "3" "配置" "各仓 URL / 路径 / Token"
+    wizard_panel_menu_item "4" "状态" "源仓摘要 + compose --status"
     wizard_panel_line "${WIZARD_DIM}[0]${WIZARD_RESET} 返回主菜单"
+    wizard_panel_bot
+    echo ""
+}
+
+wizard_show_ext_install_menu() {
+    echo ""
+    wizard_panel_begin
+    wizard_panel_top
+    wizard_panel_section "INSTALL 安装"
+    wizard_panel_line "${WIZARD_DIM}三项独立；互不影响（H5 与专业/定制无绑定）${WIZARD_RESET}"
+    wizard_panel_blank
+    wizard_panel_menu_item "1" "专业包" "kuaigeyun-pro → compose"
+    wizard_panel_menu_item "2" "定制包" "kuaigeyun-custom → compose"
+    wizard_panel_menu_item "3" "移动端 H5" "拉 kuaigeyun-client → /mobile web-dist"
+    wizard_panel_line "${WIZARD_DIM}[0]${WIZARD_RESET} 返回上级"
+    wizard_panel_bot
+    echo ""
+}
+
+wizard_show_ext_update_menu() {
+    echo ""
+    wizard_panel_begin
+    wizard_panel_top
+    wizard_panel_section "UPDATE 更新"
+    wizard_panel_line "${WIZARD_DIM}三项独立；互不影响（H5 与专业/定制无绑定）${WIZARD_RESET}"
+    wizard_panel_blank
+    wizard_panel_menu_item "1" "专业包" "sync kuaigeyun-pro → compose"
+    wizard_panel_menu_item "2" "定制包" "sync kuaigeyun-custom → compose"
+    wizard_panel_menu_item "3" "移动端 H5" "sync client → 重新部署 web-dist"
+    wizard_panel_line "${WIZARD_DIM}[0]${WIZARD_RESET} 返回上级"
+    wizard_panel_bot
+    echo ""
+}
+
+wizard_show_ext_config_menu() {
+    echo ""
+    wizard_panel_begin
+    wizard_panel_top
+    wizard_panel_section "CONFIG 配置"
+    wizard_panel_blank
+    wizard_panel_menu_item "1" "专业仓" "URL / 路径 / Token"
+    wizard_panel_menu_item "2" "定制仓" "URL / 路径 / Token"
+    wizard_panel_menu_item "3" "H5 仓" "URL / 路径 / Token"
+    wizard_panel_line "${WIZARD_DIM}[0]${WIZARD_RESET} 返回上级"
+    wizard_panel_bot
+    echo ""
+}
+
+wizard_show_ext_status_menu() {
+    echo ""
+    wizard_panel_begin
+    wizard_panel_top
+    wizard_panel_section "STATUS 状态"
+    wizard_show_ext_status_lines
+    wizard_panel_blank
+    wizard_panel_line "${WIZARD_DIM}下方为 workspace compose --status（未安装专业/定制时可能为空）${WIZARD_RESET}"
     wizard_panel_bot
     echo ""
 }
@@ -628,12 +720,131 @@ wizard_ask_restart_choice() {
     done
 }
 
+wizard_run_ext_pro() {
+    echo ""
+    cmd_install_extension_apps pro || true
+    wizard_say "专业应用启用时仍需在应用中心输入 License Key；组装后请重启服务。"
+}
+
+wizard_run_ext_custom() {
+    echo ""
+    cmd_install_extension_apps custom || true
+    wizard_say "定制应用组装完成后请重启服务；租户侧按需启用。"
+}
+
+wizard_run_ext_h5() {
+    echo ""
+    cmd_install_client_repo || true
+    wizard_say "移动端 H5 已同步并部署到 riveredge-app/mobile/web-dist（Caddy /mobile）。生产环境请再执行 start/update 以刷新网关。"
+}
+
+wizard_ask_ext_install_choice() {
+    local choice
+    while true; do
+        wizard_show_ext_install_menu
+        wizard_panel_prefix
+        echo -e "${WIZARD_BOLD}请选择${WIZARD_RESET} ${WIZARD_DIM}[0-3 · 默认 0]${WIZARD_RESET}"
+        wizard_panel_prefix
+        read -rp "$(echo -e "${WIZARD_DIM}›${WIZARD_RESET} ")" choice || true
+        case "${choice:-0}" in
+            0|q|Q|back) return 0 ;;
+            1)
+                wizard_run_ext_pro
+                wizard_pause_return_menu
+                return 0
+                ;;
+            2)
+                wizard_run_ext_custom
+                wizard_pause_return_menu
+                return 0
+                ;;
+            3)
+                wizard_run_ext_h5
+                wizard_pause_return_menu
+                return 0
+                ;;
+            *) wizard_say_warn "无效选项，请重新选择" ;;
+        esac
+    done
+}
+
+wizard_ask_ext_update_choice() {
+    local choice
+    while true; do
+        wizard_show_ext_update_menu
+        wizard_panel_prefix
+        echo -e "${WIZARD_BOLD}请选择${WIZARD_RESET} ${WIZARD_DIM}[0-3 · 默认 0]${WIZARD_RESET}"
+        wizard_panel_prefix
+        read -rp "$(echo -e "${WIZARD_DIM}›${WIZARD_RESET} ")" choice || true
+        case "${choice:-0}" in
+            0|q|Q|back) return 0 ;;
+            1)
+                wizard_ext_require_cloned pro "专业包" || { wizard_pause_return_menu; return 0; }
+                wizard_run_ext_pro
+                wizard_pause_return_menu
+                return 0
+                ;;
+            2)
+                wizard_ext_require_cloned custom "定制包" || { wizard_pause_return_menu; return 0; }
+                wizard_run_ext_custom
+                wizard_pause_return_menu
+                return 0
+                ;;
+            3)
+                wizard_ext_require_cloned client "移动端 H5" || { wizard_pause_return_menu; return 0; }
+                wizard_run_ext_h5
+                wizard_pause_return_menu
+                return 0
+                ;;
+            *) wizard_say_warn "无效选项，请重新选择" ;;
+        esac
+    done
+}
+
+wizard_ask_ext_config_choice() {
+    local choice
+    while true; do
+        wizard_show_ext_config_menu
+        wizard_panel_prefix
+        echo -e "${WIZARD_BOLD}请选择${WIZARD_RESET} ${WIZARD_DIM}[0-3 · 默认 0]${WIZARD_RESET}"
+        wizard_panel_prefix
+        read -rp "$(echo -e "${WIZARD_DIM}›${WIZARD_RESET} ")" choice || true
+        case "${choice:-0}" in
+            0|q|Q|back) return 0 ;;
+            1)
+                wizard_configure_pro_repo || true
+                wizard_pause_return_menu
+                return 0
+                ;;
+            2)
+                wizard_configure_custom_repo || true
+                wizard_pause_return_menu
+                return 0
+                ;;
+            3)
+                wizard_configure_client_repo || true
+                wizard_pause_return_menu
+                return 0
+                ;;
+            *) wizard_say_warn "无效选项，请重新选择" ;;
+        esac
+    done
+}
+
+wizard_ask_ext_status_choice() {
+    wizard_show_ext_status_menu
+    echo ""
+    cmd_pro_apps_status || true
+    wizard_pause_return_menu
+    return 0
+}
+
 wizard_ask_pro_apps_choice() {
     local choice
     while true; do
         wizard_show_pro_apps_menu
         wizard_panel_prefix
-        echo -e "${WIZARD_BOLD}请选择${WIZARD_RESET} ${WIZARD_DIM}[0-8 · 默认 0]${WIZARD_RESET}"
+        echo -e "${WIZARD_BOLD}请选择${WIZARD_RESET} ${WIZARD_DIM}[0-4 · 默认 0]${WIZARD_RESET}"
         wizard_panel_prefix
         read -rp "$(echo -e "${WIZARD_DIM}›${WIZARD_RESET} ")" choice || true
         case "${choice:-0}" in
@@ -641,53 +852,16 @@ wizard_ask_pro_apps_choice() {
                 return 0
                 ;;
             1)
-                echo ""
-                cmd_install_extension_apps pro || true
-                wizard_say "专业应用启用时仍需在应用中心输入 License Key。"
-                wizard_pause_return_menu
-                return 0
+                wizard_ask_ext_install_choice
                 ;;
             2)
-                echo ""
-                cmd_install_extension_apps custom || true
-                wizard_say "定制应用组装完成后请重启服务；租户侧按需启用。"
-                wizard_pause_return_menu
-                return 0
+                wizard_ask_ext_update_choice
                 ;;
             3)
-                echo ""
-                cmd_install_client_repo || true
-                wizard_say "移动端 H5 已同步并部署到 riveredge-app/mobile/web-dist（Caddy /mobile）。生产环境请再执行 start/update 以刷新网关。"
-                wizard_pause_return_menu
-                return 0
+                wizard_ask_ext_config_choice
                 ;;
             4)
-                echo ""
-                cmd_install_extension_apps all || true
-                wizard_say "专业应用启用时仍需 License Key；定制应用按租户启用。"
-                wizard_pause_return_menu
-                return 0
-                ;;
-            5)
-                echo ""
-                cmd_pro_apps_status || true
-                wizard_pause_return_menu
-                return 0
-                ;;
-            6)
-                wizard_configure_pro_repo || true
-                wizard_pause_return_menu
-                return 0
-                ;;
-            7)
-                wizard_configure_custom_repo || true
-                wizard_pause_return_menu
-                return 0
-                ;;
-            8)
-                wizard_configure_client_repo || true
-                wizard_pause_return_menu
-                return 0
+                wizard_ask_ext_status_choice
                 ;;
             *)
                 wizard_say_warn "无效选项，请重新选择"
@@ -823,7 +997,7 @@ wizard_ask_intent_hint() {
             wizard_say "将逐项展示当前配置，回车保持原值（密码可回车跳过）"
             ;;
         update)
-            wizard_say "将执行与 ./fast-deploy/deploy.sh update 相同的流程（fetch+reset、扩展应用/H5、迁移并重启）"
+            wizard_say "将执行与 ./fast-deploy/deploy.sh update 相同的流程（仅主仓 fetch+reset、迁移并重启；扩展/H5 请用菜单 [4]）"
             ;;
         *)
             wizard_say "阶段 2 填写数据库、超管账号、访问 IP/域名 后，其余步骤将自动执行"
@@ -1486,10 +1660,10 @@ wizard_update_app() {
     # 与 deploy.sh update 共用 run_update_*（SKIP_GIT_SYNC：上面已 pull）
     if [ "$DEPLOY_MODE" = "prod" ]; then
         SKIP_GIT_SYNC=1 wizard_run_deploy_step update \
-            "扩展应用/H5 → 迁移 → 启动（同 deploy.sh update）" "$log" run_update_prod || return 1
+            "迁移 → 启动（同 deploy.sh update，不含扩展/H5）" "$log" run_update_prod || return 1
     else
         SKIP_GIT_SYNC=1 wizard_run_deploy_step update \
-            "扩展应用/H5 → 迁移 → 启动（同 deploy.sh update）" "$log" run_update_dev || return 1
+            "迁移 → 启动（同 deploy.sh update，不含扩展/H5）" "$log" run_update_dev || return 1
     fi
 }
 
