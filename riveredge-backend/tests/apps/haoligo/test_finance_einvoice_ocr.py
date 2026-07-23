@@ -19,6 +19,21 @@ def test_parse_seller_name_from_ocr_rows_fragmented_header():
     assert parse_seller_name_from_ocr_rows(rows) == "广东聚石化学股份有限公司"
 
 
+def test_parse_seller_name_when_label_and_name_split_by_y_bucket():
+    """聚石样票：名称：与公司名同视觉行但 y 分桶拆开；双列裸公司名取右侧。"""
+    from apps.haoligo.services.finance_einvoice_ocr import parse_seller_name_from_ocr_rows
+
+    rows = [
+        ["购", "销"],
+        ["无锡好力泵业有限公司", "广东聚石化学股份有限公司"],
+        ["名称：", "名称："],
+        ["买", "售"],
+        ["方", "方"],
+        ["项目名称", "规格型号", "单位", "数量", "单价", "金额", "税额"],
+    ]
+    assert parse_seller_name_from_ocr_rows(rows) == "广东聚石化学股份有限公司"
+
+
 def test_parse_seller_name_from_ocr_rows_dual_column():
     from apps.haoligo.services.finance_einvoice_ocr import parse_seller_name_from_ocr_rows
 
@@ -239,3 +254,25 @@ def test_parse_merged_qty_price_row():
     assert parsed["quantity_decimals"] == 0
     assert parsed["invoice_unit_price_decimals"] == 13
     assert parsed["line_amount_decimals"] == 2
+
+
+def test_parse_invoice_detail_row_accepts_arbitrary_units():
+    """单位按形态识别，不维护白名单（公斤/立方米/PCS 均可）。"""
+    from apps.haoligo.services.finance_einvoice_ocr import _parse_invoice_detail_row
+
+    for unit in ("公斤", "立方米", "PCS"):
+        cells = [
+            "*塑料制品*DPP PPC20(黑）塑料粒子",
+            "P404-1-H",
+            unit,
+            "6000",
+            "7.61",
+            "45660.00",
+            "13%",
+            "5935.80",
+        ]
+        parsed = _parse_invoice_detail_row(cells)
+        assert parsed is not None, unit
+        assert parsed["unit"] == unit
+        assert parsed["quantity"] == Decimal("6000")
+        assert parsed["invoice_unit_price"] == Decimal("7.61")
