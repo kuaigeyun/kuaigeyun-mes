@@ -11,6 +11,23 @@
 {{ADDR}} {
     encode gzip zstd
 
+    # 发票 AI 解析/复核等长耗时接口：须写在通用 /api/* 之前。
+    # 复杂票 DeepSeek 往返常超过默认 response_header_timeout 30s，会表现为 504。
+    @api_long_running path \
+        /api/v1/apps/haoligo/finance/invoices/parse-pdf \
+        /api/v1/apps/haoligo/finance/invoices/ai-review \
+        /api/v1/apps/kuaizhizao/sales-orders/ocr-extract
+    handle @api_long_running {
+        reverse_proxy {{BACKEND_ADDR}} {
+            transport http {
+                read_timeout 300s
+                write_timeout 300s
+                response_header_timeout 300s
+                keepalive 30s
+            }
+        }
+    }
+
     handle /api/* {
         reverse_proxy {{BACKEND_ADDR}} {
             transport http {
