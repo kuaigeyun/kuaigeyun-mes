@@ -90,6 +90,7 @@ import {
   type InboundHubOrder,
   type InboundReceiptType,
   inboundReceiptTypeLabel,
+  inboundReceiptTypeSegmentOptions,
   inboundReceiptTypeValueEnum,
   isInboundConfirmable,
   inboundConfirmCapabilityReasonMessage,
@@ -436,11 +437,38 @@ const InboundPage: React.FC = () => {
   const { token } = AntdTheme.useToken();
   const inboundDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
+  const searchFormRef = useRef<ProFormInstance>();
   const quickPullRef = useRef<InboundQuickPullModalsRef>(null);
+  const receiptTypeFilterRef = useRef<string>('all');
+  const [receiptTypeFilter, setReceiptTypeFilter] = useState<string>('all');
   const handleCreate = useCallback(() => {
     quickPullRef.current?.open('work_order');
   }, []);
   useNewShortcut(handleCreate);
+
+  const handleReceiptTypeFilterChange = useCallback((value: string) => {
+    const next = value || 'all';
+    // 同步写入 ref，避免 setState 后立刻 reload 仍读到旧筛选值
+    receiptTypeFilterRef.current = next;
+    setReceiptTypeFilter(next);
+    searchFormRef.current?.setFieldsValue({
+      receipt_type: next === 'all' ? undefined : next,
+    });
+    actionRef.current?.reload();
+  }, []);
+
+  const receiptTypeSelect = useMemo(
+    () => (
+      <Select
+        value={receiptTypeFilter}
+        options={inboundReceiptTypeSegmentOptions(t)}
+        onChange={(v) => handleReceiptTypeFilterChange(String(v))}
+        popupMatchSelectWidth={false}
+        style={{ width: 160 }}
+      />
+    ),
+    [t, receiptTypeFilter, handleReceiptTypeFilterChange],
+  );
   const pullLoadLabel = useMemo(
     () => withSingleNewShortcutHint(t('components.uniPull.loadFromDocument')),
     [t],
@@ -1578,6 +1606,7 @@ const InboundPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseInbound.col.receiptType'),
       dataIndex: 'receipt_type',
       width: 100,
+      hideInSearch: true,
       valueEnum: inboundReceiptTypeValueEnum(t),
     },
     {
@@ -1758,9 +1787,11 @@ const InboundPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.warehouseInbound.title')}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound.v2"
         actionRef={actionRef}
+        formRef={searchFormRef}
         rowKey={inboundRowKey}
         columns={columns}
         showAdvancedSearch={true}
+        beforeSearchButtons={receiptTypeSelect}
         pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
         skipFuzzyPinyinClientFilter
         enableRowSelection={inboundPerms.canDelete || inboundPerms.canPrint}
@@ -1779,7 +1810,14 @@ const InboundPage: React.FC = () => {
         }
         request={async (params, sort, _filter, searchFormValues) => {
           try {
-            const listParams = resolveInboundHubListParams(searchFormValues, sort);
+            const typeFilter = receiptTypeFilterRef.current;
+            const listParams = resolveInboundHubListParams(
+              {
+                ...(searchFormValues as Record<string, unknown>),
+                receipt_type: typeFilter === 'all' ? undefined : typeFilter,
+              },
+              sort,
+            );
             const result = await fetchInboundHubList(
               {
                 ...(params as Record<string, unknown>),

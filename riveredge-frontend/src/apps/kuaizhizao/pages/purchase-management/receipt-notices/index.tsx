@@ -512,7 +512,7 @@ const ReceiptNoticesPage: React.FC = () => {
       messageApi.success(
         res?.purchase_receipt_code
           ? t('app.kuaizhizao.receiptNotice.notifySuccessWithDraft', { receiptCode: res.purchase_receipt_code })
-          : t('app.kuaizhizao.shipmentNotice.notifySuccess'),
+          : t('app.kuaizhizao.receiptNotice.notifySuccess'),
       );
       setStatsVersion((v) => v + 1);
       if (noticeDetail?.id === record.id) {

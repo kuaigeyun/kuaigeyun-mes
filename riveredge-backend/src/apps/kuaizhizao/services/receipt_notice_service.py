@@ -196,15 +196,6 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         )
         if not source_order:
             raise BusinessLogicError("采购订单不存在或已删除，无法创建收货通知单")
-        existed = await ReceiptNotice.get_or_none(
-            tenant_id=tenant_id,
-            purchase_order_id=notice_data.purchase_order_id,
-            deleted_at__isnull=True,
-        )
-        if existed:
-            raise BusinessLogicError(
-                f"该采购订单已创建收货通知单（{existed.notice_code}），请勿重复创建"
-            )
         async with in_transaction():
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "RECEIPT_NOTICE_CODE", prefix=f"RN{today}")

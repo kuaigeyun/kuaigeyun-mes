@@ -742,7 +742,7 @@ const ShipmentNoticesPage: React.FC = () => {
         selected_quantities: selectedQuantities,
         line_warehouses: lineWarehouses,
       });
-      messageApi.success(res?.message || t('app.kuaizhizao.salesOrder.pushSuccess'));
+      messageApi.success(res?.message || t('app.kuaizhizao.salesOrder.shipmentNoticeCreated'));
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
       resetPullPreviewModal();

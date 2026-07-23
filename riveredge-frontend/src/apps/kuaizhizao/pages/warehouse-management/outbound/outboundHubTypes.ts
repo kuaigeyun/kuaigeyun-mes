@@ -80,8 +80,29 @@ export const OUTBOUND_ISSUE_TYPE_I18N_KEYS: Record<OutboundIssueType, string> = 
   material_borrow: 'app.kuaizhizao.warehouseOutbound.type.materialBorrow',
 };
 
+export const OUTBOUND_ISSUE_TYPES: OutboundIssueType[] = [
+  'production_picking',
+  'sales_delivery',
+  'outsource_issue',
+  'other_outbound',
+  'material_borrow',
+];
+
 export function getOutboundIssueTypeLabel(t: TFunction, type: OutboundIssueType): string {
   return t(OUTBOUND_ISSUE_TYPE_I18N_KEYS[type]);
+}
+
+/** 列表工具栏快速筛选：全部 + 各出库类型 */
+export function outboundIssueTypeSegmentOptions(
+  t: TFunction,
+): Array<{ label: string; value: string }> {
+  return [
+    { label: t('app.kuaizhizao.warehouseCommon.allTypes'), value: 'all' },
+    ...OUTBOUND_ISSUE_TYPES.map((type) => ({
+      label: getOutboundIssueTypeLabel(t, type),
+      value: type,
+    })),
+  ];
 }
 
 export const OUTBOUND_ISSUE_TYPE_LABELS: Record<OutboundIssueType, string> = {

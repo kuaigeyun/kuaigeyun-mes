@@ -433,14 +433,21 @@ class MaterialKittingItem(BaseModel):
     material_name: str = Field(..., description="物料名称")
     material_unit: Optional[str] = Field(None, description="单位")
     source_type: Optional[str] = Field(None, description="物料来源类型")
+    issue_method: Optional[str] = Field(
+        None, description="发料方式 pick/backflush/none（解析后）"
+    )
     kitting_applicable: bool = Field(True, description="是否计入齐套率（服务/委外等为 false）")
     required_quantity: Decimal = Field(..., description="总需求数量")
-    picked_quantity: Decimal = Field(..., description="已领料数量")
+    picked_quantity: Decimal = Field(
+        ..., description="已正式发料数量（生产领料确认；不含配料/叫料备料转移）"
+    )
     shortage_quantity: Decimal = Field(..., description="缺料数量（相对于总需求）")
     
     # 库存分布
-    main_warehouse_available: Decimal = Field(..., description="主仓可用库存")
-    line_side_available: Decimal = Field(..., description="线边仓可用库存")
+    main_warehouse_available: Decimal = Field(..., description="主仓可用库存（实物，未发料）")
+    line_side_available: Decimal = Field(
+        ..., description="线边仓可用库存（配料/叫料备料后；非正式发料）"
+    )
     
     # 状态：fully_kitted / partial / shortage / not_applicable（不计入齐套）
     status: str = Field(..., description="齐套状态")

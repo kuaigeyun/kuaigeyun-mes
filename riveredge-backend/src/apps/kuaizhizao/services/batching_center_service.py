@@ -58,14 +58,17 @@ class BatchingCenterService:
     async def _batch_picked_quantities(
         self, tenant_id: int, work_order_id: int, material_ids: List[int]
     ) -> Dict[int, Decimal]:
+        """正式发料累计（排除历史叫料备料转移型领料单）。"""
+        from apps.kuaizhizao.utils.picking_posting import filter_gi_picking_ids
+
         if not material_ids:
             return {}
-        picking_ids = await ProductionPicking.filter(
+        pickings = await ProductionPicking.filter(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             deleted_at__isnull=True,
-        ).values_list("id", flat=True)
-        pid_list = list(picking_ids)
+        ).all()
+        pid_list = filter_gi_picking_ids(pickings)
         result = {mid: Decimal("0") for mid in material_ids}
         if not pid_list:
             return result
@@ -131,10 +134,12 @@ class BatchingCenterService:
 
         for req in reqs:
             im = issue_map.get(req.component_id, ISSUE_METHOD_PICK)
-            if not is_batching_material(im, None):
+            source_type = getattr(req, "component_type", None)
+            if not is_batching_material(im, source_type):
                 continue
             batching_item_count += 1
             required = Decimal(str(req.gross_requirement))
+            # 线边就绪 = 已正式发料（无需再配）+ 线边备料；不含主仓
             picked = picked_map.get(req.component_id, Decimal("0"))
             line_side = line_side_map.get(req.component_id, Decimal("0"))
             line_ready = picked + line_side

@@ -192,7 +192,8 @@ import {
   workstationApi,
   factoryListItems,
 } from '../../../../master-data/services/factory'
-import type { Workshop } from '../../../../master-data/types/factory'
+import type { Workshop, WorkCenter } from '../../../../master-data/types/factory'
+import { WorkCenterSelectDropdown } from '../../../../master-data/components/WorkCenterSelectDropdown'
 import { warehouseApi } from '../../../services/warehouse-execution'
 import { materialApi } from '../../../../master-data/services/material'
 import { OperationPickPanel } from '../../../../master-data/components/OperationSequenceEditor'
@@ -1392,7 +1393,7 @@ const WorkOrdersPage: React.FC = () => {
   const [soPullSelectedItemIds, setSoPullSelectedItemIds] = useState<number[]>([])
   const [soPullQuantities, setSoPullQuantities] = useState<Record<number, number>>({})
   const [soPullWorkCenters, setSoPullWorkCenters] = useState<Record<number, number>>({})
-  const [soPullWorkCenterOptions, setSoPullWorkCenterOptions] = useState<Array<{ label: string; value: number }>>([])
+  const [soPullWorkCenterList, setSoPullWorkCenterList] = useState<WorkCenter[]>([])
   const [soPullWorkCenterLoading, setSoPullWorkCenterLoading] = useState(false)
   const [soPullMode, setSoPullMode] = useState<'draft' | 'confirm'>('draft')
   const [soPullGranularity, setSoPullGranularity] = useState<'grouped' | 'per_unit'>('grouped')
@@ -2464,25 +2465,17 @@ const WorkOrdersPage: React.FC = () => {
   }, [])
 
   const ensureSoPullWorkCenters = useCallback(async () => {
-    if (soPullWorkCenterOptions.length > 0) return
+    if (soPullWorkCenterList.length > 0) return
     try {
       setSoPullWorkCenterLoading(true)
       const listRes = await workCenterApi.list({ is_active: true, limit: 1000 })
-      const rows = factoryListItems(listRes as any)
-      setSoPullWorkCenterOptions(
-        rows
-          .filter((r: any) => Number(r?.id) > 0)
-          .map((r: any) => ({
-            value: Number(r.id),
-            label: String(r.name || r.code || r.id),
-          })),
-      )
+      setSoPullWorkCenterList(factoryListItems(listRes as any))
     } catch (e: any) {
-      messageApi.warning(e?.message || t('app.kuaizhizao.salesOrder.loadProductionLinesFailed'))
+      messageApi.warning(e?.message || t('app.kuaizhizao.salesOrder.loadWorkCentersFailed'))
     } finally {
       setSoPullWorkCenterLoading(false)
     }
-  }, [messageApi, soPullWorkCenterOptions.length, t])
+  }, [messageApi, soPullWorkCenterList.length, t])
 
   const openSoPullPreview = useCallback(
     async (salesOrderId: number) => {
@@ -7414,20 +7407,20 @@ const WorkOrdersPage: React.FC = () => {
                   { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                   {
-                    title: t('app.kuaizhizao.salesOrder.productionLine'),
-                    width: 170,
+                    title: t('app.kuaizhizao.salesOrder.workCenter'),
+                    width: 200,
                     render: (_: unknown, row: any) => {
                       const itemId = Number(row?.item_id)
                       return (
-                        <Select
-                          allowClear
-                          showSearch
-                          optionFilterProp="label"
-                          placeholder={t('app.kuaizhizao.salesOrder.selectProductionLine')}
+                        <WorkCenterSelectDropdown
+                          placeholder={t('app.kuaizhizao.salesOrder.selectWorkCenter')}
                           style={{ width: '100%' }}
                           value={soPullWorkCenters[itemId]}
-                          options={soPullWorkCenterOptions}
+                          workCenters={soPullWorkCenterList}
                           loading={soPullWorkCenterLoading}
+                          autoLoad={false}
+                          onWorkCentersChange={setSoPullWorkCenterList}
+                          modalZIndex={token.zIndexPopupBase}
                           onChange={(val) => {
                             setSoPullWorkCenters((prev) => {
                               const next = { ...prev }

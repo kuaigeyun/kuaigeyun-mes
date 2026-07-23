@@ -8,8 +8,8 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Tooltip, Typography, Spin, Empty, Upload, theme as AntdTheme } from 'antd';
+import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Table, Tooltip, Typography, Spin, Empty, Upload, Select, theme as AntdTheme } from 'antd';
 import { CheckCircleOutlined, RollbackOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -65,6 +65,7 @@ import {
   type OutboundHubOrder,
   type OutboundIssueType,
   getOutboundIssueTypeLabel,
+  outboundIssueTypeSegmentOptions,
   isOutboundConfirmable,
   isOutboundWithdrawable,
   outboundConfirmCapabilityReasonMessage,
@@ -114,8 +115,35 @@ const OutboundPage: React.FC = () => {
   const outboundDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const searchFormRef = useRef<ProFormInstance>();
   const quickPullRef = useRef<OutboundQuickPullModalsRef>(null);
+  const outboundTypeFilterRef = useRef<string>('all');
+  const [outboundTypeFilter, setOutboundTypeFilter] = useState<string>('all');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+
+  const handleOutboundTypeFilterChange = useCallback((value: string) => {
+    const next = value || 'all';
+    // 同步写入 ref，避免 setState 后立刻 reload 仍读到旧筛选值
+    outboundTypeFilterRef.current = next;
+    setOutboundTypeFilter(next);
+    searchFormRef.current?.setFieldsValue({
+      outbound_type: next === 'all' ? undefined : next,
+    });
+    actionRef.current?.reload();
+  }, []);
+
+  const outboundTypeSelect = useMemo(
+    () => (
+      <Select
+        value={outboundTypeFilter}
+        options={outboundIssueTypeSegmentOptions(t)}
+        onChange={(v) => handleOutboundTypeFilterChange(String(v))}
+        popupMatchSelectWidth={false}
+        style={{ width: 140 }}
+      />
+    ),
+    [t, outboundTypeFilter, handleOutboundTypeFilterChange],
+  );
 
   const {
     customFields: salesDeliveryListCustomFields,
@@ -500,6 +528,7 @@ const OutboundPage: React.FC = () => {
       dataIndex: 'outbound_type',
       width: 100,
       sorter: true,
+      hideInSearch: true,
       valueEnum: {
         production_picking: { text: getOutboundIssueTypeLabel(t, 'production_picking'), status: 'processing' },
         sales_delivery: { text: getOutboundIssueTypeLabel(t, 'sales_delivery'), status: 'success' },
@@ -691,9 +720,11 @@ const OutboundPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.warehouseOutbound.title')}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound.v2"
         actionRef={actionRef}
+        formRef={searchFormRef}
         rowKey={outboundRowKey}
         columns={columns}
         showAdvancedSearch={true}
+        beforeSearchButtons={outboundTypeSelect}
         pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
         skipFuzzyPinyinClientFilter
         enableRowSelection={outboundPerms.canDelete || outboundPerms.canPrint}
@@ -712,7 +743,14 @@ const OutboundPage: React.FC = () => {
         }
         request={async (params, sort, _filter, searchFormValues) => {
           try {
-            const listParams = resolveOutboundHubListParams(searchFormValues, sort);
+            const typeFilter = outboundTypeFilterRef.current;
+            const listParams = resolveOutboundHubListParams(
+              {
+                ...(searchFormValues as Record<string, unknown>),
+                outbound_type: typeFilter === 'all' ? undefined : typeFilter,
+              },
+              sort,
+            );
             const result = await fetchOutboundHubList(
               {
                 ...(params as Record<string, unknown>),

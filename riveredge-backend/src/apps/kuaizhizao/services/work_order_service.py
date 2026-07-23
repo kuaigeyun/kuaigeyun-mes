@@ -306,13 +306,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
     @staticmethod
     async def has_confirmed_picking_for_work_order(tenant_id: int, work_order_id: int) -> bool:
+        """是否存在已确认的正式发料领料单（排除历史叫料备料转移型单据）。"""
+        from apps.kuaizhizao.utils.picking_posting import filter_gi_picking_ids
+
         confirmed_statuses = ["已领料", "已确认", "confirmed", "picked"]
-        return await ProductionPicking.filter(
+        pickings = await ProductionPicking.filter(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             status__in=confirmed_statuses,
             deleted_at__isnull=True,
-        ).exists()
+        ).all()
+        return bool(filter_gi_picking_ids(pickings))
 
     @staticmethod
     async def assert_confirmed_picking_before_operation_start_if_required(
@@ -326,7 +330,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         if not policy.get("require_confirmed_picking_before_operation_start", False):
             return
         if not await WorkOrderService.has_confirmed_picking_for_work_order(tenant_id, work_order_id):
-            raise BusinessLogicError(f"未确认领料，禁止{action_label}：请先确认该工单的领料单")
+            raise BusinessLogicError(
+                f"未确认正式领料，禁止{action_label}："
+                "请先确认该工单的生产领料单（配料/叫料到线边不算正式发料）"
+            )
 
     async def _match_process_route_for_material(
         self,
@@ -4785,13 +4792,16 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         from apps.kuaizhizao.utils.issue_method_resolver import is_kitting_inventory_material
 
-        # 领料单明细未声明 ForeignKey，不能使用 picking__work_order_id；明细表亦无 deleted_at
-        picking_ids = await ProductionPicking.filter(
+        # 正式发料领料单 ID（排除历史叫料「主仓→线边」备料转移型，避免与线边库存双计）
+        from apps.kuaizhizao.utils.picking_posting import filter_gi_picking_ids
+        from apps.kuaizhizao.utils.issue_method_resolver import resolve_issue_method
+
+        all_pickings = await ProductionPicking.filter(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             deleted_at__isnull=True,
-        ).values_list("id", flat=True)
-        picking_id_list = list(picking_ids) if picking_ids else []
+        ).all()
+        picking_id_list = filter_gi_picking_ids(all_pickings)
 
         component_wos: Dict[int, WorkOrder] = {}
         component_owos: Dict[int, OutsourceWorkOrder] = {}
@@ -4813,6 +4823,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         for req in requirements:
             source_type = getattr(req, "component_type", None)
+            resolved_issue = resolve_issue_method(
+                getattr(req, "issue_method", None),
+                source_type,
+            )
             kitting_applicable = is_kitting_inventory_material(
                 getattr(req, "issue_method", None),
                 source_type,
@@ -4833,6 +4847,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     material_name=req.component_name,
                     material_unit=req.unit,
                     source_type=source_type,
+                    issue_method=resolved_issue,
                     kitting_applicable=False,
                     required_quantity=required_qty,
                     picked_quantity=Decimal("0"),
@@ -4847,12 +4862,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             applicable_count += 1
 
-            # 3.1 获取已领料数量 (从 ProductionPickingItem 汇总)
-            # 状态为“已领料”或“已确认”的视为已下线到车间/线边
+            # 3.1 正式发料数量（已确认领料明细；不含配料/叫料备料）
             if not picking_id_list:
                 picked_qty = Decimal("0")
             else:
-                # Tortoise QuerySet 无 Django 式 .aggregate()，用 annotate + values 汇总
                 agg_rows = await ProductionPickingItem.filter(
                     tenant_id=tenant_id,
                     picking_id__in=picking_id_list,
@@ -4907,7 +4920,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     related_summary = self._build_kitting_related_work_order_summary(child_wo)
                     wo_supply = Decimal(str(child_wo.completed_quantity or 0))
 
-            # 3.4 判定状态：库存 + 已领 + 关联半成品工单完工量
+            # 3.4 需求覆盖：正式发料 + 线边备料 + 主仓实物 + 关联半成品完工
+            # （备料转移不再计入 picked，故不会与 line_side 双计）
             total_available = picked_qty + line_side_qty + main_warehouse_qty + wo_supply
             shortage_qty = required_qty - total_available
             if shortage_qty < 0:
@@ -4927,6 +4941,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 material_name=req.component_name,
                 material_unit=req.unit,
                 source_type=source_type,
+                issue_method=resolved_issue,
                 kitting_applicable=True,
                 required_quantity=required_qty,
                 picked_quantity=picked_qty,

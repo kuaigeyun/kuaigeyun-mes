@@ -69,18 +69,21 @@ def _derive_receipt_notice_push_cap(
     status: Any,
     *,
     has_items: bool,
-    has_outstanding: bool,
-    has_receipt_notice: bool,
+    has_pushable_notice_outstanding: bool,
+    has_raw_outstanding: bool = False,
 ) -> ActionCapability:
+    """按行剩余可通知数量开门禁；已有通知单不阻断分批下推。"""
     push_allowed = False
     push_reason = "purchase_order.push_receipt.not_audited"
     if _is_audited_status(status):
         if not has_items:
             push_reason = "purchase_order.push_receipt.no_items"
-        elif has_receipt_notice:
-            push_reason = "purchase_order.push_receipt_notice.already_exists"
-        elif not has_outstanding:
-            push_reason = "purchase_order.push_receipt.no_outstanding"
+        elif not has_pushable_notice_outstanding:
+            push_reason = (
+                "purchase_order.push_receipt_notice.qty_occupied"
+                if has_raw_outstanding
+                else "purchase_order.push_receipt.no_outstanding"
+            )
         else:
             push_allowed = True
             push_reason = None
@@ -117,6 +120,7 @@ def derive_purchase_order_capabilities(
     has_items: bool = True,
     has_outstanding: bool = False,
     has_pushable_receipt_outstanding: bool = False,
+    has_pushable_notice_outstanding: bool = False,
     has_received: bool = False,
     has_invoice: bool = False,
     has_receipt_notice: bool = False,
@@ -124,6 +128,7 @@ def derive_purchase_order_capabilities(
     has_pending_change: bool = False,
     has_returnable: bool = False,
 ) -> PurchaseOrderCapabilities:
+    del has_receipt_notice  # 历史参数：通知单是否存在不再阻断分批下推
     status = getattr(order, "status", None)
     review_status = getattr(order, "review_status", None)
 
@@ -166,8 +171,8 @@ def derive_purchase_order_capabilities(
     push_receipt_notice_cap = _derive_receipt_notice_push_cap(
         status,
         has_items=has_items,
-        has_outstanding=has_outstanding,
-        has_receipt_notice=has_receipt_notice,
+        has_pushable_notice_outstanding=has_pushable_notice_outstanding,
+        has_raw_outstanding=has_outstanding,
     )
     push_receipt_cap = _derive_purchase_receipt_push_cap(
         status,
@@ -252,6 +257,7 @@ def assert_purchase_order_capability(
     has_items: bool = True,
     has_outstanding: bool = False,
     has_pushable_receipt_outstanding: bool = False,
+    has_pushable_notice_outstanding: bool = False,
     has_received: bool = False,
     has_invoice: bool = False,
     has_receipt_notice: bool = False,
@@ -264,6 +270,7 @@ def assert_purchase_order_capability(
         has_items=has_items,
         has_outstanding=has_outstanding,
         has_pushable_receipt_outstanding=has_pushable_receipt_outstanding,
+        has_pushable_notice_outstanding=has_pushable_notice_outstanding,
         has_received=has_received,
         has_invoice=has_invoice,
         has_receipt_notice=has_receipt_notice,

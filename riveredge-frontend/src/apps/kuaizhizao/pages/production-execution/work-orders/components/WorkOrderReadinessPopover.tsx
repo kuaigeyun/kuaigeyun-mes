@@ -640,10 +640,11 @@ const WorkOrderReadinessPopoverContent: React.FC<{
 
   const callList = Array.isArray(calls) ? calls : []
 
-  /** 配料启用：线边就绪不足（已领+线边+工单供给 < 需求）；主仓有货不计入，正是要配到线边 */
+  /** 配料启用：线边就绪不足（正式发料+线边备料+工单供给 < 需求）；主仓有货不计入 */
   const hasBatchingShortage = items.some((raw) => {
     const it = raw as Record<string, unknown>
     if (it.kitting_applicable === false) return false
+    // 倒冲件由配料进线边、报工扣料；领料件与倒冲件均可去配料
     const required = Number(it.required_quantity ?? it.requiredQuantity ?? 0)
     if (!Number.isFinite(required) || required <= 0) return false
     const picked = Number(it.picked_quantity ?? it.pickedQuantity ?? 0)
@@ -683,7 +684,8 @@ const WorkOrderReadinessPopoverContent: React.FC<{
         <>
           <Space orientation="vertical" size={8} style={{ width: '100%', marginBottom: 8 }}>
             <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
-              仓库可在<strong>物料中心</strong>按齐套缺料主动配料（领料 + 倒冲物料）；现场缺料亦可发起叫料。
+              <strong>配料/叫料</strong>：主仓→线边备料（不算工单耗用）。
+              <strong>生产领料</strong>：正式发料扣库存。齐套「已领」仅含正式发料；线边列为备料库存。
             </Typography.Paragraph>
             <Space wrap>
               <Button

@@ -535,7 +535,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     work_order_id=reporting_data.work_order_id,
                 )
                 if not has_confirmed:
-                    raise BusinessLogicError("未确认领料，禁止报工：请先确认该工单的领料单")
+                    raise BusinessLogicError(
+                        "未确认正式领料，禁止报工：请先确认该工单的生产领料单"
+                        "（配料/叫料到线边不算正式发料）"
+                    )
 
             # 检查工单是否冻结
             if work_order.is_frozen:

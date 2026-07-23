@@ -59,3 +59,10 @@ def is_batching_material(bom_issue_method: Optional[str], source_type: Optional[
         return False
     im = resolve_issue_method(bom_issue_method, source_type)
     return im in (ISSUE_METHOD_PICK, ISSUE_METHOD_BACKFLUSH)
+
+
+def is_pick_list_material(bom_issue_method: Optional[str], source_type: Optional[str] = None) -> bool:
+    """生产领料单明细：仅事前领料 (pick)。倒冲由报工扣线边，不得进入领料清单。"""
+    if not is_kitting_inventory_material(bom_issue_method, source_type):
+        return False
+    return is_pick_material(bom_issue_method, source_type)

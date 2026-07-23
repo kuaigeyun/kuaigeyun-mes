@@ -735,6 +735,7 @@ export const PURCHASE_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> =
   'purchase_order.push_invoice.no_items': '采购单没有明细，无法下推采购发票',
   'purchase_order.push_invoice.already_exists': '该采购单已存在采购发票，不能重复下推',
   'purchase_order.push_receipt_notice.already_exists': '该采购单已存在收货通知单，不能重复下推',
+  'purchase_order.push_receipt_notice.qty_occupied': '可通知数量已被现有收货通知占用，请调整通知单后再下推',
   'purchase_order.push_purchase_return.not_audited': '只有已审核或已确认的采购单才能下推采购退货',
   'purchase_order.push_purchase_return.no_received': '采购单尚无已入库数量，无法下推采购退货',
   'purchase_order.push_purchase_return.no_lines': '没有可退货的采购单明细',

@@ -117,28 +117,42 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
   const effectiveVirtual = virtualProp ?? (optionCount > VIRTUAL_OPTION_THRESHOLD);
 
   const effectiveOptionRender = useMemo(() => {
-    if (!quickEdit) return optionRenderProp;
+    if (!quickEdit && !optionRenderProp) return optionRenderProp;
     return (option: Parameters<NonNullable<SelectProps['optionRender']>>[0], info: Parameters<NonNullable<SelectProps['optionRender']>>[1]) => {
-      const labelNode = optionRenderProp ? optionRenderProp(option, info) : <span>{option.label}</span>;
+      const labelNode = optionRenderProp ? (
+        optionRenderProp(option, info)
+      ) : (
+        <span
+          style={{
+            display: 'block',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {option.label}
+        </span>
+      );
+      if (!quickEdit) return labelNode;
       return (
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
+            alignItems: optionRenderProp ? 'flex-start' : 'center',
             justifyContent: 'space-between',
             gap: 8,
             width: '100%',
             minWidth: 0,
           }}
         >
-          <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{labelNode}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>{labelNode}</div>
           <Button
             type="text"
             size="small"
             icon={<EditOutlined />}
             title={quickEdit.label ?? '快速编辑'}
             aria-label={quickEdit.label ?? '快速编辑'}
-            style={{ flexShrink: 0, color: token.colorTextSecondary }}
+            style={{ flexShrink: 0, color: token.colorTextSecondary, marginTop: optionRenderProp ? 2 : 0 }}
             onMouseDown={(e) => {
               e.preventDefault();
               e.stopPropagation();

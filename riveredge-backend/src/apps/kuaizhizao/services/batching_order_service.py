@@ -131,8 +131,8 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
             im = issue_map.get(item.material_id, "pick")
             if not is_batching_material(im, getattr(item, "source_type", None)):
                 continue
-            # 配料口径：线边就绪量（已领 + 线边仓 + 关联工单供给），不含主仓。
-            # 主仓有货、线边不足，正是「去配料」要把料送到线边的场景。
+            # 配料口径：线边就绪（正式发料 + 线边备料 + 关联工单供给），不含主仓。
+            # picked 不含历史叫料备料转移，避免与线边双计。
             required = item.required_quantity or Decimal("0")
             line_ready = (
                 (item.picked_quantity or Decimal("0"))

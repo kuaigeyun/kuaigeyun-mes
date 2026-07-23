@@ -83,7 +83,7 @@ export const INBOUND_RECEIPT_TYPE_LABELS: Record<InboundReceiptType, string> = {
   material_return: '还料单',
 };
 
-const INBOUND_RECEIPT_TYPES: InboundReceiptType[] = [
+export const INBOUND_RECEIPT_TYPES: InboundReceiptType[] = [
   'purchase',
   'finished_goods',
   'semi_finished_goods',
@@ -107,6 +107,19 @@ export function inboundReceiptTypeValueEnum(
   return Object.fromEntries(
     INBOUND_RECEIPT_TYPES.map((key) => [key, { text: inboundReceiptTypeLabel(t, key), status: 'default' as const }]),
   );
+}
+
+/** 列表工具栏快速筛选：全部 + 各入库类型 */
+export function inboundReceiptTypeSegmentOptions(
+  t: TFunction,
+): Array<{ label: string; value: string }> {
+  return [
+    { label: t('app.kuaizhizao.warehouseCommon.allTypes'), value: 'all' },
+    ...INBOUND_RECEIPT_TYPES.map((type) => ({
+      label: inboundReceiptTypeLabel(t, type),
+      value: type,
+    })),
+  ];
 }
 
 export function isInboundConfirmable(record: InboundHubOrder): boolean {

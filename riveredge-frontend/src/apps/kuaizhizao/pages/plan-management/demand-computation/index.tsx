@@ -1799,7 +1799,15 @@ const DemandComputationPage: React.FC = () => {
           include_outsource: true,
           push_mode: pushMode,
         })
-        messageApi.success(t('app.kuaizhizao.demandComputation.pushSuccess'))
+        if (hasProduction && hasPurchase) {
+          messageApi.success(t('app.kuaizhizao.demandComputation.pushSuccess'))
+        } else if (hasProduction) {
+          messageApi.success(t('app.kuaizhizao.demandComputation.workOrderPushSuccess'))
+        } else if (pushConfig.purchase === 'purchase_order') {
+          messageApi.success(t('app.kuaizhizao.demandComputation.purchaseOrderPushSuccess'))
+        } else {
+          messageApi.success(t('app.kuaizhizao.demandComputation.requisitionPushSuccess'))
+        }
       } else {
         messageApi.warning(t('app.kuaizhizao.demandComputation.pushSelectAtLeastOne'))
         return

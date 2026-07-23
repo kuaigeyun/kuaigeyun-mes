@@ -373,7 +373,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
         messageApi.success(
           res?.purchase_receipt_code
             ? t('app.kuaizhizao.receiptNotice.notifySuccessWithDraft', { receiptCode: res.purchase_receipt_code })
-            : t('app.kuaizhizao.shipmentNotice.notifySuccess'),
+            : t('app.kuaizhizao.receiptNotice.notifySuccess'),
         );
         resetPullRnPreviewModal();
         onSuccess();

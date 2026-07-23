@@ -199,6 +199,59 @@ def _build_purchase_receipt_item_response(item: Any) -> PurchaseReceiptItemRespo
     return PurchaseReceiptItemResponse.model_validate(payload)
 
 
+def _resolve_material_snapshot_fields(
+    material: Optional[Any],
+    item_data: Any,
+) -> tuple[str, str, str, Optional[str]]:
+    """从明细入参 + 主数据解析物料快照（编码/名称/单位/规格）。空值才回填，不覆盖已有值。"""
+    code = str(getattr(item_data, "material_code", None) or "").strip()
+    name = str(getattr(item_data, "material_name", None) or "").strip()
+    unit = str(getattr(item_data, "material_unit", None) or "").strip()
+    spec = getattr(item_data, "material_spec", None)
+    if material is not None:
+        if not code:
+            code = str(
+                getattr(material, "main_code", None) or getattr(material, "code", None) or ""
+            ).strip()
+        if not name:
+            name = str(getattr(material, "name", None) or "").strip()
+        if not unit:
+            unit = str(getattr(material, "base_unit", None) or "pcs").strip()
+        if not (str(spec or "").strip()):
+            spec = getattr(material, "specification", None)
+    return code, name, unit or "pcs", spec
+
+
+def _build_sales_return_item_response(item: Any) -> SalesReturnItemResponse:
+    """统一销售退货明细响应，兼容历史 serial_numbers/date 存储格式。"""
+    payload = {
+        "id": int(getattr(item, "id")),
+        "tenant_id": int(getattr(item, "tenant_id")),
+        "return_id": int(getattr(item, "return_id")),
+        "sales_delivery_item_id": getattr(item, "sales_delivery_item_id", None),
+        "material_id": int(getattr(item, "material_id")),
+        "material_code": str(getattr(item, "material_code", "") or ""),
+        "material_name": str(getattr(item, "material_name", "") or ""),
+        "material_spec": getattr(item, "material_spec", None),
+        "material_unit": str(getattr(item, "material_unit", "") or ""),
+        "return_quantity": float(getattr(item, "return_quantity", 0) or 0),
+        "unit_price": float(getattr(item, "unit_price", 0) or 0),
+        "total_amount": float(getattr(item, "total_amount", 0) or 0),
+        "location_id": getattr(item, "location_id", None),
+        "location_code": getattr(item, "location_code", None),
+        "batch_number": getattr(item, "batch_number", None),
+        "expiry_date": _normalize_optional_datetime(getattr(item, "expiry_date", None)),
+        "serial_numbers": _parse_serial_numbers(getattr(item, "serial_numbers", None)) or None,
+        "status": str(getattr(item, "status", "待退货") or "待退货"),
+        "return_time": _normalize_optional_datetime(getattr(item, "return_time", None)),
+        "notes": getattr(item, "notes", None),
+        "created_at": getattr(item, "created_at"),
+        "updated_at": getattr(item, "updated_at"),
+        **audit_response_fields(item),
+    }
+    return SalesReturnItemResponse.model_validate(payload)
+
+
 def _resolve_unit_conversion_factor(material_units: Any, unit_name: Optional[str]) -> Decimal:
     """从物料多单位配置中解析“业务单位 -> 基础单位”换算因子。"""
     if not unit_name:
@@ -607,6 +660,56 @@ async def occupied_purchase_receipt_qty_by_po_item_ids(
             continue
         occupied_by_po_item[po_item_id] = occupied_by_po_item.get(po_item_id, Decimal("0")) + qty
     return occupied_by_po_item
+
+
+_RECEIPT_NOTICE_VOID_STATUSES = frozenset({"已取消", "cancelled", "CANCELLED"})
+
+
+async def noticed_qty_by_po_item_ids(
+    tenant_id: int,
+    order_ids: List[int],
+) -> dict[int, Decimal]:
+    """
+    统计采购订单行已被有效收货通知占用的数量（未删除、非取消的通知单明细合计）。
+    用于分批下推收货通知时扣减已通知量。
+    """
+    from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+    from apps.kuaizhizao.models.receipt_notice_item import ReceiptNoticeItem
+
+    if not order_ids:
+        return {}
+
+    notices = await ReceiptNotice.filter(
+        tenant_id=tenant_id,
+        purchase_order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).values("id", "status")
+    active_notice_ids: List[int] = []
+    for row in notices:
+        nid = row.get("id")
+        if nid is None:
+            continue
+        status = str(row.get("status") or "").strip()
+        if status in _RECEIPT_NOTICE_VOID_STATUSES:
+            continue
+        active_notice_ids.append(int(nid))
+    if not active_notice_ids:
+        return {}
+
+    noticed_by_po_item: dict[int, Decimal] = {}
+    item_rows = await ReceiptNoticeItem.filter(
+        tenant_id=tenant_id,
+        notice_id__in=active_notice_ids,
+    ).values("purchase_order_item_id", "notice_quantity")
+    for row in item_rows:
+        po_item_id = int(row.get("purchase_order_item_id") or 0)
+        if po_item_id <= 0:
+            continue
+        qty = Decimal(str(row.get("notice_quantity") or 0))
+        if qty <= 0:
+            continue
+        noticed_by_po_item[po_item_id] = noticed_by_po_item.get(po_item_id, Decimal("0")) + qty
+    return noticed_by_po_item
 
 
 async def sync_purchase_order_receipt_quantities(
@@ -1030,24 +1133,33 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 confirmation_data.delivery_time if confirmation_data and confirmation_data.delivery_time else None
             )
 
-            await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
-                status='已领料',
-                picker_id=confirmed_by,
-                picker_name=confirmer_name,
-                picking_time=picking_time,
-                updated_by=confirmed_by
-            )
-
-            # 更新库存（扣减）及其前置的【防超发拦截】闭环
+            # 更新库存（正式发料扣减）及其前置的【防超发拦截】；成功后再回写表头/明细
             try:
                 from apps.kuaizhizao.services.inventory_service import InventoryService
+                from apps.kuaizhizao.utils.picking_posting import (
+                    filter_gi_picking_ids,
+                    is_staging_transfer_picking_notes,
+                )
 
                 picking_items = await ProductionPickingItem.filter(
                     tenant_id=tenant_id, picking_id=picking_id
                 ).all()
                 picking = await ProductionPicking.get(tenant_id=tenant_id, id=picking_id)
-                
-                # 防超发逻辑验证 1.1 (Core Foundation Verification)
+                if is_staging_transfer_picking_notes(getattr(picking, "notes", None)):
+                    raise BusinessLogicError(
+                        "该领料单为历史备料转移单据（主仓→线边），不可再按正式发料确认；"
+                        "请使用配料单/叫料完成备料，或新建生产领料单发料"
+                    )
+
+                # 本期实发数量：优先已填 picked_quantity，否则按需求数量
+                issue_qty_by_item_id = {}
+                for item in picking_items:
+                    qty = item.picked_quantity if item.picked_quantity and item.picked_quantity > 0 else (
+                        item.required_quantity or Decimal(0)
+                    )
+                    issue_qty_by_item_id[item.id] = qty
+
+                # 防超发：仅累计正式发料领料单（排除备料转移型）
                 if picking.work_order_id:
                     from apps.kuaizhizao.models.work_order import WorkOrder
                     from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
@@ -1055,7 +1167,6 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=picking.work_order_id)
                     if wo:
                         try:
-                            # 1. 拿取目标 BOM 需求上限
                             reqs = await calculate_material_requirements_from_bom(
                                 tenant_id=tenant_id,
                                 material_id=wo.product_id,
@@ -1063,43 +1174,54 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                                 only_approved=True
                             )
                             limit_map = {r.component_id: r.gross_requirement for r in reqs}
-                            
-                            # 2. 统计已领过多少（明细表无 FK 至领料单，不可使用 picking__；先查本工单已领料状态的领料单 id）
-                            wo_picking_ids = await ProductionPicking.filter(
+
+                            past_pickings = await ProductionPicking.filter(
                                 tenant_id=tenant_id,
                                 work_order_id=picking.work_order_id,
                                 deleted_at__isnull=True,
                                 status="已领料",
-                            ).values_list("id", flat=True)
-                            wo_pid_list = list(wo_picking_ids) if wo_picking_ids else []
+                            ).all()
+                            wo_pid_list = [
+                                pid for pid in filter_gi_picking_ids(past_pickings)
+                                if pid != picking_id
+                            ]
                             if not wo_pid_list:
                                 past_items = []
                             else:
                                 past_items = await ProductionPickingItem.filter(
                                     tenant_id=tenant_id,
                                     picking_id__in=wo_pid_list,
-                                ).group_by("material_id").annotate(total_picked=Sum("picked_quantity")).values("material_id", "total_picked")
-                            past_map = {item["material_id"]: item["total_picked"] or 0 for item in past_items}
-                            
-                            # 3. 计算本期即将领用的
+                                    status__in=["已领料", "已确认", "picked", "confirmed"],
+                                ).group_by("material_id").annotate(
+                                    total_picked=Sum("picked_quantity")
+                                ).values("material_id", "total_picked")
+                            past_map = {
+                                item["material_id"]: item["total_picked"] or 0
+                                for item in past_items
+                            }
+
                             current_map = {}
                             for item in picking_items:
-                                qty = item.picked_quantity or item.required_quantity or Decimal(0)
-                                current_map[item.material_id] = current_map.get(item.material_id, 0) + float(qty)
-                                
-                            # 4. 严苛防超发出库比对
+                                qty = issue_qty_by_item_id.get(item.id) or Decimal(0)
+                                current_map[item.material_id] = (
+                                    current_map.get(item.material_id, 0) + float(qty)
+                                )
+
                             for mat_id, current_qty in current_map.items():
                                 past_qty = float(past_map.get(mat_id, 0))
                                 total_attempt = past_qty + current_qty
                                 allowed = limit_map.get(mat_id)
                                 if allowed is not None:
-                                    # 允许 1% 浮点误差或容损
                                     if total_attempt > float(allowed) * 1.01:
-                                        raise BusinessLogicError(f"防超发拦截生效：物料[ID:{mat_id}]试图总领用量({total_attempt:.2f}) 超出了当前工单配方上限额度({float(allowed):.2f})，禁止强行出库！")
+                                        raise BusinessLogicError(
+                                            f"防超发拦截生效：物料[ID:{mat_id}]试图总领用量({total_attempt:.2f}) "
+                                            f"超出了当前工单配方上限额度({float(allowed):.2f})，禁止强行出库！"
+                                        )
                         except BusinessLogicError:
                             raise
                         except Exception as calc_e:
                             logger.warning(f"防超发校验过程发生错误，可能是缺少BOM，跳过强制拦截: {calc_e}")
+
                 picking = await ProductionPicking.get(tenant_id=tenant_id, id=picking_id)
                 biz_config = await BusinessConfigService().get_business_config(tenant_id)
                 enforce_fifo = (
@@ -1108,7 +1230,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     .get("fifo", False)
                 )
                 for item in picking_items:
-                    qty = item.required_quantity or item.picked_quantity or Decimal(0)
+                    qty = issue_qty_by_item_id.get(item.id) or Decimal(0)
                     if qty <= 0:
                         continue
                     wh_id = item.warehouse_id if item.warehouse_id else None
@@ -1123,6 +1245,26 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         source_doc_code=picking.picking_code,
                         enforce_fifo=enforce_fifo,
                     )
+                    required = item.required_quantity or Decimal(0)
+                    remaining = required - qty
+                    if remaining < 0:
+                        remaining = Decimal(0)
+                    await ProductionPickingItem.filter(
+                        tenant_id=tenant_id, id=item.id, picking_id=picking_id
+                    ).update(
+                        picked_quantity=qty,
+                        remaining_quantity=remaining,
+                        status="已领料",
+                        picking_time=picking_time,
+                    )
+
+                await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
+                    status="已领料",
+                    picker_id=confirmed_by,
+                    picker_name=confirmer_name,
+                    picking_time=picking_time,
+                    updated_by=confirmed_by,
+                )
             except Exception as inv_e:
                 logger.error("生产领料确认-更新库存失败: %s", inv_e)
                 raise
@@ -1172,7 +1314,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     tenant_id=tenant_id, picking_id=picking_id
                 ).all()
                 for item in items:
-                    qty = item.required_quantity or item.picked_quantity or Decimal(0)
+                    qty = item.picked_quantity if item.picked_quantity and item.picked_quantity > 0 else (
+                        item.required_quantity or Decimal(0)
+                    )
                     if qty <= 0:
                         continue
                     wh_id = item.warehouse_id if item.warehouse_id else None
@@ -1186,6 +1330,15 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         source_doc_id=picking_id,
                         source_doc_code=picking_obj.picking_code,
                     )
+                    required = item.required_quantity or Decimal(0)
+                    await ProductionPickingItem.filter(
+                        tenant_id=tenant_id, id=item.id, picking_id=picking_id
+                    ).update(
+                        picked_quantity=Decimal(0),
+                        remaining_quantity=required,
+                        status="待领料",
+                        picking_time=None,
+                    )
 
                 await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
                     status="待领料",
@@ -1194,9 +1347,6 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     picking_time=None,
                     updated_by=updated_by,
                 )
-                await ProductionPickingItem.filter(
-                    tenant_id=tenant_id, picking_id=picking_id
-                ).update(status="待领料", picking_time=None)
             except BusinessLogicError:
                 raise
             except Exception as e:
@@ -1299,20 +1449,19 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             if not material_requirements:
                 raise ValidationError("BOM中没有物料明细，无法生成领料单")
 
-            # 与齐套/缺料同口径：服务/委外/虚拟件及发料方式 none 的行不需实物发料，
-            # 不进领料单（服务类物料无库存，纳入会导致确认领料必然失败）
-            from apps.kuaizhizao.utils.issue_method_resolver import is_kitting_inventory_material
+            # 领料清单仅含事前领料 (pick)；倒冲由报工从线边扣，不进领料单
+            from apps.kuaizhizao.utils.issue_method_resolver import is_pick_list_material
 
             material_requirements = [
                 req
                 for req in material_requirements
-                if is_kitting_inventory_material(
+                if is_pick_list_material(
                     getattr(req, "issue_method", None),
                     getattr(req, "component_type", None),
                 )
             ]
             if not material_requirements:
-                raise ValidationError("BOM中没有需要实物发料的物料明细，无法生成领料单")
+                raise ValidationError("BOM中没有需事前领料的物料明细（倒冲/不发料不进领料单），无法生成领料单")
 
             # 4. 生成领料单编码
             today = datetime.now().strftime("%Y%m%d")
@@ -1418,10 +1567,17 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             status__in=["待领料", "draft", "pending", "草稿"],
         ).first()
 
+        from apps.kuaizhizao.utils.issue_method_resolver import is_pick_list_material
+
         kitting = await WorkOrderService().get_work_order_kitting_analysis(tenant_id, work_order_id)
         preview_items: List[Dict[str, Any]] = []
         for item in kitting.items or []:
             if not getattr(item, "kitting_applicable", True):
+                continue
+            if not is_pick_list_material(
+                getattr(item, "issue_method", None),
+                getattr(item, "source_type", None),
+            ):
                 continue
             required_qty = Decimal(str(getattr(item, "required_quantity", 0) or 0))
             if required_qty <= 0:
@@ -1511,11 +1667,18 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 )
             )
 
+        from apps.kuaizhizao.utils.issue_method_resolver import is_pick_list_material
+
         kitting = await WorkOrderService().get_work_order_kitting_analysis(tenant_id, work_order_id)
         max_by_material: Dict[int, Decimal] = {}
         meta_by_material: Dict[int, Dict[str, str]] = {}
         for item in kitting.items or []:
             if not getattr(item, "kitting_applicable", True):
+                continue
+            if not is_pick_list_material(
+                getattr(item, "issue_method", None),
+                getattr(item, "source_type", None),
+            ):
                 continue
             material_id = int(getattr(item, "material_id", 0) or 0)
             if material_id <= 0:
@@ -6317,7 +6480,9 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         items = await SalesReturnItem.filter(
             tenant_id=tenant_id, return_id=return_obj.id
         ).order_by("id")
-        item_responses = [SalesReturnItemResponse.model_validate(i) for i in items]
+        if items:
+            await _hydrate_item_material_snapshot(tenant_id, items)
+        item_responses = [_build_sales_return_item_response(i) for i in items]
         item_count = len(item_responses)
         enriched = enrich_sales_return_capabilities_on_response(
             return_obj,
@@ -6416,6 +6581,13 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         tenant_id=tenant_id,
                         id=item_data.material_id
                     )
+                    if not material:
+                        raise ValidationError(f"物料不存在: {item_data.material_id}")
+                    material_code, material_name, material_unit, material_spec = (
+                        _resolve_material_snapshot_fields(material, item_data)
+                    )
+                    if not material_code or not material_name:
+                        raise ValidationError(f"物料 {item_data.material_id} 缺少编码或名称")
                     batch_number = getattr(item_data, 'batch_number', None)
                     sales_delivery_item_id = getattr(item_data, "sales_delivery_item_id", None)
                     if sales_delivery_id and sales_delivery_item_id:
@@ -6432,26 +6604,24 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         _validate_sales_return_batch_traceability(
                             source_batch_number=getattr(source_item, "batch_number", None),
                             return_batch_number=batch_number,
-                            material_label=getattr(item_data, "material_name", None)
-                            or getattr(item_data, "material_code", "未知物料"),
+                            material_label=material_name or material_code or "未知物料",
                         )
                     # 序列号信息（批号和序列号选择功能增强）
                     serial_numbers = getattr(item_data, 'serial_numbers', None)
-                    if material:
-                        await _validate_batch_serial_policy(
-                            tenant_id=tenant_id,
-                            material=material,
-                            batch_number=batch_number,
-                            serial_numbers=serial_numbers,
-                            quantity=getattr(item_data, "return_quantity", None),
-                            scene="销售退货",
-                        )
+                    await _validate_batch_serial_policy(
+                        tenant_id=tenant_id,
+                        material=material,
+                        batch_number=batch_number,
+                        serial_numbers=serial_numbers,
+                        quantity=getattr(item_data, "return_quantity", None),
+                        scene="销售退货",
+                    )
                     _validate_location_if_required(
                         location_required=location_required,
                         location_id=getattr(item_data, 'location_id', None),
                         location_code=getattr(item_data, 'location_code', None),
                         scene="销售退货",
-                        material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                        material_label=material_name or material_code or "未知物料",
                     )
                     # 如果serial_numbers是列表，转换为JSON格式存储
                     if serial_numbers and isinstance(serial_numbers, list):
@@ -6467,10 +6637,10 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         return_id=return_obj.id,
                         sales_delivery_item_id=getattr(item_data, 'sales_delivery_item_id', None),
                         material_id=item_data.material_id,
-                        material_code=item_data.material_code,
-                        material_name=item_data.material_name,
-                        material_spec=getattr(item_data, 'material_spec', None),
-                        material_unit=item_data.material_unit,
+                        material_code=material_code,
+                        material_name=material_name,
+                        material_spec=material_spec,
+                        material_unit=material_unit,
                         return_quantity=item_data.return_quantity,
                         unit_price=item_data.unit_price,
                         total_amount=item_data.total_amount,
@@ -6550,6 +6720,8 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             for ri in return_items:
                 mid = int(ri.material_id)
                 returned_by_material[mid] = returned_by_material.get(mid, 0.0) + float(ri.return_quantity or 0)
+
+        await _hydrate_item_material_snapshot(tenant_id, order_items)
 
         lines: List[InboundCreatePreviewLine] = []
         for item in order_items:
@@ -7081,10 +7253,13 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item, ensure_serial_nos_for_item
 
             items = await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
+            await _hydrate_item_material_snapshot(tenant_id, items)
             for item in items:
                 material = await Material.get_or_none(tenant_id=tenant_id, id=item.material_id)
                 if not material:
-                    continue
+                    raise BusinessLogicError(
+                        f"销售退货确认失败：物料不存在（ID={item.material_id}）"
+                    )
                 if material.batch_managed and not item.batch_number:
                     batch_no = await ensure_batch_no_for_item(tenant_id, material, item)
                     if batch_no:
@@ -7092,10 +7267,14 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         await item.save()
                 if material.serial_managed:
                     count = int(item.return_quantity or 0)
-                    serial_nos = await ensure_serial_nos_for_item(tenant_id, material, item, count)
-                    if serial_nos:
-                        item.serial_numbers = json.dumps(serial_nos)
-                        await item.save()
+                    existing_serials = _parse_serial_numbers(getattr(item, "serial_numbers", None))
+                    if len(existing_serials) < count:
+                        serial_nos = await ensure_serial_nos_for_item(
+                            tenant_id, material, item, count
+                        )
+                        if serial_nos:
+                            item.serial_numbers = json.dumps(serial_nos)
+                            await item.save()
 
             returner_name = await self.get_user_name(confirmed_by)
             receipt_time = resolve_business_datetime(
@@ -7126,12 +7305,19 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     if qty <= 0:
                         continue
                     wh_id = header.warehouse_id
+                    if wh_id is None:
+                        raise BusinessLogicError(
+                            f"无法确定入库仓库：物料 "
+                            f"{getattr(item, 'material_name', '') or getattr(item, 'material_code', '') or item.material_id}"
+                        )
+                    serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        serial_nos=serial_nos or None,
                         source_type="sales_return",
                         source_doc_id=return_id,
                         source_doc_code=return_obj.return_code,
@@ -7271,24 +7457,29 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 location_required, _ = await _get_warehouse_policy_flags(tenant_id)
                 for item_data in items:
                     material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id)
+                    if not material:
+                        raise ValidationError(f"物料不存在: {item_data.material_id}")
+                    material_code, material_name, material_unit, material_spec = (
+                        _resolve_material_snapshot_fields(material, item_data)
+                    )
+                    if not material_code or not material_name:
+                        raise ValidationError(f"物料 {item_data.material_id} 缺少编码或名称")
                     batch_number = getattr(item_data, "batch_number", None)
                     serial_numbers = getattr(item_data, "serial_numbers", None)
-                    if material:
-                        await _validate_batch_serial_policy(
-                            tenant_id=tenant_id,
-                            material=material,
-                            batch_number=batch_number,
-                            serial_numbers=serial_numbers,
-                            quantity=getattr(item_data, "return_quantity", None),
-                            scene="销售退货",
-                        )
+                    await _validate_batch_serial_policy(
+                        tenant_id=tenant_id,
+                        material=material,
+                        batch_number=batch_number,
+                        serial_numbers=serial_numbers,
+                        quantity=getattr(item_data, "return_quantity", None),
+                        scene="销售退货",
+                    )
                     _validate_location_if_required(
                         location_required=location_required,
                         location_id=getattr(item_data, "location_id", None),
                         location_code=getattr(item_data, "location_code", None),
                         scene="销售退货",
-                        material_label=getattr(item_data, "material_name", None)
-                        or getattr(item_data, "material_code", "未知物料"),
+                        material_label=material_name or material_code or "未知物料",
                     )
                     if serial_numbers and isinstance(serial_numbers, list):
                         serial_numbers_json = json.dumps(serial_numbers)
@@ -7302,10 +7493,10 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         return_id=return_obj.id,
                         sales_delivery_item_id=getattr(item_data, "sales_delivery_item_id", None),
                         material_id=item_data.material_id,
-                        material_code=item_data.material_code,
-                        material_name=item_data.material_name,
-                        material_spec=getattr(item_data, "material_spec", None),
-                        material_unit=item_data.material_unit,
+                        material_code=material_code,
+                        material_name=material_name,
+                        material_spec=material_spec,
+                        material_unit=material_unit,
                         return_quantity=item_data.return_quantity,
                         unit_price=item_data.unit_price,
                         total_amount=item_data.total_amount,

@@ -452,6 +452,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "purchase_order.push_receipt.no_outstanding": "采购单已全部入库，无法下推收货/入库",
     "purchase_order.push_receipt.qty_occupied": "该采购单存在未完成的采购入库单，请处理后再下推",
     "purchase_order.push_receipt_notice.already_exists": "该采购单已存在收货通知单，不能重复下推",
+    "purchase_order.push_receipt_notice.qty_occupied": "可通知数量已被现有收货通知占用，请调整通知单后再下推",
     "sales_delivery.push_delivery_notice.not_allowed": "当前销售出库单不可下推送货单",
     "sales_delivery.push_delivery_notice.cancelled": "销售出库单已取消，不可下推送货单",
     "sales_delivery.push_delivery_notice.no_customer": "销售出库单缺少客户，不可下推送货单",

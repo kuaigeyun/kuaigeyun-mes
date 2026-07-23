@@ -168,6 +168,8 @@ import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { workCenterApi, factoryListItems } from '../../../../master-data/services/factory';
+import type { WorkCenter } from '../../../../master-data/types/factory';
+import { WorkCenterSelectDropdown } from '../../../../master-data/components/WorkCenterSelectDropdown';
 import type { Customer } from '../../../../master-data/types/supply-chain';
 import {
   applySalesDocumentLineMaterialPricing,
@@ -1390,8 +1392,8 @@ const SalesOrdersPage: React.FC = () => {
   const [workOrderSelectedItemIds, setWorkOrderSelectedItemIds] = useState<number[]>([]);
   const [workOrderPushQuantities, setWorkOrderPushQuantities] = useState<Record<number, number>>({});
   const [workOrderSelectedWorkCenters, setWorkOrderSelectedWorkCenters] = useState<Record<number, number>>({});
-  const [workCenterOptions, setWorkCenterOptions] = useState<Array<{ label: string; value: number }>>([]);
-  const [workCenterOptionsLoading, setWorkCenterOptionsLoading] = useState(false);
+  const [workCenterList, setWorkCenterList] = useState<WorkCenter[]>([]);
+  const [workCenterListLoading, setWorkCenterListLoading] = useState(false);
   const [workOrderPushMode, setWorkOrderPushMode] = useState<'draft' | 'confirm'>('draft');
   const [workOrderGranularity, setWorkOrderGranularity] = useState<'grouped' | 'per_unit'>('grouped');
   const [pushShipmentNoticeWarehouseOptions, setPushShipmentNoticeWarehouseOptions] = useState<Array<{ label: string; value: number }>>([]);
@@ -1431,23 +1433,15 @@ const SalesOrdersPage: React.FC = () => {
     setPushShipmentNoticeWarehouseOptions([]);
     setPushShipmentNoticeLineWh({});
     const ensureWorkCentersLoaded = async () => {
-      if (workCenterOptions.length > 0) return;
+      if (workCenterList.length > 0) return;
       try {
-        setWorkCenterOptionsLoading(true);
+        setWorkCenterListLoading(true);
         const listRes = await workCenterApi.list({ is_active: true, limit: 1000 });
-        const rows = factoryListItems(listRes as any);
-        setWorkCenterOptions(
-          rows
-            .filter((r: any) => Number(r?.id) > 0)
-            .map((r: any) => ({
-              value: Number(r.id),
-              label: String(r.name || r.code || r.id),
-            })),
-        );
+        setWorkCenterList(factoryListItems(listRes as any));
       } catch (error: any) {
-        messageApi.warning(error?.message || t('app.kuaizhizao.salesOrder.loadProductionLinesFailed'));
+        messageApi.warning(error?.message || t('app.kuaizhizao.salesOrder.loadWorkCentersFailed'));
       } finally {
-        setWorkCenterOptionsLoading(false);
+        setWorkCenterListLoading(false);
       }
     };
     fetchPreview()
@@ -1749,8 +1743,12 @@ const SalesOrdersPage: React.FC = () => {
         const res = await pushPreviewAction.doPush();
         messageApi.success(res?.message || t('app.kuaizhizao.salesOrder.invoiceCreated'));
       }
-      if (['work_order', 'shipment_notice', 'demand_computation'].includes(pushPreviewData.target_type)) {
-        messageApi.success(t('app.kuaizhizao.salesOrder.pushSuccess'));
+      if (pushPreviewData.target_type === 'shipment_notice') {
+        messageApi.success(t('app.kuaizhizao.salesOrder.shipmentNoticeCreated'));
+      } else if (pushPreviewData.target_type === 'demand_computation') {
+        messageApi.success(t('app.kuaizhizao.salesOrder.demandComputationCreated'));
+      } else if (pushPreviewData.target_type === 'work_order') {
+        messageApi.success(t('app.kuaizhizao.salesOrder.workOrderCreated'));
       }
       pushPreviewAction.onSuccess();
       setPushPreviewOpen(false);
@@ -4864,23 +4862,23 @@ const SalesOrdersPage: React.FC = () => {
                   { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   {
-                    title: t('app.kuaizhizao.salesOrder.productionLine'),
+                    title: t('app.kuaizhizao.salesOrder.workCenter'),
                     dataIndex: 'work_center_id',
                     key: 'work_center_id',
-                    width: 170,
+                    width: 200,
                     render: (_: unknown, row: any) => {
                       const itemId = Number(row?.item_id);
                       if (!Number.isFinite(itemId) || itemId <= 0) return null;
                       return (
-                        <Select
-                          allowClear
-                          showSearch
-                          optionFilterProp="label"
-                          placeholder={t('app.kuaizhizao.salesOrder.selectProductionLine')}
+                        <WorkCenterSelectDropdown
+                          placeholder={t('app.kuaizhizao.salesOrder.selectWorkCenter')}
                           style={{ width: '100%' }}
                           value={workOrderSelectedWorkCenters[itemId]}
-                          options={workCenterOptions}
-                          loading={workCenterOptionsLoading}
+                          workCenters={workCenterList}
+                          loading={workCenterListLoading}
+                          autoLoad={false}
+                          onWorkCentersChange={setWorkCenterList}
+                          modalZIndex={elevatedModalZIndex}
                           onChange={(val) => {
                             setWorkOrderSelectedWorkCenters((prev) => {
                               const next = { ...prev };
