@@ -73,6 +73,8 @@ async def infra_superadmin_login(data: InfraSuperAdminLoginRequest, request: Req
         from core.services.interfaces.service_registry import ServiceLocator
         from core.utils.ip_parser import parse_ip_info
 
+        from core.utils.client_channel import resolve_login_device_from_request
+
         login_ip = _get_client_ip(request)
         user_agent = request.headers.get("User-Agent", "")
         ip_info = {}
@@ -90,7 +92,10 @@ async def infra_superadmin_login(data: InfraSuperAdminLoginRequest, request: Req
                 login_ip=login_ip,
                 user_agent=user_agent,
                 login_location=ip_info.get("location"),
-                login_device=ip_info.get("device"),
+                login_device=resolve_login_device_from_request(
+                    request,
+                    ua_device_fallback=ip_info.get("device"),
+                ),
                 login_browser=ip_info.get("browser"),
                 success=True,
                 failure_reason=None,

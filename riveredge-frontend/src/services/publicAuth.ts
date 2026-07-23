@@ -4,6 +4,8 @@
  * 避免引入 services/api.ts 的全局依赖链，缩短登录首包解析与执行时间。
  */
 
+import { webClientChannelHeaders } from '../utils/clientChannel';
+
 export interface LoginRequest {
   username: string;
   password: string;
@@ -113,7 +115,10 @@ async function publicRequest<T>(url: string, options?: { method?: string; data?:
 
   const response = await fetch(requestUrl, {
     method: options?.method || 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...webClientChannelHeaders(),
+    },
     body: options?.data !== undefined ? JSON.stringify(options.data) : undefined,
   });
 

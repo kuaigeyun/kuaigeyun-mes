@@ -7,13 +7,8 @@ import './global.less'
 import './styles/theme-plain.less'
 import { useGlobalStore } from './stores/globalStore'
 import { seedCurrentUserFromAuthStorage } from './utils/restoredUser'
-import { redirectToMobileIfNarrow } from './utils/redirectToMobileIfNarrow'
-
 import './initSpinIndicator'
 import './config/dayjs'
-
-// 窄屏交由 /mobile；已发起跳转则不再挂载 PC
-const redirectedToMobile = redirectToMobileIfNarrow()
 
 // ⚠️ 抑制 Three.js / R3F 已知的不兼容警告 (THREE.Clock 弃用)
 if (typeof console !== 'undefined') {
@@ -26,7 +21,7 @@ if (typeof console !== 'undefined') {
   };
 }
 
-if (typeof window !== 'undefined' && !redirectedToMobile) {
+if (typeof window !== 'undefined') {
   import('./utils/performance').then(({ performanceMonitor, ImageLazyLoader }) => {
     ImageLazyLoader.init();
     window.addEventListener('load', () => {
@@ -38,7 +33,7 @@ if (typeof window !== 'undefined' && !redirectedToMobile) {
   });
 }
 
-if (typeof window !== 'undefined' && !redirectedToMobile) {
+if (typeof window !== 'undefined') {
   window.addEventListener('unhandledrejection', (event) => {
     console.error('⚠️ 未处理的 Promise 错误:', event.reason);
     event.preventDefault();
@@ -98,8 +93,6 @@ const AppWrapper = import.meta.env.DEV ? (
 );
 
 async function mountApp() {
-  if (redirectedToMobile) return
-
   try {
     await useGlobalStore.persist.rehydrate()
   } catch {

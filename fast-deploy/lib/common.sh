@@ -2314,7 +2314,34 @@ cmd_ensure_frontend_dist() {
     exit 1
 }
 
-# 确保 Caddy /mobile 所需 web-dist 存在：已有则跳过；私仓已有产物则复制；已启用则拉仓安装。
+# 主仓无 H5 时写入占位页，保证 Caddy /mobile 可挂载且不依赖私仓。
+write_mobile_web_dist_placeholder() {
+    mkdir -p "$MOBILE_WEB_DIR"
+    cat >"$MOBILE_WEB_DIR/index.html" <<'EOF'
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>移动端 H5 未安装</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; line-height: 1.6; color: #222; }
+    code { background: #f4f4f5; padding: 0.1em 0.35em; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>移动端 H5 尚未安装</h1>
+  <p>主仓已正常运行。手机端为可选扩展，需私仓 <code>kuaigeyun-client</code>。</p>
+  <p>安装：<code>./fast-deploy/deploy.sh install-h5</code><br />
+  或向导菜单 <strong>[4] 扩展应用 → [3] 安装 H5</strong></p>
+</body>
+</html>
+EOF
+    log_warn "已写入 H5 占位页 → $MOBILE_WEB_DIR（不影响主仓启动）"
+}
+
+# 确保 Caddy /mobile 可挂载：已有产物则跳过；可选从私仓安装；失败仅警告并写占位页。
+# 绝不因扩展仓阻断主仓 install / update / start。
 ensure_mobile_web_dist() {
     if [ -f "$MOBILE_WEB_DIR/index.html" ]; then
         return 0
@@ -2325,20 +2352,23 @@ ensure_mobile_web_dist() {
     [ -n "$path" ] || path="$(_client_default_repo_path)"
     if _resolve_client_web_dist_dir "$path" >/dev/null 2>&1; then
         log_info "检测到私仓 H5 产物，正在安装到 ${MOBILE_WEB_DIR}…"
-        install_mobile_h5_from_client_repo "$path" || return 1
-        return 0
+        if install_mobile_h5_from_client_repo "$path"; then
+            return 0
+        fi
+        log_warn "从私仓安装 H5 失败，改用占位页（不阻断主仓）"
     fi
     client_en="$(read_deploy_env_value CLIENT_ENABLED || echo 0)"
     if [ "$client_en" = "1" ]; then
-        log_info "CLIENT_ENABLED=1 且缺少 web-dist，执行安装 H5…"
-        cmd_install_client_repo || return 1
-        return 0
+        log_info "CLIENT_ENABLED=1 且缺少 web-dist，尝试安装 H5…"
+        if cmd_install_client_repo; then
+            return 0
+        fi
+        log_warn "H5 私仓同步失败，改用占位页（不阻断主仓；可稍后 ./fast-deploy/deploy.sh install-h5）"
+    else
+        log_warn "未部署移动端 H5（可选扩展）。主仓继续启动；需要时执行 ./fast-deploy/deploy.sh install-h5"
     fi
-    log_error "缺少 $MOBILE_WEB_DIR/index.html（Caddy /mobile 需要移动端 H5）"
-    log_error "请先执行: ./fast-deploy/deploy.sh install-h5"
-    log_error "（向导：扩展应用 → [3] 安装 H5；需能访问私仓 kuaigeyun-client）"
-    log_error "开发机构建产物: ./fast-deploy/build.mobile.web.sh 后推送到私仓"
-    return 1
+    write_mobile_web_dist_placeholder
+    return 0
 }
 
 gen_caddyfile() {
@@ -2352,7 +2382,7 @@ gen_caddyfile() {
     frontend_root="$(caddy_native_path "$FRONTEND_DIR/dist")"
     [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/index.html，请先 build"; exit 1; }
     [ -f "$FRONTEND_DIR/dist/login.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/login.html（登录 MPA），请先 build.web"; exit 1; }
-    ensure_mobile_web_dist || exit 1
+    ensure_mobile_web_dist
     mobile_web_root="$(caddy_native_path "$MOBILE_WEB_DIR")"
 
     if [ -n "$CADDY_DOMAIN" ]; then
@@ -3982,7 +4012,7 @@ cmd_pro_apps_status() {
         python_bin="python"
     fi
     if [ ! -f "$PROJECT_ROOT/fast-deploy/tools/workspace/workspace.yaml" ]; then
-        log_warn "尚无 fast-deploy/tools/workspace/workspace.yaml，请先执行安装/更新或配置仓库"
+        log_warn "尚无 fast-deploy/tools/workspace/workspace.yaml（扩展应用未组装；与主仓 install/update 无关）"
         return 1
     fi
     (cd "$PROJECT_ROOT" && "$python_bin" "$py" --status)

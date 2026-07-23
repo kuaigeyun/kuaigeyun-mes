@@ -1105,6 +1105,42 @@ function Sync-ProdAppUrls {
     }
 }
 
+function Write-MobileWebDistPlaceholder {
+    if (-not (Test-Path $script:MobileWebDir)) {
+        New-Item -ItemType Directory -Path $script:MobileWebDir -Force | Out-Null
+    }
+    $html = @'
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>移动端 H5 未安装</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; line-height: 1.6; color: #222; }
+    code { background: #f4f4f5; padding: 0.1em 0.35em; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>移动端 H5 尚未安装</h1>
+  <p>主仓已正常运行。手机端为可选扩展，需私仓 <code>kuaigeyun-client</code>。</p>
+  <p>安装：<code>./fast-deploy/deploy.sh install-h5</code><br />
+  或向导菜单 <strong>[4] 扩展应用 → [3] 安装 H5</strong></p>
+</body>
+</html>
+'@
+    Set-Content -Path (Join-Path $script:MobileWebDir 'index.html') -Value $html -Encoding UTF8
+    Write-LogWarn "已写入 H5 占位页 → $($script:MobileWebDir)（不影响主仓启动）"
+}
+
+# 主仓 start 不因 H5 私仓阻断；缺产物时写占位页。
+function Ensure-MobileWebDist {
+    $index = Join-Path $script:MobileWebDir 'index.html'
+    if (Test-Path $index) { return }
+    Write-LogWarn "未部署移动端 H5（可选扩展）。主仓继续启动；需要时执行 ./fast-deploy/deploy.sh install-h5"
+    Write-MobileWebDistPlaceholder
+}
+
 function New-Caddyfile {
     Load-DeployEnv
     Sync-ProdAppUrls
@@ -1113,10 +1149,8 @@ function New-Caddyfile {
 
     $backendAddr = "127.0.0.1:$($script:BACKEND_PORT)"
     $frontendRoot = (Join-Path $script:FrontendDir 'dist') -replace '\\','/'
+    Ensure-MobileWebDist
     $mobileWebRoot = $script:MobileWebDir -replace '\\','/'
-    if (-not (Test-Path (Join-Path $script:MobileWebDir 'index.html'))) {
-        throw "缺少 $($script:MobileWebDir)\index.html（Caddy /mobile）。请先: ./fast-deploy/deploy.sh install-h5"
-    }
 
     if ($script:CADDY_DOMAIN) {
         $addr = Get-CaddySiteAddrForDomain $script:CADDY_DOMAIN

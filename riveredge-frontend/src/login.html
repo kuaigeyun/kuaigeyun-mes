@@ -9,37 +9,6 @@
 
     <meta name="theme-color" content="#141414" />
 
-    <!-- <1200 由 H5 接管（无平板中间档）；开发跨端口；?desktop=1 留 PC -->
-    <script>
-      (function () {
-        try {
-          var path = location.pathname;
-          if (path === '/mobile' || path.indexOf('/mobile/') === 0) return;
-          var q = new URLSearchParams(location.search);
-          if (q.get('desktop') === '1') {
-            sessionStorage.setItem('riveredge_prefer_pc', '1');
-            return;
-          }
-          if (sessionStorage.getItem('riveredge_prefer_pc') === '1') return;
-          function goH5IfNeeded() {
-            if (sessionStorage.getItem('riveredge_prefer_pc') === '1') return;
-            if (!window.matchMedia('(max-width: 1199px)').matches) return;
-            var port = location.port;
-            var url = '/mobile/';
-            if (port === '8100' || port === '5173') {
-              url = location.protocol + '//' + location.hostname + ':8081/';
-            }
-            location.replace(url);
-          }
-          goH5IfNeeded();
-          var mql = window.matchMedia('(max-width: 1199px)');
-          if (mql.addEventListener) mql.addEventListener('change', goH5IfNeeded);
-          else if (mql.addListener) mql.addListener(goH5IfNeeded);
-          window.addEventListener('resize', goH5IfNeeded);
-        } catch (e) {}
-      })();
-    </script>
-
     <!-- 外链样式：避免 Windows + preserveSymlinks 下 Vite html-inline-proxy 对 <style> 解析失败 -->
     <link rel="stylesheet" href="./login-shell.css" />
 

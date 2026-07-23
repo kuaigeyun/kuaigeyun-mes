@@ -9,6 +9,7 @@ import { clearAuth, getToken, isInfraSuperAdminUser } from '../utils/auth';
 import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../utils/activityUtils';
 import { handleNetworkError, handleServerError, withRetry } from '../utils/errorRecovery';
 import { navigateTo } from '../utils/navigation';
+import { webClientChannelHeaders } from '../utils/clientChannel';
 
 /**
  * API 基础 URL
@@ -218,19 +219,22 @@ export async function apiRequest<T = any>(
   
   // 3. 构建请求头
   const headers: Record<string, string> = {};
-  
+
   // Content-Type（FormData 时不设置，让浏览器自动设置）
   const isFormData = options?.body instanceof FormData;
   if (!isFormData) {
     headers['Content-Type'] = 'application/json';
   }
-  
+
+  // 客户端渠道（登录日志设备识别；PC / 工位由 VITE_CLIENT_CHANNEL 区分）
+  Object.assign(headers, webClientChannelHeaders());
+
   // Authorization（公开接口不需要）
   if (token && !isPublicEndpoint) {
     headers['Authorization'] = `Bearer ${token}`;
     // console.log('✅ apiRequest: 添加 Authorization 头');
   }
-  
+
   // X-Tenant-ID（所有非公开接口都需要添加，因为后端所有需要租户上下文的API都需要这个请求头）
   if (!isPublicEndpoint && tenantId) {
     headers['X-Tenant-ID'] = tenantId;

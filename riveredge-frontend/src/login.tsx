@@ -29,9 +29,7 @@ import viVNLocale from './locales/vi-VN.login';
 import LoginPage from './pages/login';
 import { AntdAppBridge } from './utils/antdAppApis';
 import { getGuestLanguageStorageKey, resolveLoginInitialLanguage } from './utils/localeBootstrap';
-import { redirectToMobileIfNarrow } from './utils/redirectToMobileIfNarrow';
 
-const redirectedToMobile = redirectToMobileIfNarrow();
 const initialLang = resolveLoginInitialLanguage();
 
 const LOGIN_LOCALE_BUNDLES: Record<string, Record<string, string>> = {
@@ -118,7 +116,7 @@ function LoginRoot() {
 }
 
 const rootElement = document.getElementById('root');
-if (rootElement && !redirectedToMobile) {
+if (rootElement) {
   ReactDOM.createRoot(rootElement).render(<LoginRoot />);
 }
 

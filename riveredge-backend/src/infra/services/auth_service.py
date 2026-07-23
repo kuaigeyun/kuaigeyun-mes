@@ -1375,6 +1375,13 @@ class AuthService:
                 # IP解析失败不影响登录流程，静默处理
                 logger.debug(f"IP地址解析失败: {login_ip}, 错误: {e}")
 
+            from core.utils.client_channel import resolve_login_device_from_request
+
+            login_device = resolve_login_device_from_request(
+                request,
+                ua_device_fallback=ip_info.get("device"),
+            )
+
             # 通过服务接口记录登录事件
             if not ServiceLocator.has_service("audit_log_service"):
                 logger.warning("audit_log_service 未注册，跳过登录日志记录（请检查服务初始化顺序）")
@@ -1387,7 +1394,7 @@ class AuthService:
                     login_ip=login_ip,
                     user_agent=user_agent,
                     login_location=ip_info.get("location"),  # IP地理位置
-                    login_device=ip_info.get("device"),  # 设备类型
+                    login_device=login_device,  # 优先 X-Client-Channel，否则 UA
                     login_browser=ip_info.get("browser"),  # 浏览器信息
                     success=(login_status == "success"),
                     failure_reason=failure_reason,
