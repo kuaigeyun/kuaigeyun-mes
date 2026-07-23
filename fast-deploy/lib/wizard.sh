@@ -722,20 +722,32 @@ wizard_ask_restart_choice() {
 
 wizard_run_ext_pro() {
     echo ""
-    cmd_install_extension_apps pro || true
-    wizard_say "专业应用启用时仍需在应用中心输入 License Key；组装后请重启服务。"
+    if cmd_install_extension_apps pro; then
+        wizard_say_ok "专业包已同步并组装。应用中心仍需 License Key；请重启服务后同步菜单。"
+        return 0
+    fi
+    wizard_say_warn "专业包安装/更新失败（见上方日志）。常见原因：Token、分支、PyYAML、compose 源目录缺失。"
+    return 1
 }
 
 wizard_run_ext_custom() {
     echo ""
-    cmd_install_extension_apps custom || true
-    wizard_say "定制应用组装完成后请重启服务；租户侧按需启用。"
+    if cmd_install_extension_apps custom; then
+        wizard_say_ok "定制包已同步并组装。请重启服务后同步菜单；租户侧按需启用应用。"
+        return 0
+    fi
+    wizard_say_warn "定制包安装/更新失败（见上方日志）。常见原因：Token、分支、PyYAML、compose 源目录缺失。"
+    return 1
 }
 
 wizard_run_ext_h5() {
     echo ""
-    cmd_install_client_repo || true
-    wizard_say "移动端 H5 已同步并部署到 riveredge-app/mobile/web-dist（Caddy /mobile）。生产环境请再执行 start/update 以刷新网关。"
+    if cmd_install_client_repo; then
+        wizard_say_ok "移动端 H5 已同步并部署到 riveredge-app/mobile/web-dist（Caddy /mobile）。生产环境请再执行 start/update 以刷新网关。"
+        return 0
+    fi
+    wizard_say_warn "移动端 H5 安装/更新失败（见上方日志）。需私仓中已有 web-dist，或先执行 build.mobile.web.sh。"
+    return 1
 }
 
 wizard_ask_ext_install_choice() {

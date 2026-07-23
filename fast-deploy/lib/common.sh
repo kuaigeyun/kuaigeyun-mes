@@ -3752,12 +3752,15 @@ _git_clean_untracked_safe() {
     elif [ "$enabled" != "1" ]; then
         return 0
     fi
-    log_info "清理未跟踪文件（保留 .env / uploads / .logs 等本地数据）..."
+    log_info "清理未跟踪文件（保留 .env / uploads / .logs / 扩展组装产物）..."
+    # workspace.yaml 与 compose 进 apps 的目录在 .gitignore 中；若不排除，
+    # 主仓 update 的 git clean 会删掉它们，造成「扩展已启用但 manifest 不存在」。
     git clean -fd \
         -e '.logs' \
         -e '.logs/' \
         -e 'riveredge-backend/.env' \
         -e 'fast-deploy/config/deploy.env' \
+        -e 'fast-deploy/tools/workspace/workspace.yaml' \
         -e '.playwright-browsers' \
         -e '.playwright-browsers/' \
         -e '.caddy-data' \
@@ -3766,7 +3769,39 @@ _git_clean_untracked_safe() {
         -e '.caddy-config/' \
         -e 'riveredge-backend/uploads' \
         -e 'riveredge-backend/uploads/' \
+        -e 'riveredge-backend/src/apps/haoligo' \
+        -e 'riveredge-backend/src/apps/haoligo/' \
+        -e 'riveredge-backend/src/apps/kuaiai' \
+        -e 'riveredge-backend/src/apps/kuaiai/' \
+        -e 'riveredge-backend/src/apps/kuaireport' \
+        -e 'riveredge-backend/src/apps/kuaireport/' \
+        -e 'riveredge-backend/src/apps/kuaiiot' \
+        -e 'riveredge-backend/src/apps/kuaiiot/' \
+        -e 'riveredge-frontend/src/apps/haoligo' \
+        -e 'riveredge-frontend/src/apps/haoligo/' \
+        -e 'riveredge-frontend/src/apps/kuaiai' \
+        -e 'riveredge-frontend/src/apps/kuaiai/' \
+        -e 'riveredge-frontend/src/apps/kuaireport' \
+        -e 'riveredge-frontend/src/apps/kuaireport/' \
+        -e 'riveredge-frontend/src/apps/kuaiiot' \
+        -e 'riveredge-frontend/src/apps/kuaiiot/' \
         || true
+}
+
+# 主仓 update 后或扩展开关已开时，按 deploy.env 重新写入 yaml 并 compose
+recompose_extension_apps_if_enabled() {
+    load_deploy_env
+    local pro_en custom_en
+    pro_en="$(read_deploy_env_value PRO_ENABLED || echo 0)"
+    custom_en="$(read_deploy_env_value CUSTOM_ENABLED || echo 0)"
+    if [ "$pro_en" != "1" ] && [ "$custom_en" != "1" ]; then
+        return 0
+    fi
+    log_info "扩展应用已启用，重新组装（workspace compose）..."
+    run_workspace_compose || {
+        log_error "扩展应用组装失败。请检查私仓路径与 PyYAML，或执行: ./fast-deploy/deploy.sh pro-apps all"
+        return 1
+    }
 }
 
 # 面板展示用：基于上次 fetch 的 origin/<branch> 比较（不额外 fetch）
@@ -3939,10 +3974,20 @@ write_workspace_yaml_from_deploy_env() {
     custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
     [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
 
-    # workspace.yaml 中 repo 用相对主仓根的路径
-    pro_rel="$(python -c "import os.path; print(os.path.relpath(r'''$pro_path''', r'''$PROJECT_ROOT'''))" 2>/dev/null \
+    # workspace.yaml 中 repo 用相对主仓根的路径（优先 venv/python3，避免仅有 python3 的机器写失败）
+    local py_rel="python3"
+    if [ -x "$PROJECT_ROOT/riveredge-backend/.venv/bin/python" ]; then
+        py_rel="$PROJECT_ROOT/riveredge-backend/.venv/bin/python"
+    elif [ -x "$PROJECT_ROOT/riveredge-backend/.venv/Scripts/python.exe" ]; then
+        py_rel="$PROJECT_ROOT/riveredge-backend/.venv/Scripts/python.exe"
+    elif command -v python3 >/dev/null 2>&1; then
+        py_rel="python3"
+    elif command -v python >/dev/null 2>&1; then
+        py_rel="python"
+    fi
+    pro_rel="$("$py_rel" -c "import os.path; print(os.path.relpath(r'''$pro_path''', r'''$PROJECT_ROOT'''))" 2>/dev/null \
         || echo "../kuaigeyun-pro")"
-    custom_rel="$(python -c "import os.path; print(os.path.relpath(r'''$custom_path''', r'''$PROJECT_ROOT'''))" 2>/dev/null \
+    custom_rel="$("$py_rel" -c "import os.path; print(os.path.relpath(r'''$custom_path''', r'''$PROJECT_ROOT'''))" 2>/dev/null \
         || echo "../kuaigeyun-custom")"
 
     if [ "$pro_en" != "1" ] && [ "$custom_en" != "1" ]; then
@@ -4004,6 +4049,10 @@ run_workspace_compose() {
 cmd_pro_apps_status() {
     load_deploy_env
     local py="$PROJECT_ROOT/fast-deploy/tools/workspace/compose.py" python_bin="python3"
+    local pro_en custom_en yaml
+    pro_en="$(read_deploy_env_value PRO_ENABLED || echo 0)"
+    custom_en="$(read_deploy_env_value CUSTOM_ENABLED || echo 0)"
+    yaml="$PROJECT_ROOT/fast-deploy/tools/workspace/workspace.yaml"
     if [ -x "$PROJECT_ROOT/riveredge-backend/.venv/bin/python" ]; then
         python_bin="$PROJECT_ROOT/riveredge-backend/.venv/bin/python"
     elif [ -x "$PROJECT_ROOT/riveredge-backend/.venv/Scripts/python.exe" ]; then
@@ -4011,8 +4060,13 @@ cmd_pro_apps_status() {
     elif command -v python >/dev/null 2>&1; then
         python_bin="python"
     fi
-    if [ ! -f "$PROJECT_ROOT/fast-deploy/tools/workspace/workspace.yaml" ]; then
-        log_warn "尚无 fast-deploy/tools/workspace/workspace.yaml（扩展应用未组装；与主仓 install/update 无关）"
+    if [ ! -f "$yaml" ]; then
+        if [ "$pro_en" = "1" ] || [ "$custom_en" = "1" ]; then
+            log_warn "扩展包已启用，但缺少 ${yaml}（未组装或曾被主仓 git clean 清掉）"
+            log_warn "请执行: ./fast-deploy/deploy.sh pro-apps all   或向导扩展应用 → 更新"
+        else
+            log_warn "尚无 ${yaml}（扩展应用未组装；与主仓 install/update 无关）"
+        fi
         return 1
     fi
     (cd "$PROJECT_ROOT" && "$python_bin" "$py" --status)
@@ -4167,10 +4221,11 @@ cmd_install_client_repo() {
 
 run_update_dev() {
     # SKIP_GIT_SYNC=1：调用方已 sync（如向导拉取后 reload 脚本）
-    # 扩展应用 / H5 不随 update：仅菜单 [4] 或 deploy.sh pro-apps / install-h5
+    # 私仓拉取仍走菜单 [4]；若已启用则 update 后自动 recompose，避免 clean 掉组装产物
     if [ "${SKIP_GIT_SYNC:-0}" != "1" ]; then
         sync_git_from_origin || return 1
     fi
+    recompose_extension_apps_if_enabled || return 1
     cmd_stop_dev || return 1
     cmd_migrate || return 1
     record_deploy_release_metadata || return 1
@@ -4178,10 +4233,11 @@ run_update_dev() {
 }
 
 run_update_prod() {
-    # 扩展应用 / H5 不随 update：仅菜单 [4] 或 deploy.sh pro-apps / install-h5
+    # 私仓拉取仍走菜单 [4]；若已启用则 update 后自动 recompose，避免 clean 掉组装产物
     if [ "${SKIP_GIT_SYNC:-0}" != "1" ]; then
         sync_git_from_origin || return 1
     fi
+    recompose_extension_apps_if_enabled || return 1
     cmd_stop_prod || return 1
     cmd_migrate || return 1
     cmd_ensure_frontend_dist || return 1

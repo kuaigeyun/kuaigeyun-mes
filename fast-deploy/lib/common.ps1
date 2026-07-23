@@ -1556,15 +1556,24 @@ function Invoke-GitCleanUntrackedSafe {
     } elseif ($enabled -ne '1') {
         return
     }
-    Write-LogInfo '清理未跟踪文件（保留 .env / uploads / .logs 等本地数据）...'
+    Write-LogInfo '清理未跟踪文件（保留 .env / uploads / .logs / 扩展组装产物）...'
     $patterns = @(
         '-e', '.logs', '-e', '.logs/',
         '-e', 'riveredge-backend/.env',
         '-e', 'fast-deploy/config/deploy.env',
+        '-e', 'fast-deploy/tools/workspace/workspace.yaml',
         '-e', '.playwright-browsers', '-e', '.playwright-browsers/',
         '-e', '.caddy-data', '-e', '.caddy-data/',
         '-e', '.caddy-config', '-e', '.caddy-config/',
-        '-e', 'riveredge-backend/uploads', '-e', 'riveredge-backend/uploads/'
+        '-e', 'riveredge-backend/uploads', '-e', 'riveredge-backend/uploads/',
+        '-e', 'riveredge-backend/src/apps/haoligo', '-e', 'riveredge-backend/src/apps/haoligo/',
+        '-e', 'riveredge-backend/src/apps/kuaiai', '-e', 'riveredge-backend/src/apps/kuaiai/',
+        '-e', 'riveredge-backend/src/apps/kuaireport', '-e', 'riveredge-backend/src/apps/kuaireport/',
+        '-e', 'riveredge-backend/src/apps/kuaiiot', '-e', 'riveredge-backend/src/apps/kuaiiot/',
+        '-e', 'riveredge-frontend/src/apps/haoligo', '-e', 'riveredge-frontend/src/apps/haoligo/',
+        '-e', 'riveredge-frontend/src/apps/kuaiai', '-e', 'riveredge-frontend/src/apps/kuaiai/',
+        '-e', 'riveredge-frontend/src/apps/kuaireport', '-e', 'riveredge-frontend/src/apps/kuaireport/',
+        '-e', 'riveredge-frontend/src/apps/kuaiiot', '-e', 'riveredge-frontend/src/apps/kuaiiot/'
     )
     & git clean -fd @patterns 2>$null
 }
