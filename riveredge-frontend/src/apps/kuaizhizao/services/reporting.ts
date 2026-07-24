@@ -97,7 +97,49 @@ export interface ReportingListResponse {
   success: boolean;
 }
 
+/** 报工上拉源（工单工序）候选行 */
+export interface ReportingPullCandidate {
+  pull_row_key: string;
+  work_order_id: number;
+  code?: string;
+  name?: string | null;
+  product_name?: string | null;
+  quantity?: number;
+  planned_start_date?: string | null;
+  operation_id: number;
+  operation_code?: string | null;
+  operation_name?: string | null;
+  operation_sequence?: number | null;
+  reportable_quantity_cap?: number;
+  reportable_quantity_pushed?: number;
+  reportable_quantity_max?: number;
+}
+
+export interface ReportingPullCandidateListResponse {
+  data: ReportingPullCandidate[];
+  total: number;
+  success?: boolean;
+}
+
 export const reportingApi = {
+  listPullCandidates: async (params?: {
+    keyword?: string;
+    /** reportable=仅可报工（默认）；all=全部 */
+    scope?: 'reportable' | 'all' | string;
+    skip?: number;
+    limit?: number;
+  }): Promise<ReportingPullCandidateListResponse> => {
+    const raw = await apiRequest<ReportingPullCandidateListResponse>(
+      '/apps/kuaizhizao/reporting/pull-candidates',
+      { method: 'GET', params },
+    );
+    const rows = Array.isArray(raw?.data) ? raw.data : [];
+    return {
+      data: rows,
+      total: Number(raw?.total ?? rows.length) || 0,
+      success: raw?.success !== false,
+    };
+  },
   list: async (params?: ReportingListParams): Promise<ReportingListResponse> => {
     const raw = await apiRequest<ReportingListResponse | ReportingRecord[]>('/apps/kuaizhizao/reporting', {
       method: 'GET',

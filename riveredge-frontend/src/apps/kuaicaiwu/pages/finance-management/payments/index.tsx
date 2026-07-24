@@ -17,7 +17,12 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import dayjs from 'dayjs';
 import { getFinanceVoucherLifecycle } from '../../../utils/financeLifecycle';
 import {
@@ -191,18 +196,35 @@ const PaymentsPage: React.FC = () => {
     }
   };
 
+  const isPullPaymentSelectable = useCallback(
+    (record: PullPayableCandidate) => record.capabilities?.pull_payment?.allowed !== false,
+    [],
+  );
+
+  const pullQueryScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
   const pullFromPayableQuery = useUniPullQuery<PullPayableCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    isRowDisabled: (record) => record.capabilities?.pull_payment?.allowed === false,
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullPaymentSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await paymentService.listPayablePullCandidates({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
-        return { data: res.data || [], total: res.total ?? 0 };
+        const rows = res.data || [];
+        const filtered = filterByPullScope(rows, scope, isPullPaymentSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (e: any) {
         messageApi.error(
           e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
@@ -621,6 +643,9 @@ const PaymentsPage: React.FC = () => {
         pageSize={pullFromPayableQuery.pageSize}
         total={pullFromPayableQuery.total}
         onPageChange={pullFromPayableQuery.handlePageChange}
+        scopeOptions={pullFromPayableQuery.scopeOptions}
+        scope={pullFromPayableQuery.scope}
+        onScopeChange={pullFromPayableQuery.handleScopeChange}
         okText={t('components.uniLifecycle.nextStep')}
       />
 

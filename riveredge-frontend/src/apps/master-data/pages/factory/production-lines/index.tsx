@@ -42,11 +42,13 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 
 /**
  * 产线管理列表页面组件
@@ -120,6 +122,7 @@ const ProductionLinesPage: React.FC = () => {
           { field: 'name', required: true, labelKey: 'app.master-data.productionLines.name' },
           { field: 'workshopCode', required: true, labelKey: 'app.master-data.productionLines.workshopCode' },
           { field: 'description', labelKey: 'app.master-data.productionLines.description' },
+          { field: 'isActive', labelKey: 'field.productionLine.isActive', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.productionLines.importExample.code'),
@@ -128,6 +131,7 @@ const ProductionLinesPage: React.FC = () => {
             ? workshops[0].code
             : t('app.master-data.workshops.importExample.code'),
           t('app.master-data.productionLines.importExample.description'),
+          '是',
         ],
       ),
     [t, i18n.language, workshops],
@@ -332,12 +336,17 @@ const ProductionLinesPage: React.FC = () => {
         }
 
         // 构建导入数据
+        const isActiveRaw =
+          headerIndexMap.isActive !== undefined ? String(row[headerIndexMap.isActive] ?? '').trim() : '';
+        const isActive =
+          !isActiveRaw ||
+          !['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(isActiveRaw.toLowerCase());
         const productionLineData: ProductionLineCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
           workshopId: foundWorkshop.id,
           description: description ? String(description).trim() : undefined,
-          isActive: true, // 默认启用
+          isActive,
         };
 
         importData.push(productionLineData);
@@ -477,9 +486,7 @@ const ProductionLinesPage: React.FC = () => {
         filename = `${t('app.master-data.productionLines.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
         // 导出全部数据
-        const allData = await productionLineApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        const { data: exportItems } = normalizeMasterListResponse(allData);
-        exportData = exportItems;
+        exportData = await fetchAllListItems((p) => productionLineApi.list({ ...p, ...lastListParamsRef.current }));
         filename = `${t('app.master-data.productionLines.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -772,12 +779,8 @@ const ProductionLinesPage: React.FC = () => {
         onImport={handleImport}
         importHeaders={productionLineImportTemplate.importHeaders}
         importExampleRow={productionLineImportTemplate.importExampleRow}
+        importColumnOptions={productionLineImportTemplate.importColumnOptions}
         importFieldMap={productionLineImportTemplate.importHeaderMap}
-        importFieldRules={{
-          code: { required: true },
-          name: { required: true },
-          workshopCode: { required: true },
-        }}
         showExportButton={true}
         onExport={handleExport}
         showAdvancedSearch

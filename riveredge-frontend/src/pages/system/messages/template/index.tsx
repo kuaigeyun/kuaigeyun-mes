@@ -40,6 +40,8 @@ import {
   resolvePresetMessageTemplateDescription,
   resolvePresetMessageTemplateName,
 } from '../../../../utils/presetEntityI18n';
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 /**
  * 消息模板管理列表页面组件
@@ -485,8 +487,7 @@ const MessageTemplateListPage: React.FC = () => {
         showExportButton={true}
         onExport={async (type, keys, pageData) => {
           try {
-            const allData = await getMessageTemplateList({ skip: 0, limit: 10000 });
-            let items = Array.isArray(allData) ? allData : [];
+            let items = await fetchAllListItems((p) => getMessageTemplateList(p));
             if (type === 'currentPage' && pageData?.length) {
               items = pageData;
             } else if (type === 'selected' && keys?.length) {
@@ -496,13 +497,10 @@ const MessageTemplateListPage: React.FC = () => {
               messageApi.warning(t('pages.system.messageTemplate.noDataExport'));
               return;
             }
-            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `message-templates-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              `message-templates-${new Date().toISOString().slice(0, 10)}.xlsx`,
+            );
             messageApi.success(t('pages.system.messageTemplate.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('pages.system.messageTemplate.exportFailed'));

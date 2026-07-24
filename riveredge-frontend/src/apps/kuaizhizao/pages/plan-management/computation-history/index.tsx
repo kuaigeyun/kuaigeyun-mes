@@ -36,6 +36,7 @@ import {
   resolveComputationHistoryListParams,
 } from '../../../utils/planListCore';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const ComputationHistoryPage: React.FC = () => {
   const { t } = useTranslation();
@@ -339,13 +340,10 @@ const ComputationHistoryPage: React.FC = () => {
                 if (items.length === 0) {
                   throw new Error(t('app.kuaizhizao.computationHistory.exportNoData'));
                 }
-                const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `computation-history-${new Date().toISOString().slice(0, 10)}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
+                await downloadRecordsAsXlsx(
+                  items as Array<Record<string, unknown>>,
+                  `computation-history-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                );
                 messageApi.success(t('app.kuaizhizao.computationHistory.exportSuccess', { count: items.length }));
                 return { success_count: items.length, failed_count: ids.length - items.length };
               }}

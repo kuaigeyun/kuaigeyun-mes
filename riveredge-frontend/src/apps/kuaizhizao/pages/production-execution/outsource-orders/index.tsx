@@ -44,7 +44,12 @@ import {
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import {
   ListPageTemplate,
@@ -70,7 +75,7 @@ import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import {formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateTimeString } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
@@ -349,10 +354,25 @@ export const OutsourceOrdersTable: React.FC = () => {
     openCreateModalFromPullContext(workOrder, operation);
   }, [openCreateModalFromPullContext, pullPreviewContext, pullPreviewData, resetPullPreview]);
 
+  const isPullOutsourceOperationSelectable = useCallback(
+    (record: PullOutsourceOperationCandidate) => Number(record.outsourceable_quantity ?? 0) > 0,
+    [],
+  );
+
+  const pullFromWorkOrderScopeOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.outsourceOrder.pullScopeOutsourceable'), value: 'outsourceable' },
+      { label: t('app.kuaizhizao.outsourceOrder.pullScopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
   const pullFromWorkOrderQuery = useUniPullQuery<PullOutsourceOperationCandidate>({
     rowKey: 'pull_row_key',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullFromWorkOrderScopeOptions,
+    defaultScope: 'outsourceable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       const normalizedKeyword = keyword.trim().toLowerCase();
       const chunkSize = 100;
       const maxRows = 1000;
@@ -377,29 +397,27 @@ export const OutsourceOrdersTable: React.FC = () => {
             if (!workOrder?.id) return [];
             const optionsRes = await outsourceOrderApi.getOutsourceOptions(String(workOrder.id));
             const options = Array.isArray(optionsRes) ? optionsRes : [];
-            return options
-              .filter((opt: any) => Number(opt.outsourceable_quantity ?? 0) > 0)
-              .map((opt: any) => ({
-                pull_row_key: `${workOrder.id}-${opt.work_order_operation_id}`,
-                work_order_id: Number(workOrder.id),
-                work_order_code: workOrder.code,
-                work_order_name: workOrder.name,
-                product_name: workOrder.product_name,
-                work_order_operation_id: Number(opt.work_order_operation_id),
-                operation_code: opt.operation_code,
-                operation_name: opt.operation_name,
-                sequence: opt.sequence,
-                max_quantity: Number(opt.max_quantity ?? 0),
-                completed_quantity: Number(opt.completed_quantity ?? 0),
-                already_outsourced_quantity: Number(opt.already_outsourced_quantity ?? 0),
-                outsourceable_quantity: Number(opt.outsourceable_quantity ?? 0),
-                occupied_quantity:
-                  Number(opt.completed_quantity ?? 0) + Number(opt.already_outsourced_quantity ?? 0),
-              }));
+            return options.map((opt: any) => ({
+              pull_row_key: `${workOrder.id}-${opt.work_order_operation_id}`,
+              work_order_id: Number(workOrder.id),
+              work_order_code: workOrder.code,
+              work_order_name: workOrder.name,
+              product_name: workOrder.product_name,
+              work_order_operation_id: Number(opt.work_order_operation_id),
+              operation_code: opt.operation_code,
+              operation_name: opt.operation_name,
+              sequence: opt.sequence,
+              max_quantity: Number(opt.max_quantity ?? 0),
+              completed_quantity: Number(opt.completed_quantity ?? 0),
+              already_outsourced_quantity: Number(opt.already_outsourced_quantity ?? 0),
+              outsourceable_quantity: Number(opt.outsourceable_quantity ?? 0),
+              occupied_quantity:
+                Number(opt.completed_quantity ?? 0) + Number(opt.already_outsourced_quantity ?? 0),
+            }));
           }),
         )
       ).flat();
-      const filteredRows = normalizedKeyword
+      const keywordFiltered = normalizedKeyword
         ? rows.filter((row) => {
           const workOrderCode = String(row.work_order_code || '').toLowerCase();
           const workOrderName = String(row.work_order_name || '').toLowerCase();
@@ -413,14 +431,10 @@ export const OutsourceOrdersTable: React.FC = () => {
           );
         })
         : rows;
-      const total = filteredRows.length;
-      const start = (page - 1) * pageSize;
-      return {
-        data: filteredRows.slice(start, start + pageSize),
-        total,
-      };
+      const filteredRows = filterByPullScope(keywordFiltered, scope, isPullOutsourceOperationSelectable);
+      return paginatePullRows(filteredRows, page, pageSize);
     },
-    isRowDisabled: (record) => Number(record.outsourceable_quantity ?? 0) <= 0,
+    isRowDisabled: (record) => !isPullOutsourceOperationSelectable(record),
     onConfirm: async (_selectedKeys, selectedRows) => {
       const selected = selectedRows[0];
       if (!selected?.work_order_id || !selected?.work_order_operation_id) {
@@ -456,12 +470,8 @@ export const OutsourceOrdersTable: React.FC = () => {
         supplier_id: values.supplier_id,
         outsource_quantity: outsourceQty,
         unit_price: values.unit_price,
-        planned_start_date: values.planned_start_date
-          ? values.planned_start_date.format('YYYY-MM-DD HH:mm:ss')
-          : undefined,
-        planned_end_date: values.planned_end_date
-          ? values.planned_end_date.format('YYYY-MM-DD HH:mm:ss')
-          : undefined,
+        planned_start_date: toApiDateTimeString(values.planned_start_date),
+        planned_end_date: toApiDateTimeString(values.planned_end_date),
         remarks: values.remarks,
       });
       messageApi.success(t('app.kuaizhizao.outsourceOrder.createSuccess'));
@@ -727,12 +737,8 @@ export const OutsourceOrdersTable: React.FC = () => {
       const submitData = {
         ...standardValues,
         attachments: normalizeDocumentAttachments(standardValues.attachments),
-        planned_start_date: standardValues.planned_start_date
-          ? standardValues.planned_start_date.format('YYYY-MM-DD HH:mm:ss')
-          : undefined,
-        planned_end_date: standardValues.planned_end_date
-          ? standardValues.planned_end_date.format('YYYY-MM-DD HH:mm:ss')
-          : undefined,
+        planned_start_date: toApiDateTimeString(standardValues.planned_start_date),
+        planned_end_date: toApiDateTimeString(standardValues.planned_end_date),
       };
 
       const oid = currentOutsourceOrder?.id;
@@ -1222,6 +1228,9 @@ export const OutsourceOrdersTable: React.FC = () => {
         pageSize={pullFromWorkOrderQuery.pageSize}
         total={pullFromWorkOrderQuery.total}
         onPageChange={pullFromWorkOrderQuery.handlePageChange}
+        scopeOptions={pullFromWorkOrderQuery.scopeOptions}
+        scope={pullFromWorkOrderQuery.scope}
+        onScopeChange={pullFromWorkOrderQuery.handleScopeChange}
         okText={t('common.next')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
@@ -1369,12 +1378,14 @@ export const OutsourceOrdersTable: React.FC = () => {
               name="planned_start_date"
               label={t('app.kuaizhizao.outsourceOrder.fieldPlannedStart')}
               placeholder={t('app.kuaizhizao.outsourceOrder.placeholderPlannedStart')}
+              formItemProps={formDateFormItemProps}
               fieldProps={{ showTime: true }}
             />
             <ProFormDatePicker
               name="planned_end_date"
               label={t('app.kuaizhizao.outsourceOrder.fieldPlannedEnd')}
               placeholder={t('app.kuaizhizao.outsourceOrder.placeholderPlannedEnd')}
+              formItemProps={formDateFormItemProps}
               fieldProps={buildFutureDateShortcutFieldProps({
                 showTime: true,
               })}
@@ -1454,12 +1465,14 @@ export const OutsourceOrdersTable: React.FC = () => {
             name="planned_start_date"
             label={t('app.kuaizhizao.outsourceOrder.fieldPlannedStart')}
             placeholder={t('app.kuaizhizao.outsourceOrder.placeholderPlannedStart')}
+            formItemProps={formDateFormItemProps}
             fieldProps={{ showTime: true }}
           />
           <ProFormDatePicker
             name="planned_end_date"
             label={t('app.kuaizhizao.outsourceOrder.fieldPlannedEnd')}
             placeholder={t('app.kuaizhizao.outsourceOrder.placeholderPlannedEnd')}
+            formItemProps={formDateFormItemProps}
             fieldProps={buildFutureDateShortcutFieldProps({
               getForm: () => formRef.current,
               fieldName: 'planned_end_date',

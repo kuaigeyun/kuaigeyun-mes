@@ -400,6 +400,55 @@ class CostCalculationService(AppBaseService[CostCalculation]):
             }
         )
 
+    async def _resolve_reporting_work_center_id(
+        self,
+        tenant_id: int,
+        work_order: WorkOrder,
+        record: ReportingRecord,
+    ) -> Optional[int]:
+        """
+        报工记录本身无工作中心字段。
+        解析顺序：工单工序 → 工序主数据默认工作中心 → 工单头工作中心。
+        """
+        from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+        from apps.master_data.models.process import Operation
+
+        if record.operation_id:
+            woo = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order.id,
+                operation_id=record.operation_id,
+                deleted_at__isnull=True,
+            ).first()
+            if woo and woo.work_center_id:
+                return int(woo.work_center_id)
+
+        if record.operation_code:
+            woo_by_code = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order.id,
+                operation_code=record.operation_code,
+                deleted_at__isnull=True,
+                work_center_id__not_isnull=True,
+            ).first()
+            if woo_by_code and woo_by_code.work_center_id:
+                return int(woo_by_code.work_center_id)
+
+        if record.operation_id:
+            operation = await Operation.filter(
+                tenant_id=tenant_id,
+                id=record.operation_id,
+                deleted_at__isnull=True,
+            ).first()
+            if operation and operation.default_work_center_ids:
+                wc_ids = operation.default_work_center_ids
+                if isinstance(wc_ids, list) and wc_ids:
+                    return int(wc_ids[0])
+
+        if work_order.work_center_id:
+            return int(work_order.work_center_id)
+        return None
+
     async def _resolve_work_order_work_center_id(
         self,
         tenant_id: int,
@@ -427,8 +476,9 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                 deleted_at__isnull=True,
             ).all()
         for record in records:
-            if record.work_center_id:
-                return int(record.work_center_id)
+            wc_id = await self._resolve_reporting_work_center_id(tenant_id, work_order, record)
+            if wc_id:
+                return int(wc_id)
         return None
 
     async def preview_work_order_cost_readiness(
@@ -524,18 +574,22 @@ class CostCalculationService(AppBaseService[CostCalculation]):
             )
             seen_wc: set[int] = set()
             for record in reporting_records:
+                hours = Decimal(str(record.work_hours or 0))
+                if hours <= 0:
+                    continue
                 op_label = record.operation_name or record.operation_code or f"报工#{record.id}"
-                if not record.work_center_id:
+                wc_id = await self._resolve_reporting_work_center_id(tenant_id, work_order, record)
+                if not wc_id:
                     self._append_factor(
                         factors,
                         key=f"labor_wc_{record.id}",
                         category="labor",
                         status="missing",
-                        message=f"报工「{op_label}」未指定工作中心",
-                        hint="请在报工或工单工序中指定工作中心",
+                        message=f"报工「{op_label}」无法解析工作中心",
+                        hint="请在工单工序或工序主数据中配置工作中心",
                     )
                     continue
-                wc_id = int(record.work_center_id)
+                wc_id = int(wc_id)
                 if wc_id in seen_wc:
                     continue
                 seen_wc.add(wc_id)
@@ -1291,12 +1345,17 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         ).all()
         total_labor_cost = Decimal(0)
         for record in reporting_records:
-            if not record.work_center_id:
+            hours = Decimal(str(record.work_hours or 0))
+            if hours <= 0:
+                continue
+            wc_id = await self._resolve_reporting_work_center_id(tenant_id, work_order, record)
+            if not wc_id:
                 raise ValidationError(
-                    f"报工「{record.operation_name or record.operation_code or record.id}」未指定工作中心，无法获取人工费率"
+                    f"报工「{record.operation_name or record.operation_code or record.id}」"
+                    f"无法解析工作中心，请在工单工序或工序主数据中配置工作中心"
                 )
-            hourly_rate = await self._get_standard_value(tenant_id, "work_center", record.work_center_id, "labor_rate")
-            total_labor_cost += record.work_hours * hourly_rate
+            hourly_rate = await self._get_standard_value(tenant_id, "work_center", wc_id, "labor_rate")
+            total_labor_cost += hours * hourly_rate
         return total_labor_cost
 
     async def _calculate_manufacturing_cost(self, tenant_id: int, work_order: WorkOrder) -> Decimal:
@@ -1504,16 +1563,39 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         return breakdown
 
     async def _get_labor_cost_breakdown(self, tenant_id: int, work_order: WorkOrder) -> List[Dict[str, Any]]:
-        records = await ReportingRecord.filter(tenant_id=tenant_id, work_order_id=work_order.id, status="approved").all()
+        records = await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order.id,
+            status="approved",
+            deleted_at__isnull=True,
+        ).all()
         breakdown = []
         for r in records:
-            hourly_rate = await self._get_standard_value(tenant_id, "work_center", r.work_center_id, "labor_rate")
+            hours = Decimal(str(r.work_hours or 0))
+            if hours <= 0:
+                breakdown.append({
+                    "operation_name": r.operation_name,
+                    "worker_name": r.worker_name,
+                    "work_center_id": None,
+                    "hours": 0.0,
+                    "hourly_rate": 0.0,
+                    "total": 0.0,
+                })
+                continue
+            wc_id = await self._resolve_reporting_work_center_id(tenant_id, work_order, r)
+            if not wc_id:
+                raise ValidationError(
+                    f"报工「{r.operation_name or r.operation_code or r.id}」"
+                    f"无法解析工作中心，请在工单工序或工序主数据中配置工作中心"
+                )
+            hourly_rate = await self._get_standard_value(tenant_id, "work_center", wc_id, "labor_rate")
             breakdown.append({
                 "operation_name": r.operation_name,
                 "worker_name": r.worker_name,
-                "hours": float(r.work_hours),
+                "work_center_id": wc_id,
+                "hours": float(hours),
                 "hourly_rate": float(hourly_rate),
-                "total": float(r.work_hours * hourly_rate)
+                "total": float(hours * hourly_rate),
             })
         return breakdown
 

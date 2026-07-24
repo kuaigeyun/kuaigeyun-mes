@@ -20,6 +20,11 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
+import {
+  IMPORT_PRICE_TYPE_OPTIONS,
+  pickImportExampleValue,
+} from '../../../../../utils/loadImportDictionaryValues';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, DownOutlined, FileTextOutlined, InboxOutlined, RollbackOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
@@ -56,7 +61,12 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
@@ -164,6 +174,8 @@ import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } f
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 /** 与后端 DocumentStatus / ReviewStatus 及中文存量值对齐，供 UniWorkflowActions 识别 */
 const PO_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft', 'DRAFT', DocumentStatus.DRAFT];
@@ -341,6 +353,12 @@ const PurchaseOrdersPage: React.FC = () => {
   const [tableOrders, setTableOrders] = useState<PurchaseOrder[]>([]);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
 
+  const purchaseOrderImportDict = useImportDictionaryOptions(['CURRENCY', 'ORDER_TYPE', 'MATERIAL_UNIT']);
+  const purchaseOrderLineUnitOptions = purchaseOrderImportDict.MATERIAL_UNIT ?? [];
+  const purchaseOrderLineImportColumnOptions = useMemo(
+    () => [undefined, undefined, purchaseOrderLineUnitOptions, undefined, undefined, undefined],
+    [purchaseOrderLineUnitOptions],
+  );
   const purchaseOrderImportTemplate = useMemo(
     () =>
       buildFactoryImportTemplate(
@@ -368,6 +386,12 @@ const PurchaseOrdersPage: React.FC = () => {
           { field: 'quantity', required: true, labelKey: 'app.kuaizhizao.purchaseOrder.import.quantity', aliases: ['数量'] },
           { field: 'unitPrice', labelKey: 'app.kuaizhizao.purchaseOrder.import.unitPrice', aliases: ['单价'] },
           { field: 'delivery', labelKey: 'app.kuaizhizao.purchaseOrder.import.deliveryDate', aliases: ['交货日期'] },
+          { field: 'supplierContact', labelKey: 'app.kuaizhizao.purchaseOrder.import.supplierContact', aliases: ['供应商联系人'] },
+          { field: 'supplierPhone', labelKey: 'app.kuaizhizao.purchaseOrder.import.supplierPhone', aliases: ['供应商电话'] },
+          { field: 'orderType', labelKey: 'app.kuaizhizao.purchaseOrder.import.orderType', aliases: ['订单类型'] , options: purchaseOrderImportDict.ORDER_TYPE },
+          { field: 'buyer', labelKey: 'app.kuaizhizao.purchaseOrder.import.buyer', aliases: ['采购员'] },
+          { field: 'currency', labelKey: 'app.kuaizhizao.quotation.form.currency', aliases: ['币种'] , options: purchaseOrderImportDict.CURRENCY },
+          { field: 'priceType', labelKey: 'app.kuaizhizao.salesOrder.priceType', aliases: ['价格类型'] , options: [...IMPORT_PRICE_TYPE_OPTIONS] },
           { field: 'notes', labelKey: 'app.kuaizhizao.purchaseOrder.import.notes', aliases: ['备注'] },
         ],
         [
@@ -379,9 +403,15 @@ const PurchaseOrdersPage: React.FC = () => {
           t('app.kuaizhizao.purchaseOrder.importExample.unitPrice'),
           t('app.kuaizhizao.purchaseOrder.importExample.deliveryDate'),
           '',
+          '',
+          '',
+          '',
+          'CNY',
+          'tax_inclusive',
+          '',
         ],
       ),
-    [t, i18n.language],
+    [t, i18n.language, purchaseOrderImportDict],
   );
 
   const tableSearchFormRef = useRef<any>(null);
@@ -1589,6 +1619,12 @@ const PurchaseOrdersPage: React.FC = () => {
       qty: headerIndexMap['quantity'] ?? -1,
       price: headerIndexMap['unitPrice'] ?? -1,
       delivery: headerIndexMap['delivery'] ?? -1,
+      supplierContact: headerIndexMap['supplierContact'] ?? -1,
+      supplierPhone: headerIndexMap['supplierPhone'] ?? -1,
+      orderType: headerIndexMap['orderType'] ?? -1,
+      buyer: headerIndexMap['buyer'] ?? -1,
+      currency: headerIndexMap['currency'] ?? -1,
+      priceType: headerIndexMap['priceType'] ?? -1,
       notes: headerIndexMap['notes'] ?? -1,
     };
 
@@ -1643,7 +1679,18 @@ const PurchaseOrdersPage: React.FC = () => {
 
       const groupKey = code || `${supplierName}|${dateVal}`;
       if (!groupMap.has(groupKey)) {
-        groupMap.set(groupKey, { code: code || undefined, supplier: supplierName, date: dateVal, items: [] });
+        groupMap.set(groupKey, {
+          code: code || undefined,
+          supplier: supplierName,
+          date: dateVal,
+          supplierContact: idx.supplierContact >= 0 ? String(row[idx.supplierContact] ?? '').trim() || undefined : undefined,
+          supplierPhone: idx.supplierPhone >= 0 ? String(row[idx.supplierPhone] ?? '').trim() || undefined : undefined,
+          orderType: idx.orderType >= 0 ? String(row[idx.orderType] ?? '').trim() || undefined : undefined,
+          buyer: idx.buyer >= 0 ? String(row[idx.buyer] ?? '').trim() || undefined : undefined,
+          currency: idx.currency >= 0 ? String(row[idx.currency] ?? '').trim() || undefined : undefined,
+          priceType: idx.priceType >= 0 ? String(row[idx.priceType] ?? '').trim() || undefined : undefined,
+          items: [],
+        });
       }
       const g = groupMap.get(groupKey)!;
       g.items.push({
@@ -1683,6 +1730,12 @@ const PurchaseOrdersPage: React.FC = () => {
         order_date: g.date,
         supplier_id: supp?.id,
         supplier_name: g.supplier,
+        supplier_contact: g.supplierContact,
+        supplier_phone: g.supplierPhone,
+        order_type: g.orderType,
+        buyer_name: g.buyer,
+        currency: g.currency,
+        price_type: g.priceType,
         status: '草稿',
         items: g.items,
       });
@@ -2040,25 +2093,41 @@ const PurchaseOrdersPage: React.FC = () => {
     [t],
   );
 
+  const isPullPurchaseOrderSourceSelectable = useCallback(
+    (record: { capabilities?: { push_purchase_order?: { allowed?: boolean } } }) =>
+      record.capabilities?.push_purchase_order?.allowed === true,
+    [],
+  );
+
+  const pullDocumentScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
   const pullFromRequisitionQuery = useUniPullQuery<PullPurchaseRequisitionCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
-        const skip = (page - 1) * pageSize;
         const result = await listPurchaseRequisitions({
-          skip,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
         const rows = (result.data ?? []).filter((row) => row.id != null) as PullPurchaseRequisitionCandidate[];
-        return { data: rows, total: result.total ?? rows.length };
+        const filtered = filterByPullScope(rows, scope, isPullPurchaseOrderSourceSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrder.loadRequisitionListFailed')));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => record.capabilities?.push_purchase_order?.allowed !== true,
+    isRowDisabled: (record) => !isPullPurchaseOrderSourceSelectable(record),
     onConfirm: async (keys) => {
       const requisitionId = Number(keys[0]);
       if (!requisitionId || requisitionId <= 0) {
@@ -2075,22 +2144,24 @@ const PurchaseOrdersPage: React.FC = () => {
   const pullFromInquiryQuery = useUniPullQuery<PullPurchaseInquiryCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
-        const skip = (page - 1) * pageSize;
         const result = await listPurchaseInquiries({
-          skip,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
         const rows = (result.data ?? []).filter((row) => row.id != null) as PullPurchaseInquiryCandidate[];
-        return { data: rows, total: result.total ?? rows.length };
+        const filtered = filterByPullScope(rows, scope, isPullPurchaseOrderSourceSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrder.loadInquiryListFailed')));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => record.capabilities?.push_purchase_order?.allowed !== true,
+    isRowDisabled: (record) => !isPullPurchaseOrderSourceSelectable(record),
     onConfirm: async (keys) => {
       const inquiryId = Number(keys[0]);
       if (!inquiryId || inquiryId <= 0) {
@@ -2922,7 +2993,8 @@ const PurchaseOrdersPage: React.FC = () => {
           onConfirm={handleItemImport}
           title={t('app.kuaizhizao.purchaseOrder.importItemsTitle')}
           headers={[t('app.kuaizhizao.purchaseOrder.importItems.materialCode'), t('app.kuaizhizao.purchaseOrder.importItems.spec'), t('app.kuaizhizao.purchaseOrder.importItems.unit'), t('app.kuaizhizao.purchaseOrder.importItems.quantity'), t('app.kuaizhizao.purchaseOrder.importItems.unitPrice'), t('app.kuaizhizao.purchaseOrder.importItems.requiredDate')]}
-          exampleRow={['MAT001', 'Spec X', t('app.kuaizhizao.purchaseOrder.importItems.exampleUnit'), '10', '100', '2026-03-01']}
+          exampleRow={['MAT001', 'Spec X', pickImportExampleValue(purchaseOrderLineUnitOptions, t('app.kuaizhizao.purchaseOrder.importItems.exampleUnit')), '10', '100', '2026-03-01']}
+          columnOptions={purchaseOrderLineImportColumnOptions}
         />
       </Suspense>
     </>
@@ -3100,18 +3172,12 @@ const PurchaseOrdersPage: React.FC = () => {
           onImport={handleListImport}
           importHeaders={purchaseOrderImportTemplate.importHeaders}
           importExampleRow={purchaseOrderImportTemplate.importExampleRow}
+          importColumnOptions={purchaseOrderImportTemplate.importColumnOptions}
           importFieldMap={purchaseOrderImportTemplate.importHeaderMap}
-          importFieldRules={{
-            supplier: { required: true },
-            date: { required: true },
-            material: { required: true },
-            quantity: { required: true },
-          }}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await listPurchaseOrders({ skip: 0, limit: 10000 });
-              let items = res.data || [];
+              let items = await fetchAllListItems((p) => listPurchaseOrders(p));
               if (type === 'currentPage' && pageData?.length) {
                 items = pageData;
               } else if (type === 'selected' && keys?.length) {
@@ -3121,13 +3187,10 @@ const PurchaseOrdersPage: React.FC = () => {
                 messageApi.warning(t('common.noDataToExport'));
                 return;
               }
-              const blob = new window.Blob([window.JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `purchase-orders-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              window.URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `purchase-orders-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('common.exportFailed'));
@@ -3226,6 +3289,9 @@ const PurchaseOrdersPage: React.FC = () => {
         pageSize={pullFromRequisitionQuery.pageSize}
         total={pullFromRequisitionQuery.total}
         onPageChange={pullFromRequisitionQuery.handlePageChange}
+        scopeOptions={pullFromRequisitionQuery.scopeOptions}
+        scope={pullFromRequisitionQuery.scope}
+        onScopeChange={pullFromRequisitionQuery.handleScopeChange}
         okText={t('common.next')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
@@ -3256,6 +3322,9 @@ const PurchaseOrdersPage: React.FC = () => {
         pageSize={pullFromInquiryQuery.pageSize}
         total={pullFromInquiryQuery.total}
         onPageChange={pullFromInquiryQuery.handlePageChange}
+        scopeOptions={pullFromInquiryQuery.scopeOptions}
+        scope={pullFromInquiryQuery.scope}
+        onScopeChange={pullFromInquiryQuery.handleScopeChange}
         okText={t('common.next')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />

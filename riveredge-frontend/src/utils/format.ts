@@ -5,7 +5,8 @@
  * 日期格式优先使用站点设置中的 date_format 配置
  */
 
-import dayjs, { Dayjs } from 'dayjs';
+import type { Dayjs } from 'dayjs';
+import dayjs from '../config/dayjs';
 import { useConfigStore } from '../stores/configStore';
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;

@@ -70,6 +70,10 @@ async def list_contracts(
     start_date: Optional[date] = Query(None, description="签订日期起"),
     end_date: Optional[date] = Query(None, description="签订日期止"),
     order_by: Optional[str] = Query(None, description="排序字段，如 contract_date、-updated_at（前缀-表示降序）"),
+    pullable_only: Optional[bool] = Query(
+        None,
+        description="仅可上拉建销售订单：生效中、已审核且在有效期内",
+    ),
     tenant_id: int = Depends(get_current_tenant),
 ):
     safe_order_by = None
@@ -89,6 +93,7 @@ async def list_contracts(
         start_date=start_date,
         end_date=end_date,
         order_by=safe_order_by,
+        pullable_only=pullable_only,
     )
 
 

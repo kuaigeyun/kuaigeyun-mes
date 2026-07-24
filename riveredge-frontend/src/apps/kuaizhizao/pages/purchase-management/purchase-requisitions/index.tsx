@@ -30,7 +30,13 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  isPullableScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE, PAGE_SPACING } from '../../../../../components/layout-templates';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
@@ -44,6 +50,8 @@ import type { Material } from '../../../../master-data/types/material';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { downloadFile } from '../../../../../utils';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
 
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
@@ -107,6 +115,8 @@ import {
   demandComputationCapabilityReasonMessage,
   purchaseRequisitionCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 /** 采购申请详情只读明细表最小横向宽度 */
 const PURCHASE_REQUISITION_DETAIL_ITEMS_MIN_WIDTH = 980;
@@ -208,6 +218,20 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
+  const requisitionImportDict = useImportDictionaryOptions(['MATERIAL_UNIT']);
+  const requisitionLineUnitOptions = requisitionImportDict.MATERIAL_UNIT ?? [];
+  const requisitionLineImportColumnOptions = useMemo(
+    () => [
+      undefined,
+      undefined,
+      requisitionLineUnitOptions,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ],
+    [requisitionLineUnitOptions],
+  );
 
   const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
   const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
@@ -619,17 +643,31 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
   const pullQueryCloseRef = useRef<(() => void) | null>(null);
 
+  const isPullComputationSelectable = useCallback(
+    (record: PullDemandComputationCandidate) => record.computation_status === '完成',
+    [],
+  );
+
+  const pullDocumentScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
   const pullFromComputationQuery = useUniPullQuery<PullDemandComputationCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const kw = keyword.trim();
-        const skip = (page - 1) * pageSize;
         const listRes = await listDemandComputations({
-          skip,
-          limit: pageSize,
-          computation_status: '完成',
+          skip: 0,
+          limit: 200,
+          computation_status: isPullableScope(scope) ? '完成' : undefined,
           computation_code: kw || undefined,
         });
         const rows = (listRes?.data || [])
@@ -645,13 +683,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 updated_at: row.updated_at,
               }) as PullDemandComputationCandidate,
           );
-        return { data: rows, total: listRes?.total ?? rows.length };
+        const filtered = filterByPullScope(rows, scope, isPullComputationSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (error: any) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.failed')));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => record.computation_status !== '完成',
+    isRowDisabled: (record) => !isPullComputationSelectable(record),
     onConfirm: async (keys) => {
       const selectedId = Number(keys[0]);
       if (!selectedId || selectedId <= 0) {
@@ -1775,7 +1814,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
             onConfirm={handleItemImport}
             title={t('app.kuaizhizao.purchaseRequisition.import.title')}
             headers={[t('app.kuaizhizao.purchaseRequisition.import.materialCode'), t('app.kuaizhizao.purchaseRequisition.import.spec'), t('app.kuaizhizao.purchaseRequisition.import.unit'), t('app.kuaizhizao.purchaseRequisition.import.quantity'), t('app.kuaizhizao.purchaseRequisition.import.suggestedPrice'), t('app.kuaizhizao.purchaseRequisition.import.lineDelivery'), t('app.kuaizhizao.purchaseRequisition.import.lineNotes')]}
-            exampleRow={['MAT001', 'Spec X', t('app.kuaizhizao.purchaseRequisition.import.exampleUnit'), '10', '100', '2026-03-01', '']}
+            exampleRow={['MAT001', 'Spec X', pickImportExampleValue(requisitionLineUnitOptions, t('app.kuaizhizao.purchaseRequisition.import.exampleUnit')), '10', '100', '2026-03-01', '']}
+            columnOptions={requisitionLineImportColumnOptions}
           />
         </Suspense>
       </>
@@ -1890,8 +1930,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await listPurchaseRequisitions({ skip: 0, limit: 10000 });
-              let items = res.data || [];
+              let items = await fetchAllListItems((p) => listPurchaseRequisitions(p));
               if (type === 'currentPage' && pageData?.length) {
                 items = pageData;
               } else if (type === 'selected' && keys?.length) {
@@ -1901,8 +1940,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 messageApi.warning(t('common.noDataToExport'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              downloadFile(blob, `purchase-requisitions-${new Date().toISOString().slice(0, 10)}.json`);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `purchase-requisitions-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('common.exportFailed'));
@@ -1935,6 +1976,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
         pageSize={pullFromComputationQuery.pageSize}
         total={pullFromComputationQuery.total}
         onPageChange={pullFromComputationQuery.handlePageChange}
+        scopeOptions={pullFromComputationQuery.scopeOptions}
+        scope={pullFromComputationQuery.scope}
+        onScopeChange={pullFromComputationQuery.handleScopeChange}
         okText={t('common.next')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />

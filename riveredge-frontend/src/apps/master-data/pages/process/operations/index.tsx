@@ -19,7 +19,13 @@ import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { OperationFormModal } from '../../../components/OperationFormModal';
-import { operationApi, defectTypeApi, type OperationPresetCatalog, type OperationPresetRow } from '../../../services/process';
+import {
+  operationApi,
+  defectTypeApi,
+  unwrapProcessPagedList,
+  type OperationPresetCatalog,
+  type OperationPresetRow,
+} from '../../../services/process';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { qrcodeApi } from '../../../../../services/qrcode';
@@ -37,6 +43,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   MasterDataBatchActiveMenuButton,
@@ -53,6 +60,7 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 
 /**
  * 工序信息管理列表页面组件
@@ -103,6 +111,27 @@ const OperationsPage: React.FC = () => {
     setSelectedRowKeys,
   });
 
+  const [defectTypeImportOptions, setDefectTypeImportOptions] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await defectTypeApi.list({ limit: 2000, isActive: true });
+        const list = unwrapProcessPagedList(res as any);
+        if (!cancelled) {
+          setDefectTypeImportOptions(
+            list.map((d: any) => String(d.code || '').trim()).filter(Boolean),
+          );
+        }
+      } catch {
+        if (!cancelled) setDefectTypeImportOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [i18n.language]);
+
   useEffect(() => {
     if (customFields.length > 0 && actionRef.current) {
       setTimeout(() => actionRef.current?.reload(), 200);
@@ -125,11 +154,25 @@ const OperationsPage: React.FC = () => {
             field: 'isActive',
             labelKey: 'app.master-data.operations.isActive',
             aliases: ['启用状态'],
+            options: [...IMPORT_YES_NO_OPTIONS],
+          },
+          {
+            field: 'reportingType',
+            labelKey: 'field.operation.reportingType',
+            aliases: ['报工类型', 'reporting_type'],
+            options: ['quantity', 'status'],
+          },
+          {
+            field: 'inspectionMode',
+            labelKey: 'field.operation.inspectionMode',
+            aliases: ['质检模式', 'inspection_mode'],
+            options: ['none', 'simple', 'plan'],
           },
           {
             field: 'defectTypes',
             labelKey: 'app.master-data.operations.defectTypes',
             aliases: ['不良品项'],
+            options: defectTypeImportOptions,
           },
         ],
         [
@@ -137,10 +180,12 @@ const OperationsPage: React.FC = () => {
           t('app.master-data.operations.importExample.name'),
           t('app.master-data.operations.importExample.description'),
           t('app.master-data.operations.importExample.isActive'),
+          'quantity',
+          'simple',
           t('app.master-data.operations.importExample.defectTypes'),
         ],
       ),
-    [t, i18n.language],
+    [t, i18n.language, defectTypeImportOptions],
   );
 
   const presetOperations = useMemo(() => {
@@ -374,7 +419,15 @@ const OperationsPage: React.FC = () => {
       }
     }
 
-    const items: { code: string; name: string; description?: string; isActive?: boolean; defectTypeUuids?: string[] }[] = [];
+    const items: {
+      code: string;
+      name: string;
+      description?: string;
+      isActive?: boolean;
+      reportingType?: 'quantity' | 'status';
+      inspectionMode?: 'none' | 'simple' | 'plan';
+      defectTypeUuids?: string[];
+    }[] = [];
     for (const row of rows) {
       if (!row?.length) continue;
       const code = String(row[headerIndexMap['code']] ?? '').trim();
@@ -395,12 +448,26 @@ const OperationsPage: React.FC = () => {
       }
       const descIdx = headerIndexMap['description'];
       const activeIdx = headerIndexMap['isActive'];
+      const reportingRaw =
+        headerIndexMap.reportingType !== undefined
+          ? String(row[headerIndexMap.reportingType] ?? '').trim().toLowerCase()
+          : '';
+      const reportingType: 'quantity' | 'status' =
+        reportingRaw === 'status' ? 'status' : 'quantity';
+      const inspectionRaw =
+        headerIndexMap.inspectionMode !== undefined
+          ? String(row[headerIndexMap.inspectionMode] ?? '').trim().toLowerCase()
+          : '';
+      const inspectionMode: 'none' | 'simple' | 'plan' =
+        inspectionRaw === 'none' || inspectionRaw === 'plan' ? inspectionRaw : 'simple';
       items.push({
         code,
         name,
         description:
           descIdx !== undefined && row[descIdx] != null ? String(row[descIdx]).trim() : undefined,
         isActive: activeIdx !== undefined ? parseIsActive(row[activeIdx]) : true,
+        reportingType,
+        inspectionMode,
         defectTypeUuids: defectTypeUuids.length > 0 ? defectTypeUuids : undefined,
       });
     }
@@ -431,8 +498,7 @@ const OperationsPage: React.FC = () => {
       } else if (type === 'currentPage' && pageData?.length) {
         list = pageData;
       } else {
-        const res = await operationApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        list = Array.isArray(res) ? res : res?.data ?? [];
+        list = await fetchAllListItems((p) => operationApi.list({ ...p, ...lastListParamsRef.current }));
       }
       if (list.length === 0) {
         messageApi.warning(t('app.master-data.noExportData'));
@@ -795,6 +861,7 @@ const OperationsPage: React.FC = () => {
         onImport={handleImport}
         importHeaders={operationImportTemplate.importHeaders}
         importExampleRow={operationImportTemplate.importExampleRow}
+        importColumnOptions={operationImportTemplate.importColumnOptions}
         importFieldMap={operationImportTemplate.importHeaderMap}
         showExportButton
         onExport={handleExport}

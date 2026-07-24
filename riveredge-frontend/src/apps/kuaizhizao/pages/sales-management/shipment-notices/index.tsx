@@ -39,7 +39,12 @@ import { DocumentAmountSummaryWatch } from '../../../components/document-amount-
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { shipmentNoticeApi, type ShipmentNotice, type ShipmentNoticeItem, type ShipmentNoticeNotifyPreviewResponse, type ShipmentNoticeListParams } from '../../../services/shipment-notice';
 import {
@@ -71,6 +76,8 @@ import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -79,6 +86,8 @@ import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const SHIPMENT_NOTICE_RESOURCE = 'kuaizhizao:shipment-notice';
 
@@ -104,6 +113,9 @@ const ShipmentNoticesPage: React.FC = () => {
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'shipment_notice.pull_from_sales_order');
 
+  const importDictOptions = useImportDictionaryOptions(['MATERIAL_UNIT']);
+  const materialUnitImportOptions = importDictOptions.MATERIAL_UNIT ?? [];
+
   const noticeItemImportTemplate = useMemo(
     () =>
       buildFactoryImportTemplate(
@@ -114,7 +126,7 @@ const ShipmentNoticesPage: React.FC = () => {
           { field: 'unitPrice', labelKey: 'app.kuaizhizao.shipmentNotice.import.unitPrice', aliases: ['单价'] },
           { field: 'name', labelKey: 'app.kuaizhizao.shipmentNotice.import.materialName', aliases: ['产品名称'] },
           { field: 'specification', labelKey: 'app.kuaizhizao.shipmentNotice.import.specification', aliases: ['规格'] },
-          { field: 'unit', labelKey: 'app.kuaizhizao.shipmentNotice.import.unit', aliases: ['单位'] },
+          { field: 'unit', labelKey: 'app.kuaizhizao.shipmentNotice.import.unit', aliases: ['单位'], options: materialUnitImportOptions },
         ],
         [
           t('app.kuaizhizao.shipmentNotice.importExample.materialCode'),
@@ -122,10 +134,10 @@ const ShipmentNoticesPage: React.FC = () => {
           t('app.kuaizhizao.shipmentNotice.importExample.unitPrice'),
           t('app.kuaizhizao.shipmentNotice.importExample.materialName'),
           t('app.kuaizhizao.shipmentNotice.importExample.specification'),
-          t('app.kuaizhizao.shipmentNotice.importExample.unit'),
+          pickImportExampleValue(materialUnitImportOptions, t('app.kuaizhizao.shipmentNotice.importExample.unit')),
         ],
       ),
-    [t, i18n.language],
+    [t, i18n.language, materialUnitImportOptions],
   );
   const navigate = useNavigate();
   const salesOrderEntityName = t('app.kuaizhizao.salesOrder.entityName');
@@ -859,14 +871,29 @@ const ShipmentNoticesPage: React.FC = () => {
     }
   };
 
+  const isPullShipmentSalesOrderSelectable = useCallback(
+    (record: PullSalesOrderCandidate) => record.capabilities?.push_shipment_notice?.allowed !== false,
+    [],
+  );
+
+  const pullFromSalesOrderScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
   const pullFromSalesOrderQuery = useUniPullQuery<PullSalesOrderCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullFromSalesOrderScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const result = await listSalesOrdersForPull({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
         const rows = Array.isArray(result) ? result : (result.data ?? []);
@@ -880,16 +907,14 @@ const ShipmentNoticesPage: React.FC = () => {
           updated_at: row.updated_at,
           capabilities: row.capabilities,
         }));
-        return {
-          data: candidates,
-          total: Array.isArray(result) ? candidates.length : (result.total ?? candidates.length),
-        };
+        const filtered = filterByPullScope(candidates, scope, isPullShipmentSalesOrderSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (e: any) {
         messageApi.error(e?.message || t('app.kuaizhizao.salesOrder.listFailed'));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => record.capabilities?.push_shipment_notice?.allowed === false,
+    isRowDisabled: (record) => !isPullShipmentSalesOrderSelectable(record),
     onConfirm: async (keys, rows) => {
       const selectedId = Number(keys[0]);
       if (!selectedId) {
@@ -1484,30 +1509,27 @@ const ShipmentNoticesPage: React.FC = () => {
           ]}
           importHeaders={noticeItemImportTemplate.importHeaders}
           importExampleRow={noticeItemImportTemplate.importExampleRow}
+          importColumnOptions={noticeItemImportTemplate.importColumnOptions}
           importFieldMap={noticeItemImportTemplate.importHeaderMap}
           onImport={handleListToolbarImport}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const response = await shipmentNoticeApi.list({ skip: 0, limit: 10000 });
-              const rawData = response?.data ?? [];
-              let items: ShipmentNotice[] = rawData;
-              if (type === 'currentPage' && pageData?.length) {
-                items = pageData as ShipmentNotice[];
-              } else if (type === 'selected' && keys?.length) {
-                items = rawData.filter((d: ShipmentNotice) => d.id != null && keys.includes(d.id));
+              let items: ShipmentNotice[] =
+                type === 'currentPage' && pageData?.length
+                  ? (pageData as ShipmentNotice[])
+                  : await fetchAllListItems((p) => shipmentNoticeApi.list(p));
+              if (type === 'selected' && keys?.length) {
+                items = items.filter((d: ShipmentNotice) => d.id != null && keys.includes(d.id));
               }
               if (items.length === 0) {
                 messageApi.warning(t('common.exportNoData'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `shipment-notices-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `shipment-notices-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('common.exportCountSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('common.exportFailed'));
@@ -1613,6 +1635,9 @@ const ShipmentNoticesPage: React.FC = () => {
         pageSize={pullFromSalesOrderQuery.pageSize}
         total={pullFromSalesOrderQuery.total}
         onPageChange={pullFromSalesOrderQuery.handlePageChange}
+        scopeOptions={pullFromSalesOrderQuery.scopeOptions}
+        scope={pullFromSalesOrderQuery.scope}
+        onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
         okText={t('app.kuaizhizao.shipmentNotice.createTarget', { target: shipmentNoticeEntityName })}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
@@ -2071,6 +2096,7 @@ const ShipmentNoticesPage: React.FC = () => {
           title={t('app.kuaizhizao.shipmentNotice.importItemsTitle')}
           headers={noticeItemImportTemplate.importHeaders}
           exampleRow={noticeItemImportTemplate.importExampleRow}
+        columnOptions={noticeItemImportTemplate.importColumnOptions}
         />
       </Suspense>
       {PrintModal}

@@ -13,13 +13,17 @@ from core.schemas.base import BaseSchema
 from apps.kuaizhizao.services.document_action_policy.types import ReportingRecordCapabilities
 
 
-class ReportingRecordBase(BaseModel):
+class ReportingRecordBase(BaseSchema):
     """
     报工记录基础Schema
 
     包含所有报工记录的基本字段。
     """
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        validate_assignment=True,
+        arbitrary_types_allowed=True,
+    )
 
     work_order_id: int = Field(..., description="工单ID")
     work_order_code: str = Field(..., description="工单编码")
@@ -178,6 +182,42 @@ class ReportingWorkerStatisticsItemResponse(BaseModel):
     qualified_quantity: float = Field(..., description="合格数量")
     work_hours: float = Field(..., description="工时")
     qualification_rate: float = Field(..., description="合格率")
+
+
+class ReportingPullCandidateItem(BaseSchema):
+    """报工上拉源（工单工序）候选行。"""
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        validate_assignment=True,
+        arbitrary_types_allowed=True,
+    )
+
+    pull_row_key: str = Field(..., description="行键 work_order_id-operation_id")
+    work_order_id: int = Field(..., description="工单ID")
+    code: str = Field(..., description="工单编码")
+    name: Optional[str] = Field(None, description="工单名称")
+    product_name: Optional[str] = Field(None, description="产品名称")
+    quantity: Decimal = Field(..., description="工单计划数量")
+    planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
+    operation_id: int = Field(..., description="工序主数据ID")
+    operation_code: Optional[str] = Field(None, description="工序编码")
+    operation_name: Optional[str] = Field(None, description="工序名称")
+    operation_sequence: Optional[int] = Field(None, description="工序顺序")
+    reportable_quantity_cap: Decimal = Field(
+        ...,
+        description="计划侧可累计完成上限（规则超报与不合格补报取较大；已报+本次可报不超过该值，前序不足时本次可报更小）",
+    )
+    reportable_quantity_pushed: Decimal = Field(..., description="已报工数量")
+    reportable_quantity_max: Decimal = Field(..., description="本次可报剩余")
+
+
+class ReportingPullCandidateListResponse(BaseModel):
+    """报工上拉源分页列表。"""
+
+    data: list[ReportingPullCandidateItem] = Field(default_factory=list)
+    total: int = Field(0, description="总行数")
+    success: bool = Field(True)
 
 
 class ReportingDetailedStatisticsResponse(BaseModel):

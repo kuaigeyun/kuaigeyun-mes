@@ -15,7 +15,11 @@ from decimal import Decimal
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
-from core.utils.timezone_utils import now_utc, to_api_isoformat
+from core.utils.timezone_utils import (
+    coerce_business_datetime_to_utc,
+    now_utc,
+    to_api_isoformat,
+)
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
@@ -215,8 +219,13 @@ WORK_ORDER_IN_PROGRESS_STATUS = (
 
 
 def _normalize_naive_local_datetime(value: datetime) -> datetime:
+    """比较用：统一为站点墙钟 naive（勿用服务器本机时区）。"""
+    from infra.config.infra_config import infra_settings
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo(infra_settings.TIMEZONE or "Asia/Shanghai")
     if value.tzinfo is not None:
-        return value.astimezone().replace(tzinfo=None)
+        return value.astimezone(tz).replace(tzinfo=None)
     return value
 
 
@@ -992,10 +1001,18 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 work_center_name=work_order_data.work_center_name,
                 status=work_order_data.status,
                 priority=work_order_data.priority,
-                planned_start_date=work_order_data.planned_start_date,
-                planned_end_date=work_order_data.planned_end_date,
-                actual_start_date=work_order_data.actual_start_date,
-                actual_end_date=work_order_data.actual_end_date,
+                planned_start_date=coerce_business_datetime_to_utc(
+                    work_order_data.planned_start_date
+                ),
+                planned_end_date=coerce_business_datetime_to_utc(
+                    work_order_data.planned_end_date
+                ),
+                actual_start_date=coerce_business_datetime_to_utc(
+                    work_order_data.actual_start_date
+                ),
+                actual_end_date=coerce_business_datetime_to_utc(
+                    work_order_data.actual_end_date
+                ),
                 completed_quantity=work_order_data.completed_quantity,
                 qualified_quantity=work_order_data.qualified_quantity,
                 unqualified_quantity=work_order_data.unqualified_quantity,
@@ -1072,9 +1089,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         work_center_id = op_data.work_center_id or work_order.work_center_id
                         work_center_name = op_data.work_center_name or work_order.work_center_name
                         
-                        # 计算计划时间（如果有标准工时）
-                        planned_start_date = op_data.planned_start_date or current_time
-                        planned_end_date = op_data.planned_end_date
+                        # 计算计划时间（如果有标准工时）；业务墙钟 naive → UTC
+                        planned_start_date = (
+                            coerce_business_datetime_to_utc(op_data.planned_start_date)
+                            or current_time
+                        )
+                        planned_end_date = coerce_business_datetime_to_utc(
+                            op_data.planned_end_date
+                        )
                         
                         if not planned_end_date and op_data.standard_time:
                             # 根据标准工时计算结束时间
@@ -2155,6 +2177,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         tenant_id, work_order_id, raise_if_not_found=True
                     )
 
+            for _dt_key in (
+                "planned_start_date",
+                "planned_end_date",
+                "actual_start_date",
+                "actual_end_date",
+            ):
+                if _dt_key in update_data and update_data[_dt_key] is not None:
+                    update_data[_dt_key] = coerce_business_datetime_to_utc(update_data[_dt_key])
+
             if "process_route_id" in update_data:
                 new_pr_id = update_data.pop("process_route_id")
                 old_pr_id = getattr(work_order, "process_route_id", None)
@@ -2292,8 +2323,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 if lock == "freeze_window":
                     result["skipped_freeze_window"].append(int(wo_id))
                     continue
-                wo.planned_start_date = start
-                wo.planned_end_date = end
+                wo.planned_start_date = coerce_business_datetime_to_utc(start)
+                wo.planned_end_date = coerce_business_datetime_to_utc(end)
                 wo.updated_by = updated_by
                 await wo.save()
                 updated_wo_ids.append(int(wo_id))
@@ -2359,8 +2390,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         result["skipped_freeze_window"].append(int(wo.id))
                     continue
                 await WorkOrderOperation.filter(tenant_id=tenant_id, id=op_id).update(
-                    planned_start_date=start,
-                    planned_end_date=end,
+                    planned_start_date=coerce_business_datetime_to_utc(start),
+                    planned_end_date=coerce_business_datetime_to_utc(end),
                 )
                 result["updated"].append(int(op_id))
                 ops = await WorkOrderOperation.filter(

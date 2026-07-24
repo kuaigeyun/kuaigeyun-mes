@@ -504,6 +504,14 @@ async def list_sales_orders(
     order_by: Optional[str] = Query(None, description="排序字段，如 order_code、-created_at（前缀-表示降序）"),
     include_items: bool = Query(False, description="是否包含订单明细"),
     list_scope: Optional[str] = Query(None, description="列表范围：all/mine/department"),
+    pullable_only: Optional[bool] = Query(
+        None,
+        description="仅可上拉建单；需配合 pull_target",
+    ),
+    pull_target: Optional[str] = Query(
+        None,
+        description="上拉目标：sales_order_change；与 pullable_only 组合使用",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -538,6 +546,8 @@ async def list_sales_orders(
             order_by=safe_order_by,
             include_items=include_items,
             list_scope=list_scope,
+            pullable_only=pullable_only,
+            pull_target=pull_target,
             current_user=current_user,
         )
         payloads = [row.model_dump() for row in result.data]

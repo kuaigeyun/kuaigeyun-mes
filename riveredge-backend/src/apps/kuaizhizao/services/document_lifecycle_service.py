@@ -2234,6 +2234,54 @@ def get_stocktaking_lifecycle(
 
 
 # ---------------------------------------------------------------------------
+# 生产领料单生命周期（待领料→已领料→已取消）
+# ---------------------------------------------------------------------------
+PRODUCTION_PICKING_MAIN_STAGES = [
+    {"key": "pending_picking", "label": "待领料"},
+    {"key": "completed", "label": "已领料"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+def get_production_picking_lifecycle(
+    record: Any,
+    milestones: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """生产领料单生命周期（待领料→已领料；与出库 Hub「确认出库」对齐）。"""
+    status = _norm(getattr(record, "status", None))
+    milestones = milestones or []
+    status_map = {
+        "待领料": "pending_picking",
+        "pending": "pending_picking",
+        "draft": "pending_picking",
+        "草稿": "pending_picking",
+        "已领料": "completed",
+        "completed": "completed",
+        "已完成": "completed",
+        "已取消": "cancelled",
+        "cancelled": "cancelled",
+    }
+    key = status_map.get(status, "pending_picking")
+    stage_name_map = {
+        "pending_picking": "待领料",
+        "completed": "已领料",
+        "cancelled": "已取消",
+    }
+    stage_name = stage_name_map.get(key, status or "待领料")
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if key == "cancelled" else "success" if key == "completed" else "normal",
+        "main_stages": _build_main_stages(
+            PRODUCTION_PICKING_MAIN_STAGES, key, is_exception=(key == "cancelled")
+        ),
+        "sub_stages": None,
+        "next_step_suggestions": ["确认出库"] if key == "pending_picking" else [],
+        "milestones": milestones,
+    }
+
+
+# ---------------------------------------------------------------------------
 # 借料单生命周期（待借出→已借出→已取消）
 # ---------------------------------------------------------------------------
 MATERIAL_BORROW_MAIN_STAGES = [

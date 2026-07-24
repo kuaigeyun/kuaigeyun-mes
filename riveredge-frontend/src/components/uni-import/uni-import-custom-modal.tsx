@@ -6,7 +6,7 @@ import { resolveSystemFieldKey } from './apply-import-mapping';
 import type {
   UniRelationImportEntity,
   UniRelationImportWriteStrategy,
-} from './uni-import-relation-modal';
+} from './uni-import-relation-types';
 
 export interface UniImportCustomModalApplyResult {
   selectedHeaders: string[];

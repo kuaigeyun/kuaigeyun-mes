@@ -36,6 +36,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   MasterDataBatchActiveMenuButton,
@@ -46,6 +47,8 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 /**
  * 不良品信息管理列表页面组件
@@ -74,11 +77,18 @@ const DefectTypesPage: React.FC = () => {
             labelKey: 'field.defectType.description',
             aliases: ['备注', '描述'],
           },
+          {
+            field: 'isActive',
+            labelKey: 'field.defectType.isActive',
+            aliases: ['是否启用', '启用'],
+            options: [...IMPORT_YES_NO_OPTIONS],
+          },
         ],
         [
           t('app.master-data.defectTypes.importExample.code'),
           t('app.master-data.defectTypes.importExample.name'),
           t('app.master-data.defectTypes.importExample.description'),
+          '是',
         ],
       ),
     [t, i18n.language],
@@ -320,7 +330,14 @@ const DefectTypesPage: React.FC = () => {
         name: nameValue,
         category: category != null && String(category).trim() !== '' ? String(category).trim() : undefined,
         description: description != null && String(description).trim() !== '' ? String(description).trim() : undefined,
-        isActive: true, // 启用状态默认启用，创建时间由后端自动获取
+        isActive: (() => {
+          const isActiveRaw =
+            headerIndexMap.isActive !== undefined ? String(row[headerIndexMap.isActive] ?? '').trim() : '';
+          return (
+            !isActiveRaw ||
+            !['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(isActiveRaw.toLowerCase())
+          );
+        })(),
       });
     });
 
@@ -415,17 +432,16 @@ const DefectTypesPage: React.FC = () => {
       } else if (type === 'currentPage' && currentPageData) {
         exportData = currentPageData;
       } else {
-        const result = await defectTypeApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        const list = result?.data ?? result;
-        exportData = Array.isArray(list) ? list : [];
+        exportData = await fetchAllListItems((p) => defectTypeApi.list({ ...p, ...lastListParamsRef.current }));
       }
       if (exportData.length === 0) {
         messageApi.warning(t('app.master-data.noExportData'));
         return;
       }
-      const blob = new Blob(['\ufeff' + JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
-      const filename = `${t('app.master-data.defectTypes.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.json`;
-      downloadFile(blob, filename);
+      await downloadRecordsAsXlsx(
+        exportData as Array<Record<string, unknown>>,
+        `${t('app.master-data.defectTypes.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.xlsx`,
+      );
       messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {
       messageApi.error(error?.message || t('app.master-data.exportFailed'));
@@ -608,6 +624,7 @@ const DefectTypesPage: React.FC = () => {
         onImport={handleImport}
         importHeaders={defectTypeImportTemplate.importHeaders}
         importExampleRow={defectTypeImportTemplate.importExampleRow}
+        importColumnOptions={defectTypeImportTemplate.importColumnOptions}
         importFieldMap={defectTypeImportTemplate.importHeaderMap}
         showExportButton={true}
         onExport={handleExport}

@@ -3,7 +3,15 @@ import type { TFunction } from 'i18next';
 import { Button, Table, Tag } from 'antd';
 import type { TabsProps } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
+import {
+  equipmentFaultLevelTagColor,
+  equipmentOpsStatusTagColor,
+} from '../../../utils/equipmentListCore';
 import type { EquipmentDetailTabKey } from './equipmentPaths';
+
+function renderOpsStatusTag(status: string) {
+  return <Tag color={equipmentOpsStatusTagColor(status)}>{status || '-'}</Tag>;
+}
 
 export interface EquipmentTraceData {
   equipment?: { uuid?: string; code?: string; name?: string; status?: string };
@@ -25,7 +33,7 @@ export function useEquipmentTraceColumns(t: TFunction) {
       { title: t('app.kuaizhizao.equipment.traceColPlanName'), dataIndex: 'plan_name', width: 200 },
       { title: t('app.kuaizhizao.equipment.traceColPlanType'), dataIndex: 'plan_type', width: 120 },
       { title: t('app.kuaizhizao.equipment.traceColMaintenanceType'), dataIndex: 'maintenance_type', width: 120 },
-      { title: t('common.status'), dataIndex: 'status', width: 100, render: (status: string) => <Tag>{status}</Tag> },
+      { title: t('common.status'), dataIndex: 'status', width: 100, render: renderOpsStatusTag },
       { title: t('app.kuaizhizao.equipment.traceColPlannedStartDate'), dataIndex: 'planned_start_date', width: 120 },
       { title: t('app.kuaizhizao.equipment.traceColPlannedEndDate'), dataIndex: 'planned_end_date', width: 120 },
       { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
@@ -38,8 +46,13 @@ export function useEquipmentTraceColumns(t: TFunction) {
       { title: t('app.kuaizhizao.equipment.traceColExecutionNo'), dataIndex: 'execution_no', width: 140 },
       { title: t('app.kuaizhizao.equipment.traceColExecutionDate'), dataIndex: 'execution_date', width: 120 },
       { title: t('app.kuaizhizao.equipment.traceColExecutor'), dataIndex: 'executor_name', width: 100 },
-      { title: t('app.kuaizhizao.equipment.traceColExecutionResult'), dataIndex: 'execution_result', width: 120 },
-      { title: t('common.status'), dataIndex: 'status', width: 100, render: (status: string) => <Tag>{status}</Tag> },
+      {
+        title: t('app.kuaizhizao.equipment.traceColExecutionResult'),
+        dataIndex: 'execution_result',
+        width: 120,
+        render: renderOpsStatusTag,
+      },
+      { title: t('common.status'), dataIndex: 'status', width: 100, render: renderOpsStatusTag },
       {
         title: t('app.kuaizhizao.equipment.traceColMaintenanceCost'),
         dataIndex: 'maintenance_cost',
@@ -56,8 +69,13 @@ export function useEquipmentTraceColumns(t: TFunction) {
       { title: t('app.kuaizhizao.equipment.traceColFaultNo'), dataIndex: 'fault_no', width: 140 },
       { title: t('app.kuaizhizao.equipment.traceColFaultDate'), dataIndex: 'fault_date', width: 120 },
       { title: t('app.kuaizhizao.equipment.traceColFaultType'), dataIndex: 'fault_type', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColFaultLevel'), dataIndex: 'fault_level', width: 100, render: (level: string) => <Tag>{level}</Tag> },
-      { title: t('common.status'), dataIndex: 'status', width: 100, render: (status: string) => <Tag>{status}</Tag> },
+      {
+        title: t('app.kuaizhizao.equipment.traceColFaultLevel'),
+        dataIndex: 'fault_level',
+        width: 100,
+        render: (level: string) => <Tag color={equipmentFaultLevelTagColor(level)}>{level || '-'}</Tag>,
+      },
+      { title: t('common.status'), dataIndex: 'status', width: 100, render: renderOpsStatusTag },
       {
         title: t('app.kuaizhizao.equipment.traceColRepairRequired'),
         dataIndex: 'repair_required',
@@ -86,8 +104,13 @@ export function useEquipmentTraceColumns(t: TFunction) {
         width: 100,
         render: (cost: number) => (cost ? `¥${cost}` : '-'),
       },
-      { title: t('common.status'), dataIndex: 'status', width: 100, render: (status: string) => <Tag>{status}</Tag> },
-      { title: t('app.kuaizhizao.equipment.traceColRepairResult'), dataIndex: 'repair_result', width: 120 },
+      { title: t('common.status'), dataIndex: 'status', width: 100, render: renderOpsStatusTag },
+      {
+        title: t('app.kuaizhizao.equipment.traceColRepairResult'),
+        dataIndex: 'repair_result',
+        width: 120,
+        render: renderOpsStatusTag,
+      },
       { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
     ],
     [t],
@@ -96,7 +119,7 @@ export function useEquipmentTraceColumns(t: TFunction) {
   const traceCalibrationColumns = useMemo(
     () => [
       { title: t('app.kuaizhizao.equipment.traceColCalibrationDate'), dataIndex: 'calibration_date', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColResult'), dataIndex: 'result', width: 100, render: (r: string) => <Tag>{r}</Tag> },
+      { title: t('app.kuaizhizao.equipment.traceColResult'), dataIndex: 'result', width: 100, render: renderOpsStatusTag },
       { title: t('app.kuaizhizao.equipment.traceColCertificateNo'), dataIndex: 'certificate_no', width: 140 },
       { title: t('app.kuaizhizao.equipment.traceColExpiryDate'), dataIndex: 'expiry_date', width: 120 },
       { title: t('app.kuaizhizao.equipment.traceColRemark'), dataIndex: 'remark', ellipsis: true },
@@ -110,7 +133,7 @@ export function useEquipmentTraceColumns(t: TFunction) {
       { title: t('app.kuaizhizao.equipment.traceColDocumentNo'), dataIndex: 'document_no', width: 140 },
       { title: t('app.kuaizhizao.equipment.traceColCheckDate'), dataIndex: 'check_date', width: 120 },
       { title: t('app.kuaizhizao.equipment.traceColInspector'), dataIndex: 'inspector_name', width: 100 },
-      { title: t('common.status'), dataIndex: 'status', width: 100, render: (status: string) => <Tag>{status}</Tag> },
+      { title: t('common.status'), dataIndex: 'status', width: 100, render: renderOpsStatusTag },
       {
         title: t('app.kuaizhizao.equipment.traceColHasAbnormality'),
         dataIndex: 'has_abnormality',
@@ -134,7 +157,7 @@ export function useEquipmentTraceColumns(t: TFunction) {
       { title: t('app.kuaizhizao.equipment.traceColRouteName'), dataIndex: 'route_name', width: 160 },
       { title: t('app.kuaizhizao.equipment.traceColPatrolDate'), dataIndex: 'patrol_date', width: 120 },
       { title: t('app.kuaizhizao.equipment.traceColInspector'), dataIndex: 'inspector_name', width: 100 },
-      { title: t('common.status'), dataIndex: 'status', width: 100, render: (status: string) => <Tag>{status}</Tag> },
+      { title: t('common.status'), dataIndex: 'status', width: 100, render: renderOpsStatusTag },
       {
         title: t('app.kuaizhizao.equipment.traceColHasAbnormality'),
         dataIndex: 'has_abnormality',
@@ -155,7 +178,7 @@ export function useEquipmentTraceColumns(t: TFunction) {
       { title: t('app.kuaizhizao.equipment.traceColRequisitionNo'), dataIndex: 'requisition_no', width: 140 },
       { title: t('app.kuaizhizao.equipment.traceColPurpose'), dataIndex: 'purpose', width: 160, ellipsis: true },
       { title: t('app.kuaizhizao.equipment.traceColApplicant'), dataIndex: 'applicant_name', width: 100 },
-      { title: t('common.status'), dataIndex: 'status', width: 100, render: (status: string) => <Tag>{status}</Tag> },
+      { title: t('common.status'), dataIndex: 'status', width: 100, render: renderOpsStatusTag },
       { title: t('app.kuaizhizao.equipment.traceColApprovedAt'), dataIndex: 'approved_at', width: 160 },
       { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
     ],
@@ -168,7 +191,7 @@ export function useEquipmentTraceColumns(t: TFunction) {
       { title: t('app.kuaizhizao.equipment.traceColScrapReason'), dataIndex: 'reason', ellipsis: true },
       { title: t('app.kuaizhizao.equipment.traceColScrapDate'), dataIndex: 'scrap_date', width: 120 },
       { title: t('app.kuaizhizao.equipment.traceColApplicant'), dataIndex: 'applicant_name', width: 100 },
-      { title: t('common.status'), dataIndex: 'status', width: 100, render: (status: string) => <Tag>{status}</Tag> },
+      { title: t('common.status'), dataIndex: 'status', width: 100, render: renderOpsStatusTag },
       { title: t('app.kuaizhizao.equipment.traceColApprovedAt'), dataIndex: 'approved_at', width: 160 },
       { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
     ],

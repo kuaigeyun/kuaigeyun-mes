@@ -226,6 +226,8 @@ const PermissionListPage: React.FC = () => {
           }}
           showImportButton={true}
           onImport={handleImport}
+          // 过渡：columns 自动生成模板；后续可改为 buildFactoryImportTemplate 显式模板
+          autoGenerateImportConfig
           showExportButton={true}
           onExport={handleExport}
         />

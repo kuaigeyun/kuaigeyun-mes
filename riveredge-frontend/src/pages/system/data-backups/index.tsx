@@ -43,6 +43,7 @@ import {
 import { useGlobalStore } from '../../../stores';
 import { getTenantId } from '../../../utils/auth';
 import { formatDateTime } from '../../../utils/format';
+import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 
 function formatFileSize(bytes?: number): string {
   if (!bytes) return '-';
@@ -823,13 +824,10 @@ const DataBackupsPage: React.FC = () => {
                 messageApi.warning(t('pages.system.dataBackups.noDataToExport'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `data-backups-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `data-backups-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('pages.system.dataBackups.exportSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('pages.system.dataBackups.exportFailed'));

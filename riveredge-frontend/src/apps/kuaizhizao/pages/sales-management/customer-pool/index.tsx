@@ -35,6 +35,14 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../master-data/utils/factoryImportTemplate';
+import {
+  PARTNER_ENTERPRISE_TYPE_IMPORT_OPTIONS,
+  PARTNER_INVOICE_TYPE_IMPORT_OPTIONS,
+  PARTNER_SETTLEMENT_METHOD_IMPORT_OPTIONS,
+  PARTNER_TAXPAYER_TYPE_IMPORT_OPTIONS,
+} from '../../../../master-data/utils/partner-static-labels';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import type { CustomerCreate } from '../../../../master-data/types/supply-chain';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -45,7 +53,14 @@ import {
 } from '../../../utils/customerPoolListCore';
 
 const CustomerPoolPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const poolDictOptions = useImportDictionaryOptions([
+    'INDUSTRY_SECTOR',
+    'CUSTOMER_LEVEL',
+    'PARTNER_SOURCE_CHANNEL',
+    'CUSTOMER_CATEGORY',
+    'CONTACT_TITLE',
+  ]);
   const { message, modal } = App.useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -95,24 +110,48 @@ const CustomerPoolPage: React.FC = () => {
           { field: 'code', required: true, labelKey: 'field.customer.code' },
           { field: 'name', required: true, labelKey: 'field.customer.name' },
           { field: 'shortName', labelKey: 'field.customer.shortName' },
+          { field: 'category', labelKey: 'field.customer.category' , options: poolDictOptions.CUSTOMER_CATEGORY },
           { field: 'contactPerson', labelKey: 'field.customer.contactPerson' },
+          { field: 'contactTitle', labelKey: 'field.customer.contactTitle' , options: poolDictOptions.CONTACT_TITLE },
           { field: 'phone', labelKey: 'field.customer.phone' },
           { field: 'email', labelKey: 'field.customer.email' },
-          { field: 'address', labelKey: 'field.customer.address' },
-          { field: 'category', labelKey: 'field.customer.category' },
+          { field: 'isActive', labelKey: 'field.customer.isActive' , options: [...IMPORT_YES_NO_OPTIONS] },
+          { field: 'taxRegistrationNo', labelKey: 'field.partner.taxRegistrationNo' },
+          { field: 'invoiceTitle', labelKey: 'field.partner.invoiceTitle' },
+          { field: 'invoiceAddress', labelKey: 'field.partner.invoiceAddress' },
+          { field: 'invoicePhone', labelKey: 'field.partner.invoicePhone' },
+          { field: 'invoiceBankName', labelKey: 'field.partner.invoiceBankName' },
+          { field: 'invoiceBankAccount', labelKey: 'field.partner.invoiceBankAccount' },
+          { field: 'invoiceTypeCode', labelKey: 'field.partner.invoiceType' , options: [...PARTNER_INVOICE_TYPE_IMPORT_OPTIONS] },
+          { field: 'taxpayerTypeCode', labelKey: 'field.partner.taxpayerType' , options: [...PARTNER_TAXPAYER_TYPE_IMPORT_OPTIONS] },
+          { field: 'industryCode', labelKey: 'field.customer.industry' , options: poolDictOptions.INDUSTRY_SECTOR },
+          { field: 'customerLevelCode', labelKey: 'field.customer.level' , options: poolDictOptions.CUSTOMER_LEVEL },
+          { field: 'leadSourceCode', labelKey: 'field.customer.leadSource' , options: poolDictOptions.PARTNER_SOURCE_CHANNEL },
+          { field: 'estimatedAnnualPurchase', labelKey: 'field.customer.estimatedAnnualPurchase' },
+          { field: 'creditLimit', labelKey: 'field.customer.creditLimit' },
+          { field: 'legalRepresentative', labelKey: 'field.partner.legalRepresentative' },
+          { field: 'enterpriseTypeCode', labelKey: 'field.partner.enterpriseType' , options: [...PARTNER_ENTERPRISE_TYPE_IMPORT_OPTIONS] },
+          { field: 'paymentTermsDays', labelKey: 'field.partner.paymentTermsDays' },
+          { field: 'settlementMethodCode', labelKey: 'field.partner.settlementMethod' , options: [...PARTNER_SETTLEMENT_METHOD_IMPORT_OPTIONS] },
+          { field: 'deliveryContactName', labelKey: 'field.partner.deliveryContactName' },
+          { field: 'deliveryContactPhone', labelKey: 'field.partner.deliveryContactPhone' },
+          { field: 'deliveryAddress', labelKey: 'field.partner.deliveryAddress' },
         ],
         [
           t('app.master-data.customers.importExample.code'),
           t('app.master-data.customers.importExample.name'),
           t('app.master-data.customers.importExample.shortName'),
+          t('app.master-data.customers.importExample.category'),
           t('app.master-data.customers.importExample.contactPerson'),
+          '',
           t('app.master-data.customers.importExample.phone'),
           t('app.master-data.customers.importExample.email'),
-          t('app.master-data.customers.importExample.address'),
-          t('app.master-data.customers.importExample.category'),
+          '是',
+          '', '', '', '', '', '', '', '',
+          '', '', '', '', '', '', '', '', '', '', '', '',
         ],
       ),
-    [t],
+    [t, i18n.language, poolDictOptions],
   );
 
   const loadRules = async () => {
@@ -648,21 +687,63 @@ const CustomerPoolPage: React.FC = () => {
       return;
     }
 
+    const cellAt = (row: any[], field: string): string => {
+      const idx = headerIndexMap[field];
+      if (idx === undefined) return '';
+      return String(row[idx] ?? '').trim();
+    };
+    const parseNum = (raw: string): number | undefined => {
+      if (!raw) return undefined;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : undefined;
+    };
+    const parseActive = (raw: string): boolean => {
+      if (!raw) return true;
+      const v = raw.toLowerCase();
+      if (['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(v)) return false;
+      return true;
+    };
+
     const importData: CustomerCreate[] = [];
     for (const row of nonEmptyRows) {
       const code = String(row[codeIndex] ?? '').trim();
       const name = String(row[nameIndex] ?? '').trim();
       if (!code || !name) continue;
+      const contactPerson = cellAt(row, 'contactPerson') || undefined;
+      const contactTitle = cellAt(row, 'contactTitle') || undefined;
+      const phone = cellAt(row, 'phone') || undefined;
+      const email = cellAt(row, 'email') || undefined;
+      const contacts =
+        contactPerson || contactTitle || phone || email
+          ? [{ contactPerson, contactTitle, phone, email }]
+          : undefined;
       importData.push({
         code: code.toUpperCase(),
         name,
-        shortName: headerIndexMap.shortName !== undefined ? String(row[headerIndexMap.shortName] ?? '').trim() || undefined : undefined,
-        contactPerson: headerIndexMap.contactPerson !== undefined ? String(row[headerIndexMap.contactPerson] ?? '').trim() || undefined : undefined,
-        phone: headerIndexMap.phone !== undefined ? String(row[headerIndexMap.phone] ?? '').trim() || undefined : undefined,
-        email: headerIndexMap.email !== undefined ? String(row[headerIndexMap.email] ?? '').trim() || undefined : undefined,
-        address: headerIndexMap.address !== undefined ? String(row[headerIndexMap.address] ?? '').trim() || undefined : undefined,
-        category: headerIndexMap.category !== undefined ? String(row[headerIndexMap.category] ?? '').trim() || undefined : undefined,
-        isActive: true,
+        shortName: cellAt(row, 'shortName') || undefined,
+        category: cellAt(row, 'category') || undefined,
+        contacts,
+        isActive: parseActive(cellAt(row, 'isActive')),
+        taxRegistrationNo: cellAt(row, 'taxRegistrationNo') || undefined,
+        invoiceTitle: cellAt(row, 'invoiceTitle') || undefined,
+        invoiceAddress: cellAt(row, 'invoiceAddress') || undefined,
+        invoicePhone: cellAt(row, 'invoicePhone') || undefined,
+        invoiceBankName: cellAt(row, 'invoiceBankName') || undefined,
+        invoiceBankAccount: cellAt(row, 'invoiceBankAccount') || undefined,
+        invoiceTypeCode: cellAt(row, 'invoiceTypeCode') || undefined,
+        taxpayerTypeCode: cellAt(row, 'taxpayerTypeCode') || undefined,
+        industryCode: cellAt(row, 'industryCode') || undefined,
+        customerLevelCode: cellAt(row, 'customerLevelCode') || undefined,
+        leadSourceCode: cellAt(row, 'leadSourceCode') || undefined,
+        estimatedAnnualPurchase: parseNum(cellAt(row, 'estimatedAnnualPurchase')),
+        creditLimit: parseNum(cellAt(row, 'creditLimit')),
+        legalRepresentative: cellAt(row, 'legalRepresentative') || undefined,
+        enterpriseTypeCode: cellAt(row, 'enterpriseTypeCode') || undefined,
+        paymentTermsDays: parseNum(cellAt(row, 'paymentTermsDays')),
+        settlementMethodCode: cellAt(row, 'settlementMethodCode') || undefined,
+        deliveryContactName: cellAt(row, 'deliveryContactName') || undefined,
+        deliveryContactPhone: cellAt(row, 'deliveryContactPhone') || undefined,
+        deliveryAddress: cellAt(row, 'deliveryAddress') || undefined,
       });
     }
 
@@ -788,11 +869,8 @@ const CustomerPoolPage: React.FC = () => {
           onImport={handleImport}
           importHeaders={customerImportTemplate.importHeaders}
           importExampleRow={customerImportTemplate.importExampleRow}
+          importColumnOptions={customerImportTemplate.importColumnOptions}
           importFieldMap={customerImportTemplate.importHeaderMap}
-          importFieldRules={{
-            code: { required: true },
-            name: { required: true },
-          }}
           showExportButton
           onExport={handleExport}
           request={async (params, sort, _filter, searchValues) => {

@@ -58,21 +58,12 @@ function cellValue(value: unknown): { v: string; m: string; t: number } {
   return { v: text, m: text, t: CELL_FORCE_STRING };
 }
 
-export function buildImportCellData(options: {
+/** 与表格展示一致的字符串矩阵（不含下方空数据行垫片） */
+export function buildImportStringRows(options: {
   headers?: string[];
   exampleRow?: string[];
-  /** 若来自 xlsx，为完整行数据（含表头、示例行） */
   sheetRows?: unknown[][];
-  minDataRows?: number;
-}): {
-  cellData: Record<string, Record<string, { v: unknown; m?: string; s?: string; t?: number }>>;
-  columnCount: number;
-  rowCount: number;
-  sheetStyles: ImportSheetStyles;
-} {
-  const sheetStyles = createImportSheetStyles();
-  const { headerStyleId, exampleStyleId, dataBorderStyleId, styles } = sheetStyles;
-
+}): string[][] {
   let rows: unknown[][] = [];
   if (options.sheetRows && options.sheetRows.length > 0) {
     rows = options.sheetRows.map((row) =>
@@ -91,12 +82,29 @@ export function buildImportCellData(options: {
       rows.push(exampleLine);
     }
   }
+  const columnCount = Math.max(1, ...rows.map((r) => r.length), 1);
+  return rows.map((row) =>
+    Array.from({ length: columnCount }, (_, i) => String(row[i] ?? '')),
+  );
+}
 
-  const columnCount = Math.max(1, ...rows.map((r) => r.length));
-  const normalized = rows.map((row) => {
-    const line = Array.from({ length: columnCount }, (_, i) => row[i] ?? '');
-    return line;
-  });
+export function buildImportCellData(options: {
+  headers?: string[];
+  exampleRow?: string[];
+  /** 若来自 xlsx，为完整行数据（含表头、示例行） */
+  sheetRows?: unknown[][];
+  minDataRows?: number;
+}): {
+  cellData: Record<string, Record<string, { v: unknown; m?: string; s?: string; t?: number }>>;
+  columnCount: number;
+  rowCount: number;
+  sheetStyles: ImportSheetStyles;
+} {
+  const sheetStyles = createImportSheetStyles();
+  const { headerStyleId, exampleStyleId, dataBorderStyleId, styles } = sheetStyles;
+
+  const normalized = buildImportStringRows(options);
+  const columnCount = Math.max(1, ...normalized.map((r) => r.length), 1);
 
   const minDataRows = options.minDataRows ?? 100;
   const rowCount = Math.max(minDataRows, normalized.length);

@@ -1534,6 +1534,8 @@ class SalesOrderService:
         order_by: Optional[str] = None,
         include_items: bool = False,
         list_scope: Optional[str] = None,
+        pullable_only: Optional[bool] = None,
+        pull_target: Optional[str] = None,
         current_user: Optional["User"] = None,
     ) -> SalesOrderListResponse:
         """获取销售订单列表。order_by 如 order_code、-created_at（前缀-表示降序）"""
@@ -1572,6 +1574,40 @@ class SalesOrderService:
                 | Q(customer_name__icontains=kw)
                 | Q(salesman_name__icontains=kw)
                 | Q(contract_code__icontains=kw)
+            )
+        # 上拉建销售变更：与 is_source_order_locked_for_direct_edit / 前端 isSourceOrderEligibleForChange 对齐
+        if pullable_only and (pull_target or "").strip().lower() == "sales_order_change":
+            change_eligible_statuses = (
+                "AUDITED",
+                "CONFIRMED",
+                "IN_PROGRESS",
+                "COMPLETED",
+                "CLOSED",
+                "RELEASED",
+                "已审核",
+                "审核通过",
+                "已确认",
+                "执行中",
+                "进行中",
+                "已完成",
+                "已关闭",
+                "已下达",
+            )
+            approved_review = ("APPROVED", "已通过", "审核通过", "通过", "已审核")
+            excluded_for_review_gate = (
+                "DRAFT",
+                "PENDING_REVIEW",
+                "REJECTED",
+                "草稿",
+                "待审核",
+                "已驳回",
+            )
+            query = query.filter(
+                Q(status__in=change_eligible_statuses)
+                | (
+                    Q(review_status__in=approved_review)
+                    & ~Q(status__in=excluded_for_review_gate)
+                )
             )
         order_clause = order_by if order_by else "-created_at"
 

@@ -1884,7 +1884,7 @@ class ReportService:
         balances: List[Dict[str, Any]],
     ) -> None:
         """为即时库存汇总行补齐主数据物料属性、在途/在制与库存预警展示字段。"""
-        from apps.kuaizhizao.models.inventory_alert import InventoryAlert
+        from apps.kuaizhizao.models.inventory_alert import InventoryAlert, InventoryAlertRule
         from apps.kuaizhizao.utils.inventory_helper import batch_sum_open_supply_quantities_with_breakdown
         from apps.master_data.models.material import Material
 
@@ -1905,9 +1905,17 @@ class ReportService:
             deleted_at__isnull=True,
             status__in=["pending", "processing"],
         ).all()
-        alerts_by_material: Dict[int, List[Any]] = {}
+        alerts_by_key: Dict[tuple, List[Any]] = {}
         for alert in pending_alerts:
-            alerts_by_material.setdefault(int(alert.material_id), []).append(alert)
+            wid = getattr(alert, "warehouse_id", None)
+            key = (int(alert.material_id), int(wid) if wid is not None else None)
+            alerts_by_key.setdefault(key, []).append(alert)
+
+        enabled_rules = await InventoryAlertRule.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_enabled=True,
+        ).all()
 
         for balance in balances:
             mid = balance.get("material_id")
@@ -1935,33 +1943,29 @@ class ReportService:
                 "outsource_work_order_quantity": float(transit.get("outsource_work_order_quantity") or 0),
             }
 
+            wid_raw = balance.get("warehouse_id")
+            wid_int = int(wid_raw) if wid_raw is not None else None
+            pending_for_row = list(alerts_by_key.get((mid_int, wid_int), []))
+            if wid_int is not None:
+                pending_for_row.extend(alerts_by_key.get((mid_int, None), []))
             alert_info = self._resolve_inventory_balance_alert(
                 float(balance.get("quantity") or 0),
                 material,
-                alerts_by_material.get(mid_int, []),
+                pending_for_row,
+                warehouse_id=wid_int,
+                rules=enabled_rules,
             )
             balance.update(alert_info)
 
     @staticmethod
     def _material_stock_thresholds(material: Any) -> tuple[Optional[float], Optional[float]]:
-        defaults = getattr(material, "defaults", None) if material else None
-        if not isinstance(defaults, dict):
-            return None, None
-        safety_raw = defaults.get("safetyStock")
-        max_raw = defaults.get("maxStock")
-        safety = None
-        max_stock = None
-        try:
-            if safety_raw is not None and str(safety_raw).strip() != "":
-                safety = float(safety_raw)
-        except (TypeError, ValueError):
-            safety = None
-        try:
-            if max_raw is not None and str(max_raw).strip() != "":
-                max_stock = float(max_raw)
-        except (TypeError, ValueError):
-            max_stock = None
-        return safety, max_stock
+        from apps.kuaizhizao.services.inventory_threshold_resolver import material_stock_thresholds
+
+        safety, max_stock = material_stock_thresholds(material)
+        return (
+            float(safety) if safety is not None else None,
+            float(max_stock) if max_stock is not None else None,
+        )
 
     @classmethod
     def _resolve_inventory_balance_alert(
@@ -1969,7 +1973,15 @@ class ReportService:
         quantity: float,
         material: Any,
         pending_alerts: List[Any],
+        *,
+        warehouse_id: Optional[int] = None,
+        rules: Optional[List[Any]] = None,
     ) -> Dict[str, Any]:
+        from apps.kuaizhizao.services.inventory_threshold_resolver import (
+            display_alert_from_threshold,
+            resolve_effective_threshold,
+        )
+
         level_rank = {"critical": 3, "warning": 2, "info": 1}
         type_labels = {
             "low_stock": "低库存",
@@ -1994,21 +2006,18 @@ class ReportService:
                 "alert_message": getattr(best, "alert_message", None),
             }
 
-        safety, max_stock = cls._material_stock_thresholds(material)
-        if safety is not None and quantity <= safety:
-            return {
-                "alert_status": "low_stock",
-                "alert_level": "critical" if quantity <= 0 else "warning",
-                "alert_label": "低库存",
-                "alert_message": f"当前 {quantity:g}，低于安全库存 {safety:g}",
-            }
-        if max_stock is not None and quantity > max_stock:
-            return {
-                "alert_status": "high_stock",
-                "alert_level": "warning",
-                "alert_label": "高库存",
-                "alert_message": f"当前 {quantity:g}，高于最高库存 {max_stock:g}",
-            }
+        rule_list = rules or []
+        if material is not None:
+            for alert_type in ("low_stock", "high_stock"):
+                threshold = resolve_effective_threshold(
+                    alert_type=alert_type,
+                    material=material,
+                    warehouse_id=warehouse_id,
+                    rules=rule_list,
+                )
+                display = display_alert_from_threshold(quantity, threshold)
+                if display:
+                    return display
         return {
             "alert_status": "normal",
             "alert_level": None,
@@ -3219,6 +3228,8 @@ class ReportService:
         date_start: Optional[datetime] = None,
         date_end: Optional[datetime] = None,
         warehouse_id: Optional[int] = None,
+        material_id: Optional[int] = None,
+        keyword: Optional[str] = None,
         *,
         skip: int = 0,
         limit: int = 100,
@@ -3238,6 +3249,8 @@ class ReportService:
                 date_start=date_start,
                 date_end=date_end,
                 warehouse_id=warehouse_id,
+                material_id=material_id,
+                keyword=keyword,
                 skip=sk,
                 limit=lim,
             ))
@@ -3526,6 +3539,7 @@ class ReportService:
                 date_start=date_start,
                 date_end=date_end,
                 warehouse_id=warehouse_id,
+                material_id=material_id,
             )
         elif domain_key == "quality":
             payload = await self.get_quality_report(

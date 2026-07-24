@@ -60,16 +60,38 @@ def is_future_datetime(
 
 
 def to_site_timezone(dt: datetime) -> datetime:
-    """将 ``datetime`` 统一转换到系统配置时区。naive 值按站点墙钟解释（与 Tortoise 业务时间一致）。"""
+    """
+    将 ``datetime`` 转换到系统配置时区（默认 Asia/Shanghai）。
+
+    naive 按 **UTC** 解释（与 ``BaseSchema`` / Tortoise ``USE_TZ`` 落库口径一致）；
+    业务表单墙钟入参请用 :func:`resolve_business_datetime`，勿走本函数。
+    """
     tz_name = infra_settings.TIMEZONE or "Asia/Shanghai"
     if dt.tzinfo is None:
-        return make_aware(dt, tz_name)
-    return dt.astimezone(ZoneInfo(tz_name))
+        aware = make_aware(dt, "UTC")
+    else:
+        aware = dt
+    return aware.astimezone(ZoneInfo(tz_name))
 
 
 def to_site_date(dt: datetime) -> date:
     """业务日历日：在站点时区下取 date（入库确认、生产日期等）。"""
     return to_site_timezone(dt).date()
+
+
+def coerce_business_datetime_to_utc(value: datetime | None) -> datetime | None:
+    """
+    业务表单/推单墙钟 → ORM 写入用的 UTC aware。
+
+    - None 保持 None
+    - naive：按站点时区（Asia/Shanghai）解释
+    - aware：转到 UTC
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = make_aware(value, infra_settings.TIMEZONE or "Asia/Shanghai")
+    return value.astimezone(timezone.utc)
 
 
 def resolve_business_datetime(value: datetime | None = None) -> datetime:
@@ -82,10 +104,14 @@ def resolve_business_datetime(value: datetime | None = None) -> datetime:
     """
     from tortoise.timezone import now as tz_now
 
-    dt = value if value is not None else tz_now()
-    if dt.tzinfo is None:
-        dt = make_aware(dt, infra_settings.TIMEZONE or "Asia/Shanghai")
-    return dt.astimezone(timezone.utc)
+    if value is None:
+        dt = tz_now()
+        if dt.tzinfo is None:
+            dt = make_aware(dt, infra_settings.TIMEZONE or "Asia/Shanghai")
+        return dt.astimezone(timezone.utc)
+    coerced = coerce_business_datetime_to_utc(value)
+    assert coerced is not None
+    return coerced
 
 
 def to_api_isoformat(value: datetime | date | None) -> str | None:
@@ -112,6 +138,7 @@ __all__ = [
     "is_future_datetime",
     "to_site_timezone",
     "to_site_date",
+    "coerce_business_datetime_to_utc",
     "resolve_business_datetime",
     "to_api_isoformat",
 ]

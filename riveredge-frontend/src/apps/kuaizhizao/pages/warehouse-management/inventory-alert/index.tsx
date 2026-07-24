@@ -10,9 +10,9 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormSwitch } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDependency } from '@ant-design/pro-components';
 import { App, Button, Space, Popconfirm, Typography, Row, Col } from 'antd';
-import { WarningOutlined } from '@ant-design/icons';
+import { WarningOutlined, ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -23,11 +23,35 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, MultiTabListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { inventoryAlertApi } from '../../../services/inventory-alert';
-import { materialGroupApi } from '../../../../master-data/services/material';
-import { formatMaterialGroupLabel } from '../../../../master-data/types/material';
+import { materialApi, materialGroupApi } from '../../../../master-data/services/material';
+import { formatMaterialGroupLabel, type Material } from '../../../../master-data/types/material';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+
+/** 从物料 defaults 读取最低/最高库存（与后端 InventoryThresholdResolver 对齐） */
+function readMaterialStockThresholds(material?: Material | null): {
+  safetyStock: number | null;
+  maxStock: number | null;
+} {
+  const defaults = material?.defaults as Record<string, unknown> | undefined;
+  if (!defaults || typeof defaults !== 'object') {
+    return { safetyStock: null, maxStock: null };
+  }
+  const inv =
+    defaults.inventory && typeof defaults.inventory === 'object'
+      ? (defaults.inventory as Record<string, unknown>)
+      : defaults;
+  const toNum = (raw: unknown): number | null => {
+    if (raw === null || raw === undefined || String(raw).trim() === '') return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  };
+  return {
+    safetyStock: toNum(inv.safetyStock ?? inv.safety_stock ?? inv.safety_stock_level),
+    maxStock: toNum(inv.maxStock ?? inv.max_stock),
+  };
+}
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -82,7 +106,8 @@ interface InventoryAlertRule {
   warehouse_id?: number;
   warehouse_name?: string;
   threshold_type?: string;
-  threshold_value?: number;
+  threshold_value?: number | null;
+  inherit_material_threshold?: boolean;
   is_enabled?: boolean;
   notify_users?: number[];
   notify_roles?: number[];
@@ -115,9 +140,38 @@ const InventoryAlertPage: React.FC = () => {
   // 当前编辑的规则ID
   const [currentRuleId, setCurrentRuleId] = useState<number | null>(null);
   const [currentAlertId, setCurrentAlertId] = useState<number | null>(null);
+  /** 已选物料的主数据阈值，供「继承」时只读展示 */
+  const [selectedMaterialThresholds, setSelectedMaterialThresholds] = useState<{
+    safetyStock: number | null;
+    maxStock: number | null;
+  } | null>(null);
 
   // 统计信息
   const [statistics, setStatistics] = useState<any>(null);
+
+  const loadMaterialThresholdPreview = async (material?: Material | null) => {
+    if (!material?.id) {
+      setSelectedMaterialThresholds(null);
+      return;
+    }
+    let detail = material;
+    const fromSelect = readMaterialStockThresholds(material);
+    if (fromSelect.safetyStock == null && fromSelect.maxStock == null && material.uuid) {
+      try {
+        detail = await materialApi.get(material.uuid);
+      } catch {
+        detail = material;
+      }
+    } else if (fromSelect.safetyStock == null && fromSelect.maxStock == null) {
+      try {
+        const listed = await materialApi.list({ ids: [material.id], limit: 1 });
+        detail = listed.items?.[0] ?? material;
+      } catch {
+        detail = material;
+      }
+    }
+    setSelectedMaterialThresholds(readMaterialStockThresholds(detail));
+  };
 
   /**
    * 加载统计信息
@@ -169,11 +223,32 @@ const InventoryAlertPage: React.FC = () => {
    */
   const handleCreateRule = () => {
     setCurrentRuleId(null);
+    setSelectedMaterialThresholds(null);
     setRuleModalVisible(true);
     setPendingRuleFormValues({
       is_enabled: true,
       threshold_type: 'quantity',
+      inherit_material_threshold: true,
+      alert_type: 'low_stock',
     });
+  };
+
+  const handleRunCheck = async () => {
+    try {
+      const result = await inventoryAlertApi.runCheck();
+      messageApi.success(
+        t('app.kuaizhizao.inventoryAlert.msgCheckSuccess', {
+          checked: result.checked_balances ?? 0,
+          triggered: result.triggered_count ?? 0,
+          resolved: result.resolved_count ?? 0,
+        }),
+      );
+      invalidateMenuBadgeCounts();
+      alertActionRef.current?.reload();
+      loadStatistics();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.inventoryAlert.msgCheckFailed'));
+    }
   };
   useNewShortcut(activeTabKey === 'rules' ? handleCreateRule : undefined);
   const createRuleButtonLabel = useMemo(
@@ -196,6 +271,7 @@ const InventoryAlertPage: React.FC = () => {
   const handleEditRule = async (record: InventoryAlertRule) => {
     try {
       setCurrentRuleId(record.id!);
+      setSelectedMaterialThresholds(null);
       setRuleModalVisible(true);
       const detail = await inventoryAlertApi.getRule(record.id!.toString());
       setPendingRuleFormValues({
@@ -210,11 +286,15 @@ const InventoryAlertPage: React.FC = () => {
         warehouse_name: detail.warehouse_name,
         threshold_type: detail.threshold_type,
         threshold_value: detail.threshold_value,
+        inherit_material_threshold: Boolean(detail.inherit_material_threshold),
         is_enabled: detail.is_enabled,
         notify_users: detail.notify_users,
         notify_roles: detail.notify_roles,
         remarks: detail.remarks,
       });
+      if (detail.material_id) {
+        void loadMaterialThresholdPreview({ id: Number(detail.material_id) } as Material);
+      }
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.inventoryAlert.msgGetRuleFailed'));
     }
@@ -225,11 +305,16 @@ const InventoryAlertPage: React.FC = () => {
    */
   const handleRuleSubmit = async (values: any) => {
     try {
+      const inherit = values.alert_type === 'expired' ? false : Boolean(values.inherit_material_threshold);
+      const thresholdPayload = {
+        threshold_type: inherit ? 'quantity' : values.threshold_type,
+        threshold_value: inherit ? null : values.threshold_value,
+        inherit_material_threshold: inherit,
+      };
       if (currentRuleId) {
         await inventoryAlertApi.updateRule(currentRuleId.toString(), {
           name: values.name,
-          threshold_type: values.threshold_type,
-          threshold_value: values.threshold_value,
+          ...thresholdPayload,
           is_enabled: values.is_enabled,
           notify_users: values.notify_users,
           notify_roles: values.notify_roles,
@@ -247,8 +332,7 @@ const InventoryAlertPage: React.FC = () => {
           material_name: values.material_name,
           warehouse_id: values.warehouse_id,
           warehouse_name: values.warehouse_name,
-          threshold_type: values.threshold_type,
-          threshold_value: values.threshold_value,
+          ...thresholdPayload,
           is_enabled: values.is_enabled,
           notify_users: values.notify_users,
           notify_roles: values.notify_roles,
@@ -493,6 +577,15 @@ const InventoryAlertPage: React.FC = () => {
       ellipsis: true,
     },
     {
+      title: t('app.kuaizhizao.inventoryAlert.colThresholdSource'),
+      dataIndex: 'inherit_material_threshold',
+      width: 120,
+      render: (_, r) =>
+        r.inherit_material_threshold
+          ? t('app.kuaizhizao.inventoryAlert.thresholdSourceInherit')
+          : t('app.kuaizhizao.inventoryAlert.thresholdSourceCustom'),
+    },
+    {
       title: t('app.kuaizhizao.inventoryAlert.colThresholdType'),
       dataIndex: 'threshold_type',
       width: 100,
@@ -503,6 +596,8 @@ const InventoryAlertPage: React.FC = () => {
       dataIndex: 'threshold_value',
       width: 100,
       align: 'right',
+      render: (_, r) =>
+        r.inherit_material_threshold ? t('app.kuaizhizao.inventoryAlert.thresholdInheritLabel') : (r.threshold_value ?? '-'),
     },
     {
       title: t('app.kuaizhizao.inventoryAlert.colEnabled'),
@@ -618,6 +713,20 @@ const InventoryAlertPage: React.FC = () => {
                 showAdvancedSearch
                 pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
                 skipFuzzyPinyinClientFilter
+                toolBarRender={() =>
+                  alertPerms.canAction?.('execute')
+                    ? [
+                        <Button
+                          key="run-check"
+                          type="primary"
+                          icon={<ReloadOutlined />}
+                          onClick={() => void handleRunCheck()}
+                        >
+                          {t('app.kuaizhizao.inventoryAlert.runCheckButton')}
+                        </Button>,
+                      ]
+                    : []
+                }
                 request={async (params, sort, _filter, searchFormValues) => {
                   try {
                     const pageSize = params.pageSize || 20;
@@ -683,6 +792,7 @@ const InventoryAlertPage: React.FC = () => {
           setRuleModalVisible(false);
           setCurrentRuleId(null);
           setPendingRuleFormValues(null);
+          setSelectedMaterialThresholds(null);
           formRef.current?.resetFields();
         }}
         afterOpenChange={(open) => {
@@ -720,6 +830,22 @@ const InventoryAlertPage: React.FC = () => {
               ]}
               rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formAlertTypeRequired') }]}
               disabled={!!currentRuleId}
+              fieldProps={{
+                onChange: (value: string) => {
+                  if (value === 'expired') {
+                    formRef.current?.setFieldsValue({
+                      inherit_material_threshold: false,
+                      threshold_type: 'days',
+                    });
+                  } else {
+                    formRef.current?.setFieldsValue({
+                      inherit_material_threshold: true,
+                      threshold_type: 'quantity',
+                      threshold_value: undefined,
+                    });
+                  }
+                },
+              }}
             />
           </Col>
           <Col span={12}>
@@ -761,6 +887,9 @@ const InventoryAlertPage: React.FC = () => {
                 material_name: 'name',
               }}
               fallbackOption={ruleMaterialFallbackOption}
+              onChange={(_value, material) => {
+                void loadMaterialThresholdPreview(material);
+              }}
             />
           </Col>
           <Col span={12}>
@@ -779,30 +908,102 @@ const InventoryAlertPage: React.FC = () => {
         <ProFormText name="material_name" hidden />
         <ProFormText name="material_group_name" hidden />
         <ProFormText name="warehouse_name" hidden />
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormSelect
-              name="threshold_type"
-              label={t('app.kuaizhizao.inventoryAlert.formThresholdType')}
-              options={[
-                { label: t('app.kuaizhizao.inventoryAlert.thresholdTypeQuantity'), value: 'quantity' },
-                { label: t('app.kuaizhizao.inventoryAlert.thresholdTypePercentage'), value: 'percentage' },
-                { label: t('app.kuaizhizao.inventoryAlert.thresholdTypeDays'), value: 'days' },
-              ]}
-              rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formThresholdTypeRequired') }]}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormDigit
-              name="threshold_value"
-              label={t('app.kuaizhizao.inventoryAlert.formThresholdValue')}
-              placeholder={t('app.kuaizhizao.inventoryAlert.formThresholdValuePlaceholder')}
-              rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formThresholdValueRequired') }]}
-              min={0}
-              fieldProps={{ precision: 2 }}
-            />
-          </Col>
-        </Row>
+        <ProFormDependency name={['alert_type']}>
+          {({ alert_type }) =>
+            alert_type === 'expired' ? null : (
+              <ProFormSwitch
+                name="inherit_material_threshold"
+                label={t('app.kuaizhizao.inventoryAlert.formInheritMaterialThreshold')}
+                extra={t('app.kuaizhizao.inventoryAlert.formInheritMaterialThresholdExtra')}
+                fieldProps={{
+                  onChange: (checked: boolean) => {
+                    if (checked) {
+                      formRef.current?.setFieldsValue({
+                        threshold_type: 'quantity',
+                        threshold_value: undefined,
+                      });
+                    }
+                  },
+                }}
+              />
+            )
+          }
+        </ProFormDependency>
+        <ProFormDependency name={['alert_type', 'inherit_material_threshold', 'material_id']}>
+          {({ alert_type, inherit_material_threshold, material_id }) => {
+            const inherit = alert_type !== 'expired' && Boolean(inherit_material_threshold);
+            const typeOptions =
+              alert_type === 'expired'
+                ? [{ label: t('app.kuaizhizao.inventoryAlert.thresholdTypeDays'), value: 'days' }]
+                : [
+                    { label: t('app.kuaizhizao.inventoryAlert.thresholdTypeQuantity'), value: 'quantity' },
+                    { label: t('app.kuaizhizao.inventoryAlert.thresholdTypePercentage'), value: 'percentage' },
+                  ];
+            const previewValue =
+              alert_type === 'high_stock'
+                ? selectedMaterialThresholds?.maxStock
+                : selectedMaterialThresholds?.safetyStock;
+            const previewLabel =
+              alert_type === 'high_stock'
+                ? t('app.kuaizhizao.inventoryAlert.inheritPreviewMaxStock')
+                : t('app.kuaizhizao.inventoryAlert.inheritPreviewSafetyStock');
+            return (
+              <Row gutter={16}>
+                <Col span={12}>
+                  <ProFormSelect
+                    name="threshold_type"
+                    label={t('app.kuaizhizao.inventoryAlert.formThresholdType')}
+                    options={typeOptions}
+                    disabled={inherit}
+                    rules={
+                      inherit
+                        ? []
+                        : [{ required: true, message: t('app.kuaizhizao.inventoryAlert.formThresholdTypeRequired') }]
+                    }
+                  />
+                </Col>
+                <Col span={12}>
+                  {inherit ? (
+                    <div>
+                      <div style={{ marginBottom: 8 }}>
+                        {t('app.kuaizhizao.inventoryAlert.formThresholdValue')}
+                      </div>
+                      {material_id ? (
+                        previewValue != null ? (
+                          <Typography.Text>
+                            {previewLabel}: <Typography.Text strong>{formatQuantity(previewValue)}</Typography.Text>
+                            <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
+                              ({t('app.kuaizhizao.inventoryAlert.thresholdInheritLabel')})
+                            </Typography.Text>
+                          </Typography.Text>
+                        ) : (
+                          <Typography.Text type="warning">
+                            {t('app.kuaizhizao.inventoryAlert.inheritPreviewMaterialEmpty')}
+                          </Typography.Text>
+                        )
+                      ) : (
+                        <Typography.Text type="secondary">
+                          {t('app.kuaizhizao.inventoryAlert.inheritPreviewByGroup')}
+                        </Typography.Text>
+                      )}
+                    </div>
+                  ) : (
+                    <ProFormDigit
+                      name="threshold_value"
+                      label={t('app.kuaizhizao.inventoryAlert.formThresholdValue')}
+                      placeholder={t('app.kuaizhizao.inventoryAlert.formThresholdValuePlaceholder')}
+                      rules={[
+                        { required: true, message: t('app.kuaizhizao.inventoryAlert.formThresholdValueRequired') },
+                      ]}
+                      min={0}
+                      fieldProps={{ precision: 2 }}
+                    />
+                  )}
+                </Col>
+              </Row>
+            );
+          }}
+        </ProFormDependency>
         <ProFormTextArea
           name="remarks"
           label={t('app.kuaizhizao.warehouseCommon.colRemarks')}

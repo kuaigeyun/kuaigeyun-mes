@@ -17,6 +17,12 @@ export function toApiDateString(value: unknown): string | undefined {
   return d ? d.format('YYYY-MM-DD') : undefined;
 }
 
+/** 提交 API 时统一转为 YYYY-MM-DD HH:mm:ss（兼容 dayjs / 字符串 / Date） */
+export function toApiDateTimeString(value: unknown): string | undefined {
+  const d = coerceFormDate(value);
+  return d ? d.format('YYYY-MM-DD HH:mm:ss') : undefined;
+}
+
 /** Form.Item / ProForm 单日期：读值、写入时规范为 dayjs（避免 rc-picker 报 clone is not a function） */
 export const formDateFormItemProps = {
   getValueProps: (value: unknown) => ({ value: coerceFormDate(value) ?? undefined }),

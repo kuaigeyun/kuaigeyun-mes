@@ -7,7 +7,7 @@
  * @date 2025-12-29
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
@@ -41,7 +41,12 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -87,6 +92,8 @@ import dayjs from 'dayjs';
 import {formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
 import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
@@ -112,6 +119,7 @@ import {
   qualityInspectionUniAuditProps,
 } from '../components/qualityMeta';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const FINISHED_RESOURCE = 'kuaizhizao:quality-management-finished-goods-inspection';
 const FINISHED_GOODS_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_finished_goods_inspections';
@@ -200,6 +208,9 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const pushToReworkAction = resolveKuaizhizaoDocumentAction(t, 'rework_order.pull_from_finished_goods_inspection');
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'finished_goods_inspection.pull_from_work_order');
 
+  const importDictOptions = useImportDictionaryOptions(['DISPOSAL_METHOD']);
+  const disposalImportOptions = importDictOptions.DISPOSAL_METHOD ?? [];
+
   const finishedInspectionImportTemplate = useMemo(
     () =>
       buildFactoryImportTemplate(
@@ -213,6 +224,12 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           { field: 'inspectionQty', labelKey: 'app.kuaizhizao.quality.finished.import.inspectionQty', aliases: ['检验数量'] },
           { field: 'qualifiedQty', labelKey: 'app.kuaizhizao.quality.finished.import.qualifiedQty', aliases: ['合格数量'] },
           { field: 'unqualifiedQty', labelKey: 'app.kuaizhizao.quality.finished.import.unqualifiedQty', aliases: ['不合格数量'] },
+          {
+            field: 'disposition',
+            labelKey: 'app.kuaizhizao.quality.common.form.disposition',
+            aliases: ['处置方式', 'disposition'],
+            options: disposalImportOptions,
+          },
           { field: 'remark', labelKey: 'app.kuaizhizao.quality.finished.import.notes', aliases: ['备注'] },
         ],
         [
@@ -220,10 +237,11 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           t('app.kuaizhizao.quality.finished.importExample.inspectionQty'),
           t('app.kuaizhizao.quality.finished.importExample.qualifiedQty'),
           t('app.kuaizhizao.quality.finished.importExample.unqualifiedQty'),
+          pickImportExampleValue(disposalImportOptions, 'rework'),
           '',
         ],
       ),
-    [t, i18n.language],
+    [t, i18n.language, disposalImportOptions],
   );
   const queryClient = useQueryClient();
   const { message: messageApi } = App.useApp();
@@ -473,14 +491,10 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           messageApi.warning(t('app.kuaizhizao.quality.common.messages.exportEmpty'));
           return;
         }
-        const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const exportDate = new Date().toISOString().slice(0, 10);
-        a.download = `${t('app.kuaizhizao.quality.common.entity.finishedInspection')}_${exportDate}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        await downloadRecordsAsXlsx(
+          toExport as Array<Record<string, unknown>>,
+          `${t('app.kuaizhizao.quality.common.entity.finishedInspection')}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+        );
         messageApi.success(t('common.exportCountSuccess', { count: toExport.length }));
       }
     } catch (error: any) {
@@ -488,34 +502,47 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     }
   };
 
-  const pullFromWorkOrderQuery = useUniPullQuery<{
+  type FinishedGoodsPullWorkOrderCandidate = {
     id: number;
     code: string;
     capabilities?: { pull_finished_goods_inspection?: { allowed?: boolean; reason?: string } };
-  }>({
+  };
+
+  const isPullFinishedGoodsInspectionSelectable = useCallback(
+    (row: FinishedGoodsPullWorkOrderCandidate) =>
+      row.capabilities?.pull_finished_goods_inspection?.allowed !== false,
+    [],
+  );
+
+  const pullQueryScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const pullFromWorkOrderQuery = useUniPullQuery<FinishedGoodsPullWorkOrderCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await qualityApi.finishedGoodsInspection.listWorkOrderPullCandidates({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
-        return {
-          data: (res.data || []) as Array<{
-            id: number;
-            code: string;
-            capabilities?: { pull_finished_goods_inspection?: { allowed?: boolean; reason?: string } };
-          }>,
-          total: res.total ?? 0,
-        };
+        const rows = (res.data || []) as FinishedGoodsPullWorkOrderCandidate[];
+        const filtered = filterByPullScope(rows, scope, isPullFinishedGoodsInspectionSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch {
         messageApi.error(t('app.kuaizhizao.quality.finished.messages.loadWorkOrderFailed'));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (row) => row.capabilities?.pull_finished_goods_inspection?.allowed === false,
+    isRowDisabled: (row) => !isPullFinishedGoodsInspectionSelectable(row),
     onConfirm: async (keys, rows) => {
       const selected = rows.find((x) => String(x.id) === String(keys[0]));
       if (!selected?.id) {
@@ -1154,6 +1181,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         onImport={handleImport}
         importHeaders={finishedInspectionImportTemplate.importHeaders}
         importExampleRow={finishedInspectionImportTemplate.importExampleRow}
+        importColumnOptions={finishedInspectionImportTemplate.importColumnOptions}
         importFieldMap={finishedInspectionImportTemplate.importHeaderMap}
         showExportButton={true}
         onExport={handleExport}
@@ -1327,6 +1355,9 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         pageSize={pullFromWorkOrderQuery.pageSize}
         total={pullFromWorkOrderQuery.total}
         onPageChange={pullFromWorkOrderQuery.handlePageChange}
+        scopeOptions={pullFromWorkOrderQuery.scopeOptions}
+        scope={pullFromWorkOrderQuery.scope}
+        onScopeChange={pullFromWorkOrderQuery.handleScopeChange}
       />
 
       {/* 成品检验详情 Drawer */}

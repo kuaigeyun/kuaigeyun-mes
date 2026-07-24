@@ -43,11 +43,13 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 
 /**
  * 厂区管理列表页面组件
@@ -102,12 +104,14 @@ const PlantsPage: React.FC = () => {
           { field: 'name', required: true, labelKey: 'app.master-data.plants.name' },
           { field: 'address', labelKey: 'app.master-data.plants.address' },
           { field: 'description', labelKey: 'app.master-data.plants.description' },
+          { field: 'isActive', labelKey: 'field.plant.isActive', aliases: ['是否启用', '启用'] , options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.plants.importExample.code'),
           t('app.master-data.plants.importExample.name'),
           t('app.master-data.plants.importExample.address'),
           t('app.master-data.plants.importExample.description'),
+          '是',
         ],
       ),
     [t, i18n.language],
@@ -312,13 +316,18 @@ const PlantsPage: React.FC = () => {
           return;
         }
 
-        // 构建导入数据（isActive 使用默认值 true，不导入）
+        const isActiveRaw =
+          headerIndexMap.isActive !== undefined ? String(row[headerIndexMap.isActive] ?? '').trim() : '';
+        const isActive =
+          !isActiveRaw ||
+          !['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(isActiveRaw.toLowerCase());
+
         const plantData: PlantCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
           address: address ? String(address).trim() : undefined,
           description: description ? String(description).trim() : undefined,
-          isActive: true, // 默认启用
+          isActive,
         };
 
         importData.push(plantData);
@@ -436,8 +445,7 @@ const PlantsPage: React.FC = () => {
         filename = `${t('app.master-data.plants.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
         // 导出全部数据
-        const allData = await plantApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        exportData = allData.items;
+        exportData = await fetchAllListItems((p) => plantApi.list({ ...p, ...lastListParamsRef.current }));
         filename = `${t('app.master-data.plants.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -706,11 +714,8 @@ const PlantsPage: React.FC = () => {
           onImport={handleImport}
           importHeaders={plantImportTemplate.importHeaders}
           importExampleRow={plantImportTemplate.importExampleRow}
+          importColumnOptions={plantImportTemplate.importColumnOptions}
           importFieldMap={plantImportTemplate.importHeaderMap}
-          importFieldRules={{
-            code: { required: true },
-            name: { required: true },
-          }}
           showExportButton={true}
           onExport={handleExport}
         />

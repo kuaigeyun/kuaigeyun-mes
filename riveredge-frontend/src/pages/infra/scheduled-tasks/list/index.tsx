@@ -27,6 +27,8 @@ import {
   UpdateScheduledTaskData,
 } from '../../../../services/scheduledTask';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 const { TextArea } = Input;
 
@@ -499,8 +501,7 @@ const ScheduledTaskListPage: React.FC = () => {
           showExportButton={true}
           onExport={async (type, keys, pageData) => {
             try {
-              const allData = await getScheduledTaskList({ skip: 0, limit: 10000 });
-              let items = Array.isArray(allData) ? allData : [];
+              let items = await fetchAllListItems((p) => getScheduledTaskList(p));
               if (type === 'currentPage' && pageData?.length) {
                 items = pageData;
               } else if (type === 'selected' && keys?.length) {
@@ -510,13 +511,10 @@ const ScheduledTaskListPage: React.FC = () => {
                 messageApi.warning(t('field.scheduledTask.exportNoData'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `scheduled-tasks-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `scheduled-tasks-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('field.scheduledTask.exportSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('pages.system.deleteFailed'));

@@ -35,6 +35,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   MasterDataBatchActiveMenuButton,
@@ -45,6 +46,7 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 
 /**
  * 工艺路线管理列表页面组件
@@ -101,11 +103,18 @@ const ProcessRoutesPage: React.FC = () => {
           { field: 'code', required: true, labelKey: 'field.route.code' },
           { field: 'name', required: true, labelKey: 'field.route.name' },
           { field: 'description', labelKey: 'field.route.description', aliases: ['备注', '描述'] },
+          {
+            field: 'isActive',
+            labelKey: 'field.route.isActive',
+            aliases: ['是否启用', '启用'],
+            options: [...IMPORT_YES_NO_OPTIONS],
+          },
         ],
         [
           t('app.master-data.routes.importExample.code'),
           t('app.master-data.routes.importExample.name'),
           t('app.master-data.routes.importExample.description'),
+          '是',
         ],
       ),
     [t, i18n.language],
@@ -317,7 +326,7 @@ const ProcessRoutesPage: React.FC = () => {
       );
       return;
     }
-    const items: { code: string; name: string; description?: string }[] = [];
+    const items: { code: string; name: string; description?: string; isActive?: boolean }[] = [];
     const errors: Array<{ row: number; message: string }> = [];
     rows.forEach((row: any[], i: number) => {
       const code = (row[headerIndexMap['code']] ?? '').toString().trim();
@@ -334,7 +343,12 @@ const ProcessRoutesPage: React.FC = () => {
         errors.push({ row: i + 3, message: t('app.master-data.routes.nameRequired') });
         return;
       }
-      items.push({ code, name, description: desc || undefined });
+      const isActiveRaw =
+        headerIndexMap.isActive !== undefined ? String(row[headerIndexMap.isActive] ?? '').trim() : '';
+      const isActive =
+        !isActiveRaw ||
+        !['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(isActiveRaw.toLowerCase());
+      items.push({ code, name, description: desc || undefined, isActive });
     });
     if (errors.length > 0) {
       Modal.warning({
@@ -386,15 +400,13 @@ const ProcessRoutesPage: React.FC = () => {
     try {
       let toExport: ProcessRoute[] = [];
       if (type === 'all') {
-        const res = await processRouteApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        toExport = Array.isArray(res) ? res : res?.data ?? [];
+        toExport = await fetchAllListItems((p) => processRouteApi.list({ ...p, ...lastListParamsRef.current }));
       } else if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
         toExport = currentPageData.filter((r) => selectedRowKeys.includes(r.uuid));
       } else if (type === 'currentPage' && currentPageData) {
         toExport = currentPageData;
       } else {
-        const res = await processRouteApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        toExport = Array.isArray(res) ? res : res?.data ?? [];
+        toExport = await fetchAllListItems((p) => processRouteApi.list({ ...p, ...lastListParamsRef.current }));
       }
       if (toExport.length === 0) {
         messageApi.warning(t('app.master-data.noExportData'));
@@ -631,8 +643,8 @@ const ProcessRoutesPage: React.FC = () => {
         onImport={handleImport}
         importHeaders={routeImportTemplate.importHeaders}
         importExampleRow={routeImportTemplate.importExampleRow}
+        importColumnOptions={routeImportTemplate.importColumnOptions}
         importFieldMap={routeImportTemplate.importHeaderMap}
-        importFieldRules={{ code: { required: true }, name: { required: true } }}
         showExportButton={true}
         onExport={handleExport}
       />

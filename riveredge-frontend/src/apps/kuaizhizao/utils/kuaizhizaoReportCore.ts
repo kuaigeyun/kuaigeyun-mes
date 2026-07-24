@@ -172,6 +172,23 @@ export async function fetchKuaizhizaoReport(
   const fuzzyKeyword =
     options?.keyword ??
     (typeof searchFormValues?.keyword === 'string' ? searchFormValues.keyword.trim() : undefined);
+  const warehouseIdRaw = searchFormValues?.warehouse_id;
+  const materialIdRaw = searchFormValues?.material_id;
+  const warehouse_id =
+    typeof warehouseIdRaw === 'number'
+      ? warehouseIdRaw
+      : typeof warehouseIdRaw === 'string' && warehouseIdRaw.trim()
+        ? Number(warehouseIdRaw)
+        : undefined;
+  const material_id =
+    typeof materialIdRaw === 'number'
+      ? materialIdRaw
+      : typeof materialIdRaw === 'string' && materialIdRaw.trim()
+        ? Number(materialIdRaw)
+        : undefined;
+  const filters: Record<string, number> = {};
+  if (warehouse_id != null && Number.isFinite(warehouse_id)) filters.warehouse_id = warehouse_id;
+  if (material_id != null && Number.isFinite(material_id)) filters.material_id = material_id;
 
   const base = {
     report_type: route.backendType,
@@ -181,6 +198,7 @@ export async function fetchKuaizhizaoReport(
     limit,
     ...(customer_keyword ? { customer_keyword } : {}),
     ...(fuzzyKeyword ? { keyword: fuzzyKeyword } : {}),
+    ...(Object.keys(filters).length ? { filters } : {}),
     ...(options?.order_by ? { order_by: options.order_by } : {}),
     ...(options?.status ? { status: options.status } : {}),
     ...(options?.order_code ? { order_code: options.order_code } : {}),

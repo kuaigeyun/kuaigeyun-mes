@@ -69,6 +69,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../utils/spreadsheetImportTemplate';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 
 const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
@@ -1002,15 +1003,12 @@ const ApplicationConnectionsListPage: React.FC = () => {
               messageApi.warning(t('common.exportNoData'));
               return;
             }
-            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = t('pages.system.applicationConnections.exportFileName', {
-              date: new Date().toISOString().slice(0, 10),
-            });
-            a.click();
-            URL.revokeObjectURL(url);
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              t('pages.system.applicationConnections.exportFileName', {
+                date: new Date().toISOString().slice(0, 10),
+              }),
+            );
             messageApi.success(t('common.exportSuccess', { count: items.length }));
           }}
         />

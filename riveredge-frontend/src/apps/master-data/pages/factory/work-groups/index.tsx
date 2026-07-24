@@ -31,11 +31,13 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 
 const WorkGroupsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -68,11 +70,13 @@ const WorkGroupsPage: React.FC = () => {
           { field: 'code', required: true, labelKey: 'field.workGroup.code' },
           { field: 'name', required: true, labelKey: 'field.workGroup.name' },
           { field: 'description', labelKey: 'field.workGroup.description' },
+          { field: 'isActive', labelKey: 'field.workGroup.isActive', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.workGroups.importExample.code'),
           t('app.master-data.workGroups.importExample.name'),
           t('app.master-data.workGroups.importExample.description'),
+          '是',
         ],
       ),
     [t, i18n.language],
@@ -248,11 +252,16 @@ const WorkGroupsPage: React.FC = () => {
           return;
         }
 
+        const isActiveRaw =
+          headerIndexMap.isActive !== undefined ? String(row[headerIndexMap.isActive] ?? '').trim() : '';
+        const isActive =
+          !isActiveRaw ||
+          !['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(isActiveRaw.toLowerCase());
         importData.push({
           code: codeValue.toUpperCase(),
           name: nameValue,
           description: description ? String(description).trim() : undefined,
-          isActive: true,
+          isActive,
           members: [],
         });
       } catch (error: any) {
@@ -366,9 +375,7 @@ const WorkGroupsPage: React.FC = () => {
           date: new Date().toISOString().slice(0, 10),
         })}.csv`;
       } else {
-        const allData = await workGroupApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        const { data: exportItems } = normalizeMasterListResponse(allData);
-        exportData = exportItems;
+        exportData = await fetchAllListItems((p) => workGroupApi.list({ ...p, ...lastListParamsRef.current }));
         filename = `${t('app.master-data.workGroups.exportFilenameAll', {
           date: new Date().toISOString().slice(0, 10),
         })}.csv`;
@@ -631,11 +638,8 @@ const WorkGroupsPage: React.FC = () => {
           onImport={handleImport}
           importHeaders={workGroupImportTemplate.importHeaders}
           importExampleRow={workGroupImportTemplate.importExampleRow}
+          importColumnOptions={workGroupImportTemplate.importColumnOptions}
           importFieldMap={workGroupImportTemplate.importHeaderMap}
-          importFieldRules={{
-            code: { required: true },
-            name: { required: true },
-          }}
           showExportButton={true}
           onExport={handleExport}
         />

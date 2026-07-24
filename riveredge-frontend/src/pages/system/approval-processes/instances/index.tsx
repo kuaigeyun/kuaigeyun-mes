@@ -28,6 +28,8 @@ import {
 } from '../../../../services/approvalInstance';
 import { getApprovalProcessList } from '../../../../services/approvalProcess';
 import { rowActionKind } from '../../../../components/uni-action';
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 const { TextArea } = Input;
 
@@ -564,9 +566,7 @@ const ApprovalInstanceListPage: React.FC = () => {
           showExportButton={true}
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await getApprovalInstanceList({ skip: 0, limit: 10000 });
-              const items = Array.isArray(res) ? res : [];
-              let toExport = items;
+              let toExport = await fetchAllListItems((p) => getApprovalInstanceList(p));
               if (type === 'currentPage' && pageData?.length) {
                 toExport = pageData;
               } else if (type === 'selected' && keys?.length) {
@@ -576,13 +576,10 @@ const ApprovalInstanceListPage: React.FC = () => {
                 messageApi.warning(t('pages.system.approvalInstances.exportNoData'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `approval-instances-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                toExport as Array<Record<string, unknown>>,
+                `approval-instances-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('pages.system.approvalInstances.exportSuccessCount', { count: toExport.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('pages.system.approvalInstances.exportFailed'));

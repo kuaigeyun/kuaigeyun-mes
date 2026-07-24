@@ -1283,6 +1283,7 @@ const SuperAdminTenantList: React.FC = () => {
       onImport={handleImport}
       importHeaders={[t('pages.infra.tenant.importHeaderName'), t('pages.infra.tenant.importHeaderDomain'), t('pages.infra.tenant.importHeaderPlan'), t('pages.infra.tenant.importHeaderStatus'), t('pages.infra.tenant.importHeaderMaxUsers'), t('pages.infra.tenant.importHeaderMaxStorage'), t('pages.infra.tenant.importHeaderExpiresAt')]}
       importExampleRow={[t('pages.infra.tenant.importExampleName'), 'example', packagePlanOptions[0]?.label || '-', t('pages.infra.tenant.statusInactive'), '10', '1024', '']}
+      importFieldMap={headerToFieldMap}
       showExportButton={true}
       onExport={handleExport}
       viewTypes={['table', 'help']}

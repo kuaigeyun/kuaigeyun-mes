@@ -3,10 +3,9 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  PageContainer,
   ProDescriptions,
   type ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
@@ -14,42 +13,42 @@ import {
   App,
   Button,
   Card,
-  Descriptions,
   Empty,
   Form,
   Input,
   Modal,
   Select,
+  Space,
   Spin,
-  Tabs,
   Tag,
   Typography,
   Upload,
   DatePicker,
 } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, UploadOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined, QrcodeOutlined, UploadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { equipmentApi } from '../../../../services/equipment';
 import { inspectionSchemesApi, schemeBindingsApi } from '../../../../services/equipmentOps';
 import {
-  DetailDrawerInlineFullChain,
+  DOCUMENT_DETAIL_PAGE_HEADER_STYLE,
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   MODAL_CONFIG,
+  MultiTabListPageTemplate,
 } from '../../../../../../components/layout-templates';
 import { QRCodeGenerator } from '../../../../../../components/qrcode';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
-import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
-import { getEquipmentAssetLifecycle } from '../../../../utils/equipmentLifecycle';
-import { EquipmentTraceBriefPrimaryActions } from '../../EquipmentTraceBriefFooter';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../../components/custom-fields';
 import { useCustomFieldsForList } from '../../../../../../hooks/useCustomFieldsForList';
+import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
 import { FutureDatePicker } from '../../../../../../utils/futureDatePickerShortcuts';
 import { uploadMultipleFiles } from '../../../../../../services/file';
 import { normalizeDocumentAttachments } from '../../../../utils/documentAttachments';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
+import { useKuaizhizaoPrintModal } from '../../../../hooks/useKuaizhizaoPrintModal';
 import {
   buildEquipmentDetailTabItems,
   resolveEquipmentDetailTabKey,
@@ -59,6 +58,19 @@ import {
 import { KUAIZHIZAO_EQUIPMENT_LIST_PATH } from '../equipmentPaths';
 
 const EQUIPMENT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_equipment';
+
+function equipmentStatusTag(
+  status: string | undefined,
+  t: (key: string) => string,
+): { text: string; color: string } {
+  const statusMap: Record<string, { text: string; color: string }> = {
+    正常: { text: t('app.kuaizhizao.equipment.statusNormal'), color: 'success' },
+    维修中: { text: t('app.kuaizhizao.equipment.statusRepairing'), color: 'warning' },
+    停用: { text: t('app.kuaizhizao.equipment.statusDisabled'), color: 'default' },
+    报废: { text: t('app.kuaizhizao.equipment.statusScrapped'), color: 'error' },
+  };
+  return statusMap[status ?? ''] ?? { text: status ?? '-', color: 'default' };
+}
 
 interface EquipmentDetail {
   id?: number;
@@ -95,9 +107,12 @@ interface EquipmentDetail {
 const EquipmentDetailPage: React.FC = () => {
   const { uuid } = useParams<{ uuid: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const equipmentPerms = useResourcePermissions('kuaizhizao:equipment-management-equipment');
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
 
   const activeTab = resolveEquipmentDetailTabKey(searchParams.get('tab'));
 
@@ -196,13 +211,7 @@ const EquipmentDetailPage: React.FC = () => {
         title: t('common.status'),
         dataIndex: 'status',
         render: (_, record) => {
-          const statusMap: Record<string, { text: string; color: string }> = {
-            正常: { text: t('app.kuaizhizao.equipment.statusNormal'), color: 'success' },
-            维修中: { text: t('app.kuaizhizao.equipment.statusRepairing'), color: 'warning' },
-            停用: { text: t('app.kuaizhizao.equipment.statusDisabled'), color: 'default' },
-            报废: { text: t('app.kuaizhizao.equipment.statusScrapped'), color: 'error' },
-          };
-          const mapped = statusMap[record.status ?? ''] ?? { text: record.status ?? '-', color: 'default' };
+          const mapped = equipmentStatusTag(record.status, t);
           return <Tag color={mapped.color}>{mapped.text}</Tag>;
         },
       },
@@ -280,27 +289,44 @@ const EquipmentDetailPage: React.FC = () => {
       children: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Card size="small" title={t('app.uniDetail.sectionBasic')}>
-            <ProDescriptions<EquipmentDetail> dataSource={equipment} column={3} columns={detailColumns} />
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <ProDescriptions<EquipmentDetail> dataSource={equipment} column={3} columns={detailColumns} />
+              </div>
+              {equipment.uuid ? (
+                <div
+                  style={{
+                    flex: '0 0 168px',
+                    width: 168,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {t('app.kuaizhizao.equipment.qrcodeCardTitle')}
+                  </Typography.Text>
+                  <QRCodeGenerator
+                    qrcodeType="EQ"
+                    data={{
+                      equipment_uuid: equipment.uuid,
+                      equipment_code: equipment.code || '',
+                      equipment_name: equipment.name || '',
+                    }}
+                    autoGenerate
+                    size={6}
+                    noCard
+                  />
+                </div>
+              ) : null}
+            </div>
           </Card>
           {hasCustomFieldsDetailContent(equipmentListCustomFields, equipmentDetailCustomFieldValues) ? (
             <Card size="small" title={t('app.master-data.customFields')}>
               <CustomFieldsDetailSection
                 customFields={equipmentListCustomFields}
                 customFieldValues={equipmentDetailCustomFieldValues}
-              />
-            </Card>
-          ) : null}
-          {equipment.uuid ? (
-            <Card size="small" title={t('app.kuaizhizao.equipment.qrcodeCardTitle')}>
-              <QRCodeGenerator
-                qrcodeType="EQ"
-                data={{
-                  equipment_uuid: equipment.uuid,
-                  equipment_code: equipment.code || '',
-                  equipment_name: equipment.name || '',
-                }}
-                autoGenerate
-                size={6}
               />
             </Card>
           ) : null}
@@ -339,40 +365,6 @@ const EquipmentDetailPage: React.FC = () => {
               </Button>
             </div>
           </Card>
-          <Card size="small" title={t('app.uniDetail.sectionCollaboration')}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {(() => {
-                const lc = getEquipmentAssetLifecycle(equipment as Record<string, unknown>);
-                const mainStages = lc.mainStages ?? [];
-                if (mainStages.length === 0) return null;
-                return (
-                  <UniLifecycleStepper
-                    steps={mainStages}
-                    showLabels
-                    status={lc.status}
-                    nextStepSuggestions={lc.nextStepSuggestions}
-                    hideNextStepSuggestions
-                  />
-                );
-              })()}
-              {equipment.id != null ? (
-                <DetailDrawerInlineFullChain
-                  documentType="equipment"
-                  documentId={equipment.id}
-                  active
-                  selfDocumentId={equipment.id}
-                  renderBriefActions={(doc) => (
-                    <EquipmentTraceBriefPrimaryActions
-                      doc={doc}
-                      t={t}
-                      navigate={navigate}
-                      closeDrawer={() => undefined}
-                    />
-                  )}
-                />
-              ) : null}
-            </div>
-          </Card>
           <Card size="small" title={t('app.uniDetail.sectionTimeline')}>
             {equipmentTracking.loading ? <Spin /> : null}
             {equipmentTracking.error && !equipmentTracking.loading ? (
@@ -401,54 +393,118 @@ const EquipmentDetailPage: React.FC = () => {
     equipmentTracking,
     opsTabItems,
     messageApi,
-    navigate,
   ]);
 
   const handleTabChange = (key: string) => {
     setSearchParams(key === 'info' ? {} : { tab: key }, { replace: true });
   };
 
+  const leavePage = () => navigate(KUAIZHIZAO_EQUIPMENT_LIST_PATH);
+
+  const pageTitle = equipment
+    ? `${equipment.code ?? ''} ${equipment.name ?? ''}`.trim() || t('app.kuaizhizao.equipment.detail')
+    : t('app.kuaizhizao.equipment.detail');
+  const statusTag = equipment?.status ? equipmentStatusTag(equipment.status, t) : null;
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('riveredge:update-tab-title', {
+        detail: {
+          key: location.pathname + location.search,
+          path: location.pathname,
+          title: pageTitle,
+        },
+      }),
+    );
+  }, [pageTitle, location.pathname, location.search]);
+
+  const fallbackTabs = useMemo(
+    () => [
+      {
+        key: 'info',
+        label: t('app.kuaizhizao.equipment.detailTabInfo'),
+        children: (
+          <div style={{ padding: 48, textAlign: 'center' }}>
+            {loading ? <Spin size="large" /> : <Empty description={t('app.kuaizhizao.equipment.getDetailFailed')} />}
+          </div>
+        ),
+      },
+    ],
+    [loading, t],
+  );
+
+  const tabs = equipment && traceData && tabItems.length > 0 ? tabItems : fallbackTabs;
+
   if (!uuid) {
     return (
-      <PageContainer>
-        <Empty description={t('app.kuaizhizao.equipment.uuidNotFound')} />
-      </PageContainer>
+      <MultiTabListPageTemplate
+        activeTabKey="info"
+        onTabChange={() => undefined}
+        tabs={[
+          {
+            key: 'info',
+            label: t('app.kuaizhizao.equipment.detailTabInfo'),
+            children: <Empty description={t('app.kuaizhizao.equipment.uuidNotFound')} />,
+          },
+        ]}
+      />
     );
   }
 
   return (
-    <PageContainer
-      loading={loading}
-      title={equipment ? `${equipment.code ?? ''} ${equipment.name ?? ''}`.trim() : t('app.kuaizhizao.equipment.detail')}
-      subTitle={equipment?.status ? <Tag>{equipment.status}</Tag> : undefined}
-      onBack={() => navigate(KUAIZHIZAO_EQUIPMENT_LIST_PATH)}
-      extra={[
-        <Button
-          key="back"
-          icon={<ArrowLeftOutlined />}
-          onClick={() => navigate(KUAIZHIZAO_EQUIPMENT_LIST_PATH)}
-        >
-          {t('common.back')}
-        </Button>,
-        equipment?.uuid ? (
-          <Button
-            key="edit"
-            type="primary"
-            icon={<EditOutlined />}
-            onClick={() =>
-              navigate(KUAIZHIZAO_EQUIPMENT_LIST_PATH, { state: { openEditUuid: equipment.uuid } })
-            }
-          >
-            {t('common.edit')}
-          </Button>
-        ) : null,
-      ]}
-    >
-      {equipment && traceData ? (
-        <Tabs activeKey={activeTab} onChange={handleTabChange} items={tabItems} />
-      ) : !loading ? (
-        <Empty description={t('app.kuaizhizao.equipment.getDetailFailed')} />
-      ) : null}
+    <>
+      <MultiTabListPageTemplate
+        activeTabKey={activeTab}
+        onTabChange={handleTabChange}
+        header={
+          <div style={{ ...DOCUMENT_DETAIL_PAGE_HEADER_STYLE, marginBottom: 0 }}>
+            <Space align="center" size={8}>
+              <Button
+                type="text"
+                icon={<ArrowLeftOutlined />}
+                aria-label={t('common.back')}
+                onClick={leavePage}
+              />
+              <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                {pageTitle}
+              </Typography.Title>
+              {statusTag ? <Tag color={statusTag.color}>{statusTag.text}</Tag> : null}
+            </Space>
+            <Space wrap>
+              <Button onClick={leavePage}>{t('common.back')}</Button>
+              {equipmentPerms.canPrint && equipment?.uuid ? (
+                <Button
+                  icon={<QrcodeOutlined />}
+                  onClick={() =>
+                    openPrint({
+                      documentType: 'equipment_card',
+                      documentId: equipment.id ?? 1,
+                      printApiPath: `/apps/kuaizhizao/equipment/${equipment.uuid}/print`,
+                      pdfDownloadFilename: `equipment-card-${equipment.code || equipment.uuid}.pdf`,
+                    })
+                  }
+                >
+                  {t('app.kuaizhizao.equipment.printEquipmentCards')}
+                </Button>
+              ) : null}
+              {equipment?.uuid ? (
+                <Button
+                  type="primary"
+                  icon={<EditOutlined />}
+                  onClick={() =>
+                    navigate(KUAIZHIZAO_EQUIPMENT_LIST_PATH, { state: { openEditUuid: equipment.uuid } })
+                  }
+                >
+                  {t('common.edit')}
+                </Button>
+              ) : null}
+            </Space>
+          </div>
+        }
+        tabs={tabs}
+      />
+
+      {PrintModal}
 
       <Modal
         title={t('app.kuaizhizao.equipment.createCalibration')}
@@ -495,7 +551,7 @@ const EquipmentDetailPage: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
-    </PageContainer>
+    </>
   );
 };
 

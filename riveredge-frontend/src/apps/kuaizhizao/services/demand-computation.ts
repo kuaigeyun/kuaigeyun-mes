@@ -207,6 +207,47 @@ export async function getComputationDynamicMonitor(id: number): Promise<{
   });
 }
 
+/** 需求计算执行前：物料主数据缺失项 */
+export interface DemandComputationReadinessGap {
+  material_id: number;
+  material_uuid: string;
+  material_code: string;
+  material_name: string;
+  source_type?: string | null;
+  field: string;
+  label: string;
+  current?: unknown;
+  suggested?: unknown;
+  value_type?: 'number' | 'int' | 'supplier_id' | string;
+}
+
+export interface DemandComputationReadiness {
+  ready: boolean;
+  gaps: DemandComputationReadinessGap[];
+  material_count: number;
+  gap_count: number;
+}
+
+/** 执行前就绪检查 */
+export async function getDemandComputationReadiness(
+  id: number,
+): Promise<DemandComputationReadiness> {
+  return apiRequest<DemandComputationReadiness>(
+    `/apps/kuaizhizao/demand-computations/${id}/readiness`,
+    { method: 'GET' },
+  );
+}
+
+/** 将缺失默认值回写物料主数据 */
+export async function backfillDemandComputationMaterials(
+  items: Array<{ material_id: number; field: string; value: unknown }>,
+): Promise<{ updated_material_ids: number[]; updated_count: number }> {
+  return apiRequest(`/apps/kuaizhizao/demand-computations/materials/backfill`, {
+    method: 'POST',
+    data: { items },
+  });
+}
+
 /**
  * 执行计算预览（不持久化，用于二次确认）
  */

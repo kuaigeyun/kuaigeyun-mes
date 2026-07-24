@@ -136,6 +136,17 @@ const BatchInventoryQuery: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'in_stock' | 'zero' | 'expired'>('all');
   const [agingBucket, setAgingBucket] = useState<'all' | 'expired' | '0-30' | '31-90' | '90+'>('all');
   const [groupBy, setGroupBy] = useState<'warehouse' | 'material' | 'status' | 'aging_bucket'>('aging_bucket');
+  // setState 后立刻 reload 时闭包仍是旧值；用 ref 保证请求参数与开关一致
+  const includeExpiredRef = useRef(false);
+  const includeZeroStockRef = useRef(true);
+  const statusFilterRef = useRef(statusFilter);
+  const agingBucketRef = useRef(agingBucket);
+  const groupByRef = useRef(groupBy);
+  includeExpiredRef.current = includeExpired;
+  includeZeroStockRef.current = includeZeroStock;
+  statusFilterRef.current = statusFilter;
+  agingBucketRef.current = agingBucket;
+  groupByRef.current = groupBy;
   const lastQueryRef = useRef<Record<string, any>>({});
   const actionRef = useRef<any>(null);
   const [summary, setSummary] = useState({
@@ -174,7 +185,9 @@ const BatchInventoryQuery: React.FC = () => {
             { label: t('app.kuaizhizao.batchInventoryQuery.hideExpiredBatches'), value: 'hide' },
           ]}
           onChange={(v) => {
-            setIncludeExpired(v === 'show');
+            const next = v === 'show';
+            includeExpiredRef.current = next;
+            setIncludeExpired(next);
             actionRef.current?.reload();
           }}
         />
@@ -186,7 +199,9 @@ const BatchInventoryQuery: React.FC = () => {
             { label: t('app.kuaizhizao.warehouseCommon.hideZeroStock'), value: 'hide' },
           ]}
           onChange={(v) => {
-            setIncludeZeroStock(v === 'show');
+            const next = v === 'show';
+            includeZeroStockRef.current = next;
+            setIncludeZeroStock(next);
             actionRef.current?.reload();
           }}
         />
@@ -200,6 +215,7 @@ const BatchInventoryQuery: React.FC = () => {
             { label: t('app.kuaizhizao.warehouseCommon.expiredOnly'), value: 'expired' },
           ]}
           onChange={(v) => {
+            statusFilterRef.current = v;
             setStatusFilter(v);
             actionRef.current?.reload();
           }}
@@ -215,6 +231,7 @@ const BatchInventoryQuery: React.FC = () => {
             { label: t('app.kuaizhizao.warehouseCommon.aging90Plus'), value: '90+' },
           ]}
           onChange={(v) => {
+            agingBucketRef.current = v;
             setAgingBucket(v);
             actionRef.current?.reload();
           }}
@@ -229,6 +246,7 @@ const BatchInventoryQuery: React.FC = () => {
             { label: t('app.kuaizhizao.warehouseCommon.groupByStatus'), value: 'status' },
           ]}
           onChange={(v) => {
+            groupByRef.current = v;
             setGroupBy(v);
             actionRef.current?.reload();
           }}
@@ -389,13 +407,15 @@ const BatchInventoryQuery: React.FC = () => {
 
   const fetchBatchInventory = async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
     const listParams = resolveInventoryBatchLineListParams(searchFormValues, sort);
+    const aging = agingBucketRef.current;
+    const status = statusFilterRef.current;
     const apiParams = {
       ...listParams,
       material_id: listParams.material_id ?? params.material_id,
-      include_expired: includeExpired,
-      include_zero_stock: !includeZeroStock,
-      aging_bucket: agingBucket === 'all' ? undefined : agingBucket,
-      status_filter: statusFilter === 'all' ? undefined : statusFilter,
+      include_expired: includeExpiredRef.current,
+      include_zero_stock: includeZeroStockRef.current,
+      aging_bucket: aging === 'all' ? undefined : aging,
+      status_filter: status === 'all' ? undefined : status,
     };
     lastQueryRef.current = apiParams;
     try {
@@ -415,7 +435,7 @@ const BatchInventoryQuery: React.FC = () => {
           '/apps/kuaizhizao/reports/inventory/batch-lines/summary',
           {
             method: 'GET',
-            params: { ...apiParams, group_by: groupBy },
+            params: { ...apiParams, group_by: groupByRef.current },
           }
         ),
       ]);

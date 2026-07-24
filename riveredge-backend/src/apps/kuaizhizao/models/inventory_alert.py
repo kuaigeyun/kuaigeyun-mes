@@ -81,7 +81,12 @@ class InventoryAlertRule(BaseModel):
 
     # 阈值配置
     threshold_type = fields.CharField(max_length=20, description="阈值类型（quantity/percentage/days）")
-    threshold_value = fields.DecimalField(max_digits=12, decimal_places=2, description="阈值数值")
+    threshold_value = fields.DecimalField(
+        max_digits=12, decimal_places=2, null=True, description="阈值数值（继承物料时可空）"
+    )
+    inherit_material_threshold = fields.BooleanField(
+        default=False, description="是否继承物料最低/最高库存作为数量阈值"
+    )
 
     # 状态
     is_enabled = fields.BooleanField(default=True, description="是否启用")

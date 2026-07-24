@@ -16,6 +16,8 @@ from apps.kuaizhizao.schemas.visual_scheduling import (
     SchedulingRateCoverageResponse,
     SchedulingAutoRescheduleRequest,
     SchedulingAutoRescheduleResponse,
+    SchedulingOperationBackfillRequest,
+    SchedulingOperationBackfillResponse,
 )
 from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingService
 from apps.kuaizhizao.services.scheduling_rate_coverage_service import check_scheduling_rate_coverage
@@ -107,6 +109,33 @@ async def check_rate_coverage(
         [item.model_dump() for item in body.items],
     )
     return SchedulingRateCoverageResponse(**raw)
+
+
+@router.post(
+    "/backfill-operation-settings",
+    response_model=SchedulingOperationBackfillResponse,
+    summary="Backfill operation hours/station for visual scheduling",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:update"))],
+)
+async def backfill_operation_settings(
+    body: SchedulingOperationBackfillRequest,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+) -> SchedulingOperationBackfillResponse:
+    from fastapi import HTTPException, status
+    from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+    try:
+        raw = await _service.backfill_operation_settings(
+            tenant_id,
+            items=[item.model_dump(exclude_unset=True) for item in body.items],
+            updated_by=int(current_user.id),
+        )
+        return SchedulingOperationBackfillResponse(**raw)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
 
 
 @router.post(

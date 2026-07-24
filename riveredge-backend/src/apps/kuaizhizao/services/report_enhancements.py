@@ -212,22 +212,37 @@ def execution_overdue_fields(delivery_date: Any, remaining_qty: float) -> Dict[s
     return {"overdue_days": overdue_days, "is_overdue": is_overdue}
 
 
+def _ledger_balance_key(row: dict) -> tuple:
+    """结存按「物料+仓库」累计；优先稳定 ID，避免名称空值导致每行各自起算。"""
+    mid = row.get("material_id")
+    wid = row.get("warehouse_id")
+    material_key: Any = int(mid) if mid is not None else (str(row.get("material_code") or "").strip() or "")
+    warehouse_key: Any = int(wid) if wid is not None else (str(row.get("warehouse_name") or "").strip() or "")
+    return (material_key, warehouse_key)
+
+
 async def build_inventory_ledger(
     tenant_id: int,
     *,
     date_start: Optional[datetime] = None,
     date_end: Optional[datetime] = None,
     warehouse_id: Optional[int] = None,
+    material_id: Optional[int] = None,
+    keyword: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
 ) -> Dict[str, Any]:
-    """库存流水：Union 真实出入库单据行。"""
+    """库存收发明细：按物料+仓库滚动结存（非跨物料合计）。"""
     if not date_start:
         date_start = datetime.now() - timedelta(days=90)
     if not date_end:
         date_end = datetime.now()
+    # 日期筛选若只到日，补齐当天结束，避免漏掉当日流水
+    if date_end.hour == 0 and date_end.minute == 0 and date_end.second == 0 and date_end.microsecond == 0:
+        date_end = date_end.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     events: List[dict] = []
+    kw = (keyword or "").strip().lower()
 
     async def _append_outbound_delivery():
         from apps.kuaizhizao.models.sales_delivery import SalesDelivery
@@ -241,20 +256,30 @@ async def build_inventory_ledger(
         ).exclude(status__in=["待出库", "CANCELLED", "已取消"])
         if warehouse_id:
             dq = dq.filter(warehouse_id=warehouse_id)
-        heads = {h["id"]: h for h in await dq.values("id", "delivery_code", "warehouse_name", "delivery_time", "deliverer_name")}
+        heads = {
+            h["id"]: h
+            for h in await dq.values(
+                "id", "delivery_code", "warehouse_id", "warehouse_name", "delivery_time", "deliverer_name"
+            )
+        }
         if not heads:
             return
-        for row in await SalesDeliveryItem.filter(tenant_id=tenant_id, delivery_id__in=list(heads.keys())).values(
-            "delivery_id", "material_code", "material_name", "delivery_quantity"
+        item_q = SalesDeliveryItem.filter(tenant_id=tenant_id, delivery_id__in=list(heads.keys()))
+        if material_id:
+            item_q = item_q.filter(material_id=material_id)
+        for row in await item_q.values(
+            "delivery_id", "material_id", "material_code", "material_name", "delivery_quantity"
         ):
             head = heads.get(row["delivery_id"], {})
             events.append({
                 "event_time": head.get("delivery_time"),
                 "doc_type": "销售出库",
                 "doc_code": head.get("delivery_code"),
+                "material_id": row.get("material_id"),
                 "material_code": row.get("material_code"),
                 "material_name": row.get("material_name"),
-                "warehouse_name": head.get("warehouse_name"),
+                "warehouse_id": head.get("warehouse_id"),
+                "warehouse_name": head.get("warehouse_name") or "",
                 "qty_in": 0.0,
                 "qty_out": float(row.get("delivery_quantity") or 0),
                 "operator": head.get("deliverer_name") or "",
@@ -272,20 +297,30 @@ async def build_inventory_ledger(
         )
         if warehouse_id:
             rq = rq.filter(warehouse_id=warehouse_id)
-        heads = {h["id"]: h for h in await rq.values("id", "receipt_code", "warehouse_name", "receipt_time", "receiver_name")}
+        heads = {
+            h["id"]: h
+            for h in await rq.values(
+                "id", "receipt_code", "warehouse_id", "warehouse_name", "receipt_time", "receiver_name"
+            )
+        }
         if not heads:
             return
-        for row in await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id__in=list(heads.keys())).values(
-            "receipt_id", "material_code", "material_name", "receipt_quantity"
+        item_q = PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id__in=list(heads.keys()))
+        if material_id:
+            item_q = item_q.filter(material_id=material_id)
+        for row in await item_q.values(
+            "receipt_id", "material_id", "material_code", "material_name", "receipt_quantity"
         ):
             head = heads.get(row["receipt_id"], {})
             events.append({
                 "event_time": head.get("receipt_time"),
                 "doc_type": "采购入库",
                 "doc_code": head.get("receipt_code"),
+                "material_id": row.get("material_id"),
                 "material_code": row.get("material_code"),
                 "material_name": row.get("material_name"),
-                "warehouse_name": head.get("warehouse_name"),
+                "warehouse_id": head.get("warehouse_id"),
+                "warehouse_name": head.get("warehouse_name") or "",
                 "qty_in": float(row.get("receipt_quantity") or 0),
                 "qty_out": 0.0,
                 "operator": head.get("receiver_name") or "",
@@ -294,10 +329,17 @@ async def build_inventory_ledger(
     await _append_outbound_delivery()
     await _append_inbound_receipt()
 
-    events.sort(key=lambda e: e.get("event_time") or datetime.min)
+    # 时间正序滚动结存，再倒序展示（新在前）
+    events.sort(
+        key=lambda e: (
+            e.get("event_time") or datetime.min,
+            int(e.get("material_id") or 0),
+            str(e.get("doc_code") or ""),
+        )
+    )
     balance: Dict[tuple, float] = {}
-    for row in events:
-        key = (row.get("material_code") or "", row.get("warehouse_name") or "")
+    for idx, row in enumerate(events):
+        key = _ledger_balance_key(row)
         delta = float(row.get("qty_in") or 0) - float(row.get("qty_out") or 0)
         balance[key] = balance.get(key, 0.0) + delta
         row["balance_qty"] = round(balance[key], 4)
@@ -305,8 +347,22 @@ async def build_inventory_ledger(
         row["event_date"] = et.strftime("%Y-%m-%d %H:%M") if et else None
         row["order_code"] = row.get("doc_code")
         row["type"] = row.get("doc_type")
-        net = float(row.get("qty_in") or 0) - float(row.get("qty_out") or 0)
-        row["quantity"] = net
+        row["quantity"] = delta
+        row["id"] = (
+            f"{row.get('doc_code') or ''}:{row.get('material_id') or row.get('material_code') or ''}:"
+            f"{row.get('warehouse_id') or ''}:{idx}"
+        )
+
+    # 关键词仅影响展示，不打断结存累计
+    if kw:
+        events = [
+            e
+            for e in events
+            if kw in str(e.get("material_code") or "").lower()
+            or kw in str(e.get("material_name") or "").lower()
+            or kw in str(e.get("doc_code") or "").lower()
+            or kw in str(e.get("warehouse_name") or "").lower()
+        ]
 
     events.reverse()
     total = len(events)

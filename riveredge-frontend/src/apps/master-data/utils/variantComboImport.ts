@@ -64,7 +64,19 @@ export function buildVariantComboImportTemplate(definitions: VariantAttributeDef
     }),
     '是',
   ];
-  return { headers, exampleRow };
+  const columnOptions: Array<string[] | undefined> = [
+    ...definitions.map((d) => {
+      if (d.attribute_type === 'enum' && (d.enum_values?.length ?? 0) > 0) {
+        return d.enum_values!.map((v) => String(v).trim()).filter(Boolean);
+      }
+      if (d.attribute_type === 'boolean') {
+        return ['是', '否'];
+      }
+      return undefined;
+    }),
+    ['是', '否'],
+  ];
+  return { headers, exampleRow, columnOptions };
 }
 
 export function parseVariantComboImportRows(

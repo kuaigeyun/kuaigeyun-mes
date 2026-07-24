@@ -218,22 +218,39 @@ const PurchaseOrderChangesPage: React.FC = () => {
     }
   }, [createReason, message, openEdit, pullPreviewData, pullPreviewOrderId, resetPullPreviewModal, t]);
 
+  const isPullChangeOrderSourceSelectable = useCallback(
+    (record: { capabilities?: { create_change_order?: { allowed?: boolean } } }) =>
+      record.capabilities?.create_change_order?.allowed === true,
+    [],
+  );
+
+  const pullDocumentScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
   const pullFromPurchaseOrderQuery = useUniPullQuery<PullPurchaseOrderCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    isRowDisabled: (record) => record.capabilities?.create_change_order?.allowed !== true,
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullChangeOrderSourceSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
-        const skip = (page - 1) * pageSize;
         const result = await listPurchaseOrders({
-          skip,
+          skip: (page - 1) * pageSize,
           limit: pageSize,
           keyword: keyword.trim() || undefined,
+          pullable_only: scope === 'pullable',
+          pull_target: 'purchase_order_change',
         });
         const rows = (result.data || []).filter(
           (order): order is PullPurchaseOrderCandidate => order.id != null && !!order.order_code,
         );
-        return { data: rows, total: result.total ?? rows.length };
+        return { data: rows, total: Number(result.total ?? rows.length) };
       } catch (error: unknown) {
         message.error(getApiErrorMessage(error, t('app.kuaizhizao.orderChange.loadPurchaseOrdersFailed')));
         return { data: [], total: 0 };
@@ -677,6 +694,9 @@ const PurchaseOrderChangesPage: React.FC = () => {
         pageSize={pullFromPurchaseOrderQuery.pageSize}
         total={pullFromPurchaseOrderQuery.total}
         onPageChange={pullFromPurchaseOrderQuery.handlePageChange}
+        scopeOptions={pullFromPurchaseOrderQuery.scopeOptions}
+        scope={pullFromPurchaseOrderQuery.scope}
+        onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
         searchPlaceholder={t('app.kuaizhizao.orderChange.searchOrderPlaceholder', {
           orderLabel: t('app.kuaizhizao.purchaseOrderChange.purchaseOrderLabel'),
           partnerLabel: t('path.suppliers'),

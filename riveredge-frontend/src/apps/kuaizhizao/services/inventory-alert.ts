@@ -74,4 +74,16 @@ export const inventoryAlertApi = {
       method: 'GET',
     });
   },
+
+  /** 立即检查：按规则→物料阈值链触发/解除预警 */
+  runCheck: async (data?: { material_id?: number; warehouse_id?: number }) => {
+    return apiRequest<{
+      checked_balances: number;
+      triggered_count: number;
+      resolved_count: number;
+    }>('/apps/kuaizhizao/inventory-alerts/check', {
+      method: 'POST',
+      data: data ?? {},
+    });
+  },
 };

@@ -36,6 +36,8 @@ import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 dayjs.extend(relativeTime);
 
@@ -779,7 +781,6 @@ const PrintDeviceListPage: React.FC = () => {
             selectedRowKeys,
             onChange: setSelectedRowKeys,
           }}
-          showImportButton
           showExportButton
           onExport={async (type, keys, pageData) => {
             let items: PrintDevice[] = [];
@@ -788,19 +789,16 @@ const PrintDeviceListPage: React.FC = () => {
             } else if (type === 'currentPage' && pageData?.length) {
               items = pageData;
             } else {
-              items = await getPrintDeviceList({ skip: 0, limit: 10000 });
+              items = await fetchAllListItems((p) => getPrintDeviceList(p));
             }
             if (items.length === 0) {
               messageApi.warning(t('pages.system.printDevices.noDataToExport'));
               return;
             }
-            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `print-devices-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              `print-devices-${new Date().toISOString().slice(0, 10)}.xlsx`,
+            );
             messageApi.success(t('pages.system.printDevices.exportSuccess'));
           }}
           viewTypes={['table', 'help']}

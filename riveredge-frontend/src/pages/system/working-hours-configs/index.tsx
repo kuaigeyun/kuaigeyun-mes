@@ -16,6 +16,8 @@ import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { UniDetail } from '../../../components/uni-detail';
 import { apiRequest } from '../../../services/api';
+import { fetchAllListItems } from '../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 
 /**
  * 工作时间段配置接口定义
@@ -316,23 +318,18 @@ const WorkingHoursConfigsPage: React.FC = () => {
         showExportButton={true}
         onExport={async (type, _keys, pageData) => {
           try {
-            const result = await apiRequest('/core/working-hours-configs', {
-              method: 'GET',
-              params: { skip: 0, limit: 10000 },
-            });
-            const items = Array.isArray(result) ? result : [];
-            const toExport = type === 'currentPage' && pageData?.length ? pageData : items;
+            const toExport =
+              type === 'currentPage' && pageData?.length
+                ? pageData
+                : await fetchAllListItems((p) => apiRequest('/core/working-hours-configs', { method: 'GET', params: { ...p } }));
             if (toExport.length === 0) {
               messageApi.warning(t('pages.system.workingHoursConfigs.noDataToExport'));
               return;
             }
-            const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `working-hours-configs-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            await downloadRecordsAsXlsx(
+              toExport as Array<Record<string, unknown>>,
+              `working-hours-configs-${new Date().toISOString().slice(0, 10)}.xlsx`,
+            );
             messageApi.success(t('pages.system.workingHoursConfigs.exportSuccess', { count: toExport.length }));
           } catch (error: any) {
             messageApi.error(t('pages.system.workingHoursConfigs.exportFailed'));

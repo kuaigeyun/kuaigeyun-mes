@@ -322,6 +322,8 @@ class VisualSchedulingService(BaseService):
 
         material_issues = self._material_issues(work_orders, constraints)
 
+        missing_settings = await self._collect_missing_settings(tenant_id, work_orders)
+
         load_by_work_center = self._aggregate_load_by_work_center(
 
             ops, work_orders, daily_capacity, horizon_days
@@ -339,25 +341,174 @@ class VisualSchedulingService(BaseService):
 
 
         return {
-
             "conflicts": conflicts,
-
             "unscheduled_orders": unscheduled,
-
             "material_issues": material_issues,
-
+            "missing_settings": missing_settings,
             "load_by_work_center": load_by_work_center,
-
             "load_by_station": load_by_station,
-
             "conflict_count": len(conflicts),
-
             "unscheduled_count": len(unscheduled),
-
             "material_issue_count": len(material_issues),
-
+            "missing_settings_count": len(missing_settings),
             "overloaded_station_count": overloaded_station_count,
+        }
 
+    async def _collect_missing_settings(
+        self,
+        tenant_id: int,
+        work_orders: List[WorkOrder],
+    ) -> List[Dict[str, Any]]:
+        from apps.master_data.models.factory import Workstation
+        from apps.kuaizhizao.utils.work_order_operation_scheduling import has_operation_hours
+
+        if not work_orders:
+            return []
+        wo_map = {int(wo.id): wo for wo in work_orders}
+        all_ops = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id__in=list(wo_map.keys()),
+            deleted_at__isnull=True,
+        ).order_by("work_order_id", "sequence").all()
+
+        # 预取工作中心下可用工位
+        wc_ids = {int(op.work_center_id) for op in all_ops if op.work_center_id}
+        stations_by_wc: Dict[int, List[Any]] = defaultdict(list)
+        if wc_ids:
+            stations = await Workstation.filter(
+                tenant_id=tenant_id,
+                work_center_id__in=list(wc_ids),
+                deleted_at__isnull=True,
+                is_active=True,
+            ).order_by("id").all()
+            for st in stations:
+                stations_by_wc[int(st.work_center_id)].append(st)
+
+        gaps: List[Dict[str, Any]] = []
+        for op in all_ops:
+            if op.status in {"completed", "cancelled"}:
+                continue
+            wo = wo_map.get(int(op.work_order_id))
+            if not wo:
+                continue
+            wo_code = wo.code or str(wo.id)
+            op_name = op.operation_name or op.operation_code or str(op.id)
+            if not has_operation_hours(op.setup_time, op.standard_time):
+                gaps.append(
+                    {
+                        "work_order_id": int(wo.id),
+                        "work_order_code": wo_code,
+                        "operation_id": int(op.id),
+                        "operation_name": op_name,
+                        "field": "standard_time",
+                        "label": "标准工时(小时/件)",
+                        "current": float(op.standard_time) if op.standard_time is not None else None,
+                        "suggested": 1.0,
+                        "work_center_id": int(op.work_center_id) if op.work_center_id else None,
+                    }
+                )
+                if op.setup_time is None:
+                    gaps.append(
+                        {
+                            "work_order_id": int(wo.id),
+                            "work_order_code": wo_code,
+                            "operation_id": int(op.id),
+                            "operation_name": op_name,
+                            "field": "setup_time",
+                            "label": "准备工时(小时)",
+                            "current": None,
+                            "suggested": 0.0,
+                            "work_center_id": int(op.work_center_id) if op.work_center_id else None,
+                        }
+                    )
+            station_id = int(op.assigned_station_id or 0)
+            if station_id <= 0:
+                wc_id = int(op.work_center_id or 0)
+                candidates = stations_by_wc.get(wc_id, []) if wc_id > 0 else []
+                if not candidates:
+                    gaps.append(
+                        {
+                            "work_order_id": int(wo.id),
+                            "work_order_code": wo_code,
+                            "operation_id": int(op.id),
+                            "operation_name": op_name,
+                            "field": "assigned_station_id",
+                            "label": "工位",
+                            "current": None,
+                            "suggested": None,
+                            "work_center_id": wc_id or None,
+                        }
+                    )
+        return gaps
+
+    async def backfill_operation_settings(
+        self,
+        tenant_id: int,
+        items: List[Dict[str, Any]],
+        *,
+        updated_by: int,
+    ) -> Dict[str, Any]:
+        """回写工单工序工时/工位，并重算计划时长。"""
+        from decimal import Decimal as Dec
+        from tortoise.transactions import in_transaction
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+        from apps.kuaizhizao.utils.work_order_operation_scheduling import has_operation_hours
+        from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+        if not items:
+            raise ValidationError("补齐项不能为空")
+
+        by_op: Dict[int, Dict[str, Any]] = {}
+        for raw in items:
+            op_id = int(raw.get("operation_id") or 0)
+            if op_id <= 0:
+                raise ValidationError("operation_id 无效")
+            by_op[op_id] = raw
+
+        updated_ops: List[int] = []
+        touched_wo: set[int] = set()
+        async with in_transaction():
+            for op_id, patch in by_op.items():
+                op = await WorkOrderOperation.get_or_none(
+                    tenant_id=tenant_id, id=op_id, deleted_at__isnull=True
+                )
+                if not op:
+                    raise NotFoundError(f"工序不存在: {op_id}")
+                if "setup_time" in patch and patch.get("setup_time") is not None:
+                    op.setup_time = Dec(str(patch["setup_time"]))
+                if "standard_time" in patch and patch.get("standard_time") is not None:
+                    op.standard_time = Dec(str(patch["standard_time"]))
+                if "assigned_station_id" in patch and patch.get("assigned_station_id") is not None:
+                    op.assigned_station_id = int(patch["assigned_station_id"])
+                if not has_operation_hours(op.setup_time, op.standard_time) and (
+                    "setup_time" in patch or "standard_time" in patch
+                ):
+                    raise ValidationError(
+                        f"工序 {op.operation_name or op_id} 补齐后仍无有效工时，请填写准备工时或标准工时"
+                    )
+                op.updated_by = updated_by
+                await op.save()
+                updated_ops.append(op_id)
+                touched_wo.add(int(op.work_order_id))
+
+            wo_svc = WorkOrderService()
+            for wo_id in touched_wo:
+                wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=wo_id, deleted_at__isnull=True)
+                if not wo:
+                    continue
+                ops = await WorkOrderOperation.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=wo_id,
+                    deleted_at__isnull=True,
+                ).order_by("sequence").all()
+                await wo_svc.compute_and_apply_operation_planned_times(
+                    tenant_id, wo, ops, updated_by=updated_by
+                )
+
+        return {
+            "updated_operation_ids": updated_ops,
+            "updated_work_order_ids": sorted(touched_wo),
+            "updated_count": len(updated_ops),
         }
 
 

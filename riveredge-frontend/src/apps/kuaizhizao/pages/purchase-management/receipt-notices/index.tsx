@@ -59,7 +59,12 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import { SimpleSparkline } from '../../../../../components';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -1030,25 +1035,40 @@ const ReceiptNoticesPage: React.FC = () => {
     }
   };
 
+  const isPullReceiptNoticePoSelectable = useCallback(
+    (record: PullPurchaseOrderCandidate) => record.capabilities?.push_receipt_notice?.allowed === true,
+    [],
+  );
+
+  const pullFromPurchaseOrderScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
   const pullFromPurchaseOrderQuery = useUniPullQuery<PullPurchaseOrderCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullFromPurchaseOrderScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
-        const skip = (page - 1) * pageSize;
         const poRes = await listPurchaseOrders({
-          skip,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
         const rows = (poRes?.data || []).filter((row) => row.id != null) as PullPurchaseOrderCandidate[];
-        return { data: rows, total: poRes?.total ?? rows.length };
+        const filtered = filterByPullScope(rows, scope, isPullReceiptNoticePoSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.receiptNotice.loadPurchaseOrdersFailed')));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => record.capabilities?.push_receipt_notice?.allowed !== true,
+    isRowDisabled: (record) => !isPullReceiptNoticePoSelectable(record),
     onConfirm: async (keys) => {
       const orderId = Number(keys[0]);
       if (!orderId || orderId <= 0) {
@@ -1585,6 +1605,9 @@ const ReceiptNoticesPage: React.FC = () => {
         pageSize={pullFromPurchaseOrderQuery.pageSize}
         total={pullFromPurchaseOrderQuery.total}
         onPageChange={pullFromPurchaseOrderQuery.handlePageChange}
+        scopeOptions={pullFromPurchaseOrderQuery.scopeOptions}
+        scope={pullFromPurchaseOrderQuery.scope}
+        onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
         okText={t('common.next')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />

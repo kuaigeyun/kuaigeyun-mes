@@ -51,6 +51,7 @@ import {
   resolveSystemDictionaryItemLabel,
   resolveSystemDictionaryName,
 } from '../../../../utils/systemDictionaryI18n';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 const DataDictionaryListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -612,13 +613,10 @@ const DataDictionaryListPage: React.FC = () => {
               messageApi.warning(t('common.exportNoData'));
               return;
             }
-            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `data-dictionaries-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              `data-dictionaries-${new Date().toISOString().slice(0, 10)}.xlsx`,
+            );
             messageApi.success(t('common.exportSuccess', { count: items.length }));
           } catch (error: any) {
             messageApi.error(error?.message || t('common.operationFailed'));

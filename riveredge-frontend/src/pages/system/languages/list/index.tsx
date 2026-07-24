@@ -45,6 +45,7 @@ import zhHant from '../../../../locales/zh-Hant';
 import jaJP from '../../../../locales/ja-JP';
 import viVN from '../../../../locales/vi-VN';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 /**
  * 语言管理列表页面组件
@@ -667,13 +668,10 @@ const LanguageListPage: React.FC = () => {
                 messageApi.warning(t('common.exportNoData'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `languages-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `languages-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('common.operationFailed'));

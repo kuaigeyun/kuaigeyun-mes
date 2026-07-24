@@ -1,7 +1,7 @@
 /**
  * 采购发票列表页
  */
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Tag, Alert, Spin, Table, Empty, Form } from 'antd';
@@ -22,7 +22,12 @@ import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
@@ -179,18 +184,35 @@ const PurchaseInvoiceList: React.FC = () => {
     }
   };
 
+  const isPullPurchaseInvoiceSelectable = useCallback(
+    (record: PurchaseInvoicePullCandidate) => record.capabilities?.pull_purchase_invoice?.allowed !== false,
+    [],
+  );
+
+  const pullQueryScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
   const pullFromPurchaseOrderQuery = useUniPullQuery<PurchaseInvoicePullCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    isRowDisabled: (record) => record.capabilities?.pull_purchase_invoice?.allowed === false,
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullPurchaseInvoiceSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await purchaseInvoiceService.listPurchaseOrderPullCandidates({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
-        return { data: res.data || [], total: res.total ?? 0 };
+        const rows = res.data || [];
+        const filtered = filterByPullScope(rows, scope, isPullPurchaseInvoiceSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (e: any) {
         messageApi.error(
           e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
@@ -213,15 +235,19 @@ const PurchaseInvoiceList: React.FC = () => {
   const pullFromPurchaseReceiptQuery = useUniPullQuery<PurchaseInvoicePullCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    isRowDisabled: (record) => record.capabilities?.pull_purchase_invoice?.allowed === false,
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullPurchaseInvoiceSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await purchaseInvoiceService.listPurchaseReceiptPullCandidates({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
-        return { data: res.data || [], total: res.total ?? 0 };
+        const rows = res.data || [];
+        const filtered = filterByPullScope(rows, scope, isPullPurchaseInvoiceSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (e: any) {
         messageApi.error(
           e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
@@ -653,6 +679,9 @@ const PurchaseInvoiceList: React.FC = () => {
         pageSize={pullFromPurchaseOrderQuery.pageSize}
         total={pullFromPurchaseOrderQuery.total}
         onPageChange={pullFromPurchaseOrderQuery.handlePageChange}
+        scopeOptions={pullFromPurchaseOrderQuery.scopeOptions}
+        scope={pullFromPurchaseOrderQuery.scope}
+        onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
         okText={t('components.uniLifecycle.nextStep')}
         width={1180}
       />
@@ -683,6 +712,9 @@ const PurchaseInvoiceList: React.FC = () => {
         pageSize={pullFromPurchaseReceiptQuery.pageSize}
         total={pullFromPurchaseReceiptQuery.total}
         onPageChange={pullFromPurchaseReceiptQuery.handlePageChange}
+        scopeOptions={pullFromPurchaseReceiptQuery.scopeOptions}
+        scope={pullFromPurchaseReceiptQuery.scope}
+        onScopeChange={pullFromPurchaseReceiptQuery.handleScopeChange}
         okText={t('components.uniLifecycle.nextStep')}
         width={1180}
       />

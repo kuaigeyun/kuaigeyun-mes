@@ -60,6 +60,7 @@ import {
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts'
 import { extractProTableSort, mergeListKeyword, mapApiListSortField } from '../../../../utils/tableQueryKey'
 import { rowActionKind } from '../../../../components/uni-action'
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 const { TextArea } = Input
 const { Text, Paragraph } = Typography
@@ -670,6 +671,35 @@ const APIListPage: React.FC = () => {
           onCreate={handleCreate}
           createButtonText={t('pages.system.apis.createButton')}
           showImportButton
+          importHeaders={[
+            t('pages.system.apis.columnName'),
+            t('pages.system.apis.columnCode'),
+            t('pages.system.apis.columnPath'),
+            t('pages.system.apis.columnMethod'),
+            t('pages.system.apis.columnDescription'),
+            t('pages.system.apis.columnActive'),
+          ]}
+          importExampleRow={['示例接口', 'example_api', '/api/v1/example', 'GET', '', 'true']}
+          importFieldMap={{
+            [t('pages.system.apis.columnName')]: 'name',
+            接口名称: 'name',
+            name: 'name',
+            [t('pages.system.apis.columnCode')]: 'code',
+            接口代码: 'code',
+            code: 'code',
+            [t('pages.system.apis.columnPath')]: 'path',
+            接口路径: 'path',
+            path: 'path',
+            [t('pages.system.apis.columnMethod')]: 'method',
+            请求方法: 'method',
+            method: 'method',
+            [t('pages.system.apis.columnDescription')]: 'description',
+            描述: 'description',
+            description: 'description',
+            [t('pages.system.apis.columnActive')]: 'is_active',
+            启用状态: 'is_active',
+            is_active: 'is_active',
+          }}
           onImport={async data => {
             if (!data || data.length < 2) {
               messageApi.warning(t('pages.system.apis.fillImportData'))
@@ -681,19 +711,25 @@ const APIListPage: React.FC = () => {
                 .trim()
             )
             const rows = data
-              .slice(1)
+              .slice(2)
               .filter((row: any[]) => row.some((c: any) => c != null && String(c).trim()))
             const fieldMap: Record<string, string> = {
+              [t('pages.system.apis.columnName')]: 'name',
               接口名称: 'name',
               name: 'name',
+              [t('pages.system.apis.columnCode')]: 'code',
               接口代码: 'code',
               code: 'code',
+              [t('pages.system.apis.columnPath')]: 'path',
               接口路径: 'path',
               path: 'path',
+              [t('pages.system.apis.columnMethod')]: 'method',
               请求方法: 'method',
               method: 'method',
+              [t('pages.system.apis.columnDescription')]: 'description',
               描述: 'description',
               description: 'description',
+              [t('pages.system.apis.columnActive')]: 'is_active',
               启用状态: 'is_active',
               is_active: 'is_active',
             }
@@ -738,13 +774,10 @@ const APIListPage: React.FC = () => {
               messageApi.warning(t('pages.system.apis.noDataToExport'))
               return
             }
-            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' })
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = `apis-${new Date().toISOString().slice(0, 10)}.json`
-            a.click()
-            URL.revokeObjectURL(url)
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              `apis-${new Date().toISOString().slice(0, 10)}.xlsx`,
+            );
             messageApi.success(t('pages.system.apis.exportSuccess'))
           }}
           pagination={{

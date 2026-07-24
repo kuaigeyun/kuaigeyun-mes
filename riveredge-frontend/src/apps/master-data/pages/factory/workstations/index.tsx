@@ -43,11 +43,13 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 
 /**
  * 工位管理列表页面组件
@@ -126,6 +128,7 @@ const WorkstationsPage: React.FC = () => {
             labelKey: 'app.master-data.workstations.productionLineCode',
           },
           { field: 'description', labelKey: 'app.master-data.workstations.description' },
+          { field: 'isActive', labelKey: 'field.workstation.isActive', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.workstations.importExample.code'),
@@ -134,6 +137,7 @@ const WorkstationsPage: React.FC = () => {
             ? productionLines[0].code
             : t('app.master-data.productionLines.importExample.code'),
           t('app.master-data.workstations.importExample.description'),
+          '是',
         ],
       ),
     [t, i18n.language, productionLines],
@@ -337,12 +341,17 @@ const WorkstationsPage: React.FC = () => {
         }
 
         // 构建导入数据
+        const isActiveRaw =
+          headerIndexMap.isActive !== undefined ? String(row[headerIndexMap.isActive] ?? '').trim() : '';
+        const isActive =
+          !isActiveRaw ||
+          !['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(isActiveRaw.toLowerCase());
         const workstationData: WorkstationCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
           productionLineId: foundProductionLine.id,
           description: description ? String(description).trim() : undefined,
-          isActive: true, // 默认启用
+          isActive,
         };
 
         importData.push(workstationData);
@@ -482,9 +491,7 @@ const WorkstationsPage: React.FC = () => {
         filename = `${t('app.master-data.workstations.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
         // 导出全部数据
-        const allData = await workstationApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        const { data: exportItems } = normalizeMasterListResponse(allData);
-        exportData = exportItems;
+        exportData = await fetchAllListItems((p) => workstationApi.list({ ...p, ...lastListParamsRef.current }));
         filename = `${t('app.master-data.workstations.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -779,12 +786,8 @@ const WorkstationsPage: React.FC = () => {
         onImport={handleImport}
         importHeaders={workstationImportTemplate.importHeaders}
         importExampleRow={workstationImportTemplate.importExampleRow}
+        importColumnOptions={workstationImportTemplate.importColumnOptions}
         importFieldMap={workstationImportTemplate.importHeaderMap}
-        importFieldRules={{
-          code: { required: true },
-          name: { required: true },
-          productionLineCode: { required: true },
-        }}
         showExportButton={true}
         onExport={handleExport}
         showAdvancedSearch

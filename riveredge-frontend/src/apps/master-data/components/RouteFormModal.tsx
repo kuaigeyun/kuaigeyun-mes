@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { ProFormInstance, ProForm, ProFormDependency } from '@ant-design/pro-components';
 import { App, Tag, theme } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
-import { MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
+import { MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { processRouteApi } from '../services/process';
 import { testGenerateCode, generateCode } from '../../../services/codeRule';
 import { getCodeRulePageConfig } from '../../../services/codeRule';
@@ -50,10 +50,9 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [operationSequence, setOperationSequence] = useState<OperationItem[]>([]);
   const [pickModalOpen, setPickModalOpen] = useState(false);
-  const operationPickModalZIndex =
-    zIndex != null
-      ? zIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET
-      : token.zIndexPopupBase + MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET + MODAL_NESTED_ABOVE_PARENT_OFFSET;
+  // 父弹窗未显式传 zIndex 时按 antd 默认 1000 抬升，确保「替换/选择工序」叠在编辑弹窗之上
+  const parentModalZIndex = zIndex ?? token.zIndexPopupBase;
+  const operationPickModalZIndex = parentModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET + 20;
 
   const {
     customFields,
@@ -338,6 +337,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
           <ProFormDependency name={['allowOperationJump']}>
             {({ allowOperationJump }) => (
               <OperationSequenceEditor
+                key="route-operation-sequence"
                 value={operationSequence}
                 onChange={setOperationSequence}
                 showNodeOperationColumn={!!allowOperationJump}

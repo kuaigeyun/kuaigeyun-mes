@@ -147,6 +147,25 @@ const InitialDataImportPage: React.FC = () => {
     [i18n.language, t],
   );
 
+  /** 与后端 initial_data_service 类型校验一致：应收/应付（及 AR/AP 等同义） */
+  const arImportColumnOptions = useMemo(
+    () => [
+      ['应收', '应付', 'AR', 'AP', 'RECEIVABLE', 'PAYABLE'],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ],
+    [],
+  );
+
   const snapshotIso = useCallback(
     () => (snapshotTime ? snapshotTime.format('YYYY-MM-DD HH:mm:ss') : undefined),
     [snapshotTime]
@@ -692,6 +711,7 @@ const InitialDataImportPage: React.FC = () => {
               title={t('app.kuaizhizao.initialData.importArTitle')}
               headers={arHeaders}
               exampleRow={arExample}
+              columnOptions={arImportColumnOptions}
             />
           )}
         </Suspense>

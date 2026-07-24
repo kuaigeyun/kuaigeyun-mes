@@ -126,7 +126,12 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates'
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull'
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query'
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query'
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push'
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel'
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter'
@@ -212,6 +217,7 @@ import { getEquipmentList } from '../../../../../services/equipment'
 import { getMoldList } from '../../../../../services/mold'
 import { toolApi } from '../../../services/equipment'
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 /** 指标卡趋势图：首屏不拉 @ant-design/charts，减少工单页 JS 解析与主线程占用 */
 const LazyStatTrendArea = lazy(() =>
   import('../../../../../components/common/StatCardTrendArea').then((m) => ({ default: m.StatCardTrendArea }))
@@ -242,6 +248,7 @@ const LazyUniLifecycleStepper = lazy(() =>
 const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-material-select'))
 import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue } from '../../../utils/workOrderLifecycle'
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle'
 import {
   formatOperationInspectionSummary,
@@ -285,6 +292,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate'
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues'
 import { formatDateTime, formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format'
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate'
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns'
@@ -1330,12 +1338,51 @@ const WorkOrdersPage: React.FC = () => {
             labelKey: 'app.kuaizhizao.workOrder.import.workshopCode',
             aliases: ['车间编号', '车间'],
           },
+          {
+            field: 'productionMode',
+            labelKey: 'app.kuaizhizao.workOrder.colProductionMode',
+            aliases: ['生产模式', 'production_mode'],
+            options: ['MTS', 'MTO'],
+          },
+          {
+            field: 'priority',
+            labelKey: 'app.kuaizhizao.workOrder.colPriority',
+            aliases: ['优先级', 'priority'],
+            options: ['low', 'normal', 'high', 'urgent'],
+          },
+          {
+            field: 'plannedStart',
+            labelKey: 'app.kuaizhizao.workOrder.colPlannedStart',
+            aliases: ['计划开始', 'planned_start_date'],
+          },
+          {
+            field: 'plannedEnd',
+            labelKey: 'app.kuaizhizao.workOrder.colPlannedEnd',
+            aliases: ['计划结束', 'planned_end_date'],
+          },
+          {
+            field: 'remarks',
+            labelKey: 'app.kuaizhizao.workOrder.colRemarks',
+            aliases: ['备注', 'remarks'],
+          },
+          {
+            field: 'allowOperationJump',
+            labelKey: 'app.kuaizhizao.workOrder.colAllowOpJump',
+            aliases: ['允许跳转工序', 'allow_operation_jump'],
+            options: [...IMPORT_YES_NO_OPTIONS],
+          },
         ],
         [
           t('app.kuaizhizao.workOrder.importExample.code'),
           t('app.kuaizhizao.workOrder.importExample.productCode'),
           t('app.kuaizhizao.workOrder.importExample.plannedQty'),
           t('app.kuaizhizao.workOrder.importExample.workshopCode'),
+          'MTS',
+          'normal',
+          '',
+          '',
+          '',
+          '否',
         ],
       ),
     [t, i18n.language],
@@ -2663,14 +2710,29 @@ const WorkOrdersPage: React.FC = () => {
     }
   }, [messageApi, notifyInboundPreviewData, notifyInboundWorkOrder, resetNotifyInboundPreview, t])
 
+  const pullFromWorkOrderScopeOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.workOrder.pullScopePushable'), value: 'pushable' },
+      { label: t('app.kuaizhizao.workOrder.pullScopeAll'), value: 'all' },
+    ],
+    [t],
+  )
+
+  const isPullWorkOrderComputationSelectable = useCallback(
+    (record: PullDemandComputationCandidate) => record.can_push_work_order !== false,
+    [],
+  )
+
   const pullFromComputationQuery = useUniPullQuery<PullDemandComputationCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullFromWorkOrderScopeOptions,
+    defaultScope: 'pushable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       const kw = keyword.trim()
       const listRes = await listDemandComputations({
         skip: 0,
-        limit: 50,
+        limit: 200,
         computation_status: '完成',
         computation_code: kw || undefined,
       })
@@ -2705,8 +2767,8 @@ const WorkOrdersPage: React.FC = () => {
             } as PullDemandComputationCandidate
           }),
       )
-      const start = (page - 1) * pageSize
-      return { data: candidates.slice(start, start + pageSize), total: candidates.length }
+      const filtered = filterByPullScope(candidates, scope, isPullWorkOrderComputationSelectable)
+      return paginatePullRows(filtered, page, pageSize)
     },
     isRowDisabled: (record) => record.can_push_work_order === false,
     onConfirm: async (keys, rows) => {
@@ -2725,14 +2787,22 @@ const WorkOrdersPage: React.FC = () => {
     },
   })
 
+  const isPullWorkOrderSalesOrderSelectable = useCallback(
+    (record: PullSalesOrderCandidate) =>
+      Number(record.remaining_push_quantity ?? 0) > 0 && record.capabilities?.push_work_order?.allowed !== false,
+    [],
+  )
+
   const pullFromSalesOrderQuery = useUniPullQuery<PullSalesOrderCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullFromWorkOrderScopeOptions,
+    defaultScope: 'pushable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const result = await listSalesOrdersForPull({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         })
         const rows = Array.isArray(result) ? result : (result.data ?? [])
@@ -2747,17 +2817,14 @@ const WorkOrdersPage: React.FC = () => {
           remaining_push_quantity: Number(row.remaining_push_quantity ?? 0),
           capabilities: row.capabilities,
         }))
-        return {
-          data: candidates,
-          total: Array.isArray(result) ? candidates.length : (result.total ?? candidates.length),
-        }
+        const filtered = filterByPullScope(candidates, scope, isPullWorkOrderSalesOrderSelectable)
+        return paginatePullRows(filtered, page, pageSize)
       } catch {
         messageApi.error(t('app.kuaizhizao.salesOrder.listFailed'))
         return { data: [], total: 0 }
       }
     },
-    isRowDisabled: (record) =>
-      record.remaining_push_quantity <= 0 || record.capabilities?.push_work_order?.allowed === false,
+    isRowDisabled: (record) => !isPullWorkOrderSalesOrderSelectable(record),
     onConfirm: async (keys, rows) => {
       const selectedId = Number(keys[0])
       if (!selectedId) {
@@ -3925,6 +3992,12 @@ const WorkOrdersPage: React.FC = () => {
       product: headerIndexMap.product,
       qty: headerIndexMap.plannedQty,
       workshop: headerIndexMap.workshop,
+      productionMode: headerIndexMap.productionMode,
+      priority: headerIndexMap.priority,
+      plannedStart: headerIndexMap.plannedStart,
+      plannedEnd: headerIndexMap.plannedEnd,
+      remarks: headerIndexMap.remarks,
+      allowOperationJump: headerIndexMap.allowOperationJump,
     }
 
     if (idx.product === undefined || idx.qty === undefined) {
@@ -3968,13 +4041,38 @@ const WorkOrdersPage: React.FC = () => {
         workshopId = ws?.id
       }
 
+      const productionModeRaw =
+        idx.productionMode !== undefined ? (row[idx.productionMode] ?? '').toString().trim().toUpperCase() : ''
+      const productionMode = productionModeRaw === 'MTO' ? 'MTO' : 'MTS'
+      const priorityRaw =
+        idx.priority !== undefined ? (row[idx.priority] ?? '').toString().trim().toLowerCase() : ''
+      const priority = ['low', 'normal', 'high', 'urgent'].includes(priorityRaw) ? priorityRaw : 'normal'
+      const plannedStart =
+        idx.plannedStart !== undefined ? (row[idx.plannedStart] ?? '').toString().trim() || undefined : undefined
+      const plannedEnd =
+        idx.plannedEnd !== undefined ? (row[idx.plannedEnd] ?? '').toString().trim() || undefined : undefined
+      const remarks =
+        idx.remarks !== undefined ? (row[idx.remarks] ?? '').toString().trim() || undefined : undefined
+      const allowJumpRaw =
+        idx.allowOperationJump !== undefined
+          ? String(row[idx.allowOperationJump] ?? '').trim()
+          : ''
+      const allow_operation_jump =
+        !!allowJumpRaw &&
+        !['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(allowJumpRaw.toLowerCase())
+
       toImport.push({
         code: woCode || undefined,
         product_id: mat.id,
         product_code: mat.mainCode || mat.code,
         product_name: mat.name,
         quantity: qtyVal,
-        production_mode: 'MTS',
+        production_mode: productionMode,
+        priority,
+        planned_start_date: plannedStart,
+        planned_end_date: plannedEnd,
+        remarks,
+        allow_operation_jump,
         workshop_id: workshopId,
       })
     })
@@ -6941,19 +7039,18 @@ const WorkOrdersPage: React.FC = () => {
           onImport={handleListImport}
           importHeaders={workOrderImportTemplate.importHeaders}
           importExampleRow={workOrderImportTemplate.importExampleRow}
+          importColumnOptions={workOrderImportTemplate.importColumnOptions}
           importFieldMap={workOrderImportTemplate.importHeaderMap}
-          importFieldRules={{
-            product: { required: true },
-            plannedQty: { required: true },
-          }}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const response = await workOrderApi.list({ skip: 0, limit: 10000, include_readiness: false })
-              let items = Array.isArray(response) ? response : (response as any)?.data || (response as any)?.items || []
-              if (type === 'currentPage' && pageData?.length) {
-                items = pageData
-              } else if (type === 'selected' && keys?.length) {
+              let items =
+                type === 'currentPage' && pageData?.length
+                  ? pageData
+                  : await fetchAllListItems((p) =>
+                      workOrderApi.list({ ...p, include_readiness: false }),
+                    )
+              if (type === 'selected' && keys?.length) {
                 const selectedIds = new Set(
                   resolveWorkOrderIdsFromListRowKeys(keys, workOrderRowByKeyRef.current)
                 )
@@ -6965,13 +7062,10 @@ const WorkOrdersPage: React.FC = () => {
                 messageApi.warning(t('app.kuaizhizao.workOrder.msgExportNoData'))
                 return
               }
-              const blob = new window.Blob([window.JSON.stringify(items, null, 2)], { type: 'application/json' })
-              const url = window.URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `work-orders-${new Date().toISOString().slice(0, 10)}.json`
-              a.click()
-              window.URL.revokeObjectURL(url)
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `work-orders-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('app.kuaizhizao.workOrder.msgExportSuccess', { count: items.length }))
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.workOrder.msgExportFailed'))
@@ -7113,6 +7207,9 @@ const WorkOrdersPage: React.FC = () => {
         pageSize={pullFromComputationQuery.pageSize}
         total={pullFromComputationQuery.total}
         onPageChange={pullFromComputationQuery.handlePageChange}
+        scopeOptions={pullFromComputationQuery.scopeOptions}
+        scope={pullFromComputationQuery.scope}
+        onScopeChange={pullFromComputationQuery.handleScopeChange}
         okText={t('app.kuaizhizao.workOrder.pull.okCreateWorkOrder')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
@@ -7177,6 +7274,9 @@ const WorkOrdersPage: React.FC = () => {
         pageSize={pullFromSalesOrderQuery.pageSize}
         total={pullFromSalesOrderQuery.total}
         onPageChange={pullFromSalesOrderQuery.handlePageChange}
+        scopeOptions={pullFromSalesOrderQuery.scopeOptions}
+        scope={pullFromSalesOrderQuery.scope}
+        onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
         okText="创建工单"
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />

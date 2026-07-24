@@ -45,11 +45,13 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 
 /**
  * 仓库管理列表页面组件
@@ -113,10 +115,11 @@ const WarehousesPage: React.FC = () => {
         [
           { field: 'code', required: true, labelKey: 'app.master-data.warehouses.code' },
           { field: 'name', required: true, labelKey: 'app.master-data.warehouses.name' },
-          { field: 'warehouseType', labelKey: 'field.warehouse.warehouseType' },
+          { field: 'warehouseType', labelKey: 'field.warehouse.warehouseType', options: ['普通仓', '线边仓', '在制品仓', '委外仓', '寄售仓', 'VMI仓', '不良品仓', '待检仓'] },
           { field: 'workshopCode', labelKey: 'app.master-data.warehouses.workshopCode' },
           { field: 'workCenterCode', labelKey: 'app.master-data.warehouses.workCenterCode' },
           { field: 'description', labelKey: 'app.master-data.warehouses.description' },
+          { field: 'isActive', labelKey: 'field.warehouse.isActive', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.warehouses.importExample.code'),
@@ -125,6 +128,7 @@ const WarehousesPage: React.FC = () => {
           '',
           '',
           t('app.master-data.warehouses.importExample.description'),
+          '是',
         ],
       ),
     [t, i18n.language],
@@ -350,11 +354,16 @@ const WarehousesPage: React.FC = () => {
         }
 
         // 构建导入数据
+        const isActiveRaw =
+          headerIndexMap.isActive !== undefined ? String(row[headerIndexMap.isActive] ?? '').trim() : '';
+        const isActive =
+          !isActiveRaw ||
+          !['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(isActiveRaw.toLowerCase());
         const warehouseData: WarehouseCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
           description: description ? String(description).trim() : undefined,
-          isActive: true,
+          isActive,
           warehouseType,
           workshopId,
           workCenterId,
@@ -475,9 +484,7 @@ const WarehousesPage: React.FC = () => {
         filename = t('app.master-data.warehouses.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) });
       } else {
         // 导出全部数据
-        const allData = await warehouseApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        const { data: exportItems } = normalizeMasterListResponse(allData);
-        exportData = exportItems;
+        exportData = await fetchAllListItems((p) => warehouseApi.list({ ...p, ...lastListParamsRef.current }));
         filename = t('app.master-data.warehouses.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) });
       }
 
@@ -805,11 +812,8 @@ const WarehousesPage: React.FC = () => {
         onImport={handleImport}
         importHeaders={warehouseImportTemplate.importHeaders}
         importExampleRow={warehouseImportTemplate.importExampleRow}
+        importColumnOptions={warehouseImportTemplate.importColumnOptions}
         importFieldMap={warehouseImportTemplate.importHeaderMap}
-        importFieldRules={{
-          code: { required: true },
-          name: { required: true },
-        }}
         showExportButton={true}
         onExport={handleExport}
         showAdvancedSearch

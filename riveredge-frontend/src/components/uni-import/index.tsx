@@ -29,22 +29,31 @@ import {
   type UniImportCustomModalApplyResult,
 } from './uni-import-custom-modal';
 import {
+  type UniRelationImportConfig,
   type UniRelationImportEntity,
   type UniRelationImportWriteStrategy,
   type UniRelationImportResult,
-} from './uni-import-relation-modal';
+} from './uni-import-relation-types';
 import {
   UniImportPreviewModal,
   type ImportPrecheckResult,
 } from './uni-import-preview-modal';
 import { getImportDataRows } from './import-preview-utils';
 import { translatePathTitle } from '../../utils/menuTranslation';
-import { spreadsheetCellToPlainString } from '../../utils/spreadsheetCellPlainString';
 import { resolveSystemFieldKey } from './apply-import-mapping';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 
 /**
- * Univer Import 导入弹窗组件属性
+ * UniImport 导入弹窗。
+ *
+ * 矩阵约定（与后端 POST …/import 的 data 一致）：
+ * - 行 0：表头（必填列可用 * 前缀）
+ * - 行 1：示例行（提交时跳过）
+ * - 行 2+：实际数据
+ *
+ * 确认导入只读取 sheet-host 同步的字符串矩阵（上传 / 粘贴 / 初始模板），禁止从 Univer scrape。
+ * 列表页接入须经 UniTable：showImportButton + onImport + importHeaders/exampleRow/fieldMap。
+ * 禁止用 onImport 仅打开第二个弹窗。
  */
 export interface UniImportProps {
   /**
@@ -101,6 +110,10 @@ export interface UniImportProps {
    */
   exampleRow?: string[];
   /**
+   * 与 headers 等长的列下拉选项；某列有值时示例行与数据区启用列表下拉
+   */
+  columnOptions?: Array<string[] | undefined>;
+  /**
    * 当前单据/页面名称，用于生成下载文件名（如「账户管理 - 导入模板.xlsx」）
    */
   templateDocumentName?: string;
@@ -131,11 +144,7 @@ export interface UniImportProps {
   /**
    * 高级关联导入配置
    */
-  relationImportConfig?: {
-    entities?: UniRelationImportEntity[];
-    defaultWriteStrategy?: UniRelationImportWriteStrategy;
-    supportedStrategies?: UniRelationImportWriteStrategy[];
-  };
+  relationImportConfig?: UniRelationImportConfig;
   /**
    * 关联导入预检
    */
@@ -182,15 +191,16 @@ export const UniImport: React.FC<UniImportProps> = ({
   open,
   onCancel,
   onConfirm,
-  title = '导入数据',
+  title,
   width = 1200,
   height = 620,
   showConfirmButton = true,
   showCancelButton = true,
-  confirmText = '确认导入',
-  cancelText = '取消',
+  confirmText,
+  cancelText,
   headers,
   exampleRow,
+  columnOptions,
   templateDocumentName,
   templateFileName,
   enableXlsxTemplate,
@@ -208,6 +218,9 @@ export const UniImport: React.FC<UniImportProps> = ({
   onImportPrecheck,
 }) => {
   const { t } = useTranslation();
+  const resolvedTitle = title ?? t('components.uniImport.defaultTitle');
+  const resolvedConfirmText = confirmText ?? t('components.uniImport.confirmImport');
+  const resolvedCancelText = cancelText ?? t('components.uniImport.cancel');
   const location = useLocation();
   const getPreference = useUserPreferenceStore((s) => s.getPreference);
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
@@ -510,14 +523,22 @@ export const UniImport: React.FC<UniImportProps> = ({
   };
 
   const shouldUseRelationImport = showRelationImport && customRelationEntities.length > 0 && !!onRelationImportSubmit;
-  const relationEntityRequiredFieldKeys = useMemo<Record<UniRelationImportEntity, string[]>>(
-    () => ({
-      material: ['componentCode'],
-      processRoute: ['processRouteCode'],
-      operation: ['operationCode'],
-      performance: ['employeeId'],
-    }),
-    [],
+  const relationCoreRequiredFieldKeys = useMemo(
+    () =>
+      relationImportConfig?.requiredFieldKeys?.length
+        ? relationImportConfig.requiredFieldKeys
+        : ['parentCode', 'componentCode', 'quantity'],
+    [relationImportConfig?.requiredFieldKeys],
+  );
+  const relationEntityRequiredFieldKeys = useMemo<Partial<Record<UniRelationImportEntity, string[]>>>(
+    () =>
+      relationImportConfig?.entityRequiredFieldKeys ?? {
+        material: ['componentCode'],
+        processRoute: ['processRouteCode'],
+        operation: ['operationCode'],
+        performance: ['employeeId'],
+      },
+    [relationImportConfig?.entityRequiredFieldKeys],
   );
   const resolveEffectiveRelationEntities = useCallback(
     (headerFieldKeys: Set<string>): UniRelationImportEntity[] =>
@@ -538,9 +559,10 @@ export const UniImport: React.FC<UniImportProps> = ({
       const headerFieldKeys = resolveHeaderFieldKeys(rows);
       const effectiveEntities = resolveEffectiveRelationEntities(headerFieldKeys);
 
-      const bomCoreFields = ['parentCode', 'componentCode', 'quantity'] as const;
-      const selectedBomCore = bomCoreFields.filter((key) => selectedImportFieldKeys.includes(key));
-      const missingBase = selectedBomCore.filter((key) => !headerFieldKeys.has(key));
+      const selectedCore = relationCoreRequiredFieldKeys.filter((key) =>
+        selectedImportFieldKeys.includes(key),
+      );
+      const missingBase = selectedCore.filter((key) => !headerFieldKeys.has(key));
       if (missingBase.length) {
         errors.push(
           t('components.uniImport.relationMissingRequiredColumns', {
@@ -597,6 +619,7 @@ export const UniImport: React.FC<UniImportProps> = ({
     [
       resolveEffectiveRelationEntities,
       resolveHeaderFieldKeys,
+      relationCoreRequiredFieldKeys,
       relationEntityRequiredFieldKeys,
       selectedImportFieldKeys,
       t,
@@ -740,7 +763,7 @@ export const UniImport: React.FC<UniImportProps> = ({
 
   const submitParsedImportRows = (data: string[][]) => {
     if (data.length === 0) {
-      messageApi.warning('表格中没有有效数据，请先输入数据');
+      messageApi.warning(t('components.uniImport.emptySheet'));
       return;
     }
 
@@ -755,7 +778,7 @@ export const UniImport: React.FC<UniImportProps> = ({
           }),
       );
     if (!hasDataRow) {
-      messageApi.warning('表格中没有有效数据（所有行都为空），请先输入数据');
+      messageApi.warning(t('components.uniImport.emptySheetAllBlank'));
       return;
     }
 
@@ -790,385 +813,15 @@ export const UniImport: React.FC<UniImportProps> = ({
   };
 
   /**
-   * 处理确认导入
+   * 确认导入：只认 sheet-host 同步的字符串矩阵（上传 / 粘贴 / 初始模板）。
    */
   const handleConfirm = () => {
-    try {
-      // 上传 xlsx 时已解析为字符串矩阵；确认时必须用该原文，禁止 Univer 回读（会 toPrecision 截断）
-      const uploaded = uploadedSheetRowsRef.current;
-      if (uploaded && uploaded.length > 0) {
-        submitParsedImportRows(
-          uploaded.map((row) => row.map((cell) => String(cell ?? ''))),
-        );
-        return;
-      }
-
-      const instance = univerInstanceRef.current;
-
-      if (!instance) {
-        messageApi.error('表格未加载完成，请稍候再试');
-        return;
-      }
-
-      const { univerAPI } = instance;
-
-      // 使用 Univer Sheet 的正确方式获取数据
-      let data: any[][] = [];
-
-      try {
-        // 方法1：通过 univerAPI 获取工作簿和工作表
-        let worksheet: any = null;
-        if (univerAPI) {
-          try {
-            // @ts-ignore - Univer API 类型定义可能不完整
-            if (typeof univerAPI.getActiveWorkbook === 'function') {
-              // @ts-ignore
-              const workbook = univerAPI.getActiveWorkbook();
-              if (workbook) {
-                // @ts-ignore
-                worksheet = workbook.getActiveSheet();
-              }
-            }
-          } catch (e) {
-            console.warn('通过 univerAPI 获取工作表失败：', e);
-          }
-        }
-
-        // 如果获取到了 worksheet，尝试使用其方法获取数据
-        if (worksheet) {
-          try {
-            // 优先 getCellMatrix / getCellData（保留 cell.v 原始精度），避免 getRangeValues 返回格式化显示值
-            // @ts-ignore
-            if (typeof worksheet.getCellMatrix === 'function') {
-              // @ts-ignore
-              const cellMatrix = worksheet.getCellMatrix();
-              if (cellMatrix) {
-                data = convertCellMatrixToArray(cellMatrix);
-              }
-            }
-
-            if (data.length === 0) {
-              // @ts-ignore
-              if (typeof worksheet.getCellData === 'function') {
-                // @ts-ignore
-                const cellData = worksheet.getCellData();
-                if (cellData) {
-                  data = convertCellDataToArray(cellData);
-                }
-              }
-            }
-
-            if (data.length === 0 && worksheet.cellData) {
-              data = convertCellDataToArray(worksheet.cellData);
-            }
-
-            // getRangeValues / getRange 可能返回列格式后的显示文本，仅在前述方法不可用时使用
-            // @ts-ignore
-            if (data.length === 0 && typeof worksheet.getRangeValues === 'function') {
-              // @ts-ignore
-              const rangeValues = worksheet.getRangeValues(0, 0, 999, 99);
-              if (rangeValues && Array.isArray(rangeValues)) {
-                data = rangeValues.map((row) =>
-                  Array.isArray(row)
-                    ? row.map((cell) => spreadsheetCellToPlainString(cell))
-                    : [],
-                );
-              }
-            }
-
-            if (data.length === 0) {
-              // @ts-ignore
-              if (typeof worksheet.getRange === 'function') {
-                try {
-                  // @ts-ignore
-                  const range = worksheet.getRange(0, 0, 999, 99);
-                  if (range && typeof range.getValues === 'function') {
-                    // @ts-ignore
-                    const values = range.getValues();
-                    if (values && Array.isArray(values)) {
-                      data = values.map((row) =>
-                        Array.isArray(row)
-                          ? row.map((cell) => spreadsheetCellToPlainString(cell))
-                          : [],
-                      );
-                    }
-                  }
-                } catch (e) {
-                  // 忽略错误，继续尝试其他方法
-                }
-              }
-            }
-
-            // 方法6：尝试通过遍历单元格获取数据（最后的手段）
-            if (data.length === 0) {
-              try {
-                const result: any[][] = [];
-                let maxRow = -1;
-                let maxCol = -1;
-                let hasData = false;
-
-                // 尝试获取行数和列数
-                // @ts-ignore
-                const rowCount = worksheet.getRowCount?.() || worksheet.rowCount || 100;
-                // @ts-ignore
-                const columnCount = worksheet.getColumnCount?.() || worksheet.columnCount || 100;
-
-                // 按工作表实际行列遍历（粘贴超 100 行后已扩容）
-                const maxRows = Math.max(1, Number(rowCount) || 100);
-                const maxCols = Math.max(1, Number(columnCount) || 100);
-
-                for (let r = 0; r < maxRows; r++) {
-                  const rowData: any[] = [];
-                  let rowHasData = false;
-
-                  for (let c = 0; c < maxCols; c++) {
-                    let value = '';
-
-                    // 尝试多种方式获取单元格值
-                    try {
-                      // @ts-ignore
-                      if (typeof worksheet.getCellValue === 'function') {
-                        // @ts-ignore
-                        const cell = worksheet.getCellValue(r, c);
-                        if (cell !== null && cell !== undefined) {
-                          if (typeof cell === 'object') {
-                            value = spreadsheetCellToPlainString(cell);
-                          } else {
-                            value = spreadsheetCellToPlainString(cell);
-                          }
-                        }
-                      }
-                      // @ts-ignore
-                      else if (typeof worksheet.getCell === 'function') {
-                        // @ts-ignore
-                        const cell = worksheet.getCell(r, c);
-                        if (cell) {
-                          // @ts-ignore
-                          if (typeof cell.getValue === 'function') {
-                            // @ts-ignore
-                            const cellValue = cell.getValue();
-                            value = cellValue !== null && cellValue !== undefined ? spreadsheetCellToPlainString(cellValue) : '';
-                          } else {
-                            value = spreadsheetCellToPlainString(cell);
-                          }
-                        }
-                      }
-                      // @ts-ignore
-                      else if (worksheet._cellData) {
-                        // @ts-ignore
-                        const row = worksheet._cellData[r];
-                        if (row) {
-                          const cell = row[c] || (typeof row.get === 'function' ? row.get(c) : null);
-                          if (cell) {
-                            value = spreadsheetCellToPlainString(cell);
-                          }
-                        }
-                      }
-                      // @ts-ignore
-                      else if (worksheet.cellData) {
-                        // @ts-ignore
-                        const row = worksheet.cellData[r];
-                        if (row) {
-                          const cell = row[c] || (typeof row.get === 'function' ? row.get(c) : null);
-                          if (cell) {
-                            value = spreadsheetCellToPlainString(cell);
-                          }
-                        }
-                      }
-                    } catch (cellError) {
-                      // 单个单元格获取失败，继续下一个
-                      value = '';
-                    }
-
-                    rowData.push(value);
-                    if (value !== '' && value !== null && value !== undefined) {
-                      rowHasData = true;
-                      hasData = true;
-                      if (r > maxRow) maxRow = r;
-                      if (c > maxCol) maxCol = c;
-                    }
-                  }
-
-                  // 如果这一行有数据，或者在前10行，都保留
-                  if (rowHasData || r < 10) {
-                    result.push(rowData);
-                  } else if (hasData && r > maxRow + 5) {
-                    // 如果已经有数据了，且连续5行都没有数据，可以停止
-                    break;
-                  }
-                }
-
-                if (hasData && result.length > 0) {
-                  // 移除末尾的空行
-                  while (result.length > 0) {
-                    const lastRow = result[result.length - 1];
-                    if (lastRow.some(cell => cell !== '' && cell !== null && cell !== undefined)) {
-                      break;
-                    }
-                    result.pop();
-                  }
-                  data = result;
-                }
-              } catch (e) {
-                console.warn('通过遍历单元格获取数据失败：', e);
-              }
-            }
-          } catch (e) {
-            console.warn('从 worksheet 获取数据失败：', e);
-          }
-        }
-
-        // 如果仍然没有数据，尝试通过 univerAPI 的其他方法获取
-        if (data.length === 0 && univerAPI) {
-          try {
-            // @ts-ignore
-            if (typeof univerAPI.getRangeData === 'function') {
-              // @ts-ignore
-              const rangeData = univerAPI.getRangeData(0, 0, 999, 99);
-              if (rangeData && Array.isArray(rangeData)) {
-                data = rangeData.map((row) =>
-                  Array.isArray(row)
-                    ? row.map((cell) => spreadsheetCellToPlainString(cell))
-                    : [],
-                );
-              }
-            }
-          } catch (e) {
-            console.warn('通过 univerAPI.getRangeData 获取数据失败：', e);
-          }
-        }
-
-        // 如果仍然没有数据，显示错误信息
-        if (data.length === 0) {
-          messageApi.warning('无法获取表格数据。请确保表格中有数据，或刷新页面重试');
-          console.error('无法获取数据，worksheet:', worksheet);
-          console.error('univerAPI:', univerAPI);
-          return;
-        }
-      } catch (error: any) {
-        messageApi.error('获取表格数据失败：' + (error.message || '未知错误'));
-        console.error('获取表格数据错误详情：', error);
-        return;
-      }
-
-      // 辅助函数：将 cellMatrix 转换为二维数组
-      function convertCellMatrixToArray(cellMatrix: any): any[][] {
-        const result: any[][] = [];
-        let maxRow = -1;
-        let maxCol = -1;
-
-        // 找到最大行和列
-        if (cellMatrix && typeof cellMatrix.forEach === 'function') {
-          cellMatrix.forEach((row: any, r: number) => {
-            if (row) {
-              if (row.forEach) {
-                row.forEach((cell: any, c: number) => {
-                  if (cell && (cell.v !== undefined || cell.m !== undefined)) {
-                    if (r > maxRow) maxRow = r;
-                    if (c > maxCol) maxCol = c;
-                  }
-                });
-              } else if (row.getValue) {
-                for (let c = 0; c < 100; c++) {
-                  const cell = row.getValue(c);
-                  if (cell && (cell.v !== undefined || cell.m !== undefined)) {
-                    if (r > maxRow) maxRow = r;
-                    if (c > maxCol) maxCol = c;
-                  }
-                }
-              }
-            }
-          });
-        }
-
-        if (maxRow === -1 || maxCol === -1) {
-          return [];
-        }
-
-        // 创建二维数组（保留所有行以维持表头/示例/数据行结构，便于业务从第3行起取数据）
-        for (let r = 0; r <= maxRow; r++) {
-          const rowData: any[] = [];
-          for (let c = 0; c <= maxCol; c++) {
-            let value = '';
-            if (cellMatrix && cellMatrix.getValue) {
-              const row = cellMatrix.getValue(r);
-              if (row) {
-                const cell = row.getValue ? row.getValue(c) : null;
-                if (cell) {
-                  value = spreadsheetCellToPlainString(cell);
-                }
-              }
-            }
-            rowData.push(value);
-          }
-          result.push(rowData);
-        }
-        return result;
-      }
-
-      // 辅助函数：将 cellData 对象转换为二维数组
-      function convertCellDataToArray(cellData: any): any[][] {
-        const result: any[][] = [];
-
-        if (!cellData || typeof cellData !== 'object') {
-          return [];
-        }
-
-        // 如果是对象格式 { '0': { '0': {...}, '1': {...} } }
-        const rowKeys = Object.keys(cellData).map(k => parseInt(k, 10)).filter(k => !isNaN(k));
-        if (rowKeys.length === 0) {
-          return [];
-        }
-
-        const maxRow = Math.max(...rowKeys);
-        let maxCol = -1;
-
-        rowKeys.forEach(r => {
-          const row = cellData[r.toString()];
-          if (row && typeof row === 'object') {
-            const colKeys = Object.keys(row).map(k => parseInt(k, 10)).filter(k => !isNaN(k));
-            if (colKeys.length > 0) {
-              const rowMaxCol = Math.max(...colKeys);
-              if (rowMaxCol > maxCol) maxCol = rowMaxCol;
-            }
-          }
-        });
-
-        if (maxCol === -1) {
-          return [];
-        }
-
-        // 创建二维数组（保留所有行以维持表头/示例/数据行结构）
-        for (let r = 0; r <= maxRow; r++) {
-          const rowData: any[] = [];
-          for (let c = 0; c <= maxCol; c++) {
-            let value = '';
-            const row = cellData[r.toString()];
-            if (row) {
-              const cell = row[c.toString()];
-              if (cell) {
-                value = spreadsheetCellToPlainString(cell);
-              }
-            }
-            rowData.push(value);
-          }
-          result.push(rowData);
-        }
-        return result;
-      }
-
-      data = data.map((row) =>
-        Array.isArray(row)
-          ? row.map((cell) => spreadsheetCellToPlainString(cell))
-          : [],
-      );
-
-      submitParsedImportRows(
-        data.map((row) => row.map((cell) => String(cell ?? ''))),
-      );
-    } catch (error: any) {
-      messageApi.error('获取表格数据失败：' + (error.message || '未知错误'));
+    const uploaded = uploadedSheetRowsRef.current;
+    if (!uploaded || uploaded.length === 0) {
+      messageApi.warning(t('components.uniImport.sheetMatrixMissing'));
+      return;
     }
+    submitParsedImportRows(uploaded.map((row) => row.map((cell) => String(cell ?? ''))));
   };
 
   return (
@@ -1189,7 +842,7 @@ export const UniImport: React.FC<UniImportProps> = ({
       <Modal
         className="uni-import-modal"
         focusable={{ trap: false }}
-        title={title}
+        title={resolvedTitle}
         open={open ?? visible}
         onCancel={onCancel}
         keyboard={false}
@@ -1254,7 +907,7 @@ export const UniImport: React.FC<UniImportProps> = ({
             <Space>
               {showCancelButton && (
                 <Button icon={<CloseOutlined />} onClick={onCancel} disabled={loading || xlsxBusy}>
-                  {cancelText}
+                  {resolvedCancelText}
                 </Button>
               )}
               {showConfirmButton && (
@@ -1267,7 +920,7 @@ export const UniImport: React.FC<UniImportProps> = ({
                 >
                   {enableImportPreview
                     ? t('components.uniImport.previewNextStep')
-                    : confirmText}
+                    : resolvedConfirmText}
                 </Button>
               )}
             </Space>
@@ -1289,6 +942,7 @@ export const UniImport: React.FC<UniImportProps> = ({
           uploadedSheetRows={uploadedSheetRows}
           headers={headersRef.current}
           exampleRow={exampleRowRef.current}
+          columnOptions={columnOptions}
           height={height}
           loading={loading}
           onLoadingChange={setLoading}

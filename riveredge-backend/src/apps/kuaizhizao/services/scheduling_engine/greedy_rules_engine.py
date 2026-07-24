@@ -17,6 +17,7 @@ from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingS
 from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
 from apps.kuaizhizao.utils.work_order_operation_scheduling import (
     build_operation_time_slots,
+    has_operation_hours,
     operation_total_hours,
 )
 from apps.master_data.models.factory import Workstation
@@ -164,6 +165,13 @@ class GreedyRulesSchedulingEngine:
             wo_op_slots: List[Tuple[WorkOrderOperation, datetime, datetime, int]] = []
 
             for op in pending:
+                if not has_operation_hours(op.setup_time, op.standard_time):
+                    proposals["warnings"].append(
+                        f"工单 {wo.code} 工序 {op.operation_name or op.operation_code or op.id} "
+                        f"缺少工序工时（setup_time/standard_time），请先补齐后重排"
+                    )
+                    wo_op_slots = []
+                    break
                 duration_hours = operation_total_hours(op.setup_time, op.standard_time, wo.quantity)
                 duration = timedelta(hours=duration_hours)
                 station_id = int(op.assigned_station_id or 0)

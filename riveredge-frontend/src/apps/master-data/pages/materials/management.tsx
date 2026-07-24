@@ -126,6 +126,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../components/uni-table/stackedPrimaryColumn'
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 
 /** SKU 子行列表单元格：不重复展示主物料字段 */
 function renderMasterCell(record: Material, node: React.ReactNode): React.ReactNode {
@@ -235,9 +236,15 @@ function MaterialListStackedCell({
 import { materialApi, materialGroupApi } from '../../services/material'
 import { drawingApi, type EngineeringDrawing } from '../../services/drawing'
 import {
+  buildMaterialSourceTypeImportOptions,
   buildMaterialSourceTypeOptions,
   normalizeMaterialSourceType,
+  parseMaterialSourceTypeImport,
 } from '../../utils/materialSourceType';
+import {
+  IMPORT_YES_NO_OPTIONS,
+  pickImportExampleValue,
+} from '../../../../utils/loadImportDictionaryValues';
 import { processRouteApi } from '../../services/process'
 import { warehouseApi } from '../../services/warehouse'
 import type { Warehouse } from '../../types/warehouse'
@@ -1654,6 +1661,11 @@ const MaterialsManagementPage: React.FC = () => {
     }
   }, [rewriteMainCodesScope, rewriteResetSequence, selectedRowKeys, messageApi, t])
 
+  const materialSourceTypeImportOptions = useMemo(
+    () => buildMaterialSourceTypeImportOptions(t),
+    [t, i18n.language],
+  )
+
   const materialImportTemplate = useMemo(
     () =>
       buildFactoryImportTemplate(
@@ -1666,24 +1678,20 @@ const MaterialsManagementPage: React.FC = () => {
             labelKey: 'app.master-data.materials.materialName',
             aliases: ['物料名称', '名称'],
           },
-          {
-            field: 'baseUnit',
-            required: true,
-            labelKey: 'app.master-data.materials.baseUnit',
-            aliases: ['基础单位', '单位'],
-          },
+          { field: 'baseUnit', required: true, labelKey: 'app.master-data.materials.baseUnit', aliases: ['基础单位', '单位'], options: baseUnitOptions.map((o) => o.value) },
           { field: 'specification', labelKey: 'app.master-data.materials.specification', aliases: ['规格'] },
-          { field: 'sourceType', labelKey: 'app.master-data.materials.sourceType', aliases: ['物料类型'] },
+          {
+            field: 'sourceType',
+            labelKey: 'app.master-data.materials.sourceType',
+            aliases: ['物料类型'],
+            options: materialSourceTypeImportOptions,
+          },
           {
             field: 'groupCode',
             labelKey: 'app.master-data.materials.materialGroup',
             aliases: ['分组编号', '分组'],
           },
-          {
-            field: 'rowType',
-            labelKey: 'app.master-data.materials.importRowType',
-            aliases: ['行类型'],
-          },
+          { field: 'rowType', labelKey: 'app.master-data.materials.importRowType', aliases: ['行类型'], options: ['主物料', 'SKU', 'master', 'sku'] },
           {
             field: 'masterMainCode',
             labelKey: 'app.master-data.materials.importMasterMainCode',
@@ -1698,6 +1706,25 @@ const MaterialsManagementPage: React.FC = () => {
             field: 'variantManaged',
             labelKey: 'app.master-data.materials.importVariantManaged',
             aliases: ['启用属性管理'],
+            options: [...IMPORT_YES_NO_OPTIONS],
+          },
+          {
+            field: 'isActive',
+            labelKey: 'app.master-data.materials.enabledStatus',
+            aliases: ['是否启用', '启用状态', '启用'],
+            options: [...IMPORT_YES_NO_OPTIONS],
+          },
+          {
+            field: 'batchManaged',
+            labelKey: 'app.master-data.materials.batchManaged',
+            aliases: ['批号管理'],
+            options: [...IMPORT_YES_NO_OPTIONS],
+          },
+          {
+            field: 'serialManaged',
+            labelKey: 'app.master-data.materialForm.serialManaged',
+            aliases: ['序列号管理'],
+            options: [...IMPORT_YES_NO_OPTIONS],
           },
         ],
         [
@@ -1705,15 +1732,21 @@ const MaterialsManagementPage: React.FC = () => {
           t('app.master-data.materials.importExample.name'),
           t('app.master-data.materials.importExample.baseUnit'),
           '',
-          t('app.master-data.materials.importExample.sourceType'),
+          pickImportExampleValue(
+            materialSourceTypeImportOptions,
+            t('app.master-data.materialForm.sourceMake'),
+          ),
           t('app.master-data.materials.importExample.groupCode'),
           t('app.master-data.materials.importExample.rowType'),
           '',
           '',
           t('app.master-data.materials.importExample.variantManaged'),
+          '是',
+          '否',
+          '否',
         ],
       ),
-    [t, i18n.language],
+    [t, i18n.language, baseUnitOptions, materialSourceTypeImportOptions],
   )
 
   const handleMaterialImport = async (data: any[][]) => {
@@ -1747,6 +1780,8 @@ const MaterialsManagementPage: React.FC = () => {
       rows,
       idx,
       (groupCode) => groupList.find((x: any) => (x.code || '').trim() === groupCode.trim())?.id,
+      3,
+      t,
     )
 
     if (errors.length > 0) {
@@ -1917,29 +1952,30 @@ const MaterialsManagementPage: React.FC = () => {
   const handleMaterialExport = async (type: 'selected' | 'currentPage' | 'all', selectedRowKeys?: React.Key[], currentPageData?: Material[]) => {
     try {
       let toExport: Material[] = []
-      if (type === 'all') {
-        const filter = lastListParamsRef.current
-        const res = await materialApi.list({
-          skip: 0,
-          limit: 10000,
-          treeView: true,
-          ...filter,
-          ...(Object.keys(filter).length === 0
-            ? selectedGroupId === -1
-              ? { noGroup: true }
-              : selectedGroupId != null
-                ? { groupId: selectedGroupId }
-                : {}
-            : {}),
-        })
-        toExport = res.items ?? []
-      } else if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
+      if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
         toExport = currentPageData.filter((r) => selectedRowKeys.includes(r.uuid))
       } else if (type === 'currentPage' && currentPageData) {
         toExport = currentPageData
+      } else if (type === 'all') {
+        const filter = lastListParamsRef.current
+        toExport = await fetchAllListItems((p) =>
+          materialApi.list({
+            ...p,
+            treeView: true,
+            ...filter,
+            ...(Object.keys(filter).length === 0
+              ? selectedGroupId === -1
+                ? { noGroup: true }
+                : selectedGroupId != null
+                  ? { groupId: selectedGroupId }
+                  : {}
+              : {}),
+          }),
+        )
       } else {
-        const res = await materialApi.list({ skip: 0, limit: 10000, groupId: selectedGroupId ?? undefined })
-        toExport = res.items ?? []
+        toExport = await fetchAllListItems((p) =>
+          materialApi.list({ ...p, groupId: selectedGroupId ?? undefined }),
+        )
       }
       if (toExport.length === 0) {
         messageApi.warning(t('app.master-data.noExportData'))
@@ -2678,11 +2714,8 @@ const MaterialsManagementPage: React.FC = () => {
                 onImport={handleMaterialImport}
                 importHeaders={materialImportTemplate.importHeaders}
                 importExampleRow={materialImportTemplate.importExampleRow}
+                importColumnOptions={materialImportTemplate.importColumnOptions}
                 importFieldMap={materialImportTemplate.importHeaderMap}
-                importFieldRules={{
-                name: { required: true },
-                baseUnit: { required: true },
-                }}
                 showExportButton={true}
                 onExport={handleMaterialExport}
               />

@@ -49,6 +49,8 @@ import {
 } from '../../../utils/warehouseListCore';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 interface MaterialBorrow {
   id?: number;
@@ -579,9 +581,7 @@ const MaterialBorrowsPage: React.FC = () => {
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const response = await warehouseApi.materialBorrow.list({ skip: 0, limit: 10000 });
-              const rawData = Array.isArray(response) ? response : response?.items || response?.data || [];
-              let items = rawData;
+              let items = await fetchAllListItems((p) => warehouseApi.materialBorrow.list(p));
               if (type === 'currentPage' && pageData?.length) {
                 items = pageData;
               } else if (type === 'selected' && keys?.length) {
@@ -591,13 +591,10 @@ const MaterialBorrowsPage: React.FC = () => {
                 messageApi.warning(t('app.kuaizhizao.materialBorrow.msg.noExportData'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `material-borrows-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `material-borrows-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('app.kuaizhizao.materialBorrow.msg.exportSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.materialBorrow.msg.exportFailed'));

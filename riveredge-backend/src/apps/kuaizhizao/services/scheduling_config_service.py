@@ -116,9 +116,17 @@ class SchedulingConfigService(AppBaseService[SchedulingConfig]):
 
     async def get_default_config(
         self,
-        tenant_id: int
+        tenant_id: int,
+        *,
+        ensure_persisted: bool = True,
+        created_by: int = 1,
     ) -> Optional[SchedulingConfigResponse]:
-        """获取默认排程配置"""
+        """
+        获取默认排程配置。
+
+        无任何配置且 ensure_persisted=True 时，按 SchedulingConstraints 默认值
+        自动创建 DEFAULT_APS 并落库，避免内存默认与库配置双数据源。
+        """
         config = await SchedulingConfig.get_or_none(
             tenant_id=tenant_id,
             is_default=True,
@@ -133,7 +141,14 @@ class SchedulingConfigService(AppBaseService[SchedulingConfig]):
         ).first()
         if config:
             return SchedulingConfigResponse.model_validate(config)
-        return None
+        if not ensure_persisted:
+            return None
+        created = await self.upsert_default_config(
+            tenant_id=tenant_id,
+            constraints=SchedulingConstraints(),
+            updated_by=created_by,
+        )
+        return created
 
     async def list_configs(
         self,

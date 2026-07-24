@@ -1,7 +1,7 @@
 /**
  * 应付单列表页
  */
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Typography, Modal, Spin, Alert, Table, Empty, Form } from 'antd';
@@ -30,7 +30,12 @@ import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getPayableLifecycle } from '../../../utils/financeLifecycle';
 import { buildPayableStatusEnum, buildReviewStatusEnum } from '../../../utils/financeSharedOptions';
@@ -53,6 +58,8 @@ import {
   DOCUMENT_PROGRESS_COLUMN_WIDTH,
 } from '../../../../kuaizhizao/pages/sales-management/shared/DocumentPushProgressBar';
 import { payablePaymentPushPercent } from '../../../../kuaizhizao/pages/sales-management/shared/pushProgress';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const P = 'app.kuaicaiwu.payable';
 const PAYABLE_RESOURCE = 'kuaicaiwu:payable';
@@ -119,12 +126,14 @@ const PayableList: React.FC = () => {
                     },
                     { field: 'dueDate', labelKey: `${P}.import.dueDate`, aliases: ['到期日期'] },
                     { field: 'businessDate', labelKey: `${P}.import.businessDate`, aliases: ['业务日期'] },
+                    { field: 'notes', labelKey: 'app.kuaicaiwu.common.notes', aliases: ['备注'] },
                 ],
                 [
                     t(`${P}.importExample.supplierName`),
                     t(`${P}.importExample.amount`),
                     t(`${P}.importExample.dueDate`),
                     t(`${P}.importExample.businessDate`),
+                    '',
                 ],
             ),
         [t, i18n.language],
@@ -200,18 +209,35 @@ const PayableList: React.FC = () => {
         }
     };
 
+    const isPullPayableSelectable = useCallback(
+        (record: PayablePullCandidate) => record.capabilities?.pull_payable?.allowed !== false,
+        [],
+    );
+
+    const pullQueryScopeOptions = useMemo(
+        () => [
+            { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+            { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+        ],
+        [t],
+    );
+
     const pullFromPurchaseOrderQuery = useUniPullQuery<PayablePullCandidate>({
         rowKey: 'id',
         selectionType: 'radio',
-        isRowDisabled: (record) => record.capabilities?.pull_payable?.allowed === false,
-        loadData: async ({ keyword, page, pageSize }) => {
+        scopeOptions: pullQueryScopeOptions,
+        defaultScope: 'pullable',
+        isRowDisabled: (record) => !isPullPayableSelectable(record),
+        loadData: async ({ keyword, page, pageSize, scope }) => {
             try {
                 const res = await payableService.listPurchaseOrderPullCandidates({
-                    skip: (page - 1) * pageSize,
-                    limit: pageSize,
+                    skip: 0,
+                    limit: 200,
                     keyword: keyword.trim() || undefined,
                 });
-                return { data: res.data || [], total: res.total ?? 0 };
+                const rows = res.data || [];
+                const filtered = filterByPullScope(rows, scope, isPullPayableSelectable);
+                return paginatePullRows(filtered, page, pageSize);
             } catch (e: any) {
                 messageApi.error(
                     e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
@@ -234,15 +260,19 @@ const PayableList: React.FC = () => {
     const pullFromPurchaseReceiptQuery = useUniPullQuery<PayablePullCandidate>({
         rowKey: 'id',
         selectionType: 'radio',
-        isRowDisabled: (record) => record.capabilities?.pull_payable?.allowed === false,
-        loadData: async ({ keyword, page, pageSize }) => {
+        scopeOptions: pullQueryScopeOptions,
+        defaultScope: 'pullable',
+        isRowDisabled: (record) => !isPullPayableSelectable(record),
+        loadData: async ({ keyword, page, pageSize, scope }) => {
             try {
                 const res = await payableService.listPurchaseReceiptPullCandidates({
-                    skip: (page - 1) * pageSize,
-                    limit: pageSize,
+                    skip: 0,
+                    limit: 200,
                     keyword: keyword.trim() || undefined,
                 });
-                return { data: res.data || [], total: res.total ?? 0 };
+                const rows = res.data || [];
+                const filtered = filterByPullScope(rows, scope, isPullPayableSelectable);
+                return paginatePullRows(filtered, page, pageSize);
             } catch (e: any) {
                 messageApi.error(
                     e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
@@ -732,6 +762,10 @@ const PayableList: React.FC = () => {
                             remaining_amount: amount,
                             due_date: dueDate,
                             business_date: bizDate,
+                            notes:
+                              headerIndexMap.notes !== undefined && row[headerIndexMap.notes]
+                                ? String(row[headerIndexMap.notes]).trim() || undefined
+                                : undefined,
                             status: '未付款',
                             review_status: '草稿',
                         });
@@ -756,39 +790,31 @@ const PayableList: React.FC = () => {
                 }}
                 importHeaders={payableImportTemplate.importHeaders}
                 importExampleRow={payableImportTemplate.importExampleRow}
+                importColumnOptions={payableImportTemplate.importColumnOptions}
                 importFieldMap={payableImportTemplate.importHeaderMap}
                 showExportButton
                 onExport={async (type, keys, pageData) => {
                     try {
-                        let items: Payable[] = [];
-                        if (type === 'currentPage' && pageData?.length) {
-                            items = pageData;
-                        } else if (type === 'selected' && keys?.length) {
-                            const res = await payableService.listPayables({
-                                skip: 0,
-                                limit: 10000,
-                                ...lastListParamsRef.current,
-                            });
-                            items = (res.items || []).filter((d: Payable) => d.id != null && keys.includes(d.id));
-                        } else {
-                            const res = await payableService.listPayables({
-                                skip: 0,
-                                limit: 10000,
-                                ...lastListParamsRef.current,
-                            });
-                            items = res.items || [];
+                        let items: Payable[] =
+                            type === 'currentPage' && pageData?.length
+                                ? pageData
+                                : await fetchAllListItems((p) =>
+                                      payableService.listPayables({
+                                          ...p,
+                                          ...lastListParamsRef.current,
+                                      }),
+                                  );
+                        if (type === 'selected' && keys?.length) {
+                            items = items.filter((d: Payable) => d.id != null && keys.includes(d.id));
                         }
                         if (items.length === 0) {
                             messageApi.warning(t('common.exportNoData'));
                             return;
                         }
-                        const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `payables-${new Date().toISOString().slice(0, 10)}.json`;
-                        a.click();
-                        URL.revokeObjectURL(url);
+                        await downloadRecordsAsXlsx(
+                          items as Array<Record<string, unknown>>,
+                          `payables-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                        );
                         messageApi.success(t('common.exportCountSuccess', { count: items.length }));
                     } catch (error: any) {
                         messageApi.error(error?.message || t('common.exportFailed'));
@@ -822,6 +848,9 @@ const PayableList: React.FC = () => {
                 pageSize={pullFromPurchaseOrderQuery.pageSize}
                 total={pullFromPurchaseOrderQuery.total}
                 onPageChange={pullFromPurchaseOrderQuery.handlePageChange}
+                scopeOptions={pullFromPurchaseOrderQuery.scopeOptions}
+                scope={pullFromPurchaseOrderQuery.scope}
+                onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
                 okText={t('components.uniLifecycle.nextStep')}
             />
 
@@ -851,6 +880,9 @@ const PayableList: React.FC = () => {
                 pageSize={pullFromPurchaseReceiptQuery.pageSize}
                 total={pullFromPurchaseReceiptQuery.total}
                 onPageChange={pullFromPurchaseReceiptQuery.handlePageChange}
+                scopeOptions={pullFromPurchaseReceiptQuery.scopeOptions}
+                scope={pullFromPurchaseReceiptQuery.scope}
+                onScopeChange={pullFromPurchaseReceiptQuery.handleScopeChange}
                 okText={t('components.uniLifecycle.nextStep')}
             />
 

@@ -141,6 +141,13 @@ const InventoryPage: React.FC = () => {
   const [includeZeroStock, setIncludeZeroStock] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | 'in_stock' | 'zero'>('all');
   const [groupBy, setGroupBy] = useState<'warehouse' | 'material' | 'status' | 'aging_bucket'>('warehouse');
+  // setState 后立刻 reload 时闭包仍是旧值；用 ref 保证请求参数与开关一致
+  const includeZeroStockRef = useRef(true);
+  const statusFilterRef = useRef(statusFilter);
+  const groupByRef = useRef(groupBy);
+  includeZeroStockRef.current = includeZeroStock;
+  statusFilterRef.current = statusFilter;
+  groupByRef.current = groupBy;
   const [summary, setSummary] = useState<InventorySummary>({
     total_records: 0,
     total_quantity: 0,
@@ -218,7 +225,9 @@ const InventoryPage: React.FC = () => {
             { label: t('app.kuaizhizao.warehouseCommon.hideZeroStock'), value: 'hide' },
           ]}
           onChange={(v) => {
-            setIncludeZeroStock(v === 'show');
+            const next = v === 'show';
+            includeZeroStockRef.current = next;
+            setIncludeZeroStock(next);
             actionRef.current?.reload();
           }}
         />
@@ -231,6 +240,7 @@ const InventoryPage: React.FC = () => {
             { label: t('app.kuaizhizao.warehouseCommon.zeroStockOnly'), value: 'zero' },
           ]}
           onChange={(v) => {
+            statusFilterRef.current = v;
             setStatusFilter(v);
             actionRef.current?.reload();
           }}
@@ -245,6 +255,7 @@ const InventoryPage: React.FC = () => {
             { label: t('app.kuaizhizao.warehouseCommon.groupByAging'), value: 'aging_bucket' },
           ]}
           onChange={(v) => {
+            groupByRef.current = v;
             setGroupBy(v);
             actionRef.current?.reload();
           }}
@@ -365,10 +376,12 @@ const InventoryPage: React.FC = () => {
 
   const fetchInventory = async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
     const listParams = resolveInventoryMaterialBalanceListParams(searchFormValues, sort);
+    const zeroStock = includeZeroStockRef.current;
+    const status = statusFilterRef.current;
     const baseQuery = {
       ...listParams,
-      include_zero_stock: !includeZeroStock,
-      status_filter: statusFilter === 'all' ? undefined : statusFilter,
+      include_zero_stock: zeroStock,
+      status_filter: status === 'all' ? undefined : status,
     };
     lastQueryRef.current = baseQuery;
     try {
@@ -386,7 +399,7 @@ const InventoryPage: React.FC = () => {
         ),
         apiRequest<{ summary: InventorySummary; groups: GroupItem[] }>(
           '/apps/kuaizhizao/reports/inventory/material-balances/summary',
-          { method: 'GET', params: { ...baseQuery, group_by: groupBy } }
+          { method: 'GET', params: { ...baseQuery, group_by: groupByRef.current } }
         ),
       ]);
       setSummary(summaryRes.summary);

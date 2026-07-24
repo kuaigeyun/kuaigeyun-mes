@@ -29,6 +29,7 @@ from apps.kuaizhizao.schemas.stocktaking import (
 )
 
 from apps.common.base_service import AppBaseService
+from apps.kuaizhizao.services.warehouse_service import _resolve_warehouse_name_by_id
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 
@@ -43,6 +44,37 @@ class StocktakingService(AppBaseService[Stocktaking]):
     def __init__(self):
         super().__init__(Stocktaking)
         self.business_config_service = BusinessConfigService()
+
+    @staticmethod
+    async def _fill_missing_warehouse_names(
+        tenant_id: int,
+        stocktakings: List[Stocktaking],
+    ) -> None:
+        """补齐冗余 warehouse_name（创建时未写入的历史数据）。"""
+        need = [
+            s for s in stocktakings
+            if s.warehouse_id and not str(s.warehouse_name or "").strip()
+        ]
+        if not need:
+            return
+        from apps.master_data.models.warehouse import Warehouse
+
+        ids = list({int(s.warehouse_id) for s in need})
+        rows = await Warehouse.filter(
+            tenant_id=tenant_id,
+            id__in=ids,
+            deleted_at__isnull=True,
+        ).values("id", "name")
+        name_map = {int(r["id"]): str(r.get("name") or "").strip() for r in rows}
+        dirty: List[Stocktaking] = []
+        for s in need:
+            name = name_map.get(int(s.warehouse_id), "")
+            if not name:
+                continue
+            s.warehouse_name = name
+            dirty.append(s)
+        if dirty:
+            await Stocktaking.bulk_update(dirty, fields=["warehouse_name"])
 
     async def create_stocktaking(
         self,
@@ -69,6 +101,12 @@ class StocktakingService(AppBaseService[Stocktaking]):
         if not is_enabled:
             raise BusinessLogicError("盘点单节点未启用，无法创建盘点单")
 
+        warehouse_name = await _resolve_warehouse_name_by_id(
+            tenant_id,
+            stocktaking_data.warehouse_id,
+            stocktaking_data.warehouse_name,
+        )
+
         async with in_transaction():
             # 生成盘点单号
             today = datetime.now().strftime("%Y%m%d")
@@ -87,7 +125,7 @@ class StocktakingService(AppBaseService[Stocktaking]):
                 uuid=str(uuid.uuid4()),
                 code=code,
                 warehouse_id=stocktaking_data.warehouse_id,
-                warehouse_name=stocktaking_data.warehouse_name,
+                warehouse_name=warehouse_name,
                 stocktaking_date=stocktaking_data.stocktaking_date,
                 stocktaking_type=stocktaking_data.stocktaking_type,
                 line_granularity=stocktaking_data.line_granularity,
@@ -132,6 +170,8 @@ class StocktakingService(AppBaseService[Stocktaking]):
 
         if not stocktaking:
             raise NotFoundError(f"盘点单不存在: {stocktaking_id}")
+
+        await self._fill_missing_warehouse_names(tenant_id, [stocktaking])
 
         # 获取盘点明细
         items = await StocktakingItem.filter(
@@ -210,8 +250,18 @@ class StocktakingService(AppBaseService[Stocktaking]):
             # 更新盘点单字段
             if stocktaking_data.warehouse_id is not None:
                 stocktaking.warehouse_id = stocktaking_data.warehouse_id
-            if stocktaking_data.warehouse_name is not None:
-                stocktaking.warehouse_name = stocktaking_data.warehouse_name
+            if (
+                stocktaking_data.warehouse_id is not None
+                or stocktaking_data.warehouse_name is not None
+                or not str(stocktaking.warehouse_name or "").strip()
+            ):
+                stocktaking.warehouse_name = await _resolve_warehouse_name_by_id(
+                    tenant_id,
+                    stocktaking.warehouse_id,
+                    stocktaking_data.warehouse_name
+                    if stocktaking_data.warehouse_name is not None
+                    else stocktaking.warehouse_name,
+                )
             if stocktaking_data.stocktaking_date is not None:
                 stocktaking.stocktaking_date = stocktaking_data.stocktaking_date
             if stocktaking_data.stocktaking_type is not None:
@@ -509,6 +559,7 @@ class StocktakingService(AppBaseService[Stocktaking]):
 
         total = await query.count()
         stocktakings = await query.order_by(order_clause).offset(skip).limit(limit)
+        await self._fill_missing_warehouse_names(tenant_id, list(stocktakings))
 
         from apps.kuaizhizao.services.document_lifecycle_service import get_stocktaking_lifecycle
 

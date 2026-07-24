@@ -46,11 +46,13 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 
 /**
  * 车间管理列表页面组件
@@ -114,12 +116,14 @@ const WorkshopsPage: React.FC = () => {
           { field: 'name', required: true, labelKey: 'app.master-data.workshops.name' },
           { field: 'plantCode', required: true, labelKey: 'app.master-data.workshops.plantCode' },
           { field: 'description', labelKey: 'app.master-data.workshops.description' },
+          { field: 'isActive', labelKey: 'field.workshop.isActive', aliases: ['是否启用', '启用'] , options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.workshops.importExample.code'),
           t('app.master-data.workshops.importExample.name'),
           plants.length > 0 ? plants[0].code : t('app.master-data.plants.importExample.code'),
           t('app.master-data.workshops.importExample.description'),
+          '是',
         ],
       ),
     [t, i18n.language, plants],
@@ -361,7 +365,14 @@ const WorkshopsPage: React.FC = () => {
           name: nameValue,
           plantId: foundPlant.id,
           description: description ? String(description).trim() : undefined,
-          isActive: true, // 默认启用
+          isActive: (() => {
+            const raw =
+              headerIndexMap.isActive !== undefined
+                ? String(row[headerIndexMap.isActive] ?? '').trim()
+                : '';
+            if (!raw) return true;
+            return !['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(raw.toLowerCase());
+          })(),
         };
 
         importData.push(workshopData);
@@ -501,9 +512,7 @@ const WorkshopsPage: React.FC = () => {
         filename = `${t('app.master-data.workshops.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
         // 导出全部数据
-        const allData = await workshopApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        const { data: exportItems } = normalizeMasterListResponse(allData);
-        exportData = exportItems;
+        exportData = await fetchAllListItems((p) => workshopApi.list({ ...p, ...lastListParamsRef.current }));
         filename = `${t('app.master-data.workshops.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -732,12 +741,8 @@ const WorkshopsPage: React.FC = () => {
         onImport={handleImport}
         importHeaders={workshopImportTemplate.importHeaders}
         importExampleRow={workshopImportTemplate.importExampleRow}
+        importColumnOptions={workshopImportTemplate.importColumnOptions}
         importFieldMap={workshopImportTemplate.importHeaderMap}
-        importFieldRules={{
-          code: { required: true },
-          name: { required: true },
-          plantCode: { required: true },
-        }}
         showExportButton={true}
         onExport={handleExport}
         request={async (params, sort, _filter, searchFormValues) => {

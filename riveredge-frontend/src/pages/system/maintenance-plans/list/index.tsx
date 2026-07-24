@@ -37,6 +37,8 @@ import {
   UpdateMaintenancePlanData,
 } from '../../../../services/maintenancePlan';
 import { getEquipmentList, Equipment } from '../../../../services/equipment';
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 /**
  * 维护保养计划管理列表页面组件
@@ -485,8 +487,7 @@ const MaintenancePlanListPage: React.FC = () => {
           showExportButton={true}
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await getMaintenancePlanList({ skip: 0, limit: 10000 });
-              let items = res.items || [];
+              let items = await fetchAllListItems((p) => getMaintenancePlanList(p));
               if (type === 'currentPage' && pageData?.length) {
                 items = pageData;
               } else if (type === 'selected' && keys?.length) {
@@ -496,13 +497,10 @@ const MaintenancePlanListPage: React.FC = () => {
                 messageApi.warning(t('pages.system.maintenancePlans.noDataToExport'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `maintenance-plans-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `maintenance-plans-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('pages.system.maintenancePlans.exportSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('pages.system.maintenancePlans.exportFailed'));

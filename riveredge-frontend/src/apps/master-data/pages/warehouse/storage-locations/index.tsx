@@ -43,6 +43,8 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 
 /**
  * 库位管理列表页面组件
@@ -122,6 +124,7 @@ const StorageLocationsPage: React.FC = () => {
             labelKey: 'app.master-data.storageLocations.storageAreaCode',
           },
           { field: 'description', labelKey: 'app.master-data.warehouses.description' },
+          { field: 'isActive', labelKey: 'field.storageLocation.isActive', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.storageLocations.importExample.code'),
@@ -130,6 +133,7 @@ const StorageLocationsPage: React.FC = () => {
             ? storageAreas[0].code
             : t('app.master-data.storageAreas.importExample.code'),
           t('app.master-data.storageLocations.importExample.description'),
+          '是',
         ],
       ),
     [t, i18n.language, storageAreas],
@@ -327,12 +331,17 @@ const StorageLocationsPage: React.FC = () => {
         }
 
         // 构建导入数据
+        const isActiveRaw =
+          headerIndexMap.isActive !== undefined ? String(row[headerIndexMap.isActive] ?? '').trim() : '';
+        const isActive =
+          !isActiveRaw ||
+          !['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(isActiveRaw.toLowerCase());
         const storageLocationData: StorageLocationCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
           storageAreaId: foundStorageArea.id,
           description: description ? String(description).trim() : undefined,
-          isActive: true, // 默认启用
+          isActive,
         };
 
         importData.push(storageLocationData);
@@ -472,9 +481,7 @@ const StorageLocationsPage: React.FC = () => {
         filename = t('app.master-data.storageLocations.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) });
       } else {
         // 导出全部数据
-        const allData = await storageLocationApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        const { data: exportItems } = normalizeMasterListResponse(allData);
-        exportData = exportItems;
+        exportData = await fetchAllListItems((p) => storageLocationApi.list({ ...p, ...lastListParamsRef.current }));
         filename = t('app.master-data.storageLocations.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) });
       }
 
@@ -768,12 +775,8 @@ const StorageLocationsPage: React.FC = () => {
         onImport={handleImport}
         importHeaders={storageLocationImportTemplate.importHeaders}
         importExampleRow={storageLocationImportTemplate.importExampleRow}
+        importColumnOptions={storageLocationImportTemplate.importColumnOptions}
         importFieldMap={storageLocationImportTemplate.importHeaderMap}
-        importFieldRules={{
-          code: { required: true },
-          name: { required: true },
-          storageAreaCode: { required: true },
-        }}
         showExportButton={true}
         onExport={handleExport}
         showAdvancedSearch

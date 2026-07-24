@@ -2864,11 +2864,24 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-page-container .ant-breadcrumb {
           display: none !important;
         }
-        .ant-pro-page-container .ant-pro-page-container-children-content {
+        /*
+         * UniTabs 已承担唯一一层 16px 留白（page-outer 左右 / content margin-top）。
+         * PageContainer 默认 children-container=40、warp-page-header 再叠 padding，
+         * 详情页标签区会看起来像 3×16；此处清零，页头与下方内容只保留一档 16px 间距。
+         */
+        .ant-pro-page-container .ant-pro-page-container-children-content,
+        .ant-pro-page-container .ant-pro-page-container-children-container {
           padding: 0 !important;
+          padding-inline: 0 !important;
+          padding-block: 0 !important;
         }
-        /* 全局页面边距：已由 ListPageTemplate 统一管理，不再需要全局样式 */
-        /* 注意：未使用 ListPageTemplate 的页面需要自行管理 padding */
+        .ant-pro-page-container .ant-pro-page-container-warp-page-header {
+          padding-block: 0 !important;
+          padding-inline: 0 !important;
+          margin-bottom: 16px;
+        }
+        /* 全局页面边距：已由 UniTabs / ListPageTemplate 统一管理，不再需要全局样式 */
+        /* 注意：未使用上述容器的页面需要自行管理 padding */
         .uni-tabs-content .ant-pro-table {
           padding: 0 !important;
         }
@@ -3668,10 +3681,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout-bg-list {
           background: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
         }
-        /* 确保 ProLayout 内容区域背景色与激活标签一致；强制 padding 为 0，避免首次加载 32px→16px 布局闪烁 */
+        /* 确保 ProLayout 内容区域背景色与激活标签一致；强制 padding 为 0，避免首次加载 40/32 与 UniTabs 16px 叠层 */
         .ant-pro-layout-content,
         .ant-pro-layout-content .ant-pro-page-container,
-        .ant-pro-layout-content .ant-pro-page-container-children-content {
+        .ant-pro-layout-content .ant-pro-page-container-children-content,
+        .ant-pro-layout-content .ant-pro-page-container-children-container {
           background: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
           padding: 0 !important;
           padding-inline: 0 !important;

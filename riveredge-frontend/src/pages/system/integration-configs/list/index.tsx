@@ -40,6 +40,7 @@ import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { extractProTableSort, mergeListKeyword, mapIntegrationConfigListSortField } from '../../../../utils/tableQueryKey';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 dayjs.extend(relativeTime);
 
@@ -714,7 +715,6 @@ const IntegrationConfigListPage: React.FC = () => {
               {t('pages.system.integrationConfigs.createByWizard')}
             </Button>,
           ]}
-          showImportButton
           showExportButton
           onExport={async (type, keys, pageData) => {
             let items: IntegrationConfig[] = [];
@@ -729,13 +729,10 @@ const IntegrationConfigListPage: React.FC = () => {
               messageApi.warning(t('pages.system.integrationConfigs.exportNoData'));
               return;
             }
-            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `integration-configs-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              `integration-configs-${new Date().toISOString().slice(0, 10)}.xlsx`,
+            );
             messageApi.success(t('pages.system.integrationConfigs.exportSuccess'));
           }}
           rowSelection={{

@@ -33,6 +33,7 @@ from apps.kuaizhizao.schemas.reporting_record import (
     ReportingRecordListResponse,
     ReportingOverviewStatisticsResponse,
     ReportingDetailedStatisticsResponse,
+    ReportingPullCandidateListResponse,
 )
 from apps.kuaizhizao.schemas.scrap_record import (
     ScrapRecordCreateFromReporting,
@@ -372,6 +373,33 @@ async def get_reporting_statistics(
         worker_id=worker_id,
     )
     return ReportingDetailedStatisticsResponse.model_validate(statistics)
+
+
+@router.get(
+    "/reporting/pull-candidates",
+    response_model=ReportingPullCandidateListResponse,
+    summary="List reporting pull candidates (work order operations)",
+)
+async def list_reporting_pull_candidates(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(20, ge=1, le=200, description="每页数量"),
+    keyword: Optional[str] = Query(None, description="工单/工序关键词"),
+    scope: str = Query(
+        "reportable",
+        description="reportable=仅可报工；all=全部工序行",
+    ),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReportingPullCandidateListResponse:
+    """在制工单工序上拉源（服务端分页，避免前端 N+1 拉工序）。"""
+    _ = current_user
+    return await reporting_service.list_reporting_pull_candidates(
+        tenant_id=tenant_id,
+        keyword=keyword,
+        scope=scope,
+        skip=skip,
+        limit=limit,
+    )
 
 
 @router.get("/reporting/{record_id}", response_model=ReportingRecordResponse, summary="Get reporting record")

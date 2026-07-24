@@ -26,6 +26,7 @@ import { useGlobalStore } from '../../../stores';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { formatDateTime } from '../../../utils/format';
+import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 
 dayjs.extend(relativeTime);
 
@@ -451,13 +452,10 @@ const OnlineUsersPage: React.FC = () => {
                 messageApi.warning(t('pages.system.onlineUsers.noDataExport'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `online-users-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `online-users-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('pages.system.onlineUsers.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('pages.system.onlineUsers.exportFailed'));

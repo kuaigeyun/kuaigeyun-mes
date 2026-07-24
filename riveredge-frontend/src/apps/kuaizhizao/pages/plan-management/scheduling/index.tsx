@@ -7,7 +7,7 @@
 
 import React, { useRef, useState, useCallback, lazy, Suspense, useMemo, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Modal, Switch, Spin, Typography, Alert, InputNumber, Divider, Tour, ConfigProvider, Tooltip } from 'antd';
+import { App, Button, Tag, Space, Card, Modal, Switch, Spin, Typography, Alert, InputNumber, Divider, Tour, ConfigProvider, Tooltip, Table, Select } from 'antd';
 import type { ThemeConfig } from 'antd/es/theme/interface';
 import { useRequest } from 'ahooks';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -20,6 +20,7 @@ import {
   visualSchedulingApi,
   SchedulingConstraints,
   VisualSchedulingBoardScan,
+  VisualSchedulingMissingSetting,
 } from '../../../services/production';
 import { mesDashboardService } from '../../../services/dashboard';
 import type { ViewMode, WorkOrderForGantt, WorkstationResource } from '../../../components/GanttSchedulingChart/types';
@@ -246,6 +247,23 @@ const SchedulingPage: React.FC = () => {
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   const [aiSuggestedPoolOrderIds, setAiSuggestedPoolOrderIds] = useState<number[]>([]);
   const [autoRescheduleLoading, setAutoRescheduleLoading] = useState(false);
+  const [missingSettingsModalOpen, setMissingSettingsModalOpen] = useState(false);
+  const [missingSettingsRows, setMissingSettingsRows] = useState<
+    Array<{
+      operation_id: number;
+      work_order_id: number;
+      work_order_code: string;
+      operation_name: string;
+      work_center_id?: number | null;
+      needHours: boolean;
+      needStation: boolean;
+      setup_time: number | null;
+      standard_time: number | null;
+      assigned_station_id: number | null;
+    }>
+  >([]);
+  const [missingSettingsSaving, setMissingSettingsSaving] = useState(false);
+  const [pendingAutoRescheduleIds, setPendingAutoRescheduleIds] = useState<number[] | null>(null);
   const [operationEditContext, setOperationEditContext] = useState<SchedulingOperationEditContext | null>(null);
   const [operationEditOpen, setOperationEditOpen] = useState(false);
   const [schedulingWorkers, setSchedulingWorkers] = useState<Array<{ id: number; name: string; code?: string }>>([]);
@@ -620,6 +638,66 @@ const SchedulingPage: React.FC = () => {
       conflictCount: boardScan?.conflict_count ?? 0,
     };
   }, [boardScan, freezeAnchor, ganttBoardWorkOrders, schedulingConstraints.freeze_horizon_days]);
+
+  const buildMissingSettingsRows = useCallback(
+    (gaps: VisualSchedulingMissingSetting[]) => {
+      const byOp = new Map<
+        number,
+        {
+          operation_id: number;
+          work_order_id: number;
+          work_order_code: string;
+          operation_name: string;
+          work_center_id?: number | null;
+          needHours: boolean;
+          needStation: boolean;
+          setup_time: number | null;
+          standard_time: number | null;
+          assigned_station_id: number | null;
+        }
+      >();
+      for (const gap of gaps) {
+        const existing = byOp.get(gap.operation_id) ?? {
+          operation_id: gap.operation_id,
+          work_order_id: gap.work_order_id,
+          work_order_code: gap.work_order_code,
+          operation_name: gap.operation_name || String(gap.operation_id),
+          work_center_id: gap.work_center_id,
+          needHours: false,
+          needStation: false,
+          setup_time: null as number | null,
+          standard_time: null as number | null,
+          assigned_station_id: null as number | null,
+        };
+        if (gap.field === 'setup_time' || gap.field === 'standard_time') {
+          existing.needHours = true;
+          if (gap.field === 'setup_time') {
+            existing.setup_time =
+              gap.suggested != null && gap.suggested !== '' ? Number(gap.suggested) : 0;
+          }
+          if (gap.field === 'standard_time') {
+            existing.standard_time =
+              gap.suggested != null && gap.suggested !== '' ? Number(gap.suggested) : 1;
+          }
+        }
+        if (gap.field === 'assigned_station_id') {
+          existing.needStation = true;
+        }
+        byOp.set(gap.operation_id, existing);
+      }
+      return Array.from(byOp.values());
+    },
+    [],
+  );
+
+  const openMissingSettingsModal = useCallback(
+    (gaps: VisualSchedulingMissingSetting[], continueAutoRescheduleIds?: number[]) => {
+      setMissingSettingsRows(buildMissingSettingsRows(gaps));
+      setPendingAutoRescheduleIds(continueAutoRescheduleIds ?? null);
+      setMissingSettingsModalOpen(true);
+    },
+    [buildMissingSettingsRows],
+  );
 
   const resourceViewStats = useMemo(() => {
     let scheduledOpCount = 0;
@@ -1094,6 +1172,12 @@ const SchedulingPage: React.FC = () => {
   const handleAutoReschedule = useCallback(async () => {
     const ids = selectedWorkOrderIds.slice(0, 50);
     if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const relatedGaps = (boardScan?.missing_settings ?? []).filter((g) => idSet.has(g.work_order_id));
+    if (relatedGaps.length > 0) {
+      openMissingSettingsModal(relatedGaps, ids);
+      return;
+    }
     await new Promise<void>((resolve, reject) => {
       modal.confirm({
         title: t('app.kuaizhizao.scheduling.msg.autoRescheduleTitle'),
@@ -1105,7 +1189,77 @@ const SchedulingPage: React.FC = () => {
       });
     });
     await applyEngineProposalToDraft('selected', ids);
-  }, [applyEngineProposalToDraft, modal, selectedWorkOrderIds, t]);
+  }, [applyEngineProposalToDraft, boardScan?.missing_settings, modal, openMissingSettingsModal, selectedWorkOrderIds, t]);
+
+  const handleMissingSettingsBackfill = useCallback(async () => {
+    if (!canScheduleUpdate) return;
+    for (const row of missingSettingsRows) {
+      if (row.needHours) {
+        const setup = Number(row.setup_time ?? 0);
+        const std = Number(row.standard_time ?? 0);
+        if (!(setup > 0 || std > 0)) {
+          messageApi.warning(
+            t('app.kuaizhizao.scheduling.msg.missingHoursRequired', {
+              code: row.work_order_code,
+              op: row.operation_name,
+            }),
+          );
+          return;
+        }
+      }
+      if (row.needStation && !(Number(row.assigned_station_id) > 0)) {
+        messageApi.warning(
+          t('app.kuaizhizao.scheduling.msg.missingStationRequired', {
+            code: row.work_order_code,
+            op: row.operation_name,
+          }),
+        );
+        return;
+      }
+    }
+    setMissingSettingsSaving(true);
+    try {
+      const items = missingSettingsRows.map((row) => {
+        const patch: {
+          operation_id: number;
+          setup_time?: number;
+          standard_time?: number;
+          assigned_station_id?: number;
+        } = { operation_id: row.operation_id };
+        if (row.needHours) {
+          patch.setup_time = Number(row.setup_time ?? 0);
+          patch.standard_time = Number(row.standard_time ?? 0);
+        }
+        if (row.needStation && row.assigned_station_id) {
+          patch.assigned_station_id = Number(row.assigned_station_id);
+        }
+        return patch;
+      });
+      await visualSchedulingApi.backfillOperationSettings(items);
+      messageApi.success(t('app.kuaizhizao.scheduling.msg.missingBackfillSuccess'));
+      setMissingSettingsModalOpen(false);
+      refreshGantt();
+      refreshBoardScan();
+      const continueIds = pendingAutoRescheduleIds;
+      setPendingAutoRescheduleIds(null);
+      if (continueIds?.length) {
+        await applyEngineProposalToDraft('selected', continueIds);
+      }
+    } catch (e: any) {
+      messageApi.error(e?.response?.data?.detail || e?.message || t('app.kuaizhizao.scheduling.msg.missingBackfillFailed'));
+    } finally {
+      setMissingSettingsSaving(false);
+    }
+  }, [
+    applyEngineProposalToDraft,
+    canScheduleUpdate,
+    messageApi,
+    missingSettingsRows,
+    pendingAutoRescheduleIds,
+    refreshBoardScan,
+    refreshGantt,
+    t,
+  ]);
 
   const handleRescheduleForward = useCallback(async () => {
     const ids = selectedWorkOrderIds.slice(0, 50);
@@ -1725,6 +1879,26 @@ const SchedulingPage: React.FC = () => {
         planReliabilityLoading={planReliabilityLoading}
         planReliability={planReliability}
       />
+      {(boardScan?.missing_settings?.length ?? 0) > 0 ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('app.kuaizhizao.scheduling.alert.missingSettings', {
+            count: boardScan?.missing_settings_count ?? boardScan?.missing_settings?.length ?? 0,
+          })}
+          action={
+            <Button
+              size="small"
+              type="primary"
+              disabled={!canScheduleUpdate}
+              onClick={() => openMissingSettingsModal(boardScan?.missing_settings ?? [])}
+            >
+              {t('app.kuaizhizao.scheduling.alert.missingSettingsAction')}
+            </Button>
+          }
+        />
+      ) : null}
       {filterWorkOrderIds?.length ? (
         <Alert
           type="info"
@@ -1927,6 +2101,151 @@ const SchedulingPage: React.FC = () => {
         }}
         onSubmit={handlePrepModalSubmit}
       />
+
+      <Modal
+        open={missingSettingsModalOpen}
+        destroyOnHidden
+        title={t('app.kuaizhizao.scheduling.msg.missingSettingsTitle')}
+        width={960}
+        onCancel={() => {
+          setMissingSettingsModalOpen(false);
+          setPendingAutoRescheduleIds(null);
+        }}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => {
+              setMissingSettingsModalOpen(false);
+              setPendingAutoRescheduleIds(null);
+            }}
+          >
+            {t('common.cancel')}
+          </Button>,
+          <Button
+            key="save"
+            type="primary"
+            loading={missingSettingsSaving}
+            disabled={!canScheduleUpdate}
+            onClick={() => void handleMissingSettingsBackfill()}
+          >
+            {pendingAutoRescheduleIds?.length
+              ? t('app.kuaizhizao.scheduling.msg.missingBackfillAndReschedule')
+              : t('app.kuaizhizao.scheduling.msg.missingBackfill')}
+          </Button>,
+        ]}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('app.kuaizhizao.scheduling.msg.missingSettingsHint')}
+        />
+        <Table
+          size="small"
+          rowKey="operation_id"
+          pagination={{ pageSize: 8, hideOnSinglePage: true }}
+          dataSource={missingSettingsRows}
+          columns={[
+            {
+              title: t('app.kuaizhizao.scheduling.table.workOrderCode'),
+              dataIndex: 'work_order_code',
+              width: 140,
+            },
+            {
+              title: t('app.kuaizhizao.scheduling.table.operation'),
+              dataIndex: 'operation_name',
+              ellipsis: true,
+            },
+            {
+              title: t('app.kuaizhizao.scheduling.msg.setupHours'),
+              width: 120,
+              render: (_, row) =>
+                row.needHours ? (
+                  <InputNumber
+                    min={0}
+                    step={0.1}
+                    style={{ width: '100%' }}
+                    value={row.setup_time}
+                    onChange={(v) =>
+                      setMissingSettingsRows((prev) =>
+                        prev.map((r) =>
+                          r.operation_id === row.operation_id
+                            ? { ...r, setup_time: v == null ? null : Number(v) }
+                            : r,
+                        ),
+                      )
+                    }
+                  />
+                ) : (
+                  '—'
+                ),
+            },
+            {
+              title: t('app.kuaizhizao.scheduling.msg.standardHours'),
+              width: 120,
+              render: (_, row) =>
+                row.needHours ? (
+                  <InputNumber
+                    min={0}
+                    step={0.1}
+                    style={{ width: '100%' }}
+                    value={row.standard_time}
+                    onChange={(v) =>
+                      setMissingSettingsRows((prev) =>
+                        prev.map((r) =>
+                          r.operation_id === row.operation_id
+                            ? { ...r, standard_time: v == null ? null : Number(v) }
+                            : r,
+                        ),
+                      )
+                    }
+                  />
+                ) : (
+                  '—'
+                ),
+            },
+            {
+              title: t('app.kuaizhizao.scheduling.msg.station'),
+              width: 200,
+              render: (_, row) => {
+                if (!row.needStation) return '—';
+                const wcId =
+                  row.work_center_id != null && Number(row.work_center_id) > 0
+                    ? Number(row.work_center_id)
+                    : null;
+                let candidates = workstationResources;
+                if (wcId != null) {
+                  const wc = schedulingWorkCenters.find((item) => item.id === wcId);
+                  const allowed = new Set((wc?.workstationIds ?? []).filter((id) => id > 0));
+                  if (allowed.size > 0) {
+                    candidates = workstationResources.filter((s) => allowed.has(s.id));
+                  }
+                }
+                return (
+                  <Select
+                    style={{ width: '100%' }}
+                    allowClear
+                    options={candidates.map((s) => ({
+                      value: s.id,
+                      label: s.code ? `${s.code} ${s.name}` : s.name,
+                    }))}
+                    value={row.assigned_station_id ?? undefined}
+                    onChange={(v) =>
+                      setMissingSettingsRows((prev) =>
+                        prev.map((r) =>
+                          r.operation_id === row.operation_id
+                            ? { ...r, assigned_station_id: v == null ? null : Number(v) }
+                            : r,
+                        ),
+                      )
+                    }
+                  />
+                );
+              },
+            },
+          ]}
+        />
+      </Modal>
 
       <SchedulingOperationEditDrawer
         open={operationEditOpen}

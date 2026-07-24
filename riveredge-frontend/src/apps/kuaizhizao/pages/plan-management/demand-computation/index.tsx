@@ -69,7 +69,13 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates'
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull'
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query'
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  isPullableScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query'
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push'
 import {
   DocumentTrackingTimelineBody,
@@ -83,7 +89,10 @@ import {
   previewExecuteDemandComputation,
   executeDemandComputation,
   recomputeDemandComputation,
+  getDemandComputationReadiness,
+  backfillDemandComputationMaterials,
   deleteDemandComputation,
+  type DemandComputationReadinessGap,
   getPushOptions,
   getPushPreview,
   pushAll,
@@ -144,6 +153,7 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions'
+import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown'
 import {
   demandComputationBatchRecomputeAllowed,
   demandComputationCapabilityReasonMessage,
@@ -155,6 +165,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut'
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut'
 
 const DEMAND_COMPUTATION_RESOURCE = 'plan-management-demand-computation'
+const MATERIAL_RESOURCE = 'master-data:material'
 
 function getMrpSuggestionSegmentedOptions(t: TFunction) {
   return [
@@ -758,6 +769,7 @@ const DemandComputationPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [selectedComputationForToolbar, setSelectedComputationForToolbar] = useState<DemandComputation | null>(null)
   const computationPerms = useResourcePermissions(DEMAND_COMPUTATION_RESOURCE)
+  const materialPerms = useResourcePermissions(MATERIAL_RESOURCE)
 
   const resolveSelectedComputation = useCallback(
     (keys: React.Key[], rows: DemandComputation[]) => {
@@ -841,6 +853,10 @@ const DemandComputationPage: React.FC = () => {
   const [executeRecord, setExecuteRecord] = useState<DemandComputation | null>(null)
   const [executeParams, setExecuteParams] = useState<Record<string, any>>({})
   const [executeLoading, setExecuteLoading] = useState(false)
+  const [readinessModalVisible, setReadinessModalVisible] = useState(false)
+  const [readinessGaps, setReadinessGaps] = useState<DemandComputationReadinessGap[]>([])
+  const [readinessValues, setReadinessValues] = useState<Record<string, unknown>>({})
+  const [readinessSubmitting, setReadinessSubmitting] = useState(false)
 
   // 计算结果预览 Modal（二次确认）
   const [previewModalVisible, setPreviewModalVisible] = useState(false)
@@ -1303,17 +1319,45 @@ const DemandComputationPage: React.FC = () => {
     [t],
   )
 
+  const pullDocumentScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  )
+
+  const isPullDemandSelectable = useCallback(
+    (record: PullDemandCandidate) => !record.pushed_to_computation,
+    [],
+  )
+
+  const isPullDemandComputationSalesOrderSelectable = useCallback(
+    (record: PullSalesOrderCandidate) =>
+      !record.pushed_to_computation && record.capabilities?.push_computation?.allowed !== false,
+    [],
+  )
+
+  const isPullDemandComputationSalesForecastSelectable = useCallback(
+    (record: PullSalesForecastCandidate) =>
+      !record.planning_pushed_to_computation && record.capabilities?.push_computation?.allowed !== false,
+    [],
+  )
+
   const pullFromDemandQuery = useUniPullQuery<PullDemandCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const kw = keyword.trim().toLowerCase()
         const demandsRes = await listDemands({
           status: DemandStatus.AUDITED,
           review_status: ReviewStatus.APPROVED,
-          pushed_to_computation: false,
-          limit: 100,
+          ...(isPullableScope(scope) ? { pushed_to_computation: false } : {}),
+          skip: 0,
+          limit: 200,
         })
         const rows = (demandsRes.data || [])
           .filter((d) => d.id != null)
@@ -1332,14 +1376,14 @@ const DemandComputationPage: React.FC = () => {
             updated_at: d.updated_at,
             pushed_to_computation: d.pushed_to_computation,
           }))
-        const start = (page - 1) * pageSize
-        return { data: rows.slice(start, start + pageSize), total: rows.length }
+        const filtered = filterByPullScope(rows, scope, isPullDemandSelectable)
+        return paginatePullRows(filtered, page, pageSize)
       } catch {
         messageApi.error(t('app.kuaizhizao.demandComputation.loadDemandListFailed'))
         return { data: [], total: 0 }
       }
     },
-    isRowDisabled: (record) => !!record.pushed_to_computation,
+    isRowDisabled: (record) => !isPullDemandSelectable(record),
     onConfirm: async (keys, rows) => {
       const selectedId = Number(keys[0])
       if (!selectedId) {
@@ -1359,11 +1403,13 @@ const DemandComputationPage: React.FC = () => {
   const pullFromSalesOrderQuery = useUniPullQuery<PullSalesOrderCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const result = await listSalesOrdersForPull({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         })
         const rows = Array.isArray(result) ? result : (result.data ?? [])
@@ -1378,19 +1424,14 @@ const DemandComputationPage: React.FC = () => {
           pushed_to_computation: !!row.pushed_to_computation,
           capabilities: row.capabilities,
         }))
-        return {
-          data: candidates,
-          total: Array.isArray(result) ? candidates.length : (result.total ?? candidates.length),
-        }
+        const filtered = filterByPullScope(candidates, scope, isPullDemandComputationSalesOrderSelectable)
+        return paginatePullRows(filtered, page, pageSize)
       } catch {
         messageApi.error(t('app.kuaizhizao.salesOrder.listFailed'))
         return { data: [], total: 0 }
       }
     },
-    isRowDisabled: (record) => {
-      if (record.pushed_to_computation) return true
-      return record.capabilities?.push_computation?.allowed === false
-    },
+    isRowDisabled: (record) => !isPullDemandComputationSalesOrderSelectable(record),
     onConfirm: async (keys, rows) => {
       const selectedId = Number(keys[0])
       if (!selectedId) {
@@ -1413,11 +1454,13 @@ const DemandComputationPage: React.FC = () => {
   const pullFromSalesForecastQuery = useUniPullQuery<PullSalesForecastCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const result = await listSalesForecasts({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         })
         const rows = result?.data ?? []
@@ -1432,19 +1475,14 @@ const DemandComputationPage: React.FC = () => {
           planning_pushed_to_computation: !!row.planning_pushed_to_computation,
           capabilities: row.capabilities,
         }))
-        return {
-          data: candidates,
-          total: Number(result?.total ?? candidates.length),
-        }
+        const filtered = filterByPullScope(candidates, scope, isPullDemandComputationSalesForecastSelectable)
+        return paginatePullRows(filtered, page, pageSize)
       } catch {
         messageApi.error(t('app.kuaizhizao.salesForecast.listLoadFailed'))
         return { data: [], total: 0 }
       }
     },
-    isRowDisabled: (record) => {
-      if (record.planning_pushed_to_computation) return true
-      return record.capabilities?.push_computation?.allowed === false
-    },
+    isRowDisabled: (record) => !isPullDemandComputationSalesForecastSelectable(record),
     onConfirm: async (keys, rows) => {
       const selectedId = Number(keys[0])
       if (!selectedId) {
@@ -1603,27 +1641,91 @@ const DemandComputationPage: React.FC = () => {
     return params
   }
 
+  const readinessRowKey = (gap: DemandComputationReadinessGap) =>
+    `${gap.material_id}::${gap.field}`
+
+  const openPreviewFromExecute = async () => {
+    if (!executeRecord?.id) return
+    const params = getFilteredExecuteParams()
+    const preview = await previewExecuteDemandComputation(executeRecord.id, params)
+    await prefetchMaterialsForUnitSelect(preview.items.map((i) => i.material_id))
+    setPreviewTablePage(1)
+    setPreviewTablePageSize(10)
+    setPreviewSourceTab(PREVIEW_SOURCE_TAB_ALL)
+    setPreviewData(preview)
+    setExecuteModalVisible(false)
+    setReadinessModalVisible(false)
+    setPreviewModalVisible(true)
+  }
+
   /**
-   * 第一步：从参数 Modal 点击执行计算 -> 调用预览 API，展示预览 Modal
+   * 第一步：从参数 Modal 点击执行计算 -> 就绪检查 -> 预览
    */
   const handleExecuteSubmit = async () => {
     if (!executeRecord?.id) return
     setExecuteLoading(true)
     try {
-      const params = getFilteredExecuteParams()
-      const preview = await previewExecuteDemandComputation(executeRecord.id, params)
-      await prefetchMaterialsForUnitSelect(preview.items.map((i) => i.material_id))
-      setPreviewTablePage(1)
-      setPreviewTablePageSize(10)
-      setPreviewSourceTab(PREVIEW_SOURCE_TAB_ALL)
-      setPreviewData(preview)
-      // 先关参数弹窗再开预览，避免双 Modal 叠层时 z-index 竞态导致预览被挡在后面
-      setExecuteModalVisible(false)
-      setPreviewModalVisible(true)
+      const readiness = await getDemandComputationReadiness(executeRecord.id)
+      if (readiness.gaps?.length) {
+        const values: Record<string, unknown> = {}
+        for (const gap of readiness.gaps) {
+          values[readinessRowKey(gap)] = gap.suggested ?? null
+        }
+        setReadinessGaps(readiness.gaps)
+        setReadinessValues(values)
+        setReadinessModalVisible(true)
+        return
+      }
+      await openPreviewFromExecute()
     } catch (error: any) {
       messageApi.error(error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.previewFailed'))
     } finally {
       setExecuteLoading(false)
+    }
+  }
+
+  const handleReadinessSkip = async () => {
+    setReadinessSubmitting(true)
+    try {
+      await openPreviewFromExecute()
+    } catch (error: any) {
+      messageApi.error(error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.previewFailed'))
+    } finally {
+      setReadinessSubmitting(false)
+    }
+  }
+
+  const handleReadinessBackfillAndContinue = async () => {
+    if (!materialPerms.canUpdate) {
+      messageApi.warning(t('app.kuaizhizao.demandComputation.readinessNoMaterialUpdatePerm'))
+      return
+    }
+    const items: Array<{ material_id: number; field: string; value: unknown }> = []
+    for (const gap of readinessGaps) {
+      const key = readinessRowKey(gap)
+      const value = readinessValues[key]
+      if (value === null || value === undefined || value === '') {
+        messageApi.warning(
+          t('app.kuaizhizao.demandComputation.readinessValueRequired', {
+            code: gap.material_code,
+            label: gap.label,
+          }),
+        )
+        return
+      }
+      items.push({ material_id: gap.material_id, field: gap.field, value })
+    }
+    setReadinessSubmitting(true)
+    try {
+      await backfillDemandComputationMaterials(items)
+      messageApi.success(t('app.kuaizhizao.demandComputation.readinessBackfillSuccess'))
+      await openPreviewFromExecute()
+    } catch (error: any) {
+      messageApi.error(
+        error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.readinessBackfillFailed'),
+      )
+    } finally {
+      setReadinessSubmitting(false)
     }
   }
 
@@ -2411,6 +2513,9 @@ const DemandComputationPage: React.FC = () => {
         pageSize={pullFromDemandQuery.pageSize}
         total={pullFromDemandQuery.total}
         onPageChange={pullFromDemandQuery.handlePageChange}
+        scopeOptions={pullFromDemandQuery.scopeOptions}
+        scope={pullFromDemandQuery.scope}
+        onScopeChange={pullFromDemandQuery.handleScopeChange}
         okText={t('app.kuaizhizao.demandComputation.createComputation')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
@@ -2466,6 +2571,9 @@ const DemandComputationPage: React.FC = () => {
         pageSize={pullFromSalesOrderQuery.pageSize}
         total={pullFromSalesOrderQuery.total}
         onPageChange={pullFromSalesOrderQuery.handlePageChange}
+        scopeOptions={pullFromSalesOrderQuery.scopeOptions}
+        scope={pullFromSalesOrderQuery.scope}
+        onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
         okText={t('app.kuaizhizao.demandComputation.createComputation')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
@@ -2516,6 +2624,9 @@ const DemandComputationPage: React.FC = () => {
         pageSize={pullFromSalesForecastQuery.pageSize}
         total={pullFromSalesForecastQuery.total}
         onPageChange={pullFromSalesForecastQuery.handlePageChange}
+        scopeOptions={pullFromSalesForecastQuery.scopeOptions}
+        scope={pullFromSalesForecastQuery.scope}
+        onScopeChange={pullFromSalesForecastQuery.handleScopeChange}
         okText={t('app.kuaizhizao.demandComputation.createComputation')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
@@ -2934,6 +3045,102 @@ const DemandComputationPage: React.FC = () => {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* 执行前：物料缺失默认值补齐 */}
+      <Modal
+        open={readinessModalVisible}
+        destroyOnHidden
+        onCancel={() => setReadinessModalVisible(false)}
+        title={t('app.kuaizhizao.demandComputation.readinessTitle')}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        footer={[
+          <Button key="cancel" onClick={() => setReadinessModalVisible(false)}>
+            {t('common.cancel')}
+          </Button>,
+          <Button key="skip" loading={readinessSubmitting} onClick={() => void handleReadinessSkip()}>
+            {t('app.kuaizhizao.demandComputation.readinessSkipContinue')}
+          </Button>,
+          <Button
+            key="backfill"
+            type="primary"
+            loading={readinessSubmitting}
+            disabled={!materialPerms.canUpdate}
+            onClick={() => void handleReadinessBackfillAndContinue()}
+          >
+            {t('app.kuaizhizao.demandComputation.readinessBackfillContinue')}
+          </Button>,
+        ]}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: token.marginMD }}
+          message={t('app.kuaizhizao.demandComputation.readinessHint', { count: readinessGaps.length })}
+        />
+        {!materialPerms.canUpdate ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: token.marginMD }}
+            message={t('app.kuaizhizao.demandComputation.readinessNoMaterialUpdatePerm')}
+          />
+        ) : null}
+        <Table
+          size="small"
+          rowKey={(r) => readinessRowKey(r)}
+          pagination={{ pageSize: 10, hideOnSinglePage: true }}
+          dataSource={readinessGaps}
+          columns={[
+            {
+              title: t('app.kuaizhizao.demandComputation.colMaterialCode'),
+              dataIndex: 'material_code',
+              width: 120,
+            },
+            {
+              title: t('app.kuaizhizao.demandComputation.colMaterialName'),
+              dataIndex: 'material_name',
+              ellipsis: true,
+            },
+            {
+              title: t('app.kuaizhizao.demandComputation.readinessField'),
+              dataIndex: 'label',
+              width: 140,
+            },
+            {
+              title: t('app.kuaizhizao.demandComputation.readinessValue'),
+              width: 200,
+              render: (_, gap) => {
+                const key = readinessRowKey(gap)
+                const value = readinessValues[key]
+                if (gap.value_type === 'supplier_id') {
+                  return (
+                    <SupplierSelectDropdown
+                      style={{ width: '100%' }}
+                      value={value != null && value !== '' ? Number(value) : undefined}
+                      disabled={!materialPerms.canUpdate}
+                      hostResource={DEMAND_COMPUTATION_RESOURCE}
+                      onChange={(v) =>
+                        setReadinessValues((prev) => ({ ...prev, [key]: v ?? null }))
+                      }
+                    />
+                  )
+                }
+                return (
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    min={0}
+                    disabled={!materialPerms.canUpdate}
+                    value={value == null || value === '' ? null : Number(value)}
+                    onChange={(v) =>
+                      setReadinessValues((prev) => ({ ...prev, [key]: v }))
+                    }
+                  />
+                )
+              },
+            },
+          ]}
+        />
       </Modal>
 
       {/* 执行计算 - 计算参数 Modal */}

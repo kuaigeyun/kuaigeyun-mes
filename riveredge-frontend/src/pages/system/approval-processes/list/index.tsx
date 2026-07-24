@@ -31,6 +31,7 @@ import {
   resolvePresetApprovalProcessName,
 } from '../../../../utils/presetEntityI18n';
 import { rowActionKind } from '../../../../components/uni-action';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 /**
  * 审批流程管理列表页面组件
@@ -418,7 +419,6 @@ const ApprovalProcessListPage: React.FC = () => {
         onDelete={handleBatchDelete}
         deleteButtonText={t('pages.system.approvalProcesses.batchDelete')}
         toolBarRender={() => []}
-        showImportButton
         showExportButton
         onExport={async (type, keys, pageData) => {
           const allData = await getApprovalProcessList({});
@@ -430,13 +430,10 @@ const ApprovalProcessListPage: React.FC = () => {
             messageApi.warning(t('pages.system.approvalProcesses.exportNoData'));
             return;
           }
-          const blob = new window.Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `approval-processes-${new Date().toISOString().slice(0, 10)}.json`;
-          a.click();
-          window.URL.revokeObjectURL(url);
+          await downloadRecordsAsXlsx(
+            items as Array<Record<string, unknown>>,
+            `approval-processes-${new Date().toISOString().slice(0, 10)}.xlsx`,
+          );
           messageApi.success(t('pages.system.approvalProcesses.exportSuccess'));
         }}
         search={{

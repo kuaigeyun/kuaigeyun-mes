@@ -36,6 +36,11 @@ import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { deferConvertLineItemsByPriceType, setFormPriceType } from '../../../../../utils/priceTypeSwitch';
 import {
+  IMPORT_PRICE_TYPE_OPTIONS,
+  pickImportExampleValue,
+} from '../../../../../utils/loadImportDictionaryValues';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import {
   DEFAULT_SALES_PRICE_TYPE,
   normalizeSalesPriceType,
   salesFormPriceType,
@@ -209,6 +214,8 @@ import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 /** API 异常 detail 可能是字符串或 { message, trace_id }，不能直接交给 message.error 渲染 */
 function salesOrderCatchMessage(error: unknown, fallback: string): string {
@@ -689,6 +696,12 @@ const SalesOrdersPage: React.FC = () => {
   const [highlightDeliveryOverdue, setHighlightDeliveryOverdue] = useState(false);
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
   const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const salesOrderImportDict = useImportDictionaryOptions(['CURRENCY', 'MATERIAL_UNIT']);
+  const salesOrderLineUnitOptions = salesOrderImportDict.MATERIAL_UNIT ?? [];
+  const salesOrderLineImportColumnOptions = useMemo(
+    () => [undefined, undefined, salesOrderLineUnitOptions, undefined, undefined, undefined],
+    [salesOrderLineUnitOptions],
+  );
 
   /** 付款条件字典选项（数据字典 PAYMENT_TERMS） */
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
@@ -1996,12 +2009,12 @@ const SalesOrdersPage: React.FC = () => {
           skip: (page - 1) * pageSize,
           limit: pageSize,
           keyword: keyword.trim() || undefined,
+          pullable_only: scope === 'pullable',
         });
         const rows = mapPullSalesContractRows(result.items || []);
-        const filtered = scope === 'pullable' ? rows.filter(isPullSalesContractSelectable) : rows;
         return {
-          data: filtered,
-          total: Number(result.total ?? filtered.length),
+          data: rows,
+          total: Number(result.total ?? rows.length),
         };
       } catch (error: any) {
         messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.pullContract.loadFailed')));
@@ -2294,12 +2307,13 @@ const SalesOrdersPage: React.FC = () => {
     }
 
     try {
-      // 第一行是表头，从第二行开始是数据
+      // 行0表头、行1示例、行2+数据
       const headers = data[0];
-      const rows = data.slice(1);
+      const rows = data.slice(2);
 
       // 字段映射（表头名称 -> 字段名），支持当前语言
       const fieldMap: Record<string, string> = {
+        [t('app.kuaizhizao.salesOrder.orderCode')]: 'order_code',
         [t('app.kuaizhizao.salesOrder.orderDate')]: 'order_date',
         [t('app.kuaizhizao.salesOrder.deliveryDate')]: 'delivery_date',
         [t('app.kuaizhizao.salesOrder.importHeaderCustomerId')]: 'customer_id',
@@ -2311,6 +2325,8 @@ const SalesOrdersPage: React.FC = () => {
         [t('app.kuaizhizao.salesOrder.shippingAddress')]: 'shipping_address',
         [t('app.kuaizhizao.salesOrder.shippingMethod')]: 'shipping_method',
         [t('app.kuaizhizao.salesOrder.paymentTerms')]: 'payment_terms',
+        [t('app.kuaizhizao.quotation.form.currency')]: 'currency_code',
+        [t('app.kuaizhizao.salesOrder.priceType')]: 'price_type',
         [t('app.kuaizhizao.salesOrder.notes')]: 'notes',
       };
 
@@ -2723,6 +2739,27 @@ const SalesOrdersPage: React.FC = () => {
         hasSelectedRecord: !!selectedOrderForToolbar,
       }),
     [selectedOrderForToolbar, selectedRowKeys.length, t],
+  );
+
+  const salesOrderImportColumnOptions = useMemo(
+    () => [
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      shippingMethodOptions.map((o) => o.value),
+      paymentTermsOptions.map((o) => o.value),
+      salesOrderImportDict.CURRENCY,
+      [...IMPORT_PRICE_TYPE_OPTIONS],
+      undefined,
+    ],
+    [shippingMethodOptions, paymentTermsOptions, salesOrderImportDict],
   );
 
   const salesOrderHighlightOverdueToolbar = useMemo(
@@ -3950,7 +3987,8 @@ const SalesOrdersPage: React.FC = () => {
             onConfirm={handleItemImport}
             title={t('app.kuaizhizao.salesOrder.importItemsTitle')}
             headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
-            exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
+            exampleRow={['MAT001', 'Spec X', pickImportExampleValue(salesOrderLineUnitOptions, 'PCS'), '100', '1.5', '2026-03-01']}
+            columnOptions={salesOrderLineImportColumnOptions}
           />
         </Suspense>
     </>
@@ -4348,8 +4386,7 @@ const SalesOrdersPage: React.FC = () => {
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await listSalesOrders({ skip: 0, limit: 10000, include_items: true });
-              const orders = (res as any).data || [];
+              const orders = await fetchAllListItems((p) => listSalesOrders({ ...p, include_items: true }));
               const flatRows: SalesOrderItemRow[] = [];
               for (const order of orders) {
                 const items = order.items ?? [];
@@ -4386,13 +4423,10 @@ const SalesOrdersPage: React.FC = () => {
                 messageApi.warning(t('app.kuaizhizao.salesOrder.noDataToExport'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `sales-order-items-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                toExport as Array<Record<string, unknown>>,
+                `sales-order-items-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('app.kuaizhizao.salesOrder.exportSuccess', { count: toExport.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.exportFailed'));
@@ -4402,6 +4436,7 @@ const SalesOrdersPage: React.FC = () => {
           onSync={() => setSyncModalVisible(true)}
           toolbar={{ actions: [salesOrderHighlightOverdueToolbar] }}
           importHeaders={[
+            t('app.kuaizhizao.salesOrder.orderCode'),
             t('app.kuaizhizao.salesOrder.orderDate'),
             t('app.kuaizhizao.salesOrder.deliveryDate'),
             t('app.kuaizhizao.salesOrder.importHeaderCustomerId'),
@@ -4413,9 +4448,13 @@ const SalesOrdersPage: React.FC = () => {
             t('app.kuaizhizao.salesOrder.shippingAddress'),
             t('app.kuaizhizao.salesOrder.shippingMethod'),
             t('app.kuaizhizao.salesOrder.paymentTerms'),
+            t('app.kuaizhizao.quotation.form.currency'),
+            t('app.kuaizhizao.salesOrder.priceType'),
             t('app.kuaizhizao.salesOrder.notes'),
           ]}
+          importColumnOptions={salesOrderImportColumnOptions}
           importExampleRow={[
+            '',
             '2026-01-01',
             '2026-01-31',
             '',
@@ -4427,8 +4466,27 @@ const SalesOrdersPage: React.FC = () => {
             '',
             '',
             '',
+            'CNY',
+            'tax_inclusive',
             t('app.kuaizhizao.salesOrder.importExampleNotes'),
           ]}
+          importFieldMap={{
+            [t('app.kuaizhizao.salesOrder.orderCode')]: 'order_code',
+            [t('app.kuaizhizao.salesOrder.orderDate')]: 'order_date',
+            [t('app.kuaizhizao.salesOrder.deliveryDate')]: 'delivery_date',
+            [t('app.kuaizhizao.salesOrder.importHeaderCustomerId')]: 'customer_id',
+            [t('app.kuaizhizao.salesOrder.customerName')]: 'customer_name',
+            [t('app.kuaizhizao.salesOrder.customerContact')]: 'customer_contact',
+            [t('app.kuaizhizao.salesOrder.customerPhone')]: 'customer_phone',
+            [t('app.kuaizhizao.salesOrder.importHeaderSalesmanId')]: 'salesman_id',
+            [t('app.kuaizhizao.salesOrder.salesman')]: 'salesman_name',
+            [t('app.kuaizhizao.salesOrder.shippingAddress')]: 'shipping_address',
+            [t('app.kuaizhizao.salesOrder.shippingMethod')]: 'shipping_method',
+            [t('app.kuaizhizao.salesOrder.paymentTerms')]: 'payment_terms',
+            [t('app.kuaizhizao.quotation.form.currency')]: 'currency_code',
+            [t('app.kuaizhizao.salesOrder.priceType')]: 'price_type',
+            [t('app.kuaizhizao.salesOrder.notes')]: 'notes',
+          }}
         />
         </SalesOrderIndicatorsProvider>
       </ListPageTemplate>

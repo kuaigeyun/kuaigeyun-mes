@@ -46,6 +46,13 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import {
+  PARTNER_ENTERPRISE_TYPE_IMPORT_OPTIONS,
+  PARTNER_INVOICE_TYPE_IMPORT_OPTIONS,
+  PARTNER_SETTLEMENT_METHOD_IMPORT_OPTIONS,
+  PARTNER_TAXPAYER_TYPE_IMPORT_OPTIONS,
+} from '../../../utils/partner-static-labels';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   MasterDataBatchActiveMenuButton,
@@ -56,6 +63,7 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 
 /**
  * 供应商管理列表页面组件
@@ -126,24 +134,49 @@ const SuppliersPage: React.FC = () => {
           { field: 'code', required: true, labelKey: 'field.supplier.code' },
           { field: 'name', required: true, labelKey: 'field.supplier.name' },
           { field: 'shortName', labelKey: 'field.supplier.shortName' },
+          { field: 'category', labelKey: 'field.supplier.category' , options: Object.keys(dictLabelMaps.CUSTOMER_CATEGORY ?? {}) },
           { field: 'contactPerson', labelKey: 'field.supplier.contactPerson' },
+          { field: 'contactTitle', labelKey: 'field.supplier.contactTitle' , options: Object.keys(dictLabelMaps.CONTACT_TITLE ?? {}) },
           { field: 'phone', labelKey: 'field.supplier.phone' },
           { field: 'email', labelKey: 'field.supplier.email' },
           { field: 'address', labelKey: 'field.supplier.address' },
-          { field: 'category', labelKey: 'field.supplier.category' },
+          { field: 'isActive', labelKey: 'field.supplier.isActive' , options: [...IMPORT_YES_NO_OPTIONS] },
+          { field: 'taxRegistrationNo', labelKey: 'field.partner.taxRegistrationNo' },
+          { field: 'invoiceTitle', labelKey: 'field.partner.invoiceTitle' },
+          { field: 'invoiceAddress', labelKey: 'field.partner.invoiceAddress' },
+          { field: 'invoicePhone', labelKey: 'field.partner.invoicePhone' },
+          { field: 'invoiceBankName', labelKey: 'field.partner.invoiceBankName' },
+          { field: 'invoiceBankAccount', labelKey: 'field.partner.invoiceBankAccount' },
+          { field: 'invoiceTypeCode', labelKey: 'field.partner.invoiceType' , options: [...PARTNER_INVOICE_TYPE_IMPORT_OPTIONS] },
+          { field: 'taxpayerTypeCode', labelKey: 'field.partner.taxpayerType' , options: [...PARTNER_TAXPAYER_TYPE_IMPORT_OPTIONS] },
+          { field: 'industryCode', labelKey: 'field.supplier.industry' , options: Object.keys(dictLabelMaps.INDUSTRY_SECTOR ?? {}) },
+          { field: 'sourceChannelCode', labelKey: 'field.supplier.sourceChannel' , options: Object.keys(dictLabelMaps.PARTNER_SOURCE_CHANNEL ?? {}) },
+          { field: 'estimatedAnnualPurchase', labelKey: 'field.supplier.estimatedAnnualPurchase' },
+          { field: 'creditLimit', labelKey: 'field.supplier.creditLimit' },
+          { field: 'legalRepresentative', labelKey: 'field.partner.legalRepresentative' },
+          { field: 'enterpriseTypeCode', labelKey: 'field.partner.enterpriseType' , options: [...PARTNER_ENTERPRISE_TYPE_IMPORT_OPTIONS] },
+          { field: 'paymentTermsDays', labelKey: 'field.partner.paymentTermsDays' },
+          { field: 'settlementMethodCode', labelKey: 'field.partner.settlementMethod' , options: [...PARTNER_SETTLEMENT_METHOD_IMPORT_OPTIONS] },
+          { field: 'deliveryContactName', labelKey: 'field.partner.deliveryContactName' },
+          { field: 'deliveryContactPhone', labelKey: 'field.partner.deliveryContactPhone' },
+          { field: 'deliveryAddress', labelKey: 'field.partner.deliveryAddress' },
         ],
         [
           t('app.master-data.suppliers.importExample.code'),
           t('app.master-data.suppliers.importExample.name'),
           t('app.master-data.suppliers.importExample.shortName'),
+          t('app.master-data.suppliers.importExample.category'),
           t('app.master-data.suppliers.importExample.contactPerson'),
+          '',
           t('app.master-data.suppliers.importExample.phone'),
           t('app.master-data.suppliers.importExample.email'),
           t('app.master-data.suppliers.importExample.address'),
-          t('app.master-data.suppliers.importExample.category'),
+          '是',
+          '', '', '', '', '', '', '', '',
+          '', '', '', '', '', '', '', '', '', '', '',
         ],
       ),
-    [t, i18n.language],
+    [t, i18n.language, dictLabelMaps],
   );
 
   useEffect(() => {
@@ -347,23 +380,30 @@ const SuppliersPage: React.FC = () => {
       }
 
       try {
-        const codeIndex = headerIndexMap['code'];
-        const nameIndex = headerIndexMap['name'];
-        const shortNameIndex = headerIndexMap['shortName'];
-        const contactPersonIndex = headerIndexMap['contactPerson'];
-        const phoneIndex = headerIndexMap['phone'];
-        const emailIndex = headerIndexMap['email'];
-        const addressIndex = headerIndexMap['address'];
-        const categoryIndex = headerIndexMap['category'];
-
-        if (codeIndex === undefined || nameIndex === undefined) {
+        if (headerIndexMap.code === undefined || headerIndexMap.name === undefined) {
           errors.push({ row: actualRowIndex, message: t('app.master-data.headerMappingError') });
           return;
         }
 
-        const codeValue = row[codeIndex] !== null && row[codeIndex] !== undefined ? String(row[codeIndex]).trim() : '';
-        const nameValue = row[nameIndex] !== null && row[nameIndex] !== undefined ? String(row[nameIndex]).trim() : '';
+        const cellAt = (field: string): string => {
+          const idx = headerIndexMap[field];
+          if (idx === undefined) return '';
+          return String(row[idx] ?? '').trim();
+        };
+        const parseNum = (raw: string): number | undefined => {
+          if (!raw) return undefined;
+          const n = Number(raw);
+          return Number.isFinite(n) ? n : undefined;
+        };
+        const parseActive = (raw: string): boolean => {
+          if (!raw) return true;
+          const v = raw.toLowerCase();
+          if (['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(v)) return false;
+          return true;
+        };
 
+        const codeValue = cellAt('code');
+        const nameValue = cellAt('name');
         if (!codeValue) {
           errors.push({ row: actualRowIndex, message: t('app.master-data.suppliers.codeRequired') });
           return;
@@ -373,16 +413,42 @@ const SuppliersPage: React.FC = () => {
           return;
         }
 
+        const contactPerson = cellAt('contactPerson') || undefined;
+        const contactTitle = cellAt('contactTitle') || undefined;
+        const phone = cellAt('phone') || undefined;
+        const email = cellAt('email') || undefined;
+        const contacts =
+          contactPerson || contactTitle || phone || email
+            ? [{ contactPerson, contactTitle, phone, email }]
+            : undefined;
+
         const supplierData: SupplierCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
-          shortName: shortNameIndex !== undefined && row[shortNameIndex] ? String(row[shortNameIndex]).trim() : undefined,
-          contactPerson: contactPersonIndex !== undefined && row[contactPersonIndex] ? String(row[contactPersonIndex]).trim() : undefined,
-          phone: phoneIndex !== undefined && row[phoneIndex] ? String(row[phoneIndex]).trim() : undefined,
-          email: emailIndex !== undefined && row[emailIndex] ? String(row[emailIndex]).trim() : undefined,
-          address: addressIndex !== undefined && row[addressIndex] ? String(row[addressIndex]).trim() : undefined,
-          category: categoryIndex !== undefined && row[categoryIndex] ? String(row[categoryIndex]).trim() : undefined,
-          isActive: true,
+          shortName: cellAt('shortName') || undefined,
+          category: cellAt('category') || undefined,
+          address: cellAt('address') || undefined,
+          contacts,
+          isActive: parseActive(cellAt('isActive')),
+          taxRegistrationNo: cellAt('taxRegistrationNo') || undefined,
+          invoiceTitle: cellAt('invoiceTitle') || undefined,
+          invoiceAddress: cellAt('invoiceAddress') || undefined,
+          invoicePhone: cellAt('invoicePhone') || undefined,
+          invoiceBankName: cellAt('invoiceBankName') || undefined,
+          invoiceBankAccount: cellAt('invoiceBankAccount') || undefined,
+          invoiceTypeCode: cellAt('invoiceTypeCode') || undefined,
+          taxpayerTypeCode: cellAt('taxpayerTypeCode') || undefined,
+          industryCode: cellAt('industryCode') || undefined,
+          sourceChannelCode: cellAt('sourceChannelCode') || undefined,
+          estimatedAnnualPurchase: parseNum(cellAt('estimatedAnnualPurchase')),
+          creditLimit: parseNum(cellAt('creditLimit')),
+          legalRepresentative: cellAt('legalRepresentative') || undefined,
+          enterpriseTypeCode: cellAt('enterpriseTypeCode') || undefined,
+          paymentTermsDays: parseNum(cellAt('paymentTermsDays')),
+          settlementMethodCode: cellAt('settlementMethodCode') || undefined,
+          deliveryContactName: cellAt('deliveryContactName') || undefined,
+          deliveryContactPhone: cellAt('deliveryContactPhone') || undefined,
+          deliveryAddress: cellAt('deliveryAddress') || undefined,
         };
         importData.push(supplierData);
       } catch (error: any) {
@@ -487,8 +553,7 @@ const SuppliersPage: React.FC = () => {
         exportData = currentPageData;
         filename = `${t('app.master-data.suppliers.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
-        const exportRes = await supplierApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        exportData = Array.isArray(exportRes) ? exportRes : exportRes?.data ?? [];
+        exportData = await fetchAllListItems((p) => supplierApi.list({ ...p, ...lastListParamsRef.current }));
         filename = `${t('app.master-data.suppliers.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -885,11 +950,8 @@ const SuppliersPage: React.FC = () => {
         onImport={handleImport}
         importHeaders={supplierImportTemplate.importHeaders}
         importExampleRow={supplierImportTemplate.importExampleRow}
+        importColumnOptions={supplierImportTemplate.importColumnOptions}
         importFieldMap={supplierImportTemplate.importHeaderMap}
-        importFieldRules={{
-          code: { required: true },
-          name: { required: true },
-        }}
         showExportButton={true}
         onExport={handleExport}
       />

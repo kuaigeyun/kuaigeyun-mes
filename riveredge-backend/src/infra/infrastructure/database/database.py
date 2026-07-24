@@ -289,6 +289,8 @@ TORTOISE_ORM = {
                 "apps.kuaicaiwu.models.partner_statement",  # 往来对账单
                 "apps.kuaicaiwu.models.accounting_event",  # 会计事件链路
                 "apps.kuaicaiwu.models.standard_cost",  # 标准成本
+                "apps.kuaicaiwu.models.cost_rule",  # 成本规则
+                "apps.kuaicaiwu.models.cost_calculation",  # 成本核算
                 # 快研发 kuaiplm
                 "apps.kuaiplm.models.rd_project",
                 "apps.kuaiplm.models.gate_template",

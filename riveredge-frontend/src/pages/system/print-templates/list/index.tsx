@@ -41,6 +41,8 @@ import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 dayjs.extend(relativeTime);
 
@@ -724,7 +726,6 @@ const PrintTemplateListPage: React.FC = () => {
               {t('pages.system.printTemplates.loadPresetButton')}
             </Button>
           ]}
-          showImportButton
           showExportButton
           onExport={async (type, keys, pageData) => {
             let items: PrintTemplate[] = [];
@@ -733,19 +734,16 @@ const PrintTemplateListPage: React.FC = () => {
             } else if (type === 'currentPage' && pageData?.length) {
               items = pageData;
             } else {
-              items = await getPrintTemplateList({ skip: 0, limit: 10000 });
+              items = await fetchAllListItems((p) => getPrintTemplateList(p));
             }
             if (items.length === 0) {
               messageApi.warning(t('pages.system.printTemplates.noDataToExport'));
               return;
             }
-            const blob = new window.Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `print-templates-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            window.URL.revokeObjectURL(url);
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              `print-templates-${new Date().toISOString().slice(0, 10)}.xlsx`,
+            );
             messageApi.success(t('pages.system.printTemplates.exportSuccess'));
           }}
           rowSelection={{

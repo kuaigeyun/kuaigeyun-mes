@@ -42,6 +42,9 @@ import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut'
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts'
 import { UniTable } from '../../../../../components/uni-table'
+import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate'
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions'
+import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues'
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
@@ -112,9 +115,10 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 export default function SalesForecastsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const pushToComputationAction = resolveKuaizhizaoDocumentAction(t, 'demand_computation.pull_from_sales_forecast');
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const { message: messageApi, modal: modalApi } = App.useApp()
@@ -184,6 +188,59 @@ export default function SalesForecastsPage() {
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false)
   const [productScope, setProductScope] = useState<'make' | 'all'>('make')
   const [importModalVisible, setImportModalVisible] = useState(false)
+  const forecastImportDict = useImportDictionaryOptions(['MATERIAL_UNIT'])
+  const forecastLineUnitOptions = forecastImportDict.MATERIAL_UNIT ?? []
+  const forecastLineImportColumnOptions = useMemo(
+    () => [undefined, undefined, forecastLineUnitOptions, undefined, undefined, undefined],
+    [forecastLineUnitOptions],
+  )
+  /** 列表导入模板（与后端 sales-forecasts/import header_map 字段一致） */
+  const forecastListImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'forecast_name',
+            required: true,
+            labelKey: 'app.kuaizhizao.salesForecast.forecastName',
+            aliases: ['预测名称', '*预测名称'],
+          },
+          {
+            field: 'forecast_type',
+            labelKey: 'app.kuaizhizao.salesForecast.forecastType',
+            aliases: ['预测类型'],
+            options: ['MTS', 'MTO'],
+          },
+          {
+            field: 'forecast_period',
+            required: true,
+            labelKey: 'app.kuaizhizao.salesForecast.forecastPeriod',
+            aliases: ['预测周期', '*预测周期'],
+            options: ['WEEKLY', 'MONTHLY', 'QUARTERLY'],
+          },
+          {
+            field: 'start_date',
+            required: true,
+            labelKey: 'app.kuaizhizao.salesForecast.startDate',
+            aliases: ['开始日期', '*开始日期'],
+          },
+          {
+            field: 'end_date',
+            required: true,
+            labelKey: 'app.kuaizhizao.salesForecast.endDate',
+            aliases: ['结束日期', '*结束日期'],
+          },
+          {
+            field: 'notes',
+            labelKey: 'app.kuaizhizao.salesForecast.notes',
+            aliases: ['备注'],
+          },
+        ],
+        ['FC-DEMO', 'MTS', 'MONTHLY', '2026-01-01', '2026-03-31', ''],
+      ),
+    [t, i18n.language],
+  )
   const materialSourceType = productScope === 'make' ? 'Make' : undefined
   const productColumnTitle = (
     <Space size={8} align="center">
@@ -560,10 +617,18 @@ export default function SalesForecastsPage() {
     }
   }
 
-  // 处理批量导入（UniTable 内置）
+  // 处理批量导入（UniTable 列表：提交矩阵，表头规范化为后端字段名）
   const handleImport = async (data: any[][]) => {
     try {
-      const result = await importSalesForecasts(data)
+      const headers = (data[0] || []).map((h) => String(h ?? '').trim())
+      const normalizedHeaders = headers.map((header) => {
+        const mapped =
+          forecastListImportTemplate.importHeaderMap[header] ||
+          forecastListImportTemplate.importHeaderMap[header.replace(/^\*+/, '').trim()]
+        return mapped || header.replace(/^\*+/, '').trim()
+      })
+      const payload = [normalizedHeaders, ...data.slice(1)]
+      const result = await importSalesForecasts(payload)
       if (result.failure_count > 0) {
         messageApi.warning(
           t('common.importResult', {
@@ -581,15 +646,11 @@ export default function SalesForecastsPage() {
     }
   }
 
-  const handleImportConfirm = useCallback(
+  const handleItemImportConfirm = useCallback(
     (data: any[][]) => {
-      if (isFormPage) {
-        handleItemImport(data);
-      } else {
-        void handleImport(data);
-      }
+      handleItemImport(data)
     },
-    [isFormPage, handleItemImport],
+    [handleItemImport],
   )
 
   // 处理批量导出（UniTable 内置）
@@ -613,13 +674,10 @@ export default function SalesForecastsPage() {
           messageApi.warning(t('common.noDataToExport'))
           return
         }
-        const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${t('app.kuaizhizao.salesForecast.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.json`
-        a.click()
-        URL.revokeObjectURL(url)
+        await downloadRecordsAsXlsx(
+          toExport as Array<Record<string, unknown>>,
+          `${t('app.kuaizhizao.salesForecast.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.xlsx`,
+        );
         messageApi.success(t('common.exportCountSuccess', { count: toExport.length }))
       }
     } catch (e: any) {
@@ -1706,44 +1764,36 @@ export default function SalesForecastsPage() {
         />
       </Modal>
 
-      <Suspense fallback={null}>
-        <LazyUniImport
-          visible={importModalVisible}
-          onCancel={() => setImportModalVisible(false)}
-          onConfirm={handleImportConfirm}
-          title={isFormPage ? t('app.kuaizhizao.salesForecast.importItemsTitle') : t('app.kuaizhizao.salesForecast.importTitle')}
-          headers={isFormPage
-            ? [
-                t('app.kuaizhizao.salesForecast.importHeaderMaterialCode'),
-                t('app.kuaizhizao.salesForecast.importHeaderSpec'),
-                t('app.kuaizhizao.salesForecast.importHeaderUnit'),
-                t('app.kuaizhizao.salesForecast.importHeaderForecastQuantity'),
-                t('app.kuaizhizao.salesForecast.importHeaderForecastDate'),
-                t('app.kuaizhizao.salesForecast.importHeaderNotes'),
-              ]
-            : [
-                t('app.kuaizhizao.salesForecast.importHeaderMaterialCode'),
-                t('app.kuaizhizao.salesForecast.importHeaderForecastQuantity'),
-                t('app.kuaizhizao.salesForecast.importHeaderForecastDate'),
-                t('app.kuaizhizao.salesForecast.importHeaderNotes'),
-              ]}
-          exampleRow={isFormPage
-            ? [
-                t('app.kuaizhizao.salesForecast.importExampleMaterialCode'),
-                t('app.kuaizhizao.salesForecast.importExampleSpec'),
-                t('app.kuaizhizao.salesForecast.importExampleUnit'),
-                t('app.kuaizhizao.salesForecast.importExampleQuantity'),
-                t('app.kuaizhizao.salesForecast.importExampleDate'),
-                t('app.kuaizhizao.salesForecast.importExampleNotes'),
-              ]
-            : [
-                t('app.kuaizhizao.salesForecast.importExampleMaterialCode'),
-                t('app.kuaizhizao.salesForecast.importExampleQuantity'),
-                t('app.kuaizhizao.salesForecast.importExampleDate'),
-                t('app.kuaizhizao.salesForecast.importExampleNotes'),
-              ]}
-        />
-      </Suspense>
+      {isFormPage && (
+        <Suspense fallback={null}>
+          <LazyUniImport
+            visible={importModalVisible}
+            onCancel={() => setImportModalVisible(false)}
+            onConfirm={handleItemImportConfirm}
+            title={t('app.kuaizhizao.salesForecast.importItemsTitle')}
+            headers={[
+              t('app.kuaizhizao.salesForecast.importHeaderMaterialCode'),
+              t('app.kuaizhizao.salesForecast.importHeaderSpec'),
+              t('app.kuaizhizao.salesForecast.importHeaderUnit'),
+              t('app.kuaizhizao.salesForecast.importHeaderForecastQuantity'),
+              t('app.kuaizhizao.salesForecast.importHeaderForecastDate'),
+              t('app.kuaizhizao.salesForecast.importHeaderNotes'),
+            ]}
+            exampleRow={[
+              t('app.kuaizhizao.salesForecast.importExampleMaterialCode'),
+              t('app.kuaizhizao.salesForecast.importExampleSpec'),
+              pickImportExampleValue(forecastLineUnitOptions, t('app.kuaizhizao.salesForecast.importExampleUnit')),
+              t('app.kuaizhizao.salesForecast.importExampleQuantity'),
+              t('app.kuaizhizao.salesForecast.importExampleDate'),
+              t('app.kuaizhizao.salesForecast.importExampleNotes'),
+            ]}
+            columnOptions={forecastLineImportColumnOptions}
+            enableXlsxTemplate
+            enableMappingImport
+            enableImportPreview
+          />
+        </Suspense>
+      )}
 
     </>
   );
@@ -1980,7 +2030,11 @@ export default function SalesForecastsPage() {
             />,
           ]}
           showImportButton={true}
-          onImport={() => setImportModalVisible(true)}
+          onImport={handleImport}
+          importHeaders={forecastListImportTemplate.importHeaders}
+          importExampleRow={forecastListImportTemplate.importExampleRow}
+          importColumnOptions={forecastListImportTemplate.importColumnOptions}
+          importFieldMap={forecastListImportTemplate.importHeaderMap}
           showExportButton={true}
           onExport={handleExport}
           onTableDataChange={(rows) => {

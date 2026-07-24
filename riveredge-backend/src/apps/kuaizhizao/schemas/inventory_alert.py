@@ -33,7 +33,10 @@ class InventoryAlertRuleBase(BaseModel):
     warehouse_id: Optional[int] = Field(None, description="仓库ID（可选）")
     warehouse_name: Optional[str] = Field(None, description="仓库名称（可选）")
     threshold_type: str = Field(..., description="阈值类型（quantity/percentage/days）")
-    threshold_value: Decimal = Field(..., description="阈值数值")
+    threshold_value: Optional[Decimal] = Field(None, description="阈值数值（继承物料时可空）")
+    inherit_material_threshold: bool = Field(
+        False, description="是否继承物料最低/最高库存作为数量阈值"
+    )
     is_enabled: bool = Field(True, description="是否启用")
     notify_users: Optional[List[int]] = Field(None, description="通知用户ID列表")
     notify_roles: Optional[List[int]] = Field(None, description="通知角色ID列表")
@@ -60,7 +63,8 @@ class InventoryAlertRuleUpdate(BaseModel):
 
     name: Optional[str] = Field(None, description="预警规则名称")
     threshold_type: Optional[str] = Field(None, description="阈值类型")
-    threshold_value: Optional[Decimal] = Field(None, description="阈值数值")
+    threshold_value: Optional[Decimal] = Field(None, description="阈值数值（继承物料时可空）")
+    inherit_material_threshold: Optional[bool] = Field(None, description="是否继承物料阈值")
     is_enabled: Optional[bool] = Field(None, description="是否启用")
     notify_users: Optional[List[int]] = Field(None, description="通知用户ID列表")
     notify_roles: Optional[List[int]] = Field(None, description="通知角色ID列表")
@@ -158,4 +162,18 @@ class InventoryAlertHandleRequest(BaseModel):
     """
     status: str = Field(..., description="处理状态（processing/resolved/ignored）")
     handling_notes: Optional[str] = Field(None, description="处理备注")
+
+
+class InventoryAlertCheckRequest(BaseModel):
+    """批量检查库存预警请求"""
+    material_id: Optional[int] = Field(None, description="仅检查指定物料")
+    warehouse_id: Optional[int] = Field(None, description="仅检查指定仓库")
+
+
+class InventoryAlertCheckResponse(BaseModel):
+    """批量检查库存预警结果"""
+    checked_balances: int = Field(0, description="检查的库存汇总行数")
+    triggered_count: int = Field(0, description="新触发或更新的预警数")
+    resolved_count: int = Field(0, description="自动解除的预警数")
+    alerts: List[InventoryAlertResponse] = Field(default_factory=list, description="本次涉及的预警记录")
 

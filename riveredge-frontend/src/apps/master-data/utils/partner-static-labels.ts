@@ -39,6 +39,18 @@ const SETTLEMENT_KEYS: Record<string, string> = {
   other: 'field.partner.settlementMethod.other',
 };
 
+/** 导入下拉：发票类型存库码（新建常用数电 + 兼容历史码） */
+export const PARTNER_INVOICE_TYPE_IMPORT_OPTIONS = Object.keys(INVOICE_TYPE_KEYS);
+
+/** 导入下拉：纳税人类型存库码 */
+export const PARTNER_TAXPAYER_TYPE_IMPORT_OPTIONS = Object.keys(TAXPAYER_TYPE_KEYS);
+
+/** 导入下拉：企业类型存库码 */
+export const PARTNER_ENTERPRISE_TYPE_IMPORT_OPTIONS = Object.keys(ENTERPRISE_TYPE_KEYS);
+
+/** 导入下拉：结算方式存库码 */
+export const PARTNER_SETTLEMENT_METHOD_IMPORT_OPTIONS = Object.keys(SETTLEMENT_KEYS);
+
 function mapLabel(t: TFunction, map: Record<string, string>, code?: string | null): string {
   if (code == null || code === '') return '—';
   const key = map[code];

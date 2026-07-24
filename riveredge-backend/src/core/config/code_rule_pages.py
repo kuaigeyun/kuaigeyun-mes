@@ -79,6 +79,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-warehouse-batching-order": "PL",        # 配料单
     "kuaizhizao-warehouse-stocktaking": "ST",         # 盘点单
     "kuaizhizao-warehouse-inventory-transfer": "TR",  # 调拨单
+    "kuaizhizao-warehouse-inventory-alert": "AR",     # 库存预警规则
     # 好力 GO — 模具单据单号前缀（与编码规则固定字一致）
     "haoligo-molds-documents-trial": "SM",
     "haoligo-molds-documents-borrow-out": "LY",
@@ -803,6 +804,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "INVENTORY_TRANSFER_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-warehouse-inventory-alert",
+        "page_name": "库存预警规则",
+        "page_path": "/apps/kuaizhizao/warehouse-management/inventory-alert",
+        "code_field": "code",
+        "code_field_label": "预警规则编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "ALERT_RULE_CODE",
         "allow_manual_edit": True,
     },
     {
@@ -1701,5 +1714,15 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     "kuaiplm-rd-project": ("apps.kuaiplm.models.rd_project", "RdProject", "project_code"),
     "DELIVERY_PROJECT_CODE": ("apps.kuaiplm.models.rd_project", "RdProject", "project_code"),
     "kuaiplm-delivery-project": ("apps.kuaiplm.models.rd_project", "RdProject", "project_code"),
+    "ALERT_RULE_CODE": (
+        "apps.kuaizhizao.models.inventory_alert",
+        "InventoryAlertRule",
+        "code",
+    ),
+    "kuaizhizao-warehouse-inventory-alert": (
+        "apps.kuaizhizao.models.inventory_alert",
+        "InventoryAlertRule",
+        "code",
+    ),
 }
 

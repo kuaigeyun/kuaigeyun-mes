@@ -53,6 +53,7 @@ import { updateIntegrationConfig } from '../../../../services/integrationConfig'
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { extractProTableSort, mergeListKeyword, mapIntegrationConfigListSortField } from '../../../../utils/tableQueryKey';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 dayjs.extend(relativeTime);
 
@@ -1044,13 +1045,10 @@ const DataSourceListPage: React.FC = () => {
               messageApi.warning(t('pages.system.dataSources.noDataToExport'));
               return;
             }
-            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `data-sources-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              `data-sources-${new Date().toISOString().slice(0, 10)}.xlsx`,
+            );
             messageApi.success(t('pages.system.dataSources.exportSuccess'));
           }}
           viewTypes={['table', 'help']}

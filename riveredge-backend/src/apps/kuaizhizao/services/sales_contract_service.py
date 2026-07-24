@@ -495,6 +495,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         order_by: Optional[str] = None,
+        pullable_only: Optional[bool] = None,
     ) -> SalesContractListResponse:
         qs = SalesContract.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if status:
@@ -517,6 +518,14 @@ class SalesContractService(AppBaseService[SalesContract]):
             )
         if contract_code and contract_code.strip():
             qs = qs.filter(contract_code__icontains=contract_code.strip())
+        # 上拉建销售订单：生效中 + 已审核 + 未过期/已到生效日（行级可释放量仍由 capabilities 判定）
+        if pullable_only:
+            today = date.today()
+            approved_review = ("APPROVED", "已通过", "审核通过", "通过", "已审核")
+            qs = qs.filter(status__in=("已生效", "执行中"))
+            qs = qs.filter(review_status__in=approved_review)
+            qs = qs.filter(Q(valid_to__isnull=True) | Q(valid_to__gte=today))
+            qs = qs.filter(Q(valid_from__isnull=True) | Q(valid_from__lte=today))
         total = await qs.count()
         order_clause = order_by if order_by else "-contract_date"
         rows = await qs.order_by(order_clause, "-id").offset(skip).limit(limit)

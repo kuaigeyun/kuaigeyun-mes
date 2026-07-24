@@ -6,11 +6,25 @@ from datetime import date, datetime, time, timedelta
 from typing import Any, List, Optional, Sequence, Tuple
 
 
+def has_operation_hours(setup_time: Any, standard_time: Any) -> bool:
+    """工序是否维护了可用工时（准备工时或标准工时任一有效）。"""
+    try:
+        setup_hours = float(setup_time) if setup_time not in (None, "") else 0.0
+    except (TypeError, ValueError):
+        setup_hours = 0.0
+    try:
+        standard_hours = float(standard_time) if standard_time not in (None, "") else 0.0
+    except (TypeError, ValueError):
+        standard_hours = 0.0
+    return setup_hours > 0 or standard_hours > 0
+
+
 def operation_total_hours(setup_time: Any, standard_time: Any, quantity: Any) -> float:
     setup_hours = float(setup_time) if setup_time else 0.0
     standard_hours_per_unit = float(standard_time) if standard_time else 0.0
     qty = float(quantity) if quantity else 1.0
     total = setup_hours + standard_hours_per_unit * qty
+    # 建单/重算等路径保留正值下限；排产引擎须先用 has_operation_hours 拦截缺失
     return total if total > 0 else 1.0
 
 

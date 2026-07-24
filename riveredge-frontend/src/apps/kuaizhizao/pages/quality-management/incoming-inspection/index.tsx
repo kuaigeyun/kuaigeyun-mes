@@ -7,7 +7,7 @@
  * @date 2025-12-29
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
@@ -41,7 +41,12 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -88,6 +93,8 @@ import dayjs from 'dayjs';
 import {formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
 import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
@@ -112,6 +119,7 @@ import {
   qualityInspectionUniAuditProps,
 } from '../components/qualityMeta';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const INCOMING_RESOURCE = 'kuaizhizao:quality-management-incoming-inspection';
 const INCOMING_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_incoming_inspections';
@@ -196,6 +204,9 @@ const IncomingInspectionPage: React.FC = () => {
   const pullFromPurchaseReceiptAction = resolveKuaizhizaoDocumentAction(t, 'incoming_inspection.pull_from_purchase_receipt');
   const pullFromCustomerMaterialAction = resolveKuaizhizaoDocumentAction(t, 'incoming_inspection.pull_from_customer_material_registration');
 
+  const importDictOptions = useImportDictionaryOptions(['DISPOSAL_METHOD']);
+  const disposalImportOptions = importDictOptions.DISPOSAL_METHOD ?? [];
+
   const incomingInspectionImportTemplate = useMemo(
     () =>
       buildFactoryImportTemplate(
@@ -214,6 +225,12 @@ const IncomingInspectionPage: React.FC = () => {
           { field: 'inspectionQty', labelKey: 'app.kuaizhizao.quality.incoming.import.inspectionQty', aliases: ['检验数量'] },
           { field: 'qualifiedQty', labelKey: 'app.kuaizhizao.quality.incoming.import.qualifiedQty', aliases: ['合格数量'] },
           { field: 'unqualifiedQty', labelKey: 'app.kuaizhizao.quality.incoming.import.unqualifiedQty', aliases: ['不合格数量'] },
+          {
+            field: 'disposition',
+            labelKey: 'app.kuaizhizao.quality.common.form.disposition',
+            aliases: ['处置方式', 'disposition'],
+            options: disposalImportOptions,
+          },
           { field: 'remark', labelKey: 'app.kuaizhizao.quality.incoming.import.notes', aliases: ['备注'] },
         ],
         [
@@ -222,10 +239,11 @@ const IncomingInspectionPage: React.FC = () => {
           t('app.kuaizhizao.quality.incoming.importExample.inspectionQty'),
           t('app.kuaizhizao.quality.incoming.importExample.qualifiedQty'),
           t('app.kuaizhizao.quality.incoming.importExample.unqualifiedQty'),
+          pickImportExampleValue(disposalImportOptions, 'return'),
           '',
         ],
       ),
-    [t, i18n.language],
+    [t, i18n.language, disposalImportOptions],
   );
   const queryClient = useQueryClient();
   const { message: messageApi } = App.useApp();
@@ -474,14 +492,10 @@ const IncomingInspectionPage: React.FC = () => {
           messageApi.warning(t('app.kuaizhizao.quality.common.messages.exportEmpty'));
           return;
         }
-        const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const exportDate = new Date().toISOString().slice(0, 10);
-        a.download = `${t('app.kuaizhizao.quality.common.entity.incomingInspection')}_${exportDate}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        await downloadRecordsAsXlsx(
+          toExport as Array<Record<string, unknown>>,
+          `${t('app.kuaizhizao.quality.common.entity.incomingInspection')}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+        );
         messageApi.success(t('common.exportCountSuccess', { count: toExport.length }));
       }
     } catch (error: any) {
@@ -550,26 +564,40 @@ const IncomingInspectionPage: React.FC = () => {
     }
   };
 
+  const isPullIncomingInspectionSelectable = useCallback(
+    (row: PullSourceCandidate) => row.capabilities?.pull_incoming_inspection?.allowed !== false,
+    [],
+  );
+
+  const pullQueryScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
   const pullFromPurchaseReceiptQuery = useUniPullQuery<PullSourceCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await qualityApi.incomingInspection.listPurchaseReceiptPullCandidates({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
-        return {
-          data: (res.data || []) as PullSourceCandidate[],
-          total: res.total ?? 0,
-        };
+        const rows = (res.data || []) as PullSourceCandidate[];
+        const filtered = filterByPullScope(rows, scope, isPullIncomingInspectionSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch {
         messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadReceiptFailed'));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (row) => row.capabilities?.pull_incoming_inspection?.allowed === false,
+    isRowDisabled: (row) => !isPullIncomingInspectionSelectable(row),
     onConfirm: async (keys, rows) => {
       const selected = rows.find((x) => String(x.id) === String(keys[0]));
       if (!selected?.id) {
@@ -585,23 +613,24 @@ const IncomingInspectionPage: React.FC = () => {
   const pullFromCustomerMaterialQuery = useUniPullQuery<PullSourceCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await qualityApi.incomingInspection.listCustomerMaterialPullCandidates({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
-        return {
-          data: (res.data || []) as PullSourceCandidate[],
-          total: res.total ?? 0,
-        };
+        const rows = (res.data || []) as PullSourceCandidate[];
+        const filtered = filterByPullScope(rows, scope, isPullIncomingInspectionSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch {
         messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadCustomerMaterialFailed'));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (row) => row.capabilities?.pull_incoming_inspection?.allowed === false,
+    isRowDisabled: (row) => !isPullIncomingInspectionSelectable(row),
     onConfirm: async (keys, rows) => {
       const selected = rows.find((x) => String(x.id) === String(keys[0]));
       if (!selected?.id) {
@@ -1179,6 +1208,7 @@ const IncomingInspectionPage: React.FC = () => {
         onImport={handleImport}
         importHeaders={incomingInspectionImportTemplate.importHeaders}
         importExampleRow={incomingInspectionImportTemplate.importExampleRow}
+        importColumnOptions={incomingInspectionImportTemplate.importColumnOptions}
         importFieldMap={incomingInspectionImportTemplate.importHeaderMap}
         showExportButton={true}
         onExport={handleExport}
@@ -1493,6 +1523,9 @@ const IncomingInspectionPage: React.FC = () => {
         pageSize={pullFromCustomerMaterialQuery.pageSize}
         total={pullFromCustomerMaterialQuery.total}
         onPageChange={pullFromCustomerMaterialQuery.handlePageChange}
+        scopeOptions={pullFromCustomerMaterialQuery.scopeOptions}
+        scope={pullFromCustomerMaterialQuery.scope}
+        onScopeChange={pullFromCustomerMaterialQuery.handleScopeChange}
       />
 
       <UniPullQueryModal<{ id: number; code: string }>
@@ -1519,6 +1552,9 @@ const IncomingInspectionPage: React.FC = () => {
         pageSize={pullFromPurchaseReceiptQuery.pageSize}
         total={pullFromPurchaseReceiptQuery.total}
         onPageChange={pullFromPurchaseReceiptQuery.handlePageChange}
+        scopeOptions={pullFromPurchaseReceiptQuery.scopeOptions}
+        scope={pullFromPurchaseReceiptQuery.scope}
+        onScopeChange={pullFromPurchaseReceiptQuery.handleScopeChange}
       />
 
       <Modal

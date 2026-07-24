@@ -747,6 +747,7 @@ export const bomApi = {
         unit: item.unit,
         waste_rate: item.wasteRate,
         is_required: item.isRequired,
+        is_active: item.isActive,
         is_configurable: item.isConfigurable,
         configurable_group_id: item.configurableGroupId,
         is_default_configurable: item.isDefaultConfigurable,

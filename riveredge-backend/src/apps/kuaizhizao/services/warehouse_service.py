@@ -883,11 +883,14 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
     async def get_production_picking_by_id(self, tenant_id: int, picking_id: int) -> ProductionPickingWithItemsResponse:
         """根据ID获取生产领料单（含明细）"""
+        from apps.kuaizhizao.services.document_lifecycle_service import get_production_picking_lifecycle
+
         picking = await ProductionPicking.get_or_none(tenant_id=tenant_id, id=picking_id)
         if not picking:
             raise NotFoundError(f"生产领料单不存在: {picking_id}")
         items = await ProductionPickingItem.filter(tenant_id=tenant_id, picking_id=picking_id).all()
         resp = ProductionPickingWithItemsResponse.model_validate(picking)
+        resp.lifecycle = get_production_picking_lifecycle(picking)
         resp.items = [ProductionPickingItemResponse.model_validate(i) for i in items]
         return resp
 
@@ -904,6 +907,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         pickings = await query.offset(skip).limit(limit).order_by('-created_at')
         from tortoise.functions import Count, Sum
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
+        from apps.kuaizhizao.services.document_lifecycle_service import get_production_picking_lifecycle
 
         picking_ids = [int(p.id) for p in pickings]
         qty_by_id: Dict[int, Dict[str, float]] = {}
@@ -930,9 +934,15 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     "total_quantity": req_total,
                 }
 
+        list_rows: List[ProductionPickingListResponse] = []
+        for picking in pickings:
+            resp = ProductionPickingListResponse.model_validate(picking)
+            # 列表与详情共用生命周期计算，避免出库 Hub 列表显示「生命周期缺失」
+            resp.lifecycle = get_production_picking_lifecycle(picking, milestones=[])
+            list_rows.append(resp)
         rows = enrich_outbound_hub_list_capabilities(
             pickings,
-            [ProductionPickingListResponse.model_validate(picking) for picking in pickings],
+            list_rows,
             "production_picking",
             item_counts={pid: v["total_items"] for pid, v in qty_by_id.items()},
         )

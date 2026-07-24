@@ -26,6 +26,7 @@ import {
   normalizePlanListResponse,
   resolveComputationHistoryListParams,
 } from '../../../utils/planListCore';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const ComputationHistoryTab: React.FC = () => {
   const { t } = useTranslation();
@@ -83,13 +84,10 @@ const ComputationHistoryTab: React.FC = () => {
         messageApi.warning(t('app.kuaizhizao.demandComputation.noValidExportData'));
         return;
       }
-      const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `computation-history-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await downloadRecordsAsXlsx(
+        items as Array<Record<string, unknown>>,
+        `computation-history-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      );
       messageApi.success(t('app.kuaizhizao.demandComputation.exportedCount', { count: items.length }));
     } catch (error: any) {
       messageApi.error(error?.message || t('app.kuaizhizao.demandComputation.exportFailed'));

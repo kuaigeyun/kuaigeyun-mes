@@ -65,6 +65,7 @@ class PackingBindingCreateFromDelivery(BaseModel):
     box_no: Optional[str] = Field(None, description="箱号（可选）")
     binding_method: str = Field("manual", description="绑定方式（scan/manual）")
     barcode: Optional[str] = Field(None, description="条码（可选，用于扫码绑定）")
+    bound_at: Optional[datetime] = Field(None, description="绑定时间（不传则服务端取当前时间）")
     remarks: Optional[str] = Field(None, description="备注")
 
 
@@ -85,6 +86,7 @@ class PackingBindingCreateFromReceipt(BaseModel):
     box_no: Optional[str] = Field(None, description="箱号（可选）")
     binding_method: str = Field("manual", description="绑定方式（scan/manual）")
     barcode: Optional[str] = Field(None, description="条码（可选，用于扫码绑定）")
+    bound_at: Optional[datetime] = Field(None, description="绑定时间（不传则服务端取当前时间）")
     remarks: Optional[str] = Field(None, description="备注")
 
 

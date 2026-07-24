@@ -649,6 +649,29 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'print_time', label: '打印时间', type: 'date' },
     ],
   },
+  equipment_card: {
+    type: 'equipment_card',
+    name: '设备卡',
+    fields: [
+      { key: 'card_title', label: '卡片标题', type: 'string' },
+      { key: 'print_time', label: '打印时间', type: 'date' },
+      {
+        key: 'items',
+        label: '设备卡列表',
+        type: 'array',
+        children: [
+          { key: 'items.0.code', label: '编号', type: 'string' },
+          { key: 'items.0.name', label: '名称', type: 'string' },
+          { key: 'items.0.model', label: '型号', type: 'string' },
+          { key: 'items.0.type', label: '类型', type: 'string' },
+          { key: 'items.0.affiliation', label: '所属', type: 'string' },
+          { key: 'items.0.purchase_date', label: '购买', type: 'date' },
+          { key: 'items.0.installation_date', label: '启用', type: 'date' },
+          { key: 'items.0.qrcode_image', label: '二维码', type: 'image' },
+        ],
+      },
+    ],
+  },
   equipment_spot_check: {
     type: 'equipment_spot_check',
     name: '设备点检单',
@@ -792,6 +815,7 @@ export const DOCUMENT_TYPE_TO_CODE: Record<string, string> = {
   sales_contract: 'SALES_CONTRACT_PRINT',
   delivery_notice: 'DELIVERY_NOTICE_PRINT',
   product_quality_certificate: 'PRODUCT_QUALITY_CERTIFICATE_PRINT',
+  equipment_card: 'EQUIPMENT_CARD_PRINT',
   equipment_spot_check: 'HAOLIGO_EQUIPMENT_SPOT_CHECK_PRINT',
   equipment_upkeep_complete: 'HAOLIGO_EQUIPMENT_UPKEEP_COMPLETE_PRINT',
   mold_maintenance_complete: 'HAOLIGO_MOLD_MAINTENANCE_COMPLETE_PRINT',

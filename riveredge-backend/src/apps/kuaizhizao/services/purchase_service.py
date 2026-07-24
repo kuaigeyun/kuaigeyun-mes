@@ -362,6 +362,41 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     | Q(notes__icontains=keyword)
                 )
 
+        # 上拉建采购变更：与 is_source_order_locked_for_direct_edit / create_change_order 粗过滤对齐
+        if params.pullable_only and (params.pull_target or "").strip().lower() == "purchase_order_change":
+            change_eligible_statuses = (
+                "AUDITED",
+                "CONFIRMED",
+                "IN_PROGRESS",
+                "COMPLETED",
+                "CLOSED",
+                "RELEASED",
+                "已审核",
+                "审核通过",
+                "已确认",
+                "执行中",
+                "进行中",
+                "已完成",
+                "已关闭",
+                "已下达",
+            )
+            approved_review = ("APPROVED", "已通过", "审核通过", "通过", "已审核")
+            excluded_for_review_gate = (
+                "DRAFT",
+                "PENDING_REVIEW",
+                "REJECTED",
+                "草稿",
+                "待审核",
+                "已驳回",
+            )
+            query = query.filter(
+                Q(status__in=change_eligible_statuses)
+                | (
+                    Q(review_status__in=approved_review)
+                    & ~Q(status__in=excluded_for_review_gate)
+                )
+            )
+
         # 分页
         skip = params.skip or 0
         limit = params.limit or 20

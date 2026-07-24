@@ -99,7 +99,7 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import type { PushPreviewResponse } from '../../../services/sales-order';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateTimeString } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar';
@@ -902,13 +902,13 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         }
       }
 
-      // 处理日期格式（转换为下划线命名）
+      // 处理日期格式（转换为下划线命名；兼容 dayjs / 字符串）
       if (values.plannedStartDate) {
-        values.planned_start_date = values.plannedStartDate.format('YYYY-MM-DD HH:mm:ss');
+        values.planned_start_date = toApiDateTimeString(values.plannedStartDate);
         delete values.plannedStartDate;
       }
       if (values.plannedEndDate) {
-        values.planned_end_date = values.plannedEndDate.format('YYYY-MM-DD HH:mm:ss');
+        values.planned_end_date = toApiDateTimeString(values.plannedEndDate);
         delete values.plannedEndDate;
       }
 
@@ -1997,6 +1997,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           name="plannedStartDate"
           label={t('app.kuaizhizao.outsourceWorkOrder.fieldPlannedStart')}
           placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderPlannedStart')}
+          formItemProps={formDateFormItemProps}
           fieldProps={{ style: { width: '100%' } }}
           colProps={{ span: 12 }}
         />
@@ -2004,6 +2005,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           name="plannedEndDate"
           label={t('app.kuaizhizao.outsourceWorkOrder.fieldPlannedEnd')}
           placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderPlannedEnd')}
+          formItemProps={formDateFormItemProps}
           fieldProps={buildFutureDateShortcutFieldProps({
             getForm: () => formRef.current,
             fieldName: 'plannedEndDate',

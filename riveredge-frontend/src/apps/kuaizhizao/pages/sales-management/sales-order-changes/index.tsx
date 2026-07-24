@@ -316,18 +316,17 @@ const SalesOrderChangesPage: React.FC = () => {
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const result = await listSalesOrders({
-          skip: 0,
-          limit: 200,
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
           keyword: keyword.trim() || undefined,
           include_items: false,
+          pullable_only: scope === 'pullable',
+          pull_target: 'sales_order_change',
         });
         const rows = mapPullSalesOrderRows(result.data || []);
-        const filtered = scope === 'pullable' ? rows.filter(isPullSalesOrderSelectable) : rows;
-        const begin = (page - 1) * pageSize;
-        const end = begin + pageSize;
         return {
-          data: filtered.slice(begin, end),
-          total: filtered.length,
+          data: rows,
+          total: Number(result.total ?? rows.length),
         };
       } catch (error: any) {
         message.error(error?.message ?? t('app.kuaizhizao.orderChange.loadSalesOrdersFailed'));

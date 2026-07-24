@@ -23,6 +23,7 @@ import {
   InfoCircleOutlined
 } from '@ant-design/icons';
 import { api } from '../../../services/api';
+import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 
 interface PluginInfo {
   code: string;
@@ -275,13 +276,10 @@ const PluginManagerPage: React.FC = () => {
                 message.warning(t('pages.system.pluginManager.noDataToExport'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `plugins-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                toExport as Array<Record<string, unknown>>,
+                `plugins-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               message.success(t('pages.system.pluginManager.exportSuccess', { count: toExport.length }));
             } catch (error: any) {
               message.error(t('pages.system.pluginManager.exportFailed'));

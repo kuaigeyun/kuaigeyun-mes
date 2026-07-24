@@ -27,7 +27,18 @@ import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../utils/globalSubmitShortcut';
 import { PlusOutlined, HolderOutlined } from '@ant-design/icons';
 import { SequenceIndexCell, StepDragHandleContext } from '../../../components/sequence-index-cell';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, DragOverEvent } from '@dnd-kit/core';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+  DragOverlay,
+  DragOverEvent,
+} from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { operationApi } from '../services/process';
@@ -41,6 +52,24 @@ import {
 const operationPickModalStyles = {
   body: { paddingTop: 8, paddingBottom: 12 },
 };
+
+const DND_IGNORE_SELECTOR =
+  'button,a,input,textarea,select,option,.ant-btn,.ant-select,.ant-select-dropdown,.ant-input-number,.ant-switch,.ant-picker';
+
+/** 忽略操作列等交互控件上的 pointerdown，避免拖拽传感器吞掉点击 */
+class OperationRowPointerSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: 'onPointerDown' as const,
+      handler: ({ nativeEvent: event }: React.PointerEvent) => {
+        if (!event.isPrimary || event.button !== 0) return false;
+        const target = event.target as HTMLElement | null;
+        if (target?.closest?.(DND_IGNORE_SELECTOR)) return false;
+        return true;
+      },
+    },
+  ];
+}
 
 const INSERT_LINE_STYLE: React.CSSProperties = {
   height: 2,
@@ -89,7 +118,8 @@ function SortableOperationTableRow({
   };
   return (
     <StepDragHandleContext.Provider value={{ attributes, listeners, setActivatorNodeRef }}>
-      <tr ref={setNodeRef} style={style} {...props}>
+      {/* ref 必须在 props 之后，避免被 Table 传入的 ref 覆盖 */}
+      <tr {...props} ref={setNodeRef} style={style}>
         {children}
       </tr>
     </StepDragHandleContext.Provider>
@@ -323,7 +353,14 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   const pickModalZIndex =
     nestedModalZIndex ??
     token.zIndexPopupBase + MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET + MODAL_NESTED_ABOVE_PARENT_OFFSET;
-  const [operations, setOperations] = useState<OperationItem[]>(value);
+  /** 受控：列表以父组件 value 为唯一真源，避免本地 state 被旧 value 同步打回 */
+  const operations = value ?? [];
+  const commitOperations = useCallback(
+    (next: OperationItem[]) => {
+      onChange?.(next);
+    },
+    [onChange],
+  );
   const [allOperations, setAllOperations] = useState<Operation[]>([]);
   const [loading, setLoading] = useState(false);
   const [addModalVisible, setAddModalVisible] = useState(false);
@@ -336,8 +373,8 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   const [overId, setOverId] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    useSensor(OperationRowPointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   useEffect(() => {
@@ -378,10 +415,6 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
 
   const operationFormModalZIndex = pickModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
 
-  useEffect(() => {
-    setOperations(value);
-  }, [value]);
-
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
   };
@@ -397,9 +430,8 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     if (over && active.id !== over.id) {
       const oldIndex = operations.findIndex((op) => op.uuid === active.id);
       const newIndex = operations.findIndex((op) => op.uuid === over.id);
-      const newOperations = arrayMove(operations, oldIndex, newIndex);
-      setOperations(newOperations);
-      onChange?.(newOperations);
+      if (oldIndex < 0 || newIndex < 0) return;
+      commitOperations(arrayMove(operations, oldIndex, newIndex));
     }
   };
 
@@ -425,36 +457,31 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       overReportMode: (op as any).overReportMode ?? (op as any).over_report_mode ?? 'none',
       overReportValue: Number((op as any).overReportValue ?? (op as any).over_report_value ?? 0) || 0,
     }));
-    const updated = [...operations, ...newItems];
-    setOperations(updated);
-    onChange?.(updated);
+    commitOperations([...operations, ...newItems]);
     setAddModalVisible(false);
     setSelectedOperationUuids([]);
     message.success(t('app.master-data.operationSequence.addSuccess', { count: newItems.length }));
   };
 
   const handleDeleteOperation = (uuid: string) => {
-    const newOperations = operations.filter((op) => op.uuid !== uuid);
-    setOperations(newOperations);
-    onChange?.(newOperations);
+    const next = operations.filter((op) => op.uuid !== uuid);
+    if (next.length === operations.length) {
+      message.warning(t('app.master-data.operationSequence.replaceNotFound'));
+      return;
+    }
+    commitOperations(next);
   };
 
   const toggleNodeOperation = (uuid: string, checked: boolean) => {
-    const newOperations = operations.map((op) => (op.uuid === uuid ? { ...op, isNodeOperation: checked } : op));
-    setOperations(newOperations);
-    onChange?.(newOperations);
+    commitOperations(operations.map((op) => (op.uuid === uuid ? { ...op, isNodeOperation: checked } : op)));
   };
 
   const patchOverReport = (uuid: string, patch: Partial<Pick<OperationItem, 'overReportMode' | 'overReportValue'>>) => {
-    const newOperations = operations.map((op) => (op.uuid === uuid ? { ...op, ...patch } : op));
-    setOperations(newOperations);
-    onChange?.(newOperations);
+    commitOperations(operations.map((op) => (op.uuid === uuid ? { ...op, ...patch } : op)));
   };
 
   const patchTime = (uuid: string, patch: Partial<Pick<OperationItem, 'standardTime' | 'setupTime'>>) => {
-    const newOperations = operations.map((op) => (op.uuid === uuid ? { ...op, ...patch } : op));
-    setOperations(newOperations);
-    onChange?.(newOperations);
+    commitOperations(operations.map((op) => (op.uuid === uuid ? { ...op, ...patch } : op)));
   };
 
   const handleOpenReplaceModal = (uuid: string) => {
@@ -493,8 +520,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       overReportMode: (replacement as any).overReportMode ?? (replacement as any).over_report_mode ?? 'none',
       overReportValue: Number((replacement as any).overReportValue ?? (replacement as any).over_report_value ?? 0) || 0,
     };
-    setOperations(newOperations);
-    onChange?.(newOperations);
+    commitOperations(newOperations);
     setReplaceModalVisible(false);
     setReplacingOperationUuid(null);
     setReplacementOperationUuid(undefined);
@@ -618,7 +644,6 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
             gap: 8,
             whiteSpace: 'nowrap',
           }}
-          onClick={(e) => e.stopPropagation()}
         >
           <Select
             size="small"
@@ -638,39 +663,50 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
             value={record.overReportValue ?? 0}
             onChange={(v) => patchOverReport(record.uuid, { overReportValue: v ?? 0 })}
           />
-          <Button
-            type="link"
-            htmlType="button"
-            size="small"
-            style={{ padding: '0 4px', flexShrink: 0 }}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleOpenReplaceModal(record.uuid);
-            }}
+          {/* 动作由外层 capture 委托处理（data-seq-action），避免行内 dnd / Table 吞点击 */}
+          <button
+            type="button"
+            className="ant-btn ant-btn-link ant-btn-sm"
+            data-seq-action="replace"
+            data-seq-uuid={record.uuid}
+            style={{ padding: '0 4px', flexShrink: 0, border: 'none', background: 'none', cursor: 'pointer', color: token.colorPrimary }}
           >
             {t('app.master-data.operationSequence.replace')}
-          </Button>
-          <Button
-            type="link"
-            danger
-            htmlType="button"
-            size="small"
-            style={{ padding: '0 4px', flexShrink: 0 }}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDeleteOperation(record.uuid);
-            }}
+          </button>
+          <button
+            type="button"
+            className="ant-btn ant-btn-link ant-btn-sm ant-btn-dangerous"
+            data-seq-action="delete"
+            data-seq-uuid={record.uuid}
+            style={{ padding: '0 4px', flexShrink: 0, border: 'none', background: 'none', cursor: 'pointer', color: token.colorError }}
           >
             {t('app.master-data.operationSequence.delete')}
-          </Button>
+          </button>
         </div>
       ),
     },
   ];
 
   const activeOperation = activeId ? operations.find((op) => op.uuid === activeId) : null;
+
+  /** 捕获阶段处理替换/删除：早于 dnd-kit / Table 行事件，避免“点击无反应” */
+  const handleSeqActionCapture = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    const el = (e.target as HTMLElement | null)?.closest?.('[data-seq-action]') as HTMLElement | null;
+    if (!el) return;
+    const action = el.dataset.seqAction;
+    const uuid = el.dataset.seqUuid;
+    if (!action || !uuid) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (action === 'replace') {
+      handleOpenReplaceModal(uuid);
+      return;
+    }
+    if (action === 'delete') {
+      handleDeleteOperation(uuid);
+    }
+  };
 
   const pickModals = (
     <>
@@ -679,7 +715,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         open={addModalVisible}
         centered
         width={520}
-        zIndex={pickModalZIndex}
+        zIndex={Math.max(pickModalZIndex, 2000)}
         getContainer={() => document.body}
         destroyOnHidden
         styles={operationPickModalStyles}
@@ -714,7 +750,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         open={replaceModalVisible}
         centered
         width={520}
-        zIndex={pickModalZIndex}
+        zIndex={Math.max(pickModalZIndex, 2000)}
         getContainer={() => document.body}
         destroyOnHidden
         styles={operationPickModalStyles}
@@ -772,7 +808,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   );
 
   return (
-    <div style={{ width: '100%' }}>
+    <div style={{ width: '100%' }} onPointerDownCapture={handleSeqActionCapture}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>{t('app.master-data.operationSequence.hint')}</span>
         {operations.length > 0 && (

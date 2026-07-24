@@ -134,6 +134,42 @@ class ExecuteComputationRequest(BaseModel):
     )
 
 
+class DemandComputationReadinessGapItem(BaseModel):
+    """需求计算执行前：物料主数据缺失项"""
+    material_id: int
+    material_uuid: str
+    material_code: str
+    material_name: str
+    source_type: Optional[str] = None
+    field: str = Field(..., description="补齐字段路径，如 source_config.production_lead_time")
+    label: str = Field(..., description="展示文案")
+    current: Optional[Any] = None
+    suggested: Optional[Any] = Field(None, description="表单初值，不静默生效")
+    value_type: str = Field("number", description="number|int|supplier_id")
+
+
+class DemandComputationReadinessResponse(BaseModel):
+    ready: bool = True
+    gaps: List[DemandComputationReadinessGapItem] = Field(default_factory=list)
+    material_count: int = 0
+    gap_count: int = 0
+
+
+class DemandComputationMaterialBackfillItem(BaseModel):
+    material_id: int
+    field: str
+    value: Any
+
+
+class DemandComputationMaterialBackfillRequest(BaseModel):
+    items: List[DemandComputationMaterialBackfillItem] = Field(..., min_length=1)
+
+
+class DemandComputationMaterialBackfillResponse(BaseModel):
+    updated_material_ids: List[int] = Field(default_factory=list)
+    updated_count: int = 0
+
+
 class DemandComputationUpdate(BaseModel):
     """更新需求计算Schema"""
     computation_status: Optional[str] = Field(None, max_length=20, description="计算状态")

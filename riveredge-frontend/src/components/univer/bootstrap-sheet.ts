@@ -5,11 +5,14 @@ import '@univerjs/design/lib/index.css';
 import '@univerjs/ui/lib/index.css';
 import '@univerjs/sheets-ui/lib/index.css';
 import '@univerjs/presets/lib/styles/preset-sheets-core.css';
+import '@univerjs/presets/lib/styles/preset-sheets-data-validation.css';
 
 import { createUniver, defaultTheme, LocaleType, merge } from '@univerjs/presets';
 import { IRenderManagerService } from '@univerjs/engine-render';
 import { UniverSheetsCorePreset } from '@univerjs/presets/preset-sheets-core';
 import UniverPresetSheetsCoreZhCN from '@univerjs/presets/preset-sheets-core/locales/zh-CN';
+import { UniverSheetsDataValidationPreset } from '@univerjs/presets/preset-sheets-data-validation';
+import UniverPresetSheetsDataValidationZhCN from '@univerjs/presets/preset-sheets-data-validation/locales/zh-CN';
 
 export type UniverSheetInstance = ReturnType<typeof createUniver>;
 
@@ -24,7 +27,11 @@ export function createUniverSheetInstance(options: CreateUniverSheetOptions): Un
   return createUniver({
     locale: LocaleType.ZH_CN,
     locales: {
-      [LocaleType.ZH_CN]: merge({}, UniverPresetSheetsCoreZhCN),
+      [LocaleType.ZH_CN]: merge(
+        {},
+        UniverPresetSheetsCoreZhCN,
+        UniverPresetSheetsDataValidationZhCN,
+      ),
     },
     theme: defaultTheme,
     darkMode,
@@ -32,6 +39,7 @@ export function createUniverSheetInstance(options: CreateUniverSheetOptions): Un
       UniverSheetsCorePreset({
         container: containerId,
       }),
+      UniverSheetsDataValidationPreset(),
     ],
   });
 }

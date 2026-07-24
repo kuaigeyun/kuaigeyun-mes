@@ -73,6 +73,13 @@ async def calculate_work_order_cost(
         raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost/calculations/work-order", tenant_id)
     except ValidationError as e:
         raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/cost/calculations/work-order", tenant_id)
+    except Exception as e:
+        raise _http_exception_with_trace(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"工单成本核算失败: {str(e)}",
+            "/cost/calculations/work-order",
+            tenant_id,
+        )
 
 
 @router.post("/product", response_model=CostCalculationResponse, status_code=status.HTTP_201_CREATED)

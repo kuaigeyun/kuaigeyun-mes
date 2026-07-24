@@ -27,7 +27,7 @@ import {
 } from '@ant-design/icons';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import { UniPullQueryModal, filterByPullScope, paginatePullRows, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import {
   MultiTabListPageTemplate,
   FormModalTemplate,
@@ -245,19 +245,35 @@ const BatchingCenterPage: React.FC = () => {
     resetPullPreviewModal();
   }, [messageApi, pullPreviewData, resetPullPreviewModal, t]);
 
+  const pullDocumentScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const isPullBatchingWorkOrderSelectable = useCallback(
+    (record: PullWorkOrderCandidate) => record.capabilities?.push_batching_order?.allowed !== false,
+    [],
+  );
+
   const pullFromWorkOrderQuery = useUniPullQuery<PullWorkOrderCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       const res = await batchingOrderApi.listPullCandidates({
-        skip: (page - 1) * pageSize,
-        limit: pageSize,
+        skip: 0,
+        limit: 200,
         keyword: keyword.trim() || undefined,
       });
       const data = Array.isArray(res?.data) ? res.data : [];
-      return { data, total: Number(res?.total ?? data.length) };
+      const filtered = filterByPullScope(data, scope, isPullBatchingWorkOrderSelectable);
+      return paginatePullRows(filtered, page, pageSize);
     },
-    isRowDisabled: (record) => record.capabilities?.push_batching_order?.allowed === false,
+    isRowDisabled: (record) => !isPullBatchingWorkOrderSelectable(record),
     onConfirm: async (_selectedKeys, selectedRows) => {
       const selected = selectedRows?.[0];
       if (!selected) {
@@ -638,6 +654,9 @@ const BatchingCenterPage: React.FC = () => {
         pageSize={pullFromWorkOrderQuery.pageSize}
         total={pullFromWorkOrderQuery.total}
         onPageChange={pullFromWorkOrderQuery.handlePageChange}
+        scopeOptions={pullFromWorkOrderQuery.scopeOptions}
+        scope={pullFromWorkOrderQuery.scope}
+        onScopeChange={pullFromWorkOrderQuery.handleScopeChange}
         searchPlaceholder={t('app.kuaizhizao.warehouseCommon.searchWorkOrderCodeOrName')}
         okText={t('app.kuaizhizao.warehouseOutbound.action.nextStep')}
         cancelText={t('common.cancel')}

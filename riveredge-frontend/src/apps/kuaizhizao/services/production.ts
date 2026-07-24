@@ -44,10 +44,23 @@ export interface VisualSchedulingMaterialIssue {
   message: string;
 }
 
+export interface VisualSchedulingMissingSetting {
+  work_order_id: number;
+  work_order_code: string;
+  operation_id: number;
+  operation_name?: string | null;
+  field: string;
+  label: string;
+  current?: unknown;
+  suggested?: unknown;
+  work_center_id?: number | null;
+}
+
 export interface VisualSchedulingBoardScan {
   conflicts: VisualSchedulingConflict[];
   unscheduled_orders: Array<{ work_order_id: number; work_order_code: string; reason: string }>;
   material_issues?: VisualSchedulingMaterialIssue[];
+  missing_settings?: VisualSchedulingMissingSetting[];
   load_by_work_center: Array<{
     work_center_id: number;
     work_center_name: string;
@@ -67,6 +80,7 @@ export interface VisualSchedulingBoardScan {
   conflict_count: number;
   unscheduled_count: number;
   material_issue_count?: number;
+  missing_settings_count?: number;
   overloaded_station_count?: number;
 }
 
@@ -704,5 +718,22 @@ export const visualSchedulingApi = {
         }>;
       };
     }>('/apps/kuaizhizao/scheduling/auto-reschedule', { method: 'POST', data });
+  },
+  backfillOperationSettings: async (
+    items: Array<{
+      operation_id: number;
+      setup_time?: number | null;
+      standard_time?: number | null;
+      assigned_station_id?: number | null;
+    }>,
+  ) => {
+    return apiRequest<{
+      updated_operation_ids: number[];
+      updated_work_order_ids: number[];
+      updated_count: number;
+    }>('/apps/kuaizhizao/scheduling/backfill-operation-settings', {
+      method: 'POST',
+      data: { items },
+    });
   },
 };

@@ -41,15 +41,25 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { equipmentApi } from '../../../services/equipment';
 import { buildEquipmentDetailPath } from './equipmentPaths';
-import EquipmentCardQrModal, { type EquipmentCardItem } from './EquipmentCardQrModal';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import EquipmentFactoryBindingFields from '../../../components/EquipmentFactoryBindingFields';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
-import { factoryListItems, productionLineApi, workshopApi } from '../../../../master-data/services/factory';
+import {
+  factoryListItems,
+  productionLineApi,
+  workCenterApi,
+  workstationApi,
+  workshopApi,
+} from '../../../../master-data/services/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
+import { loadImportDictionaryValues } from '../../../../../utils/loadImportDictionaryValues';
 import dayjs from 'dayjs';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
@@ -113,42 +123,166 @@ interface Equipment {
   lifecycle?: { main_stages?: Array<unknown> };
 }
 
+const EQUIPMENT_IMPORT_IS_ACTIVE_OPTIONS = ['是', '否'] as const;
+
 const EquipmentPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, i18n } = useTranslation();
 
-  const equipmentImportTemplate = useMemo(
-    () =>
-      buildFactoryImportTemplate(
-        t,
-        [
-          { field: 'code', labelKey: 'app.kuaizhizao.equipment.import.code', aliases: ['设备编号', '编号'] },
-          { field: 'name', required: true, labelKey: 'app.kuaizhizao.equipment.import.name', aliases: ['设备名称', '名称'] },
-          { field: 'type', labelKey: 'app.kuaizhizao.equipment.import.type', aliases: ['设备类型', '类型'] },
-          { field: 'category', labelKey: 'app.kuaizhizao.equipment.import.category', aliases: ['设备分类', '分类'] },
-          { field: 'equipment_nature', labelKey: 'app.kuaizhizao.equipment.import.nature', aliases: ['设备性质', '性质'] },
-          { field: 'brand', labelKey: 'app.kuaizhizao.equipment.import.brand', aliases: ['品牌'] },
-          { field: 'model', labelKey: 'app.kuaizhizao.equipment.import.model', aliases: ['型号'] },
-        ],
-        [
-          t('app.kuaizhizao.equipment.importExample.code'),
-          t('app.kuaizhizao.equipment.importExample.name'),
-          t('app.kuaizhizao.equipment.importExample.type'),
-          t('app.kuaizhizao.equipment.importExample.category'),
-          t('app.kuaizhizao.equipment.importExample.nature'),
-          t('app.kuaizhizao.equipment.importExample.brand'),
-          t('app.kuaizhizao.equipment.importExample.model'),
-        ],
-      ),
-    [t, i18n.language],
-  );
+  const [importDictOptions, setImportDictOptions] = useState<{
+    type: string[];
+    nature: string[];
+    status: string[];
+  }>({ type: [], nature: [], status: [] });
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [type, nature, status] = await Promise.all([
+          loadImportDictionaryValues('EQUIPMENT_TYPE', t),
+          loadImportDictionaryValues('EQUIPMENT_NATURE', t),
+          loadImportDictionaryValues('EQUIPMENT_STATUS', t),
+        ]);
+        if (!cancelled) {
+          setImportDictOptions({ type, nature, status });
+        }
+      } catch (error) {
+        console.warn('load equipment import dictionary options failed:', error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [t, i18n.language]);
+
+  const equipmentImportTemplate = useMemo(() => {
+    const pickExample = (options: string[], fallback: string) =>
+      options.includes(fallback) ? fallback : options[0] ?? fallback;
+
+    return buildFactoryImportTemplate(
+      t,
+      [
+        { field: 'code', labelKey: 'app.kuaizhizao.equipment.import.code', aliases: ['设备编号', '编号'] },
+        { field: 'name', required: true, labelKey: 'app.kuaizhizao.equipment.import.name', aliases: ['设备名称', '名称'] },
+        {
+          field: 'type',
+          labelKey: 'app.kuaizhizao.equipment.import.type',
+          aliases: ['设备类型', '类型'],
+          options: importDictOptions.type,
+        },
+        { field: 'category', labelKey: 'app.kuaizhizao.equipment.import.category', aliases: ['设备分类', '分类'] },
+        { field: 'brand', labelKey: 'app.kuaizhizao.equipment.import.brand', aliases: ['品牌'] },
+        { field: 'model', labelKey: 'app.kuaizhizao.equipment.import.model', aliases: ['型号'] },
+        {
+          field: 'serial_number',
+          labelKey: 'app.kuaizhizao.equipment.import.serialNumber',
+          aliases: ['序列号', 'serial_number'],
+        },
+        {
+          field: 'manufacturer',
+          labelKey: 'app.kuaizhizao.equipment.import.manufacturer',
+          aliases: ['制造商', 'manufacturer'],
+        },
+        {
+          field: 'supplier',
+          labelKey: 'app.kuaizhizao.equipment.import.supplier',
+          aliases: ['供应商', 'supplier'],
+        },
+        {
+          field: 'purchase_date',
+          labelKey: 'app.kuaizhizao.equipment.import.purchaseDate',
+          aliases: ['采购日期', 'purchase_date'],
+        },
+        {
+          field: 'installation_date',
+          labelKey: 'app.kuaizhizao.equipment.import.installationDate',
+          aliases: ['安装日期', 'installation_date'],
+        },
+        {
+          field: 'warranty_period',
+          labelKey: 'app.kuaizhizao.equipment.import.warrantyPeriod',
+          aliases: ['保修期（月）', '保修期', 'warranty_period'],
+        },
+        {
+          field: 'equipment_nature',
+          labelKey: 'app.kuaizhizao.equipment.import.nature',
+          aliases: ['设备性质', '性质'],
+          options: importDictOptions.nature,
+        },
+        {
+          field: 'workshop_name',
+          labelKey: 'app.kuaizhizao.equipment.import.workshop',
+          aliases: ['关联车间', '车间', 'workshop_name'],
+        },
+        {
+          field: 'production_line_code',
+          labelKey: 'app.kuaizhizao.equipment.import.productionLine',
+          aliases: ['关联产线（线组）', '关联产线', '产线', 'production_line_code'],
+        },
+        {
+          field: 'workstation_code',
+          labelKey: 'app.kuaizhizao.equipment.import.workstation',
+          aliases: ['关联工位', '工位', 'workstation_code'],
+        },
+        {
+          field: 'work_center_code',
+          labelKey: 'app.kuaizhizao.equipment.import.workCenter',
+          aliases: ['关联工作中心', '工作中心', 'work_center_code'],
+        },
+        {
+          field: 'status',
+          required: true,
+          labelKey: 'app.kuaizhizao.equipment.import.status',
+          aliases: ['设备状态', '状态', 'status'],
+          options: importDictOptions.status,
+        },
+        {
+          field: 'description',
+          labelKey: 'app.kuaizhizao.equipment.import.description',
+          aliases: ['备注', '描述', 'description'],
+        },
+        {
+          field: 'is_active',
+          labelKey: 'app.kuaizhizao.equipment.import.isActive',
+          aliases: ['是否启用', '启用', 'is_active'],
+          options: [...EQUIPMENT_IMPORT_IS_ACTIVE_OPTIONS],
+        },
+      ],
+      [
+        t('app.kuaizhizao.equipment.importExample.code'),
+        t('app.kuaizhizao.equipment.importExample.name'),
+        pickExample(importDictOptions.type, t('app.kuaizhizao.equipment.importExample.type')),
+        t('app.kuaizhizao.equipment.importExample.category'),
+        t('app.kuaizhizao.equipment.importExample.brand'),
+        t('app.kuaizhizao.equipment.importExample.model'),
+        t('app.kuaizhizao.equipment.importExample.serialNumber'),
+        t('app.kuaizhizao.equipment.importExample.manufacturer'),
+        t('app.kuaizhizao.equipment.importExample.supplier'),
+        t('app.kuaizhizao.equipment.importExample.purchaseDate'),
+        t('app.kuaizhizao.equipment.importExample.installationDate'),
+        t('app.kuaizhizao.equipment.importExample.warrantyPeriod'),
+        pickExample(importDictOptions.nature, t('app.kuaizhizao.equipment.importExample.nature')),
+        t('app.kuaizhizao.equipment.importExample.workshop'),
+        t('app.kuaizhizao.equipment.importExample.productionLine'),
+        t('app.kuaizhizao.equipment.importExample.workstation'),
+        t('app.kuaizhizao.equipment.importExample.workCenter'),
+        pickExample(importDictOptions.status, t('app.kuaizhizao.equipment.importExample.status')),
+        '',
+        pickExample(
+          [...EQUIPMENT_IMPORT_IS_ACTIVE_OPTIONS],
+          t('app.kuaizhizao.equipment.importExample.isActive'),
+        ),
+      ],
+    );
+  }, [t, i18n.language, importDictOptions]);
   const { message: messageApi } = App.useApp();
+  const equipmentPerms = useResourcePermissions('kuaizhizao:equipment-management-equipment');
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const actionRef = useRef<ActionType>(null);
   const searchFormRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [qrModalVisible, setQrModalVisible] = useState(false);
-  const [qrModalEquipments, setQrModalEquipments] = useState<EquipmentCardItem[]>([]);
   const [ledgerGroupMode, setLedgerGroupMode] = useState<EquipmentLedgerGroupMode>('nature');
   const [workshopGroupOptions, setWorkshopGroupOptions] = useState<Array<{ id: number; name: string }>>([]);
   const [productionLineGroupOptions, setProductionLineGroupOptions] = useState<Array<{ id: number; name: string; code?: string }>>([]);
@@ -318,41 +452,23 @@ const EquipmentPage: React.FC = () => {
     navigate(buildEquipmentDetailPath(record.uuid, 'faults_repairs'));
   };
 
-  const handleBatchPrintEquipmentCards = async () => {
+  const handleBatchPrintEquipmentCards = () => {
     if (selectedRowKeys.length === 0) {
       messageApi.warning(t('app.kuaizhizao.equipment.selectEquipmentForQrcode'));
       return;
     }
-    try {
-      const equipments = await Promise.all(
-        selectedRowKeys.map(async (key) => {
-          try {
-            return await equipmentApi.get(String(key));
-          } catch {
-            return null;
-          }
-        }),
-      );
-      const valid = equipments.filter((eq): eq is Equipment => eq != null && !!eq.uuid);
-      if (valid.length === 0) {
-        messageApi.error(t('app.kuaizhizao.equipment.getSelectedFailed'));
-        return;
-      }
-      setQrModalEquipments(
-        valid.map((eq) => ({
-          uuid: eq.uuid!,
-          code: eq.code,
-          name: eq.name,
-          type: eq.type,
-          workshop_name: eq.workshop_name,
-          production_line_name: eq.production_line_name,
-          status: eq.status,
-        })),
-      );
-      setQrModalVisible(true);
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.equipment.qrcodeFailed'));
+    const uuids = selectedRowKeys.map((key) => String(key)).filter(Boolean);
+    if (uuids.length === 0) {
+      messageApi.error(t('app.kuaizhizao.equipment.getSelectedFailed'));
+      return;
     }
+    openPrint({
+      documentType: 'equipment_card',
+      documentId: uuids.length,
+      printApiPath: '/apps/kuaizhizao/equipment/print-cards',
+      printApiParams: { uuids },
+      pdfDownloadFilename: 'equipment-cards.pdf',
+    });
   };
 
   /**
@@ -717,12 +833,13 @@ const EquipmentPage: React.FC = () => {
   ]);
 
   const equipmentCardToolbar = useMemo(
-    () => (
-      <Button key="equipment-card-qr" icon={<QrcodeOutlined />} onClick={() => void handleBatchPrintEquipmentCards()}>
-        {t('app.kuaizhizao.equipment.printEquipmentCards')}
-      </Button>
-    ),
-    [t, selectedRowKeys],
+    () =>
+      equipmentPerms.canPrint ? (
+        <Button key="equipment-card-qr" icon={<QrcodeOutlined />} onClick={handleBatchPrintEquipmentCards}>
+          {t('app.kuaizhizao.equipment.printEquipmentCards')}
+        </Button>
+      ) : null,
+    [t, selectedRowKeys, equipmentPerms.canPrint],
   );
 
   return (
@@ -790,39 +907,91 @@ const EquipmentPage: React.FC = () => {
               messageApi.error(t('app.kuaizhizao.equipment.importHeaderMissingName'));
               return;
             }
+
+            const cellAt = (row: any[], field: string): string => {
+              const idx = headerIndexMap[field];
+              if (idx === undefined) return '';
+              return String(row[idx] ?? '').trim();
+            };
+            const parseDate = (raw: string): string | undefined => {
+              if (!raw) return undefined;
+              const d = dayjs(raw);
+              return d.isValid() ? d.format('YYYY-MM-DD') : undefined;
+            };
+            const parseActive = (raw: string): boolean | undefined => {
+              if (!raw) return undefined;
+              const v = raw.toLowerCase();
+              if (['1', 'true', 'yes', 'y', '是', '启用', 'active'].includes(v)) return true;
+              if (['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(v)) return false;
+              return undefined;
+            };
+
+            const [workshops, lines, stations, centers] = await Promise.all([
+              workshopApi.list({ limit: 1000, is_active: true }).then(factoryListItems),
+              productionLineApi.list({ limit: 1000, is_active: true }).then(factoryListItems),
+              workstationApi.list({ limit: 1000, is_active: true }).then(factoryListItems),
+              workCenterApi.list({ limit: 1000, is_active: true }).then(factoryListItems),
+            ]);
+            const matchByCodeOrName = <T extends { id: number; code?: string; name?: string }>(
+              list: T[],
+              ref: string,
+            ): T | undefined =>
+              list.find(
+                (item) =>
+                  (item.code && String(item.code).trim() === ref) ||
+                  (item.name && String(item.name).trim() === ref),
+              );
+
             const items: any[] = [];
             const importRows = data.slice(2).filter((row: any[]) =>
               row?.some((c: any) => c != null && String(c).trim() !== ''),
             );
             for (const row of importRows) {
-              const name = String(row[headerIndexMap.name] ?? '').trim();
+              const name = cellAt(row, 'name');
               if (!name) continue;
+
+              const workshopRef = cellAt(row, 'workshop_name');
+              const lineRef = cellAt(row, 'production_line_code');
+              const stationRef = cellAt(row, 'workstation_code');
+              const centerRef = cellAt(row, 'work_center_code');
+              const workshop = workshopRef ? matchByCodeOrName(workshops, workshopRef) : undefined;
+              const line = lineRef ? matchByCodeOrName(lines, lineRef) : undefined;
+              const station = stationRef ? matchByCodeOrName(stations, stationRef) : undefined;
+              const center = centerRef ? matchByCodeOrName(centers, centerRef) : undefined;
+
+              const warrantyRaw = cellAt(row, 'warranty_period');
+              const warrantyParsed = warrantyRaw ? Number(warrantyRaw) : NaN;
+              const status = cellAt(row, 'status') || '正常';
+              const isActive = parseActive(cellAt(row, 'is_active'));
+
               items.push({
-                code:
-                  headerIndexMap.code !== undefined
-                    ? String(row[headerIndexMap.code] ?? '').trim() || undefined
-                    : undefined,
+                code: cellAt(row, 'code') || undefined,
                 name,
-                type:
-                  headerIndexMap.type !== undefined
-                    ? String(row[headerIndexMap.type] ?? '').trim() || undefined
-                    : undefined,
-                category:
-                  headerIndexMap.category !== undefined
-                    ? String(row[headerIndexMap.category] ?? '').trim() || undefined
-                    : undefined,
-                equipment_nature:
-                  headerIndexMap.equipment_nature !== undefined
-                    ? String(row[headerIndexMap.equipment_nature] ?? '').trim() || undefined
-                    : undefined,
-                brand:
-                  headerIndexMap.brand !== undefined
-                    ? String(row[headerIndexMap.brand] ?? '').trim() || undefined
-                    : undefined,
-                model:
-                  headerIndexMap.model !== undefined
-                    ? String(row[headerIndexMap.model] ?? '').trim() || undefined
-                    : undefined,
+                type: cellAt(row, 'type') || undefined,
+                category: cellAt(row, 'category') || undefined,
+                brand: cellAt(row, 'brand') || undefined,
+                model: cellAt(row, 'model') || undefined,
+                serial_number: cellAt(row, 'serial_number') || undefined,
+                manufacturer: cellAt(row, 'manufacturer') || undefined,
+                supplier: cellAt(row, 'supplier') || undefined,
+                purchase_date: parseDate(cellAt(row, 'purchase_date')),
+                installation_date: parseDate(cellAt(row, 'installation_date')),
+                warranty_period: Number.isFinite(warrantyParsed) ? warrantyParsed : undefined,
+                equipment_nature: cellAt(row, 'equipment_nature') || undefined,
+                workshop_id: workshop?.id,
+                workshop_name: workshop?.name ?? (workshopRef || undefined),
+                production_line_id: line?.id,
+                production_line_code: line?.code ?? (lineRef || undefined),
+                production_line_name: line?.name,
+                workstation_id: station?.id,
+                workstation_code: station?.code ?? (stationRef || undefined),
+                workstation_name: station?.name,
+                work_center_id: center?.id,
+                work_center_code: center?.code ?? (centerRef || undefined),
+                work_center_name: center?.name,
+                status,
+                description: cellAt(row, 'description') || undefined,
+                ...(isActive === undefined ? {} : { is_active: isActive }),
               });
             }
             if (items.length === 0) {
@@ -845,28 +1014,43 @@ const EquipmentPage: React.FC = () => {
           }}
           importHeaders={equipmentImportTemplate.importHeaders}
           importExampleRow={equipmentImportTemplate.importExampleRow}
+          importColumnOptions={equipmentImportTemplate.importColumnOptions}
           importFieldMap={equipmentImportTemplate.importHeaderMap}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await equipmentApi.list({ skip: 0, limit: 10000 });
-              let items = (res as any)?.items || [];
-              if (type === 'currentPage' && pageData?.length) {
-                items = pageData;
-              } else if (type === 'selected' && keys?.length) {
-                items = items.filter((d: Equipment) => d.uuid && keys.includes(d.uuid));
+              let items: Equipment[] =
+                type === 'currentPage' && pageData?.length
+                  ? pageData
+                  : await fetchAllListItems((p) => equipmentApi.list(p));
+              if (type === 'selected' && keys?.length) {
+                items = items.filter((d) => d.uuid && keys.includes(d.uuid));
               }
               if (items.length === 0) {
                 messageApi.warning(t('common.noDataToExport'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `equipment-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              const exportColumns = [
+                { key: 'code', title: t('app.kuaizhizao.equipment.import.code') },
+                { key: 'name', title: t('app.kuaizhizao.equipment.import.name') },
+                { key: 'type', title: t('app.kuaizhizao.equipment.import.type') },
+                { key: 'category', title: t('app.kuaizhizao.equipment.import.category') },
+                { key: 'equipment_nature', title: t('app.kuaizhizao.equipment.import.nature') },
+                { key: 'brand', title: t('app.kuaizhizao.equipment.import.brand') },
+                { key: 'model', title: t('app.kuaizhizao.equipment.import.model') },
+                { key: 'serial_number', title: t('app.kuaizhizao.equipment.fieldSerialNumber') },
+                { key: 'workshop_name', title: t('app.kuaizhizao.equipment.fieldWorkshop') },
+                { key: 'production_line_name', title: t('app.kuaizhizao.equipment.fieldProductionLine') },
+                { key: 'work_center_name', title: t('app.kuaizhizao.equipment.fieldWorkCenter') },
+                { key: 'status', title: t('app.kuaizhizao.equipment.fieldStatus') },
+                { key: 'purchase_date', title: t('app.kuaizhizao.equipment.fieldPurchaseDate') },
+                { key: 'installation_date', title: t('app.kuaizhizao.equipment.fieldInstallationDate') },
+              ];
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `equipment-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                { columns: exportColumns, sheetName: t('app.kuaizhizao.equipment.title') },
+              );
               messageApi.success(t('common.exportCountSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('common.exportFailed'));
@@ -1011,14 +1195,7 @@ const EquipmentPage: React.FC = () => {
         </Row>
       </FormModalTemplate>
 
-      <EquipmentCardQrModal
-        open={qrModalVisible}
-        equipments={qrModalEquipments}
-        onClose={() => {
-          setQrModalVisible(false);
-          setQrModalEquipments([]);
-        }}
-      />
+      {PrintModal}
     </>
   );
 };

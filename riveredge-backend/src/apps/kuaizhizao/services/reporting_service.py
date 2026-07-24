@@ -32,7 +32,9 @@ from apps.kuaizhizao.schemas.reporting_record import (
     ReportingRecordCreate,
     ReportingRecordUpdate,
     ReportingRecordResponse,
-    ReportingRecordListResponse
+    ReportingRecordListResponse,
+    ReportingPullCandidateItem,
+    ReportingPullCandidateListResponse,
 )
 from apps.kuaizhizao.services.document_action_policy.reporting_record import (
     assert_reporting_record_capability,
@@ -956,6 +958,210 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
         enriched = await enrich_record(tenant_id, "reporting_record", resp)
         return enrich_reporting_record_capabilities_on_response(record, enriched)
+
+    async def list_reporting_pull_candidates(
+        self,
+        tenant_id: int,
+        *,
+        keyword: Optional[str] = None,
+        scope: str = "reportable",
+        skip: int = 0,
+        limit: int = 20,
+    ) -> ReportingPullCandidateListResponse:
+        """
+        报工上拉源：一次查询返回在制工单×工序分页行（含可报数量）。
+
+        scope=reportable：仅本次可报>0；scope=all：全部工序行。
+        """
+        import asyncio
+        from collections import defaultdict
+
+        from apps.kuaizhizao.models.process_inspection import ProcessInspection
+        from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
+        from apps.kuaizhizao.services.over_report_rules import (
+            max_completed_quantity_for_plan,
+            tuple_from_model,
+        )
+        from apps.kuaizhizao.services.operation_transfer_service import (
+            resolve_operation_transfer_qualified,
+            sum_process_inspection_quality_quantities,
+        )
+        from apps.kuaizhizao.services.work_order_service import WORK_ORDER_IN_PROGRESS_STATUS
+
+        kw = (keyword or "").strip()
+        max_work_orders = 1000
+
+        wo_query = WorkOrder.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status__in=list(WORK_ORDER_IN_PROGRESS_STATUS),
+        )
+        if kw:
+            op_wo_ids = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).filter(
+                Q(operation_name__icontains=kw)
+                | Q(operation_code__icontains=kw)
+                | Q(work_order_code__icontains=kw)
+            ).distinct().values_list("work_order_id", flat=True)
+            wo_query = wo_query.filter(
+                Q(code__icontains=kw)
+                | Q(name__icontains=kw)
+                | Q(product_name__icontains=kw)
+                | Q(product_code__icontains=kw)
+                | Q(id__in=list(op_wo_ids))
+            )
+
+        work_orders = await wo_query.order_by("-planned_start_date", "-id").limit(max_work_orders)
+        if not work_orders:
+            return ReportingPullCandidateListResponse(data=[], total=0, success=True)
+
+        wo_by_id = {int(wo.id): wo for wo in work_orders}
+        wo_ids = list(wo_by_id.keys())
+
+        operations = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id__in=wo_ids,
+            deleted_at__isnull=True,
+        ).order_by("work_order_id", "sequence").all()
+
+        ops_by_wo: Dict[int, List[WorkOrderOperation]] = defaultdict(list)
+        master_op_ids_set: set[int] = set()
+        for op in operations:
+            ops_by_wo[int(op.work_order_id)].append(op)
+            if op.operation_id is not None:
+                master_op_ids_set.add(int(op.operation_id))
+
+        master_op_ids = list(master_op_ids_set)
+        if master_op_ids:
+            policy_rows = await asyncio.gather(
+                *[
+                    resolve_inspection_policy(tenant_id, "ipqc", operation_id=oid)
+                    for oid in master_op_ids
+                ]
+            )
+            policy_cache = {oid: row for oid, row in zip(master_op_ids, policy_rows)}
+        else:
+            policy_cache = {}
+
+        inspections = await ProcessInspection.filter(
+            tenant_id=tenant_id,
+            work_order_id__in=wo_ids,
+            deleted_at__isnull=True,
+        ).all()
+        inspections_by_wo_op: Dict[tuple[int, int], List[Any]] = defaultdict(list)
+        for insp in inspections:
+            mid = getattr(insp, "operation_id", None)
+            wid = getattr(insp, "work_order_id", None)
+            if mid is None or wid is None:
+                continue
+            inspections_by_wo_op[(int(wid), int(mid))].append(insp)
+
+        kw_lower = kw.lower()
+        rows: List[ReportingPullCandidateItem] = []
+        # 保持与工单排序一致
+        for wo_id in wo_ids:
+            wo = wo_by_id[wo_id]
+            plan_qty = Decimal(str(wo.quantity or 0))
+            wo_ops = ops_by_wo.get(wo_id, [])
+            if not wo_ops:
+                continue
+
+            prev_transfer = plan_qty
+            for op in wo_ops:
+                master_id = int(op.operation_id) if op.operation_id is not None else 0
+                mode = "none"
+                if master_id > 0 and master_id in policy_cache:
+                    mode = policy_cache[master_id][0]
+
+                op_inspections = inspections_by_wo_op.get((wo_id, master_id), [])
+                transfer_qualified = await resolve_operation_transfer_qualified(
+                    tenant_id,
+                    wo_id,
+                    op,
+                    policy_cache=policy_cache,
+                    inspections_by_op={master_id: op_inspections} if master_id else None,
+                )
+
+                completed = Decimal(str(op.completed_quantity or 0))
+                qualified = Decimal(str(op.qualified_quantity or 0))
+                insp_q = Decimal("0")
+                insp_u = Decimal("0")
+                if mode == "plan":
+                    insp_q, insp_u = sum_process_inspection_quality_quantities(op_inspections)
+                    if insp_q + insp_u > 0:
+                        material_consumed = completed - insp_u
+                        if material_consumed < 0:
+                            material_consumed = Decimal("0")
+                        toward_plan = insp_q + max(Decimal("0"), completed - insp_q - insp_u)
+                    else:
+                        material_consumed = qualified
+                        toward_plan = qualified
+                else:
+                    material_consumed = qualified
+                    toward_plan = qualified
+
+                material_remaining = prev_transfer - material_consumed
+                if material_remaining < 0:
+                    material_remaining = Decimal("0")
+
+                om, ov = tuple_from_model(op)
+                rule_cap = max_completed_quantity_for_plan(plan_qty, om, ov)
+                classic_remaining = max(Decimal("0"), rule_cap - completed)
+                makeup_remaining = max(Decimal("0"), plan_qty - toward_plan)
+                plan_remaining = max(classic_remaining, makeup_remaining)
+                # 报工上限：计划侧真实可累计完成（规则上限与不合格补报取较大）；
+                # 已报完成 + 本次可报 ≤ 该值（前序转入不足时本次可报更小）。
+                plan_side_cap = completed + plan_remaining
+                effective = min(plan_remaining, material_remaining)
+
+                op_code = str(op.operation_code or "")
+                op_name = str(op.operation_name or "")
+                display_name = (str(wo.name or "").strip()
+                                or str(wo.product_name or "").strip()
+                                or str(wo.code or "").strip())
+                if kw_lower:
+                    hay = " ".join(
+                        [
+                            str(wo.code or ""),
+                            display_name,
+                            str(wo.product_name or ""),
+                            op_code,
+                            op_name,
+                        ]
+                    ).lower()
+                    if kw_lower not in hay:
+                        prev_transfer = transfer_qualified
+                        continue
+
+                rows.append(
+                    ReportingPullCandidateItem(
+                        pull_row_key=f"{wo_id}-{op.operation_id}",
+                        work_order_id=wo_id,
+                        code=str(wo.code or ""),
+                        name=wo.name,
+                        product_name=wo.product_name,
+                        quantity=plan_qty,
+                        planned_start_date=wo.planned_start_date,
+                        operation_id=int(op.operation_id),
+                        operation_code=op_code or None,
+                        operation_name=op_name or None,
+                        operation_sequence=int(op.sequence) if op.sequence is not None else None,
+                        reportable_quantity_cap=plan_side_cap,
+                        reportable_quantity_pushed=completed,
+                        reportable_quantity_max=effective,
+                    )
+                )
+                prev_transfer = transfer_qualified
+
+        scope_norm = (scope or "reportable").strip().lower()
+        if scope_norm != "all":
+            rows = [r for r in rows if Decimal(str(r.reportable_quantity_max or 0)) > 0]
+
+        total = len(rows)
+        page = rows[skip : skip + limit]
+        return ReportingPullCandidateListResponse(data=page, total=total, success=True)
 
     async def list_reporting_records(
         self,

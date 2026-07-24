@@ -9,19 +9,25 @@ from typing import Optional, List, TYPE_CHECKING
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
+from core.schemas.base import BaseSchema
 from apps.kuaizhizao.services.document_action_policy.types import WorkOrderCapabilities
 
 if TYPE_CHECKING:
     from typing import ForwardRef
 
 
-class WorkOrderBase(BaseModel):
+class WorkOrderBase(BaseSchema):
     """
     工单基础Schema
 
     包含所有工单的基本字段。
     """
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        validate_assignment=True,
+        arbitrary_types_allowed=True,
+    )
 
     code: Optional[str] = Field(None, description="工单编码（必填，可通过编码规则自动生成）")
     name: Optional[str] = Field(None, description="工单名称（可选）")
@@ -268,7 +274,7 @@ class WorkOrderResponse(WorkOrderBase):
     )
 
 
-class WorkOrderOperationMinimalForGantt(BaseModel):
+class WorkOrderOperationMinimalForGantt(BaseSchema):
     """工序简要（用于甘特图展示设备/模具/工装，支持工序级派工）"""
     id: Optional[int] = None
     operation_name: Optional[str] = None
@@ -293,13 +299,17 @@ class WorkOrderOperationStepSummary(BaseModel):
     progress: int = Field(default=0, description="进行中工序进度 0-100")
 
 
-class WorkOrderListResponse(BaseModel):
+class WorkOrderListResponse(BaseSchema):
     """
     工单列表响应Schema
 
     用于工单列表API的响应数据格式。
     """
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        validate_assignment=True,
+        arbitrary_types_allowed=True,
+    )
 
     id: int = Field(..., description="工单ID")
     uuid: str = Field(..., description="业务ID")
@@ -494,9 +504,13 @@ class WorkOrderSplitResponse(BaseModel):
     total_count: int = Field(..., description="拆分工单总数")
 
 
-class WorkOrderOperationBase(BaseModel):
+class WorkOrderOperationBase(BaseSchema):
     """工单工序基础Schema"""
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        validate_assignment=True,
+        arbitrary_types_allowed=True,
+    )
 
     work_order_id: Optional[int] = Field(None, description="工单ID（创建工单时不需要，创建工序单时需要）")
     operation_id: int = Field(..., description="工序ID")

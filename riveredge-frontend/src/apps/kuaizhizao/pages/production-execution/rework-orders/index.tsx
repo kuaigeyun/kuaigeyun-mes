@@ -8,7 +8,7 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
@@ -21,7 +21,12 @@ import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import { DetailDrawerActions, DetailDrawerSection, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
@@ -1008,15 +1013,37 @@ const ReworkOrdersPage: React.FC = () => {
     [t],
   );
 
+  const pullDocumentScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const isPullFinishedGoodsInspectionSelectable = useCallback(
+    (record: PullFinishedGoodsInspectionCandidate) =>
+      record.capabilities?.push_rework?.allowed === true,
+    [],
+  );
+
+  const isPullReworkWorkOrderSelectable = useCallback(
+    (record: PullReworkWorkOrderCandidate) =>
+      ['in_progress', 'completed'].includes(String(record.status ?? '')),
+    [],
+  );
+
   const pullFromFinishedGoodsQuery = useUniPullQuery<PullFinishedGoodsInspectionCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    isRowDisabled: (record) => record.capabilities?.push_rework?.allowed !== true,
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullFinishedGoodsInspectionSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const response = await qualityApi.finishedGoodsInspection.list({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
         const list = Array.isArray(response)
@@ -1024,10 +1051,9 @@ const ReworkOrdersPage: React.FC = () => {
           : (response as { data?: unknown[]; items?: unknown[] })?.data
             ?? (response as { items?: unknown[] })?.items
             ?? [];
-        return {
-          data: (Array.isArray(list) ? list : []) as PullFinishedGoodsInspectionCandidate[],
-          total: Number((response as { total?: number })?.total ?? (Array.isArray(list) ? list.length : 0)),
-        };
+        const candidates = (Array.isArray(list) ? list : []) as PullFinishedGoodsInspectionCandidate[];
+        const filtered = filterByPullScope(candidates, scope, isPullFinishedGoodsInspectionSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (error: any) {
         messageApi.error(
           error?.message || t('app.kuaizhizao.quality.common.messages.loadListFailed'),
@@ -1051,12 +1077,14 @@ const ReworkOrdersPage: React.FC = () => {
   const pullFromWorkOrderQuery = useUniPullQuery<PullReworkWorkOrderCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    isRowDisabled: (record) => !['in_progress', 'completed'].includes(String(record.status ?? '')),
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullReworkWorkOrderSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const response = await workOrderApi.list({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
         const list = Array.isArray(response)
@@ -1064,10 +1092,9 @@ const ReworkOrdersPage: React.FC = () => {
           : (response as { data?: unknown[]; items?: unknown[] })?.data
             ?? (response as { items?: unknown[] })?.items
             ?? [];
-        return {
-          data: (Array.isArray(list) ? list : []) as PullReworkWorkOrderCandidate[],
-          total: Number((response as { total?: number })?.total ?? (Array.isArray(list) ? list.length : 0)),
-        };
+        const candidates = (Array.isArray(list) ? list : []) as PullReworkWorkOrderCandidate[];
+        const filtered = filterByPullScope(candidates, scope, isPullReworkWorkOrderSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (error: any) {
         messageApi.error(error?.message || t('app.kuaizhizao.reworkOrder.listLoadFailed'));
         return { data: [], total: 0 };
@@ -1161,6 +1188,9 @@ const ReworkOrdersPage: React.FC = () => {
         pageSize={pullFromFinishedGoodsQuery.pageSize}
         total={pullFromFinishedGoodsQuery.total}
         onPageChange={pullFromFinishedGoodsQuery.handlePageChange}
+        scopeOptions={pullFromFinishedGoodsQuery.scopeOptions}
+        scope={pullFromFinishedGoodsQuery.scope}
+        onScopeChange={pullFromFinishedGoodsQuery.handleScopeChange}
         okText={t('common.next')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
@@ -1191,6 +1221,9 @@ const ReworkOrdersPage: React.FC = () => {
         pageSize={pullFromWorkOrderQuery.pageSize}
         total={pullFromWorkOrderQuery.total}
         onPageChange={pullFromWorkOrderQuery.handlePageChange}
+        scopeOptions={pullFromWorkOrderQuery.scopeOptions}
+        scope={pullFromWorkOrderQuery.scope}
+        onScopeChange={pullFromWorkOrderQuery.handleScopeChange}
         okText={t('common.next')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />

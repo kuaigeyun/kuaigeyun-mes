@@ -1223,6 +1223,7 @@ class BOMBatchImportItem(BaseModel):
     unit: Optional[str] = Field(None, description="子件单位（可选，如：个、kg、m等）")
     waste_rate: Optional[Decimal] = Field(None, description="损耗率（可选，百分比，如：5%表示5.00）")
     is_required: Optional[bool] = Field(True, description="是否必选（可选，是/否，默认：是）")
+    is_active: Optional[bool] = Field(True, description="是否启用（可选，是/否，默认：是）")
     is_configurable: Optional[bool] = Field(False, description="是否为配置位（用户在下单/开工单时选择）")
     configurable_group_id: Optional[int] = Field(None, description="配置位组ID（同组多行=该位置的可选物料）")
     is_default_configurable: Optional[bool] = Field(False, description="配置位组内是否为默认选项")

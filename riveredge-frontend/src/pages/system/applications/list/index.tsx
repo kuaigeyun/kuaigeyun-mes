@@ -131,6 +131,8 @@ import {
   resolveApplicationDescription,
   resolveApplicationDisplayName,
 } from '../../../../utils/menuTranslation';
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 /** 应用中心行/卡片操作图标（表格与卡片共用，避免 uni-action 按 manifest action 覆盖） */
 const APP_ACTION_ICON = {
@@ -1930,8 +1932,7 @@ const ApplicationListPage: React.FC = () => {
           showExportButton={true}
           onExport={async (type, keys, pageData) => {
             try {
-              const apiParams: any = { skip: 0, limit: 10000 };
-              const allData = await getApplicationList(apiParams);
+              const allData = await fetchAllListItems((p) => getApplicationList(p));
               let items = allData || [];
               if (type === 'currentPage' && pageData?.length) {
                 items = pageData;
@@ -1942,13 +1943,10 @@ const ApplicationListPage: React.FC = () => {
                 messageApi.warning(t('pages.system.applications.noDataExport'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `applications-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `applications-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('pages.system.applications.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('pages.system.applications.exportFailed'));

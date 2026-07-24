@@ -32,6 +32,11 @@ export interface FactoryImportFieldDef {
   labelKey: string;
   /** 额外表头别名（兼容旧中文模板等） */
   aliases?: string[];
+  /**
+   * 下拉选项（与表单/API 存库值一致）。
+   * 有值时导入弹窗该列启用 Univer 列表下拉（示例行 + 数据区）。
+   */
+  options?: string[];
 }
 
 const LEGACY_ENGLISH_HEADERS: Record<string, string[]> = {
@@ -113,9 +118,12 @@ export function buildFactoryImportTemplate(
   importHeaders: string[];
   importExampleRow: string[];
   importHeaderMap: Record<string, string>;
+  /** 与 importHeaders 等长；某列非空则导入表该列启用下拉 */
+  importColumnOptions: Array<string[] | undefined>;
 } {
   const importHeaders: string[] = [];
   const importHeaderMap: Record<string, string> = {};
+  const importColumnOptions: Array<string[] | undefined> = [];
 
   const addMapping = (header: string, field: string) => {
     if (!header) return;
@@ -138,12 +146,17 @@ export function buildFactoryImportTemplate(
     for (const alias of f.aliases ?? []) {
       addMapping(alias, f.field);
     }
+    const opts = (f.options ?? [])
+      .map((v) => String(v ?? '').trim())
+      .filter(Boolean);
+    importColumnOptions.push(opts.length > 0 ? opts : undefined);
   });
 
   return {
     importHeaders,
     importExampleRow: exampleValues,
     importHeaderMap,
+    importColumnOptions,
   };
 }
 

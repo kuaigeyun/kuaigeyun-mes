@@ -4,6 +4,45 @@ import { parseSalesReportDateRange } from '../services/reports';
 
 export const EQUIPMENT_OPS_PINNED_STATUS_FIELD = 'status';
 
+/** 设备运维单据/追溯表状态徽章色（Ant Tag color） */
+const EQUIPMENT_OPS_STATUS_TAG_COLORS: Record<string, string> = {
+  已完成: 'success',
+  已修复: 'success',
+  已审核: 'success',
+  合格: 'success',
+  正常: 'success',
+  进行中: 'processing',
+  处理中: 'processing',
+  执行中: 'processing',
+  已提交: 'processing',
+  已发布: 'processing',
+  草稿: 'default',
+  待处理: 'default',
+  已关闭: 'default',
+  已取消: 'default',
+  已驳回: 'error',
+  不合格: 'error',
+  限制使用: 'warning',
+};
+
+const EQUIPMENT_FAULT_LEVEL_TAG_COLORS: Record<string, string> = {
+  高: 'error',
+  中: 'warning',
+  低: 'default',
+  紧急: 'error',
+  一般: 'default',
+};
+
+export function equipmentOpsStatusTagColor(status: string | null | undefined): string {
+  if (!status) return 'default';
+  return EQUIPMENT_OPS_STATUS_TAG_COLORS[status] ?? 'default';
+}
+
+export function equipmentFaultLevelTagColor(level: string | null | undefined): string {
+  if (!level) return 'default';
+  return EQUIPMENT_FAULT_LEVEL_TAG_COLORS[level] ?? 'default';
+}
+
 export function normalizeEquipmentListResponse(res: unknown): { data: unknown[]; total: number } {
   if (Array.isArray(res)) {
     return { data: res, total: res.length };

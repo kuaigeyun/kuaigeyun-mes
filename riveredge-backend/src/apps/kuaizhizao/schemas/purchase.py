@@ -257,6 +257,8 @@ class PurchaseOrderListParams(BaseModel):
     order_code: Optional[str] = None
     keyword: Optional[str] = None
     order_by: Optional[str] = None
+    pullable_only: Optional[bool] = None
+    pull_target: Optional[str] = None
     skip: int = 0
     limit: int = 20
 

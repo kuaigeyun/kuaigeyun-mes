@@ -36,8 +36,9 @@ class StocktakingCreate(StocktakingBase):
     库存盘点单创建Schema
 
     用于创建新库存盘点单的数据验证。
+    warehouse_name 可省略，后端按 warehouse_id 从主数据解析。
     """
-    pass
+    warehouse_name: Optional[str] = Field(None, description="仓库名称（可省略，后端按 warehouse_id 解析）")
 
 
 class StocktakingUpdate(BaseModel):

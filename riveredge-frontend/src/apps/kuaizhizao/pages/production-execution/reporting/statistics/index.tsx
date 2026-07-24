@@ -13,6 +13,7 @@ import type { NoUndefinedRangeValueType } from 'rc-picker/lib/PickerInput/RangeP
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate } from '../../../../../../components/layout-templates';
 import { formatQuantity } from '../../../../../../utils/format';
+import { downloadRecordsAsXlsx } from '../../../../../../utils/exportRecordsXlsx';
 
 const { RangePicker } = DatePicker;
 
@@ -58,19 +59,35 @@ const ReportingStatisticsPage: React.FC = () => {
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!statistics) {
       messageApi.warning(t('app.kuaizhizao.workReporting.statistics.noDataExport'));
       return;
     }
     try {
-      const blob = new Blob([JSON.stringify(statistics, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `reporting-statistics-${dateRange[0].format('YYYY-MM-DD')}-${dateRange[1].format('YYYY-MM-DD')}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const summaryRow: Record<string, unknown> = {
+        kind: 'summary',
+        total_count: statistics.total_count,
+        pending_count: statistics.pending_count,
+        approved_count: statistics.approved_count,
+        rejected_count: statistics.rejected_count,
+        total_reported_quantity: statistics.total_reported_quantity,
+        total_qualified_quantity: statistics.total_qualified_quantity,
+        total_unqualified_quantity: statistics.total_unqualified_quantity,
+        total_work_hours: statistics.total_work_hours,
+        qualification_rate: statistics.qualification_rate,
+        unqualified_rate: statistics.unqualified_rate,
+        avg_quantity_per_hour: statistics.avg_quantity_per_hour,
+      };
+      const records: Array<Record<string, unknown>> = [
+        summaryRow,
+        ...statistics.operation_stats.map((row) => ({ kind: 'operation', ...row })),
+        ...statistics.worker_stats.map((row) => ({ kind: 'worker', ...row })),
+      ];
+      await downloadRecordsAsXlsx(
+        records,
+        `reporting-statistics-${dateRange[0].format('YYYY-MM-DD')}-${dateRange[1].format('YYYY-MM-DD')}.xlsx`,
+      );
       messageApi.success(t('app.kuaizhizao.workReporting.statistics.exportSuccess'));
     } catch (error: unknown) {
       const msg =
@@ -195,7 +212,7 @@ const ReportingStatisticsPage: React.FC = () => {
             <Button icon={<ReloadOutlined />} onClick={() => void loadStatistics()} loading={loading}>
               {t('common.refresh')}
             </Button>
-            <Button icon={<DownloadOutlined />} onClick={handleExport} disabled={!statistics}>
+            <Button icon={<DownloadOutlined />} onClick={() => void handleExport()} disabled={!statistics}>
               {t('app.kuaizhizao.workReporting.statistics.export')}
             </Button>
           </Space>

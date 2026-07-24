@@ -67,6 +67,7 @@ import {
 
   InputNumber,
 
+  List,
   Modal,
   Card,
 
@@ -177,6 +178,8 @@ import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constants/fieldPermissionResources';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
 import {
   salesContractCapabilityReasonMessage,
   salesContractBatchDeleteAllowed,
@@ -215,16 +218,12 @@ import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import salesContractApi, {
-
   type SalesContract,
-
   type SalesContractChange,
-
   type SalesContractPaymentSummary,
-
   type SalesContractPushPreviewResponse,
-
 } from '../../../services/sales-contract';
 import { listQuotations, type Quotation, type QuotationCapabilities } from '../../../services/quotation';
 
@@ -246,6 +245,7 @@ import { testGenerateCode, getCodeRulePageConfig, generateCode } from '../../../
 import SalesContractTermsManageModal from './SalesContractTermsManageModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import {
   buildTermTemplatesFromGroupItems,
   extractPlaceholdersFromTerms,
@@ -263,6 +263,12 @@ import {
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
+
+import { batchImport } from '../../../../../utils/batchOperations';
+import {
+  buildContractListImportTemplate,
+  parseContractListImport,
+} from './contractListImport';
 
 import {
 
@@ -359,7 +365,7 @@ const SalesContractsPage: React.FC = () => {
 
   const { message: messageApi } = App.useApp();
 
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const pullFromQuotationAction = resolveKuaizhizaoDocumentAction(t, 'sales_contract.pull_from_quotation');
   const pushToSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_sales_contract');
   const pushToWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_sales_contract');
@@ -395,6 +401,29 @@ const SalesContractsPage: React.FC = () => {
     }),
     [t],
   );
+  const contractImportDict = useImportDictionaryOptions([
+    'MATERIAL_UNIT',
+    'CURRENCY',
+    'SHIPPING_METHOD',
+    'PAYMENT_TERMS',
+  ]);
+  const contractLineUnitOptions = contractImportDict.MATERIAL_UNIT ?? [];
+  const contractLineImportColumnOptions = useMemo(
+    () => [
+      undefined,
+      undefined,
+      contractLineUnitOptions,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ],
+    [contractLineUnitOptions],
+  );
+  const contractListImportTemplate = useMemo(
+    () => buildContractListImportTemplate(t, contractImportDict),
+    [t, i18n.language, contractImportDict],
+  );
   const contractImportHeaders = useMemo(
     () => [
       t('app.kuaizhizao.salesContract.importHeaders.materialCode'),
@@ -411,13 +440,13 @@ const SalesContractsPage: React.FC = () => {
     () => [
       'MAT001',
       'Spec X',
-      t('app.kuaizhizao.salesContract.defaultUnit'),
+      pickImportExampleValue(contractLineUnitOptions, t('app.kuaizhizao.salesContract.defaultUnit')),
       '100',
       '1.5',
       '2026-03-01',
       '',
     ],
-    [t],
+    [t, contractLineUnitOptions],
   );
   const renderContractStatus = useCallback(
     (status: string | undefined) => statusLabels[status as keyof typeof statusLabels] ?? status ?? '—',
@@ -847,6 +876,113 @@ const SalesContractsPage: React.FC = () => {
     },
     [materialList, messageApi, t],
   );
+
+  const handleListImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning(t('app.kuaizhizao.quotation.importDataInvalid'));
+      return;
+    }
+    const rows = (data.slice(2) as any[][]).filter((row) =>
+      row?.some((c) => c != null && String(c).trim() !== ''),
+    );
+    if (rows.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.quotation.noImportRows'));
+      return;
+    }
+
+    const { errors, items: toImport } = parseContractListImport(data, {
+      t,
+      importHeaderMap: contractListImportTemplate.importHeaderMap,
+      customers: customerList,
+      materials: materialList,
+    });
+
+    if (errors.length > 0) {
+      Modal.warning({
+        title: t('app.kuaizhizao.quotation.validationFailed'),
+        width: 600,
+        content: (
+          <div>
+            <p>{t('app.master-data.validationFailedIntro')}</p>
+            <List
+              size="small"
+              dataSource={errors}
+              renderItem={(item) => (
+                <List.Item>
+                  <Typography.Text type="danger">
+                    {t('app.kuaizhizao.quotation.importRowError', {
+                      row: item.row,
+                      message: item.message,
+                    })}
+                  </Typography.Text>
+                </List.Item>
+              )}
+            />
+          </div>
+        ),
+      });
+      return;
+    }
+
+    if (toImport.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.quotation.noImportData'));
+      return;
+    }
+
+    try {
+      const result = await batchImport({
+        items: toImport,
+        importFn: async (item) => salesContractApi.create(item, false),
+        title: t('app.kuaizhizao.salesContract.listImport.importing'),
+        concurrency: 3,
+      });
+
+      if (result.failureCount > 0) {
+        Modal.warning({
+          title: t('app.kuaizhizao.quotation.importPartialTitle'),
+          width: 600,
+          content: (
+            <div>
+              <p>
+                <strong>
+                  {t('app.kuaizhizao.quotation.importResult', {
+                    success: result.successCount,
+                    failed: result.failureCount,
+                  })}
+                </strong>
+              </p>
+              {result.errors.length > 0 && (
+                <List
+                  size="small"
+                  dataSource={result.errors}
+                  renderItem={(e) => (
+                    <List.Item>
+                      <Typography.Text type="danger">
+                        {t('app.kuaizhizao.quotation.importRowError', {
+                          row: e.row,
+                          message: e.error,
+                        })}
+                      </Typography.Text>
+                    </List.Item>
+                  )}
+                />
+              )}
+            </div>
+          ),
+        });
+      } else {
+        messageApi.success(
+          t('app.kuaizhizao.quotation.importSuccess', { count: result.successCount }),
+        );
+      }
+      if (result.successCount > 0) {
+        actionRef.current?.reload();
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.importFailed'));
+    }
+  };
+
 
   const buildFormPayload = (values: any) => {
 
@@ -3156,6 +3292,7 @@ const SalesContractsPage: React.FC = () => {
             title={t('app.kuaizhizao.salesContract.importItemsTitle')}
             headers={contractImportHeaders}
             exampleRow={contractImportExampleRow}
+            columnOptions={contractLineImportColumnOptions}
           />
         </Suspense>
       </>
@@ -3258,11 +3395,16 @@ const SalesContractsPage: React.FC = () => {
         ]}
 
         showExportButton={contractPerms.canExport}
+        showImportButton={contractPerms.canCreate}
+        onImport={handleListImport}
+        importHeaders={contractListImportTemplate.importHeaders}
+        importExampleRow={contractListImportTemplate.importExampleRow}
+        importColumnOptions={contractListImportTemplate.importColumnOptions}
+        importFieldMap={contractListImportTemplate.importHeaderMap}
 
         onExport={async (type, keys, pageData) => {
           try {
-            const res = await salesContractApi.list({ skip: 0, limit: 10000 });
-            let items = res.items || [];
+            let items = await fetchAllListItems((p) => salesContractApi.list(p));
             if (type === 'currentPage' && pageData?.length) {
               items = pageData as SalesContract[];
             } else if (type === 'selected' && keys?.length) {
@@ -3272,13 +3414,10 @@ const SalesContractsPage: React.FC = () => {
               messageApi.warning(t('app.kuaizhizao.salesContract.noExportData'));
               return;
             }
-            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `sales-contracts-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              `sales-contracts-${new Date().toISOString().slice(0, 10)}.xlsx`,
+            );
             messageApi.success(t('app.kuaizhizao.salesContract.exportSuccess', { count: items.length }));
           } catch (error: any) {
             messageApi.error(error?.message || t('app.kuaizhizao.salesContract.exportFailed'));

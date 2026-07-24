@@ -709,12 +709,13 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   toolBarActionsAfterBatch?: ReactNode[]
   /**
-   * 是否显示导入按钮（默认：true）
+   * 是否显示导入按钮（默认：true）。
+   * 实际渲染还须 onImport + 完整模板（或 autoGenerateImportConfig）+ canImport。
    */
   showImportButton?: boolean
   /**
-   * 导入按钮点击回调
-   * @param data - 导入的数据（二维数组格式）
+   * 确认导入回调。接收 sheet-host 同步的字符串矩阵（行0 表头 / 行1 示例 / 行2+ 数据）。
+   * 禁止仅用本回调打开第二个导入弹窗。
    */
   onImport?: (data: any[][]) => void
   /**
@@ -726,23 +727,25 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
     warnings?: string[]
   } | void>
   /**
-   * 导入表头（可选，如果提供则自动填充第一行）
-   * 如果不提供，将自动从 columns 中提取可导入的字段生成表头
+   * 导入表头（行 0）。启用导入时须与 importExampleRow、importFieldMap 一并显式提供
+   *（推荐 buildFactoryImportTemplate），除非 autoGenerateImportConfig=true。
+   * 缺任一则开发态 console.error 且不渲染导入按钮。
    */
   importHeaders?: string[]
   /**
-   * 导入示例数据（可选，如果提供则自动填充第二行作为示例）
-   * 如果不提供，将自动从 columns 中提取字段生成示例数据
+   * 导入示例行（行 1，提交时跳过）
    */
   importExampleRow?: string[]
+  /**
+   * 与 importHeaders 等长的列下拉选项（传给 UniImport；字典/枚举字段试点）
+   */
+  importColumnOptions?: Array<string[] | undefined>
   /**
    * 导入模板文件名中的单据/页面名称（默认：headerTitle 或当前路由菜单标题）
    */
   importTemplateName?: string
   /**
-   * 导入字段映射配置（可选）
-   * 用于将表头名称映射到字段名，如果不提供，将自动从 columns 中提取
-   * 格式：{ '表头名称': '字段名' } 或 { '字段名': '表头名称' }
+   * 表头文案 → 字段名（与 buildFactoryImportTemplate.importHeaderMap 一致；内部传给 UniImport.importFieldMap）
    */
   importFieldMap?: Record<string, string>
   /**
@@ -754,12 +757,16 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   enableRelationImport?: boolean
   /**
-   * 高级关联导入配置
+   * 高级关联导入配置（必填列见 requiredFieldKeys / entityRequiredFieldKeys）
    */
   relationImportConfig?: {
     entities?: Array<'material' | 'processRoute' | 'operation' | 'performance'>
     defaultWriteStrategy?: 'upsert' | 'create_only' | 'link_only' | 'strict_fail'
     supportedStrategies?: Array<'upsert' | 'create_only' | 'link_only' | 'strict_fail'>
+    requiredFieldKeys?: string[]
+    entityRequiredFieldKeys?: Partial<
+      Record<'material' | 'processRoute' | 'operation' | 'performance', string[]>
+    >
   }
   /**
    * 高级关联导入预检
@@ -790,17 +797,8 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
     warnings?: string[]
   } | void>
   /**
-   * 导入字段验证规则（可选）
-   * 用于定义哪些字段是必填的，以及字段的验证规则
-   * 格式：{ '字段名': { required: true, validator?: (value: any) => boolean } }
-   */
-  importFieldRules?: Record<
-    string,
-    { required?: boolean; validator?: (value: any) => boolean | string }
-  >
-  /**
-   * 是否自动从 columns 生成导入配置（默认：true）
-   * 如果为 true，将自动从 columns 中提取可导入的字段生成表头、示例数据和字段映射
+   * 是否从 columns 自动生成导入模板（默认 false）。
+   * 正式列表页应传显式 importHeaders/exampleRow/fieldMap；仅过渡页可开此项。
    */
   autoGenerateImportConfig?: boolean
   /**
@@ -1208,6 +1206,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   onImportPrecheck,
   importHeaders,
   importExampleRow,
+  importColumnOptions,
   importTemplateName,
   importFieldMap,
   enableCustomImport = false,
@@ -1215,8 +1214,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   relationImportConfig,
   onRelationImportPrecheck,
   onRelationImportSubmit,
-  importFieldRules,
-  autoGenerateImportConfig = true,
+  autoGenerateImportConfig = false,
   showExportButton = true,
   onExport,
   exportButtonText,
@@ -1680,13 +1678,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     return finalizeUniTableColumns(result)
   }, [resizableColumns, processedColumns])
 
-  // 导入配置：优先使用传入的 importHeaders/importExampleRow，否则从 columns 自动生成
+  // 导入配置：显式模板优先；仅 autoGenerateImportConfig 时从 columns 生成
   const effectiveImportConfig = React.useMemo(() => {
     if (importHeaders && importHeaders.length > 0) {
       return {
         headers: importHeaders,
-        exampleRow: importExampleRow,
+        exampleRow: importExampleRow ?? [],
         fieldMap: importFieldMap ?? {},
+        columnOptions: importColumnOptions,
+        complete: Boolean(importExampleRow && importFieldMap && Object.keys(importFieldMap).length > 0),
       }
     }
     if (autoGenerateImportConfig && processedColumns) {
@@ -1695,10 +1695,45 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         headers: generated.headers,
         exampleRow: generated.exampleRow,
         fieldMap: { ...generated.fieldMap, ...(importFieldMap ?? {}) },
+        columnOptions: importColumnOptions,
+        complete: Boolean(generated.headers?.length),
       }
     }
-    return { headers: undefined, exampleRow: undefined, fieldMap: importFieldMap }
-  }, [importHeaders, importExampleRow, importFieldMap, autoGenerateImportConfig, processedColumns, t])
+    return {
+      headers: undefined as string[] | undefined,
+      exampleRow: undefined as string[] | undefined,
+      fieldMap: importFieldMap,
+      columnOptions: importColumnOptions,
+      complete: false,
+    }
+  }, [
+    importHeaders,
+    importExampleRow,
+    importColumnOptions,
+    importFieldMap,
+    autoGenerateImportConfig,
+    processedColumns,
+    t,
+  ])
+
+  const importTemplateReady = Boolean(
+    onImport &&
+      effectiveImportConfig.complete &&
+      effectiveImportConfig.headers &&
+      effectiveImportConfig.headers.length > 0,
+  )
+
+  React.useEffect(() => {
+    if (!gatedShowImportButton || !onImport) return
+    if (importTemplateReady) return
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(
+        '[UniTable] 启用导入须提供 importHeaders + importExampleRow + importFieldMap，' +
+          '或显式设置 autoGenerateImportConfig={true}。导入按钮已隐藏。',
+        { path: location.pathname },
+      )
+    }
+  }, [gatedShowImportButton, onImport, importTemplateReady, location.pathname])
 
   const importTemplateDocumentName = useMemo(() => {
     if (importTemplateName?.trim()) return importTemplateName.trim()
@@ -2316,7 +2351,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       rightButtons.push(...beforeExportActions)
     }
 
-    if (gatedShowImportButton && onImport) {
+    if (gatedShowImportButton && onImport && importTemplateReady) {
       rightButtons.push(
         <UniImportToolbarButton
           key="import"
@@ -3827,7 +3862,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       </div>
 
       {/* 导入弹窗：仅当用户点击导入时才加载 UniverJS 相关 chunk，显著减轻首屏体积 */}
-      {gatedShowImportButton && onImport && importModalVisible && (
+      {gatedShowImportButton && onImport && importTemplateReady && importModalVisible && (
         <Suspense fallback={null}>
           <LazyUniImport
             visible={importModalVisible}
@@ -3839,7 +3874,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             }}
             headers={effectiveImportConfig.headers}
             exampleRow={effectiveImportConfig.exampleRow}
+            columnOptions={effectiveImportConfig.columnOptions}
             importFieldMap={effectiveImportConfig.fieldMap}
+            enableXlsxTemplate
+            enableMappingImport
+            enableImportPreview
             enableCustomImport={enableCustomImport}
             enableRelationImport={enableRelationImport}
             relationImportConfig={relationImportConfig}

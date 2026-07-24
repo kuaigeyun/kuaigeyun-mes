@@ -2,6 +2,8 @@
  * 物料 Excel 导入：主物料 + 属性 SKU 行
  */
 
+import type { TFunction } from 'i18next';
+
 import type { Material, MaterialCreate } from '../types/material';
 import { materialApi } from '../services/material';
 import { isVariantMasterMaterial } from '../components/MaterialVariantCombinationsTable';
@@ -11,6 +13,7 @@ import {
   parseVariantAttributesImport,
 } from './parseVariantAttributesImport';
 import { DEFAULT_MATERIAL_BASE_UNIT } from '../constants/materialDefaults';
+import { parseMaterialSourceTypeImport } from './materialSourceType';
 import { resolveFactoryImportHeaderIndexMap } from '../../../utils/spreadsheetImportTemplate';
 
 export type MaterialImportRowKind = 'master' | 'sku';
@@ -42,6 +45,9 @@ export interface MaterialImportColumnIndex {
   masterMainCode: number;
   variantAttrs: number;
   variantManaged: number;
+  isActive: number;
+  batchManaged: number;
+  serialManaged: number;
 }
 
 export function buildMaterialImportColumnIndex(
@@ -61,6 +67,9 @@ export function buildMaterialImportColumnIndex(
     masterMainCode: idx('masterMainCode'),
     variantAttrs: idx('variantAttributes'),
     variantManaged: idx('variantManaged'),
+    isActive: idx('isActive'),
+    batchManaged: idx('batchManaged'),
+    serialManaged: idx('serialManaged'),
   };
 }
 
@@ -74,6 +83,7 @@ export function parseMaterialImportRows(
   idx: MaterialImportColumnIndex,
   resolveGroupId: (groupCode: string) => number | undefined,
   rowOffset = 3,
+  t?: TFunction,
 ): { items: MaterialImportItem[]; errors: Array<{ row: number; message: string }> } {
   const errors: Array<{ row: number; message: string }> = [];
   const items: MaterialImportItem[] = [];
@@ -124,6 +134,12 @@ export function parseMaterialImportRows(
     const groupCode = cell(row, idx.group);
     const variantManaged =
       idx.variantManaged >= 0 ? parseImportBool(row[idx.variantManaged]) : false;
+    const isActiveRaw = cell(row, idx.isActive);
+    const isActive = idx.isActive >= 0 ? (isActiveRaw ? parseImportBool(row[idx.isActive]) : true) : true;
+    const batchManaged =
+      idx.batchManaged >= 0 ? parseImportBool(row[idx.batchManaged]) : false;
+    const serialManaged =
+      idx.serialManaged >= 0 ? parseImportBool(row[idx.serialManaged]) : false;
 
     items.push({
       kind: 'master',
@@ -134,11 +150,13 @@ export function parseMaterialImportRows(
         name,
         baseUnit: unit,
         specification: cell(row, idx.spec) || undefined,
-        sourceType: cell(row, idx.type) || undefined,
+        sourceType: parseMaterialSourceTypeImport(cell(row, idx.type), t),
         groupId: groupCode ? resolveGroupId(groupCode) : undefined,
         variantManaged,
         ...(variantManaged ? { variantAttributes: undefined } : {}),
-        isActive: true,
+        isActive,
+        batchManaged,
+        serialManaged,
       },
     });
   });

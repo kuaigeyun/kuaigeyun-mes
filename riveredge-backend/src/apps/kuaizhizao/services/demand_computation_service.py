@@ -147,18 +147,22 @@ async def _get_material_safety_reorder(
 ) -> tuple[float, float]:
     """
     从物料主数据与本次计算的 computation_params 获取安全库存、再订货点。
-    优先级：computation_params > material.defaults > 0
+    优先级：computation_params > material.defaults.safetyStock（唯一数量真源）> 0
+    MRP 不读取库存预警规则（规则仅覆盖执行域预警）。
     """
     safety = 0.0
     reorder = 0.0
 
-    if material.defaults:
-        inv = material.defaults.get("inventory") or material.defaults
-        if isinstance(inv, dict):
-            if inv.get("safety_stock") is not None or inv.get("safety_stock_level") is not None:
-                safety = _safe_float(inv.get("safety_stock") or inv.get("safety_stock_level"))
-            if inv.get("reorder_point") is not None:
-                reorder = _safe_float(inv.get("reorder_point"))
+    from apps.kuaizhizao.services.inventory_threshold_resolver import material_stock_thresholds
+
+    safety_dec, _max_stock = material_stock_thresholds(material)
+    if safety_dec is not None:
+        safety = float(safety_dec)
+
+    if material and isinstance(getattr(material, "defaults", None), dict):
+        inv = material.defaults.get("inventory") if isinstance(material.defaults.get("inventory"), dict) else material.defaults
+        if isinstance(inv, dict) and inv.get("reorder_point") is not None:
+            reorder = _safe_float(inv.get("reorder_point"))
 
     if computation_params:
         if "safety_stock" in computation_params:
@@ -319,6 +323,153 @@ def _apply_suggested_lot_rules(
     if max_q is not None and q > max_q:
         q = max_q
     return q
+
+
+def _deep_merge_dict(base: Optional[Dict[str, Any]], patch: Dict[str, Any]) -> Dict[str, Any]:
+    out: Dict[str, Any] = dict(base or {})
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _deep_merge_dict(out.get(key), value)
+        else:
+            out[key] = value
+    return out
+
+
+def _lead_time_missing(raw: Any) -> bool:
+    if raw is None or raw == "":
+        return True
+    try:
+        return int(raw) <= 0
+    except (TypeError, ValueError):
+        return True
+
+
+def _collect_material_mrp_gaps(material: Any, source_type: Optional[str]) -> List[Dict[str, Any]]:
+    """按来源类型检出 MRP 执行所需、但主数据未维护的字段。"""
+    gaps: List[Dict[str, Any]] = []
+    source_config = getattr(material, "source_config", None) or {}
+    if not isinstance(source_config, dict):
+        source_config = {}
+    defaults = getattr(material, "defaults", None) or {}
+    if not isinstance(defaults, dict):
+        defaults = {}
+    st = source_type or ""
+
+    base = {
+        "material_id": int(material.id),
+        "material_uuid": str(getattr(material, "uuid", "") or ""),
+        "material_code": str(getattr(material, "main_code", "") or ""),
+        "material_name": str(getattr(material, "name", "") or ""),
+        "source_type": st or None,
+    }
+
+    def add_gap(
+        field: str,
+        label: str,
+        current: Any,
+        suggested: Any,
+        value_type: str = "number",
+    ) -> None:
+        gaps.append(
+            {
+                **base,
+                "field": field,
+                "label": label,
+                "current": current,
+                "suggested": suggested,
+                "value_type": value_type,
+            }
+        )
+
+    if st == SOURCE_TYPE_MAKE:
+        cur = source_config.get("production_lead_time")
+        if _lead_time_missing(cur):
+            add_gap(
+                "source_config.production_lead_time",
+                "生产提前期(天)",
+                cur,
+                1,
+                "int",
+            )
+        prod = defaults.get("production") if isinstance(defaults.get("production"), dict) else {}
+        min_lot = prod.get("min_batch_quantity") or prod.get("min_batch_qty") or prod.get("min_order_quantity")
+        mult = prod.get("batch_multiple") or prod.get("order_multiple") or prod.get("quantity_multiple")
+        if _decimal_opt(min_lot) is None:
+            add_gap("defaults.production.min_batch_quantity", "最小生产批量", min_lot, 1, "number")
+        if _decimal_opt(mult) is None:
+            add_gap("defaults.production.batch_multiple", "生产批量倍数", mult, 1, "number")
+    elif st == SOURCE_TYPE_BUY:
+        cur = source_config.get("purchase_lead_time")
+        if _lead_time_missing(cur):
+            add_gap(
+                "source_config.purchase_lead_time",
+                "采购提前期(天)",
+                cur,
+                7,
+                "int",
+            )
+        if not source_config.get("default_supplier_id"):
+            add_gap(
+                "source_config.default_supplier_id",
+                "默认供应商",
+                source_config.get("default_supplier_id"),
+                None,
+                "supplier_id",
+            )
+        pur = defaults.get("purchase") if isinstance(defaults.get("purchase"), dict) else {}
+        min_lot = pur.get("min_order_quantity") or pur.get("min_order_qty")
+        mult = pur.get("order_multiple") or pur.get("quantity_multiple")
+        if _decimal_opt(min_lot) is None:
+            add_gap("defaults.purchase.min_order_quantity", "最小采购量", min_lot, 1, "number")
+        if _decimal_opt(mult) is None:
+            add_gap("defaults.purchase.order_multiple", "采购批量倍数", mult, 1, "number")
+    elif st == SOURCE_TYPE_OUTSOURCE:
+        cur = source_config.get("outsource_lead_time")
+        if _lead_time_missing(cur):
+            add_gap(
+                "source_config.outsource_lead_time",
+                "委外提前期(天)",
+                cur,
+                7,
+                "int",
+            )
+        if not source_config.get("outsource_supplier_id") and not source_config.get("default_supplier_id"):
+            add_gap(
+                "source_config.outsource_supplier_id",
+                "委外供应商",
+                source_config.get("outsource_supplier_id"),
+                None,
+                "supplier_id",
+            )
+        prod = defaults.get("production") if isinstance(defaults.get("production"), dict) else {}
+        min_lot = prod.get("min_batch_quantity") or prod.get("min_batch_qty") or prod.get("min_order_quantity")
+        mult = prod.get("batch_multiple") or prod.get("order_multiple") or prod.get("quantity_multiple")
+        if _decimal_opt(min_lot) is None:
+            add_gap("defaults.production.min_batch_quantity", "最小委外批量", min_lot, 1, "number")
+        if _decimal_opt(mult) is None:
+            add_gap("defaults.production.batch_multiple", "委外批量倍数", mult, 1, "number")
+
+    if st in (SOURCE_TYPE_MAKE, SOURCE_TYPE_BUY, SOURCE_TYPE_OUTSOURCE):
+        from apps.kuaizhizao.services.inventory_threshold_resolver import material_stock_thresholds
+
+        safety_dec, _ = material_stock_thresholds(material)
+        if safety_dec is None:
+            inv = defaults.get("inventory") if isinstance(defaults.get("inventory"), dict) else defaults
+            cur_safety = None
+            if isinstance(inv, dict):
+                cur_safety = inv.get("safetyStock")
+                if cur_safety is None:
+                    cur_safety = inv.get("safety_stock")
+            add_gap("defaults.safetyStock", "安全库存", cur_safety, None, "number")
+
+        inv = defaults.get("inventory") if isinstance(defaults.get("inventory"), dict) else defaults
+        reorder_cur = inv.get("reorder_point") if isinstance(inv, dict) else None
+        if reorder_cur is None and isinstance(defaults, dict):
+            reorder_cur = defaults.get("reorder_point")
+        if reorder_cur is None or (isinstance(reorder_cur, str) and not str(reorder_cur).strip()):
+            add_gap("defaults.reorder_point", "再订货点", reorder_cur, None, "number")
+
+    return gaps
 
 
 def _compute_supply_and_net(
@@ -819,6 +970,189 @@ class DemandComputationService(AppBaseService):
             "success": True
         }
     
+    async def _collect_computation_material_ids(
+        self,
+        tenant_id: int,
+        computation: DemandComputation,
+    ) -> List[int]:
+        """收集计算将覆盖的物料（需求明细 + BOM 展开子件）。"""
+        from apps.kuaizhizao.models.demand_item import DemandItem
+        from apps.master_data.models.material import Material
+        from apps.kuaizhizao.utils.bom_helper import get_bom_items_by_material_id
+
+        demand_id_list = computation.demand_ids if computation.demand_ids else [computation.demand_id]
+        seed_ids: List[int] = []
+        for demand_id in demand_id_list:
+            if not demand_id:
+                continue
+            rows = await DemandItem.filter(tenant_id=tenant_id, demand_id=demand_id).values_list(
+                "material_id", flat=True
+            )
+            seed_ids.extend(int(x) for x in rows if x)
+
+        params = computation.computation_params or {}
+        max_level = _bom_max_level_from_params(params)
+        seen: set[int] = set()
+        queue: List[tuple[int, int]] = [(mid, 0) for mid in seed_ids]
+        ordered: List[int] = []
+
+        while queue:
+            mid, level = queue.pop(0)
+            if mid in seen:
+                continue
+            seen.add(mid)
+            ordered.append(mid)
+            if level >= max_level:
+                continue
+            material = await Material.get_or_none(tenant_id=tenant_id, id=mid, deleted_at__isnull=True)
+            if not material:
+                continue
+            st = await get_material_source_type(tenant_id, mid)
+            if st not in (SOURCE_TYPE_MAKE, SOURCE_TYPE_PHANTOM, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE):
+                continue
+            try:
+                bom_items = await get_bom_items_by_material_id(
+                    tenant_id=tenant_id,
+                    material_id=mid,
+                    only_approved=True,
+                    use_default=True,
+                )
+            except Exception as e:
+                logger.warning(f"readiness BOM 展开失败 material_id={mid}: {e}")
+                continue
+            for bi in bom_items:
+                cid = getattr(bi, "component_id", None)
+                if cid and int(cid) not in seen:
+                    queue.append((int(cid), level + 1))
+        return ordered
+
+    async def preview_computation_readiness(
+        self,
+        tenant_id: int,
+        computation_id: int,
+    ) -> Dict[str, Any]:
+        """执行前检查物料主数据缺失项（提前期/安全库存/批量/供应商）。"""
+        from apps.master_data.models.material import Material
+
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+
+        material_ids = await self._collect_computation_material_ids(tenant_id, computation)
+        gaps: List[Dict[str, Any]] = []
+        for mid in material_ids:
+            material = await Material.get_or_none(tenant_id=tenant_id, id=mid, deleted_at__isnull=True)
+            if not material:
+                continue
+            source_type = await get_material_source_type(tenant_id, mid)
+            gaps.extend(_collect_material_mrp_gaps(material, source_type))
+
+        return {
+            "ready": len(gaps) == 0,
+            "gaps": gaps,
+            "material_count": len(material_ids),
+            "gap_count": len(gaps),
+        }
+
+    async def backfill_materials_for_computation(
+        self,
+        tenant_id: int,
+        items: List[Dict[str, Any]],
+        *,
+        updated_by: int,
+        current_user: Any = None,
+    ) -> Dict[str, Any]:
+        """将用户确认的缺失值回写到物料主数据（source_config / defaults）。"""
+        from apps.master_data.models.material import Material
+        from infra.models.user import User
+
+        if not items:
+            raise ValidationError("补齐项不能为空")
+
+        by_material: Dict[int, List[Dict[str, Any]]] = {}
+        for raw in items:
+            mid = int(raw.get("material_id") or 0)
+            field = str(raw.get("field") or "").strip()
+            if mid <= 0 or not field:
+                raise ValidationError("补齐项必须包含 material_id 与 field")
+            by_material.setdefault(mid, []).append({"field": field, "value": raw.get("value")})
+
+        actor = current_user
+        if actor is None and updated_by:
+            actor = await User.filter(id=updated_by).first()
+
+        updated_ids: List[int] = []
+        async with in_transaction():
+            for mid, patches in by_material.items():
+                material = await Material.get_or_none(tenant_id=tenant_id, id=mid, deleted_at__isnull=True)
+                if not material:
+                    raise NotFoundError(f"物料不存在: {mid}")
+
+                source_config = dict(material.source_config or {}) if isinstance(material.source_config, dict) else {}
+                defaults = dict(material.defaults or {}) if isinstance(material.defaults, dict) else {}
+                sc_changed = False
+                def_changed = False
+
+                for p in patches:
+                    field = p["field"]
+                    value = p["value"]
+                    if field.startswith("source_config."):
+                        key = field[len("source_config.") :]
+                        if key in (
+                            "production_lead_time",
+                            "purchase_lead_time",
+                            "outsource_lead_time",
+                        ):
+                            if value is None or value == "":
+                                raise ValidationError(f"物料 {material.main_code} 的 {field} 不能为空")
+                            source_config[key] = int(value)
+                        elif key in ("default_supplier_id", "outsource_supplier_id"):
+                            if value is None or value == "":
+                                raise ValidationError(f"物料 {material.main_code} 的 {field} 不能为空")
+                            source_config[key] = int(value)
+                        else:
+                            source_config[key] = value
+                        sc_changed = True
+                    elif field == "defaults.safetyStock":
+                        if value is None or value == "":
+                            raise ValidationError(f"物料 {material.main_code} 的安全库存不能为空")
+                        defaults["safetyStock"] = float(value)
+                        def_changed = True
+                    elif field == "defaults.reorder_point":
+                        if value is None or value == "":
+                            raise ValidationError(f"物料 {material.main_code} 的再订货点不能为空")
+                        defaults["reorder_point"] = float(value)
+                        def_changed = True
+                    elif field.startswith("defaults."):
+                        path = field[len("defaults.") :].split(".")
+                        if value is None or value == "":
+                            raise ValidationError(f"物料 {material.main_code} 的 {field} 不能为空")
+                        cursor: Dict[str, Any] = defaults
+                        for part in path[:-1]:
+                            nxt = cursor.get(part)
+                            if not isinstance(nxt, dict):
+                                nxt = {}
+                                cursor[part] = nxt
+                            cursor = nxt
+                        cursor[path[-1]] = float(value) if path[-1] != "default_supplier_id" else int(value)
+                        def_changed = True
+                    else:
+                        raise ValidationError(f"不支持的补齐字段: {field}")
+
+                if sc_changed:
+                    material.source_config = source_config
+                if def_changed:
+                    material.defaults = defaults
+                if sc_changed or def_changed:
+                    apply_update_audit(material, actor)
+                    await material.save()
+                    updated_ids.append(mid)
+
+        return {
+            "updated_material_ids": updated_ids,
+            "updated_count": len(updated_ids),
+        }
+
     async def execute_computation(
         self,
         tenant_id: int,

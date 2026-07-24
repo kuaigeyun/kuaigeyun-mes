@@ -41,11 +41,13 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 
 /**
  * 工作中心列表页面组件
@@ -117,11 +119,13 @@ const WorkCentersPage: React.FC = () => {
           { field: 'code', required: true, labelKey: 'field.workCenter.code' },
           { field: 'name', required: true, labelKey: 'field.workCenter.name' },
           { field: 'description', labelKey: 'field.workCenter.description' },
+          { field: 'isActive', labelKey: 'field.workCenter.isActive', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.workCenters.importExample.code'),
           t('app.master-data.workCenters.importExample.name'),
           t('app.master-data.workCenters.importExample.description'),
+          '是',
         ],
       ),
     [t, i18n.language],
@@ -279,11 +283,16 @@ const WorkCentersPage: React.FC = () => {
           return;
         }
 
+        const isActiveRaw =
+          headerIndexMap.isActive !== undefined ? String(row[headerIndexMap.isActive] ?? '').trim() : '';
+        const isActive =
+          !isActiveRaw ||
+          !['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(isActiveRaw.toLowerCase());
         const workCenterData: WorkCenterCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
           description: description ? String(description).trim() : undefined,
-          isActive: true,
+          isActive,
         };
 
         importData.push(workCenterData);
@@ -391,9 +400,7 @@ const WorkCentersPage: React.FC = () => {
         exportData = currentPageData;
         filename = `${t('app.master-data.workCenters.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
-        const allData = await workCenterApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        const { data: exportItems } = normalizeMasterListResponse(allData);
-        exportData = exportItems;
+        exportData = await fetchAllListItems((p) => workCenterApi.list({ ...p, ...lastListParamsRef.current }));
         filename = `${t('app.master-data.workCenters.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -641,11 +648,8 @@ const WorkCentersPage: React.FC = () => {
           onImport={handleImport}
           importHeaders={workCenterImportTemplate.importHeaders}
           importExampleRow={workCenterImportTemplate.importExampleRow}
+          importColumnOptions={workCenterImportTemplate.importColumnOptions}
           importFieldMap={workCenterImportTemplate.importHeaderMap}
-          importFieldRules={{
-            code: { required: true },
-            name: { required: true },
-          }}
           showExportButton={true}
           onExport={handleExport}
         />

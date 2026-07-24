@@ -4984,7 +4984,7 @@ class MaterialService:
                     effective_date=data.effective_date,
                     description=data.description,
                     remark=row_remark,
-                    is_active=True,
+                    is_active=item.is_active if item.is_active is not None else True,
                     is_configurable=is_cfg,
                     configurable_group_id=cfg_group_id if is_cfg else None,
                     is_default_configurable=is_default_cfg if is_cfg else False,

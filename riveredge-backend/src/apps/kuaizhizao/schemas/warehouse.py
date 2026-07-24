@@ -61,6 +61,7 @@ class ProductionPickingResponse(ProductionPickingBase):
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
     updated_by: Optional[int] = Field(None, description="更新人ID")
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
     capabilities: Optional[OutboundHubCapabilities] = Field(
         None, description="业务态 capabilities（出库 Hub，document_action_policy）",
     )

@@ -1,64 +1,117 @@
 """快制造 — 设备卡打印 HTML 模板。"""
 
-from apps.kuaizhizao.print.styles import PRINT_STYLE_A4
-
-EQUIPMENT_CARD_PRINT_CONTENT = (
-    PRINT_STYLE_A4
-    + """
+EQUIPMENT_CARD_PRINT_CONTENT = """
 <style>
-  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; }
+  @page { size: A4; margin: 10mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0; padding: 0;
+    font-family: "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    font-size: 11pt; color: #000;
+  }
+  .card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8mm;
+  }
   .equipment-card {
-    border: 2px solid #0f4c81; border-radius: 6px; padding: 10px 12px; break-inside: avoid;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
-  .card-title {
-    text-align: center; font-size: 14pt; font-weight: 700; color: #0f4c81;
-    border-bottom: 1px solid #cbd5e1; padding-bottom: 6px; margin-bottom: 8px;
+  table.eq-card {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    border: 1.5px solid #000;
   }
-  .card-body { display: flex; gap: 10px; align-items: flex-start; }
-  .card-info { flex: 1; font-size: 9.5pt; }
-  .card-row { display: flex; gap: 6px; margin-bottom: 4px; }
-  .card-label { flex: 0 0 36px; color: #64748b; }
-  .card-value { flex: 1; font-weight: 500; word-break: break-word; }
-  .card-qr { flex: 0 0 88px; text-align: center; }
-  .card-qr img { width: 88px; height: 88px; }
-  .scan-hint { font-size: 8pt; color: #64748b; margin-top: 4px; }
+  table.eq-card th,
+  table.eq-card td {
+    border: 1px solid #000;
+    padding: 5px 8px;
+    vertical-align: middle;
+  }
+  table.eq-card .card-title {
+    text-align: center;
+    font-size: 16pt;
+    font-weight: 700;
+    letter-spacing: 2px;
+    padding: 8px 6px;
+  }
+  table.eq-card .label {
+    width: 18%;
+    text-align: center;
+    font-size: 10.5pt;
+    white-space: nowrap;
+  }
+  table.eq-card .value {
+    width: 42%;
+    text-align: center;
+    font-size: 10.5pt;
+    word-break: break-word;
+  }
+  table.eq-card .qr-cell {
+    width: 40%;
+    text-align: center;
+    padding: 6px;
+  }
+  table.eq-card .qr-cell img {
+    width: 118px;
+    height: 118px;
+    display: block;
+    margin: 0 auto;
+  }
 </style>
-<div class="report">
-  <div class="report-header">
-    <div><h1 class="report-title">设备标识卡</h1></div>
-    <div class="doc-meta">打印时间：{{ print_time or "—" }}</div>
-  </div>
-  <div class="card-grid">
-    {% for item in items %}
-    <div class="equipment-card">
-      <div class="card-title">设备标识卡</div>
-      <div class="card-body">
-        <div class="card-info">
-          <div class="card-row"><span class="card-label">编号</span><span class="card-value">{{ item.code or "—" }}</span></div>
-          <div class="card-row"><span class="card-label">名称</span><span class="card-value">{{ item.name or "—" }}</span></div>
-          <div class="card-row"><span class="card-label">类型</span><span class="card-value">{{ item.type or "—" }}</span></div>
-          <div class="card-row"><span class="card-label">车间</span><span class="card-value">{{ item.workshop_name or "—" }}</span></div>
-          <div class="card-row"><span class="card-label">状态</span><span class="card-value">{{ item.status or "—" }}</span></div>
-        </div>
-        <div class="card-qr">
+<div class="card-grid">
+  {% for item in items %}
+  <div class="equipment-card">
+    <table class="eq-card">
+      <tr>
+        <th class="card-title" colspan="3">{{ card_title or "设备卡" }}</th>
+      </tr>
+      <tr>
+        <td class="label">编号</td>
+        <td class="value">{{ item.code or "—" }}</td>
+        <td class="qr-cell" rowspan="7">
           {% if item.qrcode_image %}
           <img src="{{ item.qrcode_image }}" alt="QR" />
           {% endif %}
-          <div class="scan-hint">扫码查看设备</div>
-        </div>
-      </div>
-    </div>
-    {% endfor %}
+        </td>
+      </tr>
+      <tr>
+        <td class="label">名称</td>
+        <td class="value">{{ item.name or "—" }}</td>
+      </tr>
+      <tr>
+        <td class="label">型号</td>
+        <td class="value">{{ item.model or "—" }}</td>
+      </tr>
+      <tr>
+        <td class="label">类型</td>
+        <td class="value">{{ item.type or "—" }}</td>
+      </tr>
+      <tr>
+        <td class="label">所属</td>
+        <td class="value">{{ item.affiliation or "—" }}</td>
+      </tr>
+      <tr>
+        <td class="label">购买</td>
+        <td class="value">{{ item.purchase_date or "—" }}</td>
+      </tr>
+      <tr>
+        <td class="label">启用</td>
+        <td class="value">{{ item.installation_date or "—" }}</td>
+      </tr>
+    </table>
   </div>
+  {% endfor %}
 </div>
 """
-)
 
 EQUIPMENT_CARD_PRINT_PRESET = {
-    "name": "设备标识卡",
+    "name": "设备卡",
     "code": "EQUIPMENT_CARD_PRINT",
     "type": "html",
-    "description": "快制造设备台账标识卡（含二维码），支持批量打印",
+    "description": "设备台账标识卡（表格+二维码），支持批量打印",
     "content": EQUIPMENT_CARD_PRINT_CONTENT,
     "config": {
         "document_type": "equipment_card",

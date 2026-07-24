@@ -57,6 +57,7 @@ import {
   buildMenuPathNameMap,
   enrichPagesWithMenuNames,
 } from '../../../../utils/featurePageDisplay';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 /**
  * 获取所有可用的表名选项（用于关联表名选择框）
@@ -1425,13 +1426,10 @@ const CustomFieldListPage: React.FC = () => {
                           messageApi.warning(t('field.customField.exportNoData'));
                           return;
                         }
-                        const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `custom-fields-${selectedPage.tableName}-${new Date().toISOString().slice(0, 10)}.json`;
-                        a.click();
-                        URL.revokeObjectURL(url);
+                        await downloadRecordsAsXlsx(
+                          items as Array<Record<string, unknown>>,
+                          `custom-fields-${selectedPage.tableName}-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                        );
                         messageApi.success(t('field.customField.exportSuccess', { count: items.length }));
                       } catch (error: any) {
                         messageApi.error(error?.message || t('pages.system.deleteFailed'));

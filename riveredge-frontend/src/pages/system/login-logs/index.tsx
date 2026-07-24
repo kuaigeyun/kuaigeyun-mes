@@ -28,6 +28,7 @@ import {
 import { useGlobalStore } from '../../../stores';
 import dayjs from 'dayjs';
 import { formatDateTimeBySiteSetting } from '../../../utils/format';
+import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 
 /**
  * 登录日志页面组件
@@ -344,13 +345,10 @@ const LoginLogsPage: React.FC = () => {
                 messageApi.warning(t('pages.system.loginLogs.noDataExport'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `login-logs-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `login-logs-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('pages.system.loginLogs.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('pages.system.loginLogs.exportFailed'));

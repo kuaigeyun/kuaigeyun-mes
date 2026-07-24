@@ -24,6 +24,7 @@ import {
   UserTaskStats,
   TaskActionRequest,
 } from '../../../services/userTask';
+import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 
 /**
  * 我的任务页面组件
@@ -490,15 +491,12 @@ const UserTasksPage: React.FC = () => {
                 messageApi.warning(t('common.exportNoData'));
                 return;
               }
-              const blob = new window.Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = t('pages.personal.tasks.exportFileName', {
-                date: new Date().toISOString().slice(0, 10),
-              });
-              a.click();
-              window.URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                t('pages.personal.tasks.exportFileName', {
+                  date: new Date().toISOString().slice(0, 10),
+                }),
+              );
               messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('common.updateFailed'));

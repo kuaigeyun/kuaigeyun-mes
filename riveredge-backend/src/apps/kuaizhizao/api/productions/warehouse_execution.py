@@ -139,6 +139,8 @@ from apps.kuaizhizao.schemas.inventory_alert import (
     InventoryAlertResponse,
     InventoryAlertListResponse,
     InventoryAlertHandleRequest,
+    InventoryAlertCheckRequest,
+    InventoryAlertCheckResponse,
 )
 from apps.kuaizhizao.schemas.packing_binding import (
     PackingBindingCreateFromReceipt,
@@ -2650,7 +2652,42 @@ async def delete_inventory_alert_rule(
 
 
 # ============ 库存预警记录 API ============
-# 注意：/statistics 必须在 /{alert_id} 之前定义，避免路径冲突
+# 注意：/statistics、/check 必须在 /{alert_id} 之前定义，避免路径冲突
+
+@router.post(
+    "/inventory-alerts/check",
+    response_model=InventoryAlertCheckResponse,
+    summary="Run inventory alert check",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-inventory-alert:execute"
+            )
+        )
+    ],
+)
+async def run_inventory_alert_check(
+    body: Optional[InventoryAlertCheckRequest] = Body(default=None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryAlertCheckResponse:
+    """
+    立即检查库存并触发/解除预警。
+    阈值链：匹配且启用的预警规则 → 物料最低/最高库存。
+    """
+    payload = body or InventoryAlertCheckRequest()
+    try:
+        return await inventory_alert_service.run_inventory_alert_check(
+            tenant_id=tenant_id,
+            material_id=payload.material_id,
+            warehouse_id=payload.warehouse_id,
+            operator_id=current_user.id,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/inventory-alerts/check", tenant_id)
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory-alerts/check", tenant_id)
+
 
 @router.get("/inventory-alerts/statistics", summary="Inventory alert statistics")
 async def get_inventory_alert_statistics(

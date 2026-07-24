@@ -7,9 +7,11 @@ Author: Luigi Lu
 Date: 2026-01-05
 """
 
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+import base64
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from apps.kuaizhizao.models.equipment import Equipment, EquipmentCalibration
 from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan, MaintenanceExecution
@@ -249,6 +251,145 @@ async def list_equipment_calibration_reminders(
         skip=skip,
         limit=limit,
     )
+
+
+@router.get(
+    "/print-cards",
+    summary="Print equipment identification cards",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-equipment:print"))],
+)
+async def print_equipment_cards(
+    uuids: List[str] = Query(..., description="设备 UUID 列表"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量打印设备标识卡（统一 DocumentPrintService + 打印模板）。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        result = await DocumentPrintService().print_equipment_cards(
+            tenant_id=tenant_id,
+            equipment_uuids=uuids,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'inline; filename="equipment-cards.pdf"'},
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.get(
+    "/id/{equipment_id}/print",
+    summary="Print equipment identification card by id",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-equipment:print"))],
+)
+async def print_equipment_card_by_id(
+    equipment_id: int = Path(..., description="设备主键 ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """按主键打印单张设备标识卡（与统一 printApiPath 映射一致）。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="equipment_card",
+            document_id=equipment_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="equipment-card-{equipment_id}.pdf"'},
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.get(
+    "/{uuid}/print",
+    summary="Print equipment identification card",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-equipment:print"))],
+)
+async def print_equipment_card(
+    uuid: str = Path(..., description="设备UUID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """按 UUID 打印单张设备标识卡。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        result = await DocumentPrintService().print_equipment_cards(
+            tenant_id=tenant_id,
+            equipment_uuids=[uuid],
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="equipment-card-{uuid}.pdf"'},
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
 
 
 @router.get("/{uuid}", response_model=EquipmentResponse)

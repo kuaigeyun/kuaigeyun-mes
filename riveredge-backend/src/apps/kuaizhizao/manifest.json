@@ -3385,6 +3385,7 @@
         "kuaizhizao:warehouse-management-inventory-alert:audit",
         "kuaizhizao:warehouse-management-inventory-alert:create",
         "kuaizhizao:warehouse-management-inventory-alert:delete",
+        "kuaizhizao:warehouse-management-inventory-alert:execute",
         "kuaizhizao:warehouse-management-inventory-alert:export",
         "kuaizhizao:warehouse-management-inventory-alert:import",
         "kuaizhizao:warehouse-management-inventory-alert:print",
@@ -4060,6 +4061,18 @@
             "module_icon": "tool",
             "auto_generate": true,
             "rule_code": "INVENTORY_TRANSFER_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-warehouse-inventory-alert",
+            "page_name": "库存预警规则",
+            "page_path": "/apps/kuaizhizao/warehouse-management/inventory-alert",
+            "code_field": "code",
+            "code_field_label": "预警规则编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "ALERT_RULE_CODE",
             "allow_manual_edit": true
         },
         {

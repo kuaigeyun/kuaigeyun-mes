@@ -157,6 +157,10 @@ export interface PurchaseOrderListParams {
   buyer_id?: number;
   keyword?: string;
   order_by?: string;
+  /** 仅可上拉建单；需配合 pull_target */
+  pullable_only?: boolean;
+  /** 上拉目标：purchase_order_change */
+  pull_target?: 'purchase_order_change';
 }
 
 export interface PurchaseOrderListResponse {

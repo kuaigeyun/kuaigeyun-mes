@@ -28,6 +28,8 @@ import {
   ScriptExecuteResponse,
 } from '../../../../services/script';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 const { TextArea } = Input;
 
@@ -423,10 +425,9 @@ const ScriptListPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.infra.scripts.batchDelete')}
-          showImportButton
           showExportButton
           onExport={async (type, keys, pageData) => {
-            const allData = await getScriptList({ skip: 0, limit: 10000 });
+            const allData = await fetchAllListItems((p) => getScriptList(p));
             let items = type === 'currentPage' && pageData?.length ? pageData : allData;
             if (type === 'selected' && keys?.length) {
               items = allData.filter((d) => keys.includes(d.uuid));
@@ -435,13 +436,10 @@ const ScriptListPage: React.FC = () => {
               messageApi.warning(t('pages.infra.scripts.noDataToExport'));
               return;
             }
-            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `scripts-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              `scripts-${new Date().toISOString().slice(0, 10)}.xlsx`,
+            );
             messageApi.success(t('pages.infra.scripts.exportSuccess'));
           }}
           search={{

@@ -36,6 +36,7 @@ import {
   CreateSystemParameterData,
   UpdateSystemParameterData,
 } from '../../../../services/systemParameter';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 /**
  * 系统参数管理列表页面组件
@@ -671,7 +672,6 @@ const SystemParameterListPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('field.systemParameter.batchDeleteButton')}
-          showImportButton
           showExportButton
           onExport={async (type, keys, pageData) => {
             const res = await getSystemParameterList({ page: 1, page_size: 10000 });
@@ -683,13 +683,10 @@ const SystemParameterListPage: React.FC = () => {
               messageApi.warning(t('field.systemParameter.exportNoData'));
               return;
             }
-            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `system-parameters-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              `system-parameters-${new Date().toISOString().slice(0, 10)}.xlsx`,
+            );
             messageApi.success(t('field.systemParameter.exportSuccess'));
           }}
           rowSelection={{

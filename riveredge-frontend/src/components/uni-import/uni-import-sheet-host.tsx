@@ -1,10 +1,14 @@
 /**
  * Univer 表格宿主：必须作为 Modal 子树挂载。
  * 粘贴：监听 BeforeClipboardPaste，取消默认粘贴，用 HTML x:num 完整数值强制文本写入。
+ *
+ * 重建条件仅绑定「表格种子」内容（暗色/上传行/表头/示例行），下拉选项变更只重打 Data Validation，
+ * 避免 columnOptions 异步到位时 dispose+重建竞态触发 getSheetBySheetId on null。
  */
-import React, { useLayoutEffect, useRef } from 'react';
+import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import { Spin, theme } from 'antd';
 import type { MessageInstance } from 'antd/es/message/interface';
+import { useTranslation } from 'react-i18next';
 
 import {
   createUniverSheetInstance,
@@ -12,7 +16,8 @@ import {
   runAfterUniverSheetsRenderServiceInit,
   type UniverSheetInstance,
 } from '../univer/bootstrap-sheet';
-import { buildImportCellData } from './build-import-cell-data';
+import { applyImportColumnDropdowns } from './apply-import-column-dropdowns';
+import { buildImportCellData, buildImportStringRows } from './build-import-cell-data';
 import { pasteClipboardAsForceString } from './paste-import-text';
 
 const UNIVER_COPY_COMMAND = 'univer.command.copy';
@@ -59,12 +64,17 @@ export interface UniImportSheetHostProps {
   uploadedSheetRows: string[][] | null;
   headers?: string[];
   exampleRow?: string[];
+  /** 与 headers 等长；某列有选项时示例行+数据区启用下拉 */
+  columnOptions?: Array<string[] | undefined>;
   height: number;
   loading: boolean;
   onLoadingChange: (loading: boolean) => void;
   instanceRef: React.MutableRefObject<UniverSheetInstance | null>;
   messageApi: MessageInstance;
-  /** 粘贴后同步字符串矩阵（剪贴板原文），供确认导入使用 */
+  /**
+   * 同步字符串矩阵（唯一确认数据源）。
+   * init / 上传重建 / 粘贴后都会回调；禁止确认时再从 Univer scrape。
+   */
   onSheetRowsChange?: (rows: string[][]) => void;
 }
 
@@ -73,6 +83,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
   uploadedSheetRows,
   headers,
   exampleRow,
+  columnOptions,
   height,
   loading,
   onLoadingChange,
@@ -80,6 +91,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
   messageApi,
   onSheetRowsChange,
 }) => {
+  const { t } = useTranslation();
   const { token } = theme.useToken();
   const containerRef = useRef<HTMLDivElement>(null);
   const mountSeqRef = useRef(0);
@@ -90,6 +102,29 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
   const onSheetRowsChangeRef = useRef(onSheetRowsChange);
   onSheetRowsChangeRef.current = onSheetRowsChange;
   const precisionRowsRef = useRef<string[][] | null>(uploadedSheetRows);
+  const rowCountRef = useRef(0);
+  const columnOptionsRef = useRef(columnOptions);
+  columnOptionsRef.current = columnOptions;
+  const tRef = useRef(t);
+  tRef.current = t;
+  const messageApiRef = useRef(messageApi);
+  messageApiRef.current = messageApi;
+  const onLoadingChangeRef = useRef(onLoadingChange);
+  onLoadingChangeRef.current = onLoadingChange;
+
+  /** 仅内容变化时重建 Univer，避免父组件每次 render 新数组引用导致 dispose 竞态 */
+  const sheetSeedKey = useMemo(
+    () =>
+      JSON.stringify({
+        isDark,
+        uploadedSheetRows,
+        headers,
+        exampleRow,
+      }),
+    [isDark, uploadedSheetRows, headers, exampleRow],
+  );
+
+  const columnOptionsKey = useMemo(() => JSON.stringify(columnOptions ?? null), [columnOptions]);
 
   useLayoutEffect(() => {
     precisionRowsRef.current = uploadedSheetRows;
@@ -102,7 +137,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
     }
 
     let active = true;
-    onLoadingChange(true);
+    onLoadingChangeRef.current(true);
 
     safeClearContainer(containerEl);
     const mountEl = document.createElement('div');
@@ -121,9 +156,9 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
         darkMode: isDark,
       });
     } catch (error: unknown) {
-      onLoadingChange(false);
+      onLoadingChangeRef.current(false);
       const msg = error instanceof Error ? error.message : String(error);
-      messageApi.error('表格加载失败：' + msg);
+      messageApiRef.current.error(tRef.current('components.uniImport.sheetLoadFailed', { message: msg }));
       return undefined;
     }
 
@@ -173,9 +208,12 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
           exampleRow,
           sheetRows,
         });
+        rowCountRef.current = rowCount;
 
-        instance.univerAPI.createWorkbook({
-          name: '导入数据',
+        const workbook = instance.univerAPI.createWorkbook({
+          id: containerId,
+          name: tRef.current('components.uniImport.workbookName'),
+          sheetOrder: ['sheet-1'],
           sheets: {
             'sheet-1': {
               id: 'sheet-1',
@@ -189,6 +227,15 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
           },
         });
 
+        const sheet =
+          workbook?.getSheetBySheetId?.('sheet-1') ?? workbook?.getActiveSheet?.() ?? null;
+        applyImportColumnDropdowns(
+          instance.univerAPI as any,
+          columnOptionsRef.current,
+          rowCount,
+          sheet,
+        );
+
         if (!active) {
           safeDisposeUniver(instance);
           return;
@@ -196,6 +243,14 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
 
         instanceRef.current = instance;
         relayoutUniverSheet(instance);
+
+        const seedRows = buildImportStringRows({
+          headers,
+          exampleRow,
+          sheetRows,
+        });
+        precisionRowsRef.current = seedRows;
+        onSheetRowsChangeRef.current?.(seedRows);
 
         // 官方粘贴前钩子：取消默认粘贴，改用 HTML x:num 完整精度写入
         try {
@@ -211,7 +266,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
                   plain: params.text ?? '',
                 });
                 if (!ok) {
-                  messageApi.warning('粘贴失败，请改用「上传 Excel」以保留完整精度');
+                  messageApiRef.current.warning(tRef.current('components.uniImport.pasteFailed'));
                 }
               },
             );
@@ -254,7 +309,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
 
           const ok = pastePreservingPrecision({ html, plain });
           if (!ok) {
-            messageApi.warning('粘贴失败，请改用「上传 Excel」以保留完整精度');
+            messageApiRef.current.warning(tRef.current('components.uniImport.pasteFailed'));
           }
         };
 
@@ -295,23 +350,27 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
         if (!sheetRows) {
           if (headers && headers.length > 0) {
             if (exampleRow && exampleRow.length > 0) {
-              messageApi.success(
-                '表格已加载。从 Excel 粘贴会保留完整小数；更稳妥请用「上传 Excel」',
+              messageApiRef.current.success(
+                tRef.current('components.uniImport.sheetLoadedWithPasteHint'),
               );
             } else {
-              messageApi.success('表格已加载，表头已自动填充，请从第二行开始填写数据');
+              messageApiRef.current.success(
+                tRef.current('components.uniImport.sheetLoadedHeaderOnly'),
+              );
             }
           } else {
-            messageApi.success('表格已加载，可以开始编辑数据');
+            messageApiRef.current.success(tRef.current('components.uniImport.sheetLoadedEmpty'));
           }
         }
 
-        onLoadingChange(false);
+        onLoadingChangeRef.current(false);
       } catch (error: unknown) {
         if (active) {
-          onLoadingChange(false);
+          onLoadingChangeRef.current(false);
           const msg = error instanceof Error ? error.message : String(error);
-          messageApi.error('表格加载失败：' + msg);
+          messageApiRef.current.error(
+            tRef.current('components.uniImport.sheetLoadFailed', { message: msg }),
+          );
         }
         safeDisposeUniver(instance);
       }
@@ -338,6 +397,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
         safeDisposeUniver(instance);
         instanceRef.current = null;
       }
+      rowCountRef.current = 0;
       const root = containerRef.current;
       if (root && mountEl.parentNode === root) {
         root.removeChild(mountEl);
@@ -345,7 +405,19 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
         safeClearContainer(root);
       }
     };
-  }, [isDark, uploadedSheetRows, headers, exampleRow, instanceRef, messageApi, onLoadingChange]);
+  }, [sheetSeedKey, instanceRef]);
+
+  // 下拉选项异步到位时只重打 DV，不 dispose 整表
+  useLayoutEffect(() => {
+    const instance = instanceRef.current;
+    if (!instance?.univerAPI || loading) return;
+    const rowCount = rowCountRef.current;
+    if (rowCount < 2) return;
+    const workbook = instance.univerAPI.getActiveWorkbook?.();
+    if (!workbook) return;
+    const sheet = workbook.getSheetBySheetId?.('sheet-1') ?? workbook.getActiveSheet?.();
+    applyImportColumnDropdowns(instance.univerAPI as any, columnOptions, rowCount, sheet);
+  }, [columnOptionsKey, columnOptions, loading, instanceRef]);
 
   return (
     <div style={{ position: 'relative', height: '100%' }}>
@@ -382,7 +454,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
         >
           <div style={{ textAlign: 'center' }}>
             <Spin size="large" />
-            <div style={{ marginTop: 12 }}>正在加载表格...</div>
+            <div style={{ marginTop: 12 }}>{t('components.uniImport.sheetLoading')}</div>
           </div>
         </div>
       )}

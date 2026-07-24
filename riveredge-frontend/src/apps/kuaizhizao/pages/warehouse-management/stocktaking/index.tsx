@@ -166,7 +166,8 @@ const StocktakingPage: React.FC = () => {
       const stocktakingDate = dayjs(values.stocktaking_date);
       await stocktakingApi.create({
         warehouse_id: values.warehouse_id,
-        warehouse_name: values._warehouse_name || '', // _warehouse_name 可以由 UniWarehouseSelect 暴露或我们在 onChange 截获
+        // 名称以后端按 warehouse_id 解析为准；有值时一并提交作首选
+        ...(values._warehouse_name ? { warehouse_name: values._warehouse_name } : {}),
         stocktaking_date: stocktakingDate.isValid()
           ? stocktakingDate.toISOString()
           : new Date().toISOString(),
@@ -856,9 +857,14 @@ const StocktakingPage: React.FC = () => {
               placeholder={t('app.kuaizhizao.stocktaking.formWarehousePlaceholder')}
               required
               onChange={(_value, warehouse) => {
-                formRef.current?.setFieldsValue({ _warehouse_name: warehouse?.name ?? '' });
+                const name =
+                  (warehouse as { name?: string; warehouse_name?: string } | undefined)?.name
+                  || (warehouse as { name?: string; warehouse_name?: string } | undefined)?.warehouse_name
+                  || '';
+                formRef.current?.setFieldsValue({ _warehouse_name: name });
               }}
             />
+            <ProFormText name="_warehouse_name" hidden />
           </Col>
           <Col span={12}>
             <ProFormDatePicker

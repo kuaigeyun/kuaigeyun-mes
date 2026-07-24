@@ -19,7 +19,12 @@ import {
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, FORM_LAYOUT, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -455,25 +460,41 @@ const PurchaseInquiriesPage: React.FC = () => {
     t,
   ]);
 
+  const isPullInquirySourceSelectable = useCallback(
+    (record: { capabilities?: { push_inquiry?: { allowed?: boolean } } }) =>
+      record.capabilities?.push_inquiry?.allowed === true,
+    [],
+  );
+
+  const pullDocumentScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
   const pullFromRequisitionQuery = useUniPullQuery<PullPurchaseRequisitionCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
-        const skip = (page - 1) * pageSize;
         const result = await listPurchaseRequisitions({
-          skip,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
         const rows = (result.data ?? []).filter((row) => row.id != null) as PullPurchaseRequisitionCandidate[];
-        return { data: rows, total: result.total ?? rows.length };
+        const filtered = filterByPullScope(rows, scope, isPullInquirySourceSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (error: unknown) {
         message.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseInquiry.loadRequisitionsFailed')));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => record.capabilities?.push_inquiry?.allowed !== true,
+    isRowDisabled: (record) => !isPullInquirySourceSelectable(record),
     onConfirm: async (keys) => {
       const requisitionId = Number(keys[0]);
       if (!requisitionId || requisitionId <= 0) {
@@ -1692,6 +1713,9 @@ const PurchaseInquiriesPage: React.FC = () => {
         pageSize={pullFromRequisitionQuery.pageSize}
         total={pullFromRequisitionQuery.total}
         onPageChange={pullFromRequisitionQuery.handlePageChange}
+        scopeOptions={pullFromRequisitionQuery.scopeOptions}
+        scope={pullFromRequisitionQuery.scope}
+        onScopeChange={pullFromRequisitionQuery.handleScopeChange}
         okText={t('common.next')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />

@@ -56,6 +56,7 @@ import CustomMenuLayoutEditor, {
   parseCustomLayoutEditorState,
   type CustomLayoutEditorState,
 } from './CustomMenuLayoutEditor';
+import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 
 // 菜单图标展示（与侧栏 ManufacturingIcons 一致）
 const IconItem = ({ icon }: { icon?: string }) => renderMenuIconByKey(icon, 16);
@@ -818,13 +819,10 @@ const MenuListPage: React.FC = () => {
                 messageApi.warning(t('pages.system.menus.noDataToExport'));
                 return;
               }
-              const blob = new window.Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `menus-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              window.URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `menus-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('pages.system.menus.exportedCount', { count: items.length }));
             }}
             toolBarRender={() => [

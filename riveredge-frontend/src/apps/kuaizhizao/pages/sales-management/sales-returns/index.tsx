@@ -7,7 +7,7 @@
  * @date 2026-01-17
  */
 
-import React, { useRef, useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import type { TFunction } from 'i18next';
 import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { useNavigate } from 'react-router-dom';
@@ -19,7 +19,7 @@ import {
 } from '../../../../../hooks/useDocumentCapabilities';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Space, Table, Row, Col, Form as AntForm, InputNumber, Input, Select, Dropdown, Tag, Card, Typography, Spin, Empty, Modal, Switch, Alert } from 'antd';
+import { App, Button, Space, Table, Row, Col, Form as AntForm, InputNumber, Input, Select, Dropdown, Tag, Card, Typography, Spin, Empty, Modal, Switch, Alert, List } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined, EditOutlined, PrinterOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
@@ -29,7 +29,13 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniCapabilityBatchButton, UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
+import { salesOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, MODAL_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
@@ -85,6 +91,15 @@ import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
+import { batchImport } from '../../../../../utils/batchOperations';
+import { materialApi } from '../../../../master-data/services/material';
+import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
+import {
+  buildDocumentReturnListImportTemplate,
+  parseDocumentReturnListImport,
+} from '../../shared/documentReturnListImport';
 
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
 const SALES_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_returns';
@@ -106,6 +121,9 @@ interface PullSalesOrderCandidate {
   status?: string;
   delivery_date?: string;
   updated_at?: string;
+  capabilities?: {
+    push_sales_return?: { allowed?: boolean; reason?: string | null };
+  };
 }
 
 /** 与后端 `system_dictionaries.py` 一致，租户未同步字典时的下拉兜底 */
@@ -162,7 +180,7 @@ function getImportRowValue(row: Record<string, unknown>, keys: string[]) {
 }
 
 const SalesReturnsPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_return.pull_from_sales_order');
   const navigate = useNavigate();
@@ -346,6 +364,46 @@ const SalesReturnsPage: React.FC = () => {
   const [returnTypeOptions, setReturnTypeOptions] = useState(fallbackReturnTypeOptions);
   const [shippingMethodOptions, setShippingMethodOptions] = useState(fallbackShippingMethodOptions);
   const [dictOptionsLoading, setDictOptionsLoading] = useState(false);
+  const salesReturnImportDict = useImportDictionaryOptions([
+    'MATERIAL_UNIT',
+    'RETURN_REASON',
+    'RETURN_TYPE',
+    'SHIPPING_METHOD',
+  ]);
+  const salesReturnLineUnitOptions = salesReturnImportDict.MATERIAL_UNIT ?? [];
+  const salesReturnLineImportColumnOptions = useMemo(
+    () => [
+      undefined,
+      salesReturnLineUnitOptions,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ],
+    [salesReturnLineUnitOptions],
+  );
+  const salesReturnListImportTemplate = useMemo(
+    () =>
+      buildDocumentReturnListImportTemplate(t, salesReturnImportDict, {
+        partnerField: 'customer',
+        codeLabelKey: 'app.kuaizhizao.salesReturn.colReturnCode',
+        partnerLabelKey: 'app.kuaizhizao.salesReturn.customer',
+        partnerAliases: ['客户', '客户名称'],
+        materialLabelKey: 'app.kuaizhizao.salesReturn.import.materialCode',
+        unitLabelKey: 'app.kuaizhizao.salesReturn.import.unit',
+        qtyLabelKey: 'app.kuaizhizao.salesReturn.import.returnQuantity',
+        unitPriceLabelKey: 'app.kuaizhizao.salesReturn.import.unitPrice',
+        batchLabelKey: 'app.kuaizhizao.salesReturn.import.batchNumber',
+        locationLabelKey: 'app.kuaizhizao.salesReturn.import.location',
+        notesLabelKey: 'app.kuaizhizao.salesReturn.import.notes',
+        defaultUnit: t('app.kuaizhizao.salesReturn.defaultUnit'),
+        examplePartner: t('app.kuaizhizao.quotation.importExample.customerName'),
+        exampleMaterial: 'MAT001',
+        exampleWarehouse: t('app.kuaizhizao.salesReturn.listImport.exampleWarehouse'),
+      }),
+    [t, i18n.language, salesReturnImportDict],
+  );
 
   /** 打开表单时拉取字典；若租户未初始化则尝试同步系统字典（与 core 配置一致） */
   useEffect(() => {
@@ -613,6 +671,21 @@ const SalesReturnsPage: React.FC = () => {
       { title: t('app.kuaizhizao.salesReturn.orderStatus'), dataIndex: 'status', width: 130, align: 'center' },
       { title: t('app.kuaizhizao.salesReturn.deliveryDate'), dataIndex: 'delivery_date', width: 130, render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-') },
+      {
+        title: t('app.kuaizhizao.shipmentNotice.convertStatus'),
+        key: 'convert_status',
+        width: 180,
+        align: 'center',
+        render: (_, r) =>
+          r.capabilities?.push_sales_return?.allowed === true ? (
+            <Tag color="success">{t('app.kuaizhizao.shipmentNotice.canCreate')}</Tag>
+          ) : (
+            <Tag color="gold">
+              {salesOrderCapabilityReasonMessage(r.capabilities?.push_sales_return?.reason, t) ||
+                t('app.kuaizhizao.workOrder.tagCannotCreate')}
+            </Tag>
+          ),
+      },
     ],
     [t],
   );
@@ -720,10 +793,26 @@ const SalesReturnsPage: React.FC = () => {
     }
   };
 
+  const isPullSalesReturnOrderSelectable = useCallback(
+    (record: PullSalesOrderCandidate) => record.capabilities?.push_sales_return?.allowed === true,
+    [],
+  );
+
+  const pullFromSalesOrderScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
   const pullFromSalesOrderQuery = useUniPullQuery<PullSalesOrderCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullFromSalesOrderScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullSalesReturnOrderSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await listSalesOrders({
           skip: 0,
@@ -738,18 +827,27 @@ const SalesReturnsPage: React.FC = () => {
           status: order.status,
           delivery_date: order.delivery_date,
           updated_at: order.updated_at,
+          capabilities: order.capabilities,
         }));
-        const start = (page - 1) * pageSize;
-        return { data: candidates.slice(start, start + pageSize), total: candidates.length };
+        const filtered = filterByPullScope(candidates, scope, isPullSalesReturnOrderSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (error: any) {
         messageApi.error(error?.message || t('app.kuaizhizao.salesReturn.loadSalesOrdersFailed'));
         return { data: [], total: 0 };
       }
     },
-    onConfirm: async (keys) => {
+    onConfirm: async (keys, rows) => {
       const selectedId = Number(keys[0]);
       if (!selectedId || selectedId <= 0) {
         messageApi.warning(t('app.kuaizhizao.salesReturn.selectSalesOrder'));
+        return;
+      }
+      const selected = rows[0];
+      if (selected && !isPullSalesReturnOrderSelectable(selected)) {
+        messageApi.warning(
+          salesOrderCapabilityReasonMessage(selected.capabilities?.push_sales_return?.reason, t) ||
+            t('app.kuaizhizao.salesReturn.selectSalesOrder'),
+        );
         return;
       }
       pullFromSalesOrderQuery.closeModal();
@@ -904,12 +1002,148 @@ const SalesReturnsPage: React.FC = () => {
     setMaterialPickerOpen(false);
   };
 
+  const handleListImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning(t('app.kuaizhizao.quotation.importDataInvalid'));
+      return;
+    }
+    const rows = (data.slice(2) as any[][]).filter((row) =>
+      row?.some((c) => c != null && String(c).trim() !== ''),
+    );
+    if (rows.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.quotation.noImportRows'));
+      return;
+    }
+
+    try {
+      const [materialsRes, warehousesRes] = await Promise.all([
+        materialApi.list({ limit: 1000, isActive: true }),
+        masterWarehouseApi.list({ limit: 1000, is_active: true }),
+      ]);
+      const materials = materialsRes?.items ?? [];
+      const warehouses = (warehousesRes as any)?.items ?? (Array.isArray(warehousesRes) ? warehousesRes : []);
+
+      const { errors, items: toImport } = parseDocumentReturnListImport(data, {
+        t,
+        importHeaderMap: salesReturnListImportTemplate.importHeaderMap,
+        partnerField: 'customer',
+        partners: customerList,
+        warehouses,
+        materials,
+        defaultUnit: t('app.kuaizhizao.salesReturn.defaultUnit'),
+        defaultReturnType: 'OTHER',
+      });
+
+      if (errors.length > 0) {
+        Modal.warning({
+          title: t('app.kuaizhizao.quotation.validationFailed'),
+          width: 600,
+          content: (
+            <div>
+              <p>{t('app.master-data.validationFailedIntro')}</p>
+              <List
+                size="small"
+                dataSource={errors}
+                renderItem={(item) => (
+                  <List.Item>
+                    <Typography.Text type="danger">
+                      {t('app.kuaizhizao.quotation.importRowError', {
+                        row: item.row,
+                        message: item.message,
+                      })}
+                    </Typography.Text>
+                  </List.Item>
+                )}
+              />
+            </div>
+          ),
+        });
+        return;
+      }
+
+      if (toImport.length === 0) {
+        messageApi.warning(t('app.kuaizhizao.quotation.noImportData'));
+        return;
+      }
+
+      const result = await batchImport({
+        items: toImport,
+        importFn: async (item) =>
+          warehouseApi.salesReturn.create({
+            return_code: item.return_code,
+            customer_id: item.partner_id,
+            customer_name: item.partner_name,
+            warehouse_id: item.warehouse_id,
+            warehouse_name: item.warehouse_name,
+            return_time: item.return_time,
+            return_reason: item.return_reason,
+            return_type: item.return_type,
+            shipping_method: item.shipping_method,
+            notes: item.notes,
+            items: item.items,
+          }),
+        title: t('app.kuaizhizao.salesReturn.listImport.importing'),
+        concurrency: 3,
+      });
+
+      if (result.failureCount > 0) {
+        Modal.warning({
+          title: t('app.kuaizhizao.quotation.importPartialTitle'),
+          width: 600,
+          content: (
+            <div>
+              <p>
+                <strong>
+                  {t('app.kuaizhizao.quotation.importResult', {
+                    success: result.successCount,
+                    failed: result.failureCount,
+                  })}
+                </strong>
+              </p>
+              {result.errors.length > 0 && (
+                <List
+                  size="small"
+                  dataSource={result.errors}
+                  renderItem={(e) => (
+                    <List.Item>
+                      <Typography.Text type="danger">
+                        {t('app.kuaizhizao.quotation.importRowError', {
+                          row: e.row,
+                          message: e.error,
+                        })}
+                      </Typography.Text>
+                    </List.Item>
+                  )}
+                />
+              )}
+            </div>
+          ),
+        });
+      } else {
+        messageApi.success(
+          t('app.kuaizhizao.quotation.importSuccess', { count: result.successCount }),
+        );
+      }
+      if (result.successCount > 0) {
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.importFailed'));
+    }
+  };
+
   // Excel导入处理
   const handleImport = (data: any[]) => {
     const materialCodeKeys = [
       t('app.kuaizhizao.salesReturn.import.materialCode'),
       t('app.kuaizhizao.salesOrder.materialCode'),
       '产品编号',
+    ];
+    const unitKeys = [
+      t('app.kuaizhizao.salesReturn.import.unit'),
+      t('app.kuaizhizao.salesOrder.unit'),
+      '单位',
     ];
     const returnQuantityKeys = [
       t('app.kuaizhizao.salesReturn.import.returnQuantity'),
@@ -936,6 +1170,8 @@ const SalesReturnsPage: React.FC = () => {
     const currentItems = formRef.current?.getFieldValue('items') || [];
     const newItems = data.map((row) => ({
       material_code: getImportRowValue(row, materialCodeKeys),
+      material_unit:
+        getImportRowValue(row, unitKeys) || t('app.kuaizhizao.salesReturn.defaultUnit'),
       return_quantity: Number(getImportRowValue(row, returnQuantityKeys) ?? 1),
       unit_price: Number(getImportRowValue(row, unitPriceKeys) ?? 0),
       batch_number: getImportRowValue(row, batchNumberKeys),
@@ -1033,6 +1269,12 @@ const SalesReturnsPage: React.FC = () => {
           showCreateButton={false}
           createButtonText={t('app.kuaizhizao.salesReturn.create')}
           onCreate={handleCreate}
+          showImportButton={salesReturnPerms.canCreate}
+          onImport={handleListImport}
+          importHeaders={salesReturnListImportTemplate.importHeaders}
+          importExampleRow={salesReturnListImportTemplate.importExampleRow}
+          importColumnOptions={salesReturnListImportTemplate.importColumnOptions}
+          importFieldMap={salesReturnListImportTemplate.importHeaderMap}
           toolBarRender={() => [
             <UniPullCreateToolbar
               compactKey="create-sales-return-with-pull"
@@ -1467,6 +1709,10 @@ const SalesReturnsPage: React.FC = () => {
         pageSize={pullFromSalesOrderQuery.pageSize}
         total={pullFromSalesOrderQuery.total}
         onPageChange={pullFromSalesOrderQuery.handlePageChange}
+        isRowDisabled={pullFromSalesOrderQuery.isRowDisabled}
+        scopeOptions={pullFromSalesOrderQuery.scopeOptions}
+        scope={pullFromSalesOrderQuery.scope}
+        onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
         okText={t('common.next')}
       />
 
@@ -1593,6 +1839,7 @@ const SalesReturnsPage: React.FC = () => {
           title={t('app.kuaizhizao.salesReturn.importTitle')}
           headers={[
             t('app.kuaizhizao.salesReturn.import.materialCode'),
+            t('app.kuaizhizao.salesReturn.import.unit'),
             t('app.kuaizhizao.salesReturn.import.returnQuantity'),
             t('app.kuaizhizao.salesReturn.import.unitPrice'),
             t('app.kuaizhizao.salesReturn.import.batchNumber'),
@@ -1601,12 +1848,17 @@ const SalesReturnsPage: React.FC = () => {
           ]}
           exampleRow={[
             'MAT001',
+            pickImportExampleValue(
+              salesReturnLineUnitOptions,
+              t('app.kuaizhizao.salesReturn.defaultUnit'),
+            ),
             '10',
             '99.5',
             'B20260117001',
             'A01-01-01',
             t('app.kuaizhizao.salesReturn.import.notesExample'),
           ]}
+          columnOptions={salesReturnLineImportColumnOptions}
         />
       </Suspense>
 

@@ -8,8 +8,8 @@ Date: 2025-01-04
 """
 
 import uuid
-from datetime import datetime
-from typing import List, Optional, Dict, Any, Tuple, Tuple
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional, Tuple
 from decimal import Decimal
 
 from tortoise.queryset import Q
@@ -24,10 +24,51 @@ from apps.kuaizhizao.schemas.inventory_alert import (
     InventoryAlertResponse,
     InventoryAlertListResponse,
     InventoryAlertHandleRequest,
+    InventoryAlertCheckResponse,
+)
+from apps.kuaizhizao.services.inventory_threshold_resolver import (
+    alert_level_for,
+    build_alert_message,
+    is_threshold_breached,
+    resolve_effective_threshold,
 )
 
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+
+
+def _normalize_rule_threshold_fields(
+    *,
+    alert_type: str,
+    threshold_type: str,
+    threshold_value: Optional[Decimal],
+    inherit_material_threshold: bool,
+) -> Tuple[str, Optional[Decimal], bool]:
+    """校验并规范化规则阈值字段。"""
+    at = (alert_type or "").strip()
+    tt = (threshold_type or "").strip() or "quantity"
+    inherit = bool(inherit_material_threshold)
+
+    if at == "expired":
+        if inherit:
+            raise ValidationError("过期预警不支持继承物料阈值，请配置天数阈值")
+        if tt != "days":
+            raise ValidationError("过期预警的阈值类型必须为天数")
+        if threshold_value is None:
+            raise ValidationError("过期预警必须填写阈值天数")
+        return tt, threshold_value, False
+
+    if at not in ("low_stock", "high_stock"):
+        raise ValidationError(f"不支持的预警类型: {at}")
+
+    if inherit:
+        return "quantity", None, True
+
+    if threshold_value is None:
+        raise ValidationError("未继承物料阈值时必须填写阈值数值")
+    if tt not in ("quantity", "percentage"):
+        raise ValidationError("低/高库存阈值类型仅支持数量或百分比")
+    return tt, threshold_value, False
 
 
 class InventoryAlertRuleService(AppBaseService[InventoryAlertRule]):
@@ -60,6 +101,12 @@ class InventoryAlertRuleService(AppBaseService[InventoryAlertRule]):
         Raises:
             ValidationError: 数据验证失败
         """
+        threshold_type, threshold_value, inherit = _normalize_rule_threshold_fields(
+            alert_type=rule_data.alert_type,
+            threshold_type=rule_data.threshold_type,
+            threshold_value=rule_data.threshold_value,
+            inherit_material_threshold=rule_data.inherit_material_threshold,
+        )
         async with in_transaction():
             # 生成预警规则编码
             code = await self.generate_code(
@@ -85,8 +132,9 @@ class InventoryAlertRuleService(AppBaseService[InventoryAlertRule]):
                 material_group_name=rule_data.material_group_name,
                 warehouse_id=rule_data.warehouse_id,
                 warehouse_name=rule_data.warehouse_name,
-                threshold_type=rule_data.threshold_type,
-                threshold_value=rule_data.threshold_value,
+                threshold_type=threshold_type,
+                threshold_value=threshold_value,
+                inherit_material_threshold=inherit,
                 is_enabled=rule_data.is_enabled,
                 notify_users=rule_data.notify_users,
                 notify_roles=rule_data.notify_roles,
@@ -228,10 +276,32 @@ class InventoryAlertRuleService(AppBaseService[InventoryAlertRule]):
             # 更新字段
             if rule_data.name is not None:
                 rule.name = rule_data.name
-            if rule_data.threshold_type is not None:
-                rule.threshold_type = rule_data.threshold_type
-            if rule_data.threshold_value is not None:
-                rule.threshold_value = rule_data.threshold_value
+            next_inherit = (
+                rule_data.inherit_material_threshold
+                if rule_data.inherit_material_threshold is not None
+                else bool(rule.inherit_material_threshold)
+            )
+            next_type = rule_data.threshold_type if rule_data.threshold_type is not None else rule.threshold_type
+            # 显式传入 inherit / threshold 时重算；仅改 threshold_value 也允许
+            if (
+                rule_data.inherit_material_threshold is not None
+                or rule_data.threshold_type is not None
+                or "threshold_value" in rule_data.model_fields_set
+            ):
+                next_value = (
+                    rule_data.threshold_value
+                    if "threshold_value" in rule_data.model_fields_set
+                    else rule.threshold_value
+                )
+                next_type, next_value, next_inherit = _normalize_rule_threshold_fields(
+                    alert_type=rule.alert_type,
+                    threshold_type=next_type,
+                    threshold_value=next_value,
+                    inherit_material_threshold=next_inherit,
+                )
+                rule.threshold_type = next_type
+                rule.threshold_value = next_value
+                rule.inherit_material_threshold = next_inherit
             if rule_data.is_enabled is not None:
                 rule.is_enabled = rule_data.is_enabled
             if rule_data.notify_users is not None:
@@ -536,25 +606,294 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
         tenant_id: int,
         material_id: int,
         warehouse_id: int,
-        current_quantity: Decimal
+        current_quantity: Decimal,
+        *,
+        warehouse_name: Optional[str] = None,
+        material: Any = None,
+        rules: Optional[List[InventoryAlertRule]] = None,
+        operator_id: Optional[int] = None,
     ) -> List[InventoryAlertResponse]:
         """
-        检查并触发库存预警
-
-        Args:
-            tenant_id: 组织ID
-            material_id: 物料ID
-            warehouse_id: 仓库ID
-            current_quantity: 当前库存数量
-
-        Returns:
-            List[InventoryAlertResponse]: 触发的预警记录列表
+        检查并触发（或自动解除）指定物料+仓库的低/高库存预警。
         """
-        # TODO: 从库存服务获取物料和仓库信息
-        # TODO: 获取所有启用的预警规则
-        # TODO: 根据规则检查是否触发预警
-        # TODO: 如果触发，创建预警记录
+        from apps.master_data.models.material import Material
 
-        # 简化处理，返回空列表
-        return []
+        if material is None:
+            material = await Material.get_or_none(
+                id=material_id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
+        if not material:
+            raise NotFoundError(f"物料不存在: {material_id}")
+
+        if rules is None:
+            rules = await InventoryAlertRule.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                is_enabled=True,
+            ).all()
+
+        qty = Decimal(str(current_quantity or 0))
+        wh_name = (warehouse_name or "").strip() or f"仓库({warehouse_id})"
+        results: List[InventoryAlertResponse] = []
+        for alert_type in ("low_stock", "high_stock"):
+            threshold = resolve_effective_threshold(
+                alert_type=alert_type,
+                material=material,
+                warehouse_id=warehouse_id,
+                rules=rules,
+            )
+            breached = is_threshold_breached(qty, threshold)
+            alert = await self._upsert_open_alert(
+                tenant_id=tenant_id,
+                alert_type=alert_type,
+                material=material,
+                warehouse_id=warehouse_id,
+                warehouse_name=wh_name,
+                quantity=qty,
+                threshold=threshold,
+                breached=breached,
+                operator_id=operator_id,
+            )
+            if alert is not None:
+                results.append(alert)
+        return results
+
+    async def run_inventory_alert_check(
+        self,
+        tenant_id: int,
+        *,
+        material_id: Optional[int] = None,
+        warehouse_id: Optional[int] = None,
+        operator_id: Optional[int] = None,
+    ) -> InventoryAlertCheckResponse:
+        """
+        批量检查库存余额并触发/解除预警（立即检查）。
+        阈值链：匹配规则 → 物料 defaults.safetyStock/maxStock。
+        """
+        from apps.kuaizhizao.services.report_service import ReportService
+        from apps.master_data.models.material import Material
+
+        report = ReportService()
+        rows = await report._load_inventory_rows(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            warehouse_id=warehouse_id,
+            include_expired=True,
+        )
+        grouped: Dict[Tuple[int, int], Dict[str, Any]] = {}
+        for row in rows:
+            mid = row.get("material_id")
+            wid = row.get("warehouse_id")
+            if mid is None or wid is None:
+                continue
+            key = (int(mid), int(wid))
+            if key not in grouped:
+                grouped[key] = {
+                    "material_id": int(mid),
+                    "warehouse_id": int(wid),
+                    "warehouse_name": row.get("warehouse_name") or f"仓库({wid})",
+                    "material_code": row.get("material_code") or "",
+                    "material_name": row.get("material_name") or "",
+                    "quantity": Decimal("0"),
+                    "min_expiry_days": None,
+                }
+            grouped[key]["quantity"] += Decimal(str(row.get("quantity") or 0))
+            expiry = row.get("expiry_date")
+            if expiry:
+                try:
+                    exp_date = date.fromisoformat(str(expiry)[:10])
+                    days_left = (exp_date - date.today()).days
+                    prev = grouped[key]["min_expiry_days"]
+                    if prev is None or days_left < prev:
+                        grouped[key]["min_expiry_days"] = days_left
+                except Exception:
+                    pass
+
+        material_ids = sorted({g["material_id"] for g in grouped.values()})
+        materials = await Material.filter(
+            tenant_id=tenant_id, id__in=material_ids, deleted_at__isnull=True
+        ).all() if material_ids else []
+        material_map = {int(m.id): m for m in materials}
+        rules = await InventoryAlertRule.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_enabled=True,
+        ).all()
+
+        touched: List[InventoryAlertResponse] = []
+        triggered = 0
+        resolved = 0
+        for balance in grouped.values():
+            material = material_map.get(int(balance["material_id"]))
+            if not material:
+                continue
+            qty = Decimal(str(balance["quantity"]))
+            wid = int(balance["warehouse_id"])
+            wh_name = str(balance["warehouse_name"] or "")
+            for alert_type in ("low_stock", "high_stock"):
+                threshold = resolve_effective_threshold(
+                    alert_type=alert_type,
+                    material=material,
+                    warehouse_id=wid,
+                    rules=rules,
+                )
+                breached = is_threshold_breached(qty, threshold)
+                before = await InventoryAlert.get_or_none(
+                    tenant_id=tenant_id,
+                    material_id=int(material.id),
+                    warehouse_id=wid,
+                    alert_type=alert_type,
+                    status__in=["pending", "processing"],
+                    deleted_at__isnull=True,
+                )
+                had_open = before is not None
+                alert = await self._upsert_open_alert(
+                    tenant_id=tenant_id,
+                    alert_type=alert_type,
+                    material=material,
+                    warehouse_id=wid,
+                    warehouse_name=wh_name,
+                    quantity=qty,
+                    threshold=threshold,
+                    breached=breached,
+                    operator_id=operator_id,
+                    existing=before,
+                )
+                if alert is None:
+                    continue
+                touched.append(alert)
+                if breached and not had_open:
+                    triggered += 1
+                elif not breached and had_open:
+                    resolved += 1
+
+            # 过期：仅规则驱动
+            exp_threshold = resolve_effective_threshold(
+                alert_type="expired",
+                material=material,
+                warehouse_id=wid,
+                rules=rules,
+            )
+            days_left = balance.get("min_expiry_days")
+            expired_breached = (
+                exp_threshold.has_threshold
+                and days_left is not None
+                and Decimal(str(days_left)) <= (exp_threshold.effective_quantity or Decimal("0"))
+            )
+            before_exp = await InventoryAlert.get_or_none(
+                tenant_id=tenant_id,
+                material_id=int(material.id),
+                warehouse_id=wid,
+                alert_type="expired",
+                status__in=["pending", "processing"],
+                deleted_at__isnull=True,
+            )
+            had_open_exp = before_exp is not None
+            alert_exp = await self._upsert_open_alert(
+                tenant_id=tenant_id,
+                alert_type="expired",
+                material=material,
+                warehouse_id=wid,
+                warehouse_name=wh_name,
+                quantity=qty,
+                threshold=exp_threshold,
+                breached=bool(expired_breached),
+                operator_id=operator_id,
+                existing=before_exp,
+                override_message=(
+                    build_alert_message(quantity=qty, threshold=exp_threshold)
+                    if expired_breached
+                    else None
+                ),
+            )
+            if alert_exp is not None:
+                touched.append(alert_exp)
+                if expired_breached and not had_open_exp:
+                    triggered += 1
+                elif not expired_breached and had_open_exp:
+                    resolved += 1
+
+        return InventoryAlertCheckResponse(
+            checked_balances=len(grouped),
+            triggered_count=triggered,
+            resolved_count=resolved,
+            alerts=touched,
+        )
+
+    async def _upsert_open_alert(
+        self,
+        *,
+        tenant_id: int,
+        alert_type: str,
+        material: Any,
+        warehouse_id: int,
+        warehouse_name: str,
+        quantity: Decimal,
+        threshold: Any,
+        breached: bool,
+        operator_id: Optional[int] = None,
+        existing: Optional[InventoryAlert] = None,
+        override_message: Optional[str] = None,
+    ) -> Optional[InventoryAlertResponse]:
+        """有突破则创建/更新 pending；已恢复则自动 resolved。"""
+        if existing is None:
+            existing = await InventoryAlert.get_or_none(
+                tenant_id=tenant_id,
+                material_id=int(material.id),
+                warehouse_id=warehouse_id,
+                alert_type=alert_type,
+                status__in=["pending", "processing"],
+                deleted_at__isnull=True,
+            )
+
+        now = datetime.now()
+
+        if not breached:
+            if existing is None:
+                return None
+            existing.status = "resolved"
+            existing.resolved_at = now
+            existing.current_quantity = quantity
+            note = "库存恢复，系统自动解除"
+            existing.handling_notes = (
+                f"{existing.handling_notes}\n{note}" if existing.handling_notes else note
+            )
+            await existing.save()
+            return InventoryAlertResponse.model_validate(existing)
+
+        if not threshold.has_threshold or threshold.effective_quantity is None:
+            return None
+
+        message = override_message or build_alert_message(quantity=quantity, threshold=threshold)
+        level = alert_level_for(quantity, alert_type)
+        eff = threshold.effective_quantity
+
+        if existing is not None:
+            existing.current_quantity = quantity
+            existing.threshold_value = eff
+            existing.alert_level = level
+            existing.alert_message = message
+            existing.alert_rule_id = threshold.rule_id
+            existing.warehouse_name = warehouse_name or existing.warehouse_name
+            await existing.save()
+            return InventoryAlertResponse.model_validate(existing)
+
+        alert = await InventoryAlert.create(
+            tenant_id=tenant_id,
+            uuid=str(uuid.uuid4()),
+            alert_rule_id=threshold.rule_id,
+            alert_type=alert_type,
+            material_id=int(material.id),
+            material_code=getattr(material, "main_code", None) or "",
+            material_name=getattr(material, "name", None) or "",
+            warehouse_id=warehouse_id,
+            warehouse_name=warehouse_name,
+            current_quantity=quantity,
+            threshold_value=eff,
+            alert_level=level,
+            alert_message=message,
+            status="pending",
+            triggered_at=now,
+        )
+        return InventoryAlertResponse.model_validate(alert)
 

@@ -115,6 +115,11 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
+import {
+  IMPORT_PRICE_TYPE_OPTIONS,
+  pickImportExampleValue,
+} from '../../../../../utils/loadImportDictionaryValues';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import { useConfigStore } from '../../../../../stores/configStore';
 import { useGlobalStore } from '../../../../../stores';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -160,6 +165,8 @@ const QUOTATION_TABLE_CACHE_ID = 'apps.kuaizhizao.pages.sales-management.quotati
 const QUOTATION_CREATE_PATH = `${QUOTATION_LIST_PATH}/new`;
 const quotationEditPath = (id: number) => `${QUOTATION_LIST_PATH}/${id}/edit`;
 import { KUAIZHIZAO_QUOTATION_FIELD_RESOURCE as QUOTATION_FIELD_RESOURCE } from '../../../../../constants/fieldPermissionResources';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport }))
@@ -604,6 +611,17 @@ const QuotationsPage: React.FC = () => {
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const invalidateSalesOrderList = useInvalidateSalesOrderList();
 
+  const quotationImportDict = useImportDictionaryOptions([
+    'CURRENCY',
+    'SHIPPING_METHOD',
+    'PAYMENT_TERMS',
+    'MATERIAL_UNIT',
+  ]);
+  const quotationLineUnitOptions = quotationImportDict.MATERIAL_UNIT ?? [];
+  const quotationLineImportColumnOptions = useMemo(
+    () => [undefined, undefined, quotationLineUnitOptions, undefined, undefined, undefined],
+    [quotationLineUnitOptions],
+  );
   const quotationImportTemplate = useMemo(
     () =>
       buildFactoryImportTemplate(
@@ -631,6 +649,15 @@ const QuotationsPage: React.FC = () => {
           { field: 'quantity', required: true, labelKey: 'app.kuaizhizao.quotation.import.quantity', aliases: ['数量'] },
           { field: 'unitPrice', labelKey: 'app.kuaizhizao.quotation.import.unitPrice', aliases: ['单价'] },
           { field: 'delivery', labelKey: 'app.kuaizhizao.quotation.import.deliveryDate', aliases: ['交货日期'] },
+          { field: 'validUntil', labelKey: 'app.kuaizhizao.quotation.form.validUntil', aliases: ['有效期至'] },
+          { field: 'customerContact', labelKey: 'app.kuaizhizao.quotation.import.customerContact', aliases: ['客户联系人'] },
+          { field: 'customerPhone', labelKey: 'app.kuaizhizao.quotation.import.customerPhone', aliases: ['客户电话'] },
+          { field: 'shippingAddress', labelKey: 'app.kuaizhizao.quotation.import.shippingAddress', aliases: ['收货地址'] },
+          { field: 'shippingMethod', labelKey: 'app.kuaizhizao.quotation.import.shippingMethod', aliases: ['发货方式'] , options: quotationImportDict.SHIPPING_METHOD },
+          { field: 'paymentTerms', labelKey: 'app.kuaizhizao.quotation.import.paymentTerms', aliases: ['付款条件'] , options: quotationImportDict.PAYMENT_TERMS },
+          { field: 'currency', labelKey: 'app.kuaizhizao.quotation.form.currency', aliases: ['币种'] , options: quotationImportDict.CURRENCY },
+          { field: 'priceType', labelKey: 'app.kuaizhizao.salesOrder.priceType', aliases: ['价格类型'] , options: [...IMPORT_PRICE_TYPE_OPTIONS] },
+          { field: 'salesman', labelKey: 'app.kuaizhizao.quotation.import.salesman', aliases: ['业务员'] },
           { field: 'notes', labelKey: 'app.kuaizhizao.quotation.import.notes', aliases: ['备注'] },
         ],
         [
@@ -642,9 +669,18 @@ const QuotationsPage: React.FC = () => {
           t('app.kuaizhizao.quotation.importExample.unitPrice'),
           t('app.kuaizhizao.quotation.importExample.deliveryDate'),
           '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          'CNY',
+          'tax_inclusive',
+          '',
+          '',
         ],
       ),
-    [t, i18n.language],
+    [t, i18n.language, quotationImportDict],
   );
   const tableSearchFormRef = useRef<any>(null);
   const [listTotal, setListTotal] = useState(0);
@@ -1477,6 +1513,15 @@ const QuotationsPage: React.FC = () => {
       qty: headerIndexMap['quantity'] ?? -1,
       price: headerIndexMap['unitPrice'] ?? -1,
       delivery: headerIndexMap['delivery'] ?? -1,
+      validUntil: headerIndexMap['validUntil'] ?? -1,
+      customerContact: headerIndexMap['customerContact'] ?? -1,
+      customerPhone: headerIndexMap['customerPhone'] ?? -1,
+      shippingAddress: headerIndexMap['shippingAddress'] ?? -1,
+      shippingMethod: headerIndexMap['shippingMethod'] ?? -1,
+      paymentTerms: headerIndexMap['paymentTerms'] ?? -1,
+      currency: headerIndexMap['currency'] ?? -1,
+      priceType: headerIndexMap['priceType'] ?? -1,
+      salesman: headerIndexMap['salesman'] ?? -1,
       notes: headerIndexMap['notes'] ?? -1,
     };
 
@@ -1486,13 +1531,31 @@ const QuotationsPage: React.FC = () => {
     }
 
     const errors: Array<{ row: number; message: string }> = [];
-    const groupMap = new Map<string, { code?: string; customer: string; date: string; items: any[] }>();
+    const groupMap = new Map<
+      string,
+      {
+        code?: string;
+        customer: string;
+        date: string;
+        validUntil?: string;
+        customerContact?: string;
+        customerPhone?: string;
+        shippingAddress?: string;
+        shippingMethod?: string;
+        paymentTerms?: string;
+        currency?: string;
+        priceType?: string;
+        salesman?: string;
+        items: any[];
+      }
+    >();
+    const cell = (row: any[], i: number) => (i >= 0 ? String(row[i] ?? '').trim() : '');
 
     rows.forEach((row: any[], i: number) => {
       const rowNum = i + 3;
-      const customerName = (row[idx.customer] ?? '').toString().trim();
-      const dateVal = (row[idx.date] ?? '').toString().trim();
-      const materialCode = (row[idx.material] ?? '').toString().trim();
+      const customerName = cell(row, idx.customer);
+      const dateVal = cell(row, idx.date);
+      const materialCode = cell(row, idx.material);
       const qtyVal = row[idx.qty];
       const qty = Number(qtyVal);
       if (!customerName) {
@@ -1518,14 +1581,28 @@ const QuotationsPage: React.FC = () => {
         return;
       }
 
-      const code = idx.code >= 0 ? (row[idx.code] ?? '').toString().trim() : '';
+      const code = cell(row, idx.code);
       const price = idx.price >= 0 ? (Number(row[idx.price]) || 0) : 0;
-      const delivery = idx.delivery >= 0 ? (row[idx.delivery] ?? '').toString().trim() : undefined;
-      const notes = idx.notes >= 0 ? (row[idx.notes] ?? '').toString().trim() : undefined;
+      const delivery = cell(row, idx.delivery) || undefined;
+      const notes = cell(row, idx.notes) || undefined;
 
       const groupKey = code || `${customerName}|${dateVal}`;
       if (!groupMap.has(groupKey)) {
-        groupMap.set(groupKey, { code: code || undefined, customer: customerName, date: dateVal, items: [] });
+        groupMap.set(groupKey, {
+          code: code || undefined,
+          customer: customerName,
+          date: dateVal,
+          validUntil: cell(row, idx.validUntil) || undefined,
+          customerContact: cell(row, idx.customerContact) || undefined,
+          customerPhone: cell(row, idx.customerPhone) || undefined,
+          shippingAddress: cell(row, idx.shippingAddress) || undefined,
+          shippingMethod: cell(row, idx.shippingMethod) || undefined,
+          paymentTerms: cell(row, idx.paymentTerms) || undefined,
+          currency: cell(row, idx.currency) || undefined,
+          priceType: cell(row, idx.priceType) || undefined,
+          salesman: cell(row, idx.salesman) || undefined,
+          items: [],
+        });
       }
       const g = groupMap.get(groupKey)!;
       g.items.push({
@@ -1570,8 +1647,17 @@ const QuotationsPage: React.FC = () => {
       toImport.push({
         quotation_code: g.code,
         quotation_date: g.date,
+        valid_until: g.validUntil,
         customer_id: cust?.id,
         customer_name: g.customer,
+        customer_contact: g.customerContact,
+        customer_phone: g.customerPhone,
+        shipping_address: g.shippingAddress,
+        shipping_method: g.shippingMethod,
+        payment_terms: g.paymentTerms,
+        currency_code: g.currency,
+        price_type: g.priceType,
+        salesman_name: g.salesman,
         status: '草稿',
         items: g.items,
       });
@@ -3306,7 +3392,8 @@ const QuotationsPage: React.FC = () => {
           onConfirm={handleItemImport}
           title={t('app.kuaizhizao.quotation.importItemsTitle')}
           headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
-          exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
+          exampleRow={['MAT001', 'Spec X', pickImportExampleValue(quotationLineUnitOptions, 'PCS'), '100', '1.5', '2026-03-01']}
+          columnOptions={quotationLineImportColumnOptions}
         />
       </Suspense>
     </>
@@ -3517,34 +3604,28 @@ const QuotationsPage: React.FC = () => {
           onImport={handleListImport}
           importHeaders={quotationImportTemplate.importHeaders}
           importExampleRow={quotationImportTemplate.importExampleRow}
+          importColumnOptions={quotationImportTemplate.importColumnOptions}
           importFieldMap={quotationImportTemplate.importHeaderMap}
-          importFieldRules={{
-            customer: { required: true },
-            date: { required: true },
-            material: { required: true },
-            quantity: { required: true },
-          }}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await listQuotations({ skip: 0, limit: 10000, list_scope: listScopeFilterRef.current });
-              let items = res.data || [];
-              if (type === 'currentPage' && pageData?.length) {
-                items = flattenQuotationTableRows(pageData as QuotationTableRow[]);
-              } else if (type === 'selected' && keys?.length) {
+              let items =
+                type === 'currentPage' && pageData?.length
+                  ? flattenQuotationTableRows(pageData as QuotationTableRow[])
+                  : await fetchAllListItems((p) =>
+                      listQuotations({ ...p, list_scope: listScopeFilterRef.current }),
+                    );
+              if (type === 'selected' && keys?.length) {
                 items = items.filter((d) => d.id != null && keys.includes(d.id));
               }
               if (items.length === 0) {
                 messageApi.warning(t('common.exportNoData'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `quotations-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `quotations-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('common.exportFailed'));

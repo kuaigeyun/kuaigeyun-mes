@@ -42,6 +42,7 @@ import {
   Input,
   Select,
   Spin,
+  List,
   theme,
 } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, EditOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined } from '@ant-design/icons';
@@ -49,7 +50,12 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -112,6 +118,15 @@ import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-manageme
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
+import { batchImport } from '../../../../../utils/batchOperations';
+import { materialApi } from '../../../../master-data/services/material';
+import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
+import {
+  buildDocumentReturnListImportTemplate,
+  parseDocumentReturnListImport,
+} from '../../shared/documentReturnListImport';
 import type { PurchaseReturnListParams } from '../../../services/purchase-return';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
@@ -390,6 +405,46 @@ const PurchaseReturnsPage: React.FC = () => {
   const [returnTypeOptions, setReturnTypeOptions] = useState(fallbackReturnTypeOptions);
   const [shippingMethodOptions, setShippingMethodOptions] = useState(fallbackShippingMethodOptions);
   const [dictOptionsLoading, setDictOptionsLoading] = useState(false);
+  const purchaseReturnImportDict = useImportDictionaryOptions([
+    'MATERIAL_UNIT',
+    'RETURN_REASON',
+    'RETURN_TYPE',
+    'SHIPPING_METHOD',
+  ]);
+  const purchaseReturnLineUnitOptions = purchaseReturnImportDict.MATERIAL_UNIT ?? [];
+  const purchaseReturnLineImportColumnOptions = useMemo(
+    () => [
+      undefined,
+      purchaseReturnLineUnitOptions,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ],
+    [purchaseReturnLineUnitOptions],
+  );
+  const purchaseReturnListImportTemplate = useMemo(
+    () =>
+      buildDocumentReturnListImportTemplate(t, purchaseReturnImportDict, {
+        partnerField: 'supplier',
+        codeLabelKey: 'app.kuaizhizao.purchaseReturn.colReturnCode',
+        partnerLabelKey: 'app.kuaizhizao.purchaseReturn.supplier',
+        partnerAliases: ['供应商', '供应商名称'],
+        materialLabelKey: 'app.kuaizhizao.purchaseReturn.import.materialCode',
+        unitLabelKey: 'app.kuaizhizao.purchaseReturn.import.unit',
+        qtyLabelKey: 'app.kuaizhizao.purchaseReturn.import.returnQuantity',
+        unitPriceLabelKey: 'app.kuaizhizao.purchaseReturn.import.unitPrice',
+        batchLabelKey: 'app.kuaizhizao.purchaseReturn.import.batchNumber',
+        locationLabelKey: 'app.kuaizhizao.purchaseReturn.import.location',
+        notesLabelKey: 'app.kuaizhizao.purchaseReturn.import.notes',
+        defaultUnit: t('app.kuaizhizao.purchaseReturn.defaultUnit'),
+        examplePartner: t('app.kuaizhizao.purchaseReturn.listImport.exampleSupplier'),
+        exampleMaterial: 'MAT001',
+        exampleWarehouse: t('app.kuaizhizao.purchaseReturn.listImport.exampleWarehouse'),
+      }),
+    [t, i18n.language, purchaseReturnImportDict],
+  );
 
   const invalidatePurchaseReturnStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['purchaseReturnStatistics'] });
@@ -665,27 +720,43 @@ const PurchaseReturnsPage: React.FC = () => {
     t,
   ]);
 
+  const isPullPurchaseReturnSourceSelectable = useCallback(
+    (record: { capabilities?: { push_purchase_return?: { allowed?: boolean } } }) =>
+      record.capabilities?.push_purchase_return?.allowed === true,
+    [],
+  );
+
+  const pullDocumentScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
   const pullFromPurchaseOrderQuery = useUniPullQuery<PullPurchaseOrderCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
-        const skip = (page - 1) * pageSize;
         const poRes = await listPurchaseOrders({
-          skip,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
         const rows = (poRes?.data || []).filter(
           (row): row is PullPurchaseOrderCandidate => row.id != null,
         );
-        return { data: rows, total: poRes?.total ?? rows.length };
+        const filtered = filterByPullScope(rows, scope, isPullPurchaseReturnSourceSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrder.listFailed')));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => record.capabilities?.push_purchase_return?.allowed !== true,
+    isRowDisabled: (record) => !isPullPurchaseReturnSourceSelectable(record),
     onConfirm: async (keys) => {
       const selectedId = Number(keys[0]);
       if (!selectedId) {
@@ -708,11 +779,13 @@ const PurchaseReturnsPage: React.FC = () => {
   const pullFromIncomingInspectionQuery = useUniPullQuery<PullIncomingInspectionCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const response = await qualityApi.incomingInspection.list({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
         const list = Array.isArray(response)
@@ -721,16 +794,14 @@ const PurchaseReturnsPage: React.FC = () => {
             ?? (response as { items?: unknown[] })?.items
             ?? [];
         const rows = (Array.isArray(list) ? list : []) as PullIncomingInspectionCandidate[];
-        return {
-          data: rows,
-          total: Number((response as { total?: number })?.total ?? rows.length),
-        };
+        const filtered = filterByPullScope(rows, scope, isPullPurchaseReturnSourceSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (e: any) {
         messageApi.error(e?.message || t('app.kuaizhizao.quality.common.messages.loadListFailed'));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => record.capabilities?.push_purchase_return?.allowed !== true,
+    isRowDisabled: (record) => !isPullPurchaseReturnSourceSelectable(record),
     onConfirm: async (keys) => {
       const selectedId = Number(keys[0]);
       if (!selectedId) {
@@ -921,12 +992,149 @@ const PurchaseReturnsPage: React.FC = () => {
     setMaterialPickerOpen(false);
   };
 
+  const handleListImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning(t('app.kuaizhizao.quotation.importDataInvalid'));
+      return;
+    }
+    const rows = (data.slice(2) as any[][]).filter((row) =>
+      row?.some((c) => c != null && String(c).trim() !== ''),
+    );
+    if (rows.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.quotation.noImportRows'));
+      return;
+    }
+
+    try {
+      const [materialsRes, warehousesRes] = await Promise.all([
+        materialApi.list({ limit: 1000, isActive: true }),
+        masterWarehouseApi.list({ limit: 1000, is_active: true }),
+      ]);
+      const materials = materialsRes?.items ?? [];
+      const warehouses = (warehousesRes as any)?.items ?? (Array.isArray(warehousesRes) ? warehousesRes : []);
+
+      const { errors, items: toImport } = parseDocumentReturnListImport(data, {
+        t,
+        importHeaderMap: purchaseReturnListImportTemplate.importHeaderMap,
+        partnerField: 'supplier',
+        partners: supplierList,
+        warehouses,
+        materials,
+        defaultUnit: t('app.kuaizhizao.purchaseReturn.defaultUnit'),
+        defaultReturnType: 'OTHER',
+      });
+
+      if (errors.length > 0) {
+        Modal.warning({
+          title: t('app.kuaizhizao.quotation.validationFailed'),
+          width: 600,
+          content: (
+            <div>
+              <p>{t('app.master-data.validationFailedIntro')}</p>
+              <List
+                size="small"
+                dataSource={errors}
+                renderItem={(item) => (
+                  <List.Item>
+                    <Typography.Text type="danger">
+                      {t('app.kuaizhizao.quotation.importRowError', {
+                        row: item.row,
+                        message: item.message,
+                      })}
+                    </Typography.Text>
+                  </List.Item>
+                )}
+              />
+            </div>
+          ),
+        });
+        return;
+      }
+
+      if (toImport.length === 0) {
+        messageApi.warning(t('app.kuaizhizao.quotation.noImportData'));
+        return;
+      }
+
+      const result = await batchImport({
+        items: toImport,
+        importFn: async (item) =>
+          warehouseApi.purchaseReturn.create({
+            return_code: item.return_code,
+            supplier_id: item.partner_id,
+            supplier_name: item.partner_name,
+            warehouse_id: item.warehouse_id,
+            warehouse_name: item.warehouse_name,
+            return_time: item.return_time,
+            return_reason: item.return_reason,
+            return_type: item.return_type,
+            shipping_method: item.shipping_method,
+            notes: item.notes,
+            items: item.items,
+          }),
+        title: t('app.kuaizhizao.purchaseReturn.listImport.importing'),
+        concurrency: 3,
+      });
+
+      if (result.failureCount > 0) {
+        Modal.warning({
+          title: t('app.kuaizhizao.quotation.importPartialTitle'),
+          width: 600,
+          content: (
+            <div>
+              <p>
+                <strong>
+                  {t('app.kuaizhizao.quotation.importResult', {
+                    success: result.successCount,
+                    failed: result.failureCount,
+                  })}
+                </strong>
+              </p>
+              {result.errors.length > 0 && (
+                <List
+                  size="small"
+                  dataSource={result.errors}
+                  renderItem={(e) => (
+                    <List.Item>
+                      <Typography.Text type="danger">
+                        {t('app.kuaizhizao.quotation.importRowError', {
+                          row: e.row,
+                          message: e.error,
+                        })}
+                      </Typography.Text>
+                    </List.Item>
+                  )}
+                />
+              )}
+            </div>
+          ),
+        });
+      } else {
+        messageApi.success(
+          t('app.kuaizhizao.quotation.importSuccess', { count: result.successCount }),
+        );
+      }
+      if (result.successCount > 0) {
+        invalidateMenuBadgeCounts();
+        invalidatePurchaseReturnStatistics();
+        actionRef.current?.reload();
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.importFailed'));
+    }
+  };
+
   const handleImport = (data: any[]) => {
     const currentItems = formRef.current?.getFieldValue('items') || [];
     const materialCodeKeys = [
       t('app.kuaizhizao.purchaseReturn.import.materialCode'),
       t('app.kuaizhizao.purchaseOrder.import.materialCode'),
       '物料编号',
+    ];
+    const unitKeys = [
+      t('app.kuaizhizao.purchaseReturn.import.unit'),
+      t('app.kuaizhizao.purchaseOrder.importItems.unit'),
+      '单位',
     ];
     const returnQuantityKeys = [
       t('app.kuaizhizao.purchaseReturn.import.returnQuantity'),
@@ -951,6 +1159,7 @@ const PurchaseReturnsPage: React.FC = () => {
     ];
     const newItems = data.map((row) => ({
       material_code: getImportRowValue(row, materialCodeKeys),
+      material_unit: getImportRowValue(row, unitKeys) || defaultUnit,
       return_quantity: Number(getImportRowValue(row, returnQuantityKeys) || 1),
       unit_price: Number(getImportRowValue(row, unitPriceKeys) || 0),
       batch_number: getImportRowValue(row, batchNumberKeys),
@@ -1471,6 +1680,12 @@ const PurchaseReturnsPage: React.FC = () => {
           showCreateButton={false}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
+          showImportButton={purchaseReturnPerms.canCreate}
+          onImport={handleListImport}
+          importHeaders={purchaseReturnListImportTemplate.importHeaders}
+          importExampleRow={purchaseReturnListImportTemplate.importExampleRow}
+          importColumnOptions={purchaseReturnListImportTemplate.importColumnOptions}
+          importFieldMap={purchaseReturnListImportTemplate.importHeaderMap}
           toolBarRender={() => [
             <UniPullCreateToolbar
               key="purchase-return-pull-create"
@@ -1798,6 +2013,9 @@ const PurchaseReturnsPage: React.FC = () => {
         pageSize={pullFromPurchaseOrderQuery.pageSize}
         total={pullFromPurchaseOrderQuery.total}
         onPageChange={pullFromPurchaseOrderQuery.handlePageChange}
+        scopeOptions={pullFromPurchaseOrderQuery.scopeOptions}
+        scope={pullFromPurchaseOrderQuery.scope}
+        onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
         okText={t('common.next')}
         filterExtra={(
           <UniWarehouseSelect
@@ -1838,6 +2056,9 @@ const PurchaseReturnsPage: React.FC = () => {
         pageSize={pullFromIncomingInspectionQuery.pageSize}
         total={pullFromIncomingInspectionQuery.total}
         onPageChange={pullFromIncomingInspectionQuery.handlePageChange}
+        scopeOptions={pullFromIncomingInspectionQuery.scopeOptions}
+        scope={pullFromIncomingInspectionQuery.scope}
+        onScopeChange={pullFromIncomingInspectionQuery.handleScopeChange}
         okText={t('common.next')}
       />
 
@@ -1979,13 +2200,23 @@ const PurchaseReturnsPage: React.FC = () => {
           title={t('app.kuaizhizao.purchaseReturn.importTitle')}
           headers={[
             t('app.kuaizhizao.purchaseReturn.import.materialCode'),
+            t('app.kuaizhizao.purchaseReturn.import.unit'),
             t('app.kuaizhizao.purchaseReturn.import.returnQuantity'),
             t('app.kuaizhizao.purchaseReturn.import.unitPrice'),
             t('app.kuaizhizao.purchaseReturn.import.batchNumber'),
             t('app.kuaizhizao.purchaseReturn.import.location'),
             t('app.kuaizhizao.purchaseReturn.import.notes'),
           ]}
-          exampleRow={['MAT001', '10', '99.5', 'B20260117001', 'A01-01-01', t('app.kuaizhizao.purchaseReturn.import.notesExample')]}
+          exampleRow={[
+            'MAT001',
+            pickImportExampleValue(purchaseReturnLineUnitOptions, defaultUnit),
+            '10',
+            '99.5',
+            'B20260117001',
+            'A01-01-01',
+            t('app.kuaizhizao.purchaseReturn.import.notesExample'),
+          ]}
+          columnOptions={purchaseReturnLineImportColumnOptions}
         />
       </Suspense>
 

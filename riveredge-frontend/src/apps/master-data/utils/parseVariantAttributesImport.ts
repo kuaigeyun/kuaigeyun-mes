@@ -57,6 +57,7 @@ export function parseImportBool(val: unknown): boolean {
     .trim()
     .toLowerCase();
   if (!v) return false;
+  // 下拉只展示「是/否」；粘贴/旧模板的 true/false/1/0 等仍接受
   return ['1', 'true', 'yes', 'y', '是', '启用', 'on'].includes(v);
 }
 

@@ -9,7 +9,7 @@
  */
 
 import React, { useRef, useState, useMemo, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
@@ -20,7 +20,7 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { moldApi } from '../../../services/equipment';
 import {
   schemeBindingsApi,
@@ -29,14 +29,19 @@ import {
   moldReportsApi,
 } from '../../../services/moldOps';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
+import {
+  IMPORT_YES_NO_OPTIONS,
+  pickImportExampleValue,
+} from '../../../../../utils/loadImportDictionaryValues';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
-import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -56,6 +61,7 @@ import {
   resolveLedgerListParams,
 } from '../../../utils/equipmentListCore';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const MOLD_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_molds';
 
@@ -113,8 +119,8 @@ interface MoldCalibration {
 }
 
 const MoldsPage: React.FC = () => {
-  const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const moldDictOptions = useImportDictionaryOptions(['MOLD_TYPE', 'MOLD_STATUS']);
 
   const moldImportTemplate = useMemo(
     () =>
@@ -123,21 +129,59 @@ const MoldsPage: React.FC = () => {
         [
           { field: 'code', labelKey: 'app.kuaizhizao.mold.import.code', aliases: ['模具编号', '编号'] },
           { field: 'name', required: true, labelKey: 'app.kuaizhizao.mold.import.name', aliases: ['模具名称', '名称'] },
-          { field: 'type', labelKey: 'app.kuaizhizao.mold.import.type', aliases: ['模具类型', '类型'] },
+          {
+            field: 'type',
+            labelKey: 'app.kuaizhizao.mold.import.type',
+            aliases: ['模具类型', '类型'],
+            options: moldDictOptions.MOLD_TYPE,
+          },
           { field: 'category', labelKey: 'app.kuaizhizao.mold.import.category', aliases: ['模具分类', '分类'] },
           { field: 'brand', labelKey: 'app.kuaizhizao.mold.import.brand', aliases: ['品牌'] },
           { field: 'model', labelKey: 'app.kuaizhizao.mold.import.model', aliases: ['型号'] },
+          { field: 'serial_number', labelKey: 'app.kuaizhizao.mold.import.serialNumber', aliases: ['序列号'] },
+          { field: 'manufacturer', labelKey: 'app.kuaizhizao.mold.import.manufacturer', aliases: ['制造商'] },
+          { field: 'supplier', labelKey: 'app.kuaizhizao.mold.import.supplier', aliases: ['供应商'] },
+          { field: 'purchase_date', labelKey: 'app.kuaizhizao.mold.import.purchaseDate', aliases: ['采购日期'] },
+          { field: 'installation_date', labelKey: 'app.kuaizhizao.mold.import.installationDate', aliases: ['安装日期'] },
+          { field: 'warranty_period', labelKey: 'app.kuaizhizao.mold.import.warrantyPeriod', aliases: ['保修期（月）', '保修期'] },
+          {
+            field: 'status',
+            required: true,
+            labelKey: 'app.kuaizhizao.mold.import.status',
+            aliases: ['模具状态', '状态'],
+            options: moldDictOptions.MOLD_STATUS,
+          },
+          { field: 'cavity_count', labelKey: 'app.kuaizhizao.mold.import.cavityCount', aliases: ['腔数（模数）', '腔数'] },
+          { field: 'design_lifetime', labelKey: 'app.kuaizhizao.mold.import.designLifetime', aliases: ['设计寿命（次）', '设计寿命'] },
+          { field: 'description', labelKey: 'app.kuaizhizao.mold.import.description', aliases: ['备注', '描述'] },
+          {
+            field: 'is_active',
+            labelKey: 'app.kuaizhizao.mold.import.isActive',
+            aliases: ['是否启用', '启用'],
+            options: [...IMPORT_YES_NO_OPTIONS],
+          },
         ],
         [
           t('app.kuaizhizao.mold.importExample.code'),
           t('app.kuaizhizao.mold.importExample.name'),
-          t('app.kuaizhizao.mold.importExample.type'),
+          pickImportExampleValue(moldDictOptions.MOLD_TYPE, t('app.kuaizhizao.mold.importExample.type')),
           t('app.kuaizhizao.mold.importExample.category'),
           t('app.kuaizhizao.mold.importExample.brand'),
           t('app.kuaizhizao.mold.importExample.model'),
+          t('app.kuaizhizao.mold.importExample.serialNumber'),
+          t('app.kuaizhizao.mold.importExample.manufacturer'),
+          t('app.kuaizhizao.mold.importExample.supplier'),
+          t('app.kuaizhizao.mold.importExample.purchaseDate'),
+          t('app.kuaizhizao.mold.importExample.installationDate'),
+          t('app.kuaizhizao.mold.importExample.warrantyPeriod'),
+          pickImportExampleValue(moldDictOptions.MOLD_STATUS, t('app.kuaizhizao.mold.importExample.status')),
+          t('app.kuaizhizao.mold.importExample.cavityCount'),
+          t('app.kuaizhizao.mold.importExample.designLifetime'),
+          '',
+          pickImportExampleValue([...IMPORT_YES_NO_OPTIONS], t('app.kuaizhizao.mold.importExample.isActive')),
         ],
       ),
-    [t, i18n.language],
+    [t, i18n.language, moldDictOptions],
   );
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
@@ -936,35 +980,54 @@ const MoldsPage: React.FC = () => {
               messageApi.error(t('app.kuaizhizao.mold.importHeaderMissingName'));
               return;
             }
+            const cellAt = (row: any[], field: string): string => {
+              const idx = headerIndexMap[field];
+              if (idx === undefined) return '';
+              return String(row[idx] ?? '').trim();
+            };
+            const parseDate = (raw: string): string | undefined => {
+              if (!raw) return undefined;
+              const d = dayjs(raw);
+              return d.isValid() ? d.format('YYYY-MM-DD') : undefined;
+            };
+            const parseIntField = (raw: string): number | undefined => {
+              if (!raw) return undefined;
+              const n = Number(raw);
+              return Number.isFinite(n) ? n : undefined;
+            };
+            const parseActive = (raw: string): boolean | undefined => {
+              if (!raw) return undefined;
+              const v = raw.toLowerCase();
+              if (['1', 'true', 'yes', 'y', '是', '启用', 'active'].includes(v)) return true;
+              if (['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(v)) return false;
+              return undefined;
+            };
             const items: any[] = [];
             const importRows = data.slice(2).filter((row: any[]) =>
               row?.some((c: any) => c != null && String(c).trim() !== ''),
             );
             for (const row of importRows) {
-              const name = String(row[headerIndexMap.name] ?? '').trim();
+              const name = cellAt(row, 'name');
               if (!name) continue;
+              const isActive = parseActive(cellAt(row, 'is_active'));
               items.push({
-                code:
-                  headerIndexMap.code !== undefined
-                    ? String(row[headerIndexMap.code] ?? '').trim() || undefined
-                    : undefined,
+                code: cellAt(row, 'code') || undefined,
                 name,
-                type:
-                  headerIndexMap.type !== undefined
-                    ? String(row[headerIndexMap.type] ?? '').trim() || undefined
-                    : undefined,
-                category:
-                  headerIndexMap.category !== undefined
-                    ? String(row[headerIndexMap.category] ?? '').trim() || undefined
-                    : undefined,
-                brand:
-                  headerIndexMap.brand !== undefined
-                    ? String(row[headerIndexMap.brand] ?? '').trim() || undefined
-                    : undefined,
-                model:
-                  headerIndexMap.model !== undefined
-                    ? String(row[headerIndexMap.model] ?? '').trim() || undefined
-                    : undefined,
+                type: cellAt(row, 'type') || undefined,
+                category: cellAt(row, 'category') || undefined,
+                brand: cellAt(row, 'brand') || undefined,
+                model: cellAt(row, 'model') || undefined,
+                serial_number: cellAt(row, 'serial_number') || undefined,
+                manufacturer: cellAt(row, 'manufacturer') || undefined,
+                supplier: cellAt(row, 'supplier') || undefined,
+                purchase_date: parseDate(cellAt(row, 'purchase_date')),
+                installation_date: parseDate(cellAt(row, 'installation_date')),
+                warranty_period: parseIntField(cellAt(row, 'warranty_period')),
+                status: cellAt(row, 'status') || '待用',
+                cavity_count: parseIntField(cellAt(row, 'cavity_count')),
+                design_lifetime: parseIntField(cellAt(row, 'design_lifetime')),
+                description: cellAt(row, 'description') || undefined,
+                ...(isActive === undefined ? {} : { is_active: isActive }),
               });
             }
             if (items.length === 0) {
@@ -987,28 +1050,39 @@ const MoldsPage: React.FC = () => {
           }}
           importHeaders={moldImportTemplate.importHeaders}
           importExampleRow={moldImportTemplate.importExampleRow}
+          importColumnOptions={moldImportTemplate.importColumnOptions}
           importFieldMap={moldImportTemplate.importHeaderMap}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await moldApi.list({ skip: 0, limit: 10000 });
-              let items = (res as any)?.items || [];
-              if (type === 'currentPage' && pageData?.length) {
-                items = pageData;
-              } else if (type === 'selected' && keys?.length) {
+              let items: any[] =
+                type === 'currentPage' && pageData?.length
+                  ? pageData
+                  : await fetchAllListItems((p) => moldApi.list(p));
+              if (type === 'selected' && keys?.length) {
                 items = items.filter((d: any) => d.uuid && keys.includes(d.uuid));
               }
               if (items.length === 0) {
                 messageApi.warning(t('common.noDataToExport'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `molds-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              const exportColumns = [
+                { key: 'code', title: t('app.kuaizhizao.mold.import.code') },
+                { key: 'name', title: t('app.kuaizhizao.mold.import.name') },
+                { key: 'type', title: t('app.kuaizhizao.mold.import.type') },
+                { key: 'category', title: t('app.kuaizhizao.mold.import.category') },
+                { key: 'brand', title: t('app.kuaizhizao.mold.import.brand') },
+                { key: 'model', title: t('app.kuaizhizao.mold.import.model') },
+                { key: 'serial_number', title: t('app.kuaizhizao.mold.fieldSerialNumber') },
+                { key: 'manufacturer', title: t('app.kuaizhizao.mold.fieldManufacturer') },
+                { key: 'supplier', title: t('app.kuaizhizao.mold.fieldSupplier') },
+                { key: 'status', title: t('app.kuaizhizao.mold.fieldStatus') },
+              ];
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `molds-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                { columns: exportColumns, sheetName: t('app.kuaizhizao.mold.title') },
+              );
               messageApi.success(t('common.exportCountSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('common.exportFailed'));
@@ -1182,29 +1256,6 @@ const MoldsPage: React.FC = () => {
                   />
                 </DetailDrawerSection>
               ) : null}
-              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
-                {moldDetail.id != null ? (
-                  <DetailDrawerInlineFullChain
-                    documentType="mold"
-                    documentId={moldDetail.id}
-                    active={drawerVisible}
-                    selfDocumentId={moldDetail.id}
-                    renderBriefActions={(doc) => (
-                      <EquipmentTraceBriefPrimaryActions
-                        doc={doc}
-                        t={t}
-                        navigate={navigate}
-                        closeDrawer={() => {
-                          setDrawerVisible(false);
-                          setMoldDetail(null);
-                          setUsages([]);
-                          setCalibrations([]);
-                        }}
-                      />
-                    )}
-                  />
-                ) : null}
-              </DetailDrawerSection>
               <DetailDrawerSection title={t('app.kuaizhizao.moldOps.schemeBindings.title')}>
                 <div style={{ marginBottom: 12 }}>
                   <Typography.Text type="secondary">{t('app.kuaizhizao.moldOps.schemeBindings.maintenance')}</Typography.Text>

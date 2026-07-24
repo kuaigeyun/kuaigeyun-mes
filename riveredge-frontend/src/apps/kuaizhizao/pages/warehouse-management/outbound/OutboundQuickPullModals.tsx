@@ -22,7 +22,12 @@ import {
   outboundWorkOrderEntryPath,
 } from './outboundPaths';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import {
   salesOrderCapabilityReasonMessage,
   shipmentNoticeCapabilityReasonMessage,
@@ -445,41 +450,101 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
       t,
     ]);
 
+    const pullDocumentScopeOptions = useMemo(
+      () => [
+        { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+        { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+      ],
+      [t],
+    );
+
+    const isPullOutboundWorkOrderSelectable = useCallback(
+      (record: PullWorkOrderCandidate) => record.capabilities?.push_production_picking?.allowed === true,
+      [],
+    );
+
+    const isPullOutboundSalesOrderSelectable = useCallback(
+      (record: PullSalesOrderCandidate) => record.capabilities?.push_sales_delivery?.allowed === true,
+      [],
+    );
+
+    const isPullOutboundShipmentNoticeSelectable = useCallback(
+      (record: PullShipmentNoticeCandidate) => record.capabilities?.notify?.allowed === true,
+      [],
+    );
+
+    const isPullOutboundOutsourceSelectable = useCallback(
+      (record: PullOutsourceWoCandidate) => record.capabilities?.push_outsource_issue?.allowed === true,
+      [],
+    );
+
+    const loadOutboundWorkOrderListPage = useCallback(async (keyword: string) => {
+      const kw = keyword.trim();
+      const res = await workOrderApi.list({
+        skip: 0,
+        limit: 200,
+        keyword: kw || undefined,
+      });
+      const list = Array.isArray(res)
+        ? res
+        : (res as { data?: unknown[]; items?: unknown[] })?.data
+          ?? (res as { items?: unknown[] })?.items
+          ?? [];
+      const rows = (Array.isArray(list) ? list : []) as Record<string, unknown>[];
+      return rows.map((wo) => ({
+        id: Number(wo.id),
+        code: String(wo.code ?? ''),
+        product_name: String(wo.product_name ?? wo.name ?? ''),
+        sales_order_code: String(wo.sales_order_code ?? ''),
+        status: String(wo.status ?? ''),
+        quantity: Number(wo.quantity ?? 0),
+        updated_at: String(wo.updated_at ?? ''),
+        capabilities: wo.capabilities as PullWorkOrderCandidate['capabilities'],
+      }));
+    }, []);
+
+    const loadOutboundOutsourceWorkOrderListPage = useCallback(async (keyword: string) => {
+      const kw = keyword.trim();
+      const res = await outsourceWorkOrderApi.list({
+        skip: 0,
+        limit: 200,
+        keyword: kw || undefined,
+      });
+      const rows = Array.isArray(res)
+        ? res
+        : (res as { data?: unknown[]; items?: unknown[] })?.data
+          ?? (res as { items?: unknown[] })?.items
+          ?? [];
+      return (Array.isArray(rows) ? rows : []).map((r: Record<string, unknown>) => ({
+        id: Number(r.id),
+        code: r.code != null ? String(r.code) : undefined,
+        product_name: String(r.product_name ?? r.productName ?? ''),
+        supplier_name: r.supplier_name != null ? String(r.supplier_name) : undefined,
+        status: r.status != null ? String(r.status) : undefined,
+        quantity: Number(r.quantity ?? 0) || undefined,
+        received_quantity: Number(r.received_quantity ?? 0) || undefined,
+        issued_quantity: Number(r.issued_quantity ?? 0) || undefined,
+        updated_at: r.updated_at != null ? String(r.updated_at) : undefined,
+        capabilities: r.capabilities as PullOutsourceWoCandidate['capabilities'],
+      }));
+    }, []);
+
     const pullFromWorkOrderQuery = useUniPullQuery<PullWorkOrderCandidate>({
       rowKey: 'id',
       selectionType: 'radio',
-      loadData: async ({ keyword, page, pageSize }) => {
+      scopeOptions: pullDocumentScopeOptions,
+      defaultScope: 'pullable',
+      loadData: async ({ keyword, page, pageSize, scope }) => {
         try {
-          const kw = keyword.trim();
-          const res = await workOrderApi.list({
-            skip: (page - 1) * pageSize,
-            limit: pageSize,
-            keyword: kw || undefined,
-          });
-          const list = Array.isArray(res)
-            ? res
-            : (res as { data?: unknown[]; items?: unknown[] })?.data
-              ?? (res as { items?: unknown[] })?.items
-              ?? [];
-          const rows = (Array.isArray(list) ? list : []) as Record<string, unknown>[];
-          const candidates = rows.map((wo) => ({
-            id: Number(wo.id),
-            code: String(wo.code ?? ''),
-            product_name: String(wo.product_name ?? wo.name ?? ''),
-            sales_order_code: String(wo.sales_order_code ?? ''),
-            status: String(wo.status ?? ''),
-            quantity: Number(wo.quantity ?? 0),
-            updated_at: String(wo.updated_at ?? ''),
-            capabilities: wo.capabilities as PullWorkOrderCandidate['capabilities'],
-          }));
-          const total = Number((res as { total?: number })?.total ?? candidates.length);
-          return { data: candidates, total };
+          const data = await loadOutboundWorkOrderListPage(keyword);
+          const filtered = filterByPullScope(data, scope, isPullOutboundWorkOrderSelectable);
+          return paginatePullRows(filtered, page, pageSize);
         } catch {
           messageApi.error(t('app.kuaizhizao.warehouseOutbound.pull.loadWorkOrdersFailed'));
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => record.capabilities?.push_production_picking?.allowed !== true,
+      isRowDisabled: (record) => !isPullOutboundWorkOrderSelectable(record),
       onConfirm: async (keys, rows) => {
         const selectedId = Number(keys[0]);
         if (!selectedId) {
@@ -500,24 +565,26 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
     const pullFromSalesOrderQuery = useUniPullQuery<PullSalesOrderCandidate>({
       rowKey: 'id',
       selectionType: 'radio',
-      loadData: async ({ keyword, page, pageSize }) => {
+      scopeOptions: pullDocumentScopeOptions,
+      defaultScope: 'pullable',
+      loadData: async ({ keyword, page, pageSize, scope }) => {
         try {
           const res = await listSalesOrders({
-            skip: (page - 1) * pageSize,
-            limit: pageSize,
+            skip: 0,
+            limit: 200,
             keyword: keyword.trim() || undefined,
           });
           const data = Array.isArray((res as { data?: unknown[] })?.data)
             ? ((res as { data: PullSalesOrderCandidate[] }).data)
             : [];
-          const total = Number((res as { total?: number })?.total ?? data.length);
-          return { data, total };
+          const filtered = filterByPullScope(data, scope, isPullOutboundSalesOrderSelectable);
+          return paginatePullRows(filtered, page, pageSize);
         } catch {
           messageApi.error(t('app.kuaizhizao.warehouseOutbound.pull.loadSalesOrdersFailed'));
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => record.capabilities?.push_sales_delivery?.allowed !== true,
+      isRowDisabled: (record) => !isPullOutboundSalesOrderSelectable(record),
       onConfirm: async (keys) => {
         const selectedId = Number(keys[0]);
         if (!selectedId) {
@@ -532,11 +599,13 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
     const pullFromShipmentNoticeQuery = useUniPullQuery<PullShipmentNoticeCandidate>({
       rowKey: 'id',
       selectionType: 'radio',
-      loadData: async ({ keyword, page, pageSize }) => {
+      scopeOptions: pullDocumentScopeOptions,
+      defaultScope: 'pullable',
+      loadData: async ({ keyword, page, pageSize, scope }) => {
         try {
           const res = await shipmentNoticeApi.list({
-            skip: (page - 1) * pageSize,
-            limit: pageSize,
+            skip: 0,
+            limit: 200,
             keyword: keyword.trim() || undefined,
           });
           const data = Array.isArray((res as { data?: unknown[] })?.data)
@@ -544,14 +613,14 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
             : Array.isArray(res)
               ? (res as PullShipmentNoticeCandidate[])
               : [];
-          const total = Number((res as { total?: number })?.total ?? data.length);
-          return { data, total };
+          const filtered = filterByPullScope(data, scope, isPullOutboundShipmentNoticeSelectable);
+          return paginatePullRows(filtered, page, pageSize);
         } catch {
           messageApi.error(t('app.kuaizhizao.warehouseOutbound.pull.loadShipmentNoticesFailed'));
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => record.capabilities?.notify?.allowed !== true,
+      isRowDisabled: (record) => !isPullOutboundShipmentNoticeSelectable(record),
       onConfirm: async (_keys, rows) => {
         const selected = rows[0];
         if (!selected?.id) {
@@ -571,39 +640,19 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
     const pullFromOutsourceWorkOrderQuery = useUniPullQuery<PullOutsourceWoCandidate>({
       rowKey: 'id',
       selectionType: 'radio',
-      loadData: async ({ keyword, page, pageSize }) => {
+      scopeOptions: pullDocumentScopeOptions,
+      defaultScope: 'pullable',
+      loadData: async ({ keyword, page, pageSize, scope }) => {
         try {
-          const kw = keyword.trim();
-          const res = await outsourceWorkOrderApi.list({
-            skip: (page - 1) * pageSize,
-            limit: pageSize,
-            keyword: kw || undefined,
-          });
-          const rows = Array.isArray(res)
-            ? res
-            : (res as { data?: unknown[]; items?: unknown[] })?.data
-              ?? (res as { items?: unknown[] })?.items
-              ?? [];
-          const candidates = (Array.isArray(rows) ? rows : []).map((r: Record<string, unknown>) => ({
-            id: Number(r.id),
-            code: r.code != null ? String(r.code) : undefined,
-            product_name: String(r.product_name ?? r.productName ?? ''),
-            supplier_name: r.supplier_name != null ? String(r.supplier_name) : undefined,
-            status: r.status != null ? String(r.status) : undefined,
-            quantity: Number(r.quantity ?? 0) || undefined,
-            received_quantity: Number(r.received_quantity ?? 0) || undefined,
-            issued_quantity: Number(r.issued_quantity ?? 0) || undefined,
-            updated_at: r.updated_at != null ? String(r.updated_at) : undefined,
-            capabilities: r.capabilities as PullOutsourceWoCandidate['capabilities'],
-          }));
-          const total = Number((res as { total?: number })?.total ?? candidates.length);
-          return { data: candidates, total };
+          const data = await loadOutboundOutsourceWorkOrderListPage(keyword);
+          const filtered = filterByPullScope(data, scope, isPullOutboundOutsourceSelectable);
+          return paginatePullRows(filtered, page, pageSize);
         } catch {
           messageApi.error(t('app.kuaizhizao.warehouseOutbound.pull.loadOutsourceFailed'));
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => record.capabilities?.push_outsource_issue?.allowed !== true,
+      isRowDisabled: (record) => !isPullOutboundOutsourceSelectable(record),
       onConfirm: async (keys, rows) => {
         const selectedId = Number(keys[0]);
         if (!selectedId) {
@@ -748,6 +797,9 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
           pageSize={pullFromWorkOrderQuery.pageSize}
           total={pullFromWorkOrderQuery.total}
           onPageChange={pullFromWorkOrderQuery.handlePageChange}
+          scopeOptions={pullFromWorkOrderQuery.scopeOptions}
+          scope={pullFromWorkOrderQuery.scope}
+          onScopeChange={pullFromWorkOrderQuery.handleScopeChange}
           okText={t('app.kuaizhizao.warehouseOutbound.action.nextStep')}
           cancelText={t('app.kuaizhizao.warehouseOutbound.action.cancel')}
           okButtonProps={{ disabled: pullFromWorkOrderQuery.selectedRowKeys.length === 0 }}
@@ -779,6 +831,9 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
           pageSize={pullFromSalesOrderQuery.pageSize}
           total={pullFromSalesOrderQuery.total}
           onPageChange={pullFromSalesOrderQuery.handlePageChange}
+          scopeOptions={pullFromSalesOrderQuery.scopeOptions}
+          scope={pullFromSalesOrderQuery.scope}
+          onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
           okText={t('app.kuaizhizao.warehouseOutbound.action.nextStep')}
           cancelText={t('app.kuaizhizao.warehouseOutbound.action.cancel')}
           okButtonProps={{ disabled: pullFromSalesOrderQuery.selectedRowKeys.length === 0 }}
@@ -1114,6 +1169,9 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
           pageSize={pullFromShipmentNoticeQuery.pageSize}
           total={pullFromShipmentNoticeQuery.total}
           onPageChange={pullFromShipmentNoticeQuery.handlePageChange}
+          scopeOptions={pullFromShipmentNoticeQuery.scopeOptions}
+          scope={pullFromShipmentNoticeQuery.scope}
+          onScopeChange={pullFromShipmentNoticeQuery.handleScopeChange}
           okText={t('app.kuaizhizao.warehouseOutbound.action.nextStep')}
           cancelText={t('app.kuaizhizao.warehouseOutbound.action.cancel')}
           okButtonProps={{ disabled: pullFromShipmentNoticeQuery.selectedRowKeys.length === 0 }}
@@ -1145,6 +1203,9 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
           pageSize={pullFromOutsourceWorkOrderQuery.pageSize}
           total={pullFromOutsourceWorkOrderQuery.total}
           onPageChange={pullFromOutsourceWorkOrderQuery.handlePageChange}
+          scopeOptions={pullFromOutsourceWorkOrderQuery.scopeOptions}
+          scope={pullFromOutsourceWorkOrderQuery.scope}
+          onScopeChange={pullFromOutsourceWorkOrderQuery.handleScopeChange}
           okText={t('app.kuaizhizao.warehouseOutbound.action.nextStep')}
           cancelText={t('app.kuaizhizao.warehouseOutbound.action.cancel')}
           okButtonProps={{ disabled: pullFromOutsourceWorkOrderQuery.selectedRowKeys.length === 0 }}

@@ -6,7 +6,12 @@ import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -54,6 +59,7 @@ import {
   renderQualityResultTag,
   renderReleaseDecisionTag,
 } from '../components/qualityMeta';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const OQC_RESOURCE = 'kuaizhizao:quality-management-oqc-inspection';
 
@@ -179,26 +185,40 @@ const OQCInspectionPage: React.FC = () => {
     }
   };
 
+  const isPullOqcInspectionSelectable = useCallback(
+    (row: OqcPullSourceCandidate) => row.capabilities?.pull_oqc_inspection?.allowed !== false,
+    [],
+  );
+
+  const pullQueryScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
   const pullFromShipmentNoticeQuery = useUniPullQuery<OqcPullSourceCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await qualityImprovementApi.oqc.listShipmentNoticePullCandidates({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
-        return {
-          data: (res.data || []) as OqcPullSourceCandidate[],
-          total: res.total ?? 0,
-        };
+        const rows = (res.data || []) as OqcPullSourceCandidate[];
+        const filtered = filterByPullScope(rows, scope, isPullOqcInspectionSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (e: any) {
         messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.loadShipmentNoticeFailed'));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (row) => row.capabilities?.pull_oqc_inspection?.allowed === false,
+    isRowDisabled: (row) => !isPullOqcInspectionSelectable(row),
     onConfirm: async (keys, rows) => {
       const selected = rows.find((x) => String(x.id) === String(keys[0]));
       if (!selected?.id) {
@@ -214,23 +234,24 @@ const OQCInspectionPage: React.FC = () => {
   const pullFromSalesDeliveryQuery = useUniPullQuery<OqcPullSourceCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await qualityImprovementApi.oqc.listSalesDeliveryPullCandidates({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
-        return {
-          data: (res.data || []) as OqcPullSourceCandidate[],
-          total: res.total ?? 0,
-        };
+        const rows = (res.data || []) as OqcPullSourceCandidate[];
+        const filtered = filterByPullScope(rows, scope, isPullOqcInspectionSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (e: any) {
         messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.loadSalesDeliveryFailed'));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (row) => row.capabilities?.pull_oqc_inspection?.allowed === false,
+    isRowDisabled: (row) => !isPullOqcInspectionSelectable(row),
     onConfirm: async (keys, rows) => {
       const selected = rows.find((x) => String(x.id) === String(keys[0]));
       if (!selected?.id) {
@@ -495,14 +516,10 @@ const OQCInspectionPage: React.FC = () => {
                 messageApi.warning(t('app.kuaizhizao.quality.common.messages.exportEmpty'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              const exportDate = new Date().toISOString().slice(0, 10);
-              a.download = `${t('app.kuaizhizao.quality.common.entity.oqcInspection')}_${exportDate}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `${t('app.kuaizhizao.quality.common.entity.oqcInspection')}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('common.exportCountSuccess', { count: items.length }));
             } catch (e: any) {
               messageApi.error(e?.message || t('app.kuaizhizao.quality.common.messages.exportFailed'));
@@ -604,6 +621,9 @@ const OQCInspectionPage: React.FC = () => {
           pageSize={pullFromShipmentNoticeQuery.pageSize}
           total={pullFromShipmentNoticeQuery.total}
           onPageChange={pullFromShipmentNoticeQuery.handlePageChange}
+          scopeOptions={pullFromShipmentNoticeQuery.scopeOptions}
+          scope={pullFromShipmentNoticeQuery.scope}
+          onScopeChange={pullFromShipmentNoticeQuery.handleScopeChange}
         />
 
         <UniPullQueryModal<OqcPullSourceCandidate>
@@ -630,6 +650,9 @@ const OQCInspectionPage: React.FC = () => {
           pageSize={pullFromSalesDeliveryQuery.pageSize}
           total={pullFromSalesDeliveryQuery.total}
           onPageChange={pullFromSalesDeliveryQuery.handlePageChange}
+          scopeOptions={pullFromSalesDeliveryQuery.scopeOptions}
+          scope={pullFromSalesDeliveryQuery.scope}
+          onScopeChange={pullFromSalesDeliveryQuery.handleScopeChange}
         />
 
         <Modal

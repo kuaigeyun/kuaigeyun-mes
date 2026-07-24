@@ -24,11 +24,8 @@ from apps.kuaizhizao.schemas.scheduling_ai import (
     SchedulingAiWorkOrderAdjustment,
     SchedulingAiOperationAdjustment,
 )
-from apps.kuaizhizao.services.sales_order_ocr_service import (
-    SalesOrderOcrService,
-    _extract_json_object,
-    _message_text,
-)
+from apps.kuaizhizao.services.sales_order_ocr_service import SalesOrderOcrService
+from core.utils.deepseek_vision_client import extract_json_object, message_text
 from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingService
 from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
 from apps.master_data.models.factory import Workstation
@@ -130,8 +127,8 @@ class SchedulingAiService:
             error_prefix=error_prefix,
         )
         choice = (body.get("choices") or [{}])[0]
-        text = _message_text(choice.get("message") or {})
-        return _extract_json_object(text)
+        text = message_text(choice.get("message") or {})
+        return extract_json_object(text)
 
     async def _load_work_orders(
         self,

@@ -112,6 +112,27 @@ class VisualSchedulingStationLoadItem(BaseSchema):
 
 
 
+class VisualSchedulingMissingSettingItem(BaseSchema):
+
+    work_order_id: int
+
+    work_order_code: str
+
+    operation_id: int
+
+    operation_name: Optional[str] = None
+
+    field: str = Field(..., description="setup_time|standard_time|assigned_station_id")
+
+    label: str
+
+    current: Optional[Any] = None
+
+    suggested: Optional[Any] = None
+
+    work_center_id: Optional[int] = None
+
+
 class VisualSchedulingScanResponse(BaseSchema):
 
     conflicts: List[VisualSchedulingConflictItem] = Field(default_factory=list)
@@ -119,6 +140,8 @@ class VisualSchedulingScanResponse(BaseSchema):
     unscheduled_orders: List[VisualSchedulingUnscheduledItem] = Field(default_factory=list)
 
     material_issues: List[VisualSchedulingMaterialIssueItem] = Field(default_factory=list)
+
+    missing_settings: List[VisualSchedulingMissingSettingItem] = Field(default_factory=list)
 
     load_by_work_center: List[VisualSchedulingLoadItem] = Field(default_factory=list)
 
@@ -130,7 +153,34 @@ class VisualSchedulingScanResponse(BaseSchema):
 
     material_issue_count: int = 0
 
+    missing_settings_count: int = 0
+
     overloaded_station_count: int = 0
+
+
+class SchedulingOperationBackfillItem(BaseSchema):
+
+    operation_id: int
+
+    setup_time: Optional[float] = Field(None, ge=0, description="准备工时(小时)")
+
+    standard_time: Optional[float] = Field(None, ge=0, description="标准工时(小时/件)")
+
+    assigned_station_id: Optional[int] = Field(None, ge=1, description="工位ID")
+
+
+class SchedulingOperationBackfillRequest(BaseSchema):
+
+    items: List[SchedulingOperationBackfillItem] = Field(..., min_length=1)
+
+
+class SchedulingOperationBackfillResponse(BaseSchema):
+
+    updated_operation_ids: List[int] = Field(default_factory=list)
+
+    updated_work_order_ids: List[int] = Field(default_factory=list)
+
+    updated_count: int = 0
 
 
 

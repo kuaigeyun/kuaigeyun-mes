@@ -15,6 +15,8 @@ export interface KuaizhizaoPrintTarget {
   documentId: number;
   title?: string;
   printApiPath?: string;
+  /** 合并进打印预览/PDF 请求的额外 query（如设备卡批量 uuids） */
+  printApiParams?: Record<string, string | number | boolean | Array<string | number>>;
   pdfDownloadFilename?: string;
 }
 
@@ -42,6 +44,7 @@ export function useKuaizhizaoPrintModal(options?: {
             ? target.printApiPath ?? buildKuaizhizaoPrintApiPath(target.documentType, target.documentId)
             : ''
         }
+        printApiParams={target?.printApiParams}
         title={target?.title ?? (target ? getKuaizhizaoPrintTitle(target.documentType) : '打印预览')}
         pdfDownloadFilename={target?.pdfDownloadFilename}
         onAfterPrint={target && options?.onAfterPrint ? () => options.onAfterPrint!(target) : undefined}

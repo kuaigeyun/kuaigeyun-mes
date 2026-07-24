@@ -3,7 +3,7 @@
  *
  * 管理向客户开具的销项发票，支持关联销售订单和应收单。
  */
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Space, Dropdown, Tag, Alert, Spin, Table, Empty, Form } from 'antd';
@@ -16,7 +16,12 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
 import {
   buildReviewStatusEnum,
@@ -166,18 +171,35 @@ const SalesInvoicesPage: React.FC = () => {
     }
   };
 
+  const isPullSalesInvoiceSelectable = useCallback(
+    (record: SalesInvoicePullCandidate) => record.capabilities?.pull_sales_invoice?.allowed !== false,
+    [],
+  );
+
+  const pullQueryScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
   const pullFromSalesOrderQuery = useUniPullQuery<SalesInvoicePullCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    isRowDisabled: (record) => record.capabilities?.pull_sales_invoice?.allowed === false,
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullSalesInvoiceSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await salesInvoiceService.listSalesOrderPullCandidates({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
-        return { data: res.data || [], total: res.total ?? 0 };
+        const rows = res.data || [];
+        const filtered = filterByPullScope(rows, scope, isPullSalesInvoiceSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (e: any) {
         messageApi.error(
           e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
@@ -200,15 +222,19 @@ const SalesInvoicesPage: React.FC = () => {
   const pullFromSalesDeliveryQuery = useUniPullQuery<SalesInvoicePullCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    isRowDisabled: (record) => record.capabilities?.pull_sales_invoice?.allowed === false,
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullSalesInvoiceSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await salesInvoiceService.listSalesDeliveryPullCandidates({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
-        return { data: res.data || [], total: res.total ?? 0 };
+        const rows = res.data || [];
+        const filtered = filterByPullScope(rows, scope, isPullSalesInvoiceSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch (e: any) {
         messageApi.error(
           e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
@@ -764,6 +790,9 @@ const SalesInvoicesPage: React.FC = () => {
         pageSize={pullFromSalesOrderQuery.pageSize}
         total={pullFromSalesOrderQuery.total}
         onPageChange={pullFromSalesOrderQuery.handlePageChange}
+        scopeOptions={pullFromSalesOrderQuery.scopeOptions}
+        scope={pullFromSalesOrderQuery.scope}
+        onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
         okText={t('components.uniLifecycle.nextStep')}
       />
 
@@ -793,6 +822,9 @@ const SalesInvoicesPage: React.FC = () => {
         pageSize={pullFromSalesDeliveryQuery.pageSize}
         total={pullFromSalesDeliveryQuery.total}
         onPageChange={pullFromSalesDeliveryQuery.handlePageChange}
+        scopeOptions={pullFromSalesDeliveryQuery.scopeOptions}
+        scope={pullFromSalesDeliveryQuery.scope}
+        onScopeChange={pullFromSalesDeliveryQuery.handleScopeChange}
         okText={t('components.uniLifecycle.nextStep')}
       />
 

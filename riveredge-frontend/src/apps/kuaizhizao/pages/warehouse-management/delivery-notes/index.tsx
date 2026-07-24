@@ -30,7 +30,7 @@ import {
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import { UniPullQueryModal, filterByPullScope, paginatePullRows, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { deliveryNoticeApi, type DeliveryNoticePullCandidate, type DeliveryNoticePullPreview } from '../../../services/delivery-notice';
 import { getDeliveryNoticeLifecycle } from '../../../utils/deliveryNoticeLifecycle';
@@ -67,6 +67,7 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { salesDeliveryCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 interface DeliveryNotice {
   id?: number;
@@ -604,25 +605,40 @@ const DeliveryNotesPage: React.FC = () => {
     t,
   ]);
 
+  const pullDocumentScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const isPullDeliveryNoticeSelectable = useCallback(
+    (record: DeliveryNoticePullCandidate) => record.capabilities?.push_delivery_notice?.allowed !== false,
+    [],
+  );
+
   const pullFromSalesDeliveryQuery = useUniPullQuery<DeliveryNoticePullCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
-    loadData: async ({ keyword, page, pageSize }) => {
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await deliveryNoticeApi.listPullCandidates({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: 200,
           keyword: keyword.trim() || undefined,
         });
         const data = Array.isArray(res?.data) ? res.data : [];
-        const total = Number(res?.total ?? data.length);
-        return { data, total };
+        const filtered = filterByPullScope(data, scope, isPullDeliveryNoticeSelectable);
+        return paginatePullRows(filtered, page, pageSize);
       } catch {
         messageApi.error(t('app.kuaizhizao.deliveryNote.msg.loadListFailed'));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => record.capabilities?.push_delivery_notice?.allowed === false,
+    isRowDisabled: (record) => !isPullDeliveryNoticeSelectable(record),
     onConfirm: async (keys, rows) => {
       const selectedId = Number(keys[0]);
       if (!selectedId) {
@@ -1157,13 +1173,10 @@ const DeliveryNotesPage: React.FC = () => {
                 messageApi.warning(t('app.kuaizhizao.deliveryNote.msg.noExportData'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `delivery-notes-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `delivery-notes-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('app.kuaizhizao.deliveryNote.msg.exportSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.deliveryNote.msg.exportFailed'));
@@ -1219,6 +1232,9 @@ const DeliveryNotesPage: React.FC = () => {
         pageSize={pullFromSalesDeliveryQuery.pageSize}
         total={pullFromSalesDeliveryQuery.total}
         onPageChange={pullFromSalesDeliveryQuery.handlePageChange}
+        scopeOptions={pullFromSalesDeliveryQuery.scopeOptions}
+        scope={pullFromSalesDeliveryQuery.scope}
+        onScopeChange={pullFromSalesDeliveryQuery.handleScopeChange}
         okText={t('app.kuaizhizao.warehouseOutbound.action.nextStep')}
         cancelText={t('common.cancel')}
         okButtonProps={{ disabled: pullFromSalesDeliveryQuery.selectedRowKeys.length === 0 }}

@@ -94,6 +94,8 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const DEMAND_ORIGIN_SUB_KEYS = new Set(['from_forecast', 'from_order', 'manual_plan']);
 const DEMAND_RESOURCE = 'kuaizhizao:demand';
@@ -1259,8 +1261,7 @@ const DemandManagementPage: React.FC = () => {
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await listDemands({ skip: 0, limit: 10000, demand_type: 'demand_plan' });
-              let items = res.data || [];
+              let items = await fetchAllListItems((p) => listDemands({ ...p, demand_type: 'demand_plan' }));
               if (type === 'currentPage' && pageData?.length) {
                 items = pageData;
               } else if (type === 'selected' && keys?.length) {
@@ -1270,13 +1271,10 @@ const DemandManagementPage: React.FC = () => {
                 messageApi.warning(t('common.exportNoData'));
                 return;
               }
-              const blob = new window.Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `demands-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              window.URL.revokeObjectURL(url);
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `demands-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              );
               messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('common.exportFailed'));

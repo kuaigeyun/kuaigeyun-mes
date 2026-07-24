@@ -1,6 +1,7 @@
 import { InboxOutlined } from '@ant-design/icons';
 import {
   ProFormDigit,
+  ProFormItem,
   ProFormSwitch,
   ProFormText,
   ProFormTextArea,
@@ -253,17 +254,18 @@ export function ClientReleaseUploadModal({
 
   const detectedMetaAlert =
     detectedMeta && !isReplacing ? (
-      <Alert
-        type="info"
-        showIcon
-        message={t('pages.infra.clientReleases.packageDetectedTitle')}
-        description={t('pages.infra.clientReleases.packageDetectedDesc', {
-          version: detectedMeta.app_version,
-          code: detectedMeta.version_code,
-          package: detectedMeta.package_name ?? '—',
-        })}
-        style={{ marginBottom: 16 }}
-      />
+      <ProFormItem colProps={{ span: 24 }}>
+        <Alert
+          type="info"
+          showIcon
+          message={t('pages.infra.clientReleases.packageDetectedTitle')}
+          description={t('pages.infra.clientReleases.packageDetectedDesc', {
+            version: detectedMeta.app_version,
+            code: detectedMeta.version_code,
+            package: detectedMeta.package_name ?? '—',
+          })}
+        />
+      </ProFormItem>
     ) : null;
 
   return (

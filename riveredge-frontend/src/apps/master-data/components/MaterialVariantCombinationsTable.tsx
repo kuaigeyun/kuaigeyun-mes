@@ -897,6 +897,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
             title={t('app.master-data.materials.variantComboImportTitle', '导入属性组合')}
             headers={importTemplate.headers}
             exampleRow={importTemplate.exampleRow}
+            columnOptions={importTemplate.columnOptions}
             templateDocumentName={t('app.master-data.materials.variantComboImportTemplate', {
               defaultValue: '属性组合导入',
             })}

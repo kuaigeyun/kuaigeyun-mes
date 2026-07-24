@@ -52,8 +52,10 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 
 /**
  * 标准操作SOP管理列表页面组件
@@ -128,6 +130,14 @@ const SOPPage: React.FC = () => {
     }
   }, [sopListCustomFields.length]);
 
+  const sopOperationCodeOptions = useMemo(
+    () =>
+      operations
+        .map((o) => String(o.code || '').trim())
+        .filter(Boolean),
+    [operations],
+  );
+
   const sopImportTemplate = useMemo(
     () =>
       buildFactoryImportTemplate(
@@ -136,14 +146,28 @@ const SOPPage: React.FC = () => {
           { field: 'code', required: true, labelKey: 'app.master-data.sop.codeLabel' },
           { field: 'name', required: true, labelKey: 'app.master-data.sop.nameLabel' },
           { field: 'version', labelKey: 'app.master-data.sop.versionLabel' },
+          {
+            field: 'operationCode',
+            labelKey: 'app.master-data.sop.operationLabel',
+            aliases: ['工序编号', '关联工序', 'operation_code'],
+            options: sopOperationCodeOptions,
+          },
+          {
+            field: 'isActive',
+            labelKey: 'app.master-data.sop.isActiveLabel',
+            aliases: ['是否启用', '启用'],
+            options: [...IMPORT_YES_NO_OPTIONS],
+          },
         ],
         [
           t('app.master-data.sop.importExample.code'),
           t('app.master-data.sop.importExample.name'),
           t('app.master-data.sop.importExample.version'),
+          sopOperationCodeOptions[0] ?? '',
+          '是',
         ],
       ),
-    [t, i18n.language],
+    [t, i18n.language, sopOperationCodeOptions],
   );
 
   /**
@@ -448,7 +472,33 @@ const SOPPage: React.FC = () => {
         });
         return;
       }
-      items.push({ code, name, version: version || undefined, isActive: true });
+      const isActiveRaw =
+        headerIndexMap.isActive !== undefined ? String(row[headerIndexMap.isActive] ?? '').trim() : '';
+      const isActive =
+        !isActiveRaw ||
+        !['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(isActiveRaw.toLowerCase());
+      const operationCodeRaw =
+        headerIndexMap.operationCode !== undefined
+          ? String(row[headerIndexMap.operationCode] ?? '').trim()
+          : '';
+      let operationId: number | undefined;
+      if (operationCodeRaw) {
+        const op = operations.find(
+          (o) => (o.code || '').toUpperCase() === operationCodeRaw.toUpperCase(),
+        );
+        if (!op?.id) {
+          errors.push({
+            row: i + 3,
+            message: t('app.master-data.sop.operationNotFound', {
+              defaultValue: `未找到工序编号：${operationCodeRaw}`,
+              code: operationCodeRaw,
+            }),
+          });
+          return;
+        }
+        operationId = op.id;
+      }
+      items.push({ code, name, version: version || undefined, isActive, operationId });
     });
     if (errors.length > 0) {
       Modal.warning({
@@ -500,15 +550,13 @@ const SOPPage: React.FC = () => {
     try {
       let toExport: SOP[] = [];
       if (type === 'all') {
-        const res = await sopApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        toExport = Array.isArray(res) ? res : res?.data ?? [];
+        toExport = await fetchAllListItems((p) => sopApi.list({ ...p, ...lastListParamsRef.current }));
       } else if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
         toExport = currentPageData.filter((r) => selectedRowKeys.includes(r.uuid));
       } else if (type === 'currentPage' && currentPageData) {
         toExport = currentPageData;
       } else {
-        const res = await sopApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
-        toExport = Array.isArray(res) ? res : res?.data ?? [];
+        toExport = await fetchAllListItems((p) => sopApi.list({ ...p, ...lastListParamsRef.current }));
       }
       if (toExport.length === 0) {
         messageApi.warning(t('app.master-data.noExportData'));
@@ -1044,8 +1092,8 @@ const SOPPage: React.FC = () => {
         onImport={handleImport}
         importHeaders={sopImportTemplate.importHeaders}
         importExampleRow={sopImportTemplate.importExampleRow}
+        importColumnOptions={sopImportTemplate.importColumnOptions}
         importFieldMap={sopImportTemplate.importHeaderMap}
-        importFieldRules={{ code: { required: true }, name: { required: true } }}
         showExportButton={true}
         onExport={handleExport}
       />

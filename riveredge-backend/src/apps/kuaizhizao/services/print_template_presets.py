@@ -76,7 +76,10 @@ async def load_kuaizhizao_print_template_presets(tenant_id: int) -> int:
                 code__startswith=base_code,
             ).all()
             for row in rows:
-                update_fields = _apply_preset_config_updates(row, preset_cfg)
+                # 同步顶层 content（HTML 预设无 designer_schema 时依赖此项更新版式）
+                update_fields = _apply_preset_config_updates(
+                    row, {**preset_cfg, "content": item.get("content")}
+                )
                 if update_fields:
                     update_fields.append("updated_at")
                     await row.save(update_fields=list(dict.fromkeys(update_fields)))

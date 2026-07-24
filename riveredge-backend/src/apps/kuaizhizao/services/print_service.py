@@ -598,6 +598,7 @@ class DocumentPrintService:
         "material_return": "MATERIAL_RETURN_PRINT",
         "delivery_notice": "DELIVERY_NOTICE_PRINT",
         "product_quality_certificate": "PRODUCT_QUALITY_CERTIFICATE_PRINT",
+        "equipment_card": "EQUIPMENT_CARD_PRINT",
     }
 
     @staticmethod
@@ -733,18 +734,65 @@ class DocumentPrintService:
         Returns:
             Dict: 打印结果
         """
-        # 获取单据数据
         i18n = await PrintLocalization.for_tenant(tenant_id)
         document_data = await self._get_document_data(tenant_id, document_type, document_id, i18n=i18n)
-        document_data["print_time"] = i18n.format_datetime(datetime.now()) or datetime.now().strftime("%Y-%m-%d %H:%M")
-        # 补充通用模板变量：company_logo（供设计器 Logo 组件/字段引用）
+        return await self._render_prepared_document(
+            tenant_id=tenant_id,
+            document_type=document_type,
+            document_id=document_id,
+            document_data=document_data,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+            i18n=i18n,
+        )
+
+    async def print_equipment_cards(
+        self,
+        tenant_id: int,
+        equipment_uuids: list[str],
+        template_code: Optional[str] = None,
+        template_uuid: Optional[str] = None,
+        output_format: str = "html",
+    ) -> Dict[str, Any]:
+        """批量打印设备标识卡（统一走打印模板渲染）。"""
+        uuids = [str(u).strip() for u in equipment_uuids if str(u).strip()]
+        if not uuids:
+            raise ValidationError("请选择要打印的设备")
+        i18n = await PrintLocalization.for_tenant(tenant_id)
+        document_data = await self._format_equipment_cards_data(tenant_id, uuids, i18n)
+        first_id = int(document_data.get("document_id") or 0)
+        return await self._render_prepared_document(
+            tenant_id=tenant_id,
+            document_type="equipment_card",
+            document_id=first_id,
+            document_data=document_data,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+            i18n=i18n,
+        )
+
+    async def _render_prepared_document(
+        self,
+        *,
+        tenant_id: int,
+        document_type: str,
+        document_id: int,
+        document_data: Dict[str, Any],
+        template_code: Optional[str] = None,
+        template_uuid: Optional[str] = None,
+        output_format: str = "html",
+        i18n: PrintLocalization | None = None,
+    ) -> Dict[str, Any]:
+        """在已准备好的单据变量上查找模板并渲染（html/pdf）。"""
+        loc = i18n or await PrintLocalization.for_tenant(tenant_id)
+        document_data["print_time"] = loc.format_datetime(datetime.now()) or datetime.now().strftime("%Y-%m-%d %H:%M")
         if not document_data.get("company_logo"):
             document_data["company_logo"] = await _resolve_company_logo_for_print(tenant_id)
-        # 兼容历史模板字段名 {{ logo }}
         if not document_data.get("logo") and document_data.get("company_logo"):
             document_data["logo"] = document_data["company_logo"]
 
-        # 查找打印模板：优先 template_uuid，其次 template_code，最后默认模板
         try:
             if template_uuid or template_code:
                 template = await self._find_print_template(
@@ -766,7 +814,6 @@ class DocumentPrintService:
                         raise ValidationError(f"未找到单据类型 {document_type} 的默认打印模板")
 
             if not template:
-                # 如果没有找到模板，返回基础HTML格式
                 logger.warning(f"未找到打印模板 {template_code}，使用默认格式")
                 res = await self._generate_default_print(
                     document_type, document_data, "html"
@@ -801,7 +848,6 @@ class DocumentPrintService:
                 message=res.get("message", "使用默认格式打印"),
             )
 
-        # 历史 pdfme 模板统一降级到服务端默认渲染，避免依赖前端 @pdfme/generator。
         from core.services.print.template_renderer import is_pdfme_template
 
         if is_pdfme_template(template.content or ""):
@@ -827,7 +873,6 @@ class DocumentPrintService:
                 message="pdfme 模板已降级为服务端默认模板渲染",
             )
 
-        # 先渲染为 HTML（再按需转 PDF）
         render_request = PrintTemplateRenderRequest(
             data=document_data,
             output_format="html",
@@ -1062,6 +1107,18 @@ class DocumentPrintService:
             if not inspection.certificate_issued:
                 raise BusinessLogicError("请先出具合格证后再打印")
             return await self._format_product_quality_certificate_data(inspection)
+
+        elif document_type == "equipment_card":
+            from apps.kuaizhizao.models.equipment import Equipment
+
+            equipment = await Equipment.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not equipment:
+                raise NotFoundError(f"设备不存在: {document_id}")
+            return await self._format_equipment_cards_data(
+                tenant_id, [str(equipment.uuid)], loc
+            )
 
         else:
             raise ValidationError(f"不支持的单据类型: {document_type}")
@@ -2004,6 +2061,79 @@ class DocumentPrintService:
                 }
             )
         return results
+
+    async def _format_equipment_cards_data(
+        self,
+        tenant_id: int,
+        equipment_uuids: list[str],
+        i18n: PrintLocalization | None = None,
+    ) -> Dict[str, Any]:
+        """格式化设备标识卡打印变量（支持批量）。"""
+        from apps.kuaizhizao.models.equipment import Equipment
+        from core.services.qrcode.qrcode_service import QRCodeService
+
+        loc = i18n or await PrintLocalization.for_tenant(tenant_id)
+        ordered_uuids = [str(u).strip() for u in equipment_uuids if str(u).strip()]
+        if not ordered_uuids:
+            raise ValidationError("请选择要打印的设备")
+
+        rows = await Equipment.filter(
+            tenant_id=tenant_id,
+            uuid__in=ordered_uuids,
+            deleted_at__isnull=True,
+        ).all()
+        by_uuid = {str(eq.uuid): eq for eq in rows}
+        missing = [u for u in ordered_uuids if u not in by_uuid]
+        if missing:
+            raise NotFoundError(f"设备不存在: {missing[0]}")
+
+        def _fmt_date(value: Any) -> str:
+            if value is None or value == "":
+                return ""
+            if hasattr(value, "strftime"):
+                return value.strftime("%Y-%m-%d")
+            text = str(value).strip()
+            return text[:10] if text else ""
+
+        items: list[Dict[str, Any]] = []
+        for uuid in ordered_uuids:
+            eq = by_uuid[uuid]
+            qr = QRCodeService.generate_equipment_qrcode(
+                equipment_uuid=str(eq.uuid),
+                equipment_code=eq.code or "",
+                equipment_name=eq.name or "",
+                size=10,
+            )
+            line_name = (getattr(eq, "production_line_name", None) or "").strip()
+            workshop_name = (eq.workshop_name or "").strip()
+            affiliation = line_name or workshop_name
+            items.append(
+                {
+                    "id": eq.id,
+                    "uuid": str(eq.uuid),
+                    "code": eq.code,
+                    "name": eq.name,
+                    "model": eq.model,
+                    "type": eq.type,
+                    "workshop_name": eq.workshop_name,
+                    "production_line_name": getattr(eq, "production_line_name", None),
+                    "affiliation": affiliation,
+                    "purchase_date": _fmt_date(eq.purchase_date),
+                    "installation_date": _fmt_date(eq.installation_date),
+                    "status": loc.document_status(eq.status) if eq.status else eq.status,
+                    "qrcode_image": qr.get("qrcode_image") or "",
+                }
+            )
+
+        first = by_uuid[ordered_uuids[0]]
+        return {
+            "document_type": "equipment_card",
+            "document_id": first.id,
+            "code": first.code,
+            "name": first.name,
+            "card_title": "设备卡",
+            "items": items,
+        }
 
     async def _generate_default_print(
         self,

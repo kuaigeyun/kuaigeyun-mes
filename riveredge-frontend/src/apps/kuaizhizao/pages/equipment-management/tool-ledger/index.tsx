@@ -7,7 +7,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
  */
 
 import React, { useRef, useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { DescriptionsProps } from 'antd';
 import {
@@ -27,24 +27,27 @@ import { PlusOutlined, EditOutlined, EyeOutlined, ReloadOutlined } from '@ant-de
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import CodeField from '../../../../../components/code-field';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { getToolAssetLifecycle } from '../../../utils/equipmentLifecycle';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { toolApi } from '../../../services/equipment';
 import { maintenanceSchemesApi, repairSchemesApi, schemeBindingsApi, maintenancesApi, calibrationsApi } from '../../../services/toolOps';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
+import {
+  IMPORT_YES_NO_OPTIONS,
+  pickImportExampleValue,
+} from '../../../../../utils/loadImportDictionaryValues';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
-import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -55,6 +58,7 @@ import {
   normalizeEquipmentListResponse,
   resolveLedgerListParams,
 } from '../../../utils/equipmentListCore';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -131,9 +135,9 @@ interface ToolCalibration {
 }
 
 const ToolLedgerPage: React.FC = () => {
-  const navigate = useNavigate();
   const perms = useResourcePermissions('kuaizhizao:equipment-management-tool-ledger');
   const { t, i18n } = useTranslation();
+  const toolDictOptions = useImportDictionaryOptions(['TOOL_TYPE', 'TOOL_STATUS']);
 
   const toolLedgerImportTemplate = useMemo(
     () =>
@@ -142,17 +146,54 @@ const ToolLedgerPage: React.FC = () => {
         [
           { field: 'code', labelKey: 'app.kuaizhizao.toolLedger.import.code', aliases: ['工装编号', '编号'] },
           { field: 'name', required: true, labelKey: 'app.kuaizhizao.toolLedger.import.name', aliases: ['工装名称', '名称'] },
-          { field: 'type', labelKey: 'app.kuaizhizao.toolLedger.import.type', aliases: ['工装类型', '类型'] },
+          {
+            field: 'type',
+            labelKey: 'app.kuaizhizao.toolLedger.import.type',
+            aliases: ['工装类型', '类型'],
+            options: toolDictOptions.TOOL_TYPE,
+          },
           { field: 'spec', labelKey: 'app.kuaizhizao.toolLedger.import.specification', aliases: ['规格型号', '规格'] },
+          { field: 'manufacturer', labelKey: 'app.kuaizhizao.toolLedger.import.manufacturer', aliases: ['制造商'] },
+          { field: 'supplier', labelKey: 'app.kuaizhizao.toolLedger.import.supplier', aliases: ['供应商'] },
+          { field: 'purchase_date', labelKey: 'app.kuaizhizao.toolLedger.import.purchaseDate', aliases: ['采购日期'] },
+          { field: 'warranty_expiry', labelKey: 'app.kuaizhizao.toolLedger.import.warrantyExpiry', aliases: ['保修到期日'] },
+          {
+            field: 'status',
+            required: true,
+            labelKey: 'app.kuaizhizao.toolLedger.import.status',
+            aliases: ['工装状态', '状态'],
+            options: toolDictOptions.TOOL_STATUS,
+          },
+          { field: 'maintenance_period', labelKey: 'app.kuaizhizao.toolLedger.import.maintenancePeriod', aliases: ['保养周期（天）', '保养周期'] },
+          { field: 'calibration_period', labelKey: 'app.kuaizhizao.toolLedger.import.calibrationPeriod', aliases: ['校验周期（天）', '校验周期'] },
+          { field: 'description', labelKey: 'app.kuaizhizao.toolLedger.import.description', aliases: ['备注', '描述'] },
+          {
+            field: 'is_active',
+            labelKey: 'app.kuaizhizao.toolLedger.import.isActive',
+            aliases: ['是否启用', '启用'],
+            options: [...IMPORT_YES_NO_OPTIONS],
+          },
         ],
         [
           t('app.kuaizhizao.toolLedger.importExample.code'),
           t('app.kuaizhizao.toolLedger.importExample.name'),
-          t('app.kuaizhizao.toolLedger.importExample.type'),
+          pickImportExampleValue(toolDictOptions.TOOL_TYPE, t('app.kuaizhizao.toolLedger.importExample.type')),
           t('app.kuaizhizao.toolLedger.importExample.specification'),
+          t('app.kuaizhizao.toolLedger.importExample.manufacturer'),
+          t('app.kuaizhizao.toolLedger.importExample.supplier'),
+          t('app.kuaizhizao.toolLedger.importExample.purchaseDate'),
+          t('app.kuaizhizao.toolLedger.importExample.warrantyExpiry'),
+          pickImportExampleValue(toolDictOptions.TOOL_STATUS, t('app.kuaizhizao.toolLedger.importExample.status')),
+          t('app.kuaizhizao.toolLedger.importExample.maintenancePeriod'),
+          t('app.kuaizhizao.toolLedger.importExample.calibrationPeriod'),
+          '',
+          pickImportExampleValue(
+            [...IMPORT_YES_NO_OPTIONS],
+            t('app.kuaizhizao.toolLedger.importExample.isActive'),
+          ),
         ],
       ),
-    [t, i18n.language],
+    [t, i18n.language, toolDictOptions],
   );
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
@@ -630,27 +671,50 @@ const ToolLedgerPage: React.FC = () => {
               messageApi.error(t('app.kuaizhizao.toolLedger.importHeaderMissingName'));
               return;
             }
+            const cellAt = (row: any[], field: string): string => {
+              const idx = headerIndexMap[field];
+              if (idx === undefined) return '';
+              return String(row[idx] ?? '').trim();
+            };
+            const parseDate = (raw: string): string | undefined => {
+              if (!raw) return undefined;
+              const d = dayjs(raw);
+              return d.isValid() ? d.format('YYYY-MM-DD') : undefined;
+            };
+            const parseIntField = (raw: string): number | undefined => {
+              if (!raw) return undefined;
+              const n = Number(raw);
+              return Number.isFinite(n) ? n : undefined;
+            };
+            const parseActive = (raw: string): boolean | undefined => {
+              if (!raw) return undefined;
+              const v = raw.toLowerCase();
+              if (['1', 'true', 'yes', 'y', '是', '启用', 'active'].includes(v)) return true;
+              if (['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(v)) return false;
+              return undefined;
+            };
             const items: any[] = [];
             const importRows = data.slice(2).filter((row: any[]) =>
               row?.some((c: any) => c != null && String(c).trim() !== ''),
             );
             for (const row of importRows) {
-              const name = String(row[headerIndexMap.name] ?? '').trim();
+              const name = cellAt(row, 'name');
               if (!name) continue;
+              const isActive = parseActive(cellAt(row, 'is_active'));
               items.push({
-                code:
-                  headerIndexMap.code !== undefined
-                    ? String(row[headerIndexMap.code] ?? '').trim() || undefined
-                    : undefined,
+                code: cellAt(row, 'code') || undefined,
                 name,
-                type:
-                  headerIndexMap.type !== undefined
-                    ? String(row[headerIndexMap.type] ?? '').trim() || undefined
-                    : undefined,
-                spec:
-                  headerIndexMap.spec !== undefined
-                    ? String(row[headerIndexMap.spec] ?? '').trim() || undefined
-                    : undefined,
+                type: cellAt(row, 'type') || undefined,
+                spec: cellAt(row, 'spec') || undefined,
+                manufacturer: cellAt(row, 'manufacturer') || undefined,
+                supplier: cellAt(row, 'supplier') || undefined,
+                purchase_date: parseDate(cellAt(row, 'purchase_date')),
+                warranty_expiry: parseDate(cellAt(row, 'warranty_expiry')),
+                status: cellAt(row, 'status') || '正常',
+                maintenance_period: parseIntField(cellAt(row, 'maintenance_period')),
+                calibration_period: parseIntField(cellAt(row, 'calibration_period')),
+                description: cellAt(row, 'description') || undefined,
+                ...(isActive === undefined ? {} : { is_active: isActive }),
               });
             }
             if (items.length === 0) {
@@ -673,28 +737,38 @@ const ToolLedgerPage: React.FC = () => {
           }}
           importHeaders={toolLedgerImportTemplate.importHeaders}
           importExampleRow={toolLedgerImportTemplate.importExampleRow}
+          importColumnOptions={toolLedgerImportTemplate.importColumnOptions}
           importFieldMap={toolLedgerImportTemplate.importHeaderMap}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await toolApi.list({ skip: 0, limit: 10000 });
-              let items = (res as any)?.items || (res as any)?.data || [];
-              if (type === 'currentPage' && pageData?.length) {
-                items = pageData;
-              } else if (type === 'selected' && keys?.length) {
+              let items: any[] =
+                type === 'currentPage' && pageData?.length
+                  ? pageData
+                  : await fetchAllListItems((p) => toolApi.list(p));
+              if (type === 'selected' && keys?.length) {
                 items = items.filter((d: any) => d.uuid && keys.includes(d.uuid));
               }
               if (items.length === 0) {
                 messageApi.warning(t('common.noDataToExport'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `tools-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              const exportColumns = [
+                { key: 'code', title: t('app.kuaizhizao.toolLedger.import.code') },
+                { key: 'name', title: t('app.kuaizhizao.toolLedger.import.name') },
+                { key: 'type', title: t('app.kuaizhizao.toolLedger.import.type') },
+                { key: 'spec', title: t('app.kuaizhizao.toolLedger.import.specification') },
+                { key: 'manufacturer', title: t('app.kuaizhizao.toolLedger.fieldManufacturer') },
+                { key: 'supplier', title: t('app.kuaizhizao.toolLedger.fieldSupplier') },
+                { key: 'status', title: t('app.kuaizhizao.toolLedger.fieldStatus') },
+                { key: 'purchase_date', title: t('app.kuaizhizao.toolLedger.fieldPurchaseDate') },
+                { key: 'is_active', title: t('app.kuaizhizao.toolLedger.fieldIsActive') },
+              ];
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `tools-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                { columns: exportColumns, sheetName: t('app.kuaizhizao.toolLedger.title') },
+              );
               messageApi.success(t('common.exportCountSuccess', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('common.exportFailed'));
@@ -824,45 +898,6 @@ const ToolLedgerPage: React.FC = () => {
                   size="small"
                   items={buildDescriptionItemsFromColumns(toolDetail, detailBaseColumns)}
                 />
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lc = getToolAssetLifecycle(toolDetail as Record<string, unknown>);
-                    const mainStages = lc.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        showLabels
-                        status={lc.status}
-                        nextStepSuggestions={lc.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  {toolDetail.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType='tool'
-                      documentId={toolDetail.id}
-                      active={drawerVisible}
-                      selfDocumentId={toolDetail.id}
-                      renderBriefActions={(doc) => (
-                  <EquipmentTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDrawerVisible(false);
-                      setToolDetail(null);
-                                  setMaintenances([]);
-                      setCalibrations([]);
-                    }}
-                  />
-                )}
-                    />
-                  ) : null}
-                </div>
               </DetailDrawerSection>
               <DetailDrawerSection title={t('app.kuaizhizao.toolOps.schemeBindings.title')}>
                 <div style={{ marginBottom: 12 }}>

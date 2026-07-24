@@ -50,6 +50,11 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import {
+  IMPORT_YES_NO_OPTIONS,
+  pickImportExampleValue,
+} from '../../../../../utils/loadImportDictionaryValues';
 import {
   buildMaterialSourceTypeOptions,
   normalizeMaterialSourceType,
@@ -62,6 +67,8 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { masterCrudCreatedUpdatedColumns } from '../../../utils/materialListCore';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 
@@ -374,6 +381,9 @@ const BOMPage: React.FC = () => {
   // 批量导入加载状态
   const [batchImportLoading, setBatchImportLoading] = useState(false);
 
+  const importDictOptions = useImportDictionaryOptions(['MATERIAL_UNIT']);
+  const materialUnitImportOptions = importDictOptions.MATERIAL_UNIT ?? [];
+
   const bomImportTemplate = useMemo(() => {
     const baseTemplate = buildFactoryImportTemplate(
       t,
@@ -395,9 +405,18 @@ const BOMPage: React.FC = () => {
           labelKey: 'app.master-data.bom.importHeaderQuantity',
           aliases: ['数量'],
         },
-        { field: 'unit', labelKey: 'app.master-data.bom.importHeaderUnit', aliases: ['单位'] },
+        { field: 'unit', labelKey: 'app.master-data.bom.importHeaderUnit', aliases: ['单位'], options: materialUnitImportOptions },
         { field: 'wasteRate', labelKey: 'app.master-data.bom.importHeaderWasteRate' },
-        { field: 'isRequired', labelKey: 'app.master-data.bom.importHeaderIsRequired' },
+        {
+          field: 'isRequired',
+          labelKey: 'app.master-data.bom.importHeaderIsRequired',
+          options: [...IMPORT_YES_NO_OPTIONS],
+        },
+        {
+          field: 'isActive',
+          labelKey: 'app.master-data.bom.importHeaderIsActive',
+          options: [...IMPORT_YES_NO_OPTIONS],
+        },
         { field: 'remark', labelKey: 'app.master-data.bom.importHeaderRemark' },
         {
           field: 'materialName',
@@ -409,7 +428,7 @@ const BOMPage: React.FC = () => {
           labelKey: 'app.master-data.bom.importHeaderSpecification',
           aliases: ['产品型号', '规格型号', '规格'],
         },
-        { field: 'baseUnit', labelKey: 'app.master-data.bom.importHeaderBaseUnit' },
+        { field: 'baseUnit', labelKey: 'app.master-data.bom.importHeaderBaseUnit', options: materialUnitImportOptions },
         { field: 'processRouteCode', labelKey: 'app.master-data.bom.importHeaderProcessRouteCode' },
         { field: 'processRouteName', labelKey: 'app.master-data.bom.importHeaderProcessRouteName' },
       ],
@@ -421,9 +440,10 @@ const BOMPage: React.FC = () => {
         t('app.master-data.bom.importExample.parentCode'),
         t('app.master-data.bom.importExample.componentCode'),
         t('app.master-data.bom.importExample.quantity'),
-        t('app.master-data.bom.importExample.unit'),
+        pickImportExampleValue(materialUnitImportOptions, t('app.master-data.bom.importExample.unit')),
         t('app.master-data.bom.importExample.wasteRate'),
-        t('app.master-data.bom.importExample.isRequired'),
+        pickImportExampleValue([...IMPORT_YES_NO_OPTIONS], t('app.master-data.bom.importExample.isRequired')),
+        pickImportExampleValue([...IMPORT_YES_NO_OPTIONS], t('app.master-data.bom.importExample.isActive')),
         '',
         '',
         '',
@@ -438,6 +458,7 @@ const BOMPage: React.FC = () => {
     const importHeaders = [...baseTemplate.importHeaders];
     const importExampleRow = [...baseTemplate.importExampleRow];
     const importHeaderMap = { ...baseTemplate.importHeaderMap };
+    const importColumnOptions = [...baseTemplate.importColumnOptions];
 
     const orderedCustomFields = [...bomListCustomFields].sort(
       (a: any, b: any) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0),
@@ -450,6 +471,7 @@ const BOMPage: React.FC = () => {
       const header = field?.is_required ? `*${label}` : label;
       importHeaders.push(header);
       importExampleRow.push('');
+      importColumnOptions.push(undefined);
       importHeaderMap[header] = customKey;
       importHeaderMap[label] = customKey;
       importHeaderMap[field.code] = customKey;
@@ -459,8 +481,9 @@ const BOMPage: React.FC = () => {
       importHeaders,
       importExampleRow,
       importHeaderMap,
+      importColumnOptions,
     };
-  }, [t, i18n.language, bomListCustomFields]);
+  }, [t, i18n.language, bomListCustomFields, materialUnitImportOptions]);
   
   // 版本管理Modal状态
   const [versionModalVisible, setVersionModalVisible] = useState(false);
@@ -1895,6 +1918,10 @@ const BOMPage: React.FC = () => {
           headerIndexMap['isRequired'] !== undefined
             ? row[headerIndexMap['isRequired']]?.toString().trim()
             : undefined;
+        const isActiveStr =
+          headerIndexMap['isActive'] !== undefined
+            ? row[headerIndexMap['isActive']]?.toString().trim()
+            : undefined;
         const remark =
           headerIndexMap['remark'] !== undefined
             ? row[headerIndexMap['remark']]?.toString().trim()
@@ -1945,6 +1972,16 @@ const BOMPage: React.FC = () => {
           }
         }
 
+        let isActive: boolean | undefined = undefined;
+        if (isActiveStr) {
+          const isActiveLower = isActiveStr.toLowerCase();
+          if (isActiveLower === '是' || isActiveLower === 'true' || isActiveLower === '1' || isActiveLower === 'yes') {
+            isActive = true;
+          } else if (isActiveLower === '否' || isActiveLower === 'false' || isActiveLower === '0' || isActiveLower === 'no') {
+            isActive = false;
+          }
+        }
+
         // 解析基准数量
         let baseQuantity: number | undefined = undefined;
         if (baseQuantityStr) {
@@ -1967,6 +2004,7 @@ const BOMPage: React.FC = () => {
           unit: unit || undefined,
           wasteRate: wasteRate !== undefined ? wasteRate : undefined,
           isRequired: isRequired !== undefined ? isRequired : true,
+          isActive: isActive !== undefined ? isActive : true,
           remark: remark || undefined,
         });
 
@@ -3002,7 +3040,7 @@ const BOMPage: React.FC = () => {
             } catch (apiErr: any) {
               if (is404(apiErr)) {
                 // 后端未提供 groups/component-ids 接口时回退：用 list 全量拉取再分组
-                const listResult = await bomApi.list({ skip: 0, limit: 10000, includeObsolete });
+                const listResult = await fetchAllListItems((p) => bomApi.list({ ...p, includeObsolete }));
                 const { groupRows, keyToUuids } = groupBomsByCode(listResult);
                 let filteredGroupRows = groupRows;
                 if (bomViewTypeRef.current === 'productBom') {
@@ -3061,7 +3099,7 @@ const BOMPage: React.FC = () => {
               );
             } catch (batchErr: any) {
               if (is404(batchErr)) {
-                const listResult = await bomApi.list({ skip: 0, limit: 10000, includeObsolete });
+                const listResult = await fetchAllListItems((p) => bomApi.list({ ...p, includeObsolete }));
                 const { groupRows, keyToUuids } = groupBomsByCode(listResult);
                 let filteredGroupRows = groupRows;
                 if (bomViewTypeRef.current === 'productBom') {
@@ -3243,11 +3281,17 @@ const BOMPage: React.FC = () => {
           entities: ['material', 'processRoute'],
           defaultWriteStrategy: 'upsert',
           supportedStrategies: ['upsert', 'create_only', 'link_only', 'strict_fail'],
+          requiredFieldKeys: ['parentCode', 'componentCode', 'quantity'],
+          entityRequiredFieldKeys: {
+            material: ['componentCode'],
+            processRoute: ['processRouteCode'],
+          },
         }}
         onRelationImportPrecheck={handleRelationImportPrecheck}
         onRelationImportSubmit={handleRelationImportSubmit}
         importHeaders={bomImportTemplate.importHeaders}
         importExampleRow={bomImportTemplate.importExampleRow}
+        importColumnOptions={bomImportTemplate.importColumnOptions}
         importFieldMap={bomImportTemplate.importHeaderMap}
         showExportButton={true}
         onExport={async (type, selectedRowKeys, currentPageData) => {
@@ -3258,7 +3302,7 @@ const BOMPage: React.FC = () => {
             } else if (type === 'currentPage' && currentPageData) {
               toExport = currentPageData;
             } else {
-              const result = await bomApi.list({ skip: 0, limit: 10000 });
+              const result = await fetchAllListItems((p) => bomApi.list(p));
               let { groupRows } = groupBomsByCode(result);
               if (bomViewTypeRef.current === 'productBom') {
                 groupRows = filterToProductBomView(groupRows, result);
@@ -3271,9 +3315,10 @@ const BOMPage: React.FC = () => {
               messageApi.warning(t('app.master-data.noExportData'));
               return;
             }
-            const blob = new Blob(['\ufeff' + JSON.stringify(toExport, null, 2)], { type: 'application/json;charset=utf-8' });
-            const filename = `BOM_${new Date().toISOString().slice(0, 10)}.json`;
-            downloadFile(blob, filename);
+            await downloadRecordsAsXlsx(
+              toExport as Array<Record<string, unknown>>,
+              `BOM_${new Date().toISOString().slice(0, 10)}.xlsx`,
+            );
             messageApi.success(t('common.exportSuccess', { count: toExport.length }));
           } catch (error: any) {
             messageApi.error(error?.message || t('app.master-data.exportFailed'));

@@ -39,7 +39,13 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
         // 采购订单列表 API limit 上限为 100（销售为 1000）
         const listLimit = docType === 'purchase' ? 100 : 200;
         if (docType === 'sales') {
-          const res = await listSalesOrders({ limit: listLimit, skip: 0, keyword: kw });
+          const res = await listSalesOrders({
+            limit: listLimit,
+            skip: 0,
+            keyword: kw,
+            pullable_only: true,
+            pull_target: 'sales_order_change',
+          });
           const rows = (res.data ?? [])
             .filter((o) => isSourceOrderEligibleForChange(o.status, o.review_status))
             .map((o) => ({
@@ -52,7 +58,13 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
             }));
           setCandidates(rows);
         } else {
-          const res = await listPurchaseOrders({ limit: listLimit, skip: 0, keyword: kw });
+          const res = await listPurchaseOrders({
+            limit: listLimit,
+            skip: 0,
+            keyword: kw,
+            pullable_only: true,
+            pull_target: 'purchase_order_change',
+          });
           const rows = (res.data ?? [])
             .filter((o) => isSourceOrderEligibleForChange(o.status, o.review_status))
             .map((o) => ({

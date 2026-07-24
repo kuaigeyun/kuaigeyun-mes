@@ -31,7 +31,11 @@ from apps.kuaizhizao.schemas.demand_computation import (
     DemandComputationUpdate,
     DemandComputationResponse,
     ExecuteComputationRequest,
+    DemandComputationReadinessResponse,
+    DemandComputationMaterialBackfillRequest,
+    DemandComputationMaterialBackfillResponse,
 )
+from core.api.deps.access import require_permission_codes
 from apps.kuaizhizao.schemas.demand_replanning import (
     DemandChangeEventCreateRequest,
     DemandReplanTaskExecuteRequest,
@@ -207,6 +211,67 @@ async def get_computation(
     except Exception as e:
         logger.error(f"获取需求计算详情失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取需求计算详情失败")
+
+
+@router.get(
+    "/{computation_id:int}/readiness",
+    response_model=DemandComputationReadinessResponse,
+    summary="Check material defaults readiness before execute",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:read"))],
+)
+async def get_computation_readiness(
+    computation_id: int = Path(..., description="计算ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """执行前检查物料提前期/安全库存/批量/供应商等缺失项。"""
+    del current_user
+    try:
+        raw = await computation_service.preview_computation_readiness(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+        )
+        return DemandComputationReadinessResponse.model_validate(raw)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"需求计算就绪检查失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__}: {str(e)}",
+        )
+
+
+@router.post(
+    "/materials/backfill",
+    response_model=DemandComputationMaterialBackfillResponse,
+    summary="Backfill material defaults for demand computation",
+    dependencies=[Depends(require_permission_codes("master-data:material:update"))],
+)
+async def backfill_materials_for_computation(
+    body: DemandComputationMaterialBackfillRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """将用户确认的缺失默认值回写到物料主数据。"""
+    try:
+        raw = await computation_service.backfill_materials_for_computation(
+            tenant_id=tenant_id,
+            items=[item.model_dump() for item in body.items],
+            updated_by=current_user.id,
+            current_user=current_user,
+        )
+        return DemandComputationMaterialBackfillResponse.model_validate(raw)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        logger.error(f"物料补齐回写失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__}: {str(e)}",
+        )
 
 
 @router.post("/{computation_id:int}/execute/preview", summary="Preview computation run")

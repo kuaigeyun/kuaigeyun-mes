@@ -27,6 +27,8 @@ import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRA
 import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import { rowActionKind } from '../../../components/uni-action';
 import { apiRequest } from '../../../services/api';
+import { fetchAllListItems } from '../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 
 /**
  * 报表模板接口定义
@@ -394,23 +396,18 @@ const ReportTemplatesPage: React.FC = () => {
         showExportButton={true}
         onExport={async (type, _keys, pageData) => {
           try {
-            const result = await apiRequest('/core/reports/templates', {
-              method: 'GET',
-              params: { skip: 0, limit: 10000 },
-            });
-            const items = Array.isArray(result) ? result : [];
-            const toExport = type === 'currentPage' && pageData?.length ? pageData : items;
+            const toExport =
+              type === 'currentPage' && pageData?.length
+                ? pageData
+                : await fetchAllListItems((p) => apiRequest('/core/reports/templates', { method: 'GET', params: { ...p } }));
             if (toExport.length === 0) {
               messageApi.warning(t('pages.system.reportTemplates.noDataToExport'));
               return;
             }
-            const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `report-templates-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            await downloadRecordsAsXlsx(
+              toExport as Array<Record<string, unknown>>,
+              `report-templates-${new Date().toISOString().slice(0, 10)}.xlsx`,
+            );
             messageApi.success(t('pages.system.reportTemplates.exportSuccess', { count: toExport.length }));
           } catch (error: any) {
             messageApi.error(t('pages.system.reportTemplates.exportFailed'));

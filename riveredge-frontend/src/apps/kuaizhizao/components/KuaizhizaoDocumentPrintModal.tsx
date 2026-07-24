@@ -25,6 +25,8 @@ interface KuaizhizaoDocumentPrintModalProps {
   documentId?: number | null;
   /** 不传则按 documentType + documentId 从 kuaizhizaoPrintConfig 解析 */
   printApiPath?: string;
+  /** 额外 query，与 template_uuid / output_format 等一并传给打印接口 */
+  printApiParams?: Record<string, string | number | boolean | Array<string | number>>;
   title?: string;
   /** PDF 下载文件名（不含路径；未传则用 documentType-documentId.pdf） */
   pdfDownloadFilename?: string;
@@ -38,6 +40,7 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
   documentType,
   documentId,
   printApiPath: printApiPathProp,
+  printApiParams,
   title = '打印预览',
   pdfDownloadFilename,
   onAfterPrint,
@@ -109,6 +112,7 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
         const result = await apiRequest<{ content?: string }>(resolvedPrintApiPath, {
           method: 'GET',
           params: {
+            ...printApiParams,
             template_uuid: selectedTemplateId,
             output_format: 'html',
             response_format: 'json',
@@ -127,7 +131,7 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
         }
       }
     })();
-  }, [open, effectiveId, selectedTemplateId, resolvedPrintApiPath]);
+  }, [open, effectiveId, selectedTemplateId, resolvedPrintApiPath, printApiParams]);
 
   const handlePrint = async () => {
     if (!effectiveId) {
@@ -194,6 +198,7 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
       const result = await apiRequest<DocumentPrintApiResult>(resolvedPrintApiPath, {
         method: 'GET',
         params: {
+          ...printApiParams,
           template_uuid: selectedTemplateId,
           output_format: 'pdf',
           response_format: 'json',

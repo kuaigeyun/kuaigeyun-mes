@@ -44,6 +44,8 @@ import {
   UpdateMessageConfigData,
   testMessageConfig,
 } from '../../../../services/messageConfig';
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 
 /**
  * 消息配置管理列表页面组件
@@ -582,8 +584,7 @@ const MessageConfigListPage: React.FC = () => {
         showExportButton={true}
         onExport={async (type, keys, pageData) => {
           try {
-            const allData = await getMessageConfigList({ skip: 0, limit: 10000 });
-            let items = Array.isArray(allData) ? allData : [];
+            let items = await fetchAllListItems((p) => getMessageConfigList(p));
             if (type === 'currentPage' && pageData?.length) {
               items = pageData;
             } else if (type === 'selected' && keys?.length) {
@@ -593,13 +594,10 @@ const MessageConfigListPage: React.FC = () => {
               messageApi.warning(t('pages.system.messageConfig.noDataExport'));
               return;
             }
-            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `message-configs-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              `message-configs-${new Date().toISOString().slice(0, 10)}.xlsx`,
+            );
             messageApi.success(t('pages.system.messageConfig.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('pages.system.messageConfig.exportFailed'));

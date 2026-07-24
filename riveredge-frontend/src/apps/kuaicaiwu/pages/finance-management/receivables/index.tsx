@@ -1,7 +1,7 @@
 /**
  * 应收单列表页
  */
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Typography, Modal, Spin, Alert, Table, Empty, Form } from 'antd';
@@ -30,7 +30,12 @@ import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  filterByPullScope,
+  paginatePullRows,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getReceivableLifecycle } from '../../../utils/financeLifecycle';
 import { buildReceivableStatusEnum, buildReviewStatusEnum } from '../../../utils/financeSharedOptions';
@@ -52,6 +57,8 @@ import {
   financeDocCreatedUpdatedColumns,
   resolveReceivableListParams,
 } from '../../../utils/financeListCore';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const P = 'app.kuaicaiwu.receivable';
 const RECEIVABLE_RESOURCE = 'kuaicaiwu:receivable';
@@ -118,12 +125,14 @@ const ReceivableList: React.FC = () => {
                     },
                     { field: 'dueDate', labelKey: `${P}.import.dueDate`, aliases: ['到期日期'] },
                     { field: 'businessDate', labelKey: `${P}.import.businessDate`, aliases: ['业务日期'] },
+                    { field: 'notes', labelKey: 'app.kuaicaiwu.common.notes', aliases: ['备注'] },
                 ],
                 [
                     t(`${P}.importExample.customerName`),
                     t(`${P}.importExample.amount`),
                     t(`${P}.importExample.dueDate`),
                     t(`${P}.importExample.businessDate`),
+                    '',
                 ],
             ),
         [t, i18n.language],
@@ -199,18 +208,35 @@ const ReceivableList: React.FC = () => {
         }
     };
 
+    const isPullReceivableSelectable = useCallback(
+        (record: ReceivablePullCandidate) => record.capabilities?.pull_receivable?.allowed !== false,
+        [],
+    );
+
+    const pullQueryScopeOptions = useMemo(
+        () => [
+            { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+            { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+        ],
+        [t],
+    );
+
     const pullFromSalesOrderQuery = useUniPullQuery<ReceivablePullCandidate>({
         rowKey: 'id',
         selectionType: 'radio',
-        isRowDisabled: (record) => record.capabilities?.pull_receivable?.allowed === false,
-        loadData: async ({ keyword, page, pageSize }) => {
+        scopeOptions: pullQueryScopeOptions,
+        defaultScope: 'pullable',
+        isRowDisabled: (record) => !isPullReceivableSelectable(record),
+        loadData: async ({ keyword, page, pageSize, scope }) => {
             try {
                 const res = await receivableService.listSalesOrderPullCandidates({
-                    skip: (page - 1) * pageSize,
-                    limit: pageSize,
+                    skip: 0,
+                    limit: 200,
                     keyword: keyword.trim() || undefined,
                 });
-                return { data: res.data || [], total: res.total ?? 0 };
+                const rows = res.data || [];
+                const filtered = filterByPullScope(rows, scope, isPullReceivableSelectable);
+                return paginatePullRows(filtered, page, pageSize);
             } catch (e: any) {
                 messageApi.error(
                     e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
@@ -233,15 +259,19 @@ const ReceivableList: React.FC = () => {
     const pullFromSalesDeliveryQuery = useUniPullQuery<ReceivablePullCandidate>({
         rowKey: 'id',
         selectionType: 'radio',
-        isRowDisabled: (record) => record.capabilities?.pull_receivable?.allowed === false,
-        loadData: async ({ keyword, page, pageSize }) => {
+        scopeOptions: pullQueryScopeOptions,
+        defaultScope: 'pullable',
+        isRowDisabled: (record) => !isPullReceivableSelectable(record),
+        loadData: async ({ keyword, page, pageSize, scope }) => {
             try {
                 const res = await receivableService.listSalesDeliveryPullCandidates({
-                    skip: (page - 1) * pageSize,
-                    limit: pageSize,
+                    skip: 0,
+                    limit: 200,
                     keyword: keyword.trim() || undefined,
                 });
-                return { data: res.data || [], total: res.total ?? 0 };
+                const rows = res.data || [];
+                const filtered = filterByPullScope(rows, scope, isPullReceivableSelectable);
+                return paginatePullRows(filtered, page, pageSize);
             } catch (e: any) {
                 messageApi.error(
                     e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
@@ -732,6 +762,10 @@ const ReceivableList: React.FC = () => {
                             remaining_amount: amount,
                             due_date: dueDate,
                             business_date: bizDate,
+                            notes:
+                              headerIndexMap.notes !== undefined && row[headerIndexMap.notes]
+                                ? String(row[headerIndexMap.notes]).trim() || undefined
+                                : undefined,
                             status: '未收款',
                             review_status: '草稿',
                         });
@@ -756,39 +790,31 @@ const ReceivableList: React.FC = () => {
                 }}
                 importHeaders={receivableImportTemplate.importHeaders}
                 importExampleRow={receivableImportTemplate.importExampleRow}
+                importColumnOptions={receivableImportTemplate.importColumnOptions}
                 importFieldMap={receivableImportTemplate.importHeaderMap}
                 showExportButton
                 onExport={async (type, keys, pageData) => {
                     try {
-                        let items: Receivable[] = [];
-                        if (type === 'currentPage' && pageData?.length) {
-                            items = pageData;
-                        } else if (type === 'selected' && keys?.length) {
-                            const res = await receivableService.listReceivables({
-                                skip: 0,
-                                limit: 10000,
-                                ...lastListParamsRef.current,
-                            });
-                            items = (res.items || []).filter((d: Receivable) => d.id != null && keys.includes(d.id));
-                        } else {
-                            const res = await receivableService.listReceivables({
-                                skip: 0,
-                                limit: 10000,
-                                ...lastListParamsRef.current,
-                            });
-                            items = res.items || [];
+                        let items: Receivable[] =
+                            type === 'currentPage' && pageData?.length
+                                ? pageData
+                                : await fetchAllListItems((p) =>
+                                      receivableService.listReceivables({
+                                          ...p,
+                                          ...lastListParamsRef.current,
+                                      }),
+                                  );
+                        if (type === 'selected' && keys?.length) {
+                            items = items.filter((d: Receivable) => d.id != null && keys.includes(d.id));
                         }
                         if (items.length === 0) {
                             messageApi.warning(t('common.exportNoData'));
                             return;
                         }
-                        const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `receivables-${new Date().toISOString().slice(0, 10)}.json`;
-                        a.click();
-                        URL.revokeObjectURL(url);
+                        await downloadRecordsAsXlsx(
+                          items as Array<Record<string, unknown>>,
+                          `receivables-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                        );
                         messageApi.success(t('common.exportCountSuccess', { count: items.length }));
                     } catch (error: any) {
                         messageApi.error(error?.message || t('common.exportFailed'));
@@ -822,6 +848,9 @@ const ReceivableList: React.FC = () => {
                 pageSize={pullFromSalesOrderQuery.pageSize}
                 total={pullFromSalesOrderQuery.total}
                 onPageChange={pullFromSalesOrderQuery.handlePageChange}
+                scopeOptions={pullFromSalesOrderQuery.scopeOptions}
+                scope={pullFromSalesOrderQuery.scope}
+                onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
                 okText={t('components.uniLifecycle.nextStep')}
             />
 
@@ -851,6 +880,9 @@ const ReceivableList: React.FC = () => {
                 pageSize={pullFromSalesDeliveryQuery.pageSize}
                 total={pullFromSalesDeliveryQuery.total}
                 onPageChange={pullFromSalesDeliveryQuery.handlePageChange}
+                scopeOptions={pullFromSalesDeliveryQuery.scopeOptions}
+                scope={pullFromSalesDeliveryQuery.scope}
+                onScopeChange={pullFromSalesDeliveryQuery.handleScopeChange}
                 okText={t('components.uniLifecycle.nextStep')}
             />
 
