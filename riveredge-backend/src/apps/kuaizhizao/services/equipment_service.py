@@ -150,7 +150,7 @@ class EquipmentService:
         query = apply_equipment_keyword_filter(
             query,
             pick_search_keyword(keyword, search),
-            ["code", "name", "serial_number"],
+            ["code", "name", "serial_number", "responsible_person_name"],
         )
         query = apply_equipment_created_date_range(
             query,
@@ -180,6 +180,11 @@ class EquipmentService:
         """更新设备"""
         equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
         update_data = data.model_dump(exclude_unset=True, exclude_none=True)
+        # 允许清空设备负责人（exclude_none 会丢掉 null）
+        if "responsible_person_id" in data.model_fields_set:
+            update_data["responsible_person_id"] = data.responsible_person_id
+        if "responsible_person_name" in data.model_fields_set:
+            update_data["responsible_person_name"] = data.responsible_person_name
         if 'code' in update_data and update_data['code'] != equipment.code:
             existing = await EquipmentService.get_equipment_by_code(
                 tenant_id, update_data['code']

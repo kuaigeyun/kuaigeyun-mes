@@ -1606,22 +1606,6 @@
                 ]
             },
             {
-                "title": "app.kuaizhizao.menu.cost-management",
-                "icon": "calculator",
-                "sort_order": 11,
-                "meta": {
-                    "module": "cost"
-                },
-                "children": [
-                    {
-                        "title": "app.kuaizhizao.menu.cost-management.dashboard",
-                        "path": "/apps/kuaizhizao/cost-management/dashboard",
-                        "permission": "kuaizhizao:cost-management-dashboard:read",
-                        "sort_order": 0
-                    }
-                ]
-            },
-            {
                 "title": "app.kuaizhizao.menu.performance-management",
                 "icon": "trophy",
                 "sort_order": 10,
@@ -2041,7 +2025,6 @@
         ]
     },
     "permissions": [
-        "kuaizhizao:cost-management-dashboard:read",
         "kuaizhizao:customer-follow-up:approve",
         "kuaizhizao:customer-follow-up:audit",
         "kuaizhizao:customer-follow-up:create",

@@ -486,6 +486,39 @@ async def activate_release(release_id: int) -> CoreClientRelease:
     return row
 
 
+async def update_release(
+    release_id: int,
+    *,
+    release_notes: str | None = None,
+    force_update: bool | None = None,
+    rollout_percent: int | None = None,
+    runtime_version: str | None = None,
+    min_version_code: int | None = None,
+) -> CoreClientRelease:
+    """更新发布元数据（客户端 / 平台 / 版本号不可改）。"""
+    row = await CoreClientRelease.get_or_none(id=release_id)
+    if not row:
+        raise NotFoundError("发布记录不存在")
+
+    if release_notes is not None:
+        row.release_notes = release_notes
+    if force_update is not None:
+        row.force_update = force_update
+    if rollout_percent is not None:
+        if rollout_percent < 0 or rollout_percent > 100:
+            raise ValidationError("灰度比例须在 0–100 之间")
+        row.rollout_percent = rollout_percent
+    if runtime_version is not None:
+        row.runtime_version = runtime_version.strip() or row.app_version
+    if min_version_code is not None:
+        if min_version_code < 0:
+            raise ValidationError("最低 versionCode 不能为负")
+        row.min_version_code = min_version_code
+
+    await row.save()
+    return row
+
+
 async def get_release(release_id: int) -> CoreClientRelease:
     row = await CoreClientRelease.get_or_none(id=release_id)
     if not row:
@@ -650,6 +683,8 @@ async def resolve_tenant_downloads(tenant_id: int, origin: str) -> list[dict[str
     seen_keys: set[str] = set()
     products = await CoreClientProduct.filter(is_active=True).order_by("sort_order")
     for product in products:
+        if not product.header_download_enabled:
+            continue
         if product.app_code and product.app_code not in eligible_apps:
             continue
         active = await get_active_release(product.client_key, product.platform_target)

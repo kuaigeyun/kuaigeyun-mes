@@ -59,6 +59,9 @@ const InspectionSchemesPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<InspectionScheme | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
   const [itemOptions, setItemOptions] = useState<{ label: string; value: number }[]>([]);
 
   const loadItemOptions = async () => {
@@ -74,27 +77,31 @@ const InspectionSchemesPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrent(null);
+    // FormModal destroyOnHidden：须用 initialValues，打开瞬间 setFieldsValue 无效
+    setFormInitialValues({ is_active: true, lines: [{ sort_order: 0 }] });
     setModalVisible(true);
     void loadItemOptions();
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ is_active: true, lines: [{ sort_order: 0 }] });
   };
   useNewShortcut(handleCreate);
 
   const handleEdit = async (record: InspectionScheme) => {
     if (!record.id) return;
-    const detail = await inspectionSchemesApi.get(record.id);
-    setIsEdit(true);
-    setCurrent(detail);
-    setModalVisible(true);
-    void loadItemOptions();
-    formRef.current?.setFieldsValue({
-      ...detail,
-      lines: (detail.lines ?? []).map((l: SchemeLine, i: number) => ({
-        item_id: l.item_id,
-        sort_order: l.sort_order ?? i,
-      })),
-    });
+    try {
+      const detail = await inspectionSchemesApi.get(record.id);
+      setIsEdit(true);
+      setCurrent(detail);
+      setFormInitialValues({
+        ...detail,
+        lines: (detail.lines ?? []).map((l: SchemeLine, i: number) => ({
+          item_id: l.item_id,
+          sort_order: l.sort_order ?? i,
+        })),
+      });
+      setModalVisible(true);
+      void loadItemOptions();
+    } catch (error: unknown) {
+      messageApi.error(error instanceof Error ? error.message : t('common.loadFailed'));
+    }
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -278,9 +285,13 @@ const InspectionSchemesPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        initialValues={formInitialValues}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
         grid={false}

@@ -534,22 +534,62 @@ class ProcessRouteVersionCompareResult(BaseModel):
 
 class SOPBase(BaseModel):
     """作业程序（SOP）基础 Schema — 工艺路线与 BOM 融合主数据，产出作业指导书与报工数据采集项"""
-    
+
+    model_config = ConfigDict(populate_by_name=True)
+
     code: str = Field(..., max_length=100, description="SOP编码")
     name: str = Field(..., max_length=200, description="SOP名称")
-    operation_id: Optional[int] = Field(None, description="关联工序ID")
+    operation_id: Optional[int] = Field(
+        None,
+        description="关联工序ID",
+        validation_alias=AliasChoices("operation_id", "operationId"),
+    )
     version: Optional[str] = Field(None, max_length=20, description="版本号")
     content: Optional[str] = Field(None, description="SOP内容（支持富文本）")
     attachments: Optional[Dict[str, Any]] = Field(None, description="附件列表（JSON格式）")
-    flow_config: Optional[Dict[str, Any]] = Field(None, description="流程配置（ProFlow JSON格式，作业指导步骤与顺序）")
-    form_config: Optional[Dict[str, Any]] = Field(None, description="报工数据采集项（Formily Schema，数字/选择/文本/日期时间及必填与校验）")
-    is_active: bool = Field(True, description="是否启用")
+    flow_config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="流程配置（ProFlow JSON格式，作业指导步骤与顺序）",
+        validation_alias=AliasChoices("flow_config", "flowConfig"),
+    )
+    form_config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="报工数据采集项（Formily Schema，数字/选择/文本/日期时间及必填与校验）",
+        validation_alias=AliasChoices("form_config", "formConfig"),
+    )
+    is_active: bool = Field(
+        True,
+        description="是否启用",
+        validation_alias=AliasChoices("is_active", "isActive"),
+    )
     # 阶段一：绑定与融合
-    material_group_uuids: Optional[List[str]] = Field(None, description="绑定的物料组 UUID 列表")
-    material_uuids: Optional[List[str]] = Field(None, description="绑定的具体物料 UUID 列表，匹配时优先于物料组")
-    route_uuids: Optional[List[str]] = Field(None, description="载入的工艺路线 UUID 列表，作为融合输入")
-    bom_load_mode: Optional[str] = Field("by_material", max_length=32, description="BOM载入方式：by_material/by_material_group/specific_bom")
-    specific_bom_uuid: Optional[str] = Field(None, max_length=36, description="指定BOM的UUID（bom_load_mode=specific_bom时使用）")
+    material_group_uuids: Optional[List[str]] = Field(
+        None,
+        description="绑定的物料组 UUID 列表",
+        validation_alias=AliasChoices("material_group_uuids", "materialGroupUuids"),
+    )
+    material_uuids: Optional[List[str]] = Field(
+        None,
+        description="绑定的具体物料 UUID 列表，匹配时优先于物料组",
+        validation_alias=AliasChoices("material_uuids", "materialUuids"),
+    )
+    route_uuids: Optional[List[str]] = Field(
+        None,
+        description="载入的工艺路线 UUID 列表，作为融合输入",
+        validation_alias=AliasChoices("route_uuids", "routeUuids"),
+    )
+    bom_load_mode: Optional[str] = Field(
+        "by_material",
+        max_length=32,
+        description="BOM载入方式：by_material/by_material_group/specific_bom",
+        validation_alias=AliasChoices("bom_load_mode", "bomLoadMode"),
+    )
+    specific_bom_uuid: Optional[str] = Field(
+        None,
+        max_length=36,
+        description="指定BOM的UUID（bom_load_mode=specific_bom时使用）",
+        validation_alias=AliasChoices("specific_bom_uuid", "specificBomUuid"),
+    )
     
     @validator("code")
     def validate_code(cls, v):
@@ -591,7 +631,11 @@ class SOPUpdate(BaseModel):
 
     code: Optional[str] = Field(None, max_length=100, description="SOP编码")
     name: Optional[str] = Field(None, max_length=200, description="SOP名称")
-    operation_id: Optional[int] = Field(None, description="关联工序ID")
+    operation_id: Optional[int] = Field(
+        None,
+        description="关联工序ID",
+        validation_alias=AliasChoices("operation_id", "operationId"),
+    )
     version: Optional[str] = Field(None, max_length=20, description="版本号")
     content: Optional[str] = Field(None, description="SOP内容（支持富文本）")
     attachments: Optional[Dict[str, Any]] = Field(None, description="附件列表（JSON格式）")
@@ -605,12 +649,38 @@ class SOPUpdate(BaseModel):
         description="报工数据采集项（Formily Schema）",
         validation_alias=AliasChoices("form_config", "formConfig"),
     )
-    is_active: Optional[bool] = Field(None, description="是否启用")
-    material_group_uuids: Optional[List[str]] = Field(None, description="绑定的物料组 UUID 列表")
-    material_uuids: Optional[List[str]] = Field(None, description="绑定的具体物料 UUID 列表")
-    route_uuids: Optional[List[str]] = Field(None, description="载入的工艺路线 UUID 列表")
-    bom_load_mode: Optional[str] = Field(None, max_length=32, description="BOM载入方式")
-    specific_bom_uuid: Optional[str] = Field(None, max_length=36, description="指定BOM的UUID")
+    is_active: Optional[bool] = Field(
+        None,
+        description="是否启用",
+        validation_alias=AliasChoices("is_active", "isActive"),
+    )
+    material_group_uuids: Optional[List[str]] = Field(
+        None,
+        description="绑定的物料组 UUID 列表",
+        validation_alias=AliasChoices("material_group_uuids", "materialGroupUuids"),
+    )
+    material_uuids: Optional[List[str]] = Field(
+        None,
+        description="绑定的具体物料 UUID 列表",
+        validation_alias=AliasChoices("material_uuids", "materialUuids"),
+    )
+    route_uuids: Optional[List[str]] = Field(
+        None,
+        description="载入的工艺路线 UUID 列表",
+        validation_alias=AliasChoices("route_uuids", "routeUuids"),
+    )
+    bom_load_mode: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="BOM载入方式",
+        validation_alias=AliasChoices("bom_load_mode", "bomLoadMode"),
+    )
+    specific_bom_uuid: Optional[str] = Field(
+        None,
+        max_length=36,
+        description="指定BOM的UUID",
+        validation_alias=AliasChoices("specific_bom_uuid", "specificBomUuid"),
+    )
     
     @validator("bom_load_mode")
     def validate_bom_load_mode_update(cls, v):

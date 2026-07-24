@@ -52,12 +52,20 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
 import {
-  PARTNER_ENTERPRISE_TYPE_IMPORT_OPTIONS,
-  PARTNER_INVOICE_TYPE_IMPORT_OPTIONS,
-  PARTNER_SETTLEMENT_METHOD_IMPORT_OPTIONS,
-  PARTNER_TAXPAYER_TYPE_IMPORT_OPTIONS,
+  buildPartnerEnterpriseTypeImportOptions,
+  buildPartnerInvoiceTypeImportOptions,
+  buildPartnerSettlementMethodImportOptions,
+  buildPartnerTaxpayerTypeImportOptions,
+  parsePartnerEnterpriseTypeImport,
+  parsePartnerInvoiceTypeImport,
+  parsePartnerSettlementMethodImport,
+  parsePartnerTaxpayerTypeImport,
 } from '../../../utils/partner-static-labels';
-import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
+import {
+  IMPORT_YES_NO_OPTIONS,
+  importDropdownLabelsFromCodeLabelMap,
+  parseImportCodedCell,
+} from '../../../../../utils/loadImportDictionaryValues';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   MasterDataBatchActiveMenuButton,
@@ -181,9 +189,9 @@ const CustomersPage: React.FC = () => {
           { field: 'code', required: true, labelKey: 'field.customer.code' },
           { field: 'name', required: true, labelKey: 'field.customer.name' },
           { field: 'shortName', labelKey: 'field.customer.shortName' },
-          { field: 'category', labelKey: 'field.customer.category' , options: Object.keys(dictLabelMaps.CUSTOMER_CATEGORY ?? {}) },
+          { field: 'category', labelKey: 'field.customer.category' , options: importDropdownLabelsFromCodeLabelMap(dictLabelMaps.CUSTOMER_CATEGORY ?? {}) },
           { field: 'contactPerson', labelKey: 'field.customer.contactPerson' },
-          { field: 'contactTitle', labelKey: 'field.customer.contactTitle' , options: Object.keys(dictLabelMaps.CONTACT_TITLE ?? {}) },
+          { field: 'contactTitle', labelKey: 'field.customer.contactTitle' , options: importDropdownLabelsFromCodeLabelMap(dictLabelMaps.CONTACT_TITLE ?? {}) },
           { field: 'phone', labelKey: 'field.customer.phone' },
           { field: 'email', labelKey: 'field.customer.email' },
           { field: 'isActive', labelKey: 'field.customer.isActive' , options: [...IMPORT_YES_NO_OPTIONS] },
@@ -193,17 +201,17 @@ const CustomersPage: React.FC = () => {
           { field: 'invoicePhone', labelKey: 'field.partner.invoicePhone' },
           { field: 'invoiceBankName', labelKey: 'field.partner.invoiceBankName' },
           { field: 'invoiceBankAccount', labelKey: 'field.partner.invoiceBankAccount' },
-          { field: 'invoiceTypeCode', labelKey: 'field.partner.invoiceType' , options: [...PARTNER_INVOICE_TYPE_IMPORT_OPTIONS] },
-          { field: 'taxpayerTypeCode', labelKey: 'field.partner.taxpayerType' , options: [...PARTNER_TAXPAYER_TYPE_IMPORT_OPTIONS] },
-          { field: 'industryCode', labelKey: 'field.customer.industry' , options: Object.keys(dictLabelMaps.INDUSTRY_SECTOR ?? {}) },
-          { field: 'customerLevelCode', labelKey: 'field.customer.level' , options: Object.keys(dictLabelMaps.CUSTOMER_LEVEL ?? {}) },
-          { field: 'leadSourceCode', labelKey: 'field.customer.leadSource' , options: Object.keys(dictLabelMaps.PARTNER_SOURCE_CHANNEL ?? {}) },
+          { field: 'invoiceTypeCode', labelKey: 'field.partner.invoiceType' , options: buildPartnerInvoiceTypeImportOptions(t) },
+          { field: 'taxpayerTypeCode', labelKey: 'field.partner.taxpayerType' , options: buildPartnerTaxpayerTypeImportOptions(t) },
+          { field: 'industryCode', labelKey: 'field.customer.industry' , options: importDropdownLabelsFromCodeLabelMap(dictLabelMaps.INDUSTRY_SECTOR ?? {}) },
+          { field: 'customerLevelCode', labelKey: 'field.customer.level' , options: importDropdownLabelsFromCodeLabelMap(dictLabelMaps.CUSTOMER_LEVEL ?? {}) },
+          { field: 'leadSourceCode', labelKey: 'field.customer.leadSource' , options: importDropdownLabelsFromCodeLabelMap(dictLabelMaps.PARTNER_SOURCE_CHANNEL ?? {}) },
           { field: 'estimatedAnnualPurchase', labelKey: 'field.customer.estimatedAnnualPurchase' },
           { field: 'creditLimit', labelKey: 'field.customer.creditLimit' },
           { field: 'legalRepresentative', labelKey: 'field.partner.legalRepresentative' },
-          { field: 'enterpriseTypeCode', labelKey: 'field.partner.enterpriseType' , options: [...PARTNER_ENTERPRISE_TYPE_IMPORT_OPTIONS] },
+          { field: 'enterpriseTypeCode', labelKey: 'field.partner.enterpriseType' , options: buildPartnerEnterpriseTypeImportOptions(t) },
           { field: 'paymentTermsDays', labelKey: 'field.partner.paymentTermsDays' },
-          { field: 'settlementMethodCode', labelKey: 'field.partner.settlementMethod' , options: [...PARTNER_SETTLEMENT_METHOD_IMPORT_OPTIONS] },
+          { field: 'settlementMethodCode', labelKey: 'field.partner.settlementMethod' , options: buildPartnerSettlementMethodImportOptions(t) },
           { field: 'deliveryContactName', labelKey: 'field.partner.deliveryContactName' },
           { field: 'deliveryContactPhone', labelKey: 'field.partner.deliveryContactPhone' },
           { field: 'deliveryAddress', labelKey: 'field.partner.deliveryAddress' },
@@ -493,7 +501,8 @@ const CustomersPage: React.FC = () => {
         }
 
         const contactPerson = cellAt('contactPerson') || undefined;
-        const contactTitle = cellAt('contactTitle') || undefined;
+        const contactTitle =
+          parseImportCodedCell(cellAt('contactTitle'), dictLabelMaps.CONTACT_TITLE) || undefined;
         const phone = cellAt('phone') || undefined;
         const email = cellAt('email') || undefined;
         const contacts =
@@ -505,7 +514,7 @@ const CustomersPage: React.FC = () => {
           code: codeValue.toUpperCase(),
           name: nameValue,
           shortName: cellAt('shortName') || undefined,
-          category: cellAt('category') || undefined,
+          category: parseImportCodedCell(cellAt('category'), dictLabelMaps.CUSTOMER_CATEGORY),
           contacts,
           isActive: parseActive(cellAt('isActive')),
           taxRegistrationNo: cellAt('taxRegistrationNo') || undefined,
@@ -514,17 +523,23 @@ const CustomersPage: React.FC = () => {
           invoicePhone: cellAt('invoicePhone') || undefined,
           invoiceBankName: cellAt('invoiceBankName') || undefined,
           invoiceBankAccount: cellAt('invoiceBankAccount') || undefined,
-          invoiceTypeCode: cellAt('invoiceTypeCode') || undefined,
-          taxpayerTypeCode: cellAt('taxpayerTypeCode') || undefined,
-          industryCode: cellAt('industryCode') || undefined,
-          customerLevelCode: cellAt('customerLevelCode') || undefined,
-          leadSourceCode: cellAt('leadSourceCode') || undefined,
+          invoiceTypeCode: parsePartnerInvoiceTypeImport(cellAt('invoiceTypeCode'), t),
+          taxpayerTypeCode: parsePartnerTaxpayerTypeImport(cellAt('taxpayerTypeCode'), t),
+          industryCode: parseImportCodedCell(cellAt('industryCode'), dictLabelMaps.INDUSTRY_SECTOR),
+          customerLevelCode: parseImportCodedCell(
+            cellAt('customerLevelCode'),
+            dictLabelMaps.CUSTOMER_LEVEL,
+          ),
+          leadSourceCode: parseImportCodedCell(
+            cellAt('leadSourceCode'),
+            dictLabelMaps.PARTNER_SOURCE_CHANNEL,
+          ),
           estimatedAnnualPurchase: parseNum(cellAt('estimatedAnnualPurchase')),
           creditLimit: parseNum(cellAt('creditLimit')),
           legalRepresentative: cellAt('legalRepresentative') || undefined,
-          enterpriseTypeCode: cellAt('enterpriseTypeCode') || undefined,
+          enterpriseTypeCode: parsePartnerEnterpriseTypeImport(cellAt('enterpriseTypeCode'), t),
           paymentTermsDays: parseNum(cellAt('paymentTermsDays')),
-          settlementMethodCode: cellAt('settlementMethodCode') || undefined,
+          settlementMethodCode: parsePartnerSettlementMethodImport(cellAt('settlementMethodCode'), t),
           deliveryContactName: cellAt('deliveryContactName') || undefined,
           deliveryContactPhone: cellAt('deliveryContactPhone') || undefined,
           deliveryAddress: cellAt('deliveryAddress') || undefined,

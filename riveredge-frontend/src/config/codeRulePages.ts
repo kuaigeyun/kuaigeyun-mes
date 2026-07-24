@@ -278,6 +278,18 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     allowManualEdit: true,
   },
   {
+    pageCode: 'master-data-process-sop',
+    pageName: '标准操作SOP',
+    pagePath: '/apps/master-data/process/sop',
+    codeField: 'code',
+    codeFieldLabel: 'SOP编号',
+    module: '主数据管理',
+    moduleIcon: 'database',
+    autoGenerate: true,
+    ruleCode: 'SOP_CODE',
+    allowManualEdit: true,
+  },
+  {
     pageCode: 'master-data-engineering-bom',
     pageName: '物料清单BOM',
     pagePath: '/apps/master-data/process/engineering-bom',

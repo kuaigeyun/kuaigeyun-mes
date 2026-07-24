@@ -22,6 +22,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "master-data-material": "WL",                # 物料
     "master-data-process-operation": "GX",       # 工序
     "master-data-process-route": "GY",           # 工艺
+    "master-data-process-sop": "SOP",            # 标准操作SOP
     "master-data-engineering-bom": "GC",         # 物料清单BOM（沿用原工程BOM编码前缀）
     "master-data-defect-type": "BL",             # 不良
     "master-data-supply-chain-customer": "KH",   # 客户
@@ -322,6 +323,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "database",
         "auto_generate": True,
         "rule_code": "ENGINEERING_DRAWING_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "master-data-process-sop",
+        "page_name": "标准操作SOP",
+        "page_path": "/apps/master-data/process/sop",
+        "code_field": "code",
+        "code_field_label": "SOP编号",
+        "module": "主数据管理",
+        "module_icon": "database",
+        "auto_generate": True,
+        "rule_code": "SOP_CODE",
         "allow_manual_edit": True,
     },
     {
@@ -1552,6 +1565,8 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     "master-data-defect-type": ("apps.master_data.models.process", "DefectType", "code"),
     "OPERATION_CODE": ("apps.master_data.models.process", "Operation", "code"),
     "master-data-process-operation": ("apps.master_data.models.process", "Operation", "code"),
+    "SOP_CODE": ("apps.master_data.models.process", "SOP", "code"),
+    "master-data-process-sop": ("apps.master_data.models.process", "SOP", "code"),
     "ENGINEERING_DRAWING_CODE": ("apps.master_data.models.drawing", "EngineeringDrawing", "code"),
     "master-data-process-drawing": ("apps.master_data.models.drawing", "EngineeringDrawing", "code"),
     "MASTER_DATA_FACTORY_PLANT": ("apps.master_data.models.factory", "Plant", "code"),

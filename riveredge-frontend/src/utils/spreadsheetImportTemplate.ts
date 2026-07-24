@@ -33,7 +33,7 @@ export interface FactoryImportFieldDef {
   /** 额外表头别名（兼容旧中文模板等） */
   aliases?: string[];
   /**
-   * 下拉选项（与表单/API 存库值一致）。
+   * 下拉展示文案（当前语言 label；确认导入时需 parse 回存库值）。
    * 有值时导入弹窗该列启用 Univer 列表下拉（示例行 + 数据区）。
    */
   options?: string[];

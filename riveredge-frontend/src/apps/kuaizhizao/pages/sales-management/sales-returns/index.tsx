@@ -1032,6 +1032,7 @@ const SalesReturnsPage: React.FC = () => {
         materials,
         defaultUnit: t('app.kuaizhizao.salesReturn.defaultUnit'),
         defaultReturnType: 'OTHER',
+        parseDict: salesReturnImportDict.parseDict,
       });
 
       if (errors.length > 0) {

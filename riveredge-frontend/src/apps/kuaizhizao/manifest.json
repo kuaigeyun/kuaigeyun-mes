@@ -1648,27 +1648,10 @@
                         ]
                     }
                 ]
-            },
-            {
-                "title": "app.kuaizhizao.menu.cost-management",
-                "icon": "calculator",
-                "sort_order": 11,
-                "meta": {
-                    "module": "cost"
-                },
-                "children": [
-                    {
-                        "title": "app.kuaizhizao.menu.cost-management.dashboard",
-                        "path": "/apps/kuaizhizao/cost-management/dashboard",
-                        "permission": "kuaizhizao:cost-management-dashboard:read",
-                        "sort_order": 0
-                    }
-                ]
             }
         ]
     },
     "permissions": [
-        "kuaizhizao:cost-management-dashboard:read",
         "kuaizhizao:customer-follow-up:read",
         "kuaizhizao:customer-follow-up:create",
         "kuaizhizao:customer-follow-up:delete",

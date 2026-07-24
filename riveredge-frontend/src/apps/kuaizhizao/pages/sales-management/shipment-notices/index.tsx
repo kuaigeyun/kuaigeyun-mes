@@ -1090,14 +1090,19 @@ const ShipmentNoticesPage: React.FC = () => {
   /** 将 Excel 行写入当前表单「通知明细」（新建弹窗内导入或列表工具栏导入共用） */
   const applyExcelRowsToNoticeForm = (data: any[][]) => {
     if (data.length <= 1) return;
-    const items = data.slice(1).filter((row) => row[0]).map((row) => ({
+    const items = data.slice(1).filter((row) => row[0]).map((row) => {
+      const unitRaw = String(row[5] || '').trim();
+      const material_unit = unitRaw
+        ? importDictOptions.parseDict('MATERIAL_UNIT', unitRaw) ?? unitRaw
+        : defaultUnit;
+      return {
       material_code: String(row[0] || ''),
       notice_quantity: Number(row[1]) || 1,
       unit_price: Number(row[2]) || 0,
       material_name: String(row[3] || ''),
       material_spec: String(row[4] || ''),
-      material_unit: String(row[5] || defaultUnit),
-    }));
+      material_unit,
+    };});
 
     if (items.length === 0) {
       messageApi.warning(t('app.kuaizhizao.shipmentNotice.importNoValidData'));

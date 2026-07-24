@@ -122,6 +122,7 @@ export const UniPreviewOverlay: React.FC<UniPreviewOverlayProps> = ({
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             {extra}
             <span
+              className="uni-preview-overlay__close"
               onClick={onClose}
               style={{
                 width: 30,
@@ -158,6 +159,7 @@ export interface UniPdfPreviewProps {
   error?: string;
   emptyMessage?: string;
   inset?: number;
+  zIndex?: number;
   onDownload?: () => void;
   onPrint?: () => void;
 }
@@ -171,6 +173,7 @@ export const UniPdfPreview: React.FC<UniPdfPreviewProps> = ({
   error = '',
   emptyMessage = '当前文件暂不支持在线预览',
   inset = 16,
+  zIndex,
   onDownload,
   onPrint,
 }) => {
@@ -227,7 +230,14 @@ export const UniPdfPreview: React.FC<UniPdfPreviewProps> = ({
   );
 
   return (
-    <UniPreviewOverlay open={open} onClose={onClose} title={title} inset={inset} extra={toolbar}>
+    <UniPreviewOverlay
+      open={open}
+      onClose={onClose}
+      title={title}
+      inset={inset}
+      zIndex={zIndex}
+      extra={toolbar}
+    >
       {loading ? (
         <div
           style={{

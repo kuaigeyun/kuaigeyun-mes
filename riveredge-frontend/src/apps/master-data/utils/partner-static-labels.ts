@@ -4,6 +4,12 @@
 
 import type { TFunction } from 'i18next';
 
+import {
+  buildImportDictionaryOptionPack,
+  parseImportCodedCell,
+  type ImportCodeLabelMap,
+} from '../../../utils/loadImportDictionaryValues';
+
 const INVOICE_TYPE_KEYS: Record<string, string> = {
   digital_vat_special: 'field.partner.invoiceType.digitalSpecial',
   digital_vat_ordinary: 'field.partner.invoiceType.digitalOrdinary',
@@ -39,24 +45,92 @@ const SETTLEMENT_KEYS: Record<string, string> = {
   other: 'field.partner.settlementMethod.other',
 };
 
-/** 导入下拉：发票类型存库码（新建常用数电 + 兼容历史码） */
-export const PARTNER_INVOICE_TYPE_IMPORT_OPTIONS = Object.keys(INVOICE_TYPE_KEYS);
-
-/** 导入下拉：纳税人类型存库码 */
-export const PARTNER_TAXPAYER_TYPE_IMPORT_OPTIONS = Object.keys(TAXPAYER_TYPE_KEYS);
-
-/** 导入下拉：企业类型存库码 */
-export const PARTNER_ENTERPRISE_TYPE_IMPORT_OPTIONS = Object.keys(ENTERPRISE_TYPE_KEYS);
-
-/** 导入下拉：结算方式存库码 */
-export const PARTNER_SETTLEMENT_METHOD_IMPORT_OPTIONS = Object.keys(SETTLEMENT_KEYS);
-
 function mapLabel(t: TFunction, map: Record<string, string>, code?: string | null): string {
   if (code == null || code === '') return '—';
   const key = map[code];
   if (!key) return code;
   const text = t(key);
   return text === key ? code : text;
+}
+
+function buildCodeLabelMap(t: TFunction, i18nKeys: Record<string, string>): ImportCodeLabelMap {
+  const labelByCode: ImportCodeLabelMap = {};
+  for (const code of Object.keys(i18nKeys)) {
+    labelByCode[code] = mapLabel(t, i18nKeys, code);
+  }
+  return labelByCode;
+}
+
+function buildImportOptions(t: TFunction, i18nKeys: Record<string, string>): string[] {
+  return buildImportDictionaryOptionPack(buildCodeLabelMap(t, i18nKeys)).options;
+}
+
+function parseStaticImport(
+  raw: string | null | undefined,
+  t: TFunction,
+  i18nKeys: Record<string, string>,
+): string | undefined {
+  return parseImportCodedCell(raw, buildCodeLabelMap(t, i18nKeys));
+}
+
+/** @deprecated 请用 buildPartnerInvoiceTypeImportOptions(t)；保留仅为兼容未传 t 的旧引用 */
+export const PARTNER_INVOICE_TYPE_IMPORT_OPTIONS = Object.keys(INVOICE_TYPE_KEYS);
+
+/** @deprecated 请用 buildPartnerTaxpayerTypeImportOptions(t) */
+export const PARTNER_TAXPAYER_TYPE_IMPORT_OPTIONS = Object.keys(TAXPAYER_TYPE_KEYS);
+
+/** @deprecated 请用 buildPartnerEnterpriseTypeImportOptions(t) */
+export const PARTNER_ENTERPRISE_TYPE_IMPORT_OPTIONS = Object.keys(ENTERPRISE_TYPE_KEYS);
+
+/** @deprecated 请用 buildPartnerSettlementMethodImportOptions(t) */
+export const PARTNER_SETTLEMENT_METHOD_IMPORT_OPTIONS = Object.keys(SETTLEMENT_KEYS);
+
+export function buildPartnerInvoiceTypeImportOptions(t: TFunction): string[] {
+  return buildImportOptions(t, INVOICE_TYPE_KEYS);
+}
+
+export function buildPartnerTaxpayerTypeImportOptions(t: TFunction): string[] {
+  return buildImportOptions(t, TAXPAYER_TYPE_KEYS);
+}
+
+export function buildPartnerEnterpriseTypeImportOptions(t: TFunction): string[] {
+  return buildImportOptions(t, ENTERPRISE_TYPE_KEYS);
+}
+
+export function buildPartnerSettlementMethodImportOptions(t: TFunction): string[] {
+  return buildImportOptions(t, SETTLEMENT_KEYS);
+}
+
+export function parsePartnerInvoiceTypeImport(raw?: string | null, t?: TFunction): string | undefined {
+  if (!t) {
+    const v = String(raw ?? '').trim();
+    return v || undefined;
+  }
+  return parseStaticImport(raw, t, INVOICE_TYPE_KEYS);
+}
+
+export function parsePartnerTaxpayerTypeImport(raw?: string | null, t?: TFunction): string | undefined {
+  if (!t) {
+    const v = String(raw ?? '').trim();
+    return v || undefined;
+  }
+  return parseStaticImport(raw, t, TAXPAYER_TYPE_KEYS);
+}
+
+export function parsePartnerEnterpriseTypeImport(raw?: string | null, t?: TFunction): string | undefined {
+  if (!t) {
+    const v = String(raw ?? '').trim();
+    return v || undefined;
+  }
+  return parseStaticImport(raw, t, ENTERPRISE_TYPE_KEYS);
+}
+
+export function parsePartnerSettlementMethodImport(raw?: string | null, t?: TFunction): string | undefined {
+  if (!t) {
+    const v = String(raw ?? '').trim();
+    return v || undefined;
+  }
+  return parseStaticImport(raw, t, SETTLEMENT_KEYS);
 }
 
 export function partnerInvoiceTypeLabel(t: TFunction, code?: string | null): string {

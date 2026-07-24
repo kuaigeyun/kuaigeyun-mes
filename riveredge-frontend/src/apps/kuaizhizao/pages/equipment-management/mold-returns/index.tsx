@@ -33,9 +33,11 @@ const RESOURCE = 'kuaizhizao:mold-return';
 
 interface MoldReturn {
   id?: number;
+  document_no?: string;
   return_no?: string;
   borrow_id?: number;
   borrow_no?: string;
+  borrow_document_no?: string;
   mold_id?: number;
   mold_code?: string;
   mold_name?: string;
@@ -59,10 +61,12 @@ const MoldReturnsPage: React.FC = () => {
   const loadBorrowOptions = async () => {
     const res = await borrowsApi.listOutstanding({ limit: 500 });
     setBorrowOptions(
-      (res.items ?? []).map((b: { id: number; borrow_no: string; mold_name?: string }) => ({
-        label: `${b.borrow_no} - ${b.mold_name ?? ''}`,
-        value: b.id,
-      })),
+      (res.items ?? []).map(
+        (b: { id: number; document_no?: string; borrow_no?: string; mold_name?: string }) => ({
+          label: `${b.document_no ?? b.borrow_no ?? b.id} - ${b.mold_name ?? ''}`,
+          value: b.id,
+        }),
+      ),
     );
   };
 
@@ -144,13 +148,20 @@ const MoldReturnsPage: React.FC = () => {
       },
       {
         title: t(`${P}.col.returnNo`),
-        dataIndex: 'return_no',
+        dataIndex: 'document_no',
         width: 140,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
+        render: (_, r) => r.document_no ?? r.return_no ?? '-',
       },
-      { title: t(`${P}.col.borrowNo`), dataIndex: 'borrow_no', width: 130, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.borrowNo`),
+        dataIndex: 'borrow_document_no',
+        width: 130,
+        hideInSearch: true,
+        render: (_, r) => r.borrow_document_no ?? r.borrow_no ?? '-',
+      },
       { title: t(`${P}.col.mold`), dataIndex: 'mold_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
       {
         title: t(`${P}.col.returnDate`),

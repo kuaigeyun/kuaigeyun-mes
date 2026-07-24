@@ -51,7 +51,7 @@ import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../.
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateString } from '../../../../../utils/formDate';
 import {
   MASTER_DATA_PINNED_ACTIVE_FIELD,
   buildActiveStatusValueEnum,
@@ -138,6 +138,7 @@ const ToolLedgerPage: React.FC = () => {
   const perms = useResourcePermissions('kuaizhizao:equipment-management-tool-ledger');
   const { t, i18n } = useTranslation();
   const toolDictOptions = useImportDictionaryOptions(['TOOL_TYPE', 'TOOL_STATUS']);
+  const parseToolDict = toolDictOptions.parseDict;
 
   const toolLedgerImportTemplate = useMemo(
     () =>
@@ -360,8 +361,8 @@ const ToolLedgerPage: React.FC = () => {
     try {
       const data = {
         ...values,
-        purchase_date: values.purchase_date?.format?.('YYYY-MM-DD') || values.purchase_date,
-        warranty_expiry: values.warranty_expiry?.format?.('YYYY-MM-DD') || values.warranty_expiry,
+        purchase_date: toApiDateString(values.purchase_date) ?? null,
+        warranty_expiry: toApiDateString(values.warranty_expiry) ?? null,
         attachments: normalizeDocumentAttachments(values.attachments),
       };
       const editedUuid = isEdit ? currentTool?.uuid : undefined;
@@ -704,13 +705,13 @@ const ToolLedgerPage: React.FC = () => {
               items.push({
                 code: cellAt(row, 'code') || undefined,
                 name,
-                type: cellAt(row, 'type') || undefined,
+                type: parseToolDict('TOOL_TYPE', cellAt(row, 'type')) || undefined,
                 spec: cellAt(row, 'spec') || undefined,
                 manufacturer: cellAt(row, 'manufacturer') || undefined,
                 supplier: cellAt(row, 'supplier') || undefined,
                 purchase_date: parseDate(cellAt(row, 'purchase_date')),
                 warranty_expiry: parseDate(cellAt(row, 'warranty_expiry')),
-                status: cellAt(row, 'status') || '正常',
+                status: parseToolDict('TOOL_STATUS', cellAt(row, 'status')) || '正常',
                 maintenance_period: parseIntField(cellAt(row, 'maintenance_period')),
                 calibration_period: parseIntField(cellAt(row, 'calibration_period')),
                 description: cellAt(row, 'description') || undefined,
@@ -833,6 +834,7 @@ const ToolLedgerPage: React.FC = () => {
             <ProFormDatePicker
               name="purchase_date"
               label={t('app.kuaizhizao.toolLedger.fieldPurchaseDate')}
+              formItemProps={formDateFormItemProps}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -840,6 +842,7 @@ const ToolLedgerPage: React.FC = () => {
             <ProFormDatePicker
               name="warranty_expiry"
               label={t('app.kuaizhizao.toolLedger.fieldWarrantyExpiry')}
+              formItemProps={formDateFormItemProps}
               fieldProps={buildFutureDateShortcutFieldProps({
                 getForm: () => formRef.current,
                 fieldName: 'warranty_expiry',

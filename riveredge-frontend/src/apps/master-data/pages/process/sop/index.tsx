@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemProps, ProFormDependency } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Modal, Row, Col, List, Typography, Descriptions } from 'antd';
 import dayjs from 'dayjs';
@@ -56,6 +56,15 @@ import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionary
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import {
+  findSopBindingConflicts,
+  formatSopBindingConflictLabels,
+  getBoundOperationIds,
+} from '../../../utils/sopBindingDuplicate';
+import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+
+const SOP_PAGE_CODE = 'master-data-process-sop';
 
 /**
  * 标准操作SOP管理列表页面组件
@@ -96,6 +105,8 @@ const SOPPage: React.FC = () => {
   const [materialGroups, setMaterialGroups] = useState<{ uuid: string; code: string; name: string }[]>([]);
   const [materials, setMaterials] = useState<{ uuid: string; code: string; name: string }[]>([]);
   const [routes, setRoutes] = useState<{ uuid: string; code: string; name: string }[]>([]);
+  const [existingSopsForCheck, setExistingSopsForCheck] = useState<SOP[]>([]);
+  const [sopPreviewCode, setSopPreviewCode] = useState<string | null>(null);
   const sopDetailReqRef = useRef(0);
 
   const {
@@ -278,10 +289,10 @@ const SOPPage: React.FC = () => {
       formRef.current?.setFieldsValue({
         code: detail.code,
         name: detail.name,
-        operationId: detail.operationId,
+        operationId: detail.operationId ?? d.operation_id ?? undefined,
         version: detail.version,
         content: detail.content,
-        isActive: detail.isActive ?? (detail as any).is_active ?? true,
+        isActive: detail.isActive ?? d.is_active ?? true,
         material_group_uuids: d.material_group_uuids ?? d.materialGroupUuids ?? undefined,
         material_uuids: d.material_uuids ?? d.materialUuids ?? undefined,
       });
@@ -397,11 +408,18 @@ const SOPPage: React.FC = () => {
       const { customData, standardValues } = extractSopFormValues(values);
 
       // 仅提交基本信息与适用范围；流程与报工采集在设计页保存
+      // 后端字段为 snake_case；表单为 camelCase，须显式映射（尤其 operation_id / is_active）
       const payload: Record<string, unknown> = {
         ...standardValues,
+        operation_id: standardValues.operationId ?? standardValues.operation_id ?? null,
+        is_active: standardValues.isActive ?? standardValues.is_active ?? true,
         material_group_uuids: standardValues.material_group_uuids ?? standardValues.materialGroupUuids ?? null,
         material_uuids: standardValues.material_uuids ?? standardValues.materialUuids ?? null,
       };
+      delete payload.operationId;
+      delete payload.isActive;
+      delete payload.materialGroupUuids;
+      delete payload.materialUuids;
 
       if (isEdit && currentSOPUuid) {
         await sopApi.update(currentSOPUuid, payload as SOPUpdate);
@@ -409,6 +427,36 @@ const SOPPage: React.FC = () => {
         const updated = await sopApi.get(currentSOPUuid);
         await saveSopCustomFieldValues(updated.id, customData);
       } else {
+        let finalCode = String(standardValues.code ?? '').trim();
+        let ruleCode: string | undefined;
+        let autoGenerate = false;
+        try {
+          const pageConfig = await getCodeRulePageConfig(SOP_PAGE_CODE);
+          ruleCode = pageConfig?.ruleCode;
+          autoGenerate = !!(pageConfig?.autoGenerate && ruleCode);
+        } catch {
+          ruleCode = getPageRuleCode(SOP_PAGE_CODE);
+          autoGenerate = isAutoGenerateEnabled(SOP_PAGE_CODE);
+        }
+        const useAutoCode = !finalCode || finalCode === sopPreviewCode;
+        if (autoGenerate && ruleCode && useAutoCode) {
+          try {
+            const codeResponse = await generateCode({
+              rule_code: ruleCode,
+              check_duplicate: true,
+              entity_type: 'sop',
+            });
+            finalCode = (codeResponse?.code ?? '').trim() || finalCode;
+          } catch {
+            if (sopPreviewCode) finalCode = sopPreviewCode;
+          }
+        }
+        if (!finalCode) {
+          messageApi.error(t('app.master-data.sop.codeRequired'));
+          return;
+        }
+        payload.code = finalCode;
+
         const created = await sopApi.create(payload as unknown as SOPCreate);
         await saveSopCustomFieldValues(created.id, customData);
         messageApi.success(t('common.createSuccess'));
@@ -417,6 +465,7 @@ const SOPPage: React.FC = () => {
       setModalVisible(false);
       formRef.current?.resetFields();
       resetSopFormFieldValues();
+      setSopPreviewCode(null);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
@@ -602,6 +651,7 @@ const SOPPage: React.FC = () => {
     setCurrentSOPUuid(null);
     formRef.current?.resetFields();
     resetSopFormFieldValues();
+    setSopPreviewCode(null);
   };
 
   /**
@@ -625,6 +675,138 @@ const SOPPage: React.FC = () => {
     if (!operationId) return '-';
     const operation = operations.find(o => o.id === operationId);
     return operation ? `${operation.code} - ${operation.name}` : t('app.master-data.sop.operationIdFallback', { id: operationId });
+  };
+
+  useEffect(() => {
+    if (!modalVisible) return;
+    let cancelled = false;
+    fetchAllListItems((params) => sopApi.list(params))
+      .then((rows) => {
+        if (cancelled) return;
+        setExistingSopsForCheck(
+          rows.map((row: SOP & { operation_id?: number }) => ({
+            ...row,
+            operationId: row.operationId ?? row.operation_id,
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setExistingSopsForCheck([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [modalVisible]);
+
+  useEffect(() => {
+    if (!modalVisible || isEdit) return;
+    let cancelled = false;
+
+    (async () => {
+      let ruleCode: string | undefined;
+      let autoGenerate = false;
+      try {
+        const pageConfig = await getCodeRulePageConfig(SOP_PAGE_CODE);
+        ruleCode = pageConfig?.ruleCode;
+        autoGenerate = !!(pageConfig?.autoGenerate && ruleCode);
+      } catch {
+        ruleCode = getPageRuleCode(SOP_PAGE_CODE);
+        autoGenerate = isAutoGenerateEnabled(SOP_PAGE_CODE);
+      }
+
+      if (!autoGenerate || !ruleCode) {
+        if (!cancelled) setSopPreviewCode(null);
+        return;
+      }
+
+      try {
+        const res = await testGenerateCode({
+          rule_code: ruleCode,
+          check_duplicate: true,
+          entity_type: 'sop',
+        });
+        if (cancelled) return;
+        const previewCodeValue = (res?.code ?? '').trim();
+        setSopPreviewCode(previewCodeValue || null);
+        if (previewCodeValue) {
+          formRef.current?.setFieldsValue({ code: previewCodeValue });
+        } else {
+          messageApi.info(t('app.master-data.codeRulePreviewHint'));
+        }
+      } catch {
+        if (!cancelled) {
+          setSopPreviewCode(null);
+          messageApi.info(t('app.master-data.codeRuleAutoFailed'));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [modalVisible, isEdit, messageApi, t]);
+
+  const sopCodeAutoGenerateEnabled = isAutoGenerateEnabled(SOP_PAGE_CODE);
+
+  const warnSopBindingDuplicate = (
+    operationId?: number | null,
+    materialUuids?: string[] | null,
+    materialGroupUuids?: string[] | null,
+  ) => {
+    if (!operationId) return;
+    const mats = materialUuids ?? formRef.current?.getFieldValue('material_uuids') ?? [];
+    const grps = materialGroupUuids ?? formRef.current?.getFieldValue('material_group_uuids') ?? [];
+    if ((!mats || mats.length === 0) && (!grps || grps.length === 0)) return;
+
+    const conflicts = findSopBindingConflicts(existingSopsForCheck, {
+      operationId,
+      materialUuids: mats,
+      materialGroupUuids: grps,
+      excludeUuid: isEdit ? currentSOPUuid : undefined,
+    });
+    if (conflicts.length === 0) return;
+
+    const labels = formatSopBindingConflictLabels(conflicts, {
+      getMaterialLabel: (uuid) => {
+        const material = materials.find((item) => item.uuid === uuid);
+        if (!material) return uuid;
+        const code = (material as { mainCode?: string; code?: string }).mainCode
+          ?? (material as { code?: string }).code
+          ?? '';
+        return `${code} - ${(material as { name?: string }).name ?? code}`;
+      },
+      getMaterialGroupLabel: (uuid) => {
+        const group = materialGroups.find((item) => item.uuid === uuid);
+        return group ? `${group.code} - ${group.name}` : uuid;
+      },
+      getOperationLabel: (id) => getOperationName(id),
+    });
+
+    messageApi.warning(t('app.master-data.sop.bindingDuplicateWarning', { details: labels.join('；') }));
+  };
+
+  const handleBindingScopeChange = (
+    nextMaterialUuids?: string[],
+    nextMaterialGroupUuids?: string[],
+  ) => {
+    const materialUuids = nextMaterialUuids ?? formRef.current?.getFieldValue('material_uuids') ?? [];
+    const materialGroupUuids = nextMaterialGroupUuids ?? formRef.current?.getFieldValue('material_group_uuids') ?? [];
+    if (
+      !isEdit
+      && materialUuids.length === 0
+      && materialGroupUuids.length === 0
+    ) {
+      formRef.current?.setFieldValue('operationId', undefined);
+      return;
+    }
+
+    const operationId = formRef.current?.getFieldValue('operationId');
+    if (!operationId) return;
+    warnSopBindingDuplicate(operationId, materialUuids, materialGroupUuids);
+  };
+
+  const handleOperationChange = (operationId?: number | null) => {
+    warnSopBindingDuplicate(operationId);
   };
 
   const bomLoadModeLabel = (mode?: string | null) => {
@@ -653,7 +835,7 @@ const SOPPage: React.FC = () => {
         },
       },
       {
-        title: t('app.master-data.sop.contentLabel'),
+        title: t('app.master-data.sop.remarkLabel'),
         dataIndex: 'content',
         span: 2,
         render: (_: unknown, record: SOP) => {
@@ -862,7 +1044,10 @@ const SOPPage: React.FC = () => {
       width: 200,
       hideInSearch: true,
       sorter: true,
-      render: (_, record) => getOperationName(record.operationId),
+      render: (_, record) =>
+        getOperationName(
+          record.operationId ?? (record as { operation_id?: number }).operation_id,
+        ),
     },
     {
       title: t('app.master-data.sop.bindingLoad'),
@@ -921,11 +1106,12 @@ const SOPPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('app.master-data.sop.contentLabel'),
+      title: t('app.master-data.sop.remarkLabel'),
       dataIndex: 'content',
       ellipsis: true,
+      width: 200,
       hideInSearch: true,
-      render: (_, record) => record.content ? `${record.content.substring(0, 50)}...` : '-',
+      render: (_, record) => (record.content ? `${record.content.substring(0, 50)}...` : '-'),
     },
     {
       title: t('app.master-data.sop.status'),
@@ -956,6 +1142,7 @@ const SOPPage: React.FC = () => {
     ...masterCrudCreatedUpdatedColumns<SOP>(t),
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       width: 280,
       fixed: 'right',
@@ -1014,7 +1201,7 @@ const SOPPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<SOP>
-        columnPersistenceId="apps.master-data.pages.process.sop.status-v2"
+        columnPersistenceId="apps.master-data.pages.process.sop.content-before-active-v4"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {
@@ -1042,7 +1229,13 @@ const SOPPage: React.FC = () => {
           try {
             const result = await sopApi.list(apiParams);
             const listData = Array.isArray(result) ? result : result?.data ?? [];
-            const enrichedData = await enrichSopRecordsWithCustomFields(listData);
+            // 列表接口为 snake_case；表格/类型用 camelCase
+            const normalized = listData.map((row: SOP & { operation_id?: number; is_active?: boolean }) => ({
+              ...row,
+              operationId: row.operationId ?? row.operation_id,
+              isActive: row.isActive ?? row.is_active ?? true,
+            }));
+            const enrichedData = await enrichSopRecordsWithCustomFields(normalized);
             return {
               data: enrichedData,
               success: true,
@@ -1180,7 +1373,11 @@ const SOPPage: React.FC = () => {
               <ProFormText
                 name="code"
                 label={t('app.master-data.sop.codeLabel')}
-                placeholder={t('app.master-data.sop.codeRequired')}
+                placeholder={
+                  !isEdit && sopCodeAutoGenerateEnabled
+                    ? t('app.master-data.sop.codeAutoGenerated')
+                    : t('app.master-data.sop.codeRequired')
+                }
                 rules={[
                   { required: true, message: t('app.master-data.sop.codeRequired') },
                   { max: 100, message: t('app.master-data.sop.codeMaxLength') },
@@ -1201,35 +1398,16 @@ const SOPPage: React.FC = () => {
             </Col>
             <Col span={12} style={{ minWidth: 0 }}>
               <SafeProFormSelect
-                name="operationId"
-                label={t('app.master-data.sop.operationLabel')}
-                placeholder={t('app.master-data.sop.operationPlaceholder')}
-                options={operations.map(o => ({ label: `${o.code} - ${o.name}`, value: o.id }))}
-                fieldProps={{
-                  loading: operationsLoading,
-                  showSearch: true,
-                  allowClear: true,
-                  filterOption: (input: string, option: { label?: React.ReactNode }) =>
-                    (String(option?.label ?? '')).toLowerCase().includes(input.toLowerCase()),
-                }}
-              />
-            </Col>
-            <Col span={12} style={{ minWidth: 0 }}>
-              <ProFormText
-                name="version"
-                label={t('app.master-data.sop.versionLabel')}
-                placeholder={t('app.master-data.sop.versionPlaceholder')}
-                rules={[{ max: 20, message: t('app.master-data.sop.versionMaxLength') }]}
-              />
-            </Col>
-            <Col span={12} style={{ minWidth: 0 }}>
-              <SafeProFormSelect
                 name="material_group_uuids"
                 label={t('app.master-data.sop.bindMaterialGroups')}
                 placeholder={t('app.master-data.sop.bindMaterialGroupPlaceholder')}
                 mode="multiple"
                 options={materialGroups.map(g => ({ label: `${g.code} - ${g.name}`, value: g.uuid }))}
-                fieldProps={{ showSearch: true, filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()) }}
+                fieldProps={{
+                  showSearch: true,
+                  filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()),
+                  onChange: (value: string[]) => handleBindingScopeChange(undefined, value),
+                }}
               />
             </Col>
             <Col span={12} style={{ minWidth: 0 }}>
@@ -1239,7 +1417,81 @@ const SOPPage: React.FC = () => {
                 placeholder={t('app.master-data.sop.bindMaterialPlaceholder')}
                 mode="multiple"
                 options={materials.map(m => ({ label: `${(m as any).mainCode ?? (m as any).code ?? ''} - ${(m as any).name}`, value: m.uuid }))}
-                fieldProps={{ showSearch: true, filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()) }}
+                fieldProps={{
+                  showSearch: true,
+                  filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()),
+                  onChange: (value: string[]) => handleBindingScopeChange(value, undefined),
+                }}
+              />
+            </Col>
+            <Col span={12} style={{ minWidth: 0 }}>
+              <ProFormDependency name={['material_uuids', 'material_group_uuids']}>
+                {({ material_uuids, material_group_uuids }) => {
+                  const scopeReady =
+                    (Array.isArray(material_uuids) && material_uuids.length > 0)
+                    || (Array.isArray(material_group_uuids) && material_group_uuids.length > 0);
+                  const boundOperationIds = scopeReady
+                    ? getBoundOperationIds(existingSopsForCheck, {
+                        materialUuids: material_uuids,
+                        materialGroupUuids: material_group_uuids,
+                        excludeUuid: isEdit ? currentSOPUuid : undefined,
+                      })
+                    : new Set<number>();
+                  return (
+                    <SafeProFormSelect
+                      name="operationId"
+                      label={t('app.master-data.sop.operationLabel')}
+                      placeholder={
+                        !isEdit && !scopeReady
+                          ? t('app.master-data.sop.selectMaterialOrGroupFirst')
+                          : t('app.master-data.sop.operationPlaceholder')
+                      }
+                      options={operations.map(o => ({ label: `${o.code} - ${o.name}`, value: o.id }))}
+                      fieldProps={{
+                        loading: operationsLoading,
+                        showSearch: true,
+                        allowClear: true,
+                        disabled: !isEdit && !scopeReady,
+                        optionFilterProp: 'label',
+                        filterOption: (input: string, option: { label?: React.ReactNode }) =>
+                          (String(option?.label ?? '')).toLowerCase().includes(input.toLowerCase()),
+                        optionRender: (option) => {
+                          const operationId = option.value as number;
+                          const isBound = boundOperationIds.has(operationId);
+                          return (
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 8,
+                                width: '100%',
+                              }}
+                            >
+                              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {option.label}
+                              </span>
+                              {isBound ? (
+                                <Tag color="orange" style={{ marginInlineEnd: 0, flexShrink: 0 }}>
+                                  {t('app.master-data.sop.operationBoundBadge')}
+                                </Tag>
+                              ) : null}
+                            </div>
+                          );
+                        },
+                        onChange: (value: number | null) => handleOperationChange(value),
+                      }}
+                    />
+                  );
+                }}
+              </ProFormDependency>
+            </Col>
+            <Col span={12} style={{ minWidth: 0 }}>
+              <ProFormText
+                name="version"
+                label={t('app.master-data.sop.versionLabel')}
+                placeholder={t('app.master-data.sop.versionPlaceholder')}
+                rules={[{ max: 20, message: t('app.master-data.sop.versionMaxLength') }]}
               />
             </Col>
             <CustomFieldsFormSection

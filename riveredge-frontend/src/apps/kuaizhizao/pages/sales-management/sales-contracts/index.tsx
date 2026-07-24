@@ -895,6 +895,7 @@ const SalesContractsPage: React.FC = () => {
       importHeaderMap: contractListImportTemplate.importHeaderMap,
       customers: customerList,
       materials: materialList,
+      parseDict: contractImportDict.parseDict,
     });
 
     if (errors.length > 0) {

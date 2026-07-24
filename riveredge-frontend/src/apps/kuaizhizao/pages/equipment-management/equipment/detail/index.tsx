@@ -97,6 +97,8 @@ interface EquipmentDetail {
   workstation_name?: string;
   work_center_id?: number;
   work_center_name?: string;
+  responsible_person_id?: number;
+  responsible_person_name?: string;
   status?: string;
   is_active?: boolean;
   description?: string;
@@ -207,6 +209,7 @@ const EquipmentDetailPage: React.FC = () => {
       { title: t('app.kuaizhizao.equipment.colProductionLine'), dataIndex: 'production_line_name' },
       { title: t('app.kuaizhizao.equipment.colWorkstation'), dataIndex: 'workstation_name' },
       { title: t('app.kuaizhizao.equipment.colWorkCenter'), dataIndex: 'work_center_name' },
+      { title: t('app.kuaizhizao.equipment.colResponsiblePerson'), dataIndex: 'responsible_person_name' },
       {
         title: t('common.status'),
         dataIndex: 'status',

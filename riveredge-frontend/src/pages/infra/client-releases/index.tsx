@@ -6,8 +6,8 @@ import React, { useMemo, useRef, useState } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../components/uni-action';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Popconfirm, Space, Tag } from 'antd';
-import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined, EyeOutlined, SettingOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
+import { DeleteOutlined, DownloadOutlined, EditOutlined, EyeOutlined, SettingOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 
@@ -27,16 +27,16 @@ import { ClientProductConfigDrawer } from './ClientProductConfigDrawer';
 const ClientReleasesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const [searchParams] = useSearchParams();
   const initialApp = searchParams.get('app_code') ?? undefined;
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [replaceRelease, setReplaceRelease] = useState<ClientRelease | null>(null);
+  const [editingRelease, setEditingRelease] = useState<ClientRelease | null>(null);
   const [activatingId, setActivatingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [detailRelease, setDetailRelease] = useState<ClientRelease | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
-  const tableRowsRef = useRef<ClientRelease[]>([]);
 
   const { data: products } = useQuery({
     queryKey: ['clientProducts'],
@@ -63,12 +63,12 @@ const ClientReleasesPage: React.FC = () => {
   );
 
   const handleCreate = () => {
-    setReplaceRelease(null);
+    setEditingRelease(null);
     setUploadOpen(true);
   };
 
-  const handleReplacePackage = (record: ClientRelease) => {
-    setReplaceRelease(record);
+  const handleEdit = (record: ClientRelease) => {
+    setEditingRelease(record);
     setUploadOpen(true);
   };
 
@@ -199,8 +199,6 @@ const ClientReleasesPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => {
         const packageUrl = record.package?.url || record.apk?.url;
-        const hasPackage = Boolean(packageUrl);
-        const isPackageRelease = record.update_type === 'package' || record.update_type === 'both';
         const actions: React.ReactNode[] = [];
 
         actions.push(
@@ -214,7 +212,20 @@ const ClientReleasesPage: React.FC = () => {
           />,
         );
 
-        if (hasPackage && packageUrl) {
+        actions.push(
+          <Button
+            {...rowActionKind('update')}
+            key="edit"
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
+            {t('common.edit')}
+          </Button>,
+        );
+
+        if (packageUrl) {
           actions.push(
             <Button
               {...rowActionKind('skip')}
@@ -226,23 +237,6 @@ const ClientReleasesPage: React.FC = () => {
               onClick={() => window.open(packageUrl, '_blank', 'noopener,noreferrer')}
             >
               {t('pages.infra.clientReleases.downloadPackage')}
-            </Button>,
-          );
-        }
-
-        if (isPackageRelease) {
-          actions.push(
-            <Button
-              {...rowActionKind('update')}
-              key="upload"
-              type="link"
-              size="small"
-              icon={<CloudUploadOutlined />}
-              onClick={() => handleReplacePackage(record)}
-            >
-              {hasPackage
-                ? t('pages.infra.clientReleases.replacePackageExisting')
-                : t('pages.infra.clientReleases.replacePackage')}
             </Button>,
           );
         }
@@ -317,8 +311,6 @@ const ClientReleasesPage: React.FC = () => {
                 list = list.filter((row) => row.is_active === active);
               }
 
-              tableRowsRef.current = list;
-
               return {
                 data: list,
                 success: true,
@@ -338,30 +330,29 @@ const ClientReleasesPage: React.FC = () => {
           showImportButton={false}
           showExportButton={false}
           showDeleteButton={false}
+          enableRowSelection
           toolBarActionsAfterCreate={[
             <Button key="client-config" icon={<SettingOutlined />} onClick={() => setConfigOpen(true)}>
               {t('pages.infra.clientReleases.clientConfigButton')}
             </Button>,
           ]}
-          onDetail={(keys) => {
-            const row = tableRowsRef.current.find((r) => r.id === keys[0]);
-            if (row) handleOpenDetail(row);
-          }}
           search={{ labelWidth: 'auto' }}
         />
       </ListPageTemplate>
 
       <ClientReleaseUploadModal
+        key={editingRelease ? `edit-${editingRelease.id}` : 'create'}
         open={uploadOpen}
         products={products ?? []}
         defaultClientKey={initialClientKey}
-        existingRelease={replaceRelease}
+        existingRelease={editingRelease}
         onClose={() => {
           setUploadOpen(false);
-          setReplaceRelease(null);
+          setEditingRelease(null);
         }}
         onSuccess={() => {
           actionRef.current?.reload();
+          void queryClient.invalidateQueries({ queryKey: ['clientProducts'] });
         }}
       />
 

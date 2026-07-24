@@ -8,11 +8,11 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
+import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
 import {
-  IMPORT_PRICE_TYPE_OPTIONS,
-  pickImportExampleValue,
-} from '../../../../../utils/loadImportDictionaryValues';
-import { normalizeSalesPriceType } from '../shared/salesPriceType';
+  buildImportPriceTypeOptions,
+  parseImportPriceType,
+} from '../shared/salesPriceType';
 import { calcContractLineAmounts } from './contract-line-items-shared';
 
 export type ContractListImportDict = {
@@ -20,6 +20,7 @@ export type ContractListImportDict = {
   CURRENCY?: string[];
   SHIPPING_METHOD?: string[];
   PAYMENT_TERMS?: string[];
+  parseDict?: (dictionaryCode: string, raw?: string | null) => string | undefined;
 };
 
 export function buildContractListImportTemplate(
@@ -27,6 +28,11 @@ export function buildContractListImportTemplate(
   dict: ContractListImportDict,
 ) {
   const unitOpts = dict.MATERIAL_UNIT ?? [];
+  const priceTypeOpts = buildImportPriceTypeOptions(t);
+  const contractTypeOpts = [
+    t('app.kuaizhizao.salesContract.contractTypeSingle'),
+    t('app.kuaizhizao.salesContract.contractTypeFramework'),
+  ];
   return buildFactoryImportTemplate(
     t,
     [
@@ -51,12 +57,7 @@ export function buildContractListImportTemplate(
         field: 'contractType',
         labelKey: 'app.kuaizhizao.salesContract.contractType',
         aliases: ['合同类型'],
-        options: [
-          'single',
-          'framework',
-          t('app.kuaizhizao.salesContract.contractTypeSingle'),
-          t('app.kuaizhizao.salesContract.contractTypeFramework'),
-        ],
+        options: contractTypeOpts,
       },
       {
         field: 'shippingMethod',
@@ -80,7 +81,7 @@ export function buildContractListImportTemplate(
         field: 'priceType',
         labelKey: 'app.kuaizhizao.salesOrder.priceType',
         aliases: ['价格类型'],
-        options: [...IMPORT_PRICE_TYPE_OPTIONS],
+        options: priceTypeOpts,
       },
       {
         field: 'material',
@@ -120,11 +121,11 @@ export function buildContractListImportTemplate(
       '',
       t('app.kuaizhizao.quotation.importExample.customerName'),
       '2026-01-01',
-      'single',
+      pickImportExampleValue(contractTypeOpts, t('app.kuaizhizao.salesContract.contractTypeSingle')),
       '',
       '',
       pickImportExampleValue(dict.CURRENCY, 'CNY'),
-      'tax_inclusive',
+      pickImportExampleValue(priceTypeOpts, t('app.kuaizhizao.salesContract.priceTypeTaxInclusive')),
       t('app.kuaizhizao.quotation.importExample.materialCode'),
       '100',
       '1.5',
@@ -177,12 +178,15 @@ export function parseContractListImport(
     importHeaderMap: Record<string, string>;
     customers: CustomerLike[];
     materials: Material[];
+    parseDict?: (dictionaryCode: string, raw?: string | null) => string | undefined;
   },
 ): {
   errors: Array<{ row: number; message: string }>;
   items: ContractListImportPayload[];
 } {
-  const { t, importHeaderMap, customers, materials } = opts;
+  const { t, importHeaderMap, customers, materials, parseDict } = opts;
+  const parse = (code: string, raw?: string | null) =>
+    parseDict ? parseDict(code, raw) : String(raw ?? '').trim() || undefined;
   const headers = (data[0] || []).map((h) => String(h || '').trim());
   const rows = (data.slice(2) as unknown[][]).filter((row) =>
     row?.some((c) => c != null && String(c).trim() !== ''),
@@ -283,7 +287,7 @@ export function parseContractListImport(
     }
 
     const code = cell(row, idx.code);
-    const priceType = normalizeSalesPriceType(cell(row, idx.priceType) || undefined);
+    const priceType = parseImportPriceType(cell(row, idx.priceType) || undefined, t);
     const unitPrice = idx.price >= 0 ? Number(row[idx.price]) || 0 : 0;
     const taxRate = 0;
     const groupKey = code || `${customerName}|${dateVal}`;
@@ -298,9 +302,9 @@ export function parseContractListImport(
         customer: customerName,
         date: dateVal,
         contractType: isFramework ? 'framework' : 'single',
-        shippingMethod: cell(row, idx.shippingMethod) || undefined,
-        paymentTerms: cell(row, idx.paymentTerms) || undefined,
-        currency: cell(row, idx.currency) || 'CNY',
+        shippingMethod: parse('SHIPPING_METHOD', cell(row, idx.shippingMethod)),
+        paymentTerms: parse('PAYMENT_TERMS', cell(row, idx.paymentTerms)),
+        currency: parse('CURRENCY', cell(row, idx.currency)) || 'CNY',
         priceType,
         notes: cell(row, idx.notes) || undefined,
         items: [],
@@ -308,7 +312,7 @@ export function parseContractListImport(
     }
     const g = groupMap.get(groupKey)!;
     const unit =
-      cell(row, idx.unit) ||
+      parse('MATERIAL_UNIT', cell(row, idx.unit)) ||
       (mat as any).baseUnit ||
       (mat as any).base_unit ||
       'PCS';

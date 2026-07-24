@@ -183,8 +183,13 @@ const SOPDesignerPage: React.FC = () => {
     if (!sopUuid) return;
     setSaving(true);
     try {
+      // 节点侧栏（含附件）存在 nodeDataMap，保存前合并进 nodes.data
+      const nodesToSave = nodes.map((n) => ({
+        ...n,
+        data: { ...(n.data || {}), ...(nodeDataMap[n.id] || {}) },
+      }));
       await sopApi.update(sopUuid, {
-        flowConfig: { nodes, edges }
+        flowConfig: { nodes: nodesToSave, edges },
       } as SOPUpdate);
       message.success(t('common.saveSuccess'));
     } catch (e) {

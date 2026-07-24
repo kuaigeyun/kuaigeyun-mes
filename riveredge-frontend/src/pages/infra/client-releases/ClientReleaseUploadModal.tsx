@@ -1,14 +1,13 @@
 import { InboxOutlined } from '@ant-design/icons';
 import {
   ProFormDigit,
-  ProFormItem,
   ProFormSwitch,
   ProFormText,
   ProFormTextArea,
   ProFormUploadDragger,
 } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
-import { App, Alert } from 'antd';
+import { App, Alert, Col } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +16,8 @@ import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import {
   publishClientReleasePackage,
+  updateClientProductConfig,
+  updateClientRelease,
   uploadClientReleasePackage,
   type ClientProduct,
   type ClientRelease,
@@ -30,6 +31,7 @@ type Props = {
   open: boolean;
   products: ClientProduct[];
   defaultClientKey?: string;
+  /** 传入时为编辑模式（含可选替换 / 补传安装包） */
   existingRelease?: ClientRelease | null;
   onClose: () => void;
   onSuccess: () => void;
@@ -55,7 +57,12 @@ export function ClientReleaseUploadModal({
   const [loading, setLoading] = useState(false);
   const [parsingPackage, setParsingPackage] = useState(false);
   const [detectedMeta, setDetectedMeta] = useState<ClientPackageMetadata | null>(null);
-  const isReplacing = Boolean(existingRelease);
+  const isEditing = Boolean(existingRelease);
+  const hasExistingPackage = Boolean(
+    existingRelease?.package?.url || existingRelease?.apk?.url,
+  );
+  const isPackageRelease =
+    existingRelease?.update_type === 'package' || existingRelease?.update_type === 'both';
 
   useEffect(() => {
     if (!open) {
@@ -89,7 +96,7 @@ export function ClientReleaseUploadModal({
         }
 
         setDetectedMeta(meta);
-        if (!isReplacing) {
+        if (!isEditing) {
           formRef.current?.setFieldsValue({
             app_version: meta.app_version,
             version_code: meta.version_code,
@@ -119,7 +126,7 @@ export function ClientReleaseUploadModal({
         setParsingPackage(false);
       }
     },
-    [existingRelease, isReplacing, messageApi, t],
+    [existingRelease, isEditing, messageApi, t],
   );
 
   const platformOptions = useMemo(
@@ -140,8 +147,17 @@ export function ClientReleaseUploadModal({
     [products],
   );
 
+  const productLabel = useMemo(() => {
+    if (!existingRelease) return undefined;
+    const product = products.find((p) => p.client_key === existingRelease.client_key);
+    return product
+      ? `${product.display_name} (${product.client_key})`
+      : existingRelease.client_key;
+  }, [existingRelease, products]);
+
   const initialValues = useMemo(() => {
     if (existingRelease) {
+      const product = products.find((p) => p.client_key === existingRelease.client_key);
       return {
         client_key: existingRelease.client_key,
         platform: existingRelease.platform,
@@ -151,6 +167,7 @@ export function ClientReleaseUploadModal({
         release_notes: existingRelease.release_notes,
         force_update: existingRelease.force_update,
         rollout_percent: existingRelease.rollout_percent ?? 100,
+        header_download_enabled: product?.header_download_enabled !== false,
         activate: true,
       };
     }
@@ -164,6 +181,7 @@ export function ClientReleaseUploadModal({
       release_notes: '',
       force_update: false,
       rollout_percent: 100,
+      header_download_enabled: product?.header_download_enabled !== false,
       activate: true,
     };
   }, [defaultClientKey, existingRelease, products]);
@@ -171,53 +189,88 @@ export function ClientReleaseUploadModal({
   const handleFinish = async (values: Record<string, unknown>) => {
     const packageFiles = values.package_file as UploadFile[] | undefined;
     const uploadFile = packageFiles?.[0]?.originFileObj;
+
+    if (existingRelease) {
+      if (uploadFile && detectedMeta) {
+        if (
+          detectedMeta.app_version !== existingRelease.app_version ||
+          detectedMeta.version_code !== existingRelease.version_code
+        ) {
+          messageApi.error(t('pages.infra.clientReleases.packageReplaceMismatch'));
+          return;
+        }
+      }
+
+      if (!hasExistingPackage && isPackageRelease && !uploadFile) {
+        messageApi.warning(t('pages.infra.clientReleases.selectFileRequired'));
+        return;
+      }
+
+      setLoading(true);
+      try {
+        await updateClientRelease(existingRelease.id, {
+          release_notes: String(values.release_notes ?? ''),
+          force_update: Boolean(values.force_update),
+          rollout_percent: Number(values.rollout_percent ?? 100),
+          runtime_version: values.runtime_version
+            ? String(values.runtime_version)
+            : existingRelease.app_version,
+        });
+
+        if (uploadFile) {
+          await uploadClientReleasePackage(existingRelease.id, uploadFile, uploadFile.name);
+        }
+
+        await updateClientProductConfig(existingRelease.client_key, {
+          header_download_enabled: Boolean(values.header_download_enabled),
+        });
+
+        messageApi.success(t('pages.infra.clientReleases.editSuccess'));
+        onSuccess();
+        onClose();
+      } catch (e) {
+        messageApi.error(e instanceof Error ? e.message : t('pages.infra.clientReleases.editFailed'));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (!uploadFile) {
       messageApi.warning(t('pages.infra.clientReleases.selectFileRequired'));
       return;
     }
 
-    if (existingRelease && detectedMeta) {
-      if (
-        detectedMeta.app_version !== existingRelease.app_version ||
-        detectedMeta.version_code !== existingRelease.version_code
-      ) {
-        messageApi.error(t('pages.infra.clientReleases.packageReplaceMismatch'));
-        return;
-      }
-    }
-
     setLoading(true);
     try {
-      if (existingRelease) {
-        await uploadClientReleasePackage(existingRelease.id, uploadFile, uploadFile.name);
-        messageApi.success(t('pages.infra.clientReleases.replaceSuccess'));
-      } else {
-        const clientKey = String(values.client_key);
-        const platform = String(values.platform);
-        const appVersion = String(values.app_version).trim();
-        if (!clientKey || !platform || !appVersion) {
-          messageApi.warning(t('pages.infra.clientReleases.formIncomplete'));
-          return;
-        }
-        await publishClientReleasePackage(
-          {
-            client_key: clientKey,
-            platform,
-            app_version: appVersion,
-            version_code: Number(values.version_code ?? 0),
-            runtime_version: values.runtime_version ? String(values.runtime_version) : appVersion,
-            update_type: 'package',
-            requires_native: true,
-            force_update: Boolean(values.force_update),
-            min_version_code: 0,
-            release_notes: String(values.release_notes ?? ''),
-            rollout_percent: Number(values.rollout_percent ?? 100),
-          },
-          uploadFile,
-          { activate: Boolean(values.activate) },
-        );
-        messageApi.success(t('pages.infra.clientReleases.uploadSuccess'));
+      const clientKey = String(values.client_key);
+      const platform = String(values.platform);
+      const appVersion = String(values.app_version).trim();
+      if (!clientKey || !platform || !appVersion) {
+        messageApi.warning(t('pages.infra.clientReleases.formIncomplete'));
+        return;
       }
+      await publishClientReleasePackage(
+        {
+          client_key: clientKey,
+          platform,
+          app_version: appVersion,
+          version_code: Number(values.version_code ?? 0),
+          runtime_version: values.runtime_version ? String(values.runtime_version) : appVersion,
+          update_type: 'package',
+          requires_native: true,
+          force_update: Boolean(values.force_update),
+          min_version_code: 0,
+          release_notes: String(values.release_notes ?? ''),
+          rollout_percent: Number(values.rollout_percent ?? 100),
+        },
+        uploadFile,
+        { activate: Boolean(values.activate) },
+      );
+      await updateClientProductConfig(clientKey, {
+        header_download_enabled: Boolean(values.header_download_enabled),
+      });
+      messageApi.success(t('pages.infra.clientReleases.uploadSuccess'));
       onSuccess();
       onClose();
     } catch (e) {
@@ -239,10 +292,22 @@ export function ClientReleaseUploadModal({
       colProps={{ span: 24 }}
       icon={<InboxOutlined />}
       title={t('pages.infra.clientReleases.uploadDragHint')}
-      description={t('pages.infra.clientReleases.uploadDragSubHint')}
+      description={
+        isEditing
+          ? hasExistingPackage
+            ? t('pages.infra.clientReleases.editPackageOptionalHint')
+            : t('pages.infra.clientReleases.uploadDragSubHint')
+          : t('pages.infra.clientReleases.uploadDragSubHint')
+      }
       max={1}
       accept={uploadAccept}
-      rules={[{ required: true, message: t('pages.infra.clientReleases.selectFileRequired') }]}
+      rules={
+        isEditing
+          ? hasExistingPackage || !isPackageRelease
+            ? undefined
+            : [{ required: true, message: t('pages.infra.clientReleases.selectFileRequired') }]
+          : [{ required: true, message: t('pages.infra.clientReleases.selectFileRequired') }]
+      }
       fieldProps={{
         beforeUpload: () => false,
         style: { width: '100%' },
@@ -253,11 +318,12 @@ export function ClientReleaseUploadModal({
   );
 
   const detectedMetaAlert =
-    detectedMeta && !isReplacing ? (
-      <ProFormItem colProps={{ span: 24 }}>
+    detectedMeta && !isEditing ? (
+      <Col span={24}>
         <Alert
           type="info"
           showIcon
+          style={{ marginBottom: 16 }}
           message={t('pages.infra.clientReleases.packageDetectedTitle')}
           description={t('pages.infra.clientReleases.packageDetectedDesc', {
             version: detectedMeta.app_version,
@@ -265,14 +331,14 @@ export function ClientReleaseUploadModal({
             package: detectedMeta.package_name ?? '—',
           })}
         />
-      </ProFormItem>
+      </Col>
     ) : null;
 
   return (
     <FormModalTemplate
       title={
-        isReplacing
-          ? t('pages.infra.clientReleases.replaceModalTitle')
+        isEditing
+          ? t('pages.infra.clientReleases.editModalTitle')
           : t('pages.infra.clientReleases.uploadModalTitle')
       }
       open={open}
@@ -283,8 +349,9 @@ export function ClientReleaseUploadModal({
       loading={loading || parsingPackage}
       width={MODAL_CONFIG.STANDARD_WIDTH}
       grid
+      isEdit={isEditing}
     >
-      {!isReplacing ? (
+      {!isEditing ? (
         <>
           <SafeProFormSelect
             name="client_key"
@@ -292,12 +359,15 @@ export function ClientReleaseUploadModal({
             rules={[{ required: true, message: t('pages.infra.clientReleases.formClientRequired') }]}
             options={productOptions}
             placeholder={t('pages.infra.clientReleases.formClientPlaceholder')}
-            colProps={{ span: 24 }}
+            colProps={{ span: 12 }}
             fieldProps={{
               onChange: (key: string) => {
                 const product = products.find((p) => p.client_key === key);
                 if (product) {
-                  formRef.current?.setFieldsValue({ platform: product.platform_target });
+                  formRef.current?.setFieldsValue({
+                    platform: product.platform_target,
+                    header_download_enabled: product.header_download_enabled !== false,
+                  });
                 }
               },
             }}
@@ -317,7 +387,7 @@ export function ClientReleaseUploadModal({
             rules={[{ required: true, message: t('pages.infra.clientReleases.formVersionRequired') }]}
             placeholder={t('pages.infra.clientReleases.formVersionPlaceholder')}
             tooltip={t('pages.infra.clientReleases.formVersionAutoTooltip')}
-            colProps={{ span: 12 }}
+            colProps={{ span: 6 }}
           />
           <ProFormDigit
             name="version_code"
@@ -328,20 +398,13 @@ export function ClientReleaseUploadModal({
               { required: true, message: t('pages.infra.clientReleases.formVersionCodeRequired') },
             ]}
             fieldProps={{ precision: 0 }}
-            colProps={{ span: 12 }}
+            colProps={{ span: 6 }}
           />
           <ProFormText
             name="runtime_version"
             label={t('pages.infra.clientReleases.formRuntimeVersion')}
             placeholder={t('pages.infra.clientReleases.formRuntimeVersionPlaceholder')}
-            colProps={{ span: 12 }}
-          />
-          <ProFormTextArea
-            name="release_notes"
-            label={t('pages.infra.clientReleases.columnNotes')}
-            placeholder={t('pages.infra.clientReleases.formNotesPlaceholder')}
-            colProps={{ span: 24 }}
-            fieldProps={{ rows: 3 }}
+            colProps={{ span: 6 }}
           />
           <ProFormDigit
             name="rollout_percent"
@@ -349,7 +412,14 @@ export function ClientReleaseUploadModal({
             min={0}
             max={100}
             fieldProps={{ precision: 0 }}
-            colProps={{ span: 8 }}
+            colProps={{ span: 6 }}
+          />
+          <ProFormTextArea
+            name="release_notes"
+            label={t('pages.infra.clientReleases.columnNotes')}
+            placeholder={t('pages.infra.clientReleases.formNotesPlaceholder')}
+            colProps={{ span: 24 }}
+            fieldProps={{ rows: 3 }}
           />
           <ProFormSwitch
             name="force_update"
@@ -361,16 +431,74 @@ export function ClientReleaseUploadModal({
             label={t('pages.infra.clientReleases.activateAfterUpload')}
             colProps={{ span: 8 }}
           />
+          <ProFormSwitch
+            name="header_download_enabled"
+            label={t('pages.infra.clientReleases.configHeaderDownloadEnabled')}
+            tooltip={t('pages.infra.clientReleases.configHeaderDownloadEnabledTooltip')}
+            colProps={{ span: 8 }}
+          />
         </>
       ) : (
         <>
+          <Col span={24}>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={t('pages.infra.clientReleases.editIdentityHint', {
+                client: productLabel ?? existingRelease?.client_key,
+                platform: existingRelease?.platform,
+                version: existingRelease?.app_version,
+                code: existingRelease?.version_code,
+              })}
+            />
+          </Col>
           <ProFormText
             name="app_version"
             label={t('pages.infra.clientReleases.columnVersion')}
             disabled
+            colProps={{ span: 12 }}
+          />
+          <ProFormDigit
+            name="version_code"
+            label={t('pages.infra.clientReleases.formVersionCode')}
+            disabled
+            fieldProps={{ precision: 0 }}
+            colProps={{ span: 12 }}
+          />
+          <ProFormText
+            name="runtime_version"
+            label={t('pages.infra.clientReleases.formRuntimeVersion')}
+            placeholder={t('pages.infra.clientReleases.formRuntimeVersionPlaceholder')}
+            colProps={{ span: 12 }}
+          />
+          <ProFormDigit
+            name="rollout_percent"
+            label={t('pages.infra.clientReleases.formRolloutPercent')}
+            min={0}
+            max={100}
+            fieldProps={{ precision: 0 }}
+            colProps={{ span: 12 }}
+          />
+          <ProFormTextArea
+            name="release_notes"
+            label={t('pages.infra.clientReleases.columnNotes')}
+            placeholder={t('pages.infra.clientReleases.formNotesPlaceholder')}
+            colProps={{ span: 24 }}
+            fieldProps={{ rows: 3 }}
+          />
+          <ProFormSwitch
+            name="force_update"
+            label={t('pages.infra.clientReleases.formForceUpdate')}
+            colProps={{ span: 12 }}
+          />
+          {isPackageRelease ? packageUploadField : null}
+          <ProFormSwitch
+            name="header_download_enabled"
+            label={t('pages.infra.clientReleases.configHeaderDownloadEnabled')}
+            tooltip={t('pages.infra.clientReleases.configHeaderDownloadEnabledTooltip')}
             colProps={{ span: 24 }}
           />
-          {packageUploadField}
         </>
       )}
     </FormModalTemplate>

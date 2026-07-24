@@ -7,21 +7,21 @@ import {
   DiffOutlined,
   AuditOutlined,
 } from '@ant-design/icons';
-import { mesDashboardService } from '../../../services/dashboard';
-import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
+import { apiRequest } from '../../../../../services/api';
+import { useDashboardRequest } from '../../../../kuaizhizao/utils/dashboardRequestOptions';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
   ModuleShortcutGrid,
   type ModuleKpiDef,
   type ModuleShortcutDef,
-} from '../../../components/module-center';
+} from '../../../../kuaizhizao/components/module-center';
 
 const CostCenterDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { data: summary, loading } = useDashboardRequest(
-    mesDashboardService.getCostSummary,
-    'kz:cost-dashboard:summary',
+    () => apiRequest<Record<string, number>>('/apps/kuaicaiwu/cost/cost-summary', { method: 'GET' }),
+    'kc:cost-dashboard:summary',
   );
   const s = summary as Record<string, number> | undefined;
 

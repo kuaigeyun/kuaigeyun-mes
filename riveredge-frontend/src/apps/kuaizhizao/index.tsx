@@ -129,9 +129,6 @@ const MaintenanceExecutionsPage = lazy(() => import('./pages/equipment-managemen
 const EquipmentRepairsPage = lazy(() => import('./pages/equipment-management/equipment-repairs'));
 const EquipmentCalibrationsPage = lazy(() => import('./pages/equipment-management/equipment-calibrations'));
 
-// 成本管理（仅保留成本中心仪表盘，其余入口在快财务）
-const CostCenterDashboardPage = lazy(() => import('./pages/cost-management/dashboard'));
-
 // 仓储管理页面
 const WarehouseDashboard = lazy(() => import('./pages/warehouse-management/dashboard'));
 const InventoryPage = lazy(() => import('./pages/warehouse-management/inventory'));
@@ -466,8 +463,8 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/line-side-warehouse" element={withPageSuspense(LineSideWarehousePage)} />
       <Route path="warehouse-management/backflush-records" element={withPageSuspense(BackflushRecordsPage)} />
 
-      {/* 成本管理：仅成本中心；旧路径跳转快财务 */}
-      <Route path="cost-management/dashboard" element={withPageSuspense(CostCenterDashboardPage)} />
+      {/* 成本管理已归属快财务；旧路径跳转 */}
+      <Route path="cost-management/dashboard" element={<Navigate to="/apps/kuaicaiwu/cost-management/dashboard" replace />} />
       <Route path="cost-management/cost-calculations" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations" replace />} />
       <Route path="cost-management/cost-comparison" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations?cat=compare" replace />} />
       <Route path="cost-management/cost-rules" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-rules" replace />} />

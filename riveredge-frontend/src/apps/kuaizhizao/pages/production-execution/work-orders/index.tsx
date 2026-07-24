@@ -1315,6 +1315,22 @@ const WorkOrdersPage: React.FC = () => {
   const workOrderPerms = useResourcePermissions(WORK_ORDER_RESOURCE)
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal()
 
+  const workOrderProductionModeImportOptions = useMemo(
+    () => [
+      t('app.kuaizhizao.workOrder.productionModeMTS'),
+      t('app.kuaizhizao.workOrder.productionModeMTO'),
+    ],
+    [t, i18n.language],
+  )
+  const workOrderPriorityImportOptions = useMemo(
+    () => [
+      t('app.kuaizhizao.workOrder.priorityLow'),
+      t('app.kuaizhizao.workOrder.priorityNormal'),
+      t('app.kuaizhizao.workOrder.priorityHigh'),
+      t('app.kuaizhizao.workOrder.priorityUrgent'),
+    ],
+    [t, i18n.language],
+  )
   const workOrderImportTemplate = useMemo(
     () =>
       buildFactoryImportTemplate(
@@ -1342,13 +1358,13 @@ const WorkOrdersPage: React.FC = () => {
             field: 'productionMode',
             labelKey: 'app.kuaizhizao.workOrder.colProductionMode',
             aliases: ['生产模式', 'production_mode'],
-            options: ['MTS', 'MTO'],
+            options: workOrderProductionModeImportOptions,
           },
           {
             field: 'priority',
             labelKey: 'app.kuaizhizao.workOrder.colPriority',
             aliases: ['优先级', 'priority'],
-            options: ['low', 'normal', 'high', 'urgent'],
+            options: workOrderPriorityImportOptions,
           },
           {
             field: 'plannedStart',
@@ -1377,15 +1393,15 @@ const WorkOrdersPage: React.FC = () => {
           t('app.kuaizhizao.workOrder.importExample.productCode'),
           t('app.kuaizhizao.workOrder.importExample.plannedQty'),
           t('app.kuaizhizao.workOrder.importExample.workshopCode'),
-          'MTS',
-          'normal',
+          t('app.kuaizhizao.workOrder.productionModeMTS'),
+          t('app.kuaizhizao.workOrder.priorityNormal'),
           '',
           '',
           '',
           '否',
         ],
       ),
-    [t, i18n.language],
+    [t, i18n.language, workOrderProductionModeImportOptions, workOrderPriorityImportOptions],
   )
   const pullFromDemandComputationAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_demand_computation')
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_sales_order')
@@ -4041,12 +4057,31 @@ const WorkOrdersPage: React.FC = () => {
         workshopId = ws?.id
       }
 
-      const productionModeRaw =
-        idx.productionMode !== undefined ? (row[idx.productionMode] ?? '').toString().trim().toUpperCase() : ''
-      const productionMode = productionModeRaw === 'MTO' ? 'MTO' : 'MTS'
-      const priorityRaw =
-        idx.priority !== undefined ? (row[idx.priority] ?? '').toString().trim().toLowerCase() : ''
-      const priority = ['low', 'normal', 'high', 'urgent'].includes(priorityRaw) ? priorityRaw : 'normal'
+      const productionModeCell =
+        idx.productionMode !== undefined ? (row[idx.productionMode] ?? '').toString().trim() : ''
+      const productionModeUpper = productionModeCell.toUpperCase()
+      const productionMode =
+        productionModeUpper === 'MTO' ||
+        productionModeCell === t('app.kuaizhizao.workOrder.productionModeMTO')
+          ? 'MTO'
+          : 'MTS'
+      const priorityCell =
+        idx.priority !== undefined ? (row[idx.priority] ?? '').toString().trim() : ''
+      const priorityLower = priorityCell.toLowerCase()
+      const priorityByCode = ['low', 'normal', 'high', 'urgent'].includes(priorityLower)
+        ? priorityLower
+        : undefined
+      const priorityByLabel =
+        priorityCell === t('app.kuaizhizao.workOrder.priorityLow')
+          ? 'low'
+          : priorityCell === t('app.kuaizhizao.workOrder.priorityNormal')
+            ? 'normal'
+            : priorityCell === t('app.kuaizhizao.workOrder.priorityHigh')
+              ? 'high'
+              : priorityCell === t('app.kuaizhizao.workOrder.priorityUrgent')
+                ? 'urgent'
+                : undefined
+      const priority = priorityByCode || priorityByLabel || 'normal'
       const plannedStart =
         idx.plannedStart !== undefined ? (row[idx.plannedStart] ?? '').toString().trim() || undefined : undefined
       const plannedEnd =

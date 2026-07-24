@@ -385,6 +385,7 @@ class MoldReturnResponse(AuditActorFields):
     mold_code: Optional[str] = None
     mold_name: Optional[str] = None
     borrow_id: Optional[int] = None
+    borrow_document_no: Optional[str] = None
     return_date: datetime
     usage_count: int
     operator_id: Optional[int] = None

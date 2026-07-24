@@ -117,6 +117,10 @@ class Equipment(BaseModel):
     work_center_id = fields.IntField(null=True, description="关联工作中心ID（可选，关联到工作中心）")
     work_center_code = fields.CharField(max_length=50, null=True, description="工作中心编码")
     work_center_name = fields.CharField(max_length=200, null=True, description="工作中心名称")
+
+    # 设备负责人（可选）
+    responsible_person_id = fields.IntField(null=True, description="设备负责人ID")
+    responsible_person_name = fields.CharField(max_length=100, null=True, description="设备负责人姓名")
     
     # 状态信息
     status = fields.CharField(max_length=50, default="正常", description="设备状态（正常、维修中、停用、校验中、报废）")

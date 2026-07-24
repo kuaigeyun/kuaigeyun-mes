@@ -4,7 +4,6 @@ import {
   ActionType,
   ProColumns,
   ProFormDatePicker,
-  ProFormDigit,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
@@ -22,10 +21,10 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { rowActionKind } from '../../../../../components/uni-action';
 import { moldApi } from '../../../services/equipment';
 import { borrowsApi } from '../../../services/moldOps';
-import { formatDateTime } from '../../../../../utils/format';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   EQUIPMENT_OPS_PINNED_STATUS_FIELD,
   normalizeEquipmentListResponse,
@@ -37,18 +36,38 @@ const RESOURCE = 'kuaizhizao:mold-borrow';
 
 interface MoldBorrow {
   id?: number;
+  document_no?: string;
   borrow_no?: string;
   mold_id?: number;
   mold_code?: string;
   mold_name?: string;
   work_order_no?: string;
+  source_no?: string;
   department?: string;
+  department_name?: string;
   borrower_id?: number;
   borrower_name?: string;
   borrow_date?: string;
-  planned_qty?: number;
+  expected_return_date?: string;
   status?: string;
+  remark?: string;
   updated_at?: string;
+}
+
+function buildMoldBorrowSubmitPayload(values: Record<string, unknown>) {
+  const workOrderNo =
+    typeof values.work_order_no === 'string' ? values.work_order_no.trim() : undefined;
+  return {
+    mold_id: values.mold_id,
+    borrow_date: toApiDateString(values.borrow_date),
+    borrower_id: values.borrower_id,
+    borrower_name: values.borrower_name,
+    department_name: values.department,
+    expected_return_date: toApiDateString(values.expected_return_date),
+    source_type: workOrderNo ? 'work_order' : undefined,
+    source_no: workOrderNo || undefined,
+    remark: values.remark,
+  };
 }
 
 const MoldBorrowsPage: React.FC = () => {
@@ -60,6 +79,10 @@ const MoldBorrowsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<MoldBorrow | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
+  const [submitting, setSubmitting] = useState(false);
   const [moldOptions, setMoldOptions] = useState<{ label: string; value: number }[]>([]);
 
   const loadMoldOptions = async () => {
@@ -75,32 +98,37 @@ const MoldBorrowsPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrent(null);
+    setFormInitialValues({ borrow_date: dayjs() });
     setModalVisible(true);
     void loadMoldOptions();
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ borrow_date: dayjs() });
   };
   useNewShortcut(handleCreate);
 
   const handleEdit = async (record: MoldBorrow) => {
     if (!record.id) return;
-    const detail = await borrowsApi.get(record.id);
-    setIsEdit(true);
-    setCurrent(detail);
-    setModalVisible(true);
-    void loadMoldOptions();
-    const borrowerUuid = await resolveUserUuidById(detail.borrower_id);
-    formRef.current?.setFieldsValue({
-      mold_id: detail.mold_id,
-      work_order_no: detail.work_order_no,
-      department: detail.department,
-      borrower_uuid: borrowerUuid,
-      borrower_id: detail.borrower_id,
-      borrower_name: detail.borrower_name,
-      borrow_date: detail.borrow_date ? dayjs(detail.borrow_date) : dayjs(),
-      planned_qty: detail.planned_qty,
-      remark: detail.remark,
-    });
+    try {
+      const detail = await borrowsApi.get(record.id);
+      const borrowerUuid = await resolveUserUuidById(detail.borrower_id);
+      setIsEdit(true);
+      setCurrent(detail);
+      setFormInitialValues({
+        mold_id: detail.mold_id,
+        work_order_no: detail.source_no ?? detail.work_order_no,
+        department: detail.department_name ?? detail.department,
+        borrower_uuid: borrowerUuid,
+        borrower_id: detail.borrower_id,
+        borrower_name: detail.borrower_name,
+        borrow_date: detail.borrow_date ? dayjs(detail.borrow_date) : dayjs(),
+        expected_return_date: detail.expected_return_date
+          ? dayjs(detail.expected_return_date)
+          : undefined,
+        remark: detail.remark,
+      });
+      setModalVisible(true);
+      void loadMoldOptions();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.listFailed`)));
+    }
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -118,25 +146,24 @@ const MoldBorrowsPage: React.FC = () => {
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
-    const payload = {
-      mold_id: values.mold_id,
-      work_order_no: values.work_order_no,
-      department: values.department,
-      borrower_id: values.borrower_id,
-      borrower_name: values.borrower_name,
-      borrow_date: (values.borrow_date as dayjs.Dayjs)?.format('YYYY-MM-DD'),
-      planned_qty: values.planned_qty,
-      remark: values.remark,
-    };
-    if (isEdit && current?.id) {
-      await borrowsApi.update(current.id, payload);
-      messageApi.success(t('common.updateSuccess'));
-    } else {
-      await borrowsApi.create(payload);
-      messageApi.success(t('common.createSuccess'));
+    const payload = buildMoldBorrowSubmitPayload(values);
+    setSubmitting(true);
+    try {
+      if (isEdit && current?.id) {
+        await borrowsApi.update(current.id, payload);
+        messageApi.success(t('common.updateSuccess'));
+      } else {
+        await borrowsApi.create(payload);
+        messageApi.success(t('common.createSuccess'));
+      }
+      setModalVisible(false);
+      setFormInitialValues(undefined);
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    } finally {
+      setSubmitting(false);
     }
-    setModalVisible(false);
-    actionRef.current?.reload();
   };
 
   const borrowStatusValueEnum = useMemo(
@@ -174,14 +201,22 @@ const MoldBorrowsPage: React.FC = () => {
       },
       {
         title: t(`${P}.col.borrowNo`),
-        dataIndex: 'borrow_no',
+        dataIndex: 'document_no',
         width: 140,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
+        render: (_, r) => r.document_no ?? r.borrow_no ?? '-',
       },
       { title: t(`${P}.col.mold`), dataIndex: 'mold_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
-      { title: t(`${P}.col.workOrderNo`), dataIndex: 'work_order_no', width: 130, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.workOrderNo`),
+        dataIndex: 'source_no',
+        width: 130,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => r.source_no ?? r.work_order_no ?? '-',
+      },
       { title: t(`${P}.col.borrower`), dataIndex: 'borrower_name', width: 100, sorter: true, hideInSearch: true },
       {
         title: t(`${P}.col.borrowDate`),
@@ -192,7 +227,15 @@ const MoldBorrowsPage: React.FC = () => {
         sorter: true,
         hideInSearch: true,
       },
-      { title: t(`${P}.col.plannedQty`), dataIndex: 'planned_qty', width: 90, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.expectedReturnDate`),
+        dataIndex: 'expected_return_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        valueType: 'date',
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
@@ -207,7 +250,7 @@ const MoldBorrowsPage: React.FC = () => {
         hideInTable: true,
         hideInSearch: true,
       },
-      ...buildDocumentAuditColumns<Record<string, unknown>>(t),
+      ...buildDocumentAuditColumns<MoldBorrow>(t),
       {
         title: t('common.actions'),
         key: 'action',
@@ -228,7 +271,7 @@ const MoldBorrowsPage: React.FC = () => {
             >
               {t('common.detail')}
             </Button>
-            {perms.canUpdate && record.status === '生效' && (
+            {perms.canUpdate && record.status === '领用中' && (
               <Button
                 {...rowActionKind('update')}
                 type="link"
@@ -306,11 +349,16 @@ const MoldBorrowsPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        loading={submitting}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
+        initialValues={formInitialValues}
         grid={false}
       >
         <Row gutter={16}>
@@ -344,11 +392,17 @@ const MoldBorrowsPage: React.FC = () => {
               name="borrow_date"
               label={t(`${P}.col.borrowDate`)}
               rules={[{ required: true }]}
+              formItemProps={formDateFormItemProps}
               fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
             />
           </Col>
           <Col span={12}>
-            <ProFormDigit name="planned_qty" label={t(`${P}.col.plannedQty`)} min={0} />
+            <ProFormDatePicker
+              name="expected_return_date"
+              label={t(`${P}.col.expectedReturnDate`)}
+              formItemProps={formDateFormItemProps}
+              fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
+            />
           </Col>
           <Col span={24}>
             <ProFormTextArea name="remark" label={t(`${P}.form.remark`)} fieldProps={{ rows: 2 }} />

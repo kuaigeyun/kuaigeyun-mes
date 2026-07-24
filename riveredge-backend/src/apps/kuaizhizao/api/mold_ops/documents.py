@@ -2,7 +2,7 @@
 模具运营单据 API：试模、领用、归还、保养、维修。
 """
 
-from typing import Optional
+from typing import Iterable, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -12,6 +12,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
+from apps.kuaizhizao.models.mold_ops import MoldBorrow
 from apps.kuaizhizao.schemas.mold_ops import (
     MoldTrialCreate,
     MoldTrialUpdate,
@@ -69,6 +70,33 @@ def _repair_response(header, lines=None) -> MoldRepairResponse:
     if lines is not None:
         resp.lines = [MoldRepairLineResponse.model_validate(l) for l in lines]
     return resp
+
+
+async def _borrow_document_no_map(tenant_id: int, borrow_ids: Iterable[Optional[int]]) -> dict[int, str]:
+    ids = sorted({int(i) for i in borrow_ids if i is not None})
+    if not ids:
+        return {}
+    rows = await MoldBorrow.filter(tenant_id=tenant_id, id__in=ids).only("id", "document_no")
+    return {row.id: row.document_no for row in rows}
+
+
+async def _mold_return_response(tenant_id: int, row) -> MoldReturnResponse:
+    resp = MoldReturnResponse.model_validate(row)
+    if row.borrow_id is not None:
+        mapping = await _borrow_document_no_map(tenant_id, [row.borrow_id])
+        resp.borrow_document_no = mapping.get(row.borrow_id)
+    return resp
+
+
+async def _mold_return_list_items(tenant_id: int, rows) -> list[MoldReturnResponse]:
+    mapping = await _borrow_document_no_map(tenant_id, [r.borrow_id for r in rows])
+    items: list[MoldReturnResponse] = []
+    for row in rows:
+        resp = MoldReturnResponse.model_validate(row)
+        if row.borrow_id is not None:
+            resp.borrow_document_no = mapping.get(row.borrow_id)
+        items.append(resp)
+    return items
 
 
 # ---------- 试模 ----------
@@ -342,7 +370,7 @@ async def create_mold_return(
             operator_name=current_user.full_name or current_user.username,
             current_user=current_user,
         )
-        return MoldReturnResponse.model_validate(row)
+        return await _mold_return_response(tenant_id, row)
     except (ValidationError, NotFoundError) as e:
         raise _http_from_exc(e)
 
@@ -380,7 +408,7 @@ async def list_mold_returns(
         updated_end_date=updated_end_date,
     )
     return MoldReturnListResponse(
-        items=[MoldReturnResponse.model_validate(r) for r in rows],
+        items=await _mold_return_list_items(tenant_id, rows),
         total=total,
         skip=skip,
         limit=limit,
@@ -395,7 +423,7 @@ async def list_mold_returns(
 async def get_mold_return(row_id: int, tenant_id: int = Depends(get_current_tenant)):
     try:
         row = await svc.return_service.get(tenant_id, row_id)
-        return MoldReturnResponse.model_validate(row)
+        return await _mold_return_response(tenant_id, row)
     except NotFoundError as e:
         raise _http_from_exc(e)
 
@@ -413,7 +441,7 @@ async def update_mold_return(
 ):
     try:
         row = await svc.return_service.update(tenant_id, row_id, data, current_user=current_user)
-        return MoldReturnResponse.model_validate(row)
+        return await _mold_return_response(tenant_id, row)
     except (ValidationError, NotFoundError) as e:
         raise _http_from_exc(e)
 

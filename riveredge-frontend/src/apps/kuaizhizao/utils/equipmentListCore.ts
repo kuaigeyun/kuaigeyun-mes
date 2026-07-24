@@ -423,8 +423,11 @@ export function resolveLedgerListParams(
 ): Record<string, string | boolean | number | undefined> {
   const s = searchFormValues ?? {};
   const base = resolveMasterDataListParams(searchFormValues, sort);
+  // 高级搜索「设备编号」字段 dataIndex=code，后端用 keyword 模糊匹配 code/name/serial
+  const codeKeyword = pickString(s, 'code');
   return {
     ...base,
+    keyword: codeKeyword ?? base.keyword,
     status: typeof s.status === 'string' && s.status ? s.status : undefined,
     type: typeof s.type === 'string' && s.type ? s.type : undefined,
     category: typeof s.category === 'string' && s.category ? s.category : undefined,

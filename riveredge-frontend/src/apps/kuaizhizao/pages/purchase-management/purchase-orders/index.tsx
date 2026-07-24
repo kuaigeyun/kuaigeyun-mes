@@ -21,10 +21,13 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
 import {
-  IMPORT_PRICE_TYPE_OPTIONS,
   pickImportExampleValue,
 } from '../../../../../utils/loadImportDictionaryValues';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import {
+  buildImportPriceTypeOptions,
+  parseImportPriceType,
+} from '../../sales-management/shared/salesPriceType';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, DownOutlined, FileTextOutlined, InboxOutlined, RollbackOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
@@ -391,7 +394,7 @@ const PurchaseOrdersPage: React.FC = () => {
           { field: 'orderType', labelKey: 'app.kuaizhizao.purchaseOrder.import.orderType', aliases: ['订单类型'] , options: purchaseOrderImportDict.ORDER_TYPE },
           { field: 'buyer', labelKey: 'app.kuaizhizao.purchaseOrder.import.buyer', aliases: ['采购员'] },
           { field: 'currency', labelKey: 'app.kuaizhizao.quotation.form.currency', aliases: ['币种'] , options: purchaseOrderImportDict.CURRENCY },
-          { field: 'priceType', labelKey: 'app.kuaizhizao.salesOrder.priceType', aliases: ['价格类型'] , options: [...IMPORT_PRICE_TYPE_OPTIONS] },
+          { field: 'priceType', labelKey: 'app.kuaizhizao.salesOrder.priceType', aliases: ['价格类型'] , options: buildImportPriceTypeOptions(t) },
           { field: 'notes', labelKey: 'app.kuaizhizao.purchaseOrder.import.notes', aliases: ['备注'] },
         ],
         [
@@ -404,10 +407,10 @@ const PurchaseOrdersPage: React.FC = () => {
           t('app.kuaizhizao.purchaseOrder.importExample.deliveryDate'),
           '',
           '',
+          pickImportExampleValue(purchaseOrderImportDict.ORDER_TYPE, ''),
           '',
-          '',
-          'CNY',
-          'tax_inclusive',
+          pickImportExampleValue(purchaseOrderImportDict.CURRENCY, 'CNY'),
+          pickImportExampleValue(buildImportPriceTypeOptions(t), t('app.kuaizhizao.salesContract.priceTypeTaxInclusive')),
           '',
         ],
       ),
@@ -711,7 +714,9 @@ const PurchaseOrdersPage: React.FC = () => {
         .map((row) => {
           const materialCode = String(row[0] || '').trim();
           const spec = String(row[1] || '').trim();
-          const unit = String(row[2] || '').trim();
+          const unitRaw = String(row[2] || '').trim();
+          const unit =
+            purchaseOrderImportDict.parseDict('MATERIAL_UNIT', unitRaw) || unitRaw;
           const quantity = parseFloat(row[3]) || 0;
           const price = parseFloat(row[4]) || 0;
           const requiredDate = row[5];
@@ -745,7 +750,7 @@ const PurchaseOrdersPage: React.FC = () => {
       messageApi.success(t('app.kuaizhizao.salesOrder.importSuccessItems', { count: newItems.length }));
       setImportModalVisible(false);
     },
-    [messageApi],
+    [messageApi, purchaseOrderImportDict, t],
   );
 
   // 下推退货 Modal 相关详情状态
@@ -1685,10 +1690,10 @@ const PurchaseOrdersPage: React.FC = () => {
           date: dateVal,
           supplierContact: idx.supplierContact >= 0 ? String(row[idx.supplierContact] ?? '').trim() || undefined : undefined,
           supplierPhone: idx.supplierPhone >= 0 ? String(row[idx.supplierPhone] ?? '').trim() || undefined : undefined,
-          orderType: idx.orderType >= 0 ? String(row[idx.orderType] ?? '').trim() || undefined : undefined,
+          orderType: idx.orderType >= 0 ? purchaseOrderImportDict.parseDict('ORDER_TYPE', String(row[idx.orderType] ?? '').trim()) || undefined : undefined,
           buyer: idx.buyer >= 0 ? String(row[idx.buyer] ?? '').trim() || undefined : undefined,
-          currency: idx.currency >= 0 ? String(row[idx.currency] ?? '').trim() || undefined : undefined,
-          priceType: idx.priceType >= 0 ? String(row[idx.priceType] ?? '').trim() || undefined : undefined,
+          currency: idx.currency >= 0 ? purchaseOrderImportDict.parseDict('CURRENCY', String(row[idx.currency] ?? '').trim()) || undefined : undefined,
+          priceType: idx.priceType >= 0 ? parseImportPriceType(String(row[idx.priceType] ?? '').trim(), t) : undefined,
           items: [],
         });
       }

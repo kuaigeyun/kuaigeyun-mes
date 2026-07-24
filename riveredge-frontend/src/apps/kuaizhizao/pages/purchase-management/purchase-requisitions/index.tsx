@@ -320,7 +320,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
         .map((row) => {
           const materialCode = String(row[0] || '').trim();
           const spec = String(row[1] || '').trim();
-          const unit = String(row[2] || '').trim();
+          const unitRaw = String(row[2] || '').trim();
+          const unit = requisitionImportDict.parseDict('MATERIAL_UNIT', unitRaw) || unitRaw;
           const quantity = parseFloat(row[3]) || 0;
           const suggestedPrice = parseFloat(row[4]) || 0;
           const requiredDate = row[5];
@@ -351,7 +352,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       messageApi.success(t('app.kuaizhizao.salesOrder.importSuccessItems', { count: newItems.length }));
       setImportModalVisible(false);
     },
-    [messageApi, t],
+    [messageApi, requisitionImportDict, t],
   );
 
   const handleCopyRequisitionCode = useCallback(

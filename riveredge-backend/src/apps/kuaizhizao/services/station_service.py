@@ -4,7 +4,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from tortoise.transactions import in_transaction
 
@@ -23,6 +23,11 @@ from apps.kuaizhizao.schemas.station import (
     OperationPauseRequest,
     OperatorSkillCreate,
     ShiftHandoverCreate,
+    StationDocFileItem,
+    StationSopDocument,
+    StationSopStep,
+    StationOperationDocumentsResponse,
+    StationWorkOrderDocumentFlags,
 )
 from apps.kuaizhizao.schemas.work_order import WorkOrderOperationResponse
 from apps.kuaizhizao.services.work_order_service import WorkOrderService, _max_reportable_quantity_for_op
@@ -44,6 +49,175 @@ ANDON_TYPE_LABELS = {
     "equipment": "设备故障",
     "supervisor": "班长呼叫",
 }
+
+
+def _station_file_preview_url(file_uuid: str) -> str:
+    return f"/api/v1/core/files/{file_uuid}/preview"
+
+
+def _attachment_uuids_from_node_data(raw: Any) -> List[str]:
+    if not isinstance(raw, list):
+        return []
+    out: List[str] = []
+    for item in raw:
+        if isinstance(item, str) and item.strip():
+            out.append(item.strip())
+        elif isinstance(item, dict):
+            uid = item.get("uuid") or item.get("uid") or item.get("file_uuid")
+            if uid and str(uid).strip():
+                out.append(str(uid).strip())
+    # 保序去重
+    seen: set[str] = set()
+    uniq: List[str] = []
+    for u in out:
+        if u not in seen:
+            seen.add(u)
+            uniq.append(u)
+    return uniq
+
+
+def _sop_flow_to_steps(flow_config: Optional[Dict[str, Any]]) -> List[StationSopStep]:
+    """将 SOP 设计页 flow_config 展开为工位有序工步（跳过开始/结束）。"""
+    if not isinstance(flow_config, dict):
+        return []
+    nodes = flow_config.get("nodes") or []
+    edges = flow_config.get("edges") or []
+    if not isinstance(nodes, list) or not nodes:
+        return []
+    if not isinstance(edges, list):
+        edges = []
+
+    node_by_id = {str(n.get("id")): n for n in nodes if isinstance(n, dict) and n.get("id")}
+
+    def _node_type(n: dict) -> str:
+        return str(n.get("type") or (n.get("data") or {}).get("type") or "step")
+
+    def _to_step(n: dict) -> StationSopStep:
+        data = n.get("data") if isinstance(n.get("data"), dict) else {}
+        title = str(data.get("label") or n.get("id") or "")
+        desc = data.get("description")
+        key_points = data.get("keyPoints") or data.get("key_points")
+        return StationSopStep(
+            id=str(n.get("id")),
+            type=_node_type(n),
+            title=title,
+            description=str(desc).strip() if desc else None,
+            key_points=str(key_points).strip() if key_points else None,
+            attachment_uuids=_attachment_uuids_from_node_data(data.get("attachments")),
+        )
+
+    steps: List[StationSopStep] = []
+    visited: set[str] = set()
+
+    start = next(
+        (
+            n
+            for n in nodes
+            if isinstance(n, dict)
+            and (_node_type(n) == "start" or str(n.get("id")) == "start")
+        ),
+        None,
+    )
+
+    def _traverse(node_id: str) -> None:
+        if not node_id or node_id in visited:
+            return
+        visited.add(node_id)
+        n = node_by_id.get(node_id)
+        if not n:
+            return
+        nt = _node_type(n)
+        if nt not in ("start", "end"):
+            steps.append(_to_step(n))
+        for e in edges:
+            if isinstance(e, dict) and str(e.get("source")) == node_id:
+                _traverse(str(e.get("target") or ""))
+
+    if start:
+        _traverse(str(start.get("id")))
+
+    # 未从开始可达的工步按原顺序补齐
+    for n in nodes:
+        if not isinstance(n, dict) or not n.get("id"):
+            continue
+        nid = str(n.get("id"))
+        if nid in visited:
+            continue
+        if _node_type(n) in ("start", "end"):
+            continue
+        steps.append(_to_step(n))
+        visited.add(nid)
+
+    return steps
+
+
+def _norm_uuid_list_local(value) -> List[str]:
+    if not value or not isinstance(value, list):
+        return []
+    out: List[str] = []
+    for item in value:
+        if isinstance(item, str) and item.strip():
+            out.append(item.strip())
+    return out
+
+
+def _normalize_attachment_list(raw) -> list:
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict):
+        for key in ("files", "items", "attachments", "list"):
+            val = raw.get(key)
+            if isinstance(val, list):
+                return val
+        vals = list(raw.values())
+        if vals and all(isinstance(v, (dict, str)) for v in vals):
+            return vals
+    return []
+
+
+def _attachment_to_doc_item(file, index: int, source: str) -> Optional[StationDocFileItem]:
+    if isinstance(file, str):
+        uuid = file.strip()
+        if not uuid:
+            return None
+        return StationDocFileItem(
+            key=f"{source}-{uuid}",
+            name=f"附件{index + 1}",
+            file_uuid=uuid,
+            url=_station_file_preview_url(uuid),
+            source=source,
+        )
+    if not isinstance(file, dict):
+        return None
+    uuid = str(
+        file.get("uid")
+        or file.get("uuid")
+        or file.get("file_uuid")
+        or file.get("fileUuid")
+        or ""
+    ).strip()
+    name = str(
+        file.get("name")
+        or file.get("original_name")
+        or file.get("originalName")
+        or file.get("file_name")
+        or file.get("filename")
+        or ""
+    ).strip()
+    url = str(file.get("url") or file.get("download_url") or file.get("downloadUrl") or "").strip()
+    if not url and uuid:
+        url = _station_file_preview_url(uuid)
+    if not url:
+        return None
+    return StationDocFileItem(
+        key=f"{source}-{uuid or name or index}",
+        name=name or f"附件{index + 1}",
+        file_uuid=uuid or None,
+        url=url,
+        source=source,
+    )
 
 
 class StationService(WorkOrderService):
@@ -422,6 +596,351 @@ class StationService(WorkOrderService):
             if woo2:
                 return int(woo2.operation_id), woo2.operation_name
         return operation_id, None
+
+    async def get_operation_documents(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        operation_id: int,
+    ) -> StationOperationDocumentsResponse:
+        """
+        工位工序文档聚合（唯一入口）：
+        - ESOP：ProcessService.get_sop_for_reporting（物料(+可选工序) → 物料组(+可选工序) → 仅工序；未绑工序视为适用全部工序）
+        - 图纸：已发布工程图纸（按物料，再按路线/工序收窄）+ 物料 images + 工单附件 + SOP 附件
+        """
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.master_data.models.material import Material
+        from apps.master_data.models.process import Operation, ProcessRoute
+        from apps.master_data.services.process_service import ProcessService
+        from apps.master_data.services.drawing_service import DrawingService
+
+        woo = await WorkOrderOperation.get_or_none(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            id=operation_id,
+            deleted_at__isnull=True,
+        )
+        if not woo:
+            woo = await WorkOrderOperation.get_or_none(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                operation_id=operation_id,
+                deleted_at__isnull=True,
+            )
+        if not woo:
+            raise NotFoundError(f"工单工序不存在: work_order_id={work_order_id}, operation_id={operation_id}")
+
+        work_order = await WorkOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=work_order_id,
+            deleted_at__isnull=True,
+        )
+        if not work_order:
+            raise NotFoundError(f"工单不存在: {work_order_id}")
+
+        master_op_id = int(woo.operation_id) if woo.operation_id is not None else None
+        master_op = None
+        if master_op_id is not None:
+            master_op = await Operation.get_or_none(
+                tenant_id=tenant_id,
+                id=master_op_id,
+                deleted_at__isnull=True,
+            )
+        operation_uuid = str(master_op.uuid) if master_op else None
+
+        material = await Material.filter(
+            id=work_order.product_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        material_uuid = str(material.uuid) if material else None
+
+        process_route_uuid = None
+        route_id = getattr(work_order, "process_route_id", None)
+        if route_id:
+            route = await ProcessRoute.get_or_none(
+                tenant_id=tenant_id,
+                id=route_id,
+                deleted_at__isnull=True,
+            )
+            if route:
+                process_route_uuid = str(route.uuid)
+
+        sop_doc: Optional[StationSopDocument] = None
+        if master_op_id is not None:
+            sop = await ProcessService.get_sop_for_reporting(
+                tenant_id, work_order_id, master_op_id
+            )
+            if sop:
+                sop_attachments_raw = _normalize_attachment_list(getattr(sop, "attachments", None))
+                sop_att_items: List[StationDocFileItem] = []
+                for i, f in enumerate(sop_attachments_raw):
+                    item = _attachment_to_doc_item(f, i, "sop")
+                    if item:
+                        sop_att_items.append(item)
+
+                # 直接读 ORM，避免 SOPResponse 字段别名导致 flow_config 丢失
+                from apps.master_data.models.process import SOP as SopModel
+
+                sop_row = await SopModel.filter(
+                    tenant_id=tenant_id,
+                    uuid=str(sop.uuid),
+                    deleted_at__isnull=True,
+                ).first()
+                flow_config = (
+                    getattr(sop_row, "flow_config", None)
+                    if sop_row is not None
+                    else getattr(sop, "flow_config", None)
+                )
+                if not isinstance(flow_config, dict):
+                    flow_config = None
+
+                sop_doc = StationSopDocument(
+                    uuid=str(sop.uuid),
+                    name=sop.name,
+                    version=sop.version,
+                    content=sop.content,
+                    steps=_sop_flow_to_steps(flow_config),
+                    flow_config=flow_config,
+                    attachments=sop_att_items,
+                )
+
+        drawings: List[StationDocFileItem] = []
+        seen_keys: set[str] = set()
+
+        def _push(item: Optional[StationDocFileItem]) -> None:
+            if not item:
+                return
+            dedupe = item.file_uuid or item.url or item.key
+            if dedupe in seen_keys:
+                return
+            seen_keys.add(dedupe)
+            drawings.append(item)
+
+        # 1) 快研发 / 主数据工程图纸（已发布，按物料；路线/工序有绑定时再收窄）
+        if material_uuid:
+            eng_rows = await DrawingService.list_by_context(
+                tenant_id, material_uuid=material_uuid
+            )
+            for d in eng_rows:
+                op_uuids = list(getattr(d, "operation_uuids", None) or [])
+                route_uuids = list(getattr(d, "process_route_uuids", None) or [])
+                if op_uuids and operation_uuid and operation_uuid not in op_uuids:
+                    continue
+                if route_uuids and process_route_uuid and process_route_uuid not in route_uuids:
+                    continue
+                file_uuid = getattr(d, "file_uuid", None) or (
+                    getattr(getattr(d, "file", None), "uuid", None)
+                )
+                file_brief = getattr(d, "file", None)
+                name = (
+                    (getattr(file_brief, "original_name", None) if file_brief else None)
+                    or f"{d.code}-{d.name}"
+                )
+                preview = (
+                    getattr(file_brief, "preview_url", None)
+                    if file_brief
+                    else None
+                )
+                if file_uuid:
+                    _push(
+                        StationDocFileItem(
+                            key=f"engineering_drawing-{d.uuid}",
+                            name=str(name),
+                            file_uuid=str(file_uuid),
+                            url=preview or _station_file_preview_url(str(file_uuid)),
+                            source="engineering_drawing",
+                            drawing_code=d.code,
+                            drawing_revision=d.revision,
+                        )
+                    )
+                for j, supp in enumerate(getattr(d, "supplementary_files", None) or []):
+                    suuid = getattr(supp, "uuid", None)
+                    if not suuid:
+                        continue
+                    _push(
+                        StationDocFileItem(
+                            key=f"engineering_drawing-{d.uuid}-supp-{j}",
+                            name=str(getattr(supp, "original_name", None) or f"{d.code}-附加{j + 1}"),
+                            file_uuid=str(suuid),
+                            url=getattr(supp, "preview_url", None)
+                            or _station_file_preview_url(str(suuid)),
+                            source="engineering_drawing",
+                            drawing_code=d.code,
+                            drawing_revision=d.revision,
+                        )
+                    )
+
+        # 2) 物料附件（Material.images：图片 / PDF / DWG 等）
+        if material and getattr(material, "images", None):
+            images = material.images if isinstance(material.images, list) else []
+            for i, img in enumerate(images):
+                if isinstance(img, str):
+                    _push(_attachment_to_doc_item(img, i, "material"))
+                elif isinstance(img, dict):
+                    _push(_attachment_to_doc_item(img, i, "material"))
+
+        # 3) 工单附件
+        for i, f in enumerate(_normalize_attachment_list(getattr(work_order, "attachments", None))):
+            _push(_attachment_to_doc_item(f, i, "work_order"))
+
+        # 4) SOP 附件（图档也进图纸列表）
+        if sop_doc:
+            for item in sop_doc.attachments:
+                _push(item)
+
+        return StationOperationDocumentsResponse(
+            work_order_id=work_order_id,
+            operation_id=int(woo.id),
+            master_operation_id=master_op_id,
+            material_uuid=material_uuid,
+            process_route_uuid=process_route_uuid,
+            operation_uuid=operation_uuid,
+            sop=sop_doc,
+            drawings=drawings,
+            esop_available=sop_doc is not None,
+            drawings_available=len(drawings) > 0,
+        )
+
+    async def get_work_orders_document_flags(
+        self,
+        tenant_id: int,
+        work_order_ids: List[int],
+    ) -> List[StationWorkOrderDocumentFlags]:
+        """工单列表：批量判断是否有 ESOP / 图纸（供附件角标）。"""
+        from tortoise.expressions import Q
+
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.master_data.models.drawing import EngineeringDrawing
+        from apps.master_data.models.material import Material
+        from apps.master_data.models.process import Operation
+        from apps.master_data.services.process_service import ProcessService
+
+        ids = sorted({int(i) for i in work_order_ids if i is not None})
+        if not ids:
+            return []
+
+        work_orders = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            id__in=ids,
+            deleted_at__isnull=True,
+        ).all()
+        wo_by_id = {int(w.id): w for w in work_orders}
+
+        product_ids = {int(w.product_id) for w in work_orders if w.product_id is not None}
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=list(product_ids),
+            deleted_at__isnull=True,
+        ).all() if product_ids else []
+        material_by_product_id = {int(m.id): m for m in materials}
+        material_uuids = [str(m.uuid) for m in materials if getattr(m, "uuid", None)]
+
+        material_has_drawing: set[str] = set()
+        if material_uuids:
+            q = Q()
+            for mu in material_uuids:
+                q |= Q(material_uuids__contains=[mu])
+            eng_rows = await EngineeringDrawing.filter(
+                tenant_id=tenant_id,
+                status="Released",
+                deleted_at__isnull=True,
+            ).filter(q).all()
+            for row in eng_rows:
+                for mu in _norm_uuid_list_local(getattr(row, "material_uuids", None)):
+                    if mu in material_uuids:
+                        material_has_drawing.add(mu)
+
+        wo_ops = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id__in=ids,
+            deleted_at__isnull=True,
+        ).all()
+        ops_by_wo: dict[int, list] = {}
+        master_op_ids: set[int] = set()
+        for op in wo_ops:
+            ops_by_wo.setdefault(int(op.work_order_id), []).append(op)
+            if op.operation_id is not None:
+                master_op_ids.add(int(op.operation_id))
+
+        master_ops = await Operation.filter(
+            tenant_id=tenant_id,
+            id__in=list(master_op_ids),
+            deleted_at__isnull=True,
+        ).all() if master_op_ids else []
+        master_uuid_by_id = {int(o.id): str(o.uuid) for o in master_ops}
+
+        sop_cache: dict[tuple[str, Optional[str]], bool] = {}
+
+        async def _has_sop(material_uuid: Optional[str], operation_uuid: Optional[str]) -> bool:
+            if not material_uuid and not operation_uuid:
+                return False
+            key = (material_uuid or "", operation_uuid)
+            if key in sop_cache:
+                return sop_cache[key]
+            if material_uuid:
+                sop = await ProcessService.get_sop_for_material(
+                    tenant_id, material_uuid, operation_uuid=operation_uuid
+                )
+            else:
+                sop = None
+                if operation_uuid:
+                    op = await Operation.filter(
+                        tenant_id=tenant_id, uuid=operation_uuid, deleted_at__isnull=True
+                    ).first()
+                    if op:
+                        from apps.master_data.models.process import SOP
+
+                        sop_row = await SOP.filter(
+                            tenant_id=tenant_id,
+                            deleted_at__isnull=True,
+                            is_active=True,
+                            operation_id=op.id,
+                        ).order_by("code").first()
+                        sop = sop_row
+            sop_cache[key] = sop is not None
+            return sop_cache[key]
+
+        result: List[StationWorkOrderDocumentFlags] = []
+        for wo_id in ids:
+            wo = wo_by_id.get(wo_id)
+            if not wo:
+                result.append(
+                    StationWorkOrderDocumentFlags(
+                        work_order_id=wo_id, has_esop=False, has_drawings=False, has_docs=False
+                    )
+                )
+                continue
+
+            material = material_by_product_id.get(int(wo.product_id)) if wo.product_id else None
+            material_uuid = str(material.uuid) if material else None
+
+            has_drawings = False
+            if _normalize_attachment_list(getattr(wo, "attachments", None)):
+                has_drawings = True
+            if not has_drawings and material and getattr(material, "images", None):
+                images = material.images if isinstance(material.images, list) else []
+                if any(images):
+                    has_drawings = True
+            if not has_drawings and material_uuid and material_uuid in material_has_drawing:
+                has_drawings = True
+
+            has_esop = False
+            for op in ops_by_wo.get(wo_id, []):
+                op_uuid = master_uuid_by_id.get(int(op.operation_id)) if op.operation_id else None
+                if await _has_sop(material_uuid, op_uuid):
+                    has_esop = True
+                    break
+
+            result.append(
+                StationWorkOrderDocumentFlags(
+                    work_order_id=wo_id,
+                    has_esop=has_esop,
+                    has_drawings=has_drawings,
+                    has_docs=has_esop or has_drawings,
+                )
+            )
+        return result
 
     async def check_operator_skill(
         self,

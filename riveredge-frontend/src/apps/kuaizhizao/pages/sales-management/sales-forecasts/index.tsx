@@ -194,6 +194,51 @@ export default function SalesForecastsPage() {
     () => [undefined, undefined, forecastLineUnitOptions, undefined, undefined, undefined],
     [forecastLineUnitOptions],
   )
+  const forecastTypeImportOptions = useMemo(
+    () => [
+      t('app.kuaizhizao.demandManagement.businessModeMtsShort'),
+      t('app.kuaizhizao.demandManagement.businessModeMtoShort'),
+    ],
+    [t, i18n.language],
+  )
+  const forecastPeriodImportOptions = useMemo(
+    () => [
+      t('app.kuaizhizao.salesForecast.period.weekly'),
+      t('app.kuaizhizao.salesForecast.period.monthly'),
+      t('app.kuaizhizao.salesForecast.period.quarterly'),
+    ],
+    [t, i18n.language],
+  )
+  const parseForecastTypeImport = useCallback(
+    (raw?: string | null) => {
+      const v = String(raw ?? '').trim()
+      if (!v) return undefined
+      if (v === 'MTS' || v === 'MTO') return v
+      if (v === t('app.kuaizhizao.demandManagement.businessModeMtsShort') ||
+          v === t('app.kuaizhizao.demandManagement.businessModeMts')) {
+        return 'MTS'
+      }
+      if (v === t('app.kuaizhizao.demandManagement.businessModeMtoShort') ||
+          v === t('app.kuaizhizao.demandManagement.businessModeMto')) {
+        return 'MTO'
+      }
+      return v
+    },
+    [t, i18n.language],
+  )
+  const parseForecastPeriodImport = useCallback(
+    (raw?: string | null) => {
+      const v = String(raw ?? '').trim()
+      if (!v) return undefined
+      const upper = v.toUpperCase()
+      if (upper === 'WEEKLY' || upper === 'MONTHLY' || upper === 'QUARTERLY') return upper
+      if (v === t('app.kuaizhizao.salesForecast.period.weekly')) return 'WEEKLY'
+      if (v === t('app.kuaizhizao.salesForecast.period.monthly')) return 'MONTHLY'
+      if (v === t('app.kuaizhizao.salesForecast.period.quarterly')) return 'QUARTERLY'
+      return v
+    },
+    [t, i18n.language],
+  )
   /** 列表导入模板（与后端 sales-forecasts/import header_map 字段一致） */
   const forecastListImportTemplate = useMemo(
     () =>
@@ -210,14 +255,14 @@ export default function SalesForecastsPage() {
             field: 'forecast_type',
             labelKey: 'app.kuaizhizao.salesForecast.forecastType',
             aliases: ['预测类型'],
-            options: ['MTS', 'MTO'],
+            options: forecastTypeImportOptions,
           },
           {
             field: 'forecast_period',
             required: true,
             labelKey: 'app.kuaizhizao.salesForecast.forecastPeriod',
             aliases: ['预测周期', '*预测周期'],
-            options: ['WEEKLY', 'MONTHLY', 'QUARTERLY'],
+            options: forecastPeriodImportOptions,
           },
           {
             field: 'start_date',
@@ -237,9 +282,22 @@ export default function SalesForecastsPage() {
             aliases: ['备注'],
           },
         ],
-        ['FC-DEMO', 'MTS', 'MONTHLY', '2026-01-01', '2026-03-31', ''],
+        [
+          'FC-DEMO',
+          pickImportExampleValue(
+            forecastTypeImportOptions,
+            t('app.kuaizhizao.demandManagement.businessModeMtsShort'),
+          ),
+          pickImportExampleValue(
+            forecastPeriodImportOptions,
+            t('app.kuaizhizao.salesForecast.period.monthly'),
+          ),
+          '2026-01-01',
+          '2026-03-31',
+          '',
+        ],
       ),
-    [t, i18n.language],
+    [t, i18n.language, forecastTypeImportOptions, forecastPeriodImportOptions],
   )
   const materialSourceType = productScope === 'make' ? 'Make' : undefined
   const productColumnTitle = (
@@ -361,7 +419,8 @@ export default function SalesForecastsPage() {
         .map((row) => {
           const materialCode = String(row[0] || '').trim();
           const spec = String(row[1] || '').trim();
-          const unit = String(row[2] || '').trim();
+          const unitRaw = String(row[2] || '').trim();
+          const unit = forecastImportDict.parseDict('MATERIAL_UNIT', unitRaw) || unitRaw;
           const quantity = parseFloat(row[3]) || 0;
           const forecastDate = row[4];
           const notes = String(row[5] || '').trim();
@@ -390,7 +449,7 @@ export default function SalesForecastsPage() {
       messageApi.success(t('app.kuaizhizao.salesForecast.importItemsSuccess', { count: newItems.length }));
       setImportModalVisible(false);
     },
-    [defaultForecastItem, defaultUnit, messageApi, t],
+    [defaultForecastItem, defaultUnit, forecastImportDict, messageApi, t],
   );
 
 
@@ -627,7 +686,20 @@ export default function SalesForecastsPage() {
           forecastListImportTemplate.importHeaderMap[header.replace(/^\*+/, '').trim()]
         return mapped || header.replace(/^\*+/, '').trim()
       })
-      const payload = [normalizedHeaders, ...data.slice(1)]
+      const typeIdx = normalizedHeaders.indexOf('forecast_type')
+      const periodIdx = normalizedHeaders.indexOf('forecast_period')
+      const bodyRows = data.slice(1).map((row) => {
+        if (!Array.isArray(row)) return row
+        const next = [...row]
+        if (typeIdx >= 0 && next[typeIdx] != null) {
+          next[typeIdx] = parseForecastTypeImport(String(next[typeIdx])) ?? next[typeIdx]
+        }
+        if (periodIdx >= 0 && next[periodIdx] != null) {
+          next[periodIdx] = parseForecastPeriodImport(String(next[periodIdx])) ?? next[periodIdx]
+        }
+        return next
+      })
+      const payload = [normalizedHeaders, ...bodyRows]
       const result = await importSalesForecasts(payload)
       if (result.failure_count > 0) {
         messageApi.warning(

@@ -25,6 +25,7 @@ def _serialize_product_config(row: CoreClientProduct) -> dict:
         "platform_target": row.platform_target,
         "push_configurable": push_configurable,
         "push_enabled": row.push_enabled,
+        "header_download_enabled": bool(row.header_download_enabled),
         "jpush_app_key": db_app_key,
         "jpush_master_secret_configured": bool(db_secret),
         "effective_push_ready": bool(
@@ -61,6 +62,7 @@ async def update_client_product_config(
     client_key: str,
     *,
     push_enabled: bool | None = None,
+    header_download_enabled: bool | None = None,
     jpush_app_key: str | None = None,
     jpush_master_secret: str | None = None,
 ) -> dict:
@@ -71,6 +73,8 @@ async def update_client_product_config(
 
     if push_enabled is not None:
         row.push_enabled = push_enabled
+    if header_download_enabled is not None:
+        row.header_download_enabled = header_download_enabled
     if jpush_app_key is not None:
         if row.platform_target != "android":
             raise ValidationError("仅 Android 客户端支持极光推送配置")

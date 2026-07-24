@@ -50,23 +50,30 @@ const MaintenanceItemsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<MaintenanceItem | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
 
   const handleCreate = () => {
     setIsEdit(false);
     setCurrent(null);
+    // FormModal destroyOnHidden：须用 initialValues，打开瞬间 setFieldsValue 无效
+    setFormInitialValues({ is_active: true });
     setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ is_active: true });
   };
   useNewShortcut(handleCreate);
 
   const handleEdit = async (record: MaintenanceItem) => {
     if (!record.id) return;
-    const detail = await maintenanceItemsApi.get(record.id);
-    setIsEdit(true);
-    setCurrent(detail);
-    setModalVisible(true);
-    formRef.current?.setFieldsValue(detail);
+    try {
+      const detail = await maintenanceItemsApi.get(record.id);
+      setIsEdit(true);
+      setCurrent(detail);
+      setFormInitialValues({ ...detail });
+      setModalVisible(true);
+    } catch (error: unknown) {
+      messageApi.error(error instanceof Error ? error.message : t('common.loadFailed'));
+    }
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -237,9 +244,13 @@ const MaintenanceItemsPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        initialValues={formInitialValues}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
         grid={false}

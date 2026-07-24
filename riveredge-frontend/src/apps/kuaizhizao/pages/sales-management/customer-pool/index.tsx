@@ -36,10 +36,14 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../master-data/utils/factoryImportTemplate';
 import {
-  PARTNER_ENTERPRISE_TYPE_IMPORT_OPTIONS,
-  PARTNER_INVOICE_TYPE_IMPORT_OPTIONS,
-  PARTNER_SETTLEMENT_METHOD_IMPORT_OPTIONS,
-  PARTNER_TAXPAYER_TYPE_IMPORT_OPTIONS,
+  buildPartnerEnterpriseTypeImportOptions,
+  buildPartnerInvoiceTypeImportOptions,
+  buildPartnerSettlementMethodImportOptions,
+  buildPartnerTaxpayerTypeImportOptions,
+  parsePartnerEnterpriseTypeImport,
+  parsePartnerInvoiceTypeImport,
+  parsePartnerSettlementMethodImport,
+  parsePartnerTaxpayerTypeImport,
 } from '../../../../master-data/utils/partner-static-labels';
 import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
@@ -61,6 +65,7 @@ const CustomerPoolPage: React.FC = () => {
     'CUSTOMER_CATEGORY',
     'CONTACT_TITLE',
   ]);
+  const parsePoolDict = poolDictOptions.parseDict;
   const { message, modal } = App.useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -122,17 +127,17 @@ const CustomerPoolPage: React.FC = () => {
           { field: 'invoicePhone', labelKey: 'field.partner.invoicePhone' },
           { field: 'invoiceBankName', labelKey: 'field.partner.invoiceBankName' },
           { field: 'invoiceBankAccount', labelKey: 'field.partner.invoiceBankAccount' },
-          { field: 'invoiceTypeCode', labelKey: 'field.partner.invoiceType' , options: [...PARTNER_INVOICE_TYPE_IMPORT_OPTIONS] },
-          { field: 'taxpayerTypeCode', labelKey: 'field.partner.taxpayerType' , options: [...PARTNER_TAXPAYER_TYPE_IMPORT_OPTIONS] },
+          { field: 'invoiceTypeCode', labelKey: 'field.partner.invoiceType' , options: buildPartnerInvoiceTypeImportOptions(t) },
+          { field: 'taxpayerTypeCode', labelKey: 'field.partner.taxpayerType' , options: buildPartnerTaxpayerTypeImportOptions(t) },
           { field: 'industryCode', labelKey: 'field.customer.industry' , options: poolDictOptions.INDUSTRY_SECTOR },
           { field: 'customerLevelCode', labelKey: 'field.customer.level' , options: poolDictOptions.CUSTOMER_LEVEL },
           { field: 'leadSourceCode', labelKey: 'field.customer.leadSource' , options: poolDictOptions.PARTNER_SOURCE_CHANNEL },
           { field: 'estimatedAnnualPurchase', labelKey: 'field.customer.estimatedAnnualPurchase' },
           { field: 'creditLimit', labelKey: 'field.customer.creditLimit' },
           { field: 'legalRepresentative', labelKey: 'field.partner.legalRepresentative' },
-          { field: 'enterpriseTypeCode', labelKey: 'field.partner.enterpriseType' , options: [...PARTNER_ENTERPRISE_TYPE_IMPORT_OPTIONS] },
+          { field: 'enterpriseTypeCode', labelKey: 'field.partner.enterpriseType' , options: buildPartnerEnterpriseTypeImportOptions(t) },
           { field: 'paymentTermsDays', labelKey: 'field.partner.paymentTermsDays' },
-          { field: 'settlementMethodCode', labelKey: 'field.partner.settlementMethod' , options: [...PARTNER_SETTLEMENT_METHOD_IMPORT_OPTIONS] },
+          { field: 'settlementMethodCode', labelKey: 'field.partner.settlementMethod' , options: buildPartnerSettlementMethodImportOptions(t) },
           { field: 'deliveryContactName', labelKey: 'field.partner.deliveryContactName' },
           { field: 'deliveryContactPhone', labelKey: 'field.partner.deliveryContactPhone' },
           { field: 'deliveryAddress', labelKey: 'field.partner.deliveryAddress' },
@@ -710,7 +715,7 @@ const CustomerPoolPage: React.FC = () => {
       const name = String(row[nameIndex] ?? '').trim();
       if (!code || !name) continue;
       const contactPerson = cellAt(row, 'contactPerson') || undefined;
-      const contactTitle = cellAt(row, 'contactTitle') || undefined;
+      const contactTitle = parsePoolDict('CONTACT_TITLE', cellAt(row, 'contactTitle')) || undefined;
       const phone = cellAt(row, 'phone') || undefined;
       const email = cellAt(row, 'email') || undefined;
       const contacts =
@@ -721,7 +726,7 @@ const CustomerPoolPage: React.FC = () => {
         code: code.toUpperCase(),
         name,
         shortName: cellAt(row, 'shortName') || undefined,
-        category: cellAt(row, 'category') || undefined,
+        category: parsePoolDict('CUSTOMER_CATEGORY', cellAt(row, 'category')),
         contacts,
         isActive: parseActive(cellAt(row, 'isActive')),
         taxRegistrationNo: cellAt(row, 'taxRegistrationNo') || undefined,
@@ -730,17 +735,17 @@ const CustomerPoolPage: React.FC = () => {
         invoicePhone: cellAt(row, 'invoicePhone') || undefined,
         invoiceBankName: cellAt(row, 'invoiceBankName') || undefined,
         invoiceBankAccount: cellAt(row, 'invoiceBankAccount') || undefined,
-        invoiceTypeCode: cellAt(row, 'invoiceTypeCode') || undefined,
-        taxpayerTypeCode: cellAt(row, 'taxpayerTypeCode') || undefined,
-        industryCode: cellAt(row, 'industryCode') || undefined,
-        customerLevelCode: cellAt(row, 'customerLevelCode') || undefined,
-        leadSourceCode: cellAt(row, 'leadSourceCode') || undefined,
+        invoiceTypeCode: parsePartnerInvoiceTypeImport(cellAt(row, 'invoiceTypeCode'), t),
+        taxpayerTypeCode: parsePartnerTaxpayerTypeImport(cellAt(row, 'taxpayerTypeCode'), t),
+        industryCode: parsePoolDict('INDUSTRY_SECTOR', cellAt(row, 'industryCode')),
+        customerLevelCode: parsePoolDict('CUSTOMER_LEVEL', cellAt(row, 'customerLevelCode')),
+        leadSourceCode: parsePoolDict('PARTNER_SOURCE_CHANNEL', cellAt(row, 'leadSourceCode')),
         estimatedAnnualPurchase: parseNum(cellAt(row, 'estimatedAnnualPurchase')),
         creditLimit: parseNum(cellAt(row, 'creditLimit')),
         legalRepresentative: cellAt(row, 'legalRepresentative') || undefined,
-        enterpriseTypeCode: cellAt(row, 'enterpriseTypeCode') || undefined,
+        enterpriseTypeCode: parsePartnerEnterpriseTypeImport(cellAt(row, 'enterpriseTypeCode'), t),
         paymentTermsDays: parseNum(cellAt(row, 'paymentTermsDays')),
-        settlementMethodCode: cellAt(row, 'settlementMethodCode') || undefined,
+        settlementMethodCode: parsePartnerSettlementMethodImport(cellAt(row, 'settlementMethodCode'), t),
         deliveryContactName: cellAt(row, 'deliveryContactName') || undefined,
         deliveryContactPhone: cellAt(row, 'deliveryContactPhone') || undefined,
         deliveryAddress: cellAt(row, 'deliveryAddress') || undefined,

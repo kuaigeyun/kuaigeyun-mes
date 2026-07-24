@@ -32,6 +32,8 @@ export interface FilePreviewModalProps extends FilePreviewSource {
   title?: string;
   width?: string | number;
   height?: string | number;
+  /** 预览浮层 z-index（工位端需高于侧滑面板等） */
+  overlayZIndex?: number;
 }
 
 const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
@@ -45,6 +47,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   title,
   width = '88vw',
   height = '72vh',
+  overlayZIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -265,6 +268,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         onClose={onClose}
         title={title || fileName || t('app.master-data.drawings.preview')}
         inset={16}
+        zIndex={overlayZIndex}
         extra={stepToolbar}
       >
         <Suspense
@@ -298,6 +302,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         onClose={onClose}
         title={title || fileName || t('app.master-data.drawings.preview')}
         inset={16}
+        zIndex={overlayZIndex}
         extra={dwgToolbar}
       >
         <Suspense
@@ -334,6 +339,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             visible: open,
             src: displayUrl || previewUrl,
             destroyOnHidden: true,
+            ...(overlayZIndex != null ? { zIndex: overlayZIndex } : {}),
             onVisibleChange: (visible) => {
               if (!visible) onClose();
             },
@@ -374,6 +380,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           error={error}
           emptyMessage={t('app.master-data.drawings.previewUnsupported')}
           inset={16}
+          zIndex={overlayZIndex}
         />
       ) : null}
 
@@ -386,6 +393,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           width={width}
           style={{ top: 16 }}
           destroyOnHidden
+          zIndex={overlayZIndex}
           styles={{ body: { minHeight: typeof height === 'number' ? `${height}px` : height, padding: 0 } }}
         >
           {loading || pdfLoading ? (

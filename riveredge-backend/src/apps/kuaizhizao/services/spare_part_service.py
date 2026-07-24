@@ -163,7 +163,11 @@ class SparePartService:
         old_quantity = inventory.stock_quantity
         new_quantity = old_quantity + quantity
         if new_quantity < 0:
-            raise ValidationError(f"库存不足，当前库存: {old_quantity}")
+            part_label = f"{spare_part.part_no} {spare_part.part_name}".strip()
+            raise ValidationError(
+                f"备件「{part_label}」在库位「{warehouse_location}」库存不足："
+                f"当前 {old_quantity}，本次需出库 {abs(int(quantity))}。请先在备品备件中入库后再批准。"
+            )
 
         inventory.stock_quantity = new_quantity
         await inventory.save()

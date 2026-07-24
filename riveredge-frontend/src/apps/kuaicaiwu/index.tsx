@@ -28,6 +28,7 @@ const ReceiptsPage = lazy(() => import('./pages/finance-management/receipts'));
 const PaymentsPage = lazy(() => import('./pages/finance-management/payments'));
 
 // 成本管理页面
+const CostCenterDashboardPage = lazy(() => import('./pages/cost-management/dashboard'));
 const CostRulesPage = lazy(() => import('./pages/cost-management/cost-rules'));
 const CostCalculationsPage = lazy(() => import('./pages/cost-management/cost-calculations'));
 const CostDetailsPage = lazy(() => import('./pages/cost-management/cost-details'));
@@ -75,6 +76,7 @@ const KuaicaiwuApp: React.FC = () => {
       <Route path="finance-management/prepayments" element={withPageSuspense(PrepaymentsPage)} />
 
       {/* 成本管理路由 */}
+      <Route path="cost-management/dashboard" element={withPageSuspense(CostCenterDashboardPage)} />
       <Route path="cost-management/cost-rules" element={withPageSuspense(CostRulesPage)} />
       <Route path="cost-management/cost-calculations" element={withPageSuspense(CostCalculationsPage)} />
       <Route path="cost-management/cost-details" element={withPageSuspense(CostDetailsPage)} />

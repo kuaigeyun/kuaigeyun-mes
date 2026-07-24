@@ -256,9 +256,15 @@ const SparePartRequisitionsPage: React.FC = () => {
                 icon={<SendOutlined />}
                 onClick={async () => {
                   if (!record.id) return;
-                  await sparePartRequisitionsApi.submit(record.id);
-                  messageApi.success(t(`${P}.submitSuccess`));
-                  actionRef.current?.reload();
+                  try {
+                    await sparePartRequisitionsApi.submit(record.id);
+                    messageApi.success(t(`${P}.submitSuccess`));
+                    actionRef.current?.reload();
+                  } catch (error: unknown) {
+                    messageApi.error(
+                      error instanceof Error ? error.message : t('common.operationFailed'),
+                    );
+                  }
                 }}
               >
                 {t(`${P}.action.submit`)}
@@ -272,9 +278,15 @@ const SparePartRequisitionsPage: React.FC = () => {
                 icon={<CheckOutlined />}
                 onClick={async () => {
                   if (!record.id) return;
-                  await sparePartRequisitionsApi.approve(record.id);
-                  messageApi.success(t(`${P}.approveSuccess`));
-                  actionRef.current?.reload();
+                  try {
+                    await sparePartRequisitionsApi.approve(record.id);
+                    messageApi.success(t(`${P}.approveSuccess`));
+                    actionRef.current?.reload();
+                  } catch (error: unknown) {
+                    messageApi.error(
+                      error instanceof Error ? error.message : t('common.operationFailed'),
+                    );
+                  }
                 }}
               >
                 {t(`${P}.action.approve`)}
@@ -428,10 +440,16 @@ const SparePartRequisitionsPage: React.FC = () => {
         onCancel={() => setRejectModalVisible(false)}
         onOk={async () => {
           if (!rejectTarget?.id || !rejectReason.trim()) return;
-          await sparePartRequisitionsApi.reject(rejectTarget.id, { reject_reason: rejectReason });
-          messageApi.success(t(`${P}.rejectSuccess`));
-          setRejectModalVisible(false);
-          actionRef.current?.reload();
+          try {
+            await sparePartRequisitionsApi.reject(rejectTarget.id, { reject_reason: rejectReason });
+            messageApi.success(t(`${P}.rejectSuccess`));
+            setRejectModalVisible(false);
+            actionRef.current?.reload();
+          } catch (error: unknown) {
+            messageApi.error(
+              error instanceof Error ? error.message : t('common.operationFailed'),
+            );
+          }
         }}
       >
         <Input.TextArea rows={3} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />

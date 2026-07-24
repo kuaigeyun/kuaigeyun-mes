@@ -10,6 +10,7 @@ export type ClientProduct = {
   supports_ota: boolean;
   login_tile_slot: string;
   sort_order: number;
+  header_download_enabled?: boolean;
 };
 
 export type ClientProductConfig = {
@@ -18,6 +19,7 @@ export type ClientProductConfig = {
   platform_target: string;
   push_configurable: boolean;
   push_enabled: boolean;
+  header_download_enabled: boolean;
   jpush_app_key: string;
   jpush_master_secret_configured: boolean;
   effective_push_ready: boolean;
@@ -27,6 +29,7 @@ export type ClientProductConfig = {
 
 export type ClientProductConfigUpdateInput = {
   push_enabled?: boolean;
+  header_download_enabled?: boolean;
   jpush_app_key?: string;
   jpush_master_secret?: string;
 };
@@ -190,6 +193,24 @@ export async function listClientReleases(params?: {
 
 export async function activateClientRelease(releaseId: number): Promise<ClientRelease> {
   return apiRequest<ClientRelease>(`${ADMIN_BASE}/${releaseId}/activate`, { method: 'POST' });
+}
+
+export type ClientReleaseUpdateInput = {
+  release_notes?: string;
+  force_update?: boolean;
+  rollout_percent?: number;
+  runtime_version?: string | null;
+  min_version_code?: number;
+};
+
+export async function updateClientRelease(
+  releaseId: number,
+  input: ClientReleaseUpdateInput,
+): Promise<ClientRelease> {
+  return apiRequest<ClientRelease>(`${ADMIN_BASE}/${releaseId}`, {
+    method: 'PUT',
+    data: input,
+  });
 }
 
 export async function deleteClientRelease(releaseId: number): Promise<void> {

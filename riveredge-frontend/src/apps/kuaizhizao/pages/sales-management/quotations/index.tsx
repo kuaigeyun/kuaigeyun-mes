@@ -38,8 +38,10 @@ import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { deferConvertLineItemsByPriceType, setFormPriceType } from '../../../../../utils/priceTypeSwitch';
 import {
+  buildImportPriceTypeOptions,
   DEFAULT_SALES_PRICE_TYPE,
   normalizeSalesPriceType,
+  parseImportPriceType,
   salesFormPriceType,
 } from '../shared/salesPriceType';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -116,7 +118,6 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
 import {
-  IMPORT_PRICE_TYPE_OPTIONS,
   pickImportExampleValue,
 } from '../../../../../utils/loadImportDictionaryValues';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
@@ -656,7 +657,7 @@ const QuotationsPage: React.FC = () => {
           { field: 'shippingMethod', labelKey: 'app.kuaizhizao.quotation.import.shippingMethod', aliases: ['发货方式'] , options: quotationImportDict.SHIPPING_METHOD },
           { field: 'paymentTerms', labelKey: 'app.kuaizhizao.quotation.import.paymentTerms', aliases: ['付款条件'] , options: quotationImportDict.PAYMENT_TERMS },
           { field: 'currency', labelKey: 'app.kuaizhizao.quotation.form.currency', aliases: ['币种'] , options: quotationImportDict.CURRENCY },
-          { field: 'priceType', labelKey: 'app.kuaizhizao.salesOrder.priceType', aliases: ['价格类型'] , options: [...IMPORT_PRICE_TYPE_OPTIONS] },
+          { field: 'priceType', labelKey: 'app.kuaizhizao.salesOrder.priceType', aliases: ['价格类型'] , options: buildImportPriceTypeOptions(t) },
           { field: 'salesman', labelKey: 'app.kuaizhizao.quotation.import.salesman', aliases: ['业务员'] },
           { field: 'notes', labelKey: 'app.kuaizhizao.quotation.import.notes', aliases: ['备注'] },
         ],
@@ -674,8 +675,8 @@ const QuotationsPage: React.FC = () => {
           '',
           '',
           '',
-          'CNY',
-          'tax_inclusive',
+          pickImportExampleValue(quotationImportDict.CURRENCY, 'CNY'),
+          pickImportExampleValue(buildImportPriceTypeOptions(t), t('app.kuaizhizao.salesContract.priceTypeTaxInclusive')),
           '',
           '',
         ],
@@ -1306,7 +1307,8 @@ const QuotationsPage: React.FC = () => {
       .map((row) => {
         const materialCode = String(row[0] || '').trim();
         const spec = String(row[1] || '').trim();
-        const unit = String(row[2] || '').trim();
+        const unitRaw = String(row[2] || '').trim();
+        const unit = quotationImportDict.parseDict('MATERIAL_UNIT', unitRaw) || unitRaw;
         const quantity = parseFloat(row[3]) || 0;
         const price = parseFloat(row[4]) || 0;
         const deliveryDate = row[5];
@@ -1596,10 +1598,10 @@ const QuotationsPage: React.FC = () => {
           customerContact: cell(row, idx.customerContact) || undefined,
           customerPhone: cell(row, idx.customerPhone) || undefined,
           shippingAddress: cell(row, idx.shippingAddress) || undefined,
-          shippingMethod: cell(row, idx.shippingMethod) || undefined,
-          paymentTerms: cell(row, idx.paymentTerms) || undefined,
-          currency: cell(row, idx.currency) || undefined,
-          priceType: cell(row, idx.priceType) || undefined,
+          shippingMethod: quotationImportDict.parseDict('SHIPPING_METHOD', cell(row, idx.shippingMethod)),
+          paymentTerms: quotationImportDict.parseDict('PAYMENT_TERMS', cell(row, idx.paymentTerms)),
+          currency: quotationImportDict.parseDict('CURRENCY', cell(row, idx.currency)) || defaultQuotationCurrency,
+          priceType: parseImportPriceType(cell(row, idx.priceType), t),
           salesman: cell(row, idx.salesman) || undefined,
           items: [],
         });

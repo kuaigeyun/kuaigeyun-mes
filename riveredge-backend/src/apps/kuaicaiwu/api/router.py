@@ -26,6 +26,7 @@ from .cost import (
     cost_optimization_router,
     cost_report_router,
     standard_costs_router,
+    cost_dashboard_router,
 )
 from .management_report import router as management_report_router
 from .finance_settlement import router as settlement_router
@@ -56,6 +57,7 @@ router.include_router(cost_comparison_router)
 router.include_router(cost_optimization_router)
 router.include_router(cost_report_router)
 router.include_router(standard_costs_router)
+router.include_router(cost_dashboard_router)
 router.include_router(management_report_router)
 router.include_router(settlement_router)
 router.include_router(partner_statements_router)

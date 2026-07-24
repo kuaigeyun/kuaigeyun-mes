@@ -590,6 +590,15 @@ class CodeGenerationService:
                 deleted_at__isnull=True
             ).first()
             return existing is not None
+
+        if entity_type == 'sop':
+            from apps.master_data.models.process import SOP
+            existing = await SOP.filter(
+                tenant_id=tenant_id,
+                code=code,
+                deleted_at__isnull=True,
+            ).first()
+            return existing is not None
         
         if entity_type == 'bom':
             from apps.master_data.models.material import BOM

@@ -15,6 +15,7 @@ from .cost_comparison import router as cost_comparison_router
 from .cost_optimization import router as cost_optimization_router
 from .cost_report import router as cost_report_router
 from .standard_costs import router as standard_costs_router
+from .cost_dashboard import router as cost_dashboard_router
 
 __all__ = [
     "cost_rules_router",
@@ -27,4 +28,5 @@ __all__ = [
     "cost_optimization_router",
     "cost_report_router",
     "standard_costs_router",
+    "cost_dashboard_router",
 ]

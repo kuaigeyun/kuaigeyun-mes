@@ -111,74 +111,8 @@ async def list_maintenance_plans(
     )
 
 
-@router.get("/{uuid}", response_model=MaintenancePlanResponse)
-async def get_maintenance_plan(
-    uuid: str,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    获取维护计划详情
-    
-    根据UUID获取维护计划详情。
-    """
-    try:
-        plan = await MaintenancePlanService.get_maintenance_plan_by_uuid(tenant_id, uuid)
-        return MaintenancePlanResponse.model_validate(plan)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
-@router.put("/{uuid}", response_model=MaintenancePlanResponse)
-async def update_maintenance_plan(
-    uuid: str,
-    data: MaintenancePlanUpdate,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    更新维护计划
-    
-    更新维护计划信息。
-    """
-    try:
-        plan = await MaintenancePlanService.update_maintenance_plan(
-            tenant_id=tenant_id,
-            uuid=uuid,
-            data=data
-        )
-        return MaintenancePlanResponse.model_validate(plan)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
-@router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_maintenance_plan(
-    uuid: str,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    删除维护计划
-    
-    软删除维护计划（标记为已删除，不实际删除数据）。
-    """
-    try:
-        await MaintenancePlanService.delete_maintenance_plan(tenant_id, uuid)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
 # ========== 维护执行记录相关端点 ==========
+# 必须注册在 /{uuid} 之前，否则 GET /executions 会被当成 uuid="executions" 的计划详情
 
 @router.post("/executions", response_model=MaintenanceExecutionResponse, status_code=status.HTTP_201_CREATED)
 async def create_maintenance_execution(
@@ -319,6 +253,75 @@ async def delete_maintenance_execution(
     """
     try:
         await MaintenanceExecutionService.delete_maintenance_execution(tenant_id, uuid)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+# ========== 维护计划详情 / 更新 / 删除（/{uuid} 须在静态路径之后） ==========
+
+@router.get("/{uuid}", response_model=MaintenancePlanResponse)
+async def get_maintenance_plan(
+    uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取维护计划详情
+    
+    根据UUID获取维护计划详情。
+    """
+    try:
+        plan = await MaintenancePlanService.get_maintenance_plan_by_uuid(tenant_id, uuid)
+        return MaintenancePlanResponse.model_validate(plan)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.put("/{uuid}", response_model=MaintenancePlanResponse)
+async def update_maintenance_plan(
+    uuid: str,
+    data: MaintenancePlanUpdate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    更新维护计划
+    
+    更新维护计划信息。
+    """
+    try:
+        plan = await MaintenancePlanService.update_maintenance_plan(
+            tenant_id=tenant_id,
+            uuid=uuid,
+            data=data
+        )
+        return MaintenancePlanResponse.model_validate(plan)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_maintenance_plan(
+    uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    删除维护计划
+    
+    软删除维护计划（标记为已删除，不实际删除数据）。
+    """
+    try:
+        await MaintenancePlanService.delete_maintenance_plan(tenant_id, uuid)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

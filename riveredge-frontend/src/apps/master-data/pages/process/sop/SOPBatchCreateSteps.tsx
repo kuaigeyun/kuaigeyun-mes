@@ -5,7 +5,7 @@
  * 供新建 Modal 的批量模式使用。
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App, Button, Card, Select, Space, Table, Steps, Modal, Input, Form, Typography, Segmented, Alert } from 'antd';
 import { HighlightOutlined, FormOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -16,6 +16,11 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import type { ProcessRoute, Operation } from '../../../types/process';
 import type { Material, MaterialGroup, MaterialListResponse } from '../../../types/material';
 import type { SOP } from '../../../types/process';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import {
+  findSopBindingConflicts,
+  formatSopBindingConflictLabels,
+} from '../../../utils/sopBindingDuplicate';
 
 const { Text } = Typography;
 
@@ -69,6 +74,84 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
   const [routePickerOptions, setRoutePickerOptions] = useState<ProcessRoute[]>([]);
   const [routesLoading, setRoutesLoading] = useState(false);
   const [pickedRouteUuid, setPickedRouteUuid] = useState<string | undefined>(undefined);
+  const [existingSopsForCheck, setExistingSopsForCheck] = useState<SOP[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAllListItems((params) => sopApi.list(params))
+      .then((rows) => {
+        if (cancelled) return;
+        setExistingSopsForCheck(
+          rows.map((row: SOP & { operation_id?: number }) => ({
+            ...row,
+            operationId: row.operationId ?? row.operation_id,
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setExistingSopsForCheck([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const batchBindingConflictLabels = useMemo(() => {
+    if (operations.length === 0) return [] as string[];
+    const scopes = type === 'material' ? selectedMaterialUuids : selectedMaterialGroupUuids;
+    if (scopes.length === 0) return [] as string[];
+
+    const conflicts = [];
+    for (const op of operations) {
+      const fullOp = allOperations.find((item) => item.uuid === op.uuid);
+      if (!fullOp?.id) continue;
+      for (const scopeUuid of scopes) {
+        conflicts.push(
+          ...findSopBindingConflicts(existingSopsForCheck, {
+            operationId: fullOp.id,
+            materialUuids: type === 'material' ? [scopeUuid] : [],
+            materialGroupUuids: type === 'material_group' ? [scopeUuid] : [],
+          }),
+        );
+      }
+    }
+
+    const seen = new Set<string>();
+    const unique = conflicts.filter((item) => {
+      const key = `${item.kind}:${item.scopeUuid}:${item.sop.uuid}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return formatSopBindingConflictLabels(unique, {
+      getMaterialLabel: (uuid) => {
+        const material = materials.find((item) => String(item.uuid) === uuid);
+        if (!material) return uuid;
+        const code = (material as { mainCode?: string; code?: string }).mainCode
+          ?? (material as { code?: string }).code
+          ?? '';
+        return `${code} - ${material.name ?? code}`;
+      },
+      getMaterialGroupLabel: (uuid) => {
+        const group = materialGroups.find((item) => String(item.uuid) === uuid);
+        return group ? `${group.code} - ${group.name}` : uuid;
+      },
+      getOperationLabel: (operationId) => {
+        const operation = allOperations.find((item) => item.id === operationId);
+        return operation ? `${operation.code} - ${operation.name}` : String(operationId);
+      },
+    });
+  }, [
+    allOperations,
+    existingSopsForCheck,
+    materialGroups,
+    materials,
+    operations,
+    selectedMaterialGroupUuids,
+    selectedMaterialUuids,
+    type,
+  ]);
 
   useEffect(() => {
     const load = async () => {
@@ -357,7 +440,14 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
       });
       setCreatedSops(sops);
       setCurrentStep(3);
-      messageApi.success(t('app.master-data.sop.sopsCreated', { count: sops.length }));
+      const skipped = batchBindingConflictLabels.length;
+      if (skipped > 0) {
+        messageApi.success(
+          t('app.master-data.sop.batchCreatedWithSkipped', { created: sops.length, skipped }),
+        );
+      } else {
+        messageApi.success(t('app.master-data.sop.sopsCreated', { count: sops.length }));
+      }
     } catch (e: any) {
       messageApi.error(e?.message || t('app.master-data.sop.batchCreateFailed'));
     } finally {
@@ -486,29 +576,42 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                   { title: t('field.operation.name'), dataIndex: 'name' },
                   {
                     title: t('common.actions'),
-                    width: 120,
-                  render: (_: any, record: OperationItem, index: number) => [
-                        <Button {...rowActionKind('skip')} key="move-up" onClick={() => moveUp(index)} disabled={index === 0}>
-                          {t('app.master-data.sop.moveUp')}
-                        </Button>,
-                        <Button {...rowActionKind('skip')}
-                          key="move-down"
+                    width: 200,
+                    render: (_: any, record: OperationItem, index: number) => (
+                      <Space size={4} wrap={false}>
+                        <Button
+                          {...rowActionKind('skip')}
                           size="small"
+                          type="link"
+                          onClick={() => moveUp(index)}
+                          disabled={index === 0}
+                          style={{ minWidth: 48, paddingInline: 4 }}
+                        >
+                          {t('app.master-data.sop.moveUp')}
+                        </Button>
+                        <Button
+                          {...rowActionKind('skip')}
+                          size="small"
+                          type="link"
                           onClick={() => moveDown(index)}
                           disabled={index === operations.length - 1}
+                          style={{ minWidth: 48, paddingInline: 4 }}
                         >
                           {t('app.master-data.sop.moveDown')}
-                        </Button>,
-                        <Button {...rowActionKind('delete')}
-                          key="delete"
+                        </Button>
+                        <Button
+                          {...rowActionKind('delete')}
                           size="small"
+                          type="link"
                           danger
                           icon={<DeleteOutlined />}
                           onClick={() => handleRemoveOperation(record.uuid)}
+                          style={{ minWidth: 48, paddingInline: 4 }}
                         >
                           {t('field.customField.delete')}
-                        </Button>,
-                      ],
+                        </Button>
+                      </Space>
+                    ),
                   },
                 ]}
               />
@@ -590,6 +693,17 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                     })
               }
             />
+            {batchBindingConflictLabels.length > 0 && (
+              <Alert
+                type="warning"
+                showIcon
+                message={t('app.master-data.sop.batchBindingDuplicateTitle')}
+                description={t('app.master-data.sop.batchBindingDuplicateHint', {
+                  count: batchBindingConflictLabels.length,
+                  details: batchBindingConflictLabels.join('；'),
+                })}
+              />
+            )}
             <div>
               {t('app.master-data.sop.batchConfirmHint', { count: operations.length })}
             </div>

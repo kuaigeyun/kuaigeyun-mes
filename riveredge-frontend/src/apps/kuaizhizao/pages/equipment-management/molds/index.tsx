@@ -53,7 +53,7 @@ import {
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateString } from '../../../../../utils/formDate';
 import {
   MASTER_DATA_PINNED_ACTIVE_FIELD,
   buildActiveStatusValueEnum,
@@ -121,6 +121,7 @@ interface MoldCalibration {
 const MoldsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const moldDictOptions = useImportDictionaryOptions(['MOLD_TYPE', 'MOLD_STATUS']);
+  const parseMoldDict = moldDictOptions.parseDict;
 
   const moldImportTemplate = useMemo(
     () =>
@@ -414,10 +415,10 @@ const MoldsPage: React.FC = () => {
       const values = await calibForm.validateFields();
       const data = {
         mold_uuid: moldUuid,
-        calibration_date: values.calibration_date?.format?.('YYYY-MM-DD') || values.calibration_date,
+        calibration_date: toApiDateString(values.calibration_date),
         result: values.result,
         certificate_no: values.certificate_no,
-        expiry_date: values.expiry_date?.format?.('YYYY-MM-DD') || values.expiry_date,
+        expiry_date: toApiDateString(values.expiry_date),
         remark: values.remark,
         attachments: normalizeDocumentAttachments(values.attachments),
       };
@@ -469,8 +470,8 @@ const MoldsPage: React.FC = () => {
       const { customData, standardValues } = extractMoldFormValues(values);
       const submitData = {
         ...standardValues,
-        purchase_date: standardValues.purchase_date ? standardValues.purchase_date.format('YYYY-MM-DD') : null,
-        installation_date: standardValues.installation_date ? standardValues.installation_date.format('YYYY-MM-DD') : null,
+        purchase_date: toApiDateString(standardValues.purchase_date) ?? null,
+        installation_date: toApiDateString(standardValues.installation_date) ?? null,
         cavity_count: standardValues.cavity_count ?? null,
         design_lifetime: standardValues.design_lifetime ?? null,
         attachments: normalizeDocumentAttachments(standardValues.attachments),
@@ -1013,7 +1014,7 @@ const MoldsPage: React.FC = () => {
               items.push({
                 code: cellAt(row, 'code') || undefined,
                 name,
-                type: cellAt(row, 'type') || undefined,
+                type: parseMoldDict('MOLD_TYPE', cellAt(row, 'type')) || undefined,
                 category: cellAt(row, 'category') || undefined,
                 brand: cellAt(row, 'brand') || undefined,
                 model: cellAt(row, 'model') || undefined,
@@ -1023,7 +1024,7 @@ const MoldsPage: React.FC = () => {
                 purchase_date: parseDate(cellAt(row, 'purchase_date')),
                 installation_date: parseDate(cellAt(row, 'installation_date')),
                 warranty_period: parseIntField(cellAt(row, 'warranty_period')),
-                status: cellAt(row, 'status') || '待用',
+                status: parseMoldDict('MOLD_STATUS', cellAt(row, 'status')) || '待用',
                 cavity_count: parseIntField(cellAt(row, 'cavity_count')),
                 design_lifetime: parseIntField(cellAt(row, 'design_lifetime')),
                 description: cellAt(row, 'description') || undefined,
@@ -1159,6 +1160,7 @@ const MoldsPage: React.FC = () => {
               name="purchase_date"
               label={t('app.kuaizhizao.mold.fieldPurchaseDate')}
               placeholder={t('app.kuaizhizao.mold.phPurchaseDate')}
+              formItemProps={formDateFormItemProps}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -1167,6 +1169,7 @@ const MoldsPage: React.FC = () => {
               name="installation_date"
               label={t('app.kuaizhizao.mold.fieldInstallationDate')}
               placeholder={t('app.kuaizhizao.mold.phInstallationDate')}
+              formItemProps={formDateFormItemProps}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>

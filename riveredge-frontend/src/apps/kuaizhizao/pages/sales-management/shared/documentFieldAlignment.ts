@@ -170,7 +170,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   labor_cost: 67,
   manufacturing_cost: 68,
   unit_cost: 69,
-  content: 70,
+  /** 备注/正文：业务列之后、启用状态之前 */
+  content: 91.55,
   received_quantity: 60.1,
   /** 报工/检验：人员或检验数量紧挨合格/不合格之前 */
   worker_name: 60.15,

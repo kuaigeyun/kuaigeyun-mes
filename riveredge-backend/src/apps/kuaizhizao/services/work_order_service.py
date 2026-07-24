@@ -79,7 +79,7 @@ from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
 from apps.kuaizhizao.models.scrap_record import ScrapRecord
 from apps.kuaizhizao.services.document_timing_service import DocumentTimingService
 from apps.master_data.models.material import Material, MaterialGroup
-from apps.master_data.models.process import ProcessRoute, Operation, SOP
+from apps.master_data.models.process import ProcessRoute, Operation
 from apps.master_data.services.material_product_process_service import (
     MaterialProductProcessService,
 )
@@ -3883,15 +3883,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         master_op_ids = [op.operation_id for op in operations if op.operation_id is not None]
         defect_by_master_op = await batch_get_operation_defect_types_via_table(master_op_ids)
 
-        # 批量查询工序关联的 SOP（法）
+        # 工序 SOP：与报工/工位一致，按物料 → 物料组 → 工序匹配（非仅 operation_id）
         op_ids = [op.operation_id for op in operations]
-        sops = await SOP.filter(
-            tenant_id=tenant_id,
-            operation_id__in=op_ids,
-            is_active=True,
-            deleted_at__isnull=True
-        ).all()
-        sop_by_op = {s.operation_id: s for s in sops}
+        from apps.master_data.services.process_service import ProcessService
+
+        sop_by_master_op_id: dict = {}
+        for master_op_id in {oid for oid in op_ids if oid is not None}:
+            sop_resp = await ProcessService.get_sop_for_reporting(
+                tenant_id, work_order_id, int(master_op_id)
+            )
+            if sop_resp:
+                sop_by_master_op_id[int(master_op_id)] = sop_resp
 
         default_snap_by_master = await _batch_default_operators_snapshots_by_master_operation_id(
             tenant_id, op_ids
@@ -4010,7 +4012,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             op_data["next_op_planned_qty"] = transfer_qualified
             op_data["next_op_has_reporting"] = bool(next_op and (next_op.completed_quantity or 0) > 0) if next_op else None
 
-            sop = sop_by_op.get(op.operation_id)
+            sop = sop_by_master_op_id.get(op.operation_id)
             if sop:
                 op_data["sop_id"] = sop.id
                 op_data["sop_uuid"] = getattr(sop, "uuid", None)

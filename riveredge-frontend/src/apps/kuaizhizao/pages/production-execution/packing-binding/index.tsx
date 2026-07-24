@@ -70,6 +70,11 @@ import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import {
+  MaterialStackedCell,
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 
 interface PackingBinding {
   id?: number;
@@ -860,23 +865,27 @@ const PackingBindingPage: React.FC = () => {
         ),
       },
       {
+        title: `${t('app.kuaizhizao.packingBinding.colProductName')}/${t('app.kuaizhizao.packingBinding.colProductCode')}`,
+        key: 'product_stacked',
+        dataIndex: 'product_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (
+          <MaterialStackedCell material_name={r.product_name} material_code={r.product_code} />
+        ),
+      },
+      {
         title: t('app.kuaizhizao.packingBinding.colProductCode'),
         dataIndex: 'product_code',
-        width: 128,
-        ellipsis: true,
+        hideInTable: true,
         sorter: true,
         hideInSearch: false,
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.product_code ?? '') }} ellipsis>
-            {r.product_code ?? '-'}
-          </Typography.Text>
-        ),
       },
       {
         title: t('app.kuaizhizao.packingBinding.colProductName'),
         dataIndex: 'product_name',
-        width: 160,
-        ellipsis: true,
+        hideInTable: true,
         sorter: true,
         hideInSearch: false,
       },
@@ -931,10 +940,26 @@ const PackingBindingPage: React.FC = () => {
         render: () => <Tag color="processing">{t('app.kuaizhizao.packingBinding.statusBound')}</Tag>,
       },
       {
+        title: `${t('app.kuaizhizao.packingBinding.colBoundBy')}/${t('app.kuaizhizao.packingBinding.colBoundAt')}`,
+        key: 'bound_stacked',
+        dataIndex: 'bound_at',
+        width: 168,
+        uniTableKeepWidth: true,
+        sorter: true,
+        defaultSortOrder: 'descend',
+        hideInSearch: true,
+        render: (_, r) => (
+          <UniTableStackedPrimaryCell
+            primary={r.bound_by_name?.trim() || '-'}
+            secondary={r.bound_at ? formatDateTime(r.bound_at, 'YYYY-MM-DD HH:mm') : '-'}
+            secondaryCopyable={false}
+          />
+        ),
+      },
+      {
         title: t('app.kuaizhizao.packingBinding.colBoundBy'),
         dataIndex: 'bound_by_name',
-        width: 100,
-        ellipsis: true,
+        hideInTable: true,
         sorter: true,
         hideInSearch: true,
       },
@@ -942,12 +967,9 @@ const PackingBindingPage: React.FC = () => {
         title: t('app.kuaizhizao.packingBinding.colBoundAt'),
         dataIndex: 'bound_at',
         valueType: 'dateTime',
-        width: 132,
-        uniTableKeepWidth: true,
+        hideInTable: true,
         sorter: true,
-        defaultSortOrder: 'descend',
         hideInSearch: true,
-        render: (_, r) => (r.bound_at ? formatDateTime(r.bound_at, 'YYYY-MM-DD HH:mm') : '-'),
       },
       ...buildDocumentAuditColumns<PackingBinding>(t),
       {

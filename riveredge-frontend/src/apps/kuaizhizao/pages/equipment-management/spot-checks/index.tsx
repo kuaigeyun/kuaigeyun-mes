@@ -121,7 +121,25 @@ const SpotChecksPage: React.FC = () => {
         equipment_id: equipmentId,
         scheme_id: schemeId,
       });
-      setPreviewLines(res.lines ?? []);
+      setPreviewLines(
+        (res.lines ?? []).map((l) => {
+          const valueType = String(l.value_type || 'boolean').toLowerCase();
+          const isBoolean =
+            valueType === 'boolean' || valueType === 'bool' || valueType === '是/否';
+          const isPass = l.is_pass ?? true;
+          return {
+            ...l,
+            is_pass: isPass,
+            measured_value: isBoolean
+              ? l.measured_value?.trim()
+                ? l.measured_value
+                : isPass
+                  ? '是'
+                  : '否'
+              : l.measured_value,
+          };
+        }),
+      );
       if (res.scheme_id) {
         formRef.current?.setFieldsValue({ scheme_id: res.scheme_id });
       }
@@ -232,17 +250,24 @@ const SpotChecksPage: React.FC = () => {
       title: t(`${P}.line.measuredValue`),
       dataIndex: 'measured_value',
       width: 120,
-      render: (_: unknown, row: SpotCheckLine, index: number) => (
-        <Input
-          size="small"
-          value={row.measured_value}
-          onChange={(e) => {
-            const next = [...previewLines];
-            next[index] = { ...next[index], measured_value: e.target.value };
-            setPreviewLines(next);
-          }}
-        />
-      ),
+      render: (_: unknown, row: SpotCheckLine, index: number) => {
+        const valueType = String(row.value_type || 'boolean').toLowerCase();
+        // 是/否项只需合格开关，不展示实测值录入
+        if (valueType === 'boolean' || valueType === 'bool' || valueType === '是/否') {
+          return <span>—</span>;
+        }
+        return (
+          <Input
+            size="small"
+            value={row.measured_value}
+            onChange={(e) => {
+              const next = [...previewLines];
+              next[index] = { ...next[index], measured_value: e.target.value };
+              setPreviewLines(next);
+            }}
+          />
+        );
+      },
     },
     {
       title: t(`${P}.line.isPass`),
@@ -254,7 +279,14 @@ const SpotChecksPage: React.FC = () => {
           checked={row.is_pass ?? true}
           onChange={(checked) => {
             const next = [...previewLines];
-            next[index] = { ...next[index], is_pass: checked };
+            const valueType = String(row.value_type || 'boolean').toLowerCase();
+            const isBoolean =
+              valueType === 'boolean' || valueType === 'bool' || valueType === '是/否';
+            next[index] = {
+              ...next[index],
+              is_pass: checked,
+              ...(isBoolean ? { measured_value: checked ? '是' : '否' } : {}),
+            };
             setPreviewLines(next);
           }}
         />

@@ -23,6 +23,10 @@ class CoreClientProduct(Model):
     push_enabled = fields.BooleanField(default=True, description="是否启用极光推送")
     jpush_app_key = fields.CharField(max_length=128, null=True)
     jpush_master_secret = fields.CharField(max_length=256, null=True)
+    header_download_enabled = fields.BooleanField(
+        default=True,
+        description="是否在主界面顶栏扫码下载中展示该客户端",
+    )
 
     class Meta:
         table = "core_client_products"

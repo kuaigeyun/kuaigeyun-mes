@@ -1906,10 +1906,13 @@ const BOMPage: React.FC = () => {
             : undefined;
         const componentCode = row[headerIndexMap['componentCode']]?.toString().trim();
         const quantityStr = row[headerIndexMap['quantity']]?.toString().trim();
-        const unit =
+        const unitRaw =
           headerIndexMap['unit'] !== undefined
             ? row[headerIndexMap['unit']]?.toString().trim()
             : undefined;
+        const unit = unitRaw
+          ? importDictOptions.parseDict('MATERIAL_UNIT', unitRaw) ?? unitRaw
+          : undefined;
         const wasteRateStr =
           headerIndexMap['wasteRate'] !== undefined
             ? row[headerIndexMap['wasteRate']]?.toString().trim()

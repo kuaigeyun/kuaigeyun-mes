@@ -101,6 +101,12 @@
         "sort_order": 2,
         "children": [
           {
+            "title": "app.kuaicaiwu.menu.cost-management.dashboard",
+            "path": "/apps/kuaicaiwu/cost-management/dashboard",
+            "permission": "kuaicaiwu:cost-management-dashboard:read",
+            "sort_order": 0
+          },
+          {
             "title": "app.kuaicaiwu.menu.cost-management.cost-calculations",
             "path": "/apps/kuaicaiwu/cost-management/cost-calculations",
             "permission": "kuaicaiwu:cost:read",
@@ -212,6 +218,7 @@
     "kuaicaiwu:document-reconciliation:reject",
     "kuaicaiwu:document-reconciliation:print",
     "kuaicaiwu:finance-dashboard:read",
+    "kuaicaiwu:cost-management-dashboard:read",
     "kuaicaiwu:gl:read",
     "kuaicaiwu:gl:create",
     "kuaicaiwu:gl:execute",

@@ -33,6 +33,7 @@ import {
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
+import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
@@ -59,7 +60,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
-import { loadImportDictionaryValues } from '../../../../../utils/loadImportDictionaryValues';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import dayjs from 'dayjs';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
@@ -69,7 +70,7 @@ import {
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateString } from '../../../../../utils/formDate';
 import {
   buildActiveStatusValueEnum,
   buildEquipmentNatureValueEnum,
@@ -114,6 +115,8 @@ interface Equipment {
   work_center_id?: number;
   work_center_code?: string;
   work_center_name?: string;
+  responsible_person_id?: number;
+  responsible_person_name?: string;
   status?: string;
   is_active?: boolean;
   description?: string;
@@ -130,32 +133,20 @@ const EquipmentPage: React.FC = () => {
   const location = useLocation();
   const { t, i18n } = useTranslation();
 
-  const [importDictOptions, setImportDictOptions] = useState<{
-    type: string[];
-    nature: string[];
-    status: string[];
-  }>({ type: [], nature: [], status: [] });
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const [type, nature, status] = await Promise.all([
-          loadImportDictionaryValues('EQUIPMENT_TYPE', t),
-          loadImportDictionaryValues('EQUIPMENT_NATURE', t),
-          loadImportDictionaryValues('EQUIPMENT_STATUS', t),
-        ]);
-        if (!cancelled) {
-          setImportDictOptions({ type, nature, status });
-        }
-      } catch (error) {
-        console.warn('load equipment import dictionary options failed:', error);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [t, i18n.language]);
+  const equipmentDictOptions = useImportDictionaryOptions([
+    'EQUIPMENT_TYPE',
+    'EQUIPMENT_NATURE',
+    'EQUIPMENT_STATUS',
+  ]);
+  const parseEquipmentDict = equipmentDictOptions.parseDict;
+  const importDictOptions = useMemo(
+    () => ({
+      type: equipmentDictOptions.EQUIPMENT_TYPE ?? [],
+      nature: equipmentDictOptions.EQUIPMENT_NATURE ?? [],
+      status: equipmentDictOptions.EQUIPMENT_STATUS ?? [],
+    }),
+    [equipmentDictOptions],
+  );
 
   const equipmentImportTemplate = useMemo(() => {
     const pickExample = (options: string[], fallback: string) =>
@@ -361,8 +352,10 @@ const EquipmentPage: React.FC = () => {
       const detail = await equipmentApi.get(record.uuid);
       setIsEdit(true);
       setCurrentEquipment(detail);
-      const fieldFormValues =
-        detail.id != null ? await loadEquipmentFormFieldValues(detail.id) : {};
+      const [fieldFormValues, responsiblePersonUuid] = await Promise.all([
+        detail.id != null ? loadEquipmentFormFieldValues(detail.id) : Promise.resolve({}),
+        resolveUserUuidById(detail.responsible_person_id),
+      ]);
       setFormInitialValues({
         code: detail.code,
         name: detail.name,
@@ -388,6 +381,9 @@ const EquipmentPage: React.FC = () => {
         work_center_id: detail.work_center_id,
         work_center_code: detail.work_center_code,
         work_center_name: detail.work_center_name,
+        responsible_person_uuid: responsiblePersonUuid,
+        responsible_person_id: detail.responsible_person_id,
+        responsible_person_name: detail.responsible_person_name,
         status: detail.status,
         is_active: detail.is_active,
         description: detail.description,
@@ -477,10 +473,16 @@ const EquipmentPage: React.FC = () => {
   const handleSubmit = async (values: any): Promise<void> => {
     try {
       const { customData, standardValues } = extractEquipmentFormValues(values);
+      const {
+        responsible_person_uuid: _responsiblePersonUuid,
+        ...standardWithoutPersonUuid
+      } = standardValues;
       const submitData = {
-        ...standardValues,
-        purchase_date: standardValues.purchase_date ? standardValues.purchase_date.format('YYYY-MM-DD') : null,
-        installation_date: standardValues.installation_date ? standardValues.installation_date.format('YYYY-MM-DD') : null,
+        ...standardWithoutPersonUuid,
+        purchase_date: toApiDateString(standardValues.purchase_date) ?? null,
+        installation_date: toApiDateString(standardValues.installation_date) ?? null,
+        responsible_person_id: standardValues.responsible_person_id ?? null,
+        responsible_person_name: standardValues.responsible_person_name ?? null,
         attachments: normalizeDocumentAttachments(standardValues.attachments),
       };
 
@@ -766,6 +768,14 @@ const EquipmentPage: React.FC = () => {
       render: (_, r) => r.equipment_nature ?? '-',
     },
     {
+      title: t('app.kuaizhizao.equipment.colResponsiblePerson'),
+      dataIndex: 'responsible_person_name',
+      width: 110,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) => r.responsible_person_name ?? '-',
+    },
+    {
       title: t('app.kuaizhizao.equipment.colBrand'),
       dataIndex: 'brand',
       width: 100,
@@ -961,13 +971,13 @@ const EquipmentPage: React.FC = () => {
 
               const warrantyRaw = cellAt(row, 'warranty_period');
               const warrantyParsed = warrantyRaw ? Number(warrantyRaw) : NaN;
-              const status = cellAt(row, 'status') || '正常';
+              const status = parseEquipmentDict('EQUIPMENT_STATUS', cellAt(row, 'status')) || '正常';
               const isActive = parseActive(cellAt(row, 'is_active'));
 
               items.push({
                 code: cellAt(row, 'code') || undefined,
                 name,
-                type: cellAt(row, 'type') || undefined,
+                type: parseEquipmentDict('EQUIPMENT_TYPE', cellAt(row, 'type')) || undefined,
                 category: cellAt(row, 'category') || undefined,
                 brand: cellAt(row, 'brand') || undefined,
                 model: cellAt(row, 'model') || undefined,
@@ -977,7 +987,8 @@ const EquipmentPage: React.FC = () => {
                 purchase_date: parseDate(cellAt(row, 'purchase_date')),
                 installation_date: parseDate(cellAt(row, 'installation_date')),
                 warranty_period: Number.isFinite(warrantyParsed) ? warrantyParsed : undefined,
-                equipment_nature: cellAt(row, 'equipment_nature') || undefined,
+                equipment_nature:
+                  parseEquipmentDict('EQUIPMENT_NATURE', cellAt(row, 'equipment_nature')) || undefined,
                 workshop_id: workshop?.id,
                 workshop_name: workshop?.name ?? (workshopRef || undefined),
                 production_line_id: line?.id,
@@ -1132,6 +1143,7 @@ const EquipmentPage: React.FC = () => {
               name="purchase_date"
               label={t('app.kuaizhizao.equipment.fieldPurchaseDate')}
               placeholder={t('app.kuaizhizao.equipment.phPurchaseDate')}
+              formItemProps={formDateFormItemProps}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -1140,6 +1152,7 @@ const EquipmentPage: React.FC = () => {
               name="installation_date"
               label={t('app.kuaizhizao.equipment.fieldInstallationDate')}
               placeholder={t('app.kuaizhizao.equipment.phInstallationDate')}
+              formItemProps={formDateFormItemProps}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -1157,6 +1170,16 @@ const EquipmentPage: React.FC = () => {
               name="equipment_nature"
               label={t('app.kuaizhizao.equipment.fieldEquipmentNature')}
               placeholder={t('common.selectField', { field: t('app.kuaizhizao.equipment.fieldEquipmentNature') })}
+              formRef={formRef}
+            />
+          </Col>
+          <Col span={12}>
+            <EquipmentPersonSelect
+              uuidFieldName="responsible_person_uuid"
+              idFieldName="responsible_person_id"
+              nameFieldName="responsible_person_name"
+              label={t('app.kuaizhizao.equipment.fieldResponsiblePerson')}
+              placeholder={t('app.kuaizhizao.equipment.phResponsiblePerson')}
               formRef={formRef}
             />
           </Col>

@@ -111,6 +111,9 @@ const EquipmentStatusPage: React.FC = () => {
 
   // 状态更新Modal
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
+  const [updateFormInitialValues, setUpdateFormInitialValues] = useState<
+    Record<string, unknown> | undefined
+  >(undefined);
   const updateFormRef = useRef<any>(null);
 
   const translateStatus = (status: string) => {
@@ -231,28 +234,35 @@ const EquipmentStatusPage: React.FC = () => {
    */
   const handleUpdateStatus = (equipment: EquipmentStatus) => {
     setCurrentEquipment(equipment);
+    // FormModal destroyOnHidden：须用 initialValues；勿 setTimeout + setFieldsValue
+    setUpdateFormInitialValues({
+      status: equipment.status,
+      is_online: equipment.is_online,
+    });
     setUpdateModalVisible(true);
-    setTimeout(() => {
-      updateFormRef.current?.setFieldsValue({
-        equipment_uuid: equipment.equipment.uuid,
-        status: equipment.status,
-        is_online: equipment.is_online,
-      });
-    }, 100);
   };
 
   /**
    * 提交状态更新
    */
-  const handleUpdateStatusSubmit = async (values: any) => {
+  const handleUpdateStatusSubmit = async (values: Record<string, unknown>) => {
+    const targetUuid = currentEquipment?.equipment?.uuid;
+    if (!targetUuid) {
+      messageApi.error(t(`${P}.updateFailed`, { message: t('common.loadFailed') }));
+      return;
+    }
     try {
-      const targetUuid = values.equipment_uuid as string;
       await equipmentStatusApi.updateStatus({
-        ...values,
+        equipment_uuid: targetUuid,
+        status: values.status,
+        is_online: values.is_online,
+        reason: values.reason,
+        remark: values.remark,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
       messageApi.success(t(`${P}.updateSuccess`));
       setUpdateModalVisible(false);
+      setUpdateFormInitialValues(undefined);
       await fetchStatusList();
       if (detailVisible && currentEquipment?.equipment?.uuid === targetUuid) {
         try {
@@ -266,8 +276,9 @@ const EquipmentStatusPage: React.FC = () => {
           /* ignore */
         }
       }
-    } catch (error: any) {
-      messageApi.error(t(`${P}.updateFailed`, { message: error.message || t('common.unknownError') }));
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : t('common.unknownError');
+      messageApi.error(t(`${P}.updateFailed`, { message: msg }));
     }
   };
 
@@ -673,9 +684,14 @@ const EquipmentStatusPage: React.FC = () => {
       <FormModalTemplate
         title={t(`${P}.updateModal`)}
         open={updateModalVisible}
-        onClose={() => setUpdateModalVisible(false)}
+        onClose={() => {
+          setUpdateModalVisible(false);
+          setUpdateFormInitialValues(undefined);
+        }}
         formRef={updateFormRef}
         onFinish={handleUpdateStatusSubmit}
+        isEdit
+        initialValues={updateFormInitialValues}
         layout="vertical"
       >
         <ProFormSelect

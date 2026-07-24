@@ -19,6 +19,8 @@ from apps.kuaizhizao.schemas.station import (
     StationAndonResponse,
     StationSopAckCreate,
     StationSopAckCheckResponse,
+    StationOperationDocumentsResponse,
+    StationWorkOrderDocumentFlagsResponse,
     FaceEnrollRequest,
     FaceIdentifyRequest,
     FaceIdentifyResponse,
@@ -176,6 +178,58 @@ async def check_sop_acknowledgment(
         worker_id=worker_id,
     )
     return StationSopAckCheckResponse.model_validate(result)
+
+
+@router.get(
+    "/work-orders/document-flags",
+    response_model=StationWorkOrderDocumentFlagsResponse,
+    summary="Batch document presence flags for work order list",
+)
+async def get_station_work_order_document_flags(
+    ids: str = Query(..., description="工单 ID，逗号分隔"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StationWorkOrderDocumentFlagsResponse:
+    """工单列表附件角标：是否存在 ESOP / 图纸（含工程图纸与物料附件）。"""
+    id_list: List[int] = []
+    for part in (ids or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            id_list.append(int(part))
+        except ValueError:
+            continue
+    items = await station_service.get_work_orders_document_flags(
+        tenant_id=tenant_id,
+        work_order_ids=id_list,
+    )
+    return StationWorkOrderDocumentFlagsResponse(items=items)
+
+
+@router.get(
+    "/work-orders/{work_order_id}/operations/{operation_id}/documents",
+    response_model=StationOperationDocumentsResponse,
+    summary="Aggregate ESOP and drawings for station operation",
+)
+async def get_station_operation_documents(
+    work_order_id: int,
+    operation_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StationOperationDocumentsResponse:
+    """
+    工位工序文档唯一入口：物料感知 SOP + 已发布工程图纸 + 物料附件 + 工单/SOP 附件。
+    权限走 production-execution-terminal:read，不要求 master-data process 权限。
+    """
+    try:
+        return await station_service.get_operation_documents(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            operation_id=operation_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.post("/face-templates", response_model=FaceTemplateResponse, summary="Enroll face template")

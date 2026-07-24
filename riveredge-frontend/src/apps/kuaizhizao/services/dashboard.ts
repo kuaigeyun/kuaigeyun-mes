@@ -121,10 +121,6 @@ export const mesDashboardService = {
     );
   },
 
-  getCostSummary: async () => {
-    return apiRequest('/apps/kuaizhizao/dashboard/cost-summary', { method: 'GET' });
-  },
-
   getPerformanceSummary: async () => {
     return apiRequest('/apps/kuaizhizao/dashboard/performance-summary', { method: 'GET' });
   },

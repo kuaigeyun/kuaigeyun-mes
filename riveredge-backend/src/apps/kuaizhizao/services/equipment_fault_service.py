@@ -275,6 +275,46 @@ class EquipmentRepairService:
     
     提供设备维修记录的 CRUD 操作。
     """
+
+    # 维修状态 → 关联故障单状态（列表「当前阶段」读故障 status）
+    _REPAIR_TO_FAULT_STATUS = {
+        "进行中": "处理中",
+        "已完成": "已修复",
+    }
+    _FAULT_TERMINAL = frozenset({"已关闭"})
+
+    @classmethod
+    async def _sync_linked_fault_status(
+        cls,
+        *,
+        tenant_id: int,
+        equipment_fault: Optional[EquipmentFault],
+        repair_status: Optional[str],
+    ) -> None:
+        """维修创建/更新后回写关联故障单阶段，避免列表仍显示「待处理」。"""
+        if not equipment_fault or not repair_status:
+            return
+        target = cls._REPAIR_TO_FAULT_STATUS.get(repair_status)
+        if not target:
+            return
+        if equipment_fault.status in cls._FAULT_TERMINAL:
+            return
+        if equipment_fault.status == target:
+            return
+        # 已修复后不因「进行中」回退
+        if equipment_fault.status == "已修复" and target == "处理中":
+            return
+        equipment_fault.status = target
+        if target == "已修复":
+            equipment_fault.repair_required = False
+        await equipment_fault.save()
+        logger.info(
+            "equipment_repair_synced_fault tenant_id={} fault_uuid={} repair_status={} fault_status={}",
+            tenant_id,
+            equipment_fault.uuid,
+            repair_status,
+            target,
+        )
     
     @staticmethod
     async def create_equipment_repair(
@@ -345,6 +385,11 @@ class EquipmentRepairService:
                 actor = await User.filter(id=created_by).first()
                 apply_create_audit(repair, actor)
             await repair.save()
+            await EquipmentRepairService._sync_linked_fault_status(
+                tenant_id=tenant_id,
+                equipment_fault=equipment_fault,
+                repair_status=repair.status,
+            )
             if data.repair_parts:
                 await SparePartService().apply_parts_usage(
                     tenant_id,
@@ -496,6 +541,18 @@ class EquipmentRepairService:
             setattr(repair, key, value)
         
         await repair.save()
+
+        if "status" in update_data and repair.equipment_fault_uuid:
+            linked_fault = await EquipmentFault.filter(
+                tenant_id=tenant_id,
+                uuid=repair.equipment_fault_uuid,
+                deleted_at__isnull=True,
+            ).first()
+            await EquipmentRepairService._sync_linked_fault_status(
+                tenant_id=tenant_id,
+                equipment_fault=linked_fault,
+                repair_status=repair.status,
+            )
         return repair
     
     @staticmethod

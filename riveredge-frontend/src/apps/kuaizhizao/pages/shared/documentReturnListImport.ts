@@ -15,6 +15,7 @@ export type ReturnListImportDict = {
   RETURN_REASON?: string[];
   RETURN_TYPE?: string[];
   SHIPPING_METHOD?: string[];
+  parseDict?: (dictionaryCode: string, raw?: string | null) => string | undefined;
 };
 
 export type ReturnListPartner = {
@@ -231,6 +232,7 @@ export function parseDocumentReturnListImport(
     materials: Material[];
     defaultUnit: string;
     defaultReturnType: string;
+    parseDict?: (dictionaryCode: string, raw?: string | null) => string | undefined;
   },
 ): {
   errors: Array<{ row: number; message: string }>;
@@ -245,7 +247,10 @@ export function parseDocumentReturnListImport(
     materials,
     defaultUnit,
     defaultReturnType,
+    parseDict,
   } = opts;
+  const parse = (code: string, raw?: string | null) =>
+    parseDict ? parseDict(code, raw) : String(raw ?? '').trim() || undefined;
   const headers = (data[0] || []).map((h) => String(h || '').trim());
   const rows = (data.slice(2) as unknown[][]).filter((row) =>
     row?.some((c) => c != null && String(c).trim() !== ''),
@@ -360,16 +365,16 @@ export function parseDocumentReturnListImport(
         partner: partnerName,
         warehouse: warehouseName,
         returnTime,
-        returnReason: cell(row, idx.returnReason) || undefined,
-        returnType: cell(row, idx.returnType) || defaultReturnType,
-        shippingMethod: cell(row, idx.shippingMethod) || undefined,
+        returnReason: parse('RETURN_REASON', cell(row, idx.returnReason)),
+        returnType: parse('RETURN_TYPE', cell(row, idx.returnType)) || defaultReturnType,
+        shippingMethod: parse('SHIPPING_METHOD', cell(row, idx.shippingMethod)),
         notes: cell(row, idx.notes) || undefined,
         items: [],
       });
     }
     const g = groupMap.get(groupKey)!;
     const unit =
-      cell(row, idx.unit) ||
+      parse('MATERIAL_UNIT', cell(row, idx.unit)) ||
       (mat as any).baseUnit ||
       (mat as any).base_unit ||
       defaultUnit;

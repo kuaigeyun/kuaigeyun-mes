@@ -27,6 +27,7 @@ class ClientProductOut(BaseModel):
     supports_ota: bool
     login_tile_slot: str
     sort_order: int
+    header_download_enabled: bool = True
 
 
 class ClientReleaseCreateIn(BaseModel):
@@ -44,6 +45,16 @@ class ClientReleaseCreateIn(BaseModel):
     ota_relative_path: str | None = None
     rollout_percent: int = Field(default=100, ge=0, le=100)
     activate: bool = False
+
+
+class ClientReleaseUpdateIn(BaseModel):
+    """可编辑元数据；客户端 / 平台 / 版本号不可改。安装包通过 upload-package 可选替换。"""
+
+    release_notes: str | None = None
+    force_update: bool | None = None
+    rollout_percent: int | None = Field(default=None, ge=0, le=100)
+    runtime_version: str | None = None
+    min_version_code: int | None = Field(default=None, ge=0)
 
 
 class ClientReleaseOut(BaseModel):
@@ -99,6 +110,7 @@ class ClientProductConfigOut(BaseModel):
     platform_target: str
     push_configurable: bool
     push_enabled: bool
+    header_download_enabled: bool = True
     jpush_app_key: str
     jpush_master_secret_configured: bool
     effective_push_ready: bool
@@ -108,6 +120,7 @@ class ClientProductConfigOut(BaseModel):
 
 class ClientProductConfigUpdateIn(BaseModel):
     push_enabled: bool | None = None
+    header_download_enabled: bool | None = None
     jpush_app_key: str | None = None
     jpush_master_secret: str | None = Field(
         default=None,
@@ -158,6 +171,7 @@ async def list_client_products(
             supports_ota=r.supports_ota,
             login_tile_slot=r.login_tile_slot,
             sort_order=r.sort_order,
+            header_download_enabled=bool(r.header_download_enabled),
         )
         for r in rows
     ]
@@ -202,6 +216,7 @@ async def update_client_product_config(
     data = await product_cfg_svc.update_client_product_config(
         client_key,
         push_enabled=body.push_enabled,
+        header_download_enabled=body.header_download_enabled,
         jpush_app_key=body.jpush_app_key,
         jpush_master_secret=body.jpush_master_secret,
     )
@@ -364,6 +379,24 @@ async def get_client_release(
     _admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
 ) -> ClientReleaseOut:
     row = await svc.get_release(release_id)
+    return ClientReleaseOut.model_validate(svc.serialize_release(row, _origin(request)))
+
+
+@router.put("/{release_id}", response_model=ClientReleaseOut, summary="更新发布元数据（超管）")
+async def update_client_release(
+    release_id: int,
+    body: ClientReleaseUpdateIn,
+    request: Request,
+    _admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+) -> ClientReleaseOut:
+    row = await svc.update_release(
+        release_id,
+        release_notes=body.release_notes,
+        force_update=body.force_update,
+        rollout_percent=body.rollout_percent,
+        runtime_version=body.runtime_version,
+        min_version_code=body.min_version_code,
+    )
     return ClientReleaseOut.model_validate(svc.serialize_release(row, _origin(request)))
 
 

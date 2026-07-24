@@ -265,6 +265,102 @@ def _sop_name_truncate(name: str, max_len: int = 200) -> str:
     return name[: max_len - 1] + "…"
 
 
+def _normalize_uuid_list(values: Optional[List[str]]) -> List[str]:
+    if not values:
+        return []
+    seen: List[str] = []
+    for raw in values:
+        token = str(raw or "").strip()
+        if token and token not in seen:
+            seen.append(token)
+    return seen
+
+
+async def _collect_sop_binding_conflicts(
+    tenant_id: int,
+    operation_id: Optional[int],
+    material_uuids: Optional[List[str]],
+    material_group_uuids: Optional[List[str]],
+    exclude_sop_uuid: Optional[str] = None,
+) -> List[str]:
+    """检查物料/物料组 + 工序是否与现有 SOP 重复绑定。"""
+    if not operation_id:
+        return []
+
+    mat_uuids = _normalize_uuid_list(material_uuids)
+    grp_uuids = _normalize_uuid_list(material_group_uuids)
+    if not mat_uuids and not grp_uuids:
+        return []
+
+    query = SOP.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        operation_id=operation_id,
+    )
+    if exclude_sop_uuid:
+        query = query.exclude(uuid=exclude_sop_uuid)
+    existing_sops = await query.all()
+    if not existing_sops:
+        return []
+
+    operation = await Operation.filter(
+        tenant_id=tenant_id,
+        id=operation_id,
+        deleted_at__isnull=True,
+    ).first()
+    op_label = f"{operation.code} - {operation.name}" if operation else str(operation_id)
+
+    conflicts: List[str] = []
+    seen_keys: set = set()
+
+    for mu in mat_uuids:
+        for sop in existing_sops:
+            sop_mats = _normalize_uuid_list(
+                sop.material_uuids if isinstance(sop.material_uuids, list) else None
+            )
+            if mu not in sop_mats:
+                continue
+            key = ("material", mu, sop.uuid)
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            material = await Material.filter(
+                tenant_id=tenant_id, uuid=mu, deleted_at__isnull=True
+            ).first()
+            if material:
+                mc = getattr(material, "main_code", None) or getattr(material, "code", None) or mu
+                mat_label = f"{mc} - {getattr(material, 'name', '') or mc}"
+            else:
+                mat_label = mu
+            conflicts.append(
+                f"物料 {mat_label} 与工序 {op_label} 已绑定 SOP {sop.code}（{sop.name}）"
+            )
+
+    for gu in grp_uuids:
+        for sop in existing_sops:
+            sop_grps = _normalize_uuid_list(
+                sop.material_group_uuids if isinstance(sop.material_group_uuids, list) else None
+            )
+            if gu not in sop_grps:
+                continue
+            key = ("group", gu, sop.uuid)
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            group = await MaterialGroup.filter(
+                tenant_id=tenant_id, uuid=gu, deleted_at__isnull=True
+            ).first()
+            if group:
+                grp_label = f"{group.code} - {group.name}"
+            else:
+                grp_label = gu
+            conflicts.append(
+                f"物料组 {grp_label} 与工序 {op_label} 已绑定 SOP {sop.code}（{sop.name}）"
+            )
+
+    return conflicts
+
+
 class ProcessService:
     """工艺数据服务"""
     
@@ -1612,6 +1708,15 @@ class ProcessService:
         
         if existing:
             raise ValidationError(f"SOP编码 {data.code} 已存在")
+
+        binding_conflicts = await _collect_sop_binding_conflicts(
+            tenant_id=tenant_id,
+            operation_id=data.operation_id,
+            material_uuids=data.material_uuids,
+            material_group_uuids=data.material_group_uuids,
+        )
+        if binding_conflicts:
+            raise ValidationError("；".join(binding_conflicts))
         
         # 创建SOP（仅传模型字段；dict 已包含 schema 中定义的绑定与融合字段）
         create_data = data.model_dump() if hasattr(data, "model_dump") else data.dict()
@@ -1796,6 +1901,16 @@ class ProcessService:
                     grp_uuids_arg = [str(entity.uuid)]
                     bom_mode = "by_material_group"
                     title_extra = f"（{getattr(entity, 'name', '') or gc}｜{gc}）"
+
+                if mat_uuids_arg or grp_uuids_arg:
+                    binding_conflicts = await _collect_sop_binding_conflicts(
+                        tenant_id=tenant_id,
+                        operation_id=op_id,
+                        material_uuids=mat_uuids_arg,
+                        material_group_uuids=grp_uuids_arg,
+                    )
+                    if binding_conflicts:
+                        continue
 
                 code_parts = [route_tok, op_tok] + scope_parts
                 base_code = _sop_code_join(code_parts, 100)
@@ -1990,6 +2105,30 @@ class ProcessService:
         
         # 更新字段（含绑定与融合字段）
         update_data = data.model_dump(exclude_unset=True) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
+
+        next_operation_id = (
+            update_data["operation_id"] if "operation_id" in update_data else sop.operation_id
+        )
+        next_material_uuids = (
+            update_data["material_uuids"] if "material_uuids" in update_data else sop.material_uuids
+        )
+        next_material_group_uuids = (
+            update_data["material_group_uuids"]
+            if "material_group_uuids" in update_data
+            else sop.material_group_uuids
+        )
+        binding_conflicts = await _collect_sop_binding_conflicts(
+            tenant_id=tenant_id,
+            operation_id=next_operation_id,
+            material_uuids=next_material_uuids if isinstance(next_material_uuids, list) else None,
+            material_group_uuids=(
+                next_material_group_uuids if isinstance(next_material_group_uuids, list) else None
+            ),
+            exclude_sop_uuid=sop_uuid,
+        )
+        if binding_conflicts:
+            raise ValidationError("；".join(binding_conflicts))
+
         for key, value in update_data.items():
             setattr(sop, key, value)
         
@@ -2041,66 +2180,82 @@ class ProcessService:
     ) -> Optional[SOPResponse]:
         """
         按物料匹配 SOP，供工单/报工「以 SOP 为依据生成流程单据」使用。
-        匹配规则：具体物料优先于物料组。
+
+        匹配规则（高 → 低）：
+        1. 绑定该具体物料：同物料下「关联当前工序」优先于「未关联工序」（适用全部工序）
+        2. 绑定该物料所属物料组：同上工序优先规则
+        3. 仅按工序匹配（兼容未绑物料、只关联工序的 SOP）
         """
+        op_id: Optional[int] = None
+        if operation_uuid:
+            op = await Operation.filter(
+                tenant_id=tenant_id, uuid=operation_uuid, deleted_at__isnull=True
+            ).first()
+            if op:
+                op_id = int(op.id)
+
+        async def _pick_for_scope(base_q) -> Optional[SOP]:
+            """有工序上下文时：精确工序 > 未绑工序；无工序上下文时取任意启用 SOP。"""
+            if op_id is not None:
+                sop = (
+                    await base_q.filter(operation_id=op_id)
+                    .order_by("code")
+                    .prefetch_related("operation")
+                    .first()
+                )
+                if sop:
+                    return sop
+                return (
+                    await base_q.filter(operation_id__isnull=True)
+                    .order_by("code")
+                    .prefetch_related("operation")
+                    .first()
+                )
+            return await base_q.order_by("code").prefetch_related("operation").first()
+
         # 1) 优先：绑定该具体物料的 SOP
-        q = SOP.filter(
+        q_material = SOP.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             is_active=True,
             material_uuids__contains=[material_uuid],
         )
-        if operation_uuid:
-            op = await Operation.filter(
-                tenant_id=tenant_id, uuid=operation_uuid, deleted_at__isnull=True
-            ).first()
-            if op:
-                q = q.filter(operation_id=op.id)
-        sop = await q.order_by("code").prefetch_related("operation").first()
+        sop = await _pick_for_scope(q_material)
         if sop:
             return SOPResponse.model_validate(sop)
+
         # 2) 其次：绑定该物料所属物料组的 SOP
         from apps.master_data.models.material import Material, MaterialGroup
+
         material = await Material.filter(
             tenant_id=tenant_id, uuid=material_uuid, deleted_at__isnull=True
         ).first()
-        if not material or not getattr(material, "group_id", None):
-            return None
-        group = await MaterialGroup.filter(
-            id=material.group_id, tenant_id=tenant_id, deleted_at__isnull=True
-        ).first()
-        if not group:
-            return None
-        group_uuid = str(group.uuid)
-        q2 = SOP.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            is_active=True,
-            material_group_uuids__contains=[group_uuid],
-        )
-        if operation_uuid:
-            op = await Operation.filter(
-                tenant_id=tenant_id, uuid=operation_uuid, deleted_at__isnull=True
+        if material and getattr(material, "group_id", None):
+            group = await MaterialGroup.filter(
+                id=material.group_id, tenant_id=tenant_id, deleted_at__isnull=True
             ).first()
-            if op:
-                q2 = q2.filter(operation_id=op.id)
-        sop2 = await q2.order_by("code").prefetch_related("operation").first()
-        if sop2:
-            return SOPResponse.model_validate(sop2)
-        # 3) fallback：仅按工序匹配（兼容仅关联工序的 SOP）
-        if operation_uuid:
-            op = await Operation.filter(
-                tenant_id=tenant_id, uuid=operation_uuid, deleted_at__isnull=True
-            ).first()
-            if op:
-                q3 = SOP.filter(
+            if group:
+                group_uuid = str(group.uuid)
+                q_group = SOP.filter(
                     tenant_id=tenant_id,
                     deleted_at__isnull=True,
                     is_active=True,
-                    operation_id=op.id,
+                    material_group_uuids__contains=[group_uuid],
                 )
-                sop3 = await q3.order_by("code").prefetch_related("operation").first()
-                return SOPResponse.model_validate(sop3) if sop3 else None
+                sop2 = await _pick_for_scope(q_group)
+                if sop2:
+                    return SOPResponse.model_validate(sop2)
+
+        # 3) fallback：仅按工序匹配（兼容仅关联工序的 SOP）
+        if op_id is not None:
+            q3 = SOP.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                is_active=True,
+                operation_id=op_id,
+            )
+            sop3 = await q3.order_by("code").prefetch_related("operation").first()
+            return SOPResponse.model_validate(sop3) if sop3 else None
         return None
 
     @staticmethod

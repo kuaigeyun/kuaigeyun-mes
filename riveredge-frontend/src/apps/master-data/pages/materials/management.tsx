@@ -243,6 +243,8 @@ import {
 } from '../../utils/materialSourceType';
 import {
   IMPORT_YES_NO_OPTIONS,
+  importDropdownLabelsFromOptions,
+  parseImportOptionCell,
   pickImportExampleValue,
 } from '../../../../utils/loadImportDictionaryValues';
 import { processRouteApi } from '../../services/process'
@@ -1678,7 +1680,7 @@ const MaterialsManagementPage: React.FC = () => {
             labelKey: 'app.master-data.materials.materialName',
             aliases: ['物料名称', '名称'],
           },
-          { field: 'baseUnit', required: true, labelKey: 'app.master-data.materials.baseUnit', aliases: ['基础单位', '单位'], options: baseUnitOptions.map((o) => o.value) },
+          { field: 'baseUnit', required: true, labelKey: 'app.master-data.materials.baseUnit', aliases: ['基础单位', '单位'], options: importDropdownLabelsFromOptions(baseUnitOptions) },
           { field: 'specification', labelKey: 'app.master-data.materials.specification', aliases: ['规格'] },
           {
             field: 'sourceType',
@@ -1691,7 +1693,7 @@ const MaterialsManagementPage: React.FC = () => {
             labelKey: 'app.master-data.materials.materialGroup',
             aliases: ['分组编号', '分组'],
           },
-          { field: 'rowType', labelKey: 'app.master-data.materials.importRowType', aliases: ['行类型'], options: ['主物料', 'SKU', 'master', 'sku'] },
+          { field: 'rowType', labelKey: 'app.master-data.materials.importRowType', aliases: ['行类型'], options: ['主物料', 'SKU'] },
           {
             field: 'masterMainCode',
             labelKey: 'app.master-data.materials.importMasterMainCode',
@@ -1730,7 +1732,10 @@ const MaterialsManagementPage: React.FC = () => {
         [
           t('app.master-data.materials.importExample.code'),
           t('app.master-data.materials.importExample.name'),
-          t('app.master-data.materials.importExample.baseUnit'),
+          pickImportExampleValue(
+            importDropdownLabelsFromOptions(baseUnitOptions),
+            t('app.master-data.materials.importExample.baseUnit'),
+          ),
           '',
           pickImportExampleValue(
             materialSourceTypeImportOptions,
@@ -1777,7 +1782,15 @@ const MaterialsManagementPage: React.FC = () => {
     const groups = await materialGroupApi.list({ limit: 1000 })
     const groupList = Array.isArray(groups) ? groups : []
     const { items: parsedItems, errors } = parseMaterialImportRows(
-      rows,
+      rows.map((row) => {
+        if (idx.unit < 0) return row;
+        const copy = [...row];
+        const raw = String(copy[idx.unit] ?? '').trim();
+        if (raw) {
+          copy[idx.unit] = parseImportOptionCell(raw, baseUnitOptions) ?? raw;
+        }
+        return copy;
+      }),
       idx,
       (groupCode) => groupList.find((x: any) => (x.code || '').trim() === groupCode.trim())?.id,
       3,

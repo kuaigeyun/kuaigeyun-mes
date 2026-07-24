@@ -36,13 +36,16 @@ import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { deferConvertLineItemsByPriceType, setFormPriceType } from '../../../../../utils/priceTypeSwitch';
 import {
-  IMPORT_PRICE_TYPE_OPTIONS,
+  importDropdownLabelsFromOptions,
+  parseImportOptionCell,
   pickImportExampleValue,
 } from '../../../../../utils/loadImportDictionaryValues';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import {
+  buildImportPriceTypeOptions,
   DEFAULT_SALES_PRICE_TYPE,
   normalizeSalesPriceType,
+  parseImportPriceType,
   salesFormPriceType,
 } from '../shared/salesPriceType';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
@@ -2360,8 +2363,15 @@ const SalesOrdersPage: React.FC = () => {
             else if (fieldName.includes('_id')) {
               salesOrder[fieldName] = value ? parseInt(value, 10) : null;
             }
-            // 其他字段直接赋值
-            else {
+            else if (fieldName === 'shipping_method') {
+              salesOrder[fieldName] = parseImportOptionCell(value, shippingMethodOptions);
+            } else if (fieldName === 'payment_terms') {
+              salesOrder[fieldName] = parseImportOptionCell(value, paymentTermsOptions);
+            } else if (fieldName === 'currency_code') {
+              salesOrder[fieldName] = salesOrderImportDict.parseDict('CURRENCY', value);
+            } else if (fieldName === 'price_type') {
+              salesOrder[fieldName] = parseImportPriceType(value, t);
+            } else {
               salesOrder[fieldName] = value;
             }
           }
@@ -2438,7 +2448,8 @@ const SalesOrdersPage: React.FC = () => {
       .map((row) => {
         const materialCode = String(row[0] || '').trim();
         const spec = String(row[1] || '').trim();
-        const unit = String(row[2] || '').trim();
+        const unitRaw = String(row[2] || '').trim();
+        const unit = salesOrderImportDict.parseDict('MATERIAL_UNIT', unitRaw) || unitRaw;
         const quantity = parseFloat(row[3]) || 0;
         const price = parseFloat(row[4]) || 0;
         const deliveryDate = row[5];
@@ -2753,13 +2764,13 @@ const SalesOrdersPage: React.FC = () => {
       undefined,
       undefined,
       undefined,
-      shippingMethodOptions.map((o) => o.value),
-      paymentTermsOptions.map((o) => o.value),
+      importDropdownLabelsFromOptions(shippingMethodOptions),
+      importDropdownLabelsFromOptions(paymentTermsOptions),
       salesOrderImportDict.CURRENCY,
-      [...IMPORT_PRICE_TYPE_OPTIONS],
+      buildImportPriceTypeOptions(t),
       undefined,
     ],
-    [shippingMethodOptions, paymentTermsOptions, salesOrderImportDict],
+    [shippingMethodOptions, paymentTermsOptions, salesOrderImportDict, t],
   );
 
   const salesOrderHighlightOverdueToolbar = useMemo(
@@ -4466,8 +4477,8 @@ const SalesOrdersPage: React.FC = () => {
             '',
             '',
             '',
-            'CNY',
-            'tax_inclusive',
+            pickImportExampleValue(salesOrderImportDict.CURRENCY, 'CNY'),
+            pickImportExampleValue(buildImportPriceTypeOptions(t), t('app.kuaizhizao.salesContract.priceTypeTaxInclusive')),
             t('app.kuaizhizao.salesOrder.importExampleNotes'),
           ]}
           importFieldMap={{
