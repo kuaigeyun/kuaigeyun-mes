@@ -14,6 +14,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
+from tortoise.exceptions import FieldError
 
 from core.api.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_permission_codes
@@ -1186,6 +1187,45 @@ async def preview_push_sales_order_to_invoice(
         raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-invoice/preview", tenant_id)
     except (BusinessLogicError, ValidationError) as e:
         raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-invoice/preview", tenant_id)
+
+
+@router.get(
+    "/{sales_order_id}/backfill-sales-contract/preview",
+    response_model=Dict[str, Any],
+    summary="Preview backfill sales contract from sales order",
+)
+async def preview_backfill_sales_contract_from_sales_order(
+    sales_order_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.sales_contract_service import SalesContractService
+
+    try:
+        return await SalesContractService().preview_backfill_contract_from_sales_order(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_404_NOT_FOUND,
+            str(e),
+            "/sales-orders/{sales_order_id}/backfill-sales-contract/preview",
+            tenant_id,
+        )
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            str(e),
+            "/sales-orders/{sales_order_id}/backfill-sales-contract/preview",
+            tenant_id,
+        )
+    except FieldError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            str(e),
+            "/sales-orders/{sales_order_id}/backfill-sales-contract/preview",
+            tenant_id,
+        )
 
 
 @router.get("/{sales_order_id}/push-to-delivery/preview", response_model=Dict[str, Any], summary="Push to sales delivery preview")

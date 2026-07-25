@@ -370,6 +370,7 @@ class ExceptionService:
             work_order_id,
             exception.id,
         )
+        await self._notify_quality_exception_created(tenant_id, exception, created_by=created_by)
         return QualityExceptionResponse.model_validate(exception)
 
     async def detect_material_shortage(
@@ -1068,7 +1069,45 @@ class ExceptionService:
             source_id,
             exception.id,
         )
+        await self._notify_quality_exception_created(tenant_id, exception, created_by=created_by)
         return QualityExceptionResponse.model_validate(exception)
+
+    async def _notify_quality_exception_created(
+        self,
+        tenant_id: int,
+        exception: QualityException,
+        *,
+        created_by: Optional[int] = None,
+    ) -> None:
+        from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+            ACTION_CREATED,
+            DOC_QUALITY_EXCEPTION,
+            dispatch_kuaizhizao_notification,
+        )
+
+        code = str(getattr(exception, "uuid", None) or exception.id)
+        await dispatch_kuaizhizao_notification(
+            tenant_id,
+            trigger_document=DOC_QUALITY_EXCEPTION,
+            trigger_action=ACTION_CREATED,
+            variables={
+                "exception_code": code,
+                "exception_type": exception.exception_type or "",
+                "severity": exception.severity or "",
+                "material_name": exception.material_name or exception.material_code or "—",
+                "problem_description": (exception.problem_description or "")[:500],
+                "detail_path": f"/apps/kuaizhizao/production-execution/quality-exceptions?highlight={exception.id}",
+                "quality_exception_id": str(exception.id),
+            },
+            context={
+                "creator_user_id": created_by,
+                "form_notify_user_ids": (
+                    [exception.responsible_person_id]
+                    if exception.responsible_person_id
+                    else []
+                ),
+            },
+        )
 
     async def handle_quality_exception(
         self,

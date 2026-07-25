@@ -2,7 +2,7 @@ import { formatQuantity } from '../../../../../utils/format';
 /**
  * 物料中心页面
  *
- * 集中处理工单配料、产线叫料、委外收发等物料流转作业。
+ * 集中处理工单线边备料、产线补料、委外收发等物料流转作业。
  *
  * Author: Luigi Lu
  * Date: 2026-02-28
@@ -315,7 +315,7 @@ const BatchingCenterPage: React.FC = () => {
         const items = values.items || [];
         if (items.length === 0) {
           messageApi.error(t('app.kuaizhizao.batchingCenter.manualNeedItems'));
-          throw new Error('请添加配料明细');
+          throw new Error(t('app.kuaizhizao.batchingCenter.manualNeedItems'));
         }
         const orderData: any = {
           warehouse_id: values.warehouse_id,
@@ -400,7 +400,7 @@ const BatchingCenterPage: React.FC = () => {
         tabs={taskTabs}
       />
 
-      {/* 新建配料单 Modal */}
+      {/* 新建线边备料单 Modal */}
       <FormModalTemplate
         title={t('app.kuaizhizao.batchingCenter.createModalTitle')}
         open={createModalVisible}

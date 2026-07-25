@@ -1,5 +1,5 @@
 /**
- * 现场叫料生命周期：待处理→配料中→(部分送达)→已完成 / 已取消
+ * 现场补料生命周期：待处理→备料中→(部分送达)→已完成 / 已取消
  * 后端状态：pending / processing / partial / completed / cancelled
  */
 
@@ -8,7 +8,7 @@ import { createLifecycleResolver } from './createLifecycleResolver';
 export const getMaterialCallLifecycle = createLifecycleResolver({
   stageDefs: [
     { key: 'pending', label: '待处理' },
-    { key: 'processing', label: '配料中' },
+    { key: 'processing', label: '备料中' },
     { key: 'partial', label: '部分送达' },
     { key: 'completed', label: '已完成' },
     { key: 'cancelled', label: '已取消' },

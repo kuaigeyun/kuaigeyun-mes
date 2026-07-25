@@ -326,8 +326,66 @@ async def build_inventory_ledger(
                 "operator": head.get("receiver_name") or "",
             })
 
+    async def _append_production_movements():
+        """生产相关库存流水（线边备料/领料/倒冲/入库/报废等）。"""
+        from apps.kuaizhizao.models.material_stock_movement import MaterialStockMovement
+
+        type_labels = {
+            "staging_to_line": "线边备料",
+            "production_issue": "生产领料",
+            "production_return": "生产退料",
+            "backflush_consume": "报工倒冲",
+            "semi_fg_receipt": "半成品入库",
+            "fg_receipt": "成品入库",
+            "scrap": "报废",
+            "transfer": "调拨",
+            "outsource_issue": "委外发料",
+            "outsource_receipt": "委外收货",
+            "adjust": "库存调整",
+            "other_inbound": "其他入库",
+            "other_outbound": "其他出库",
+        }
+        mq = MaterialStockMovement.filter(
+            tenant_id=tenant_id,
+            created_at__gte=date_start,
+            created_at__lte=date_end,
+        )
+        # 采销已由单据路径覆盖，流水侧跳过以免双计
+        mq = mq.exclude(movement_type__in=["purchase_receipt", "sales_delivery"])
+        if material_id:
+            mq = mq.filter(material_id=material_id)
+        rows = await mq.order_by("created_at", "id").limit(5000).all()
+        for r in rows:
+            qty = float(r.quantity or 0)
+            bal_wh = r.balance_warehouse_id
+            if warehouse_id is not None:
+                if bal_wh != warehouse_id and r.from_warehouse_id != warehouse_id and r.to_warehouse_id != warehouse_id:
+                    continue
+            wh_id = bal_wh or r.from_warehouse_id or r.to_warehouse_id
+            wh_name = (
+                (r.from_warehouse_name if bal_wh == r.from_warehouse_id else None)
+                or (r.to_warehouse_name if bal_wh == r.to_warehouse_id else None)
+                or r.from_warehouse_name
+                or r.to_warehouse_name
+                or ""
+            )
+            events.append({
+                "event_time": r.created_at,
+                "doc_type": type_labels.get(r.movement_type, r.movement_type or "库存移动"),
+                "doc_code": r.source_doc_code or "",
+                "material_id": r.material_id,
+                "material_code": r.material_code or "",
+                "material_name": "",
+                "warehouse_id": wh_id,
+                "warehouse_name": wh_name,
+                "qty_in": qty if qty > 0 else 0.0,
+                "qty_out": abs(qty) if qty < 0 else 0.0,
+                "operator": r.operator_name or "",
+            })
+
     await _append_outbound_delivery()
     await _append_inbound_receipt()
+    await _append_production_movements()
 
     # 时间正序滚动结存，再倒序展示（新在前）
     events.sort(

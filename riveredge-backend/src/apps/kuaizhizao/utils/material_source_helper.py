@@ -628,6 +628,149 @@ async def expand_bom_with_source_control(
     return requirements
 
 
+async def explode_bom_one_level_for_mrp(
+    tenant_id: int,
+    material_id: int,
+    planned_quantity: float,
+    *,
+    only_approved: bool = True,
+    bom_version: Optional[str] = None,
+    use_default_bom: bool = False,
+    material_bom_versions: Optional[Dict[int, str]] = None,
+    variant_attributes: Optional[Dict[str, Any]] = None,
+    configurable_selections: Optional[Dict[str, int]] = None,
+    as_of_date: Optional[datetime] = None,
+    max_phantom_depth: int = 10,
+) -> List[Dict[str, Any]]:
+    """
+    LLC/时间分桶 MRP：按父件「计划订单量」只展开一层实件。
+
+    - 虚拟件：穿透展平到下一层实件（不单独产出虚拟件行）
+    - 自制/委外/采购/服务：只产出子件需求行，不再递归（由上层 LLC 循环处理）
+    """
+    if planned_quantity <= 0:
+        return []
+
+    material = await Material.get_or_none(tenant_id=tenant_id, id=material_id)
+    if not material:
+        return []
+
+    source_type = material.source_type
+    effective_material_bom_versions = dict(material_bom_versions) if material_bom_versions else {}
+    if source_type == SOURCE_TYPE_CONFIGURE:
+        source_config = material.source_config or {}
+        resolved = _resolve_configure_variant(
+            variant_attributes,
+            source_config.get("bom_variants"),
+            source_config.get("default_variant"),
+        )
+        if resolved and resolved.get("version"):
+            effective_material_bom_versions[material_id] = resolved["version"]
+
+    target_bom = await _get_bom_for_material(
+        tenant_id,
+        material_id,
+        only_approved,
+        bom_version,
+        use_default_bom,
+        effective_material_bom_versions,
+        as_of_date=as_of_date,
+    )
+    if not target_bom:
+        return []
+
+    bom_items_query = BOM.filter(**bom_component_lines_filter(target_bom, material_id))
+    eff_filter = _bom_effective_filter(as_of_date)
+    if eff_filter:
+        bom_items_query = bom_items_query.filter(eff_filter)
+    if only_approved:
+        bom_items_query = bom_items_query.filter(approval_status="approved")
+    bom_items = await bom_items_query.prefetch_related("component").order_by("priority", "id").all()
+    bom_items = _select_alternatives(bom_items)
+    bom_items = _select_configurable(bom_items, material_id, configurable_selections)
+
+    requirements: List[Dict[str, Any]] = []
+
+    async def _emit_or_penetrate(
+        bom_item: BOM,
+        component: Material,
+        component_qty: float,
+        *,
+        parent_id: int,
+        phantom_depth: int,
+    ) -> None:
+        ct = component.source_type
+        if ct == SOURCE_TYPE_PHANTOM:
+            if phantom_depth >= max_phantom_depth:
+                logger.warning(
+                    f"虚拟件穿透达到上限 material_id={component.id} parent={parent_id}"
+                )
+                return
+            nested = await explode_bom_one_level_for_mrp(
+                tenant_id=tenant_id,
+                material_id=component.id,
+                planned_quantity=component_qty,
+                only_approved=only_approved,
+                bom_version=bom_version,
+                use_default_bom=use_default_bom,
+                material_bom_versions=effective_material_bom_versions,
+                variant_attributes=variant_attributes,
+                configurable_selections=configurable_selections,
+                as_of_date=as_of_date,
+                max_phantom_depth=max_phantom_depth,
+            )
+            for row in nested:
+                row["phantom_material_id"] = component.id
+                row.setdefault("parent_material_id", parent_id)
+                requirements.append(row)
+            return
+        if ct == SOURCE_TYPE_CONFIGURE:
+            nested = await explode_bom_one_level_for_mrp(
+                tenant_id=tenant_id,
+                material_id=component.id,
+                planned_quantity=component_qty,
+                only_approved=only_approved,
+                bom_version=bom_version,
+                use_default_bom=use_default_bom,
+                material_bom_versions=effective_material_bom_versions,
+                variant_attributes=variant_attributes,
+                configurable_selections=configurable_selections,
+                as_of_date=as_of_date,
+                max_phantom_depth=max_phantom_depth,
+            )
+            if nested:
+                for row in nested:
+                    row.setdefault("parent_material_id", parent_id)
+                    requirements.append(row)
+                return
+        requirements.append(
+            _bom_leaf_requirement(
+                bom_item,
+                component,
+                component_qty,
+                1,
+                parent_material_id=parent_id,
+            )
+        )
+
+    for bom_item in bom_items:
+        component = await bom_item.component
+        if not component:
+            continue
+        component_qty = _bom_component_qty(bom_item, planned_quantity)
+        if component_qty <= 0:
+            continue
+        await _emit_or_penetrate(
+            bom_item,
+            component,
+            component_qty,
+            parent_id=material_id,
+            phantom_depth=0,
+        )
+
+    return requirements
+
+
 def normalize_source_config_payload(
     raw: Optional[Dict[str, Any]],
     *,
@@ -681,6 +824,7 @@ def resolve_computation_item_source_config(
         "outsource_lead_time",
         "purchase_price",
         "outsource_price",
+        "production_waste_rate",
     ):
         if cfg.get(key) is not None:
             merged[key] = cfg[key]

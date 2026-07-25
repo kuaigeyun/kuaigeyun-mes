@@ -71,6 +71,21 @@ class SalesForecastService(AppBaseService[SalesForecast]):
 
         await _hydrate_item_material_snapshot(tenant_id, items)
 
+    @staticmethod
+    def _forecast_item_to_response(item: SalesForecastItem) -> SalesForecastItemResponse:
+        from decimal import Decimal
+        from apps.kuaizhizao.utils.forecast_consumption import forecast_open_quantity
+
+        resp = SalesForecastItemResponse.model_validate(item)
+        consumed = getattr(item, "consumed_quantity", None)
+        open_qty = forecast_open_quantity(item.forecast_quantity, consumed)
+        return resp.model_copy(
+            update={
+                "consumed_quantity": consumed if consumed is not None else Decimal("0"),
+                "open_quantity": open_qty,
+            }
+        )
+
     def _is_forecast_pushed_to_computation(self, forecast: Any, demand: Optional[Demand] = None) -> bool:
         if bool(getattr(forecast, "planning_pushed_to_computation", False)):
             return True
@@ -229,7 +244,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         resp = SalesForecastResponse.model_validate(forecast)
         item_rows = await SalesForecastItem.filter(tenant_id=tenant_id, forecast_id=forecast_id).order_by("forecast_date").all()
         await self._hydrate_forecast_item_snapshots(tenant_id, item_rows)
-        resp.items = [SalesForecastItemResponse.model_validate(it) for it in item_rows]
+        resp.items = [self._forecast_item_to_response(it) for it in item_rows]
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_forecast_lifecycle, get_document_milestones
         milestones = await get_document_milestones(forecast.tenant_id, "sales_forecast", forecast.id)
         demand = await self._get_linked_demand_for_forecast(tenant_id, forecast_id)
@@ -334,7 +349,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             )
             if include_items:
                 f_items = items_by_forecast.get(fid, [])
-                resp.items = [SalesForecastItemResponse.model_validate(it) for it in f_items]
+                resp.items = [self._forecast_item_to_response(it) for it in f_items]
             list_responses.append(resp)
 
         enriched = enrich_sales_forecast_list_capabilities(
@@ -575,20 +590,30 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             raise BusinessLogicError("销售预测无明细，无法自动产生需求")
 
         from decimal import Decimal
-        total_qty = sum(Decimal(str(it.forecast_quantity)) for it in items)
+        from apps.kuaizhizao.utils.forecast_consumption import forecast_open_quantity
+
+        open_qtys = [
+            forecast_open_quantity(it.forecast_quantity, getattr(it, "consumed_quantity", 0))
+            for it in items
+        ]
+        total_qty = sum(open_qtys)
         demand_items = []
-        for it in items:
+        for it, open_qty in zip(items, open_qtys):
+            if open_qty <= 0:
+                continue
             demand_items.append({
                 "material_id": it.material_id,
                 "material_code": it.material_code,
                 "material_name": it.material_name,
                 "material_spec": it.material_spec,
                 "material_unit": it.material_unit,
-                "required_quantity": it.forecast_quantity,
+                "required_quantity": open_qty,
                 "forecast_date": it.forecast_date,
-                "remaining_quantity": it.forecast_quantity,
+                "remaining_quantity": open_qty,
                 "delivery_status": "待交货",
             })
+        if not demand_items:
+            raise BusinessLogicError("销售预测明细均已被订单冲销，无法自动产生需求")
 
         demand = await Demand.create(
             tenant_id=tenant_id,
@@ -774,14 +799,14 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 **item_data.model_dump(exclude_unset=True)
             )
             await self._hydrate_forecast_item_snapshots(tenant_id, [item])
-            return SalesForecastItemResponse.model_validate(item)
+            return self._forecast_item_to_response(item)
 
     async def get_forecast_items(self, tenant_id: int, forecast_id: int) -> List[SalesForecastItemResponse]:
         """获取销售预测明细"""
         items = await SalesForecastItem.filter(tenant_id=tenant_id, forecast_id=forecast_id).order_by('forecast_date')
         item_list = list(items)
         await self._hydrate_forecast_item_snapshots(tenant_id, item_list)
-        return [SalesForecastItemResponse.model_validate(item) for item in item_list]
+        return [self._forecast_item_to_response(item) for item in item_list]
 
     async def submit_forecast(self, tenant_id: int, forecast_id: int, submitted_by: int) -> SalesForecastResponse:
         """

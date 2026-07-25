@@ -277,9 +277,9 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
         if _is_custom_like(norm_ct):
             reason = (create_data.call_reason or "").strip()
             if not reason:
-                raise ValidationError("单独叫料须选择叫料原因")
+                raise ValidationError("单独补料须选择补料原因")
         if norm_ct == "FULL_ORDER" and len(create_data.items) < 1:
-            raise ValidationError("叫料明细不能为空")
+            raise ValidationError("补料明细不能为空")
         hydrated_items = await self._hydrate_line_material_identity(
             tenant_id=tenant_id,
             lines=create_data.items,
@@ -359,7 +359,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
                 )
             )
         if not lines:
-            raise ValidationError("当前工单齐套分析无缺料行，无需整单叫料")
+            raise ValidationError("当前工单齐套分析无缺料行，无需整单补料")
         create_data = MaterialCallRequestCreate(
             work_order_id=analysis.work_order_id,
             work_order_code=analysis.work_order_code,
@@ -367,7 +367,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             call_type="FULL_ORDER",
             call_reason=None,
             priority="normal",
-            remarks="工单整单叫料（按 BOM 齐套缺料）",
+            remarks="工单整单补料（按 BOM 齐套缺料）",
         )
         return await self.create_call_request(tenant_id, create_data, user)
 
@@ -451,7 +451,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
                 src_id, src_name = wh.id, wh.name or ""
         if not src_id:
             raise BusinessLogicError(
-                "叫料过账需要来源仓库：请在叫料单指定 source_warehouse_id，或维护普通仓"
+                "补料过账需要来源仓库：请在补料单指定 source_warehouse_id，或维护普通仓"
             )
 
         tgt_id = call_req.target_warehouse_id
@@ -477,7 +477,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
                 tgt_id, tgt_name = wh.id, wh.name or ""
         if not tgt_id:
             raise BusinessLogicError(
-                "叫料过账需要线边仓：请指定 target_warehouse_id，或维护 warehouse_type=line_side 的仓库"
+                "补料过账需要线边仓：请指定 target_warehouse_id，或维护 warehouse_type=line_side 的仓库"
             )
         if int(src_id) == int(tgt_id):
             raise BusinessLogicError("来源仓库与线边仓不能相同")
@@ -527,7 +527,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             tenant_id=tenant_id, id=call_req.work_order_id, deleted_at__isnull=True
         )
         if not wo:
-            raise BusinessLogicError(f"工单不存在，无法完成叫料备料: {call_req.work_order_id}")
+            raise BusinessLogicError(f"工单不存在，无法完成补料备料: {call_req.work_order_id}")
 
         src_wh_id, src_wh_name, tgt_wh_id, tgt_wh_name = await self._resolve_warehouses_for_material_call(
             tenant_id, call_req, wo
@@ -555,6 +555,14 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
                 source_doc_id=call_req.id,
                 source_doc_code=call_req.code,
                 enforce_fifo=enforce_fifo,
+                work_order_id=wo.id,
+                work_order_code=wo.code,
+                movement_type="staging_to_line",
+                from_warehouse_id=src_wh_id,
+                from_warehouse_name=src_wh_name or None,
+                to_warehouse_id=tgt_wh_id,
+                to_warehouse_name=tgt_wh_name or None,
+                idempotency_key=f"material_call:{call_req.id}:dec:{it.id}",
             )
             await InventoryService.increase_stock(
                 tenant_id=tenant_id,
@@ -567,6 +575,12 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
                 source_doc_code=call_req.code,
                 work_order_id=wo.id,
                 work_order_code=wo.code,
+                movement_type="staging_to_line",
+                from_warehouse_id=src_wh_id,
+                from_warehouse_name=src_wh_name or None,
+                to_warehouse_id=tgt_wh_id,
+                to_warehouse_name=tgt_wh_name or None,
+                idempotency_key=f"material_call:{call_req.id}:inc:{it.id}",
             )
 
         try:
@@ -587,7 +601,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
                     target_name=getattr(wo, "name", None),
                     relation_type="source",
                     relation_mode="push",
-                    relation_desc="叫料完成：主仓→线边备料（非正式发料）",
+                    relation_desc="补料完成：主仓→线边备料（非正式发料）",
                 ),
                 created_by=user.id,
             )
@@ -612,7 +626,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
         async with in_transaction():
             call_req = await MaterialCallRequest.get_or_none(tenant_id=tenant_id, id=call_id)
             if not call_req:
-                raise NotFoundError(f"叫料请求不存在: {call_id}")
+                raise NotFoundError(f"补料申请不存在: {call_id}")
 
             already_posted = bool(getattr(call_req, "production_picking_id", None))
 
@@ -630,7 +644,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
                 if items:
                     cb = update_data.completion_batches
                     if not cb:
-                        raise ValidationError("完成叫料前请逐行确认批号")
+                        raise ValidationError("完成补料前请逐行确认批号")
                     batch_by_item_id = {}
                     for row in cb:
                         bn = (row.batch_no or "").strip()
@@ -687,16 +701,16 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
         """生产端撤回：仅待处理且各明细尚无送达"""
         call_req = await MaterialCallRequest.get_or_none(tenant_id=tenant_id, id=call_id)
         if not call_req:
-            raise NotFoundError(f"叫料请求不存在: {call_id}")
+            raise NotFoundError(f"补料申请不存在: {call_id}")
 
         if call_req.status != "pending":
             raise BusinessLogicError(
-                f"仅「待处理」状态的叫料可申请撤回，当前状态：{call_req.status}"
+                f"仅「待处理」状态的补料可申请撤回，当前状态：{call_req.status}"
             )
         items = await MaterialCallRequestItem.filter(tenant_id=tenant_id, request_id=call_id).all()
         delivered = sum((i.delivered_quantity or Decimal("0") for i in items), start=Decimal("0"))
         if delivered > Decimal("0"):
-            raise BusinessLogicError("已有送达数量，无法撤回叫料申请")
+            raise BusinessLogicError("已有送达数量，无法撤回补料申请")
 
         call_req.status = "cancelled"
         call_req.updated_by = updated_by

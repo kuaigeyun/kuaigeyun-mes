@@ -110,13 +110,27 @@ class ScrapRecordService(AppBaseService[ScrapRecord]):
                     )
                     await work_order.save()
 
-                # 更新库存（不良品库存）
-                # TODO: 待库存服务实现后补充
-                if scrap_record.warehouse_id:
-                    logger.info(
-                        f"报废记录 {scrap_record.code} 审批通过，需要更新库存，物料ID: {scrap_record.product_id}, "
-                        f"仓库ID: {scrap_record.warehouse_id}, 数量: {scrap_record.scrap_quantity} "
-                        f"（库存更新功能待库存服务实现后补充）"
+                # 报废审批通过：从指定仓库扣减产品库存并写物料移动流水
+                if scrap_record.warehouse_id and scrap_record.product_id and scrap_record.scrap_quantity:
+                    from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                    await InventoryService._decrease_stock_no_atomic(
+                        tenant_id=tenant_id,
+                        material_id=scrap_record.product_id,
+                        quantity=Decimal(str(scrap_record.scrap_quantity)),
+                        warehouse_id=scrap_record.warehouse_id,
+                        source_type="scrap_record",
+                        source_doc_id=scrap_record.id,
+                        source_doc_code=scrap_record.code,
+                        work_order_id=scrap_record.work_order_id,
+                        work_order_code=scrap_record.work_order_code,
+                        movement_type="scrap",
+                        from_warehouse_id=scrap_record.warehouse_id,
+                        from_warehouse_name=scrap_record.warehouse_name,
+                        operator_id=approved_by,
+                        operator_name=user_info.get("name"),
+                        remark=scrap_record.scrap_reason,
+                        idempotency_key=f"scrap_record:{scrap_record.id}:dec",
                     )
 
                 logger.info(f"报废记录 {scrap_record.code} 审批通过，审批人: {user_info['name']}")

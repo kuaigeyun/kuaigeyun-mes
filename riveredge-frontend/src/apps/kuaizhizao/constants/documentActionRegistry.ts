@@ -2,6 +2,7 @@ export type KuaizhizaoDocumentActionKey =
   | 'sales_order.pull_from_quotation'
   | 'sales_order.pull_from_sales_contract'
   | 'sales_contract.pull_from_quotation'
+  | 'sales_contract.pull_from_sales_order'
   | 'sales_order_change.pull_from_sales_order'
   | 'purchase_order_change.pull_from_purchase_order'
   | 'purchase_order.pull_from_requisition'
@@ -91,6 +92,14 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('sales_contract.pull_from_quotation', 'label'),
     sourceLabelKey: documentActionI18n('sales_contract.pull_from_quotation', 'source'),
     targetLabelKey: documentActionI18n('sales_contract.pull_from_quotation', 'target'),
+  },
+  'sales_contract.pull_from_sales_order': {
+    key: 'sales_contract.pull_from_sales_order',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('sales_contract.pull_from_sales_order', 'label'),
+    sourceLabelKey: documentActionI18n('sales_contract.pull_from_sales_order', 'source'),
+    targetLabelKey: documentActionI18n('sales_contract.pull_from_sales_order', 'target'),
   },
   'sales_order_change.pull_from_sales_order': {
     key: 'sales_order_change.pull_from_sales_order',

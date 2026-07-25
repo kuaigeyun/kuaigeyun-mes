@@ -4,6 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import {
   App,
   Badge,
@@ -14,12 +15,14 @@ import {
   Segmented,
   Space,
   Spin,
+  Tag,
   Typography,
   theme,
 } from 'antd';
 import {
   CheckOutlined,
   ClearOutlined,
+  LinkOutlined,
   MailOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -44,6 +47,25 @@ import {
 const { Text, Title, Paragraph } = Typography;
 
 type StatusFilter = 'all' | 'unread' | 'read' | 'failed';
+type CategoryFilter = 'all' | 'approval' | 'process' | 'system';
+
+function messageCategory(record: UserMessage): CategoryFilter | 'other' {
+  const raw = String(record.variables?.message_category || '').trim().toLowerCase();
+  if (raw === 'approval' || raw === 'process' || raw === 'system') return raw;
+  const action = String(record.variables?.trigger_action || '').trim().toLowerCase();
+  if (action === 'pending' || action === 'rejected' || action === 'urge' || action === 'cc') {
+    return 'approval';
+  }
+  if (String(record.variables?.trigger_document || '') === 'scheduled_task') return 'system';
+  if (record.variables?.trigger_document) return 'process';
+  return 'other';
+}
+
+function resolveDetailPath(record: UserMessage): string | null {
+  const path = String(record.variables?.detail_path || '').trim();
+  if (!path.startsWith('/')) return null;
+  return path;
+}
 
 const LIST_WIDTH = 380;
 
@@ -132,6 +154,7 @@ function groupLabel(sentAt: string | undefined, createdAt: string | undefined, t
 
 const OutlookMessagesView: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
 
@@ -163,6 +186,7 @@ const OutlookMessagesView: React.FC = () => {
   const [pageSize, setPageSize] = useState(20);
   const [listLoading, setListLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [searchText, setSearchText] = useState('');
   const [appliedKeyword, setAppliedKeyword] = useState('');
 
@@ -203,8 +227,11 @@ const OutlookMessagesView: React.FC = () => {
             (m.recipient || '').toLowerCase().includes(kw),
         );
       }
+      if (categoryFilter !== 'all') {
+        items = items.filter((m) => messageCategory(m) === categoryFilter);
+      }
       setMessages(items);
-      setTotal(kw ? items.length : response.total);
+      setTotal(kw || categoryFilter !== 'all' ? items.length : response.total);
       if (selectedUuid && !items.some((m) => m.uuid === selectedUuid)) {
         setSelectedUuid(null);
         setSelectedMessage(null);
@@ -216,7 +243,17 @@ const OutlookMessagesView: React.FC = () => {
     } finally {
       setListLoading(false);
     }
-  }, [appliedKeyword, messageApi, page, pageSize, selectedUuid, statusFilter, statusParam, t]);
+  }, [
+    appliedKeyword,
+    categoryFilter,
+    messageApi,
+    page,
+    pageSize,
+    selectedUuid,
+    statusFilter,
+    statusParam,
+    t,
+  ]);
 
   useEffect(() => {
     void loadStats();
@@ -420,6 +457,21 @@ const OutlookMessagesView: React.FC = () => {
               }}
               options={statusSegmentOptions}
             />
+            <Segmented<CategoryFilter>
+              block
+              style={{ marginTop: 8 }}
+              value={categoryFilter}
+              onChange={(v) => {
+                setCategoryFilter(v);
+                setPage(1);
+              }}
+              options={[
+                { label: t('pages.personal.messages.categoryAll'), value: 'all' },
+                { label: t('pages.personal.messages.categoryApproval'), value: 'approval' },
+                { label: t('pages.personal.messages.categoryProcess'), value: 'process' },
+                { label: t('pages.personal.messages.categorySystem'), value: 'system' },
+              ]}
+            />
           </div>
 
           <div style={{ flex: 1, overflow: 'auto' }}>
@@ -583,20 +635,48 @@ const OutlookMessagesView: React.FC = () => {
                   <Title level={4} style={{ margin: 0, flex: 1 }}>
                     {selectedMessage.subject || t('common.noSubject')}
                   </Title>
-                  {isUnreadMessage(selectedMessage) && (
-                    <Button
-                      type="primary"
-                      size="small"
-                      icon={<CheckOutlined />}
-                      onClick={() => void handleMarkCurrentRead()}
-                    >
-                      {t('pages.personal.messages.markRead')}
-                    </Button>
-                  )}
+                  <Space size={8}>
+                    {resolveDetailPath(selectedMessage) ? (
+                      <Button
+                        type="default"
+                        size="small"
+                        icon={<LinkOutlined />}
+                        onClick={() => {
+                          const path = resolveDetailPath(selectedMessage);
+                          if (path) navigate(path);
+                        }}
+                      >
+                        {t('pages.personal.messages.openRelated')}
+                      </Button>
+                    ) : null}
+                    {isUnreadMessage(selectedMessage) && (
+                      <Button
+                        type="primary"
+                        size="small"
+                        icon={<CheckOutlined />}
+                        onClick={() => void handleMarkCurrentRead()}
+                      >
+                        {t('pages.personal.messages.markRead')}
+                      </Button>
+                    )}
+                  </Space>
                 </div>
                 <Space wrap size={[8, 4]} style={{ marginTop: 12 }}>
                   {getChannelTag(selectedMessage.type, t)}
                   {getStatusTag(selectedMessage.status, t)}
+                  {(() => {
+                    const cat = messageCategory(selectedMessage);
+                    if (cat === 'approval') {
+                      return <Tag color="purple">{t('pages.personal.messages.categoryApproval')}</Tag>;
+                    }
+                    if (cat === 'process') {
+                      return <Tag color="blue">{t('pages.personal.messages.categoryProcess')}</Tag>;
+                    }
+                    if (cat === 'system') {
+                      return <Tag color="default">{t('pages.personal.messages.categorySystem')}</Tag>;
+                    }
+                    return null;
+                  })()}
                   {selectedMessage.sent_at && (
                     <Text type="secondary" style={{ fontSize: 12 }}>
                       {t('pages.personal.messages.sentAt')}：

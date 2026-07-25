@@ -29,6 +29,9 @@ class SalesForecastItem(BaseModel):
 
     # 预测数据
     forecast_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="预测数量")
+    consumed_quantity = fields.DecimalField(
+        max_digits=10, decimal_places=2, default=0, description="已被销售订单冲销的数量"
+    )
     forecast_date = fields.DateField(description="预测日期")
 
     # 历史数据（可选，用于预测参考）

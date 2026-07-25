@@ -21,6 +21,10 @@ from loguru import logger
 from tortoise.exceptions import IntegrityError
 from tortoise.transactions import atomic, in_transaction
 
+from apps.kuaizhizao.models.material_stock_movement import (
+    MOVEMENT_ADJUST,
+    MaterialStockMovement,
+)
 from apps.kuaizhizao.utils.inventory_helper import get_material_inventory_info
 from infra.services.business_config_service import BusinessConfigService
 
@@ -55,6 +59,105 @@ class InventoryService:
     def _normalize_batch_no_for_ledger(batch_no: Optional[str]) -> str:
         bn = str(batch_no or "").strip()
         return bn if bn else "DEFAULT"
+
+    @staticmethod
+    async def _resolve_warehouse_name(warehouse_id: Optional[int]) -> Optional[str]:
+        if warehouse_id is None:
+            return None
+        from apps.master_data.models.warehouse import Warehouse
+
+        wh = await Warehouse.get_or_none(id=warehouse_id, deleted_at__isnull=True)
+        return (wh.name or "").strip() or None if wh else None
+
+    @staticmethod
+    async def _record_stock_movement(
+        *,
+        tenant_id: int,
+        material_id: int,
+        quantity: Decimal,
+        qty_before: Optional[Decimal],
+        qty_after: Optional[Decimal],
+        batch_no: Optional[str] = None,
+        movement_type: Optional[str] = None,
+        from_warehouse_id: Optional[int] = None,
+        from_warehouse_name: Optional[str] = None,
+        to_warehouse_id: Optional[int] = None,
+        to_warehouse_name: Optional[str] = None,
+        balance_warehouse_id: Optional[int] = None,
+        source_type: Optional[str] = None,
+        source_doc_id: Optional[int] = None,
+        source_doc_code: Optional[str] = None,
+        work_order_id: Optional[int] = None,
+        work_order_code: Optional[str] = None,
+        operator_id: Optional[int] = None,
+        operator_name: Optional[str] = None,
+        remark: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> None:
+        """余额变更后追加流水；幂等键冲突时跳过（视为已过账）。"""
+        mt = (movement_type or "").strip() or MOVEMENT_ADJUST
+        if not movement_type:
+            logger.warning(
+                "InventoryService movement_type missing; fallback to adjust "
+                f"material={material_id} source={source_type}/{source_doc_id}"
+            )
+        if idempotency_key:
+            exists = await MaterialStockMovement.filter(
+                tenant_id=tenant_id, idempotency_key=idempotency_key
+            ).exists()
+            if exists:
+                return
+
+        from apps.master_data.models.material import Material
+
+        mat = await Material.get_or_none(
+            tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
+        )
+        material_code = ""
+        if mat:
+            material_code = (
+                getattr(mat, "main_code", None) or getattr(mat, "code", None) or ""
+            )
+
+        if from_warehouse_id is not None and not from_warehouse_name:
+            from_warehouse_name = await InventoryService._resolve_warehouse_name(
+                from_warehouse_id
+            )
+        if to_warehouse_id is not None and not to_warehouse_name:
+            to_warehouse_name = await InventoryService._resolve_warehouse_name(
+                to_warehouse_id
+            )
+
+        try:
+            await MaterialStockMovement.create(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                material_code=material_code or None,
+                batch_no=batch_no,
+                movement_type=mt,
+                quantity=Decimal(str(quantity)),
+                qty_before=qty_before,
+                qty_after=qty_after,
+                from_warehouse_id=from_warehouse_id,
+                from_warehouse_name=from_warehouse_name,
+                to_warehouse_id=to_warehouse_id,
+                to_warehouse_name=to_warehouse_name,
+                balance_warehouse_id=balance_warehouse_id,
+                source_doc_type=source_type,
+                source_doc_id=source_doc_id,
+                source_doc_code=source_doc_code,
+                work_order_id=work_order_id,
+                work_order_code=work_order_code,
+                operator_id=operator_id,
+                operator_name=operator_name,
+                remark=remark,
+                idempotency_key=idempotency_key,
+            )
+        except IntegrityError:
+            logger.info(
+                f"MaterialStockMovement idempotent skip key={idempotency_key} "
+                f"tenant={tenant_id}"
+            )
 
     @staticmethod
     def _material_batch_no_lookup_q(batch_no: Optional[str]):
@@ -246,11 +349,25 @@ class InventoryService:
         customer_id: Optional[int] = None,
         customer_name: Optional[str] = None,
         ledger_production_date: Optional[date] = None,
+        movement_type: Optional[str] = None,
+        from_warehouse_id: Optional[int] = None,
+        from_warehouse_name: Optional[str] = None,
+        to_warehouse_id: Optional[int] = None,
+        to_warehouse_name: Optional[str] = None,
+        operator_id: Optional[int] = None,
+        operator_name: Optional[str] = None,
+        remark: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
     ) -> bool:
         """
         增加库存（不开启独立事务）。
         """
         try:
+            quantity = Decimal(str(quantity or 0))
+            to_wh_id = to_warehouse_id if to_warehouse_id is not None else warehouse_id
+            to_wh_name = to_warehouse_name
+            from_wh_id = from_warehouse_id
+            from_wh_name = from_warehouse_name
             # 根据 warehouse_type 决定写入目标
             use_line_side = False
             wh = None
@@ -299,6 +416,16 @@ class InventoryService:
                     raise BusinessLogicError("序列号入库必须提供入库日期（来自入库单确认时间）")
 
                 logger.info(f"Adding stock for material_id={material_id}, batch_no={batch_no}, qty={quantity}")
+                bn_norm = InventoryService._normalize_batch_no_for_ledger(batch_no or "DEFAULT")
+                existing_batch = await InventoryService._find_in_stock_material_batch(
+                    tenant_id=tenant_id,
+                    material_id=material_id,
+                    batch_no=bn_norm,
+                    ownership_type=ownership_type,
+                    customer_id=customer_id,
+                    for_update=True,
+                )
+                qty_before = Decimal(str(existing_batch.quantity or 0)) if existing_batch else Decimal(0)
                 await InventoryService._material_batch_increase_or_restore(
                     tenant_id=tenant_id,
                     material_id=material_id,
@@ -310,6 +437,30 @@ class InventoryService:
                     source_doc_id=source_doc_id,
                     source_doc_code=source_doc_code,
                     ledger_production_date=ledger_production_date,
+                )
+                qty_after = qty_before + quantity
+                await InventoryService._record_stock_movement(
+                    tenant_id=tenant_id,
+                    material_id=material_id,
+                    quantity=quantity,
+                    qty_before=qty_before,
+                    qty_after=qty_after,
+                    batch_no=bn_norm,
+                    movement_type=movement_type,
+                    from_warehouse_id=from_wh_id,
+                    from_warehouse_name=from_wh_name,
+                    to_warehouse_id=to_wh_id,
+                    to_warehouse_name=to_wh_name,
+                    balance_warehouse_id=warehouse_id,
+                    source_type=source_type,
+                    source_doc_id=source_doc_id,
+                    source_doc_code=source_doc_code,
+                    work_order_id=work_order_id,
+                    work_order_code=work_order_code,
+                    operator_id=operator_id,
+                    operator_name=operator_name,
+                    remark=remark,
+                    idempotency_key=idempotency_key,
                 )
 
                 # 记录序列号
@@ -354,8 +505,9 @@ class InventoryService:
                 if batch_no:
                     inv_filter["batch_no"] = batch_no
                 inv = await LineSideInventory.filter(**inv_filter).select_for_update().first()
+                qty_before = Decimal(str(inv.quantity or 0)) if inv else Decimal(0)
                 if inv:
-                    inv.quantity = (inv.quantity or Decimal(0)) + quantity
+                    inv.quantity = qty_before + quantity
                     if work_order_id and not inv.work_order_id:
                         inv.work_order_id = work_order_id
                         inv.work_order_code = work_order_code
@@ -381,6 +533,29 @@ class InventoryService:
                         work_order_id=work_order_id,
                         work_order_code=work_order_code,
                     )
+                await InventoryService._record_stock_movement(
+                    tenant_id=tenant_id,
+                    material_id=material_id,
+                    quantity=quantity,
+                    qty_before=qty_before,
+                    qty_after=qty_before + quantity,
+                    batch_no=batch_no,
+                    movement_type=movement_type,
+                    from_warehouse_id=from_wh_id,
+                    from_warehouse_name=from_wh_name,
+                    to_warehouse_id=to_wh_id if to_wh_id is not None else warehouse_id,
+                    to_warehouse_name=to_wh_name or wh_name or None,
+                    balance_warehouse_id=warehouse_id,
+                    source_type=source_type,
+                    source_doc_id=source_doc_id,
+                    source_doc_code=source_doc_code,
+                    work_order_id=work_order_id,
+                    work_order_code=work_order_code,
+                    operator_id=operator_id,
+                    operator_name=operator_name,
+                    remark=remark,
+                    idempotency_key=idempotency_key,
+                )
             from apps.kuaizhizao.services.work_order_readiness_service import notify_inventory_changed
 
             notify_inventory_changed(tenant_id, material_id)
@@ -407,6 +582,15 @@ class InventoryService:
         customer_id: Optional[int] = None,
         customer_name: Optional[str] = None,
         ledger_production_date: Optional[date] = None,
+        movement_type: Optional[str] = None,
+        from_warehouse_id: Optional[int] = None,
+        from_warehouse_name: Optional[str] = None,
+        to_warehouse_id: Optional[int] = None,
+        to_warehouse_name: Optional[str] = None,
+        operator_id: Optional[int] = None,
+        operator_name: Optional[str] = None,
+        remark: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
     ) -> bool:
         """
         增加库存（独立事务包装）。
@@ -427,6 +611,15 @@ class InventoryService:
             customer_id=customer_id,
             customer_name=customer_name,
             ledger_production_date=ledger_production_date,
+            movement_type=movement_type,
+            from_warehouse_id=from_warehouse_id,
+            from_warehouse_name=from_warehouse_name,
+            to_warehouse_id=to_warehouse_id,
+            to_warehouse_name=to_warehouse_name,
+            operator_id=operator_id,
+            operator_name=operator_name,
+            remark=remark,
+            idempotency_key=idempotency_key,
         )
 
     @staticmethod
@@ -442,6 +635,17 @@ class InventoryService:
         enforce_fifo: bool = False,
         ownership_type: Optional[str] = None,
         customer_id: Optional[int] = None,
+        work_order_id: Optional[int] = None,
+        work_order_code: Optional[str] = None,
+        movement_type: Optional[str] = None,
+        from_warehouse_id: Optional[int] = None,
+        from_warehouse_name: Optional[str] = None,
+        to_warehouse_id: Optional[int] = None,
+        to_warehouse_name: Optional[str] = None,
+        operator_id: Optional[int] = None,
+        operator_name: Optional[str] = None,
+        remark: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
     ) -> bool:
         """
         扣减库存（不开启独立事务）。见 `_increase_stock_no_atomic` 说明。
@@ -452,6 +656,11 @@ class InventoryService:
             quantity = Decimal(str(quantity or 0))
             if quantity <= 0:
                 raise BusinessLogicError(f"扣减数量必须大于0: {quantity}")
+
+            from_wh_id = from_warehouse_id if from_warehouse_id is not None else warehouse_id
+            from_wh_name = from_warehouse_name
+            to_wh_id = to_warehouse_id
+            to_wh_name = to_warehouse_name
 
             # 根据 warehouse_type 决定扣减目标：line_side → LineSideInventory，否则 → MaterialBatch
             use_line_side = False
@@ -553,7 +762,8 @@ class InventoryService:
                                 f"系统内仍存在更新批次 (批号:{newer_batch.batch_no}) 未用完！"
                                 f"请优先领用最新批次。"
                             )
-                    next_qty = (batch.quantity or Decimal(0)) - quantity
+                    qty_before = Decimal(str(batch.quantity or 0))
+                    next_qty = qty_before - quantity
                     if next_qty < 0:
                         raise BusinessLogicError(
                             f"并发扣减导致库存不足: material={material_id} batch={ledger_bn} "
@@ -563,6 +773,29 @@ class InventoryService:
                     if batch.quantity <= 0:
                         batch.status = "out_stock"
                     await batch.save()
+                    await InventoryService._record_stock_movement(
+                        tenant_id=tenant_id,
+                        material_id=material_id,
+                        quantity=-quantity,
+                        qty_before=qty_before,
+                        qty_after=next_qty,
+                        batch_no=ledger_bn,
+                        movement_type=movement_type,
+                        from_warehouse_id=from_wh_id,
+                        from_warehouse_name=from_wh_name,
+                        to_warehouse_id=to_wh_id,
+                        to_warehouse_name=to_wh_name,
+                        balance_warehouse_id=warehouse_id,
+                        source_type=source_type,
+                        source_doc_id=source_doc_id,
+                        source_doc_code=source_doc_code,
+                        work_order_id=work_order_id,
+                        work_order_code=work_order_code,
+                        operator_id=operator_id,
+                        operator_name=operator_name,
+                        remark=remark,
+                        idempotency_key=idempotency_key,
+                    )
                 else:
                     # 默认 FIFO；若开启 LIFO 且未开启 FIFO，则按最新批次扣减
                     order_key = "-id" if (lifo_enabled and not enforce_fifo) else "id"
@@ -585,16 +818,47 @@ class InventoryService:
                         f"{InventoryService._normalize_batch_no_for_ledger(str(b.batch_no))}({b.quantity})"
                         for b in batches
                     ) or "无"
+                    part_idx = 0
                     for b in batches:
                         if remaining <= 0:
                             break
                         deduct = min(remaining, b.quantity or Decimal(0))
                         if deduct > 0:
-                            b.quantity = (b.quantity or Decimal(0)) - deduct
+                            qty_before = Decimal(str(b.quantity or 0))
+                            b.quantity = qty_before - deduct
                             if b.quantity <= 0:
                                 b.status = "out_stock"
                             await b.save()
+                            key = idempotency_key
+                            if key and part_idx > 0:
+                                key = f"{key}#p{part_idx}"
+                            await InventoryService._record_stock_movement(
+                                tenant_id=tenant_id,
+                                material_id=material_id,
+                                quantity=-deduct,
+                                qty_before=qty_before,
+                                qty_after=Decimal(str(b.quantity or 0)),
+                                batch_no=InventoryService._normalize_batch_no_for_ledger(
+                                    str(b.batch_no)
+                                ),
+                                movement_type=movement_type,
+                                from_warehouse_id=from_wh_id,
+                                from_warehouse_name=from_wh_name,
+                                to_warehouse_id=to_wh_id,
+                                to_warehouse_name=to_wh_name,
+                                balance_warehouse_id=warehouse_id,
+                                source_type=source_type,
+                                source_doc_id=source_doc_id,
+                                source_doc_code=source_doc_code,
+                                work_order_id=work_order_id,
+                                work_order_code=work_order_code,
+                                operator_id=operator_id,
+                                operator_name=operator_name,
+                                remark=remark,
+                                idempotency_key=key,
+                            )
                             remaining -= deduct
+                            part_idx += 1
                     if remaining > 0:
                         raise BusinessLogicError(
                             f"库存不足：需求 {quantity}，可用 {have_before}"
@@ -630,7 +894,8 @@ class InventoryService:
                         f"线边仓库存不足: warehouse={warehouse_id} material={material_id} "
                         f"need={quantity} available={available}"
                     )
-                next_qty = (inv.quantity or Decimal(0)) - quantity
+                qty_before = Decimal(str(inv.quantity or 0))
+                next_qty = qty_before - quantity
                 if next_qty < 0:
                     raise BusinessLogicError(
                         f"并发扣减导致线边仓负库存: warehouse={warehouse_id} material={material_id} "
@@ -638,6 +903,29 @@ class InventoryService:
                     )
                 inv.quantity = next_qty
                 await inv.save()
+                await InventoryService._record_stock_movement(
+                    tenant_id=tenant_id,
+                    material_id=material_id,
+                    quantity=-quantity,
+                    qty_before=qty_before,
+                    qty_after=next_qty,
+                    batch_no=batch_no or getattr(inv, "batch_no", None),
+                    movement_type=movement_type,
+                    from_warehouse_id=from_wh_id,
+                    from_warehouse_name=from_wh_name,
+                    to_warehouse_id=to_wh_id,
+                    to_warehouse_name=to_wh_name,
+                    balance_warehouse_id=warehouse_id,
+                    source_type=source_type,
+                    source_doc_id=source_doc_id,
+                    source_doc_code=source_doc_code,
+                    work_order_id=work_order_id,
+                    work_order_code=work_order_code,
+                    operator_id=operator_id,
+                    operator_name=operator_name,
+                    remark=remark,
+                    idempotency_key=idempotency_key,
+                )
                 logger.info(
                     f"InventoryService.decrease_stock(line_side): tenant={tenant_id} "
                     f"warehouse={warehouse_id} material={material_id} qty={quantity}"
@@ -662,6 +950,19 @@ class InventoryService:
         source_doc_id: Optional[int] = None,
         source_doc_code: Optional[str] = None,
         enforce_fifo: bool = False,
+        ownership_type: Optional[str] = None,
+        customer_id: Optional[int] = None,
+        work_order_id: Optional[int] = None,
+        work_order_code: Optional[str] = None,
+        movement_type: Optional[str] = None,
+        from_warehouse_id: Optional[int] = None,
+        from_warehouse_name: Optional[str] = None,
+        to_warehouse_id: Optional[int] = None,
+        to_warehouse_name: Optional[str] = None,
+        operator_id: Optional[int] = None,
+        operator_name: Optional[str] = None,
+        remark: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
     ) -> bool:
         """
         扣减库存（独立事务包装）。
@@ -678,6 +979,19 @@ class InventoryService:
             source_doc_id=source_doc_id,
             source_doc_code=source_doc_code,
             enforce_fifo=enforce_fifo,
+            ownership_type=ownership_type,
+            customer_id=customer_id,
+            work_order_id=work_order_id,
+            work_order_code=work_order_code,
+            movement_type=movement_type,
+            from_warehouse_id=from_warehouse_id,
+            from_warehouse_name=from_warehouse_name,
+            to_warehouse_id=to_warehouse_id,
+            to_warehouse_name=to_warehouse_name,
+            operator_id=operator_id,
+            operator_name=operator_name,
+            remark=remark,
+            idempotency_key=idempotency_key,
         )
 
     @staticmethod

@@ -60,6 +60,7 @@ from apps.kuaizhizao.schemas.work_order import (
     MaterialKittingItem,
     KittingRelatedWorkOrderSummary,
     KittingRelatedOutsourceWorkOrderSummary,
+    KittingSupplyProgress,
     MaterialLocationInfo,
 )
 from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
@@ -87,6 +88,7 @@ from apps.master_data.models.factory import Workshop, WorkCenter, Workstation, W
 from apps.kuaizhizao.models.equipment import Equipment
 from apps.master_data.services.process_service import batch_get_operation_defect_types_via_table
 from core.services.business.code_generation_service import CodeGenerationService
+from apps.kuaizhizao.constants import DocumentStatus
 from apps.kuaizhizao.utils.material_source_helper import (
     get_material_source_type,
     validate_material_source_config,
@@ -341,7 +343,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         if not await WorkOrderService.has_confirmed_picking_for_work_order(tenant_id, work_order_id):
             raise BusinessLogicError(
                 f"未确认正式领料，禁止{action_label}："
-                "请先确认该工单的生产领料单（配料/叫料到线边不算正式发料）"
+                "请先确认该工单的生产领料单（线边备料/补料到线边不算正式发料）"
             )
 
     async def _match_process_route_for_material(
@@ -4437,7 +4439,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 raise BusinessLogicError("已拆分主工单不可开工，请将剩余数量拆分为子工单后由子工单执行")
 
             if work_order.status not in ['released', 'in_progress']:
-                raise BusinessLogicError(f"只能开始已下达或进行中的工单的工序，当前工单状态：{work_order.status}")
+                raise BusinessLogicError("需要先下达工单才能开工")
 
             # 获取工单工序
             work_order_operation = await WorkOrderOperation.get_or_none(
@@ -4773,6 +4775,331 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             supplier_name=owo.supplier_name,
         )
 
+    _KITTING_PO_TERMINAL_STATUSES = frozenset(
+        {
+            DocumentStatus.CANCELLED.value,
+            DocumentStatus.CLOSED.value,
+            DocumentStatus.COMPLETED.value,
+            DocumentStatus.REJECTED.value,
+            "已取消",
+            "已关闭",
+            "已完成",
+            "已驳回",
+            "cancelled",
+            "closed",
+            "completed",
+            "rejected",
+        }
+    )
+    _KITTING_PR_TERMINAL_STATUSES = frozenset(
+        {
+            DocumentStatus.CANCELLED.value,
+            DocumentStatus.REJECTED.value,
+            DocumentStatus.FULL_CONVERTED.value,
+            "已取消",
+            "已驳回",
+            "全部转单",
+            "cancelled",
+            "rejected",
+            "FULL_CONVERTED",
+        }
+    )
+
+    @classmethod
+    async def _load_material_open_purchase_map(
+        cls,
+        tenant_id: int,
+        material_ids: List[int],
+    ) -> Dict[int, Dict[str, Any]]:
+        """
+        按物料聚合未结采购订单 / 未转单采购申请（供齐套面板展示供给进度）。
+        返回 material_id -> {po?: {...}, pr?: {...}}
+        """
+        from apps.kuaizhizao.models.purchase_order import (
+            PurchaseOrderItem,
+            effective_po_item_outstanding,
+        )
+        from apps.kuaizhizao.models.purchase_requisition import (
+            PurchaseRequisition,
+            PurchaseRequisitionItem,
+        )
+        from apps.kuaizhizao.constants import normalize_status
+
+        result: Dict[int, Dict[str, Any]] = {int(mid): {} for mid in material_ids if mid}
+        if not result:
+            return result
+
+        ids = list(result.keys())
+
+        po_items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            material_id__in=ids,
+            deleted_at__isnull=True,
+        ).prefetch_related("order")
+
+        for item in po_items:
+            order = getattr(item, "order", None)
+            if order is None or getattr(order, "deleted_at", None) is not None:
+                continue
+            st = str(order.status or "").strip()
+            if st in cls._KITTING_PO_TERMINAL_STATUSES or normalize_status(st) in {
+                DocumentStatus.CANCELLED.value,
+                DocumentStatus.CLOSED.value,
+                DocumentStatus.COMPLETED.value,
+                DocumentStatus.REJECTED.value,
+            }:
+                continue
+            outstanding = effective_po_item_outstanding(item)
+            if outstanding <= 0:
+                continue
+            mid = int(item.material_id)
+            ordered = Decimal(str(item.ordered_quantity or 0))
+            received = Decimal(str(item.received_quantity or 0))
+            bucket = result.setdefault(mid, {})
+            prev = bucket.get("po")
+            # 优先展示未到货量更大的行；同等则取较新订单
+            if prev and Decimal(str(prev["outstanding_quantity"])) >= outstanding:
+                continue
+            bucket["po"] = {
+                "document_id": int(order.id),
+                "document_code": str(order.order_code or order.id),
+                "ordered_quantity": ordered,
+                "received_quantity": received,
+                "outstanding_quantity": outstanding,
+            }
+
+        pr_items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id,
+            material_id__in=ids,
+            purchase_order_id__isnull=True,
+        ).all()
+        if pr_items:
+            req_ids = {int(i.requisition_id) for i in pr_items if i.requisition_id}
+            reqs = await PurchaseRequisition.filter(
+                tenant_id=tenant_id,
+                id__in=list(req_ids),
+                deleted_at__isnull=True,
+            ).all()
+            req_map = {int(r.id): r for r in reqs}
+            for item in pr_items:
+                req = req_map.get(int(item.requisition_id))
+                if not req:
+                    continue
+                st = str(req.status or "").strip()
+                if st in cls._KITTING_PR_TERMINAL_STATUSES or normalize_status(st) in {
+                    DocumentStatus.CANCELLED.value,
+                    DocumentStatus.REJECTED.value,
+                    DocumentStatus.FULL_CONVERTED.value,
+                }:
+                    continue
+                qty = Decimal(str(item.quantity or 0))
+                if qty <= 0:
+                    continue
+                mid = int(item.material_id)
+                bucket = result.setdefault(mid, {})
+                prev = bucket.get("pr")
+                if prev and Decimal(str(prev["outstanding_quantity"])) >= qty:
+                    continue
+                bucket["pr"] = {
+                    "document_id": int(req.id),
+                    "document_code": str(req.requisition_code or req.id),
+                    "ordered_quantity": qty,
+                    "received_quantity": Decimal("0"),
+                    "outstanding_quantity": qty,
+                }
+
+        return result
+
+    @classmethod
+    def _resolve_kitting_supply_progress(
+        cls,
+        *,
+        source_type: Optional[str],
+        required_qty: Decimal,
+        total_available: Decimal,
+        has_related_production: bool,
+        open_purchase: Optional[Dict[str, Any]],
+    ) -> Optional[KittingSupplyProgress]:
+        """自制/委外有关联工单时不填；其余按库存 → 采购订单 → 采购申请 → 待请购。"""
+        if has_related_production:
+            return None
+
+        if total_available >= required_qty and required_qty > 0:
+            return KittingSupplyProgress(status="stock_covered")
+
+        open_purchase = open_purchase or {}
+        po = open_purchase.get("po")
+        if po:
+            ordered = Decimal(str(po["ordered_quantity"]))
+            received = Decimal(str(po["received_quantity"]))
+            outstanding = Decimal(str(po["outstanding_quantity"]))
+            pct = 0.0
+            if ordered > 0:
+                pct = round(float(received / ordered) * 100, 2)
+            status = "receiving" if received > 0 else "purchasing"
+            return KittingSupplyProgress(
+                status=status,
+                ordered_quantity=ordered,
+                received_quantity=received,
+                outstanding_quantity=outstanding,
+                progress_percent=pct,
+                document_type="purchase_order",
+                document_id=int(po["document_id"]),
+                document_code=str(po["document_code"]),
+            )
+
+        pr = open_purchase.get("pr")
+        if pr:
+            qty = Decimal(str(pr["ordered_quantity"]))
+            return KittingSupplyProgress(
+                status="purchase_requisition",
+                ordered_quantity=qty,
+                received_quantity=Decimal("0"),
+                outstanding_quantity=Decimal(str(pr["outstanding_quantity"])),
+                progress_percent=0.0,
+                document_type="purchase_requisition",
+                document_id=int(pr["document_id"]),
+                document_code=str(pr["document_code"]),
+            )
+
+        if source_type == SOURCE_TYPE_BUY and required_qty > total_available:
+            return KittingSupplyProgress(status="awaiting_purchase")
+
+        return None
+
+    async def remind_warehouse_batching(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        recipient_user_uuids: list[str],
+        remarks: Optional[str],
+        created_by: int,
+    ) -> dict:
+        """
+        提醒仓库线边备料：生成/同步线边备料草稿，并向指定用户发送站内信。
+        生产侧不跳转仓储作业页；仓库在物料中心处理备料单。
+        """
+        from apps.kuaizhizao.schemas.batching_order import PullFromWorkOrderRequest
+        from apps.kuaizhizao.services.batching_order_service import BatchingOrderService
+        from core.schemas.message_template import SendMessageRequest
+        from core.services.messaging.message_service import MessageService
+        from infra.models.user import User
+
+        wo = await WorkOrder.get_or_none(
+            tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True
+        )
+        if not wo:
+            raise NotFoundError(f"工单不存在: {work_order_id}")
+
+        uuids = [str(u).strip() for u in (recipient_user_uuids or []) if str(u).strip()]
+        if not uuids:
+            raise ValidationError("请至少选择一位仓库提醒对象")
+
+        users = await User.filter(
+            tenant_id=tenant_id,
+            uuid__in=uuids,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).all()
+        if not users:
+            raise NotFoundError("提醒对象不存在或已停用")
+
+        batching_svc = BatchingOrderService()
+        order = await batching_svc.pull_from_work_order(
+            tenant_id=tenant_id,
+            request_data=PullFromWorkOrderRequest(
+                work_order_id=work_order_id,
+                allow_existing_draft=True,
+                remarks=remarks or "工单齐套面板：提醒仓库线边备料",
+            ),
+            created_by=created_by,
+        )
+
+        creator = await User.get_or_none(id=created_by, deleted_at__isnull=True)
+        creator_name = (
+            (getattr(creator, "full_name", None) or getattr(creator, "username", None) or "")
+            if creator
+            else ""
+        )
+        subject = f"线边备料提醒：{wo.code}"
+        content_parts = [
+            f"工单 {wo.code} 需要线边备料（主仓→线边，非正式发料）。",
+            f"产品：{wo.product_name or wo.product_code or '—'}",
+            f"线边备料单：{order.code}",
+        ]
+        if creator_name:
+            content_parts.append(f"发起人：{creator_name}")
+        if remarks and str(remarks).strip():
+            content_parts.append(f"备注：{str(remarks).strip()}")
+        content_parts.append("请到「仓储管理 → 物料中心 → 线边备料执行」处理。")
+        content = "\n".join(content_parts)
+
+        variables = {
+            "message_category": "process",
+            "trigger_document": "work_order",
+            "trigger_action": "remind_batching",
+            "detail_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+            "work_order_id": str(wo.id),
+            "batching_order_id": str(order.id),
+            "work_order_code": wo.code or str(wo.id),
+            "product_name": wo.product_name or wo.product_code or "—",
+            "batching_order_code": order.code or "",
+            "remarks": (remarks or "").strip() or "—",
+        }
+
+        notified = 0
+        seen_ids: set[int] = set()
+        for user in users:
+            if user.id in seen_ids:
+                continue
+            seen_ids.add(user.id)
+            try:
+                await MessageService.send_message(
+                    tenant_id=tenant_id,
+                    request=SendMessageRequest(
+                        type="internal",
+                        recipient=str(user.id),
+                        subject=subject,
+                        content=content,
+                        variables=variables,
+                    ),
+                )
+                notified += 1
+            except Exception as exc:
+                logger.warning(
+                    "线边备料提醒站内信失败 tenant={} user={}: {}",
+                    tenant_id,
+                    user.id,
+                    exc,
+                )
+
+        # 配置中心规则中的默认仓库人员（与弹窗选人合并去重）
+        from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+            ACTION_REMIND_BATCHING,
+            DOC_WORK_ORDER,
+            dispatch_kuaizhizao_notification,
+        )
+
+        rule_sent = await dispatch_kuaizhizao_notification(
+            tenant_id,
+            trigger_document=DOC_WORK_ORDER,
+            trigger_action=ACTION_REMIND_BATCHING,
+            variables=variables,
+            context={"creator_user_id": created_by},
+        )
+        notified += rule_sent
+
+        if notified <= 0:
+            raise BusinessLogicError("备料任务已生成，但站内信发送失败，请稍后重试或联系管理员")
+
+        return {
+            "success": True,
+            "message": f"已提醒 {notified} 人，并生成线边备料任务 {order.code}",
+            "notified_count": notified,
+            "batching_order_id": order.id,
+            "batching_order_code": order.code,
+        }
+
     async def get_work_order_kitting_analysis(
         self,
         tenant_id: int,
@@ -4854,6 +5181,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             ).all()
             component_owos = {int(r.product_id): r for r in outsource_rows if r.product_id}
 
+        buy_or_open_ids = [
+            int(req.component_id)
+            for req in requirements
+            if req.component_id
+            and (
+                getattr(req, "component_type", None) == SOURCE_TYPE_BUY
+                or int(req.component_id) not in component_wos
+            )
+        ]
+        open_purchase_map = await self._load_material_open_purchase_map(
+            tenant_id, buy_or_open_ids
+        )
+
         for req in requirements:
             source_type = getattr(req, "component_type", None)
             resolved_issue = resolve_issue_method(
@@ -4874,6 +5214,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         related_outsource = self._build_kitting_related_outsource_work_order_summary(
                             child_owo
                         )
+                mid = int(req.component_id)
+                supply_progress = self._resolve_kitting_supply_progress(
+                    source_type=source_type,
+                    required_qty=required_qty,
+                    total_available=Decimal("0"),
+                    has_related_production=related_outsource is not None,
+                    open_purchase=open_purchase_map.get(mid),
+                )
                 analysis_items.append(MaterialKittingItem(
                     material_id=req.component_id,
                     material_code=req.component_code,
@@ -4890,6 +5238,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     status="not_applicable",
                     locations=[],
                     related_outsource_work_order=related_outsource,
+                    supply_progress=supply_progress,
                 ))
                 continue
 
@@ -4968,6 +5317,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             else:
                 item_status = "shortage"
 
+            mid = int(req.component_id)
+            supply_progress = self._resolve_kitting_supply_progress(
+                source_type=source_type,
+                required_qty=required_qty,
+                total_available=total_available,
+                has_related_production=related_summary is not None,
+                open_purchase=open_purchase_map.get(mid),
+            )
+
             analysis_items.append(MaterialKittingItem(
                 material_id=req.component_id,
                 material_code=req.component_code,
@@ -4985,6 +5343,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 locations=locations,
                 related_work_order=related_summary,
                 work_order_supply_quantity=wo_supply,
+                supply_progress=supply_progress,
             ))
 
         # 4. 汇总（仅统计需库存齐套的物料）

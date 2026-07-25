@@ -23,6 +23,8 @@ from apps.kuaizhizao.models.sales_contract_item import SalesContractItem
 from apps.kuaizhizao.models.sales_contract_milestone import SalesContractMilestone
 from apps.kuaizhizao.models.sales_contract_term_group import SalesContractTermGroup
 from apps.kuaizhizao.models.sales_order import SalesOrder
+from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.kuaizhizao.schemas.sales_contract import (
     SalesContractAlertItem,
     SalesContractChangeCreate,
@@ -1221,6 +1223,225 @@ class SalesContractService(AppBaseService[SalesContract]):
         order_qty = sum(qty for _, qty in plan)
         order_amt = sum(self._line_release_amount(it, qty) for it, qty in plan)
         return plan, item_qty_map, order_qty, order_amt
+
+    async def _sales_order_backfill_relation_exists(
+        self, tenant_id: int, sales_order_id: int
+    ) -> bool:
+        from apps.kuaizhizao.services.document_relation_new_service import (
+            DocumentRelationNewService,
+        )
+
+        return await DocumentRelationNewService().relation_exists(
+            tenant_id,
+            source_type="sales_order",
+            source_id=sales_order_id,
+            target_type="sales_contract",
+        )
+
+    async def _load_sales_order_backfill_context(
+        self, tenant_id: int, sales_order_id: int
+    ) -> tuple[SalesOrder, List[SalesOrderItem], Any]:
+        from apps.kuaizhizao.services.document_action_policy import (
+            derive_sales_order_capabilities,
+        )
+        from apps.kuaizhizao.services.document_action_policy.types import ActionCapability
+
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError("销售订单不存在")
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        caps = derive_sales_order_capabilities(order, has_items=bool(items))
+        if caps.backfill_sales_contract.allowed and await self._sales_order_backfill_relation_exists(
+            tenant_id, sales_order_id
+        ):
+            caps = caps.model_copy(
+                update={
+                    "backfill_sales_contract": ActionCapability(
+                        allowed=False,
+                        reason="sales_order.backfill_contract.already_backfilled",
+                    )
+                }
+            )
+        return order, items, caps
+
+    async def preview_backfill_contract_from_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+    ) -> Dict[str, Any]:
+        order, items, caps = await self._load_sales_order_backfill_context(
+            tenant_id, sales_order_id
+        )
+        if not items:
+            raise BusinessLogicError("销售订单无明细，无法补签销售合同")
+
+        push_allowed = caps.backfill_sales_contract.allowed
+        preview_items: List[Dict[str, Any]] = []
+        for it in items:
+            qty = Decimal(str(getattr(it, "order_quantity", None) or 0))
+            if qty <= 0:
+                continue
+            preview_items.append(
+                {
+                    "item_id": int(it.id),
+                    "material_id": it.material_id,
+                    "material_code": it.material_code,
+                    "material_name": it.material_name,
+                    "material_unit": it.material_unit,
+                    "quantity": float(qty),
+                    "pushed_quantity": 0.0,
+                    "max_push_quantity": float(qty) if push_allowed else 0.0,
+                    "delivery_date": (
+                        it.delivery_date.isoformat() if it.delivery_date else None
+                    ),
+                }
+            )
+        if not preview_items:
+            raise BusinessLogicError("销售订单无有效明细数量，无法补签销售合同")
+
+        return {
+            "target_type": "sales_contract",
+            "summary": (
+                f"将为销售订单 {order.order_code} 补签单次销售合同（{len(preview_items)} 行）"
+                if push_allowed
+                else "当前销售订单不可补签销售合同"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": not push_allowed,
+            "blocking_reason": (
+                caps.backfill_sales_contract.reason if not push_allowed else None
+            ),
+            "tip": "确认后将按订单明细创建单次销售合同，并回写订单关联；合同释放量将补录为订单已占用数量。",
+        }
+
+    async def convert_from_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+    ) -> SalesContractResponse:
+        from apps.kuaizhizao.services.document_action_policy import (
+            assert_sales_order_capability,
+        )
+        from apps.kuaizhizao.services.document_relation_new_service import (
+            DocumentRelationNewService,
+        )
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+        order, items, caps = await self._load_sales_order_backfill_context(
+            tenant_id, sales_order_id
+        )
+        if await self._sales_order_backfill_relation_exists(tenant_id, sales_order_id):
+            raise BusinessLogicError("该销售订单已补签销售合同")
+        assert_sales_order_capability(order, "backfill_sales_contract", has_items=bool(items))
+        if not items:
+            raise BusinessLogicError("销售订单无明细，无法补签销售合同")
+
+        contract_items: List[SalesContractItemCreate] = []
+        order_qty = Decimal("0")
+        for it in items:
+            qty = Decimal(str(getattr(it, "order_quantity", None) or 0))
+            if qty <= 0:
+                continue
+            order_qty += qty
+            contract_items.append(
+                SalesContractItemCreate(
+                    material_id=it.material_id,
+                    material_code=it.material_code,
+                    material_name=it.material_name,
+                    material_spec=it.material_spec,
+                    material_unit=it.material_unit,
+                    contract_quantity=qty,
+                    unit_price=it.unit_price,
+                    tax_rate=getattr(it, "tax_rate", None) or Decimal("0"),
+                    total_amount=it.total_amount,
+                    variant_attributes=getattr(it, "variant_attributes", None),
+                    delivery_date=it.delivery_date,
+                    notes=getattr(it, "notes", None),
+                )
+            )
+        if not contract_items:
+            raise BusinessLogicError("销售订单无有效明细数量，无法补签销售合同")
+
+        create_data = SalesContractCreate(
+            contract_type=self.CONTRACT_TYPE_SINGLE,
+            customer_id=order.customer_id,
+            customer_name=order.customer_name,
+            customer_contact=order.customer_contact,
+            customer_phone=order.customer_phone,
+            contract_date=order.order_date,
+            valid_from=order.order_date,
+            valid_to=order.delivery_date,
+            price_type=getattr(order, "price_type", None) or DEFAULT_SALES_PRICE_TYPE,
+            currency_code=getattr(order, "currency_code", None) or "CNY",
+            salesman_id=order.salesman_id,
+            salesman_name=order.salesman_name,
+            shipping_address=order.shipping_address,
+            shipping_method=order.shipping_method,
+            payment_terms=order.payment_terms,
+            discount_amount=getattr(order, "discount_amount", None) or Decimal("0"),
+            notes=order.notes or f"由销售订单 {order.order_code} 补签",
+            items=contract_items,
+        )
+
+        raw_push_mode = await self.business_config_service.get_push_default_mode(tenant_id)
+        push_as_confirm = str(raw_push_mode or "").strip().lower() == "confirm"
+
+        async with in_transaction():
+            contract_resp = await self.create_contract(
+                tenant_id, create_data, created_by, auto_submit=push_as_confirm
+            )
+            contract = await SalesContract.get(id=contract_resp.id)
+            contract_items_db = await SalesContractItem.filter(
+                tenant_id=tenant_id, contract_id=contract.id
+            ).order_by("id")
+            by_material: dict[int, SalesContractItem] = {}
+            for row in contract_items_db:
+                mid = int(getattr(row, "material_id", 0) or 0)
+                if mid > 0:
+                    by_material[mid] = row
+
+            item_qty_map: dict[int, Decimal] = {}
+            order_amt = Decimal(str(order.total_amount or 0))
+            for oi in items:
+                qty = Decimal(str(getattr(oi, "order_quantity", None) or 0))
+                if qty <= 0:
+                    continue
+                ci = by_material.get(int(oi.material_id)) if oi.material_id else None
+                if ci and ci.id is not None:
+                    item_qty_map[int(ci.id)] = item_qty_map.get(int(ci.id), Decimal("0")) + qty
+
+            await self._apply_release_to_contract(
+                contract, order_qty, order_amt, item_qty_map
+            )
+            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
+                contract_id=contract.id,
+                contract_code=contract.contract_code,
+                updated_by=created_by,
+            )
+            await DocumentRelationNewService().create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="sales_order",
+                    source_id=sales_order_id,
+                    source_code=order.order_code,
+                    source_name=order.order_code,
+                    target_type="sales_contract",
+                    target_id=contract.id,
+                    target_code=contract.contract_code,
+                    target_name=contract.contract_code,
+                    relation_type="source",
+                    relation_mode="pull",
+                    relation_desc="订单补签销售合同",
+                ),
+                created_by=created_by,
+            )
+
+        return await self.get_contract_by_id(tenant_id, int(contract_resp.id))
 
     async def convert_from_quotation(
         self,

@@ -1158,7 +1158,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 if is_staging_transfer_picking_notes(getattr(picking, "notes", None)):
                     raise BusinessLogicError(
                         "该领料单为历史备料转移单据（主仓→线边），不可再按正式发料确认；"
-                        "请使用配料单/叫料完成备料，或新建生产领料单发料"
+                        "请使用线边备料单/补料完成备料，或新建生产领料单发料"
                     )
 
                 # 本期实发数量：优先已填 picked_quantity，否则按需求数量
@@ -1254,6 +1254,11 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         source_doc_id=picking_id,
                         source_doc_code=picking.picking_code,
                         enforce_fifo=enforce_fifo,
+                        work_order_id=picking.work_order_id,
+                        work_order_code=picking.work_order_code,
+                        movement_type="production_issue",
+                        from_warehouse_id=wh_id,
+                        idempotency_key=f"production_picking:{picking_id}:dec:{item.id}",
                     )
                     required = item.required_quantity or Decimal(0)
                     remaining = required - qty
@@ -1339,6 +1344,12 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         source_type="production_picking_withdraw",
                         source_doc_id=picking_id,
                         source_doc_code=picking_obj.picking_code,
+                        work_order_id=picking_obj.work_order_id,
+                        work_order_code=picking_obj.work_order_code,
+                        movement_type="production_issue",
+                        to_warehouse_id=wh_id,
+                        remark="撤回生产领料",
+                        idempotency_key=f"production_picking:{picking_id}:withdraw:{item.id}",
                     )
                     required = item.required_quantity or Decimal(0)
                     await ProductionPickingItem.filter(
@@ -2293,7 +2304,12 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                         source_type="production_return",
                         source_doc_id=return_id,
                         source_doc_code=ret.return_code,
+                        work_order_id=ret.work_order_id,
+                        work_order_code=ret.work_order_code,
                         ledger_production_date=to_site_date(receipt_time),
+                        movement_type="production_return",
+                        to_warehouse_id=wh_id,
+                        idempotency_key=f"production_return:{return_id}:inc:{item.id}",
                     )
             except Exception as inv_e:
                 logger.error("生产退料确认-更新库存失败: %s", inv_e)
@@ -2740,6 +2756,9 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         work_order_id=receipt.work_order_id,
                         work_order_code=receipt.work_order_code,
                         ledger_production_date=to_site_date(receipt_time),
+                        movement_type="fg_receipt",
+                        to_warehouse_id=wh_id,
+                        idempotency_key=f"finished_goods_receipt:{receipt_id}:inc:{item.id}",
                     )
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
                 await InventoryCostService().apply_finished_goods_receipt_cost(
@@ -4861,6 +4880,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         source_doc_id=delivery_id,
                         source_doc_code=delivery.delivery_code,
                         enforce_fifo=enforce_fifo,
+                        movement_type="sales_delivery",
+                        from_warehouse_id=wh_id,
+                        idempotency_key=f"sales_delivery:{delivery_id}:dec:{item.id}",
                     )
             except BusinessLogicError:
                 raise
@@ -5883,6 +5905,9 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
                         ledger_production_date=ledger_production_date,
+                        movement_type="purchase_receipt",
+                        to_warehouse_id=line_wh,
+                        idempotency_key=f"purchase_receipt:{receipt_id}:inc:{item.id}",
                     )
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
                 await InventoryCostService().on_purchase_receipt_confirmed(tenant_id, receipt_id)

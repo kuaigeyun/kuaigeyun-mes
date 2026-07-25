@@ -278,12 +278,12 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
         pushable = len(preview_lines)
         blocking_reason = None
         if pushable == 0:
-            blocking_reason = "当前工单无待配料缺料行"
+            blocking_reason = "当前工单无待备料缺料行"
         return {
             "work_order_id": work_order_id,
             "work_order_code": str(work_order.code or ""),
             "items": preview_lines,
-            "summary": f"工单 {work_order.code}：{pushable} 行可配料",
+            "summary": f"工单 {work_order.code}：{pushable} 行可备料",
             "message": None,
             "has_blocking_issues": pushable == 0,
             "blocking_reason": blocking_reason,
@@ -362,9 +362,9 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
             deleted_at__isnull=True,
         )
         if not order:
-            raise NotFoundError(f"配料单不存在: {order_id}")
+            raise NotFoundError(f"线边备料单不存在: {order_id}")
         if not order.work_order_id:
-            raise ValidationError("配料单未关联工单，无法同步缺料")
+            raise ValidationError("线边备料单未关联工单，无法同步缺料")
         work_order = await WorkOrder.get_or_none(
             id=order.work_order_id,
             tenant_id=tenant_id,
@@ -391,10 +391,10 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
             raise NotFoundError(f"工单不存在: {request_data.work_order_id}")
 
         if work_order.status in ("completed", "cancelled", "已完工", "已取消"):
-            raise ValidationError(f"工单状态 {work_order.status} 不可生成配料单")
+            raise ValidationError(f"工单状态 {work_order.status} 不可生成线边备料单")
 
         if not work_order.product_id:
-            raise ValidationError("工单未关联产品物料，无法按 BOM 展开配料需求")
+            raise ValidationError("工单未关联产品物料，无法按 BOM 展开备料需求")
 
         existing = await BatchingOrder.get_or_none(
             tenant_id=tenant_id,
@@ -412,12 +412,12 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
                     updated_by=created_by,
                 )
             raise BusinessLogicError(
-                f"工单 {work_order.code} 已有进行中的配料单 {existing.code}，请先处理或确认"
+                f"工单 {work_order.code} 已有进行中的线边备料单 {existing.code}，请先处理或确认"
             )
 
         shortage_lines, _analysis = await self._get_pick_shortage_lines(tenant_id, work_order)
         if not shortage_lines:
-            raise ValidationError("当前工单无待配料缺料行，无需主动配料")
+            raise ValidationError("当前工单无待备料缺料行，无需主动备料")
 
         src_id, src_name = await resolve_source_warehouse_for_work_order(
             tenant_id, work_order, request_data.warehouse_id
@@ -455,7 +455,7 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
                 total_items=len(shortage_lines),
                 target_warehouse_id=tgt_wh_id,
                 target_warehouse_name=tgt_wh_name,
-                remarks=request_data.remarks or "主动配料（齐套缺料）",
+                remarks=request_data.remarks or "主动线边备料（齐套缺料）",
                 attachments=request_data.attachments,
                 created_by=created_by,
                 created_by_name=user_info["name"],
@@ -492,7 +492,7 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
             deleted_at__isnull=True,
         )
         if not order:
-            raise NotFoundError(f"配料单不存在: {order_id}")
+            raise NotFoundError(f"线边备料单不存在: {order_id}")
 
         items = await BatchingOrderItem.filter(
             batching_order_id=order_id,
@@ -521,9 +521,9 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
             deleted_at__isnull=True,
         )
         if not order:
-            raise NotFoundError(f"配料单不存在: {order_id}")
+            raise NotFoundError(f"线边备料单不存在: {order_id}")
         if order.status not in ["draft", "picking"]:
-            raise ValidationError(f"配料单状态为 {order.status}，不能修改")
+            raise ValidationError(f"线边备料单状态为 {order.status}，不能修改")
 
         user_info = await self.get_user_info(updated_by)
 
@@ -591,9 +591,9 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
                 deleted_at__isnull=True,
             )
             if not order:
-                raise NotFoundError(f"配料单不存在: {order_id}")
+                raise NotFoundError(f"线边备料单不存在: {order_id}")
             if order.status not in ["draft", "picking"]:
-                raise ValidationError(f"配料单状态为 {order.status}，不能确认配料")
+                raise ValidationError(f"线边备料单状态为 {order.status}，不能确认备料")
 
             if not order.target_warehouse_id:
                 wo = None
@@ -610,7 +610,7 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
                 deleted_at__isnull=True,
             )
             if not items:
-                raise ValidationError("配料单没有明细")
+                raise ValidationError("线边备料单没有明细")
 
             biz_config = await BusinessConfigService().get_business_config(tenant_id)
             enforce_fifo = bool(biz_config.get("parameters", {}).get("warehouse", {}).get("fifo", False))
@@ -642,7 +642,7 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
                     continue
                 if pick_qty > item.required_quantity:
                     raise ValidationError(
-                        f"物料 {item.material_code} 配料数量不能超过需求数量 {item.required_quantity}"
+                        f"物料 {item.material_code} 备料数量不能超过需求数量 {item.required_quantity}"
                     )
 
                 batch_no = batch_map.get(item.id) or getattr(item, "batch_no", None)
@@ -665,6 +665,12 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
                     source_doc_id=order.id,
                     source_doc_code=order.code,
                     enforce_fifo=enforce_fifo,
+                    work_order_id=order.work_order_id,
+                    work_order_code=wo_code,
+                    movement_type="staging_to_line",
+                    from_warehouse_id=src_wh,
+                    to_warehouse_id=order.target_warehouse_id,
+                    idempotency_key=f"batching_order:{order.id}:dec:{item.id}",
                 )
                 await InventoryService.increase_stock(
                     tenant_id=tenant_id,
@@ -677,6 +683,10 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
                     source_doc_code=order.code,
                     work_order_id=order.work_order_id,
                     work_order_code=wo_code,
+                    movement_type="staging_to_line",
+                    from_warehouse_id=src_wh,
+                    to_warehouse_id=order.target_warehouse_id,
+                    idempotency_key=f"batching_order:{order.id}:inc:{item.id}",
                 )
                 item.picked_quantity = pick_qty
                 item.status = "picked" if pick_qty >= item.required_quantity else "pending"
@@ -686,7 +696,7 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
                 picked_this_round += 1
 
             if use_selective_confirm and picked_this_round == 0:
-                raise ValidationError("请至少选择一项进行配料")
+                raise ValidationError("请至少选择一项进行备料")
 
             all_picked = all(
                 i.status == "picked"
@@ -713,9 +723,9 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
             deleted_at__isnull=True,
         )
         if not order:
-            raise NotFoundError(f"配料单不存在: {order_id}")
+            raise NotFoundError(f"线边备料单不存在: {order_id}")
         if order.status != "draft":
-            raise ValidationError(f"配料单状态为 {order.status}，不能删除")
+            raise ValidationError(f"线边备料单状态为 {order.status}，不能删除")
 
         now = datetime.now()
         await BatchingOrder.filter(id=order_id, tenant_id=tenant_id).update(deleted_at=now)

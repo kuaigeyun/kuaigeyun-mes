@@ -212,6 +212,11 @@ const WorkOrdersKioskPage: React.FC = () => {
 
     const handleStart = async () => {
         if (!selectedWorkOrder?.id || !activeOperation?.id) return;
+        const st = String(selectedWorkOrder.status || '').trim().toLowerCase();
+        if (st !== 'released' && st !== 'in_progress' && st !== '已下达' && st !== '执行中') {
+            message.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'));
+            return;
+        }
         try {
             setOpsLoading(true);
             // Call startOperation API
@@ -226,9 +231,14 @@ const WorkOrdersKioskPage: React.FC = () => {
             if (updatedOp) setActiveOperation(updatedOp);
 
             loadWorkOrders(stationInfo?.workCenterId);
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            message.error(t('app.kuaizhizao.workOrder.kioskOperationFailed'));
+            const detail = error?.response?.data?.detail || error?.message || '';
+            if (typeof detail === 'string' && (detail.includes('需要先下达') || detail.includes('只能开始已下达'))) {
+                message.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'));
+            } else {
+                message.error(t('app.kuaizhizao.workOrder.kioskOperationFailed'));
+            }
         } finally {
             setOpsLoading(false);
         }

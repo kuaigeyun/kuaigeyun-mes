@@ -1,5 +1,5 @@
 /**
- * 物料中心任务队列（配料执行 / 产线叫料 / 备料建议 / 倒冲异常）
+ * 物料中心任务队列（线边备料执行 / 产线补料 / 备料建议 / 倒冲异常）
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -465,7 +465,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       dataIndex: 'kitting_rate',
       width: 90,
       hideInSearch: true,
-      // 齐套率仅对配料执行/主动备料有意义；产线叫料是局部需求，后端不计算齐套率
+      // 齐套率仅对线边备料执行/主动备料有意义；产线补料是局部需求，后端不计算齐套率
       hideInTable: taskType === 'material_call' || taskType === 'backflush_alert',
       render: (_, r) =>
         r.kitting_rate != null ? <Tag color="green">{Math.round(r.kitting_rate)}%</Tag> : '-',
@@ -487,7 +487,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
       uniTableKeepWidth: true,
       hideInSearch: true,
-      // 送达进度仅产线叫料有「已送/需求」语义；配料执行是仓内拣料，不展示以免整列全为 -
+      // 送达进度仅产线补料有「已送/需求」语义；线边备料执行是仓内拣料，不展示以免整列全为 -
       hideInTable: taskType !== 'material_call',
       render: (_, r) => {
         if (r.task_type !== 'material_call') return '-';
@@ -522,7 +522,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       width: 132,
       uniTableKeepWidth: true,
       hideInSearch: true,
-      // 需求时间仅叫料单有 needed_at
+      // 需求时间仅补料单有 needed_at
       hideInTable: taskType !== 'material_call',
       render: (_, r) => (r.needed_at ? formatDateTime(r.needed_at) : '-'),
     },

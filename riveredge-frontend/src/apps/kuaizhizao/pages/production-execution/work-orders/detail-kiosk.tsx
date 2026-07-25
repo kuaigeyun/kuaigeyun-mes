@@ -68,12 +68,22 @@ const WorkOrderDetailKioskPage: React.FC = () => {
 
     const handleStart = async () => {
         if (!workOrder || !activeOperation) return;
+        const st = String(workOrder.status || '').trim().toLowerCase();
+        if (st !== 'released' && st !== 'in_progress' && st !== '已下达' && st !== '执行中') {
+            message.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'));
+            return;
+        }
         try {
             await workOrderApi.startOperation(workOrder.id, activeOperation.id);
             message.success(t('app.kuaizhizao.workOrder.kioskOpStarted'));
             loadWorkOrderDetail(workOrder.id);
-        } catch (error) {
-            message.error(t('app.kuaizhizao.workOrder.kioskOperationFailed'));
+        } catch (error: any) {
+            const detail = error?.response?.data?.detail || error?.message || '';
+            if (typeof detail === 'string' && (detail.includes('需要先下达') || detail.includes('只能开始已下达'))) {
+                message.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'));
+            } else {
+                message.error(t('app.kuaizhizao.workOrder.kioskOperationFailed'));
+            }
         }
     };
     

@@ -311,6 +311,23 @@ def derive_sales_order_capabilities(
         "sales_order.create_change.not_allowed" if not create_change_allowed else None,
     )
 
+    backfill_contract_allowed = False
+    backfill_contract_reason = push_reason or "sales_order.backfill_contract.not_allowed"
+    if push_ok:
+        if getattr(order, "contract_id", None):
+            backfill_contract_reason = "sales_order.backfill_contract.already_linked"
+        elif getattr(order, "is_release_order", False):
+            backfill_contract_reason = "sales_order.backfill_contract.release_order"
+        elif not has_items:
+            backfill_contract_reason = "sales_order.push.no_items"
+        else:
+            backfill_contract_allowed = True
+            backfill_contract_reason = None
+    backfill_contract_cap = _cap(
+        backfill_contract_allowed,
+        backfill_contract_reason if not backfill_contract_allowed else None,
+    )
+
     return SalesOrderCapabilities(
         update=update_cap,
         delete=delete_cap,
@@ -328,6 +345,7 @@ def derive_sales_order_capabilities(
         push_invoice=push_invoice_cap,
         push_sales_return=push_return_cap,
         create_change_order=create_change_cap,
+        backfill_sales_contract=backfill_contract_cap,
     )
 
 
@@ -366,6 +384,7 @@ def assert_sales_order_capability(
         "push_invoice": caps.push_invoice,
         "push_sales_return": caps.push_sales_return,
         "create_change_order": caps.create_change_order,
+        "backfill_sales_contract": caps.backfill_sales_contract,
     }
     cap = cap_map.get(action)
     if cap is None:

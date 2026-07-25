@@ -731,7 +731,7 @@ def build_spc_sample_payloads(
             except (TypeError, ValueError):
                 continue
             item_name = str(item.get("inspection_item") or key)
-            char_name = f"{material_code}·{item_name}" if material_code else item_name
+            char_name = f"{material_code} {item_name}" if material_code else item_name
             if char_name in seen_chars:
                 char_name = f"{char_name}#{key[:8]}"
             seen_chars.add(char_name)

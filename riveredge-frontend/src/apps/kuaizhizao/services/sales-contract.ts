@@ -418,6 +418,11 @@ export const salesContractApi = {
 
     }),
 
+  convertFromSalesOrder: (salesOrderId: number) =>
+    apiRequest<SalesContract>(`${BASE}/from-sales-order/${salesOrderId}`, {
+      method: 'POST',
+    }),
+
   pullSalesContractFromQuotation: async (quotationId: number, contractType = 'single') => {
     const salesContract = await apiRequest<SalesContract>(`${BASE}/from-quotation/${quotationId}`, {
       method: 'POST',

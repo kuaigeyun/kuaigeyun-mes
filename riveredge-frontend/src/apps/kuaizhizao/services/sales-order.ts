@@ -114,6 +114,7 @@ export interface SalesOrderCapabilities {
   push_invoice?: ActionCapability;
   push_sales_return?: ActionCapability;
   create_change_order?: ActionCapability;
+  backfill_sales_contract?: ActionCapability;
 }
 
 /**
@@ -536,6 +537,13 @@ export async function previewPushSalesOrderToInvoice(salesOrderId: number): Prom
   return apiRequest<PushPreviewResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-invoice/preview`, {
     method: 'GET',
   });
+}
+
+export async function previewBackfillSalesContract(salesOrderId: number): Promise<PushPreviewResponse> {
+  return apiRequest<PushPreviewResponse>(
+    `/apps/kuaizhizao/sales-orders/${salesOrderId}/backfill-sales-contract/preview`,
+    { method: 'GET' },
+  );
 }
 
 export async function pushSalesOrderToInvoice(salesOrderId: number): Promise<PushToInvoiceResponse> {

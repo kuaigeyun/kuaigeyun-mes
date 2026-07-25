@@ -10,6 +10,7 @@ import {
   CORE_NOTIFICATION_RECIPIENT_SCOPES,
 } from './coreNotificationRules';
 import { USER_SPECIFIED_SCOPE_OPTION } from './notificationRecipientConstants';
+import { loadKuaizhizaoNotificationRulePresets } from '../../apps/kuaizhizao/services/notification-rules';
 
 export type NotificationDocumentOption = { value: string; labelKey: string; fallback: string };
 
@@ -68,6 +69,7 @@ export const NOTIFICATION_APP_MODULES: Record<string, NotificationAppModule> = {
     documentOptions: CORE_NOTIFICATION_DOCUMENT_OPTIONS,
     actionOptions: CORE_NOTIFICATION_ACTION_OPTIONS,
     extraRecipientScopes: [],
+    loadPresets: loadKuaizhizaoNotificationRulePresets,
   },
 };
 

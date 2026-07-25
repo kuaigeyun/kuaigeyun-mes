@@ -19,6 +19,10 @@ from apps.kuaizhizao.workflows.functions.equipment_supervision_workflow import (
     equipment_supervision_checker_function,
     run_equipment_supervision_scheduler,
 )
+from apps.kuaizhizao.workflows.functions.delivery_delay_notification_workflow import (
+    delivery_delay_notification_checker_function,
+    run_delivery_delay_notification_scheduler,
+)
 from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
     run_work_order_score_scheduler,
     work_order_score_recalc_one,
@@ -35,6 +39,8 @@ __all__ = [
     "maintenance_reminder_checker_function",
     "run_equipment_supervision_scheduler",
     "equipment_supervision_checker_function",
+    "run_delivery_delay_notification_scheduler",
+    "delivery_delay_notification_checker_function",
     "run_work_order_score_scheduler",
     "work_order_score_recalc_worker",
     "work_order_score_recalc_one",

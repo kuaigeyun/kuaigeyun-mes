@@ -136,6 +136,7 @@ import {
   previewPushSalesOrderToDelivery,
   previewPushSalesOrderToInvoice,
   previewPushSalesOrderToSalesReturn,
+  previewBackfillSalesContract,
   pushSalesOrderToComputation,
   pushSalesOrderToWorkOrder,
   pushSalesOrderToShipmentNotice,
@@ -388,6 +389,7 @@ const SALES_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_orders';
 
 const SALES_ORDER_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-orders';
 const SALES_ORDER_RESOURCE = 'kuaizhizao:sales-order';
+const SALES_CONTRACT_RESOURCE = 'kuaizhizao:sales-contract';
 const SALES_ORDER_CREATE_PATH = `${SALES_ORDER_LIST_PATH}/new`;
 const salesOrderEditPath = (id: number) => `${SALES_ORDER_LIST_PATH}/${id}/edit`;
 
@@ -460,6 +462,7 @@ const SalesOrdersPage: React.FC = () => {
   const pushToSalesDeliveryAction = resolveKuaizhizaoDocumentAction(t, 'sales_delivery.pull_from_sales_order');
   const pushToSalesReturnAction = resolveKuaizhizaoDocumentAction(t, 'sales_return.pull_from_sales_order');
   const pushToSalesOrderChangeAction = resolveKuaizhizaoDocumentAction(t, 'sales_order_change.pull_from_sales_order');
+  const pushToBackfillSalesContractAction = resolveKuaizhizaoDocumentAction(t, 'sales_contract.pull_from_sales_order');
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -608,6 +611,7 @@ const SalesOrdersPage: React.FC = () => {
 
   const auditEnabled = useAuditRequired('sales_order', false);
   const salesOrderPerms = useResourcePermissions(SALES_ORDER_RESOURCE);
+  const salesContractPerms = useResourcePermissions(SALES_CONTRACT_RESOURCE);
   const permDeniedTitle = t('common.noPermission');
   const auditEnabledRef = useRef(auditEnabled);
   useEffect(() => {
@@ -1424,6 +1428,7 @@ const SalesOrdersPage: React.FC = () => {
     if (targetType === 'sales_invoice') return pushToSalesInvoiceAction.label;
     if (targetType === 'sales_delivery') return pushToSalesDeliveryAction.label;
     if (targetType === 'sales_return') return pushToSalesReturnAction.label;
+    if (targetType === 'sales_contract') return pushToBackfillSalesContractAction.label;
     throw new Error(`Unknown sales order push preview target_type: ${String(targetType)}`);
   };
 
@@ -1758,6 +1763,13 @@ const SalesOrdersPage: React.FC = () => {
         }
         const res = await pushPreviewAction.doPush();
         messageApi.success(res?.message || t('app.kuaizhizao.salesOrder.invoiceCreated'));
+      } else if (pushPreviewData.target_type === 'sales_contract') {
+        const res = await pushPreviewAction.doPush();
+        messageApi.success(
+          t('app.kuaizhizao.salesOrder.backfillSalesContractSuccess', {
+            code: res?.contract_code || t('app.kuaizhizao.salesOrder.createdFallback'),
+          }),
+        );
       }
       if (pushPreviewData.target_type === 'shipment_notice') {
         messageApi.success(t('app.kuaizhizao.salesOrder.shipmentNoticeCreated'));
@@ -1829,6 +1841,17 @@ const SalesOrdersPage: React.FC = () => {
       'sales_invoice',
       () => previewPushSalesOrderToInvoice(id),
       () => pushSalesOrderToInvoice(id),
+      () => refreshDrawerOrder(id),
+      id,
+    );
+  };
+
+  /** 补签销售合同（预览） */
+  const handleBackfillSalesContract = async (id: number) => {
+    showPushPreviewModal(
+      'sales_contract',
+      () => previewBackfillSalesContract(id),
+      () => salesContractApi.convertFromSalesOrder(id),
       () => refreshDrawerOrder(id),
       id,
     );
@@ -2677,6 +2700,11 @@ const SalesOrdersPage: React.FC = () => {
       ? salesOrderCapabilityReasonMessage(record.capabilities?.withdraw_computation?.reason, t)
       : undefined;
     const canWithdrawComputation = !withdrawComputationDisabledReason;
+    const backfillContractDisabledReason = resolvePushReason(
+      record.capabilities?.backfill_sales_contract,
+      { disabled: !salesContractPerms.canCreate, title: permDeniedTitle },
+    );
+    const canBackfillContract = !backfillContractDisabledReason;
 
     return buildUniPushMenuItems([
       {
@@ -2731,6 +2759,14 @@ const SalesOrdersPage: React.FC = () => {
       },
       { type: 'divider' as const },
       {
+        key: 'backfill-sales-contract',
+        label: pushToBackfillSalesContractAction.label,
+        disabled: !!backfillContractDisabledReason,
+        title: backfillContractDisabledReason,
+        onClick: () => canBackfillContract && handleBackfillSalesContract(record.id!),
+      },
+      { type: 'divider' as const },
+      {
         key: 'withdraw',
         label: t('app.kuaizhizao.salesOrder.withdrawComputation'),
         disabled: !canWithdrawComputation,
@@ -2738,7 +2774,7 @@ const SalesOrdersPage: React.FC = () => {
         onClick: () => canWithdrawComputation && handleWithdrawFromComputation(record.id!),
       },
     ]);
-  }, [handlePushToComputation, handlePushToDelivery, handlePushToInvoice, handlePushToSalesOrderChange, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, permDeniedTitle, pushToDemandComputationAction.label, pushToSalesDeliveryAction.label, pushToSalesInvoiceAction.label, pushToSalesOrderChangeAction.label, pushToSalesReturnAction.label, pushToShipmentNoticeAction.label, pushToWorkOrderAction.label, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, salesOrderPerms.canUpdate, t]);
+  }, [handleBackfillSalesContract, handlePushToComputation, handlePushToDelivery, handlePushToInvoice, handlePushToSalesOrderChange, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, permDeniedTitle, pushToBackfillSalesContractAction.label, pushToDemandComputationAction.label, pushToSalesDeliveryAction.label, pushToSalesInvoiceAction.label, pushToSalesOrderChangeAction.label, pushToSalesReturnAction.label, pushToShipmentNoticeAction.label, pushToWorkOrderAction.label, salesContractPerms.canCreate, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, salesOrderPerms.canUpdate, t]);
   const toolbarPushMenuItems = useMemo(
     () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : buildUniPushMenuItems([])),
     [buildToolbarPushMenuItems, selectedOrderForToolbar]
@@ -4569,14 +4605,6 @@ const SalesOrdersPage: React.FC = () => {
                     {t('app.kuaizhizao.salesOrder.delete')}
                   </Button>
                 )}
-                {!detailCapabilityGates.createChangeOrder.disabled && (
-                  <Button
-                    icon={<EditOutlined />}
-                    onClick={() => handlePushToSalesOrderChange(currentSalesOrder.id!)}
-                  >
-                    {pushToSalesOrderChangeAction.label}
-                  </Button>
-                )}
                 <UniWorkflowActions {...rowActionKind('skip')}
                   record={currentSalesOrder}
                   entityName={t('app.kuaizhizao.salesOrder.entityName')}
@@ -4595,9 +4623,6 @@ const SalesOrdersPage: React.FC = () => {
                       : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
                   }}
                 />
-                <Dropdown {...rowActionKind('skip')} menu={{ items: buildToolbarPushMenuItems(currentSalesOrder) }}>
-                  <Button icon={<ArrowDownOutlined />}>{t('app.kuaizhizao.salesOrder.push')}</Button>
-                </Dropdown>
                 {currentSalesOrder.id != null && !detailCapabilityGates.print.disabled && (
                   <Button
                     icon={<PrinterOutlined />}

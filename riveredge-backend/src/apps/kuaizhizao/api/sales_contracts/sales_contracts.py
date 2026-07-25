@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from loguru import logger
 
 from core.api.deps import get_current_tenant, get_current_user
+from core.api.deps.access import require_permission_codes
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
@@ -300,6 +301,27 @@ async def convert_from_quotation(
     try:
         return await service.convert_from_quotation(
             tenant_id, quotation_id, current_user.id, contract_type=contract_type
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/from-sales-order/{sales_order_id}",
+    response_model=SalesContractResponse,
+    summary="Backfill sales contract from sales order",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-contract:create"))],
+)
+async def convert_from_sales_order(
+    sales_order_id: int = Path(..., description="销售订单 ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.convert_from_sales_order(
+            tenant_id, sales_order_id, current_user.id
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

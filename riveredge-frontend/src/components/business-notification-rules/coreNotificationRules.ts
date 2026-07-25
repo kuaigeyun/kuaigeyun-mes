@@ -81,6 +81,11 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
     },
   ],
   work_order: [
+    {
+      value: 'remind_batching',
+      labelKey: 'pages.system.configCenter.notification.action.work_order.remind_batching',
+      fallback: '提醒仓库线边备料',
+    },
     { value: 'released', labelKey: 'pages.system.configCenter.notification.action.work_order.released', fallback: '下达' },
     { value: 'started', labelKey: 'pages.system.configCenter.notification.action.work_order.started', fallback: '开工' },
     { value: 'completed', labelKey: 'pages.system.configCenter.notification.action.work_order.completed', fallback: '完工' },
@@ -135,3 +140,17 @@ export const CORE_NOTIFICATION_RECIPIENT_SCOPES = [
   { value: 'salesman', labelKey: 'pages.system.configCenter.notification.scope.salesman', fallback: '业务员' },
   { value: 'follower', labelKey: 'pages.system.configCenter.notification.scope.follower', fallback: '跟单员' },
 ];
+
+/** 一期推荐节点（已接线）；其余动作可配但默认标为「更多」 */
+export const CORE_RECOMMENDED_NOTIFICATION_ACTIONS: ReadonlySet<string> = new Set([
+  'sales_order:delivery_delayed',
+  'purchase_order:delivery_delayed',
+  'quality_exception:created',
+  'quality_inspection:abnormal_detected',
+  'equipment_fault:reported',
+  'work_order:remind_batching',
+]);
+
+export function isRecommendedNotificationAction(document: string, action: string): boolean {
+  return CORE_RECOMMENDED_NOTIFICATION_ACTIONS.has(`${document}:${action}`);
+}

@@ -55,6 +55,21 @@ async def _scope_user_specified(tenant_id: int, context: Dict[str, Any]) -> List
     return merged
 
 
+async def _scope_creator(tenant_id: int, context: Dict[str, Any]) -> List[int]:
+    del tenant_id
+    return _normalize_context_user_ids(context.get("creator_user_id"))
+
+
+async def _scope_salesman(tenant_id: int, context: Dict[str, Any]) -> List[int]:
+    del tenant_id
+    return _normalize_context_user_ids(context.get("salesman_user_id"))
+
+
+async def _scope_follower(tenant_id: int, context: Dict[str, Any]) -> List[int]:
+    del tenant_id
+    return _normalize_context_user_ids(context.get("follower_user_id"))
+
+
 def _rule_has_user_specified(rule: dict) -> bool:
     scopes = rule.get("recipient_scopes") or []
     if isinstance(scopes, str):
@@ -94,6 +109,9 @@ def register_notification_scope_resolver(scope: str, resolver: ScopeResolver) ->
 
 def ensure_core_notification_scope_resolvers() -> None:
     register_notification_scope_resolver("user_specified", _scope_user_specified)
+    register_notification_scope_resolver("creator", _scope_creator)
+    register_notification_scope_resolver("salesman", _scope_salesman)
+    register_notification_scope_resolver("follower", _scope_follower)
 
 
 ensure_core_notification_scope_resolvers()
@@ -143,7 +161,8 @@ class BusinessNotificationService:
                 continue
 
             template_ref = str(rule.get("template_uuid") or rule.get("template") or "").strip()
-            if not template_ref:
+            template_code = str(rule.get("template_code") or "").strip()
+            if not template_ref and not template_code:
                 logger.warning(
                     "业务消息提醒规则缺少模板 tenant={} doc={} action={} rule_id={}",
                     tenant_id,
@@ -159,15 +178,29 @@ class BusinessNotificationService:
             if not recipient_ids:
                 continue
 
+            # 一期仅站内信；忽略规则中的 email/sms 等 channel_uuids
+            if "message_category" not in vars_payload:
+                vars_payload["message_category"] = "process"
+
             for uid in recipient_ids:
                 try:
-                    req = SendMessageRequest(
+                    req_kwargs: Dict[str, Any] = dict(
                         type="internal",
                         recipient=str(uid),
-                        template_uuid=UUID(template_ref),
                         variables=vars_payload,
                         content="",
                     )
+                    if template_ref:
+                        try:
+                            req_kwargs["template_uuid"] = UUID(template_ref)
+                        except (TypeError, ValueError):
+                            if template_code:
+                                req_kwargs["template_code"] = template_code
+                            else:
+                                req_kwargs["template_code"] = template_ref
+                    elif template_code:
+                        req_kwargs["template_code"] = template_code
+                    req = SendMessageRequest(**req_kwargs)
                     result = await MessageService.send_message(tenant_id, req)
                     if result.success:
                         sent += 1

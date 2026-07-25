@@ -107,7 +107,27 @@ def _derived_to_response(
 
 class DocumentRelationNewService:
     """单据关联服务（新实现）"""
-    
+
+    async def relation_exists(
+        self,
+        tenant_id: int,
+        *,
+        source_type: str,
+        source_id: int,
+        target_type: str,
+        target_id: int | None = None,
+    ) -> bool:
+        """DocumentRelation 无软删除字段，禁止传 deleted_at 过滤。"""
+        filters: dict[str, int | str] = {
+            "tenant_id": tenant_id,
+            "source_type": source_type,
+            "source_id": source_id,
+            "target_type": target_type,
+        }
+        if target_id is not None:
+            filters["target_id"] = target_id
+        return await DocumentRelation.filter(**filters).exists()
+
     async def create_relation(
         self,
         tenant_id: int,

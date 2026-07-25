@@ -34,6 +34,8 @@ from apps.kuaizhizao.schemas.demand_computation import (
     DemandComputationReadinessResponse,
     DemandComputationMaterialBackfillRequest,
     DemandComputationMaterialBackfillResponse,
+    FirmPlannedOrdersRequest,
+    FirmPlannedOrdersResponse,
 )
 from core.api.deps.access import require_permission_codes
 from apps.kuaizhizao.schemas.demand_replanning import (
@@ -243,6 +245,37 @@ async def get_computation_readiness(
 
 
 @router.post(
+    "/{computation_id:int}/readiness",
+    response_model=DemandComputationReadinessResponse,
+    summary="Check readiness with optional execute param overrides",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:read"))],
+)
+async def post_computation_readiness(
+    computation_id: int = Path(..., description="计算ID"),
+    body: Optional[ExecuteComputationRequest] = Body(None, description="可选临时覆盖参数（与执行计算一致）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """执行前检查基础资料缺失项；可传入本次执行参数（仓库/BOM 版本等）。"""
+    del current_user
+    try:
+        raw = await computation_service.preview_computation_readiness(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+            computation_params_override=body.computation_params if body else None,
+        )
+        return DemandComputationReadinessResponse.model_validate(raw)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"需求计算就绪检查失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__}: {str(e)}",
+        )
+
+
+@router.post(
     "/materials/backfill",
     response_model=DemandComputationMaterialBackfillResponse,
     summary="Backfill material defaults for demand computation",
@@ -334,6 +367,42 @@ async def execute_computation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err_msg)
 
 
+@router.post(
+    "/{computation_id:int}/items/{item_id:int}/firm-planned-orders",
+    response_model=FirmPlannedOrdersResponse,
+    summary="Firm or unfirm planned orders on a computation item",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:update"))],
+)
+async def firm_planned_orders(
+    computation_id: int = Path(..., description="计算ID"),
+    item_id: int = Path(..., description="计算明细ID"),
+    body: FirmPlannedOrdersRequest = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """确认/取消确认计划订单；frozen=true 时重算保留且不生成新计划。"""
+    try:
+        raw = await computation_service.firm_planned_orders(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+            item_id=item_id,
+            firm=body.firm,
+            frozen=body.frozen,
+            operator_id=current_user.id,
+        )
+        return FirmPlannedOrdersResponse.model_validate(raw)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"确认计划订单失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__}: {str(e)}",
+        )
+
+
 @router.post("/{computation_id:int}/recompute", response_model=DemandComputationResponse, summary="Recompute")
 async def recompute_computation(
     computation_id: int = Path(..., description="计算ID"),
@@ -343,6 +412,7 @@ async def recompute_computation(
     """
     对已完成或失败的需求计算重新执行计算。
     会清空原计算结果明细后按原需求重新跑 MRP/LRP。
+    已确认/冻结的计划订单会保留。
     """
     try:
         return await computation_service.recompute_computation(

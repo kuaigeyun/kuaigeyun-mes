@@ -112,7 +112,7 @@ export function resolveWorkOrderGroupIdFromListRow(row: WorkOrderListRow): numbe
   return null
 }
 
-/** 批量解除编组：从勾选行收集不重复的工单组 ID */
+/** 批量解除编组：仅从勾选的「工单组」父行收集组 ID（不含组内成员行） */
 export function resolveDissolvableWorkOrderGroupIdsFromRowKeys(
   keys: React.Key[],
   rowByKey?: Map<string, WorkOrderListRow>
@@ -120,11 +120,13 @@ export function resolveDissolvableWorkOrderGroupIdsFromRowKeys(
   const ids: number[] = []
   const seen = new Set<number>()
   for (const key of keys) {
+    const rowKey = String(key)
+    const row = rowByKey?.get(rowKey)
+    const isGroupRow =
+      row?.row_kind === 'work_order_group' || parseWorkOrderGroupIdFromListRowKey(key) != null
+    if (!isGroupRow) continue
     let gid = parseWorkOrderGroupIdFromListRowKey(key)
-    if (gid == null) {
-      const row = rowByKey?.get(String(key))
-      if (row) gid = resolveWorkOrderGroupIdFromListRow(row)
-    }
+    if (gid == null && row) gid = resolveWorkOrderGroupIdFromListRow(row)
     if (gid == null || seen.has(gid)) continue
     seen.add(gid)
     ids.push(gid)

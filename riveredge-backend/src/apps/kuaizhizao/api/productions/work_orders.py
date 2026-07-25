@@ -15,7 +15,7 @@ from core.api.deps import get_current_user, get_current_tenant
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from core.api.deps.access import require_permission_codes
 from infra.models.user import User
-from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.rework_order_service import ReworkOrderService, REWORK_ORDER_SORTABLE_FIELDS
@@ -56,6 +56,8 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderOperationsUpdateRequest,
     WorkOrderOperationDispatch,
     WorkOrderKittingAnalysisResponse,
+    WorkOrderRemindBatchingRequest,
+    WorkOrderRemindBatchingResponse,
     WorkOrderTrackingPreviewRequest,
     WorkOrderTrackingPreviewResponse,
     WorkOrderConfirmTrackingRequest,
@@ -1667,9 +1669,74 @@ async def get_work_order_kitting_analysis(
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
+@router.post(
+    "/work-orders/{work_order_id}/remind-batching",
+    response_model=WorkOrderRemindBatchingResponse,
+    summary="Remind warehouse for line-side batching",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:read"))],
+)
+async def remind_work_order_batching(
+    work_order_id: int,
+    body: WorkOrderRemindBatchingRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderRemindBatchingResponse:
+    """
+    提醒仓库线边备料：同步/生成线边备料草稿，并向指定用户发送站内信。
+    生产侧不进入物料中心；仓库在线边备料执行页处理。
+    """
+    try:
+        result = await WorkOrderService().remind_warehouse_batching(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            recipient_user_uuids=body.recipient_user_uuids,
+            remarks=body.remarks,
+            created_by=current_user.id,
+        )
+        return WorkOrderRemindBatchingResponse(**result)
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"提醒仓库线边备料失败 work_order_id={work_order_id}: {e}")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="提醒仓库备料失败",
+        )
+
+
+@router.get(
+    "/work-orders/{work_order_id}/material-movements",
+    summary="Work order material stock movements",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:read"))],
+)
+async def list_work_order_material_movements(
+    work_order_id: int,
+    limit: int = Query(200, ge=1, le=500),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """工单物料移动时间线：优先库存流水；无流水时单据并集兜底。"""
+    from apps.kuaizhizao.services.material_stock_movement_service import (
+        MaterialStockMovementService,
+    )
+
+    try:
+        return await MaterialStockMovementService().list_for_work_order(
+            tenant_id, work_order_id, limit=limit
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
 @router.post("/work-orders/{work_order_id}/release", response_model=WorkOrderResponse, summary="Release work order")
 async def release_work_order(
     work_order_id: int,
+    ignore_shortage: bool = Query(
+        False,
+        description="用户确认后忽略缺料继续下达（前端齐套提示「继续下达」时传 true）",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> WorkOrderResponse:
@@ -1679,17 +1746,18 @@ async def release_work_order(
     将工单状态从"草稿"更新为"已下达"。
     是否检查缺料由业务配置「缺料拦截级别」决定：
     0=不拦截，1=下达拦截，2=下达+开工拦截，3=下达+开工+报工拦截。
+    前端可先 check-shortage 提示；用户确认「继续下达」时传 ignore_shortage=true。
 
     - **work_order_id**: 工单ID
     """
     from infra.services.business_config_service import BusinessConfigService
     block_level = await BusinessConfigService().get_material_shortage_block_level(tenant_id)
-    check_shortage = block_level >= 1
+    check_shortage = block_level >= 1 and not ignore_shortage
     return await WorkOrderService().release_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
         released_by=current_user.id,
-        check_shortage=check_shortage
+        check_shortage=check_shortage,
     )
 
 

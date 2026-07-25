@@ -49,6 +49,7 @@ class SalesOrderCapabilities(BaseModel):
     push_invoice: ActionCapability
     push_sales_return: ActionCapability
     create_change_order: ActionCapability
+    backfill_sales_contract: ActionCapability
 
 
 class SalesOrderChangeCapabilities(BaseModel):
@@ -355,6 +356,10 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "sales_order.push_return.not_allowed": "当前状态不可下推销售退货单",
     "sales_order.push_return.no_delivered": "销售订单暂无可退货数量（已交货数量为 0）",
     "sales_order.create_change.not_allowed": "当前状态不可新建销售变更单",
+    "sales_order.backfill_contract.not_allowed": "当前状态不可补签销售合同",
+    "sales_order.backfill_contract.already_linked": "销售订单已关联销售合同",
+    "sales_order.backfill_contract.release_order": "框架合同释放单不可补签合同",
+    "sales_order.backfill_contract.already_backfilled": "该销售订单已补签销售合同",
     "sales_order_change.update.not_draft": "仅草稿或待审核状态可编辑变更单",
     "sales_order_change.delete.not_draft": "仅草稿状态可删除",
     "sales_order_change.submit.not_draft": "仅草稿可提交",
@@ -506,10 +511,10 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "work_order.push_production_picking.not_allowed": "当前状态不可下推生产领料",
     "work_order.push_production_picking.frozen": "工单已冻结，不可下推生产领料",
     "work_order.push_production_picking.pending_picking": "已存在待领料单，请先处理后再下推",
-    "batching_order.pull_from_work_order.not_allowed": "工单状态不可生成配料单",
-    "batching_order.pull_from_work_order.no_product": "工单未关联产品，无法配料",
-    "batching_order.pull_from_work_order.existing_draft": "工单已有进行中的配料单",
-    "batching_order.pull_from_work_order.no_shortage_lines": "工单无待配料缺料行",
+    "batching_order.pull_from_work_order.not_allowed": "工单状态不可生成线边备料单",
+    "batching_order.pull_from_work_order.no_product": "工单未关联产品，无法备料",
+    "batching_order.pull_from_work_order.existing_draft": "工单已有进行中的线边备料单",
+    "batching_order.pull_from_work_order.no_shortage_lines": "工单无待备料缺料行",
     "work_order.push_finished_goods_receipt.not_allowed": "当前状态不可下推成品入库",
     "work_order.push_finished_goods_receipt.frozen": "工单已冻结，不可下推成品入库",
     "work_order.push_production_return.not_allowed": "当前状态不可下推生产退料",

@@ -16,10 +16,19 @@ computation_params（MRP）中小企业常用键白名单（JSON 存取，与前
 - 仓库范围：warehouse_ids: int[]；缺省时后端按全部启用且 warehouse_type=normal 的仓库汇总线边库存；
   MaterialBatch 主仓批次不按仓过滤（全量计入）。
 - 时间窗：planning_horizon: int（天），有交期的需求行交期晚于「今天+horizon」则跳过；缺省或 <=0 不裁剪。
-- BOM：bom_version, material_bom_versions；bom_expand_level: int（1–100，展开最大层级，默认 10）。
-- 建议量：apply_lot_sizing: bool（默认 true）；suggested_qty_min / suggested_qty_max / suggested_qty_multiple（全局覆盖）；
-  物料级规则：defaults.purchase（Buy）与 defaults.production（Make/Outsource）中的 min/max/multiple 等别名键。
+- 建议量：apply_lot_sizing: bool（默认 true）；suggested_qty_min / suggested_qty_max / suggested_qty_multiple / suggested_qty_fixed（全局覆盖）；
+  物料级规则：defaults.purchase（Buy）与 defaults.production（Make/Outsource）中的 min/max/multiple/fixed（固定批量 FOQ）等别名键。
+  自制建议量还会按 source_config.production_waste_rate（百分比，如 5=5%）放大。
+- BOM：bom_version, material_bom_versions；bom_expand_level: int（1–100，展开最大层级，默认 10）；
+  展开时按需求行交期（无则计算日）作为 as_of_date 过滤 BOM 生效区间。
 - 排程缓冲：schedule_buffer_days: int（≥0，默认 0），在物料来源提前期基础上，将计划开工/请购日再整体向前多留若干天（中小企业应对波动）。
+- 排程方向：schedule_direction: "backward" | "forward"（默认 backward）。
+  backward=交期锚定倒排（完工日=需求交期，开工日=交期−提前期−缓冲）；
+  forward=尽早开工正排（开工日=今天，完工日=开工+提前期+缓冲；完工晚于原交期时写入例外，不改交期）。
+  下推工单时：倒排按计划结束倒推工序；正排按计划开始正推工序。
+- 工作日历：use_work_calendar: bool（默认 true），提前期按主数据节假日（Holiday）计工作日；周末是否休息取决于是否已导入周休。
+- 预测冲销：forecast_consume_enabled: bool（默认 true）；forecast_consume_backward_days / forecast_consume_forward_days（默认 30/30），
+  同物料销售订单需求冲抵销售预测毛需求（种子层）；持久冲销见 SalesForecastItem.consumed_quantity。
 - 4M（仅占位，供排产扩展）：consider_capacity, consider_material_readiness,
   consider_equipment_availability, consider_mold_tool_availability；当前不参与净算与建议量，仅保留配置键。
 """
@@ -140,12 +149,16 @@ class DemandComputationReadinessGapItem(BaseModel):
     material_uuid: str
     material_code: str
     material_name: str
+    material_spec: Optional[str] = Field(None, description="规格")
+    material_unit: Optional[str] = Field(None, description="基础单位")
     source_type: Optional[str] = None
+    manufacturing_mode: Optional[str] = Field(None, description="制造模式 fabrication/assembly")
     field: str = Field(..., description="补齐字段路径，如 source_config.production_lead_time")
     label: str = Field(..., description="展示文案")
     current: Optional[Any] = None
     suggested: Optional[Any] = Field(None, description="表单初值，不静默生效")
-    value_type: str = Field("number", description="number|int|supplier_id")
+    value_type: str = Field("number", description="number|int|supplier_id|source_type|manufacturing_mode|process_route_id|text|info")
+    blocking: bool = Field(False, description="仅提示、不可在本流程补齐（如缺 BOM）")
 
 
 class DemandComputationReadinessResponse(BaseModel):
@@ -170,6 +183,23 @@ class DemandComputationMaterialBackfillResponse(BaseModel):
     updated_count: int = 0
 
 
+class FirmPlannedOrdersRequest(BaseModel):
+    """确认/取消确认计算明细上的计划订单"""
+    firm: bool = Field(True, description="true=确认计划订单；false=取消确认")
+    frozen: bool = Field(
+        False,
+        description="true=冻结：重算时保留已确认量且不再生成新计划订单",
+    )
+
+
+class FirmPlannedOrdersResponse(BaseModel):
+    item_id: int
+    material_id: int
+    firm: bool
+    frozen: bool
+    planned_orders: List[Dict[str, Any]] = Field(default_factory=list)
+
+
 class DemandComputationUpdate(BaseModel):
     """更新需求计算Schema"""
     computation_status: Optional[str] = Field(None, max_length=20, description="计算状态")
@@ -182,7 +212,10 @@ class DemandComputationItemResponse(DemandComputationItemBase):
     """需求计算明细响应Schema"""
     id: int
     computation_id: int
-    
+    demand_item_ids: Optional[List[int]] = Field(
+        None, description="该计算行由哪些 DemandItem 汇总而来，用于追溯"
+    )
+
     # 计划员赋能增强字段 (Computed)
     readiness_status: Optional[str] = Field(None, description="物料就绪状态 (Ready/Partial/Shortage)")
     readiness_rate: Optional[float] = Field(None, description="库存就绪比例 (0.0-1.0)")

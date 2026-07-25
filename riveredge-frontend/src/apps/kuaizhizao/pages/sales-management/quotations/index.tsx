@@ -109,7 +109,7 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 import { batchImport } from '../../../../../utils/batchOperations';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
-import { formDateFormItemProps, formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { coerceFormDate, formDateFormItemProps, formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
@@ -543,7 +543,7 @@ function resolveQuotationLineMaterialFields(
   return { material_code, material_name };
 }
 
-function mapQuotationSubmitItem(it: any, materialList: any[]) {
+function mapQuotationSubmitItem(it: any, materialList: any[], mainDeliveryStr?: string) {
   const { material_code, material_name } = resolveQuotationLineMaterialFields(it, materialList);
   return {
     material_id: it.material_id,
@@ -555,7 +555,7 @@ function mapQuotationSubmitItem(it: any, materialList: any[]) {
     unit_price: it.unit_price,
     tax_rate: it.tax_rate ?? 0,
     variant_attributes: parseVariantAttributesValue(it.variant_attributes) ?? it.variant_attributes,
-    delivery_date: toApiDateString(it.delivery_date),
+    delivery_date: toApiDateString(it.delivery_date) ?? mainDeliveryStr,
     notes: it.notes,
   };
 }
@@ -731,7 +731,34 @@ const QuotationsPage: React.FC = () => {
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
   const formRef = useRef<any>(null);
+  /** 上一次表头预计交货日期，改表头时同步曾跟随表头的明细行 */
+  const lastHeaderDeliveryRef = useRef<ReturnType<typeof dayjs> | null>(null);
   const lastPriceTypeRef = useRef<PriceTypeValue>(DEFAULT_SALES_PRICE_TYPE);
+
+  const applyHeaderDeliveryToItemLines = useCallback((delivery: unknown) => {
+    const coerced = coerceFormDate(delivery);
+    if (coerced == null) return;
+    const prevHeader = lastHeaderDeliveryRef.current;
+    const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+    if (!items.length) return;
+    let changed = false;
+    const next = items.map((it: Record<string, unknown>) => {
+      const lineDate = coerceFormDate(it.delivery_date);
+      if (lineDate == null) {
+        changed = true;
+        return { ...it, delivery_date: coerced };
+      }
+      if (prevHeader && lineDate.isSame(prevHeader, 'day')) {
+        changed = true;
+        return { ...it, delivery_date: coerced };
+      }
+      return it;
+    });
+    lastHeaderDeliveryRef.current = coerced;
+    if (changed) {
+      formRef.current?.setFieldsValue({ items: next });
+    }
+  }, []);
   const [quotationEditingIncl, setQuotationEditingIncl] = useState<{ index: number; value: number | null } | null>(
     null,
   );
@@ -2188,7 +2215,6 @@ const QuotationsPage: React.FC = () => {
         {
           key: 'sales-order',
           label: pushToSalesOrderAction.label,
-          icon: <SwapOutlined />,
           disabled: superseded || !convertible,
           title: orderPushTitle,
           onClick: () => {
@@ -2206,7 +2232,6 @@ const QuotationsPage: React.FC = () => {
         {
           key: 'sales-contract',
           label: pushToSalesContractAction.label,
-          icon: <FileTextOutlined />,
           disabled: superseded || !contractConvertible || !salesContractPerms.canCreate,
           title: contractPushTitle,
           onClick: () => {
@@ -2278,6 +2303,7 @@ const QuotationsPage: React.FC = () => {
 
   async function initQuotationCreateForm(options?: { customerId?: number }) {
     const prefillCustomerId = options?.customerId;
+    lastHeaderDeliveryRef.current = null;
     formRef.current?.resetFields();
     setEditingId(null);
     setPendingCreateCustomerId(prefillCustomerId ?? null);
@@ -2386,6 +2412,7 @@ const QuotationsPage: React.FC = () => {
       };
       setTimeout(() => {
         formRef.current?.setFieldsValue(editValues);
+        lastHeaderDeliveryRef.current = coerceFormDate(editValues.delivery_date);
         lastPriceTypeRef.current = normalizeSalesPriceType(editValues.price_type);
       }, 100);
     } catch {
@@ -2411,7 +2438,8 @@ const QuotationsPage: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.quotation.validLineHint'));
       throw new Error(t('app.kuaizhizao.quotation.validLineHint'));
     }
-    const submitItems = validItems.map((it: any) => mapQuotationSubmitItem(it, materialList));
+    const mainDeliveryStr = toApiDateString(values.delivery_date);
+    const submitItems = validItems.map((it: any) => mapQuotationSubmitItem(it, materialList, mainDeliveryStr));
     const missingMaterialMeta = submitItems.find((it) => !it.material_code || !it.material_name);
     if (missingMaterialMeta) {
       messageApi.error(t('app.kuaizhizao.quotation.lineMaterialMissing'));
@@ -2513,7 +2541,8 @@ const QuotationsPage: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.quotation.validLineHint'));
       throw new Error(t('app.kuaizhizao.quotation.validLineHint'));
     }
-    const submitItems = validItems.map((it: any) => mapQuotationSubmitItem(it, materialList));
+    const mainDeliveryStr = toApiDateString(values.delivery_date);
+    const submitItems = validItems.map((it: any) => mapQuotationSubmitItem(it, materialList, mainDeliveryStr));
     const missingMaterialMeta = submitItems.find((it) => !it.material_code || !it.material_name);
     if (missingMaterialMeta) {
       messageApi.error(t('app.kuaizhizao.quotation.lineMaterialMissing'));
@@ -2728,9 +2757,7 @@ const QuotationsPage: React.FC = () => {
   const appendQuotationItemsFromMaterials = useCallback(
     async (selected: Material[]) => {
       const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
-      const mainDelivery = formRef.current?.getFieldValue('delivery_date');
-      const defaultDelivery =
-        mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
+      const defaultDelivery = coerceFormDate(formRef.current?.getFieldValue('delivery_date')) ?? undefined;
       const customerId = formRef.current?.getFieldValue('customer_id');
       const quotationDate = formRef.current?.getFieldValue('quotation_date');
       const asOf =
@@ -2819,6 +2846,7 @@ const QuotationsPage: React.FC = () => {
   useSubmitShortcut(() => triggerQuotationFormSubmit(), isFormPage);
 
   const appendEmptyQuotationItem = useCallback(() => {
+    const headerDelivery = coerceFormDate(formRef.current?.getFieldValue('delivery_date')) ?? undefined;
     const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
     items.push({
       material_id: undefined,
@@ -2829,7 +2857,7 @@ const QuotationsPage: React.FC = () => {
       quote_quantity: 1,
       unit_price: undefined,
       tax_rate: 0,
-      delivery_date: undefined,
+      delivery_date: headerDelivery,
       notes: '',
     });
     formRef.current?.setFieldsValue({ items });
@@ -2902,6 +2930,15 @@ const QuotationsPage: React.FC = () => {
               fieldName: 'delivery_date',
               baseFieldName: 'quotation_date',
               t,
+              onApply: (date) => {
+                formRef.current?.setFieldValue?.('delivery_date', date);
+                applyHeaderDeliveryToItemLines(date);
+              },
+              fieldProps: {
+                onChange: (value: unknown) => {
+                  applyHeaderDeliveryToItemLines(value);
+                },
+              },
             })}
           />
         </Col>
@@ -3244,12 +3281,15 @@ const QuotationsPage: React.FC = () => {
                           <Form.Item
                             name={[index, 'delivery_date']}
                             style={{ margin: 0 }}
+                            getValueProps={(value) => ({ value: coerceFormDate(value) ?? undefined })}
+                            normalize={(value) => coerceFormDate(value) ?? undefined}
                             {...formDateFormItemProps}
                           >
                             <FutureDatePicker
                               size={DOCUMENT_DETAIL_CONTROL_SIZE}
                               style={{ width: '100%', minWidth: 140 }}
                               format="YYYY-MM-DD"
+                              allowClear
                               getForm={() => formRef.current}
                               baseFieldName="quotation_date"
                               t={t}
@@ -3737,29 +3777,6 @@ const QuotationsPage: React.FC = () => {
                   {t('app.kuaizhizao.quotation.saveAsRevision')}
                 </Button>
               )}
-              <Tooltip title={detailCapabilityGates.convertToOrder.disabled ? detailCapabilityGates.convertToOrder.title : undefined}>
-                <Button
-                  icon={<SwapOutlined />}
-                  disabled={detailCapabilityGates.convertToOrder.disabled}
-                  onClick={() =>
-                    !detailCapabilityGates.convertToOrder.disabled && showQuotationPushPreview(quotationDetail, 'sales_order')
-                  }
-                >
-                  {pushToSalesOrderAction.label}
-                </Button>
-              </Tooltip>
-              <Tooltip title={detailCapabilityGates.convertToContract.disabled ? detailCapabilityGates.convertToContract.title : undefined}>
-                <Button
-                  icon={<FileTextOutlined />}
-                  disabled={detailCapabilityGates.convertToContract.disabled}
-                  onClick={() =>
-                    !detailCapabilityGates.convertToContract.disabled &&
-                    showQuotationPushPreview(quotationDetail, 'sales_contract')
-                  }
-                >
-                  {pushToSalesContractAction.label}
-                </Button>
-              </Tooltip>
               <Tooltip
                 title={
                   detailCapabilityGates.printFormal.disabled

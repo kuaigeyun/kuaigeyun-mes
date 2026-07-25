@@ -236,6 +236,10 @@ export const SALES_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'sales_order.push_return.not_allowed': '当前状态不可下推销售退货单',
   'sales_order.push_return.no_delivered': '销售订单暂无可退货数量（已交货数量为 0）',
   'sales_order.create_change.not_allowed': '当前状态不可新建销售变更单',
+  'sales_order.backfill_contract.not_allowed': '当前状态不可补签销售合同',
+  'sales_order.backfill_contract.already_linked': '销售订单已关联销售合同',
+  'sales_order.backfill_contract.release_order': '框架合同释放单不可补签合同',
+  'sales_order.backfill_contract.already_backfilled': '该销售订单已补签销售合同',
 };
 
 export function salesOrderCapabilityReasonMessage(
@@ -966,10 +970,10 @@ export const SALES_DELIVERY_CAPABILITY_REASON_MESSAGES: Record<string, string> =
 };
 
 export const BATCHING_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
-  'batching_order.pull_from_work_order.not_allowed': '工单状态不可生成配料单',
-  'batching_order.pull_from_work_order.no_product': '工单未关联产品，无法配料',
-  'batching_order.pull_from_work_order.existing_draft': '工单已有进行中的配料单',
-  'batching_order.pull_from_work_order.no_shortage_lines': '工单无待配料缺料行',
+  'batching_order.pull_from_work_order.not_allowed': '工单状态不可生成线边备料单',
+  'batching_order.pull_from_work_order.no_product': '工单未关联产品，无法备料',
+  'batching_order.pull_from_work_order.existing_draft': '工单已有进行中的线边备料单',
+  'batching_order.pull_from_work_order.no_shortage_lines': '工单无待备料缺料行',
 };
 
 export const REPORTING_RECORD_CAPABILITY_REASON_MESSAGES: Record<string, string> = {

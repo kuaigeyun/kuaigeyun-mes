@@ -40,6 +40,9 @@ class SalesOrderItem(BaseModel):
     delivery_date = fields.DateField(description="交货日期")
     delivery_status = fields.CharField(max_length=20, default="待交货", description="交货状态")
 
+    # 预测冲销绑定（主预测明细；数量冲销累计在 SalesForecastItem.consumed_quantity）
+    forecast_item_id = fields.IntField(null=True, description="冲销绑定的销售预测明细ID")
+
     # 关联工单（MTO模式）
     work_order_id = fields.IntField(null=True, description="工单ID")
     work_order_code = fields.CharField(max_length=50, null=True, description="工单编码")

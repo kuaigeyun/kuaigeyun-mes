@@ -1504,33 +1504,83 @@ class ApprovalInstanceService:
         }
 
     @staticmethod
+    def _approval_detail_path(instance: ApprovalInstance) -> str:
+        return f"/personal/tasks?highlight={instance.id}"
+
+    @staticmethod
+    async def _send_internal_to_user(
+        *,
+        tenant_id: int,
+        user_id: int,
+        subject: str,
+        content: str,
+        trigger_action: str,
+        instance: ApprovalInstance,
+        template_code: Optional[str] = None,
+        extra_variables: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """审批站内信：recipient 必须为用户 ID（不走邮件）。"""
+        variables: Dict[str, Any] = {
+            "message_category": "approval",
+            "trigger_document": "approval",
+            "trigger_action": trigger_action,
+            "detail_path": ApprovalInstanceService._approval_detail_path(instance),
+            "approval_instance_id": str(instance.id),
+            "title": instance.title or "",
+        }
+        if extra_variables:
+            variables.update({k: str(v) for k, v in extra_variables.items()})
+        req_kwargs: Dict[str, Any] = dict(
+            type="internal",
+            recipient=str(user_id),
+            subject=subject,
+            content=content,
+            variables=variables,
+        )
+        if template_code:
+            req_kwargs["template_code"] = template_code
+        try:
+            await MessageService.send_message(
+                tenant_id=tenant_id,
+                request=SendMessageRequest(**req_kwargs),
+            )
+        except NotFoundError:
+            # 模板未加载时回落明文站内信，避免审批通知静默失败
+            req_kwargs.pop("template_code", None)
+            await MessageService.send_message(
+                tenant_id=tenant_id,
+                request=SendMessageRequest(**req_kwargs),
+            )
+
+    @staticmethod
     async def _send_cc_notification(
         tenant_id: int,
         instance: ApprovalInstance,
         node: dict,
         approver_ids: List[int],
     ) -> None:
-        """抄送节点：给抄送人发站内/邮件通知（可选）。"""
+        """抄送节点：给抄送人发站内信。"""
         try:
             await instance.fetch_related("process")
             process = instance.process
             node_label = (node.get("data") or {}).get("label") or "抄送"
-            for uid in approver_ids[:50]:  # 限制人数
+            for uid in approver_ids[:50]:
                 u = await User.filter(
                     id=uid,
                     tenant_id=tenant_id,
                     deleted_at__isnull=True,
                 ).first()
-                if u and getattr(u, "email", None):
-                    await MessageService.send_message(
-                        tenant_id=tenant_id,
-                        request=SendMessageRequest(
-                            type="internal",
-                            recipient=u.email,
-                            subject=f"抄送：{instance.title}",
-                            content=f"您被抄送审批「{instance.title}」，节点：{node_label}，流程：{process.name}。",
-                        ),
-                    )
+                if not u:
+                    continue
+                await ApprovalInstanceService._send_internal_to_user(
+                    tenant_id=tenant_id,
+                    user_id=u.id,
+                    subject=f"抄送：{instance.title}",
+                    content=f"您被抄送审批「{instance.title}」，节点：{node_label}，流程：{process.name}。",
+                    trigger_action="cc",
+                    instance=instance,
+                    extra_variables={"process_name": process.name, "node_label": node_label},
+                )
         except Exception as e:
             logger.warning("抄送通知失败: %s", e)
 
@@ -1541,7 +1591,7 @@ class ApprovalInstanceService:
         approver_ids: List[int],
         comment: Optional[str] = None,
     ) -> None:
-        """催办/超时：通知待办审批人。"""
+        """催办/超时：通知待办审批人（站内信）。"""
         try:
             await instance.fetch_related("process")
             process = instance.process
@@ -1552,16 +1602,21 @@ class ApprovalInstanceService:
                     tenant_id=tenant_id,
                     deleted_at__isnull=True,
                 ).first()
-                if u and getattr(u, "email", None):
-                    await MessageService.send_message(
-                        tenant_id=tenant_id,
-                        request=SendMessageRequest(
-                            type="internal",
-                            recipient=u.email,
-                            subject=f"催办：{instance.title}",
-                            content=f"{body}（流程：{process.name}）",
-                        ),
-                    )
+                if not u:
+                    continue
+                await ApprovalInstanceService._send_internal_to_user(
+                    tenant_id=tenant_id,
+                    user_id=u.id,
+                    subject=f"催办：{instance.title}",
+                    content=f"{body}（流程：{process.name}）",
+                    trigger_action="urge",
+                    instance=instance,
+                    template_code="approval_urge",
+                    extra_variables={
+                        "process_name": process.name,
+                        "comment": body,
+                    },
+                )
         except Exception as e:
             logger.warning("催办通知失败: %s", e)
 
@@ -1571,57 +1626,42 @@ class ApprovalInstanceService:
         approval_instance: ApprovalInstance,
         process: ApprovalProcess
     ) -> None:
-        """
-        发送审批提交通知
-        
-        Args:
-            tenant_id: 组织ID
-            approval_instance: 审批实例
-            process: 审批流程
-        """
+        """提交后仅通知当前审批人（待办）；不给提交人刷「已提交」以免打扰。"""
         try:
-            # 获取提交人信息
             submitter = await User.filter(
                 id=approval_instance.submitter_id,
                 tenant_id=tenant_id,
                 deleted_at__isnull=True
             ).first()
-            
-            if not submitter or not submitter.email:
+            if not approval_instance.current_approver_id:
                 return
-            
-            # 发送消息给提交人
-            await MessageService.send_message(
+            approver = await User.filter(
+                id=approval_instance.current_approver_id,
                 tenant_id=tenant_id,
-                request=SendMessageRequest(
-                    type="internal",
-                    recipient=submitter.email,
-                    subject=f"审批已提交：{approval_instance.title}",
-                    content=f"您提交的审批「{approval_instance.title}」已成功提交，流程：{process.name}。请等待审批。",
-                )
+                deleted_at__isnull=True
+            ).first()
+            if not approver:
+                return
+            submitter_name = (
+                (submitter.full_name or submitter.username) if submitter else "—"
             )
-            
-            # 如果有当前审批人，发送消息给审批人
-            if approval_instance.current_approver_id:
-                approver = await User.filter(
-                    id=approval_instance.current_approver_id,
-                    tenant_id=tenant_id,
-                    deleted_at__isnull=True
-                ).first()
-                
-                if approver and approver.email:
-                    await MessageService.send_message(
-                        tenant_id=tenant_id,
-                        request=SendMessageRequest(
-                            type="internal",
-                            recipient=approver.email,
-                            subject=f"待审批：{approval_instance.title}",
-                            content=f"您有一个待审批的申请：{approval_instance.title}，提交人：{submitter.full_name or submitter.username}，流程：{process.name}。",
-                        )
-                    )
+            await ApprovalInstanceService._send_internal_to_user(
+                tenant_id=tenant_id,
+                user_id=approver.id,
+                subject=f"待审批：{approval_instance.title}",
+                content=(
+                    f"您有一个待审批的申请：{approval_instance.title}，"
+                    f"提交人：{submitter_name}，流程：{process.name}。"
+                ),
+                trigger_action="pending",
+                instance=approval_instance,
+                template_code="approval_pending",
+                extra_variables={
+                    "submitter_name": submitter_name,
+                    "process_name": process.name,
+                },
+            )
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"发送审批提交通知失败: {str(e)}")
     
     @staticmethod
@@ -1634,102 +1674,87 @@ class ApprovalInstanceService:
         old_current_approver_id: Optional[int]
     ) -> None:
         """
-        发送审批操作通知
-        
-        Args:
-            tenant_id: 组织ID
-            approval_instance: 审批实例
-            action: 审批操作
-            user_id: 操作人ID
-            old_status: 旧状态
-            old_current_approver_id: 旧审批人ID
+        审批操作通知（站内信，少打扰）：
+        - 驳回 → 通知提交人
+        - 进入下一审批人 / 转交 → 通知新审批人
+        - 通过/取消 → 不额外刷成功信
         """
         try:
             await approval_instance.fetch_related('process')
             process = approval_instance.process
             
-            # 获取提交人信息
             submitter = await User.filter(
                 id=approval_instance.submitter_id,
                 tenant_id=tenant_id,
                 deleted_at__isnull=True
             ).first()
             
-            if not submitter or not submitter.email:
-                return
-            
-            # 获取操作人信息
             operator = await User.filter(
                 id=user_id,
                 tenant_id=tenant_id,
                 deleted_at__isnull=True
             ).first()
-            
-            # 根据操作类型发送不同的消息
-            action_text = {
-                "approve": "已通过",
-                "reject": "已拒绝",
-                "cancel": "已取消",
-                "transfer": "已转交"
-            }.get(action.action, action.action)
-            
-            # 发送消息给提交人
-            comment_text = f"，备注：{action.comment}" if action.comment else ""
-            operator_name = operator.full_name or operator.username if operator else "系统"
-            
-            await MessageService.send_message(
-                tenant_id=tenant_id,
-                request=SendMessageRequest(
-                    type="internal",
-                    recipient=submitter.email,
-                    subject=f"审批{action_text}：{approval_instance.title}",
-                    content=f"您的审批「{approval_instance.title}」已被{operator_name}{action_text}{comment_text}。流程：{process.name}。",
-                )
+            operator_name = (
+                (operator.full_name or operator.username) if operator else "系统"
             )
-            
-            # 如果审批完成（approved/rejected/cancelled），发送完成通知
-            if approval_instance.status in ["approved", "rejected", "cancelled"]:
-                status_text = {
-                    "approved": "已通过",
-                    "rejected": "已拒绝",
-                    "cancelled": "已取消"
-                }.get(approval_instance.status, approval_instance.status)
-                
-                await MessageService.send_message(
+            comment_text = action.comment or ""
+
+            if action.action == "reject" and submitter:
+                await ApprovalInstanceService._send_internal_to_user(
                     tenant_id=tenant_id,
-                    request=SendMessageRequest(
-                        type="internal",
-                        recipient=submitter.email,
-                        subject=f"审批完成：{approval_instance.title}",
-                        content=f"您的审批「{approval_instance.title}」已完成，结果：{status_text}。流程：{process.name}。",
-                    )
+                    user_id=submitter.id,
+                    subject=f"审批已拒绝：{approval_instance.title}",
+                    content=(
+                        f"您的审批「{approval_instance.title}」已被{operator_name}拒绝"
+                        f"{('，备注：' + comment_text) if comment_text else ''}。"
+                        f"流程：{process.name}。"
+                    ),
+                    trigger_action="rejected",
+                    instance=approval_instance,
+                    template_code="approval_rejected",
+                    extra_variables={
+                        "submitter_name": submitter.full_name or submitter.username or "",
+                        "approver_name": operator_name,
+                        "rejected_at": str(action.created_at or ""),
+                        "comment": comment_text or "—",
+                        "process_name": process.name,
+                    },
                 )
-            
-            # 如果有新的审批人（转交或进入下一节点），发送消息给新审批人
-            if approval_instance.current_approver_id and \
-               approval_instance.current_approver_id != old_current_approver_id and \
-               approval_instance.status == "pending":
+
+            if (
+                approval_instance.current_approver_id
+                and approval_instance.current_approver_id != old_current_approver_id
+                and approval_instance.status == "pending"
+            ):
                 new_approver = await User.filter(
                     id=approval_instance.current_approver_id,
                     tenant_id=tenant_id,
                     deleted_at__isnull=True
                 ).first()
-                
-                if new_approver and new_approver.email:
-                    await MessageService.send_message(
+                if new_approver:
+                    submitter_name = (
+                        (submitter.full_name or submitter.username) if submitter else "—"
+                    )
+                    await ApprovalInstanceService._send_internal_to_user(
                         tenant_id=tenant_id,
-                        request=SendMessageRequest(
-                            type="internal",
-                            recipient=new_approver.email,
-                            subject=f"待审批：{approval_instance.title}",
-                            content=f"您有一个待审批的申请：{approval_instance.title}，提交人：{submitter.full_name or submitter.username}，流程：{process.name}。",
-                        )
+                        user_id=new_approver.id,
+                        subject=f"待审批：{approval_instance.title}",
+                        content=(
+                            f"您有一个待审批的申请：{approval_instance.title}，"
+                            f"提交人：{submitter_name}，流程：{process.name}。"
+                        ),
+                        trigger_action="pending",
+                        instance=approval_instance,
+                        template_code="approval_pending",
+                        extra_variables={
+                            "submitter_name": submitter_name,
+                            "process_name": process.name,
+                        },
                     )
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"发送审批操作通知失败: {str(e)}")
     
+
     @staticmethod
     def _evaluate_conditions(instance: ApprovalInstance, conditions: List[Dict[str, Any]]) -> int:
         """

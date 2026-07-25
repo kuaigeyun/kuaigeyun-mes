@@ -21,6 +21,7 @@ from apps.kuaizhizao.models.sales_forecast import SalesForecast
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.quotation import Quotation
 from apps.kuaizhizao.models.sales_contract import SalesContract
+from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.kuaizhizao.models.material_borrow import MaterialBorrow
 from apps.kuaizhizao.models.material_return import MaterialReturn
 from apps.kuaizhizao.models.demand import Demand
@@ -265,6 +266,37 @@ class DocumentRelationService:
         """获取销售预测的上游单据（通常没有）"""
         return []
 
+    async def _is_sales_order_backfill_contract_link(
+        self,
+        tenant_id: int,
+        order_id: int,
+        contract_id: int,
+    ) -> bool:
+        """订单补签销售合同：订单为上游、合同为下游，不应把合同当作订单上游。"""
+        return await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="sales_order",
+            source_id=order_id,
+            target_type="sales_contract",
+            target_id=contract_id,
+            relation_mode="pull",
+        ).exists()
+
+    async def _sales_order_backfill_contract_order_ids(
+        self,
+        tenant_id: int,
+        contract_id: int,
+    ) -> set[int]:
+        """补签关联的订单不应通过 contract_id 推导为合同下游。"""
+        rows = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="sales_order",
+            target_type="sales_contract",
+            target_id=contract_id,
+            relation_mode="pull",
+        ).values_list("source_id", flat=True)
+        return set(rows)
+
     async def _get_sales_order_upstream(self, tenant_id: int, order_id: int) -> List[Dict[str, Any]]:
         """获取销售订单的上游单据（关联销售合同）"""
         upstream: List[Dict[str, Any]] = []
@@ -272,6 +304,10 @@ class DocumentRelationService:
             tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
         )
         if order and order.contract_id:
+            if await self._is_sales_order_backfill_contract_link(
+                tenant_id, order_id, order.contract_id
+            ):
+                return upstream
             contract = await SalesContract.get_or_none(
                 tenant_id=tenant_id, id=order.contract_id, deleted_at__isnull=True
             )
@@ -2299,7 +2335,12 @@ class DocumentRelationService:
             contract_id=contract_id,
             deleted_at__isnull=True,
         ).order_by("-created_at").limit(20)
+        backfill_order_ids = await self._sales_order_backfill_contract_order_ids(
+            tenant_id, contract_id
+        )
         for order in orders:
+            if order.id in backfill_order_ids:
+                continue
             downstream.append({
                 "document_type": "sales_order",
                 "document_id": order.id,
@@ -2569,6 +2610,74 @@ class DocumentRelationService:
                 "document_name": os_order.operation_name,
                 "status": os_order.status,
                 "created_at": to_api_isoformat(os_order.created_at) if os_order.created_at else None
+            })
+
+        # 线边备料单
+        from apps.kuaizhizao.models.batching_order import BatchingOrder
+
+        batching_orders = await BatchingOrder.filter(
+            tenant_id=tenant_id, work_order_id=work_order_id
+        ).limit(10)
+        for bo in batching_orders:
+            downstream.append({
+                "document_type": "batching_order",
+                "document_id": bo.id,
+                "document_code": bo.code,
+                "document_name": None,
+                "status": bo.status,
+                "created_at": to_api_isoformat(bo.created_at) if bo.created_at else None,
+            })
+
+        # 补料申请
+        from apps.kuaizhizao.models.material_call_request import MaterialCallRequest
+
+        material_calls = await MaterialCallRequest.filter(
+            tenant_id=tenant_id, work_order_id=work_order_id
+        ).limit(10)
+        for mc in material_calls:
+            downstream.append({
+                "document_type": "material_call_request",
+                "document_id": mc.id,
+                "document_code": mc.code,
+                "document_name": None,
+                "status": mc.status,
+                "created_at": to_api_isoformat(mc.created_at) if mc.created_at else None,
+            })
+
+        # 倒冲记录
+        from apps.kuaizhizao.models.backflush_record import BackflushRecord
+
+        backflushes = await BackflushRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).limit(10)
+        for bf in backflushes:
+            downstream.append({
+                "document_type": "backflush_record",
+                "document_id": bf.id,
+                "document_code": bf.material_code or str(bf.id),
+                "document_name": bf.material_name,
+                "status": bf.status,
+                "created_at": to_api_isoformat(bf.created_at) if bf.created_at else None,
+            })
+
+        # 报废记录
+        from apps.kuaizhizao.models.scrap_record import ScrapRecord
+
+        scraps = await ScrapRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).limit(10)
+        for scrap in scraps:
+            downstream.append({
+                "document_type": "scrap_record",
+                "document_id": scrap.id,
+                "document_code": scrap.code,
+                "document_name": scrap.product_name,
+                "status": scrap.status,
+                "created_at": to_api_isoformat(scrap.created_at) if scrap.created_at else None,
             })
 
         # 过程检验单

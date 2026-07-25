@@ -1209,7 +1209,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
       {
         key: 'push-purchase-order',
         label: pushToPurchaseOrderAction.label,
-        icon: <SwapOutlined />,
         disabled: !selectedRequisitionForToolbar || !canPushPurchaseOrder,
         title: pushPoBlockedReason,
         onClick: () => {
@@ -1221,7 +1220,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
       {
         key: 'push-inquiry',
         label: pushToInquiryAction.label,
-        icon: <FileSearchOutlined />,
         disabled: !selectedRequisitionForToolbar || !canPushInquiry,
         title: pushInquiryBlockedReason,
         onClick: () => {
@@ -2262,58 +2260,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     }}
                   />
                 ) },
-                {
-                  key: 'convert',
-                  visible: !!currentReq,
-                  render: () => {
-                    const canPush = !!currentReq?.capabilities?.push_purchase_order?.allowed;
-                    const blockedReason = canPush
-                      ? undefined
-                      : purchaseRequisitionCapabilityReasonMessage(
-                          currentReq?.capabilities?.push_purchase_order?.reason,
-                          t,
-                        );
-                    return (
-                      <Tooltip title={blockedReason}>
-                        <Button
-                          type="link"
-                          size="small"
-                          icon={<SwapOutlined />}
-                          disabled={!canPush}
-                          onClick={() => canPush && currentReq && void openPushPoPreview(currentReq)}
-                        >
-                          {pushToPurchaseOrderAction.label}
-                        </Button>
-                      </Tooltip>
-                    );
-                  },
-                },
-                {
-                  key: 'create-inquiry',
-                  visible: !!currentReq,
-                  render: () => {
-                    const canPush = !!currentReq?.capabilities?.push_inquiry?.allowed;
-                    const blockedReason = canPush
-                      ? undefined
-                      : purchaseRequisitionCapabilityReasonMessage(
-                          currentReq?.capabilities?.push_inquiry?.reason,
-                          t,
-                        );
-                    return (
-                      <Tooltip title={blockedReason}>
-                        <Button
-                          type="link"
-                          size="small"
-                          icon={<FileSearchOutlined />}
-                          disabled={!canPush}
-                          onClick={() => canPush && currentReq && void openPushInquiryPreview(currentReq)}
-                        >
-                          {pushToInquiryAction.label}
-                        </Button>
-                      </Tooltip>
-                    );
-                  },
-                },
                 {
                   key: 'fixStatus',
                   visible: ['全部转单', 'FULL_CONVERTED'].includes(currentReq.status ?? ''),

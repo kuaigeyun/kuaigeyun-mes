@@ -334,6 +334,11 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                     source_doc_id=payload["source_doc_id"],
                     source_doc_code=payload["source_doc_code"],
                     ledger_production_date=payload["ledger_production_date"],
+                    movement_type="outsource_receipt",
+                    to_warehouse_id=payload["warehouse_id"],
+                    idempotency_key=(
+                        f"outsource_material_receipt:{payload['source_doc_id']}:inc"
+                    ),
                 )
             except Exception as exc:
                 logger.error(

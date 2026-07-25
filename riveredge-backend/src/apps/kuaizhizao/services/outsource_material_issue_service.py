@@ -164,6 +164,9 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
                 "source_type": "outsource_material_issue",
                 "source_doc_id": material_issue.id,
                 "source_doc_code": code,
+                "movement_type": "outsource_issue",
+                "from_warehouse_id": issue_data.warehouse_id,
+                "idempotency_key": f"outsource_material_issue:{material_issue.id}:dec",
             }
 
         if stock_payload:

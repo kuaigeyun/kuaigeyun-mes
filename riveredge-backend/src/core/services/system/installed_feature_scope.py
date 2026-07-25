@@ -132,9 +132,16 @@ KUAIZHIZAO_APPROVAL_PROCESS_CODES: FrozenSet[str] = frozenset(
 )
 
 _MESSAGE_TEMPLATE_REQUIRES_APPS: Dict[str, FrozenSet[str]] = {
-    # 审批通知模板目前仅在快制造审批流程域内使用
+    # 审批通知：有审批能力的租户即可（快制造为主）
+    "approval_pending": frozenset({"kuaizhizao"}),
+    "approval_urge": frozenset({"kuaizhizao"}),
     "approval_approved": frozenset({"kuaizhizao"}),
     "approval_rejected": frozenset({"kuaizhizao"}),
+    "KZ_SALES_DELIVERY_DELAYED": frozenset({"kuaizhizao"}),
+    "KZ_PO_DELIVERY_DELAYED": frozenset({"kuaizhizao"}),
+    "KZ_QUALITY_EXCEPTION_CREATED": frozenset({"kuaizhizao"}),
+    "KZ_EQUIPMENT_FAULT_REPORTED": frozenset({"kuaizhizao"}),
+    "KZ_WO_REMIND_BATCHING": frozenset({"kuaizhizao"}),
 }
 
 # 邮件类全局预设已下线（邮件渠道未建设）；无「始终加载」的核心模板

@@ -78,7 +78,6 @@ import {
   CloseCircleOutlined,
   InboxOutlined,
   SendOutlined,
-  AuditOutlined,
   RetweetOutlined,
   SplitCellsOutlined,
   DisconnectOutlined,
@@ -284,6 +283,12 @@ const WORK_ORDER_ROW_EXPAND_QK = 'workOrderRowExpand' as const
 const WORK_ORDER_ROW_EXPAND_STALE_MS = 45_000
 const WORK_ORDER_STATISTICS_STALE_MS = 60_000
 const WORK_ORDER_EXECUTION_CONFIG_STALE_MS = 5 * 60_000
+
+/** 工序开工要求工单已下达或进行中 */
+function isWorkOrderReleasedForStart(status?: string | null): boolean {
+  const s = String(status || '').trim().toLowerCase()
+  return s === 'released' || s === 'in_progress' || s === '已下达' || s === '执行中'
+}
 import { getFileDownloadUrl } from '../../../../../services/file'
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField'
 import { batchImport } from '../../../../../utils/batchOperations'
@@ -2007,6 +2012,12 @@ const WorkOrdersPage: React.FC = () => {
   const [workOrderDetail, setWorkOrderDetail] = useState<WorkOrder | null>(null)
   /** 详情抽屉：单据跟踪 refresh（生命周期时间线共用） */
   const [woTrackingRefreshKey, setWoTrackingRefreshKey] = useState(0)
+  const materialMovementsQuery = useQuery({
+    queryKey: ['work-order-material-movements', workOrderDetail?.id],
+    queryFn: () => workOrderApi.getMaterialMovements(String(workOrderDetail!.id)),
+    enabled: Boolean(drawerVisible && workOrderDetail?.id),
+  })
+
   const workOrderTracking = useDocumentTracking(
     drawerVisible && workOrderDetail ? 'work_order' : undefined,
     workOrderDetail?.id,
@@ -3632,40 +3643,68 @@ const WorkOrdersPage: React.FC = () => {
                         : token.colorTextSecondary,
                     display: 'flex',
                     alignItems: 'center',
-                    flexWrap: 'wrap',
+                    flexWrap: 'nowrap',
                     gap: 6,
+                    minWidth: 0,
+                    width: '100%',
                   }}
                 >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', minWidth: 0 }}>
-                    <AuditOutlined style={{ marginRight: 4 }} />
-                    <strong>{t('app.kuaizhizao.workOrder.opCard.inspection')}: </strong>
-                    {formatOperationInspectionSummary(operation, {
+                  {(() => {
+                    const inspectionSummary = formatOperationInspectionSummary(operation, {
                       none: t('app.kuaizhizao.workOrder.opCard.inspectionNone'),
                       simple: t('app.kuaizhizao.workOrder.opCard.inspectionSimple'),
                       planFallback: t('app.kuaizhizao.workOrder.opCard.inspectionPlanFallback'),
-                    })}
-                  </span>
-                  {(() => {
+                    })
                     const qcStatus = getProcessInspectionCardStatus(operation)
-                    if (!qcStatus) return null
-                    const targetUrl = buildProcessInspectionPageUrl(operation, workOrder.id)
+                    const targetUrl = qcStatus
+                      ? buildProcessInspectionPageUrl(operation, workOrder.id)
+                      : null
                     return (
-                      <Tag
-                        color={getProcessInspectionStatusTagColor(qcStatus)}
-                        variant="solid"
-                        style={{
-                          marginInlineEnd: 0,
-                          lineHeight: '18px',
-                          cursor: targetUrl ? 'pointer' : 'default',
-                        }}
-                        onClick={(e) => {
-                          if (!targetUrl) return
-                          e.stopPropagation()
-                          navigate(targetUrl)
-                        }}
-                      >
-                        {t(`app.kuaizhizao.workOrder.opCard.processInspectionStatus.${qcStatus}`)}
-                      </Tag>
+                      <>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            minWidth: 0,
+                            flex: '1 1 auto',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <strong style={{ flexShrink: 0 }}>
+                            {t('app.kuaizhizao.workOrder.opCard.inspection')}:{' '}
+                          </strong>
+                          <span
+                            style={{
+                              minWidth: 0,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                            title={inspectionSummary}
+                          >
+                            {inspectionSummary}
+                          </span>
+                        </span>
+                        {qcStatus ? (
+                          <Tag
+                            color={getProcessInspectionStatusTagColor(qcStatus)}
+                            variant="solid"
+                            style={{
+                              marginInlineEnd: 0,
+                              lineHeight: '18px',
+                              flexShrink: 0,
+                              cursor: targetUrl ? 'pointer' : 'default',
+                            }}
+                            onClick={(e) => {
+                              if (!targetUrl) return
+                              e.stopPropagation()
+                              navigate(targetUrl)
+                            }}
+                          >
+                            {t(`app.kuaizhizao.workOrder.opCard.processInspectionStatus.${qcStatus}`)}
+                          </Tag>
+                        ) : null}
+                      </>
                     )
                   })()}
                 </div>
@@ -3765,6 +3804,10 @@ const WorkOrdersPage: React.FC = () => {
               onClick={
                 operation.status === 'pending' && !isSplitParentWorkOrder(workOrder)
                   ? async () => {
+                      if (!isWorkOrderReleasedForStart(workOrder.status)) {
+                        messageApi.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'))
+                        return
+                      }
                       try {
                         await workOrderApi.startOperation(
                           getWorkOrderOperationApiId(workOrder),
@@ -3791,7 +3834,15 @@ const WorkOrdersPage: React.FC = () => {
                         })
                         invalidateStatistics(); actionRef.current?.reload()
                       } catch (error: any) {
-                        messageApi.error(error.message || '开始工序失败')
+                        const detail = error?.response?.data?.detail || error?.message || ''
+                        if (
+                          typeof detail === 'string' &&
+                          (detail.includes('只能开始已下达') || detail.includes('需要先下达'))
+                        ) {
+                          messageApi.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'))
+                        } else {
+                          messageApi.error(detail || t('app.kuaizhizao.workOrder.msgStartOperationFailed'))
+                        }
                       }
                     }
                   : undefined
@@ -4720,7 +4771,11 @@ const WorkOrdersPage: React.FC = () => {
         onOk: async () => {
           try {
             // 批量下达工单
-            await Promise.all(idsToRelease.map(id => workOrderApi.release(id.toString())))
+            await Promise.all(
+              idsToRelease.map((id) =>
+                workOrderApi.release(id.toString(), { ignoreShortage: ignoreErrors }),
+              ),
+            )
 
             messageApi.success(`已批量下达 ${idsToRelease.length} 个工单`)
             setBatchReleaseModalVisible(false)
@@ -4774,15 +4829,86 @@ const WorkOrdersPage: React.FC = () => {
   };
 
   /**
-   * 处理下达工单
+   * 处理下达工单：缺料时提示，确认后可继续下达
    */
   const handleRelease = async (record: WorkOrder) => {
+    if (!record.id) return
+    const doRelease = async (ignoreShortage: boolean) => {
+      await workOrderApi.release(record.id!.toString(), { ignoreShortage })
+      messageApi.success(t('app.kuaizhizao.workOrder.msgReleaseSuccess'))
+      invalidateStatistics()
+      actionRef.current?.reload()
+    }
     try {
-      await workOrderApi.release(record.id!.toString())
-      messageApi.success('工单下达成功')
-      invalidateStatistics(); actionRef.current?.reload()
+      let shortageLines: string[] = []
+      let missingCount = 0
+      try {
+        const materialCheck = await workOrderApi.checkShortage(String(record.id))
+        const missing = materialCheck.missing_materials || []
+        if (!materialCheck.available && missing.length) {
+          missingCount = missing.length
+          shortageLines = missing.slice(0, 5).map((m) => {
+            const need = m.required != null ? String(m.required) : '-'
+            const avail = m.available != null ? String(m.available) : '-'
+            return `${m.material_code || ''} ${m.material_name || ''}（需 ${need} / 有 ${avail}）`.trim()
+          })
+        }
+      } catch {
+        const rate = Number((record as any).readiness_rate)
+        if (Number.isFinite(rate) && rate < 100) {
+          shortageLines = [
+            t('app.kuaizhizao.workOrder.releaseShortageRateOnly', { rate: rate.toFixed(0) }),
+          ]
+        }
+      }
+
+      if (shortageLines.length > 0) {
+        Modal.confirm({
+          title: t('app.kuaizhizao.workOrder.modalConfirmReleaseShortage'),
+          content: (
+            <div>
+              <p style={{ marginBottom: 8 }}>
+                {t('app.kuaizhizao.workOrder.releaseShortageHint', {
+                  code: record.code || '',
+                })}
+              </p>
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                {shortageLines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+              {missingCount > 5 ? (
+                <p style={{ marginTop: 8, marginBottom: 0 }}>
+                  {t('app.kuaizhizao.workOrder.releaseShortageMore', { count: missingCount })}
+                </p>
+              ) : null}
+            </div>
+          ),
+          okText: t('app.kuaizhizao.workOrder.actionContinueRelease'),
+          cancelText: t('common.cancel'),
+          onOk: async () => {
+            try {
+              await doRelease(true)
+            } catch (error: any) {
+              messageApi.error(
+                error?.response?.data?.detail ||
+                  error?.message ||
+                  t('app.kuaizhizao.workOrder.msgReleaseFailed'),
+              )
+              throw error
+            }
+          },
+        })
+        return
+      }
+
+      await doRelease(false)
     } catch (error: any) {
-      messageApi.error(error?.message || '工单下达失败')
+      messageApi.error(
+        error?.response?.data?.detail ||
+          error?.message ||
+          t('app.kuaizhizao.workOrder.msgReleaseFailed'),
+      )
     }
   }
 
@@ -5635,14 +5761,13 @@ const WorkOrdersPage: React.FC = () => {
 
   const workOrderToolBarActionsAfterDelete = useMemo(
     () => [
-      ...(selectedRowKeys.length > 0
+      ...(mergeableWorkOrderIds.length >= 2
         ? [
             <UniBatchButton
               key="merge-into-group"
               selectedRowKeys={selectedRowKeys}
               size="middle"
               icon={<GroupOutlined />}
-              disabled={mergeableWorkOrderIds.length < 2}
               onAction={(keys) => {
                 const ids = resolveMergeableWorkOrderIdsFromRowKeys(
                   keys,
@@ -5687,6 +5812,18 @@ const WorkOrdersPage: React.FC = () => {
         toolBarButtonSize="middle"
         menuItems={[
           {
+            key: 'batch-release',
+            label: t('app.kuaizhizao.workOrder.actionBatchRelease'),
+            icon: <SendOutlined />,
+            disabled:
+              selectedWorkOrdersForBatch.length > 0 &&
+              !workOrderBatchReleaseAllowed(
+                selectedWorkOrdersForBatch,
+                workOrderPerms.canAction?.('submit') ?? false,
+              ),
+            onClick: () => void handleBatchRelease(),
+          },
+          {
             key: 'batch-qrcode',
             label: t('app.kuaizhizao.workOrder.batchGenerateQrcode'),
             icon: <QrcodeOutlined />,
@@ -5727,23 +5864,6 @@ const WorkOrdersPage: React.FC = () => {
           },
         ]}
       />,
-      <UniBatchButton
-        key="batch-release"
-        selectedRowKeys={selectedRowKeys}
-        type="primary"
-        size="middle"
-        icon={<SendOutlined />}
-        disabled={
-          selectedWorkOrdersForBatch.length > 0 &&
-          !workOrderBatchReleaseAllowed(
-            selectedWorkOrdersForBatch,
-            workOrderPerms.canAction?.('submit') ?? false,
-          )
-        }
-        onAction={() => void handleBatchRelease()}
-      >
-        {t('app.kuaizhizao.workOrder.actionBatchRelease')}
-      </UniBatchButton>,
     ],
     [
       selectedRowKeys,
@@ -6299,11 +6419,7 @@ const WorkOrdersPage: React.FC = () => {
       uniTableKeepWidth: true,
       sorter: true,
       render: (_, record) =>
-        isWorkOrderGroupListRow(record) ? (
-          <Typography.Text type="secondary">—</Typography.Text>
-        ) : (
-          formatWorkOrderListQuantity(record)
-        ),
+        isWorkOrderGroupListRow(record) ? null : formatWorkOrderListQuantity(record),
     },
       {
         title: t('app.kuaizhizao.workOrder.colMode'),
@@ -6314,7 +6430,7 @@ const WorkOrdersPage: React.FC = () => {
         hideInSearch: true,
         render: (_, record) => {
         if (isWorkOrderGroupListRow(record)) {
-          return <Typography.Text type="secondary">—</Typography.Text>
+          return null
         }
         const kind = record.row_kind || 'work_order'
         if (kind === 'rework' || kind === 'outsource') {
@@ -6354,7 +6470,7 @@ const WorkOrdersPage: React.FC = () => {
       valueType: 'digit',
       render: (_text, record) => {
         if (isWorkOrderGroupListRow(record)) {
-          return <Typography.Text type="secondary">—</Typography.Text>
+          return null
         }
         const kind = record.row_kind || 'work_order'
         if (kind === 'rework' || kind === 'outsource') {
@@ -6396,7 +6512,7 @@ const WorkOrdersPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => {
         if (isWorkOrderGroupListRow(record)) {
-          return <Typography.Text type="secondary">—</Typography.Text>
+          return null
         }
         const kind = record.row_kind || 'work_order'
         if (kind === 'rework' || kind === 'outsource' || record.id == null) {
@@ -6468,11 +6584,7 @@ const WorkOrdersPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
       render: (_, record) =>
-        isWorkOrderGroupListRow(record) ? (
-          <Typography.Text type="secondary">—</Typography.Text>
-        ) : (
-          <WorkOrderPlannedRangeCell record={record} />
-        ),
+        isWorkOrderGroupListRow(record) ? null : <WorkOrderPlannedRangeCell record={record} />,
     },
     {
       title: t('app.kuaizhizao.workOrder.colPlannedStart'),
@@ -6517,6 +6629,8 @@ const WorkOrdersPage: React.FC = () => {
       uniTableKeepWidth: true,
       hideInSearch: true,
       render: (_, record) => {
+        // 工单组无独立完工进度，避免展示误导的 0%
+        if (isWorkOrderGroupListRow(record)) return null
         const percent = resolveDownstreamPushPercent(record.downstream_push_progress)
         return (
           <DocumentPushProgressBar
@@ -6528,7 +6642,14 @@ const WorkOrdersPage: React.FC = () => {
         )
       },
     },
-    ...buildDocumentAuditColumns<WorkOrder>(t),
+    ...buildDocumentAuditColumns<WorkOrder>(t).map((col) => ({
+      ...col,
+      render: (text: any, record: WorkOrder, index: number, action: any) => {
+        if (isWorkOrderGroupListRow(record)) return null
+        const original = (col as { render?: Function }).render
+        return original ? original(text, record, index, action) : text
+      },
+    })),
     {
       title: t('app.kuaizhizao.workOrder.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
@@ -8912,7 +9033,87 @@ const WorkOrdersPage: React.FC = () => {
                   />
                 </DetailDrawerSection>
 
-                {/* 4. 操作记录：时间线 */}
+                {/* 4. 物料移动 */}
+                {workOrderDetail?.id ? (
+                  <DetailDrawerSection title={t('app.kuaizhizao.workOrder.materialMovementsTitle')}>
+                    {materialMovementsQuery.isLoading && (
+                      <div style={{ textAlign: 'center', padding: 24 }}>
+                        <Spin />
+                      </div>
+                    )}
+                    {materialMovementsQuery.isError && !materialMovementsQuery.isLoading && (
+                      <Typography.Text type="danger">
+                        {(materialMovementsQuery.error as Error)?.message ||
+                          t('app.kuaizhizao.workOrder.materialMovementsLoadFailed')}
+                      </Typography.Text>
+                    )}
+                    {!materialMovementsQuery.isLoading && !materialMovementsQuery.isError && (
+                      <>
+                        {materialMovementsQuery.data?.source_mode === 'document' ? (
+                          <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                            {t('app.kuaizhizao.workOrder.materialMovementsDocumentHint')}
+                          </Typography.Paragraph>
+                        ) : null}
+                        <Table
+                          size="small"
+                          rowKey={(r, i) => String(r.id ?? `${r.source_doc_type}-${r.source_doc_code}-${i}`)}
+                          pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                          dataSource={materialMovementsQuery.data?.items || []}
+                          locale={{ emptyText: t('app.kuaizhizao.workOrder.materialMovementsEmpty') }}
+                          columns={[
+                            {
+                              title: t('app.kuaizhizao.workOrder.materialMovementType'),
+                              dataIndex: 'movement_type',
+                              width: 120,
+                              render: (v: string) =>
+                                t(`app.kuaizhizao.workOrder.movementType.${v}`, {
+                                  defaultValue: v,
+                                }),
+                            },
+                            {
+                              title: t('app.kuaizhizao.workOrder.materialMovementMaterial'),
+                              key: 'material',
+                              ellipsis: true,
+                              render: (_, r) =>
+                                [r.material_code, r.material_name].filter(Boolean).join(' ') || '-',
+                            },
+                            {
+                              title: t('app.kuaizhizao.workOrder.materialMovementQty'),
+                              dataIndex: 'quantity',
+                              width: 90,
+                              align: 'right',
+                            },
+                            {
+                              title: t('app.kuaizhizao.workOrder.materialMovementFromTo'),
+                              key: 'wh',
+                              ellipsis: true,
+                              render: (_, r) => {
+                                const from = r.from_warehouse_name || '-'
+                                const to = r.to_warehouse_name || '-'
+                                return `${from} → ${to}`
+                              },
+                            },
+                            {
+                              title: t('app.kuaizhizao.workOrder.materialMovementDoc'),
+                              dataIndex: 'source_doc_code',
+                              width: 140,
+                              ellipsis: true,
+                              render: (v: string) => v || '-',
+                            },
+                            {
+                              title: t('app.kuaizhizao.workOrder.materialMovementTime'),
+                              dataIndex: 'occurred_at',
+                              width: 160,
+                              render: (v: string) => (v ? String(v).replace('T', ' ').slice(0, 19) : '-'),
+                            },
+                          ]}
+                        />
+                      </>
+                    )}
+                  </DetailDrawerSection>
+                ) : null}
+
+                {/* 5. 操作记录：时间线 */}
                 {workOrderDetail?.id ? (
                   <DetailDrawerSection title="操作记录">
                     {workOrderTracking.loading && (

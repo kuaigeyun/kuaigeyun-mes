@@ -121,6 +121,8 @@ class SalesForecastItemResponse(SalesForecastItemBase):
     id: int = Field(..., description="明细ID")
     tenant_id: int = Field(..., description="租户ID")
     forecast_id: int = Field(..., description="销售预测ID")
+    consumed_quantity: float = Field(0, ge=0, description="已被销售订单冲销的数量")
+    open_quantity: Optional[float] = Field(None, ge=0, description="未冲销剩余数量")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 

@@ -436,6 +436,29 @@ class KittingRelatedOutsourceWorkOrderSummary(BaseModel):
     supplier_name: Optional[str] = Field(None, description="委外供应商名称")
 
 
+class KittingSupplyProgress(BaseModel):
+    """
+    齐套分析：采购件供给进度（按物料聚合未结采购申请/采购订单）。
+
+    status:
+      - stock_covered: 库存/线边已覆盖需求
+      - receiving: 采购部分到货、仍有未到货
+      - purchasing: 采购中（有未结采购订单）
+      - purchase_requisition: 采购申请中（有未转单申请）
+      - awaiting_purchase: 待请购（缺料且无下游采购单据）
+    """
+    status: str = Field(..., description="供给状态码")
+    ordered_quantity: Decimal = Field(default=Decimal("0"), description="相关单据订购/申请数量")
+    received_quantity: Decimal = Field(default=Decimal("0"), description="已到货数量（采购订单）")
+    outstanding_quantity: Decimal = Field(default=Decimal("0"), description="未到货/未转单数量")
+    progress_percent: float = Field(default=0.0, description="到货进度 0-100（仅采购订单有意义）")
+    document_type: Optional[str] = Field(
+        None, description="关联单据类型 purchase_order / purchase_requisition"
+    )
+    document_id: Optional[int] = Field(None, description="关联单据 ID")
+    document_code: Optional[str] = Field(None, description="关联单据编号")
+
+
 class MaterialKittingItem(BaseModel):
     """齐套性分析明细项"""
     material_id: int = Field(..., description="物料ID")
@@ -449,14 +472,14 @@ class MaterialKittingItem(BaseModel):
     kitting_applicable: bool = Field(True, description="是否计入齐套率（服务/委外等为 false）")
     required_quantity: Decimal = Field(..., description="总需求数量")
     picked_quantity: Decimal = Field(
-        ..., description="已正式发料数量（生产领料确认；不含配料/叫料备料转移）"
+        ..., description="已正式发料数量（生产领料确认；不含线边备料/补料备料转移）"
     )
     shortage_quantity: Decimal = Field(..., description="缺料数量（相对于总需求）")
     
     # 库存分布
     main_warehouse_available: Decimal = Field(..., description="主仓可用库存（实物，未发料）")
     line_side_available: Decimal = Field(
-        ..., description="线边仓可用库存（配料/叫料备料后；非正式发料）"
+        ..., description="线边仓可用库存（线边备料/补料备料后；非正式发料）"
     )
     
     # 状态：fully_kitted / partial / shortage / not_applicable（不计入齐套）
@@ -476,6 +499,10 @@ class MaterialKittingItem(BaseModel):
     related_outsource_work_order: Optional[KittingRelatedOutsourceWorkOrderSummary] = Field(
         None, description="关联委外工单（委外子件）"
     )
+    supply_progress: Optional[KittingSupplyProgress] = Field(
+        None,
+        description="采购供给进度（无关联自制/委外工单时供生产侧查看）",
+    )
 
 
 class WorkOrderKittingAnalysisResponse(BaseModel):
@@ -485,6 +512,22 @@ class WorkOrderKittingAnalysisResponse(BaseModel):
     kitting_rate: Decimal = Field(..., description="齐套率（0-100）")
     status: str = Field(..., description="整体齐套状态")
     items: List[MaterialKittingItem] = Field(..., description="物料齐套明细")
+
+
+class WorkOrderRemindBatchingRequest(BaseModel):
+    """提醒仓库线边备料（站内信）"""
+    recipient_user_uuids: List[str] = Field(
+        ..., min_length=1, description="提醒对象用户 UUID 列表"
+    )
+    remarks: Optional[str] = Field(None, max_length=500, description="备注")
+
+
+class WorkOrderRemindBatchingResponse(BaseModel):
+    success: bool = True
+    message: str
+    notified_count: int = 0
+    batching_order_id: Optional[int] = None
+    batching_order_code: Optional[str] = None
 
 
 class WorkOrderSplitRequest(BaseModel):

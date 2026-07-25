@@ -75,6 +75,8 @@ class PermissionRegistryService:
         "system:site-setting:read",
         "system:site-setting:update",
         "system:config-center:read",
+        "system:config-center:create",
+        "system:config-center:delete",
         "system:config-center:update",
         "system:data-dictionary:read",
         "system:data-dictionary:create",

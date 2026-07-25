@@ -1,8 +1,9 @@
 /**
- * 工单列表「齐套率」列：点击打开 Modal，展示库位分布与叫料申请（Tab）
- * - 叫料：生产现场 → 仓库；仓库在配料中心备货（仓储关联配置）
- * - 叫料类型：整单（一张单多行明细）/ 单独叫料（自选多物料）；单独叫料原因：MATERIAL_CALL_REASON
- * - 发起叫料为独立 Modal（zIndex 更高），挂在主 Modal 同级，避免嵌套 Dialog 事件问题
+ * 工单列表「齐套率」列：点击打开 Modal，展示库位分布与补料申请（Tab）
+ * - 线边备料：生产侧「提醒仓库备料」→ 站内信 + 生成/同步备料草稿；仓库在物料中心执行
+ * - 补料：生产现场 → 仓库；仓库在物料中心做线边备料（仓储关联配置）
+ * - 补料类型：整单（一张单多行明细）/ 单独补料（自选多物料）；单独补料原因：MATERIAL_CALL_REASON
+ * - 发起补料为独立 Modal（zIndex 更高），挂在主 Modal 同级，避免嵌套 Dialog 事件问题
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -13,9 +14,9 @@ import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { workOrderApi } from '../../../../services/production'
 import { warehouseApi } from '../../../../services/warehouse-execution'
-import { batchingOrderApi } from '../../../../services/batching-order'
 import { getMaterialCallLifecycle } from '../../../../utils/materialCallLifecycle'
 import UniMaterialSelect from '../../../../../../components/uni-material-select'
+import { UniUserSelect } from '../../../../../../components/uni-user-select'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../../services/dataDictionary'
 import { useInvalidateMenuBadgeCounts } from '../../../../../../hooks/useInvalidateMenuBadgeCounts'
 import { translateWorkOrderLifecycleStatus } from '../../../../utils/workOrderLifecycle'
@@ -229,13 +230,15 @@ const WorkOrderMaterialCallModal: React.FC<{
           work_order_id: workOrderId,
         })) as { code?: string }
         messageApi.success(
-          res?.code ? `整单叫料已生成：${res.code}（含多行明细）` : '整单叫料已生成（一张叫料单）'
+          res?.code
+            ? t('app.kuaizhizao.workOrder.msgFullOrderCallSuccessWithCode', { code: res.code })
+            : t('app.kuaizhizao.workOrder.msgFullOrderCallSuccess'),
         )
         queryClient.invalidateQueries({ queryKey: ['materialCallsByWorkOrder', workOrderId] })
         queryClient.invalidateQueries({ queryKey: ['workOrderKittingAnalysis', workOrderId] })
         closeModal()
       } catch (e: any) {
-        messageApi.error(e?.message ?? '整单叫料失败')
+        messageApi.error(e?.message ?? t('app.kuaizhizao.workOrder.msgCallFailed'))
       } finally {
         setSubmitting(false)
       }
@@ -270,14 +273,14 @@ const WorkOrderMaterialCallModal: React.FC<{
         call_type: 'CUSTOM_SELECTION',
         call_reason: String(values.call_reason ?? ''),
         priority: 'normal',
-        remarks: '生产现场通过工单列表齐套率发起叫料',
+        remarks: '生产现场通过工单列表齐套率发起补料',
         items,
       })
       messageApi.success(t('app.kuaizhizao.workOrder.msgCallSubmitted'))
       queryClient.invalidateQueries({ queryKey: ['materialCallsByWorkOrder', workOrderId] })
       closeModal()
     } catch (e: any) {
-      messageApi.error(e?.message ?? '发起叫料失败')
+      messageApi.error(e?.message ?? t('app.kuaizhizao.workOrder.msgCallFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -285,10 +288,10 @@ const WorkOrderMaterialCallModal: React.FC<{
 
   return (
     <Modal
-      title="发起叫料申请"
+      title={t('app.kuaizhizao.workOrder.modalCreateMaterialCall')}
       open={open}
       onCancel={closeModal}
-      okText="提交申请"
+      okText={t('app.kuaizhizao.workOrder.actionSubmitCall')}
       confirmLoading={submitting}
       onOk={() => handleSubmitCall()}
       destroyOnHidden
@@ -301,10 +304,14 @@ const WorkOrderMaterialCallModal: React.FC<{
       centered
     >
       <Form form={form} layout="vertical" preserve={false} initialValues={{ call_type: 'CUSTOM_SELECTION', items: [{}] }}>
-        <Form.Item name="call_type" label="叫料类型" rules={[{ required: true, message: '请选择叫料类型' }]}>
+        <Form.Item
+          name="call_type"
+          label={t('app.kuaizhizao.workOrder.formCallType')}
+          rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formSelectCallType') }]}
+        >
           <Select
             options={callTypeOptions}
-            placeholder="请选择"
+            placeholder={t('common.select')}
             getPopupContainer={getPopupContainerInModal}
             styles={materialCallSelectPopupStyles}
             onChange={(v) => {
@@ -319,19 +326,19 @@ const WorkOrderMaterialCallModal: React.FC<{
         </Form.Item>
         {callType === 'FULL_ORDER' ? (
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
-            将按工单齐套分析，对缺料数量大于 0 的物料生成<strong>一张</strong>叫料单，每行一种缺料物料（整单叫料）。
+            {t('app.kuaizhizao.workOrder.readinessFullOrderHint')}
           </Typography.Paragraph>
         ) : (
           <>
             <Form.Item
               name="call_reason"
-              label="叫料原因"
-              rules={[{ required: true, message: '请选择叫料原因' }]}
+              label={t('app.kuaizhizao.workOrder.formCallReason')}
+              rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formSelectCallReason') }]}
               style={{ marginBottom: 16 }}
             >
               <Select
                 options={callReasonOptions}
-                placeholder="请选择叫料原因"
+                placeholder={t('app.kuaizhizao.workOrder.formSelectCallReason')}
                 getPopupContainer={getPopupContainerInModal}
                 styles={materialCallSelectPopupStyles}
                 allowClear={false}
@@ -432,7 +439,9 @@ const WorkOrderReadinessPopoverContent: React.FC<{
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts()
-  const [pullLoading, setPullLoading] = useState(false)
+  const [remindModalOpen, setRemindModalOpen] = useState(false)
+  const [remindSubmitting, setRemindSubmitting] = useState(false)
+  const [remindForm] = Form.useForm<{ recipient_user_uuids: string[]; remarks?: string }>()
   const {
     data: kittingData,
     isLoading: kittingLoading,
@@ -492,6 +501,17 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     supplierName?: string
   }
 
+  type SupplyProgressProp = {
+    status: string
+    orderedQuantity: number
+    receivedQuantity: number
+    outstandingQuantity: number
+    progressPercent: number
+    documentType?: string
+    documentId?: number
+    documentCode?: string
+  }
+
   type WhRow = {
     key: string
     materialCode: string
@@ -504,6 +524,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     kittingApplicable: boolean
     relatedWorkOrder?: RelatedWorkOrderRow
     relatedOutsourceWorkOrder?: RelatedOutsourceWorkOrderRow
+    supplyProgress?: SupplyProgressProp
   }
 
   function formatWarehouseLocation(loc: Record<string, unknown>): string {
@@ -542,6 +563,49 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     }
   }
 
+  function parseSupplyProgress(raw: Record<string, unknown>): SupplyProgressProp | undefined {
+    const nested = (raw.supply_progress ?? raw.supplyProgress) as Record<string, unknown> | undefined
+    if (!nested?.status) return undefined
+    const documentIdRaw = nested.document_id ?? nested.documentId
+    const documentId =
+      documentIdRaw != null && Number.isFinite(Number(documentIdRaw)) ? Number(documentIdRaw) : undefined
+    return {
+      status: String(nested.status),
+      orderedQuantity: Number(nested.ordered_quantity ?? nested.orderedQuantity ?? 0),
+      receivedQuantity: Number(nested.received_quantity ?? nested.receivedQuantity ?? 0),
+      outstandingQuantity: Number(nested.outstanding_quantity ?? nested.outstandingQuantity ?? 0),
+      progressPercent: Number(nested.progress_percent ?? nested.progressPercent ?? 0),
+      documentType: nested.document_type
+        ? String(nested.document_type)
+        : nested.documentType
+          ? String(nested.documentType)
+          : undefined,
+      documentId,
+      documentCode: nested.document_code
+        ? String(nested.document_code)
+        : nested.documentCode
+          ? String(nested.documentCode)
+          : undefined,
+    }
+  }
+
+  function supplyProgressLabel(status: string): string {
+    const key = `app.kuaizhizao.workOrder.supplyProgress.${status}`
+    const label = t(key)
+    return label === key ? status : label
+  }
+
+  function openSupplyDocument(sp: SupplyProgressProp) {
+    if (!sp.documentId) return
+    if (sp.documentType === 'purchase_order') {
+      navigate(`/apps/kuaizhizao/purchase-management/purchase-orders?highlight=${sp.documentId}`)
+      return
+    }
+    if (sp.documentType === 'purchase_requisition') {
+      navigate(`/apps/kuaizhizao/purchase-management/purchase-requisitions?highlight=${sp.documentId}`)
+    }
+  }
+
   function nonInventoryKittingHint(sourceType: unknown): string {
     const st = String(sourceType ?? '').trim()
     if (st === 'Service') return t('app.kuaizhizao.workOrder.readinessNonInventoryService')
@@ -561,6 +625,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
       const sourceType = it.source_type ?? it.sourceType
       const relatedWorkOrder = parseRelatedWorkOrder(it)
       const relatedOutsourceWorkOrder = parseRelatedOutsourceWorkOrder(it)
+      const supplyProgress = parseSupplyProgress(it)
       const woSupply = Number(it.work_order_supply_quantity ?? 0)
       const woSupplySafe = Number.isFinite(woSupply) ? woSupply : 0
 
@@ -579,6 +644,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
             qtyVsRequired: meets === null ? 'neutral' : meets ? 'ok' : 'short',
             kittingApplicable: false,
             relatedOutsourceWorkOrder,
+            supplyProgress,
           })
         } else {
           warehouseRows.push({
@@ -590,6 +656,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
             warehouseLocation: '—',
             qtyVsRequired: 'neutral',
             kittingApplicable: false,
+            supplyProgress,
           })
         }
         continue
@@ -615,6 +682,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
             materialCmp === null ? 'neutral' : materialCmp ? 'ok' : 'short',
           kittingApplicable: true,
           relatedWorkOrder,
+          supplyProgress,
         })
       } else {
         for (const loc of locs) {
@@ -632,6 +700,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
               materialCmp === null ? 'neutral' : materialCmp ? 'ok' : 'short',
             kittingApplicable: true,
             relatedWorkOrder,
+            supplyProgress,
           })
         }
       }
@@ -657,22 +726,28 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     return lineReady < required
   })
 
-  const handleGoBatching = async () => {
-    setPullLoading(true)
+  const handleOpenRemindBatching = () => {
+    remindForm.resetFields()
+    setRemindModalOpen(true)
+  }
+
+  const handleRemindBatchingSubmit = async () => {
     try {
-      await batchingOrderApi.pullFromWorkOrder({
-        work_order_id: workOrderId,
-        allow_existing_draft: true,
-        remarks: '工单齐套率面板一键配料',
+      const values = await remindForm.validateFields()
+      setRemindSubmitting(true)
+      const result = await workOrderApi.remindBatching(workOrderId, {
+        recipient_user_uuids: values.recipient_user_uuids,
+        remarks: values.remarks,
       })
-      messageApi.success(t('app.kuaizhizao.workOrder.msgBatchingTaskCreated'))
+      messageApi.success(result?.message || t('app.kuaizhizao.workOrder.msgBatchingRemindSent'))
       invalidateMenuBadgeCounts()
+      setRemindModalOpen(false)
       onCloseMain?.()
-      navigate('/apps/kuaizhizao/warehouse-management/batching-center')
     } catch (e: unknown) {
-      messageApi.error((e as Error)?.message ?? '生成配料任务失败')
+      if ((e as { errorFields?: unknown })?.errorFields) return
+      messageApi.error((e as Error)?.message ?? t('app.kuaizhizao.workOrder.msgBatchingRemindFailed'))
     } finally {
-      setPullLoading(false)
+      setRemindSubmitting(false)
     }
   }
 
@@ -684,18 +759,16 @@ const WorkOrderReadinessPopoverContent: React.FC<{
         <>
           <Space orientation="vertical" size={8} style={{ width: '100%', marginBottom: 8 }}>
             <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
-              <strong>配料/叫料</strong>：主仓→线边备料（不算工单耗用）。
-              <strong>生产领料</strong>：正式发料扣库存。齐套「已领」仅含正式发料；线边列为备料库存。
+              {t('app.kuaizhizao.workOrder.readinessFlowHint')}
             </Typography.Paragraph>
             <Space wrap>
               <Button
                 type="primary"
                 size="small"
-                loading={pullLoading}
                 disabled={!hasBatchingShortage}
-                onClick={handleGoBatching}
+                onClick={handleOpenRemindBatching}
               >
-                去配料
+                {t('app.kuaizhizao.workOrder.actionRemindBatching')}
               </Button>
               {!hasBatchingShortage ? (
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -795,9 +868,9 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                   },
                 },
                 {
-                  title: t('app.kuaizhizao.workOrder.colWorkOrderProgress'),
+                  title: t('app.kuaizhizao.workOrder.colMaterialProgress'),
                   key: 'workOrderProgress',
-                  width: 168,
+                  width: 176,
                   render: (_: unknown, row: WhRow) => {
                     const owo = row.relatedOutsourceWorkOrder
                     if (owo?.id) {
@@ -819,21 +892,73 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                       )
                     }
                     const wo = row.relatedWorkOrder
-                    if (!wo?.code) return '—'
-                    const statusLabel = translateWorkOrderLifecycleStatus(t, wo.status)
+                    if (wo?.code) {
+                      const statusLabel = translateWorkOrderLifecycleStatus(t, wo.status)
+                      return (
+                        <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                          <Space size={4} wrap>
+                            <Tag style={{ margin: 0 }}>{statusLabel}</Tag>
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                              {formatQuantity(wo.completedQuantity)}/{formatQuantity(wo.quantity)}
+                            </Typography.Text>
+                          </Space>
+                          <Progress
+                            percent={Math.min(100, Math.max(0, wo.progressPercent))}
+                            size="small"
+                            showInfo
+                          />
+                        </Space>
+                      )
+                    }
+                    const sp = row.supplyProgress
+                    if (!sp?.status) return '—'
+                    const showQty =
+                      sp.status === 'purchasing' ||
+                      sp.status === 'receiving' ||
+                      sp.status === 'purchase_requisition'
                     return (
                       <Space direction="vertical" size={2} style={{ width: '100%' }}>
                         <Space size={4} wrap>
-                          <Tag style={{ margin: 0 }}>{statusLabel}</Tag>
-                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                            {formatQuantity(wo.completedQuantity)}/{formatQuantity(wo.quantity)}
-                          </Typography.Text>
+                          <Tag
+                            style={{ margin: 0 }}
+                            color={
+                              sp.status === 'stock_covered'
+                                ? 'success'
+                                : sp.status === 'awaiting_purchase'
+                                  ? 'warning'
+                                  : 'processing'
+                            }
+                          >
+                            {supplyProgressLabel(sp.status)}
+                          </Tag>
+                          {showQty ? (
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                              {sp.status === 'purchase_requisition'
+                                ? formatQuantity(sp.orderedQuantity)
+                                : `${formatQuantity(sp.receivedQuantity)}/${formatQuantity(sp.orderedQuantity)}`}
+                            </Typography.Text>
+                          ) : null}
                         </Space>
-                        <Progress
-                          percent={Math.min(100, Math.max(0, wo.progressPercent))}
-                          size="small"
-                          showInfo
-                        />
+                        {sp.documentCode && sp.documentId ? (
+                          <Button
+                            type="link"
+                            size="small"
+                            style={{ padding: 0, height: 'auto', fontSize: 12 }}
+                            onClick={(e) => {
+                              stopRowToggle(e)
+                              openSupplyDocument(sp)
+                            }}
+                          >
+                            {sp.documentCode}
+                          </Button>
+                        ) : null}
+                        {sp.status === 'purchasing' || sp.status === 'receiving' ? (
+                          <Progress
+                            percent={Math.min(100, Math.max(0, sp.progressPercent))}
+                            size="small"
+                            showInfo
+                          />
+                        ) : null}
                       </Space>
                     )
                   },
@@ -850,13 +975,17 @@ const WorkOrderReadinessPopoverContent: React.FC<{
       children: (
         <Space orientation="vertical" size={8} style={{ width: '100%' }}>
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
-            由生产现场向仓库发起；仓库部门在<strong>物料中心</strong>主动备货、配送。物料中心及可用仓库范围以<strong>仓储关联</strong>中的配置为准。
+            {t('app.kuaizhizao.workOrder.readinessCallsHint')}
           </Typography.Paragraph>
           <Button type="primary" size="small" onClick={() => setCallModalOpen(true)}>
-            发起叫料申请
+            {t('app.kuaizhizao.workOrder.modalCreateMaterialCall')}
           </Button>
           {callList.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="本工单暂无叫料申请" style={{ margin: '8px 0' }} />
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={t('app.kuaizhizao.workOrder.readinessNoCalls')}
+              style={{ margin: '8px 0' }}
+            />
           ) : (
             <Table
               size="small"
@@ -1023,7 +1152,46 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     },
   ]
 
-  return <Tabs size="small" items={tabItems} />
+  return (
+    <>
+      <Tabs size="small" items={tabItems} />
+      <Modal
+        title={t('app.kuaizhizao.workOrder.remindBatchingModalTitle')}
+        open={remindModalOpen}
+        onCancel={() => setRemindModalOpen(false)}
+        onOk={() => void handleRemindBatchingSubmit()}
+        okText={t('app.kuaizhizao.workOrder.remindBatchingSend')}
+        cancelText={t('common.cancel')}
+        confirmLoading={remindSubmitting}
+        destroyOnHidden
+        zIndex={1200}
+      >
+        <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 12 }}>
+          {t('app.kuaizhizao.workOrder.remindBatchingHint')}
+        </Typography.Paragraph>
+        <Form form={remindForm} layout="vertical" style={{ marginTop: 8 }}>
+          <UniUserSelect
+            name="recipient_user_uuids"
+            label={t('app.kuaizhizao.workOrder.remindBatchingRecipient')}
+            placeholder={t('app.kuaizhizao.workOrder.remindBatchingRecipientPlaceholder')}
+            required
+            mode="multiple"
+            rules={[
+              { required: true, type: 'array', min: 1, message: t('app.kuaizhizao.workOrder.remindBatchingRecipientRequired') },
+            ]}
+          />
+          <Form.Item name="remarks" label={t('app.kuaizhizao.workOrder.colRemarks')}>
+            <Input.TextArea
+              rows={3}
+              placeholder={t('app.kuaizhizao.workOrder.remindBatchingRemarksPlaceholder')}
+              maxLength={500}
+              showCount
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
+  )
 }
 
 export const WorkOrderReadinessPopover: React.FC<WorkOrderReadinessPopoverProps> = ({
@@ -1061,7 +1229,7 @@ export const WorkOrderReadinessPopover: React.FC<WorkOrderReadinessPopoverProps>
         {children}
       </span>
       <Modal
-        title="库位与叫料"
+        title={t('app.kuaizhizao.workOrder.modalWarehouseAndCall')}
         open={mainModalOpen}
         onCancel={() => {
           setMainModalOpen(false)

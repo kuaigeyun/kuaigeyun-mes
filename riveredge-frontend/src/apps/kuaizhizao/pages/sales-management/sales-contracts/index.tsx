@@ -3542,35 +3542,6 @@ const SalesContractsPage: React.FC = () => {
                 }}
               />
 
-              <Tooltip title={detailCapabilityGates.pushToSalesOrder.disabled ? detailCapabilityGates.pushToSalesOrder.title : undefined}>
-                <Button
-                  type="primary"
-                  icon={<ShoppingOutlined />}
-                  disabled={detailCapabilityGates.pushToSalesOrder.disabled}
-                  onClick={() => {
-                    if (!detailCapabilityGates.pushToSalesOrder.disabled) {
-                      showContractPushPreview(detail, 'sales_order');
-                    }
-                  }}
-                >
-                  {pushToSalesOrderAction.label}
-                </Button>
-              </Tooltip>
-
-              <Tooltip title={detailCapabilityGates.pushToWorkOrder.disabled ? detailCapabilityGates.pushToWorkOrder.title : undefined}>
-                <Button
-                  icon={<ToolOutlined />}
-                  disabled={detailCapabilityGates.pushToWorkOrder.disabled}
-                  onClick={() => {
-                    if (!detailCapabilityGates.pushToWorkOrder.disabled) {
-                      showContractPushPreview(detail, 'work_order');
-                    }
-                  }}
-                >
-                  {pushToWorkOrderAction.label}
-                </Button>
-              </Tooltip>
-
               {!detailCapabilityGates.createChange.disabled && (
                 <Button icon={<FormOutlined />} onClick={openChangeDrawer}>{t('app.kuaizhizao.salesContract.contractChange')}</Button>
               )}

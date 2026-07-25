@@ -2725,6 +2725,23 @@ class SalesOrderService:
             )
         logger.info("从销售订单 %s 生成需求 %s", order.order_code, demand.demand_code)
 
+        # 预测冲销：按交期窗口匹配未消耗预测并累加 consumed_quantity
+        from apps.kuaizhizao.utils.forecast_consumption import (
+            apply_forecast_consumption_for_sales_order,
+        )
+
+        consume_result = await apply_forecast_consumption_for_sales_order(
+            tenant_id,
+            sales_order_id,
+            only_item_ids=[int(it.id) for it in items],
+        )
+        if consume_result.get("consumed_total"):
+            logger.info(
+                "销售订单 %s 预测冲销合计 %s",
+                order.order_code,
+                consume_result.get("consumed_total"),
+            )
+
         # 不再写入 DocumentRelation(sales_order→demand)：全链路追溯以订单→需求计算为主，
         # Demand 仍存表供计算与明细；关联路径见推导逻辑 _get_sales_order_downstream。
 
@@ -3206,6 +3223,13 @@ class SalesOrderService:
                 recipient=str(user.id),
                 subject=subject,
                 content=content,
+                variables={
+                    "message_category": "process",
+                    "trigger_document": "sales_order",
+                    "trigger_action": "manual_remind",
+                    "detail_path": f"/apps/kuaizhizao/sales-management/sales-orders?highlight={order.id}",
+                    "sales_order_id": str(order.id),
+                },
             ),
         )
 

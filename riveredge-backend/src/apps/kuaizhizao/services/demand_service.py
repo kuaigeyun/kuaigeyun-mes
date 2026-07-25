@@ -1579,12 +1579,24 @@ class DemandService(AppBaseService[Demand]):
                     )
                     if not forecast:
                         raise NotFoundError("销售预测", str(source_id))
+                    from apps.kuaizhizao.utils.forecast_consumption import forecast_open_quantity
+
                     forecast_items = await SalesForecastItem.filter(
                         tenant_id=tenant_id, forecast_id=source_id
                     ).order_by("id")
                     if not forecast_items:
                         raise BusinessLogicError("销售预测无明细，无法同步需求")
-                    total_qty = sum(Decimal(str(it.forecast_quantity)) for it in forecast_items)
+                    open_rows = []
+                    for it in forecast_items:
+                        open_qty = forecast_open_quantity(
+                            it.forecast_quantity, getattr(it, "consumed_quantity", 0)
+                        )
+                        if open_qty <= 0:
+                            continue
+                        open_rows.append((it, open_qty))
+                    if not open_rows:
+                        raise BusinessLogicError("销售预测明细均已被订单冲销，无法同步需求")
+                    total_qty = sum(q for _, q in open_rows)
                     upd = {
                         "demand_code": forecast.forecast_code,
                         "demand_name": forecast.forecast_name or forecast.forecast_code,
@@ -1603,7 +1615,7 @@ class DemandService(AppBaseService[Demand]):
                     }
                     await Demand.filter(tenant_id=tenant_id, id=demand.id).update(**upd)
                     await DemandItem.filter(tenant_id=tenant_id, demand_id=demand.id).delete()
-                    for it in forecast_items:
+                    for it, open_qty in open_rows:
                         await DemandItem.create(
                             tenant_id=tenant_id,
                             demand_id=demand.id,
@@ -1612,9 +1624,9 @@ class DemandService(AppBaseService[Demand]):
                             material_name=it.material_name,
                             material_spec=it.material_spec,
                             material_unit=it.material_unit,
-                            required_quantity=it.forecast_quantity,
+                            required_quantity=open_qty,
                             forecast_date=it.forecast_date,
-                            remaining_quantity=it.forecast_quantity,
+                            remaining_quantity=open_qty,
                             delivered_quantity=Decimal("0"),
                             delivery_status="待交货",
                             variant_attributes=getattr(it, "variant_attributes", None),

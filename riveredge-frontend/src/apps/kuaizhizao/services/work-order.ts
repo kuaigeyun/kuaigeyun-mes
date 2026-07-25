@@ -125,7 +125,11 @@ export const workOrderApi = {
   update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/work-orders/${id}`, { method: 'PUT', data }),
   delete: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}`, { method: 'DELETE' }),
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}`, { method: 'GET' }),
-  release: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/release`, { method: 'POST' }),
+  release: async (id: string, options?: { ignoreShortage?: boolean }) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${id}/release`, {
+      method: 'POST',
+      params: options?.ignoreShortage ? { ignore_shortage: true } : undefined,
+    }),
   revoke: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/revoke`, { method: 'POST' }),
   complete: async (id: string, data?: { confirmed_batch_no?: string; confirmed_serial_no?: string }) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${id}/complete`, { method: 'POST', data: data ?? {} }),
@@ -303,6 +307,44 @@ export const workOrderApi = {
   /** 获取工单齐套性分析 */
   getKittingAnalysis: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${id}/kitting-analysis`, { method: 'GET' }),
+
+  /** 提醒仓库线边备料（站内信 + 生成/同步备料草稿） */
+  remindBatching: async (
+    id: string | number,
+    data: { recipient_user_uuids: string[]; remarks?: string },
+  ) =>
+    apiRequest<{
+      success: boolean
+      message: string
+      notified_count: number
+      batching_order_id?: number
+      batching_order_code?: string
+    }>(`/apps/kuaizhizao/work-orders/${id}/remind-batching`, { method: 'POST', data }),
+
+  /** 工单物料移动时间线（库存流水 / 单据兜底） */
+  getMaterialMovements: async (id: string | number, params?: { limit?: number }) =>
+    apiRequest<{
+      work_order_id: number
+      total: number
+      source_mode: 'ledger' | 'document'
+      items: Array<{
+        id?: number
+        source: 'ledger' | 'document'
+        movement_type: string
+        material_id?: number
+        material_code?: string
+        material_name?: string
+        batch_no?: string
+        quantity: number | string
+        from_warehouse_name?: string
+        to_warehouse_name?: string
+        source_doc_type?: string
+        source_doc_code?: string
+        operator_name?: string
+        remark?: string
+        occurred_at?: string
+      }>
+    }>(`/apps/kuaizhizao/work-orders/${id}/material-movements`, { method: 'GET', params }),
 
   /** 工单下推生产领料预览 */
   previewPushProductionPicking: async (id: number | string) =>

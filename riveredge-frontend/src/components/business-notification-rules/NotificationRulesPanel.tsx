@@ -16,7 +16,10 @@ import { getMessageConfigList, type MessageConfig } from '../../services/message
 import { getMessageTemplateList, type MessageTemplate } from '../../services/messageTemplate';
 import { getUserList, type User } from '../../services/user';
 import { getInstalledApplicationList } from '../../services/application';
-import { CORE_NOTIFICATION_RECIPIENT_SCOPES } from './coreNotificationRules';
+import {
+  CORE_NOTIFICATION_RECIPIENT_SCOPES,
+  isRecommendedNotificationAction,
+} from './coreNotificationRules';
 import { isHaoligoNotificationDocumentCode } from './notificationRulePartition';
 import { buildNotificationConfig, ensureNotificationAppModules } from './notificationAppModules';
 import {
@@ -39,6 +42,7 @@ import {
   getDefaultNotificationChannelRefs,
   normalizeNotificationChannelRefs,
 } from './notificationChannelRefs';
+import { stripMiddleDotSeparator } from './stripMiddleDotSeparator';
 
 function splitRecipientScopes(scopes: unknown): {
   recipient_role_scopes: string[];
@@ -157,6 +161,7 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
     [usersRes, i18n.language],
   );
 
+  /** 渠道可选（邮件/短信等一并列出）；一期投递仍以站内信为准，选项可先配置备后续启用 */
   const channelOptions = useMemo(() => {
     const builtInName = t('pages.system.configCenter.notification.channel.inApp');
     const unknownLabel = t('pages.system.configCenter.notification.channel.unknown');
@@ -175,7 +180,7 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
         it?.uuid === BUILTIN_IN_APP_CHANNEL_UUID,
     );
     const merged = hasInternal ? list : [builtIn as MessageConfig, ...list];
-    return merged.map((it: { uuid?: string; code?: string; name?: string }) => ({
+    return merged.map((it: { uuid?: string; code?: string; name?: string; type?: string }) => ({
       value: String(it.uuid || it.code),
       label: String(it.name || it.code || unknownLabel),
       code: String(it.code || ''),
@@ -235,11 +240,23 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
     [cfg.documentOptions, t, i18n.language],
   );
 
-  const getNotificationActionOptions = (documentCode: string) =>
-    (cfg.actionOptions[String(documentCode || '')] || []).map((it) => ({
-      value: it.value,
-      label: renderText(it.labelKey, it.fallback),
-    }));
+  const getNotificationActionOptions = (documentCode: string) => {
+    const doc = String(documentCode || '');
+    const recommendedLabel = t('pages.system.configCenter.notification.action.recommended', {
+      defaultValue: '推荐',
+    });
+    const moreLabel = t('pages.system.configCenter.notification.action.more', {
+      defaultValue: '更多',
+    });
+    return (cfg.actionOptions[doc] || []).map((it) => {
+      const base = renderText(it.labelKey, it.fallback);
+      const recommended = isRecommendedNotificationAction(doc, it.value);
+      return {
+        value: it.value,
+        label: recommended ? `${base}（${recommendedLabel}）` : `${base}（${moreLabel}）`,
+      };
+    });
+  };
 
   const getRulePartitions = () => {
     const all = normalizeNotificationRulesFromParameters(bizRes?.parameters?.notifications);
@@ -248,9 +265,15 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
 
   const mergeAndSaveVisibleRules = async (visibleRules: any[]) => {
     const { hidden } = getRulePartitions();
+    const sanitizeScene = (rules: any[]) =>
+      rules.map((r) =>
+        r && typeof r === 'object'
+          ? { ...r, scene_name: stripMiddleDotSeparator(r.scene_name ?? r.scene) || r.scene_name }
+          : r,
+      );
     await batchUpdateProcessParameters({
       parameters: {
-        notifications: { rules: [...hidden, ...visibleRules] },
+        notifications: { rules: [...sanitizeScene(hidden), ...sanitizeScene(visibleRules)] },
       },
     });
   };
@@ -322,7 +345,9 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
         (templateKey ? t('pages.system.configCenter.notification.template.unknown') : '-');
       return {
         id: String(rule?.id || rule?.code || idx + 1),
-        scene: rule?.scene_name || t('pages.system.configCenter.notification.scene.default'),
+        scene:
+          stripMiddleDotSeparator(rule?.scene_name) ||
+          t('pages.system.configCenter.notification.scene.default'),
         document: getDocumentLabel(String(rule?.trigger_document || '')) || String(rule?.trigger_document || '-'),
         action:
           getActionLabel(String(rule?.trigger_document || ''), String(rule?.trigger_action || '')) ||
@@ -346,7 +371,9 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
       );
       const newRule = {
         id: `rule_${Date.now()}`,
-        scene_name: t('pages.system.configCenter.notification.scene.default'),
+        scene_name: stripMiddleDotSeparator(
+          t('pages.system.configCenter.notification.scene.default'),
+        ),
         enabled: values.rule_enabled !== false,
         trigger_document: values.trigger_document || '',
         trigger_action: values.trigger_action || '',
@@ -456,19 +483,29 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
     });
   };
 
+  const deleteNotificationRulesByIds = async (ids: string[]) => {
+    const idSet = new Set(ids.map(String).filter(Boolean));
+    if (idSet.size === 0) return;
+    const { visible } = getRulePartitions();
+    const nextVisible = visible.filter((r: { id?: string }) => !idSet.has(String(r?.id)));
+    await mergeAndSaveVisibleRules(nextVisible);
+    messageApi.success(
+      idSet.size > 1
+        ? t('common.batchDeleteSuccess', { count: idSet.size })
+        : t('pages.system.configCenter.notification.message.deleted'),
+    );
+    await queryClient.invalidateQueries({ queryKey: BUSINESS_CONFIG_QUERY_KEY });
+    await refetchBusinessConfig();
+    notificationTableActionRef.current?.reload?.();
+  };
+
   const handleDeleteNotificationRule = (row: { id: string }) => {
     Modal.confirm({
       title: t('pages.system.configCenter.notification.modal.deleteTitle'),
       content: t('pages.system.configCenter.notification.modal.deleteConfirm'),
       onOk: async () => {
         try {
-          const { visible } = getRulePartitions();
-          const nextVisible = visible.filter((r: { id?: string }) => String(r?.id) !== String(row.id));
-          await mergeAndSaveVisibleRules(nextVisible);
-          messageApi.success(t('pages.system.configCenter.notification.message.deleted'));
-          await queryClient.invalidateQueries({ queryKey: BUSINESS_CONFIG_QUERY_KEY });
-          await refetchBusinessConfig();
-          notificationTableActionRef.current?.reload?.();
+          await deleteNotificationRulesByIds([row.id]);
         } catch (error: unknown) {
           messageApi.error(
             (error as Error)?.message || t('pages.system.configCenter.notification.message.deleteFailed'),
@@ -476,6 +513,23 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
         }
       },
     });
+  };
+
+  /** 批量删除（确认由 UniTable / UniBatchDeleteButton 承担，此处仅执行删除） */
+  const handleBatchDeleteNotificationRules = async (keys: React.Key[]) => {
+    const ids = (keys || []).map(String).filter(Boolean);
+    if (ids.length === 0) {
+      messageApi.warning(t('pages.system.configCenter.notification.message.selectToDelete'));
+      return;
+    }
+    try {
+      await deleteNotificationRulesByIds(ids);
+    } catch (error: unknown) {
+      messageApi.error(
+        (error as Error)?.message || t('pages.system.configCenter.notification.message.deleteFailed'),
+      );
+      throw error;
+    }
   };
 
   const handleLoadPresets = async () => {
@@ -572,6 +626,31 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
     notificationTableActionRef.current?.reload?.();
   }, [rulesListSignature, installedAppCodes.size, templateCatalogSignature]);
 
+  /** 入库数据若仍含间隔号，打开本页时静默清洗落库（零容忍） */
+  const middleDotPurgeRef = useRef(false);
+  useEffect(() => {
+    if (middleDotPurgeRef.current || loading || !bizRes) return;
+    const { visible, hidden } = getRulePartitions();
+    const all = [...hidden, ...visible];
+    const dirty = all.some((r) => /[·・•]/.test(String(r?.scene_name || '')));
+    if (!dirty) {
+      middleDotPurgeRef.current = true;
+      return;
+    }
+    middleDotPurgeRef.current = true;
+    void (async () => {
+      try {
+        await mergeAndSaveVisibleRules(visible);
+        await queryClient.invalidateQueries({ queryKey: BUSINESS_CONFIG_QUERY_KEY });
+        await refetchBusinessConfig();
+        notificationTableActionRef.current?.reload?.();
+      } catch {
+        middleDotPurgeRef.current = false;
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在配置首次就绪时清洗
+  }, [bizRes, loading]);
+
   useEffect(() => {
     if (!notificationModalOpen || channelOptions.length === 0) return;
     const form = notificationFormRef.current;
@@ -608,28 +687,45 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
                 </Text>
                 <Paragraph type="secondary" style={{ marginTop: 4 }}>
                   {t('pages.system.configCenter.notification.desc')}
+                  {showPresetButton
+                    ? ` ${t('pages.system.configCenter.notification.preset.hint')}`
+                    : ''}
                 </Paragraph>
               </div>
             ) : null}
             <Spin spinning={loading || isFetching}>
               <UniTable
                 columnPersistenceId="notification-rules.config-center"
+                permissionResource="system:config-center"
                 actionRef={notificationTableActionRef}
                 tanstackQuery={{ enabled: false }}
                 rowKey="id"
                 pagination={false}
                 search={false}
                 options={false}
+                enableRowSelection
                 showCreateButton={hasDocumentOptions}
                 createButtonText={t('pages.system.configCenter.notification.create')}
+                showDeleteButton
+                onDelete={handleBatchDeleteNotificationRules}
+                deleteButtonText={t('common.batchDelete')}
+                deleteConfirmTitle={t('pages.system.configCenter.notification.modal.batchDeleteTitle')}
+                deleteConfirmDescription={(count) =>
+                  t('common.confirmBatchDeleteContent', { count })
+                }
                 toolBarActionsAfterCreate={
                   showPresetButton
                     ? [
-                        <Button {...rowActionKind('import')} key="load-presets" loading={loadingPresets} onClick={() => void handleLoadPresets()}>
+                        <Button
+                          {...rowActionKind('import')}
+                          key="load-presets"
+                          loading={loadingPresets}
+                          onClick={() => void handleLoadPresets()}
+                        >
                           {t('pages.system.configCenter.notification.preset.button')}
                         </Button>,
                       ]
-                    : undefined
+                    : []
                 }
                 onCreate={() => {
                   notificationFormRef.current?.resetFields?.();
@@ -747,15 +843,28 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
             options={templateOptions}
             initialValue={templateOptions[0]?.value}
           />
-          <ProFormSelect
-            name="channels"
-            label={t('pages.system.configCenter.notification.form.channels')}
-            mode="multiple"
-            options={channelOptions}
-            fieldProps={{
-              placeholder: t('pages.system.configCenter.notification.form.channelsPlaceholder'),
-            }}
-          />
+          <div>
+            <ProFormSelect
+              name="channels"
+              label={t('pages.system.configCenter.notification.form.channels')}
+              mode="multiple"
+              options={channelOptions}
+              rules={[
+                {
+                  required: true,
+                  type: 'array',
+                  min: 1,
+                  message: t('pages.system.configCenter.notification.form.channelsRequired', {
+                    defaultValue: '请至少选择一个通知渠道',
+                  }),
+                },
+              ]}
+              initialValue={defaultChannelValues}
+              fieldProps={{
+                placeholder: t('pages.system.configCenter.notification.form.channelsPlaceholder'),
+              }}
+            />
+          </div>
           <div style={{ gridColumn: '1 / -1' }}>
             <Typography.Text strong>{t('pages.system.configCenter.notification.form.designatedSection')}</Typography.Text>
           </div>

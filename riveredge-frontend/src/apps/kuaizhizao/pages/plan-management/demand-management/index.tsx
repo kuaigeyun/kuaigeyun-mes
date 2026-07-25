@@ -1601,47 +1601,6 @@ const DemandManagementPage: React.FC = () => {
                     {t('common.delete')}
                   </Button>
                 )}
-              <Tooltip
-                title={
-                  !demandCanPushToComputation(currentDemand)
-                    ? currentDemand.pushed_to_computation
-                      ? t('app.kuaizhizao.demandManagement.alreadyPushed')
-                      : t('components.uniPush.disabled.unavailable')
-                    : undefined
-                }
-              >
-                <Button
-                  type="primary"
-                  icon={<ArrowDownOutlined />}
-                  disabled={!demandCanPushToComputation(currentDemand)}
-                  onClick={() => {
-                    if (demandCanPushToComputation(currentDemand)) {
-                      void handlePushToComputation(currentDemand.id!);
-                    }
-                  }}
-                >
-                  {pushToComputationAction.label}
-                </Button>
-              </Tooltip>
-              <Tooltip
-                title={
-                  !demandCanWithdrawComputation(currentDemand)
-                    ? t('app.kuaizhizao.demandManagement.notPushedYet')
-                    : undefined
-                }
-              >
-                <Button
-                  icon={<RollbackOutlined />}
-                  disabled={!demandCanWithdrawComputation(currentDemand)}
-                  onClick={() => {
-                    if (demandCanWithdrawComputation(currentDemand)) {
-                      void handleWithdrawFromComputation(currentDemand.id!);
-                    }
-                  }}
-                >
-                  {t('app.kuaizhizao.demandManagement.withdrawPush')}
-                </Button>
-              </Tooltip>
             </Space>
           )
         }

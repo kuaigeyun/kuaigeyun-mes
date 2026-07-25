@@ -8,7 +8,7 @@ Author: Luigi Lu
 Date: 2025-01-01
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import Optional, Dict, Any, List, Iterable, Tuple
 from decimal import Decimal
 from tortoise.functions import Sum
@@ -24,6 +24,14 @@ def _decimal_or_zero(v: Any) -> Decimal:
         return Decimal(str(v))
     except Exception:
         return Decimal("0")
+
+
+def _as_date(value: Any, fallback: Optional[date] = None) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return fallback or date.today()
 
 
 async def batch_sum_open_supply_quantities_with_breakdown(
@@ -154,6 +162,145 @@ async def batch_sum_open_supply_quantities(
     """
     breakdown = await batch_sum_open_supply_quantities_with_breakdown(tenant_id, material_ids)
     return {mid: Decimal(str(row.get("total") or 0)) for mid, row in breakdown.items()}
+
+
+async def batch_list_open_supply_receipts_by_date(
+    tenant_id: int,
+    material_ids: Iterable[int],
+) -> Dict[int, List[Dict[str, Any]]]:
+    """
+    按物料列出开放供应（计划收货）明细，带到期日，供时间分桶 MRP 使用。
+
+    每项：{date, qty, source_type, document_id, document_code}
+    - 采购：PurchaseOrderItem.required_date，否则订单 delivery_date
+    - 工单/委外：planned_end_date，否则 planned_start_date，否则今天
+    """
+    mids = [int(m) for m in material_ids if m is not None]
+    if not mids:
+        return {}
+
+    result: Dict[int, List[Dict[str, Any]]] = {mid: [] for mid in mids}
+    mid_set = set(mids)
+    today = date.today()
+
+    from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, REVIEW_STATUS_ALIASES, normalize_status
+
+    def _purchase_order_supplyable(order) -> bool:
+        rs = str(getattr(order, "review_status", None) or "").strip()
+        if REVIEW_STATUS_ALIASES.get(rs, rs) != ReviewStatus.APPROVED.value:
+            return False
+        st = str(getattr(order, "status", None) or "").strip()
+        ns = normalize_status(st)
+        blocked = {
+            DocumentStatus.CANCELLED.value,
+            DocumentStatus.REJECTED.value,
+            DocumentStatus.DRAFT.value,
+            DocumentStatus.PENDING_REVIEW.value,
+        }
+        if ns in blocked or st in ("已完成", "已取消", "completed", "cancelled", "CLOSED"):
+            return False
+        return True
+
+    try:
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+        po_items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            material_id__in=mids,
+            deleted_at__isnull=True,
+        ).select_related("order")
+
+        for line in po_items:
+            order = line.order
+            if not order or getattr(order, "deleted_at", None):
+                continue
+            if not _purchase_order_supplyable(order):
+                continue
+            out = _decimal_or_zero(line.outstanding_quantity)
+            if out <= 0:
+                out = max(
+                    Decimal("0"),
+                    _decimal_or_zero(line.ordered_quantity) - _decimal_or_zero(line.received_quantity),
+                )
+            if out <= 0:
+                continue
+            mid = int(line.material_id)
+            if mid not in mid_set:
+                continue
+            due = getattr(line, "required_date", None) or getattr(order, "delivery_date", None)
+            result[mid].append({
+                "date": _as_date(due, today),
+                "qty": float(out),
+                "source_type": "purchase_order",
+                "document_id": int(getattr(order, "id", 0) or 0),
+                "document_code": str(getattr(order, "order_code", "") or ""),
+            })
+    except Exception as e:
+        logger.warning(f"采购在途按日明细失败: {e}")
+
+    try:
+        from apps.kuaizhizao.models.work_order import WorkOrder
+
+        wos = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            product_id__in=mids,
+            deleted_at__isnull=True,
+            status__in=["released", "in_progress"],
+        ).all()
+        for wo in wos:
+            pid = int(wo.product_id)
+            if pid not in mid_set:
+                continue
+            wip = max(
+                Decimal("0"),
+                _decimal_or_zero(wo.quantity) - _decimal_or_zero(wo.completed_quantity),
+            )
+            if wip <= 0:
+                continue
+            due = getattr(wo, "planned_end_date", None) or getattr(wo, "planned_start_date", None)
+            result[pid].append({
+                "date": _as_date(due, today),
+                "qty": float(wip),
+                "source_type": "work_order",
+                "document_id": int(getattr(wo, "id", 0) or 0),
+                "document_code": str(getattr(wo, "code", "") or ""),
+            })
+    except Exception as e:
+        logger.warning(f"工单在制按日明细失败: {e}")
+
+    try:
+        from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
+
+        owos = await OutsourceWorkOrder.filter(
+            tenant_id=tenant_id,
+            product_id__in=mids,
+            deleted_at__isnull=True,
+            status__in=["released", "in_progress"],
+        ).all()
+        for owo in owos:
+            pid = int(owo.product_id)
+            if pid not in mid_set:
+                continue
+            wip = max(
+                Decimal("0"),
+                _decimal_or_zero(owo.quantity) - _decimal_or_zero(owo.received_quantity),
+            )
+            if wip <= 0:
+                continue
+            due = getattr(owo, "planned_end_date", None) or getattr(owo, "planned_start_date", None)
+            result[pid].append({
+                "date": _as_date(due, today),
+                "qty": float(wip),
+                "source_type": "outsource_work_order",
+                "document_id": int(getattr(owo, "id", 0) or 0),
+                "document_code": str(getattr(owo, "code", "") or ""),
+            })
+    except Exception as e:
+        logger.warning(f"委外工单在制按日明细失败: {e}")
+
+    for mid in result:
+        result[mid].sort(key=lambda r: (r["date"], r["source_type"], r["document_id"]))
+    return result
 
 
 async def get_material_available_quantity(

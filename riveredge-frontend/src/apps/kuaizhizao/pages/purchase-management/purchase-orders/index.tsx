@@ -28,7 +28,7 @@ import {
   buildImportPriceTypeOptions,
   parseImportPriceType,
 } from '../../sales-management/shared/salesPriceType';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, DownOutlined, FileTextOutlined, InboxOutlined, RollbackOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, DownOutlined, FileTextOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
 import { mapSystemDictionaryItemOptions, resolveSystemDictionaryItemLabel } from '../../../../../utils/systemDictionaryI18n';
@@ -1449,7 +1449,6 @@ const PurchaseOrdersPage: React.FC = () => {
         {
           key: 'receipt-notice',
           label: pushToReceiptNoticeAction.label,
-          icon: <FileTextOutlined />,
           disabled: record.capabilities?.push_receipt_notice?.allowed !== true,
           title: capReason(record.capabilities?.push_receipt_notice),
           onClick: () => {
@@ -1460,7 +1459,6 @@ const PurchaseOrdersPage: React.FC = () => {
         {
           key: 'receipt',
           label: pushToReceiptAction.label,
-          icon: <InboxOutlined />,
           disabled: record.capabilities?.push_receipt?.allowed !== true,
           title: capReason(record.capabilities?.push_receipt),
           onClick: () => {
@@ -1471,7 +1469,6 @@ const PurchaseOrdersPage: React.FC = () => {
         {
           key: 'invoice',
           label: pushToInvoiceAction.label,
-          icon: <FileTextOutlined />,
           disabled: record.capabilities?.push_invoice?.allowed !== true,
           title: capReason(record.capabilities?.push_invoice),
           onClick: () => {
@@ -1482,7 +1479,6 @@ const PurchaseOrdersPage: React.FC = () => {
         {
           key: 'purchase-return',
           label: pushToPurchaseReturnAction.label,
-          icon: <RollbackOutlined />,
           disabled: record.capabilities?.push_purchase_return?.allowed !== true,
           title: capReason(record.capabilities?.push_purchase_return),
           onClick: () => {
@@ -3739,58 +3735,6 @@ const PurchaseOrdersPage: React.FC = () => {
                         setPoTrackingRefreshKey((k) => k + 1);
                       }}
                     />
-                  ),
-                },
-                {
-                  key: 'push',
-                  visible:
-                    orderDetail.capabilities?.push_receipt_notice?.allowed === true ||
-                    orderDetail.capabilities?.push_receipt?.allowed === true ||
-                    orderDetail.capabilities?.push_invoice?.allowed === true ||
-                    orderDetail.capabilities?.push_purchase_return?.allowed === true,
-                  render: () => (
-                    <Dropdown {...rowActionKind('skip')}
-                      menu={{
-                        items: buildUniPushMenuItems([
-                          {
-                            key: 'receipt-notice',
-                            label: pushToReceiptNoticeAction.label,
-                            icon: <FileTextOutlined />,
-                            disabled: orderDetail.capabilities?.push_receipt_notice?.allowed !== true,
-                            title: purchaseOrderCapabilityReasonMessage(orderDetail.capabilities?.push_receipt_notice?.reason, t),
-                            onClick: () => handlePushToNotice(orderDetail),
-                          },
-                          {
-                            key: 'receipt',
-                            label: pushToReceiptAction.label,
-                            icon: <InboxOutlined />,
-                            disabled: orderDetail.capabilities?.push_receipt?.allowed !== true,
-                            title: purchaseOrderCapabilityReasonMessage(orderDetail.capabilities?.push_receipt?.reason, t),
-                            onClick: () => handlePushToReceipt(orderDetail),
-                          },
-                          {
-                            key: 'invoice',
-                            label: pushToInvoiceAction.label,
-                            icon: <FileTextOutlined />,
-                            disabled: orderDetail.capabilities?.push_invoice?.allowed !== true,
-                            title: purchaseOrderCapabilityReasonMessage(orderDetail.capabilities?.push_invoice?.reason, t),
-                            onClick: () => handlePushToInvoice(orderDetail),
-                          },
-                          {
-                            key: 'purchase-return',
-                            label: pushToPurchaseReturnAction.label,
-                            icon: <RollbackOutlined />,
-                            disabled: orderDetail.capabilities?.push_purchase_return?.allowed !== true,
-                            title: purchaseOrderCapabilityReasonMessage(orderDetail.capabilities?.push_purchase_return?.reason, t),
-                            onClick: () => handlePushToReturn(orderDetail),
-                          },
-                        ]),
-                      }}
-                    >
-                      <Button type="link" size="small" icon={<CheckCircleOutlined />} style={{ color: '#722ed1' }}>
-                        {t('app.kuaizhizao.purchaseOrder.push.dropdown')} <DownOutlined />
-                      </Button>
-                    </Dropdown>
                   ),
                 },
                 {

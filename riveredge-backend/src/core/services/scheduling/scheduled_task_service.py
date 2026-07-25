@@ -364,53 +364,53 @@ class ScheduledTaskService:
             old_status: 旧状态
         """
         try:
-            # 获取组织管理员列表（发送通知给管理员）
-            # 如果没有管理员，则发送到系统消息中心
+            # 仅失败时通知，且只发站内信给组织管理员（recipient=user.id）
+            if status != "failed":
+                return
+
             admins = await User.filter(
                 tenant_id=tenant_id,
                 is_tenant_admin=True,
                 is_active=True,
                 deleted_at__isnull=True
             ).all()
-            
-            # 如果没有管理员，尝试获取创建者（如果有的话）
-            recipients = []
-            if admins:
-                for admin in admins:
-                    if admin.email:
-                        recipients.append(admin.email)
-            
-            # 如果没有找到接收人，跳过发送（或者可以发送到系统消息中心）
-            if not recipients:
+            recipient_ids = [admin.id for admin in admins if admin.id]
+            if not recipient_ids:
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.warning(f"定时任务 {scheduled_task.name} 执行结果通知：未找到接收人（组织管理员）")
                 return
-            
-            # 构建消息内容
-            status_text = {
-                "success": "成功",
-                "failed": "失败"
-            }.get(status, status)
-            
+
             error_text = f"，错误信息：{error}" if error else ""
-            
-            # 发送消息给所有管理员
-            for recipient in recipients:
+            run_at = (
+                scheduled_task.last_run_at.strftime("%Y-%m-%d %H:%M:%S")
+                if scheduled_task.last_run_at
+                else "未知"
+            )
+            for uid in recipient_ids:
                 try:
                     await MessageService.send_message(
                         tenant_id=tenant_id,
                         request=SendMessageRequest(
                             type="internal",
-                            recipient=recipient,
-                            subject=f"定时任务执行{status_text}：{scheduled_task.name}",
-                            content=f"定时任务「{scheduled_task.name}」（代码：{scheduled_task.code}）执行{status_text}{error_text}。执行时间：{scheduled_task.last_run_at.strftime('%Y-%m-%d %H:%M:%S') if scheduled_task.last_run_at else '未知'}。",
+                            recipient=str(uid),
+                            subject=f"定时任务执行失败：{scheduled_task.name}",
+                            content=(
+                                f"定时任务「{scheduled_task.name}」（代码：{scheduled_task.code}）"
+                                f"执行失败{error_text}。执行时间：{run_at}。"
+                            ),
+                            variables={
+                                "message_category": "system",
+                                "trigger_document": "scheduled_task",
+                                "trigger_action": "failed",
+                                "detail_path": "/system/scheduled-tasks",
+                            },
                         )
                     )
                 except Exception as e:
                     import logging
                     logger = logging.getLogger(__name__)
-                    logger.error(f"发送定时任务执行结果通知失败（接收人：{recipient}）: {str(e)}")
+                    logger.error(f"发送定时任务执行结果通知失败（接收人：{uid}）: {str(e)}")
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)

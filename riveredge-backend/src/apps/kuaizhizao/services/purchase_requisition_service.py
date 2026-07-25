@@ -87,6 +87,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         if not is_enabled:
             raise BusinessLogicError("采购申请模块未启用，无法创建")
 
+        # 写事务内只做插入；读回详情（含 enrich）放在提交后，避免嵌套事务/连接池等待
         async with in_transaction():
             if not data.requisition_code:
                 try:
@@ -150,8 +151,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     supplier_id=item_data.supplier_id,
                     notes=item_data.notes,
                 )
+            req_id = req.id
 
-            return await self.get_requisition_by_id(tenant_id, req.id)
+        return await self.get_requisition_by_id(tenant_id, req_id)
 
     async def get_requisition_by_id(
         self, tenant_id: int, requisition_id: int

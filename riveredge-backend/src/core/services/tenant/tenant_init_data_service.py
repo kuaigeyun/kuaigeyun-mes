@@ -297,6 +297,15 @@ class TenantInitDataService:
                 tenant_id,
                 only_codes=message_template_codes_for_installed_apps(installed),
             )
+            if "kuaizhizao" in installed:
+                from apps.kuaizhizao.services.kuaizhizao_notification_rule_presets import (
+                    load_kuaizhizao_notification_rule_presets,
+                )
+
+                kz_rules = await load_kuaizhizao_notification_rule_presets(tenant_id)
+                count += int(kz_rules.get("created") or 0) + int(
+                    kz_rules.get("templates_created") or 0
+                )
             if "haoligo" in installed:
                 from apps.haoligo.services.haoligo_message_template_registry import (
                     load_haoligo_message_template_presets,

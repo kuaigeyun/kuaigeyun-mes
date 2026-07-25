@@ -2163,24 +2163,6 @@ export default function SalesForecastsPage() {
                   </Button>
                 </span>
               </Tooltip>
-              {salesNodesEnabled.demand_computation ? (
-                <Tooltip title={detailCapabilityGates.pushComputation.title}>
-                  <span>
-                    <Button
-                      type="primary"
-                      icon={<ArrowDownOutlined />}
-                      disabled={detailCapabilityGates.pushComputation.disabled || currentForecast.id == null}
-                      onClick={() => {
-                        const fid = currentForecast.id;
-                        if (detailCapabilityGates.pushComputation.disabled || fid == null) return;
-                        handlePushToComputation(fid);
-                      }}
-                    >
-                      {pushToComputationAction.label}
-                    </Button>
-                  </span>
-                </Tooltip>
-              ) : null}
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={currentForecast}
                 entityName={t('app.kuaizhizao.salesForecast.title')}

@@ -13,6 +13,20 @@ const SOURCE_TYPE_I18N_KEY: Record<string, string> = {
   Service: 'app.master-data.materialForm.sourceService',
 };
 
+/** Ant Design Tag 颜色（与 BOM 设计器 SOURCE_TYPE_COLORS 一致） */
+export const MATERIAL_SOURCE_TYPE_TAG_COLORS: Record<string, string> = {
+  Make: 'blue',
+  Buy: 'green',
+  Phantom: 'default',
+  Outsource: 'orange',
+  Service: 'cyan',
+};
+
+export function getMaterialSourceTypeTagColor(raw?: string | null): string {
+  const normalized = normalizeMaterialSourceType(raw);
+  return MATERIAL_SOURCE_TYPE_TAG_COLORS[normalized] ?? 'default';
+}
+
 /** 导入常见中文/别名 → 存库值（不依赖当前 UI 语言） */
 const SOURCE_TYPE_IMPORT_ALIASES: Record<string, MaterialSourceTypeValue> = {
   自制件: 'Make',

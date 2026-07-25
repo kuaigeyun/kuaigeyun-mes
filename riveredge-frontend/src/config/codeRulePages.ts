@@ -681,10 +681,10 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
   },
   {
     pageCode: 'kuaizhizao-warehouse-batching-order',
-    pageName: '配料单',
+    pageName: '线边备料单',
     pagePath: '/apps/kuaizhizao/warehouse-management/batching-center',
     codeField: 'code',
-    codeFieldLabel: '配料单编号',
+    codeFieldLabel: '线边备料单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,

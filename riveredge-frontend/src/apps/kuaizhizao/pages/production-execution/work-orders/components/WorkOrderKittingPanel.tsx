@@ -31,7 +31,7 @@ const WorkOrderKittingPanel: React.FC<{ workOrderId?: number }> = ({ workOrderId
         call_type: 'CUSTOM_SELECTION',
         call_reason: 'LINE_SIDE_SHORTAGE',
         priority: 'normal',
-        remarks: '生产现场通过齐套分析发起叫料',
+        remarks: '生产现场通过齐套分析发起补料',
         items: [
           {
             material_id: record.material_id,

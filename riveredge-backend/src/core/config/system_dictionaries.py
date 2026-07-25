@@ -495,27 +495,27 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
     },
     {
         "code": "MATERIAL_CALL_TYPE",
-        "name": "叫料类型",
-        "description": "单独叫料为自选一种或多种物料；整单叫料按工单齐套缺料生成一张叫料单多行明细",
+        "name": "补料类型",
+        "description": "单独补料为自选一种或多种物料；整单补料按工单齐套缺料生成一张补料单多行明细",
         "items": [
             {
-                "label": "单独叫料",
+                "label": "单独补料",
                 "value": "CUSTOM_SELECTION",
-                "description": "自选一种或多种物料及数量发起叫料",
+                "description": "自选一种或多种物料及数量发起补料",
                 "sort_order": 1,
             },
             {
-                "label": "整单叫料",
+                "label": "整单补料",
                 "value": "FULL_ORDER",
-                "description": "按工单齐套分析缺料生成一张叫料单（多行明细）",
+                "description": "按工单齐套分析缺料生成一张补料单（多行明细）",
                 "sort_order": 2,
             },
         ],
     },
     {
         "code": "MATERIAL_CALL_REASON",
-        "name": "叫料原因",
-        "description": "单独叫料时说明现场需求场景，便于仓库与计划追溯",
+        "name": "补料原因",
+        "description": "单独补料时说明现场需求场景，便于仓库与计划追溯",
         "items": [
             {
                 "label": "线边仓缺料",
@@ -526,7 +526,7 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {
                 "label": "批量领料未领足",
                 "value": "PICKING_SHORTAGE",
-                "description": "按批量领料单领取的数量不足，需补叫",
+                "description": "按批量领料单领取的数量不足，需补料",
                 "sort_order": 2,
             },
             {

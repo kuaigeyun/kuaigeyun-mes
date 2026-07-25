@@ -73,39 +73,42 @@ class DocumentPushPullService:
             NotFoundError: 源单据不存在
             BusinessLogicError: 下推操作不符合业务规则
         """
-        async with in_transaction():
-            # 获取源单据信息
-            source_doc = await self._get_source_document(tenant_id, source_type, source_id)
-            if not source_doc:
-                raise NotFoundError(f"源单据不存在: {source_type}#{source_id}")
-            
-            # 验证源单据状态（必须是已审核通过）
-            if not self._validate_source_status(source_doc, source_type):
-                raise BusinessLogicError(f"源单据状态不符合下推要求: {source_type}#{source_id}")
-            
-            # 生产计划已下线，仅支持需求计算 -> 工单/采购
-            if target_type == "production_plan":
-                raise BusinessLogicError("生产计划已下线，请使用工单下推")
+        # 获取源单据信息
+        source_doc = await self._get_source_document(tenant_id, source_type, source_id)
+        if not source_doc:
+            raise NotFoundError(f"源单据不存在: {source_type}#{source_id}")
 
+        # 验证源单据状态（必须是已审核通过）
+        if not self._validate_source_status(source_doc, source_type):
+            raise BusinessLogicError(f"源单据状态不符合下推要求: {source_type}#{source_id}")
+
+        # 生产计划已下线，仅支持需求计算 -> 工单/采购
+        if target_type == "production_plan":
+            raise BusinessLogicError("生产计划已下线，请使用工单下推")
+
+        # 采购申请/工单/采购单创建路径内部各自有事务；外层再套 in_transaction
+        # 会与 create_* 内层事务 + 读回详情嵌套，易导致连接池等待（前端一直转圈）。
+        if source_type == "demand_computation" and target_type == "purchase_requisition":
+            return await self._push_computation_to_purchase_requisition(
+                tenant_id, source_id, push_params, created_by
+            )
+        if source_type == "demand_computation" and target_type == "work_order":
+            return await self._push_computation_to_work_order(
+                tenant_id, source_id, push_params, created_by
+            )
+        if source_type == "demand_computation" and target_type == "purchase_order":
+            return await self._push_computation_to_purchase_order(
+                tenant_id, source_id, push_params, created_by
+            )
+        if source_type == "purchase_receipt" and target_type == "incoming_inspection":
+            return await self._push_purchase_receipt_to_incoming_inspection(
+                tenant_id, source_id, push_params, created_by
+            )
+
+        async with in_transaction():
             # 根据不同的下推场景执行下推操作
             if source_type == "demand" and target_type == "demand_computation":
                 return await self._push_demand_to_computation(
-                    tenant_id, source_id, push_params, created_by
-                )
-            elif source_type == "demand_computation" and target_type == "work_order":
-                return await self._push_computation_to_work_order(
-                    tenant_id, source_id, push_params, created_by
-                )
-            elif source_type == "demand_computation" and target_type == "purchase_order":
-                return await self._push_computation_to_purchase_order(
-                    tenant_id, source_id, push_params, created_by
-                )
-            elif source_type == "demand_computation" and target_type == "purchase_requisition":
-                return await self._push_computation_to_purchase_requisition(
-                    tenant_id, source_id, push_params, created_by
-                )
-            elif source_type == "purchase_receipt" and target_type == "incoming_inspection":
-                return await self._push_purchase_receipt_to_incoming_inspection(
                     tenant_id, source_id, push_params, created_by
                 )
             else:
@@ -438,6 +441,7 @@ class DocumentPushPullService:
             SOURCE_TYPE_BUY,
             resolve_computation_item_source_config,
         )
+        from decimal import Decimal
         from apps.master_data.models.material import Material
 
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
@@ -502,7 +506,7 @@ class DocumentPushPullService:
                 material_spec=material_spec or None,
                 unit=material_unit or "件",
                 quantity=item.suggested_purchase_order_quantity,
-                suggested_unit_price=0,
+                suggested_unit_price=Decimal("0"),
                 required_date=item.procurement_completion_date,
                 demand_computation_item_id=item.id,
                 supplier_id=supplier_id,

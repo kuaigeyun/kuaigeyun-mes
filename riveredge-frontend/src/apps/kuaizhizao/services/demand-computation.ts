@@ -78,6 +78,7 @@ export interface DemandComputationItem {
   bom_version?: string;
   suggested_work_order_quantity?: number;
   suggested_purchase_order_quantity?: number;
+  demand_item_ids?: number[];
   detail_results?: Record<string, any>;
   notes?: string;
   // 物料来源信息（核心功能，新增）
@@ -213,12 +214,16 @@ export interface DemandComputationReadinessGap {
   material_uuid: string;
   material_code: string;
   material_name: string;
+  material_spec?: string | null;
+  material_unit?: string | null;
   source_type?: string | null;
+  manufacturing_mode?: string | null;
   field: string;
   label: string;
   current?: unknown;
   suggested?: unknown;
-  value_type?: 'number' | 'int' | 'supplier_id' | string;
+  value_type?: 'number' | 'int' | 'supplier_id' | 'source_type' | 'manufacturing_mode' | 'process_route_id' | 'text' | 'info' | string;
+  blocking?: boolean;
 }
 
 export interface DemandComputationReadiness {
@@ -228,13 +233,17 @@ export interface DemandComputationReadiness {
   gap_count: number;
 }
 
-/** 执行前就绪检查 */
+/** 执行前就绪检查（可传入本次执行参数，与 preview/execute 一致） */
 export async function getDemandComputationReadiness(
   id: number,
+  computationParams?: Record<string, unknown>,
 ): Promise<DemandComputationReadiness> {
   return apiRequest<DemandComputationReadiness>(
     `/apps/kuaizhizao/demand-computations/${id}/readiness`,
-    { method: 'GET' },
+    {
+      method: 'POST',
+      data: computationParams ? { computation_params: computationParams } : undefined,
+    },
   );
 }
 
@@ -490,6 +499,27 @@ export async function pushAll(
     method: 'POST',
     data: body,
   })
+}
+
+/** 确认/取消确认计划订单（重算保留；frozen 时不再生成新计划） */
+export async function firmPlannedOrders(
+  computationId: number,
+  itemId: number,
+  body: { firm: boolean; frozen?: boolean },
+): Promise<{
+  item_id: number
+  material_id: number
+  firm: boolean
+  frozen: boolean
+  planned_orders: Array<Record<string, unknown>>
+}> {
+  return apiRequest(
+    `/apps/kuaizhizao/demand-computations/${computationId}/items/${itemId}/firm-planned-orders`,
+    {
+      method: 'POST',
+      data: body,
+    },
+  )
 }
 
 /**

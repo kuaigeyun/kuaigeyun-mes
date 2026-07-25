@@ -636,7 +636,6 @@ const PurchaseInquiriesPage: React.FC = () => {
         {
           key: 'push-purchase-order',
           label: pushToPurchaseOrderAction.label,
-          icon: <SwapOutlined />,
           disabled: !selectedInquiryForToolbar || !canPushPurchaseOrder,
           title: !canPushPurchaseOrder && selectedInquiryForToolbar
             ? purchaseInquiryCapabilityReasonMessage(
@@ -1507,26 +1506,6 @@ const PurchaseInquiriesPage: React.FC = () => {
               {(isInquiryPendingCompare(detail) || isInquiryQuoting(detail)) && (
                 <Button onClick={() => void openCompare(detail)}>{t('app.kuaizhizao.purchaseInquiry.compareAward')}</Button>
               )}
-              <Tooltip
-                title={
-                  !detail.capabilities?.push_purchase_order?.allowed
-                    ? purchaseInquiryCapabilityReasonMessage(detail.capabilities?.push_purchase_order?.reason, t)
-                      || t('app.kuaizhizao.purchaseInquiry.push.notAwarded')
-                    : undefined
-                }
-              >
-                <Button
-                  icon={<SwapOutlined />}
-                  disabled={!detail.capabilities?.push_purchase_order?.allowed}
-                  onClick={() => {
-                    if (detail.capabilities?.push_purchase_order?.allowed) {
-                      void openPushPoPreview(detail);
-                    }
-                  }}
-                >
-                  {pushToPurchaseOrderAction.label}
-                </Button>
-              </Tooltip>
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={detail}
                 entityName={t('app.kuaizhizao.purchaseInquiry.entityName')}

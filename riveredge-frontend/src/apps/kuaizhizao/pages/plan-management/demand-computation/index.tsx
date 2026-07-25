@@ -30,6 +30,7 @@ import {
   Modal,
   Popover,
   Table,
+  type TableColumnsType,
   Switch,
   Input,
   Select,
@@ -52,10 +53,10 @@ import {
   ReloadOutlined,
   WarningOutlined,
   CopyOutlined,
+  FundOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { UniTable } from '../../../../../components/uni-table'
-import { UniCapabilityBatchButton } from '../../../../../components/uni-batch'
 import { MaterialStackedCell, UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn'
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
 import {
@@ -96,6 +97,7 @@ import {
   getPushOptions,
   getPushPreview,
   pushAll,
+  firmPlannedOrders,
   validateMaterialSources,
   getMaterialSources,
   getDemandComputationStatistics,
@@ -133,6 +135,7 @@ import { bomApi } from '../../../../master-data/services/material'
 import { warehouseApi } from '../../../../master-data/services/warehouse'
 import ComputationHistoryTab from './ComputationHistoryTab'
 import { MrpParametersCustomerGuideTrigger } from './MrpParametersCustomerGuide'
+import { readinessFieldHelpI18nKey } from './readinessFieldHelp'
 import { buildDemandPushPreviewSummary } from './pushPreviewSummary'
 import { renderPushPreviewTargetBadge } from './pushPreviewTargetBadge'
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns'
@@ -145,9 +148,13 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate'
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select'
 import {
   getMaterialSourceTypeLabel,
+  getMaterialSourceTypeTagColor,
+  buildMaterialSourceTypeOptions,
   MATERIAL_SOURCE_TYPE_VALUES,
   normalizeMaterialSourceType,
 } from '../../../../master-data/utils/materialSourceType'
+import { processRouteApi } from '../../../../master-data/services/process'
+import type { ProcessRoute } from '../../../../master-data/types/process'
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
@@ -155,7 +162,6 @@ import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } f
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions'
 import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown'
 import {
-  demandComputationBatchRecomputeAllowed,
   demandComputationCapabilityReasonMessage,
   demandPushCapabilityReasonMessage,
   salesForecastCapabilityReasonMessage,
@@ -171,6 +177,19 @@ function getMrpSuggestionSegmentedOptions(t: TFunction) {
   return [
     { label: t('app.kuaizhizao.demandComputation.suggestionNet'), value: 'net' as const },
     { label: t('app.kuaizhizao.demandComputation.suggestionGross'), value: 'gross' as const },
+  ]
+}
+
+function getScheduleDirectionSegmentedOptions(t: TFunction) {
+  return [
+    {
+      label: t('app.kuaizhizao.demandComputation.scheduleDirectionBackward'),
+      value: 'backward' as const,
+    },
+    {
+      label: t('app.kuaizhizao.demandComputation.scheduleDirectionForward'),
+      value: 'forward' as const,
+    },
   ]
 }
 
@@ -478,6 +497,8 @@ const PARAM_DEFAULTS: Record<string, any> = {
   bom_expand_level: 10,
   /** 在物料来源提前期基础上，开工/请购日再整体前置的天数（中小企业排程缓冲） */
   schedule_buffer_days: 0,
+  /** 排程方向：backward=交期倒排 forward=尽早开工正排 */
+  schedule_direction: 'backward' as 'backward' | 'forward',
 }
 
 /** 净需求模式下的供需净算默认（与 PARAM_DEFAULTS 一致） */
@@ -705,6 +726,25 @@ const InventoryParamsForm: React.FC<{
                     onChange={v => handleChange('schedule_buffer_days', v === null ? 0 : v)}
                   />
                 </Col>
+                <Col xs={24}>
+                  {fieldLabel(t('app.kuaizhizao.demandComputation.paramsScheduleDirection'))}
+                  <ThemedSegmented
+                    block
+                    value={params.schedule_direction === 'forward' ? 'forward' : 'backward'}
+                    options={getScheduleDirectionSegmentedOptions(t)}
+                    onChange={v =>
+                      handleChange('schedule_direction', v === 'forward' ? 'forward' : 'backward')
+                    }
+                  />
+                  <Typography.Text
+                    type="secondary"
+                    style={{ display: 'block', marginTop: token.marginXXS, fontSize: token.fontSizeSM }}
+                  >
+                    {params.schedule_direction === 'forward'
+                      ? t('app.kuaizhizao.demandComputation.scheduleDirectionForwardHint')
+                      : t('app.kuaizhizao.demandComputation.scheduleDirectionBackwardHint')}
+                  </Typography.Text>
+                </Col>
               </Row>
             </div>
           </div>
@@ -808,12 +848,6 @@ const DemandComputationPage: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ['demandComputationStatistics'] })
   }
 
-  const handleComputationBatchSuccess = useCallback(() => {
-    setSelectedRowKeys([])
-    setSelectedComputationForToolbar(null)
-    invalidateStatistics()
-    actionRef.current?.reload()
-  }, [queryClient])
   const { data: statistics } = useQuery({
     queryKey: ['demandComputationStatistics'],
     queryFn: getDemandComputationStatistics,
@@ -842,6 +876,14 @@ const DemandComputationPage: React.FC = () => {
       })),
     [warehouseRows],
   )
+  const materialSourceTypeOptions = React.useMemo(() => buildMaterialSourceTypeOptions(t), [t])
+  const manufacturingModeOptions = React.useMemo(
+    () => [
+      { value: 'assembly', label: t('app.kuaizhizao.workOrder.manufacturingModeAssembly') },
+      { value: 'fabrication', label: t('app.kuaizhizao.workOrder.manufacturingModeFabrication') },
+    ],
+    [t],
+  )
 
   // Modal 相关状态（新建计算）
   const [modalVisible, setModalVisible] = useState(false)
@@ -854,9 +896,19 @@ const DemandComputationPage: React.FC = () => {
   const [executeParams, setExecuteParams] = useState<Record<string, any>>({})
   const [executeLoading, setExecuteLoading] = useState(false)
   const [readinessModalVisible, setReadinessModalVisible] = useState(false)
+  /** execute=执行前补齐；analysis=计算结果分析（结果+补齐+重算） */
+  const [readinessContext, setReadinessContext] = useState<'execute' | 'analysis'>('execute')
+  const [analysisRecord, setAnalysisRecord] = useState<DemandComputation | null>(null)
+  const [analysisMainTab, setAnalysisMainTab] = useState<'results' | 'masterData'>('results')
+  const [analysisSourceTab, setAnalysisSourceTab] = useState<string>(PREVIEW_SOURCE_TAB_ALL)
+  const [analysisTablePage, setAnalysisTablePage] = useState(1)
+  const [analysisTablePageSize, setAnalysisTablePageSize] = useState(10)
   const [readinessGaps, setReadinessGaps] = useState<DemandComputationReadinessGap[]>([])
   const [readinessValues, setReadinessValues] = useState<Record<string, unknown>>({})
+  const [readinessActiveFieldTab, setReadinessActiveFieldTab] = useState('')
   const [readinessSubmitting, setReadinessSubmitting] = useState(false)
+  const [readinessProcessRoutes, setReadinessProcessRoutes] = useState<ProcessRoute[]>([])
+  const [readinessProcessRoutesLoading, setReadinessProcessRoutesLoading] = useState(false)
 
   // 计算结果预览 Modal（二次确认）
   const [previewModalVisible, setPreviewModalVisible] = useState(false)
@@ -1644,6 +1696,225 @@ const DemandComputationPage: React.FC = () => {
   const readinessRowKey = (gap: DemandComputationReadinessGap) =>
     `${gap.material_id}::${gap.field}`
 
+  /** 安全库存 / 再订货点无建议值时默认 0，便于直接回写 */
+  const readinessSuggestedValue = (gap: DemandComputationReadinessGap): unknown => {
+    if (gap.suggested !== null && gap.suggested !== undefined) return gap.suggested
+    if (gap.field === 'defaults.safetyStock' || gap.field === 'defaults.reorder_point') return 0
+    return null
+  }
+
+  const readinessBackfillableGaps = useMemo(
+    () => readinessGaps.filter((g) => g.value_type !== 'info'),
+    [readinessGaps],
+  )
+
+  const readinessGapsByField = useMemo(() => {
+    const groups: Array<{ field: string; label: string; gaps: DemandComputationReadinessGap[] }> = []
+    const indexByField = new Map<string, number>()
+    for (const gap of readinessGaps) {
+      const idx = indexByField.get(gap.field)
+      if (idx === undefined) {
+        indexByField.set(gap.field, groups.length)
+        groups.push({ field: gap.field, label: gap.label, gaps: [gap] })
+      } else {
+        groups[idx].gaps.push(gap)
+      }
+    }
+    return groups
+  }, [readinessGaps])
+
+  const getReadinessFieldHelp = useCallback(
+    (field: string) => {
+      const key = readinessFieldHelpI18nKey(field)
+      const text = t(key)
+      return text === key
+        ? t('app.kuaizhizao.demandComputation.readinessFieldHelpDefault')
+        : text
+    },
+    [t],
+  )
+
+  const renderReadinessGapValue = useCallback(
+    (gap: DemandComputationReadinessGap) => {
+      const key = readinessRowKey(gap)
+      const value = readinessValues[key]
+      if (gap.value_type === 'info') {
+        return (
+          <Typography.Text type="secondary">
+            {t('app.kuaizhizao.demandComputation.readinessInfoBom')}
+          </Typography.Text>
+        )
+      }
+      if (gap.value_type === 'supplier_id') {
+        return (
+          <SupplierSelectDropdown
+            style={{ width: '100%' }}
+            value={value != null && value !== '' ? Number(value) : undefined}
+            disabled={!materialPerms.canUpdate}
+            hostResource={DEMAND_COMPUTATION_RESOURCE}
+            onChange={(v) => setReadinessValues((prev) => ({ ...prev, [key]: v ?? null }))}
+          />
+        )
+      }
+      if (gap.value_type === 'source_type') {
+        return (
+          <Select
+            style={{ width: '100%' }}
+            options={materialSourceTypeOptions}
+            value={value != null && value !== '' ? String(value) : undefined}
+            disabled={!materialPerms.canUpdate}
+            placeholder={t('app.master-data.materials.batchSourceTypeSelect')}
+            onChange={(v) => setReadinessValues((prev) => ({ ...prev, [key]: v ?? null }))}
+          />
+        )
+      }
+      if (gap.value_type === 'manufacturing_mode') {
+        return (
+          <Select
+            style={{ width: '100%' }}
+            options={manufacturingModeOptions}
+            value={value != null && value !== '' ? String(value) : undefined}
+            disabled={!materialPerms.canUpdate}
+            onChange={(v) => setReadinessValues((prev) => ({ ...prev, [key]: v ?? null }))}
+          />
+        )
+      }
+      if (gap.value_type === 'process_route_id') {
+        return (
+          <Select
+            style={{ width: '100%' }}
+            showSearch
+            optionFilterProp="label"
+            loading={readinessProcessRoutesLoading}
+            options={readinessProcessRoutes.map((r) => ({
+              value: r.id,
+              label: `${r.code || ''} ${r.name || ''}`.trim() || String(r.id),
+            }))}
+            value={value != null && value !== '' ? Number(value) : undefined}
+            disabled={!materialPerms.canUpdate}
+            placeholder={t('app.master-data.materials.batchProcessRouteSelect')}
+            onChange={(v) => setReadinessValues((prev) => ({ ...prev, [key]: v ?? null }))}
+          />
+        )
+      }
+      if (gap.value_type === 'text') {
+        return (
+          <Input
+            style={{ width: '100%' }}
+            disabled={!materialPerms.canUpdate}
+            value={value == null || value === '' ? '' : String(value)}
+            onChange={(e) => setReadinessValues((prev) => ({ ...prev, [key]: e.target.value }))}
+          />
+        )
+      }
+      return (
+        <InputNumber
+          style={{ width: '100%' }}
+          min={0}
+          disabled={!materialPerms.canUpdate}
+          value={value == null || value === '' ? null : Number(value)}
+          onChange={(v) => setReadinessValues((prev) => ({ ...prev, [key]: v }))}
+        />
+      )
+    },
+    [
+      readinessValues,
+      materialPerms.canUpdate,
+      materialSourceTypeOptions,
+      manufacturingModeOptions,
+      readinessProcessRoutes,
+      readinessProcessRoutesLoading,
+      t,
+    ],
+  )
+
+  const readinessTableColumns = useMemo((): TableColumnsType<DemandComputationReadinessGap> => {
+    const dash = '-'
+    return [
+      {
+        title: t('app.kuaizhizao.demandComputation.colMaterialCode'),
+        dataIndex: 'material_code',
+        width: 108,
+        fixed: 'left',
+      },
+      {
+        title: t('app.kuaizhizao.demandComputation.colMaterialName'),
+        dataIndex: 'material_name',
+        width: 168,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.demandComputation.colMaterialSpec'),
+        dataIndex: 'material_spec',
+        width: 128,
+        ellipsis: true,
+        render: (val: string | null | undefined) => (val?.trim() ? val : dash),
+      },
+      {
+        title: t('app.kuaizhizao.demandComputation.colMaterialUnit'),
+        dataIndex: 'material_unit',
+        width: 64,
+        render: (val: string | null | undefined) => (val?.trim() ? val : dash),
+      },
+      {
+        title: t('app.kuaizhizao.demandComputation.colSourceType'),
+        dataIndex: 'source_type',
+        width: 92,
+        render: (_: unknown, row) => {
+          const label = getMaterialSourceTypeLabel(row.source_type, t)
+          return label && label !== dash ? (
+            <Tag color={getMaterialSourceTypeTagColor(row.source_type)}>{label}</Tag>
+          ) : (
+            dash
+          )
+        },
+      },
+      {
+        title: t('app.kuaizhizao.workOrder.colManufacturingMode'),
+        dataIndex: 'manufacturing_mode',
+        width: 92,
+        render: (_: unknown, row) => {
+          if (!row.manufacturing_mode) return dash
+          if (row.manufacturing_mode === 'assembly') {
+            return t('app.kuaizhizao.workOrder.manufacturingModeAssembly')
+          }
+          if (row.manufacturing_mode === 'fabrication') {
+            return t('app.kuaizhizao.workOrder.manufacturingModeFabrication')
+          }
+          return row.manufacturing_mode
+        },
+      },
+      {
+        title: t('app.kuaizhizao.demandComputation.readinessValue'),
+        width: 200,
+        fixed: 'right',
+        render: (_: unknown, gap) => renderReadinessGapValue(gap),
+      },
+    ]
+  }, [renderReadinessGapValue, t])
+
+  useEffect(() => {
+    if (!readinessModalVisible || readinessGapsByField.length === 0) return
+    setReadinessActiveFieldTab((prev) =>
+      readinessGapsByField.some((g) => g.field === prev) ? prev : readinessGapsByField[0].field,
+    )
+  }, [readinessModalVisible, readinessGapsByField])
+
+  useEffect(() => {
+    if (!readinessModalVisible) return
+    const needsRoutes = readinessGaps.some((g) => g.value_type === 'process_route_id')
+    if (!needsRoutes) return
+    setReadinessProcessRoutesLoading(true)
+    processRouteApi
+      .list({ limit: 1000, isActive: true })
+      .then((result) => {
+        const list = Array.isArray(result) ? result : result?.data ?? []
+        setReadinessProcessRoutes(list)
+      })
+      .catch(() => setReadinessProcessRoutes([]))
+      .finally(() => setReadinessProcessRoutesLoading(false))
+  }, [readinessModalVisible, readinessGaps])
+
   const openPreviewFromExecute = async () => {
     if (!executeRecord?.id) return
     const params = getFilteredExecuteParams()
@@ -1665,14 +1936,17 @@ const DemandComputationPage: React.FC = () => {
     if (!executeRecord?.id) return
     setExecuteLoading(true)
     try {
-      const readiness = await getDemandComputationReadiness(executeRecord.id)
+      const params = getFilteredExecuteParams()
+      const readiness = await getDemandComputationReadiness(executeRecord.id, params)
       if (readiness.gaps?.length) {
         const values: Record<string, unknown> = {}
         for (const gap of readiness.gaps) {
-          values[readinessRowKey(gap)] = gap.suggested ?? null
+          values[readinessRowKey(gap)] = readinessSuggestedValue(gap)
         }
+        setReadinessContext('execute')
         setReadinessGaps(readiness.gaps)
         setReadinessValues(values)
+        setReadinessActiveFieldTab(readiness.gaps[0]?.field ?? '')
         setReadinessModalVisible(true)
         return
       }
@@ -1695,13 +1969,29 @@ const DemandComputationPage: React.FC = () => {
     }
   }
 
-  const handleReadinessBackfillAndContinue = async () => {
-    if (!materialPerms.canUpdate) {
-      messageApi.warning(t('app.kuaizhizao.demandComputation.readinessNoMaterialUpdatePerm'))
-      return
-    }
+  const applyReadinessGapsToState = useCallback(
+    (gaps: DemandComputationReadinessGap[], keepExistingValues = false) => {
+      const values: Record<string, unknown> = {}
+      for (const gap of gaps) {
+        const rk = readinessRowKey(gap)
+        values[rk] = keepExistingValues
+          ? (readinessValues[rk] ?? readinessSuggestedValue(gap))
+          : readinessSuggestedValue(gap)
+      }
+      setReadinessGaps(gaps)
+      setReadinessValues(values)
+      setReadinessActiveFieldTab(gaps[0]?.field ?? '')
+    },
+    [readinessValues],
+  )
+
+  const collectReadinessBackfillItems = (): Array<{
+    material_id: number
+    field: string
+    value: unknown
+  }> | null => {
     const items: Array<{ material_id: number; field: string; value: unknown }> = []
-    for (const gap of readinessGaps) {
+    for (const gap of readinessBackfillableGaps) {
       const key = readinessRowKey(gap)
       const value = readinessValues[key]
       if (value === null || value === undefined || value === '') {
@@ -1711,18 +2001,171 @@ const DemandComputationPage: React.FC = () => {
             label: gap.label,
           }),
         )
-        return
+        return null
       }
       items.push({ material_id: gap.material_id, field: gap.field, value })
     }
+    return items
+  }
+
+  const handleReadinessBackfillAndContinue = async () => {
+    if (!materialPerms.canUpdate) {
+      messageApi.warning(t('app.kuaizhizao.demandComputation.readinessNoMaterialUpdatePerm'))
+      return
+    }
+    const items = collectReadinessBackfillItems()
+    if (!items) return
     setReadinessSubmitting(true)
     try {
       await backfillDemandComputationMaterials(items)
       messageApi.success(t('app.kuaizhizao.demandComputation.readinessBackfillSuccess'))
+      if (!executeRecord?.id) return
+      const params = getFilteredExecuteParams()
+      const readiness = await getDemandComputationReadiness(executeRecord.id, params)
+      if (readiness.gaps?.length) {
+        applyReadinessGapsToState(readiness.gaps, true)
+        messageApi.info(t('app.kuaizhizao.demandComputation.readinessStillGaps'))
+        return
+      }
+      setReadinessModalVisible(false)
       await openPreviewFromExecute()
     } catch (error: any) {
       messageApi.error(
         error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.readinessBackfillFailed'),
+      )
+    } finally {
+      setReadinessSubmitting(false)
+    }
+  }
+
+  /** 计算结果分析：仅回写基础资料，不进入执行预览 */
+  const handleAnalysisBackfill = async () => {
+    if (!materialPerms.canUpdate) {
+      messageApi.warning(t('app.kuaizhizao.demandComputation.readinessNoMaterialUpdatePerm'))
+      return
+    }
+    if (readinessBackfillableGaps.length === 0) {
+      messageApi.info(t('app.kuaizhizao.demandComputation.analysisNoGaps'))
+      return
+    }
+    const items = collectReadinessBackfillItems()
+    if (!items) return
+    if (!analysisRecord?.id) return
+    setReadinessSubmitting(true)
+    try {
+      await backfillDemandComputationMaterials(items)
+      messageApi.success(t('app.kuaizhizao.demandComputation.readinessBackfillSuccess'))
+      const readiness = await getDemandComputationReadiness(
+        analysisRecord.id,
+        analysisRecord.computation_params || undefined,
+      )
+      if (readiness.gaps?.length) {
+        applyReadinessGapsToState(readiness.gaps, true)
+        setAnalysisMainTab('masterData')
+        messageApi.info(t('app.kuaizhizao.demandComputation.analysisStillGaps'))
+      } else {
+        setReadinessGaps([])
+        setReadinessValues({})
+        messageApi.success(t('app.kuaizhizao.demandComputation.analysisReady'))
+      }
+    } catch (error: any) {
+      messageApi.error(
+        error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.readinessBackfillFailed'),
+      )
+    } finally {
+      setReadinessSubmitting(false)
+    }
+  }
+
+  const handleAnalysisRecompute = async () => {
+    if (!analysisRecord?.id) return
+    const canRecomputeByCapability = analysisRecord.capabilities?.recompute?.allowed !== false
+    if (!canRecomputeByCapability || !computationPerms.canUpdate) {
+      messageApi.warning(
+        demandComputationCapabilityReasonMessage(
+          analysisRecord.capabilities?.recompute?.reason,
+          t,
+        ) || t('app.kuaizhizao.demandComputation.recomputeFailed'),
+      )
+      return
+    }
+    modalApi.confirm({
+      title: t('app.kuaizhizao.demandComputation.recomputeTitle'),
+      content: t('app.kuaizhizao.demandComputation.recomputeConfirm', {
+        code: analysisRecord.computation_code,
+      }),
+      onOk: async () => {
+        setReadinessSubmitting(true)
+        try {
+          await recomputeDemandComputation(analysisRecord.id!)
+          messageApi.success(t('app.kuaizhizao.demandComputation.recomputeSubmitted'))
+          setReadinessModalVisible(false)
+          setAnalysisRecord(null)
+          invalidateStatistics()
+          actionRef.current?.reload()
+          if (drawerVisible && currentComputation?.id === analysisRecord.id) {
+            void getDemandComputation(analysisRecord.id!, true)
+              .then(setCurrentComputation)
+              .catch(() => {})
+          }
+        } catch (error: any) {
+          messageApi.error(
+            error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.recomputeFailed'),
+          )
+        } finally {
+          setReadinessSubmitting(false)
+        }
+      },
+    })
+  }
+
+  const analysisItems = analysisRecord?.items || []
+  const analysisSourceTabItems = useMemo(
+    () => (analysisItems.length ? buildPreviewSourceTabItems(analysisItems, t) : []),
+    [analysisItems, t],
+  )
+  const filteredAnalysisItems = useMemo(() => {
+    if (!analysisItems.length) return []
+    if (analysisSourceTab === PREVIEW_SOURCE_TAB_ALL) return analysisItems
+    return analysisItems.filter(
+      (item) => (normalizeMaterialSourceType(item.material_source_type) || 'Unknown') === analysisSourceTab,
+    )
+  }, [analysisItems, analysisSourceTab])
+
+  const openResultAnalysis = async (record?: DemandComputation) => {
+    const target =
+      record ||
+      (selectedRowKeys.length === 1
+        ? selectedComputationsForBatch[0] || selectedComputationForToolbar
+        : null)
+    if (!target?.id) {
+      messageApi.warning(t('app.kuaizhizao.demandComputation.analysisSelectOne'))
+      return
+    }
+    const canAnalyze =
+      isComputationCompleted(target.computation_status) ||
+      isComputationFailed(target.computation_status)
+    if (!canAnalyze) {
+      messageApi.warning(t('app.kuaizhizao.demandComputation.analysisStatusRequired'))
+      return
+    }
+    setReadinessSubmitting(true)
+    try {
+      const [detail, readiness] = await Promise.all([
+        getDemandComputation(target.id, true),
+        getDemandComputationReadiness(target.id, target.computation_params || undefined),
+      ])
+      await prefetchMaterialsForUnitSelect((detail.items || []).map((i) => i.material_id))
+      setAnalysisRecord(detail)
+      setAnalysisMainTab('results')
+      setAnalysisSourceTab(PREVIEW_SOURCE_TAB_ALL)
+      setAnalysisTablePage(1)
+      setReadinessContext('analysis')
+      applyReadinessGapsToState(readiness.gaps || [], false)
+      setReadinessModalVisible(true)
+    } catch (error: any) {
+      messageApi.error(
+        error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.analysisLoadFailed'),
       )
     } finally {
       setReadinessSubmitting(false)
@@ -1763,35 +2206,6 @@ const DemandComputationPage: React.FC = () => {
     } finally {
       setExecuteLoading(false)
     }
-  }
-
-  /**
-   * 处理重新计算（仅对已完成或失败的计算）
-   */
-  const handleRecompute = async (record: DemandComputation) => {
-    modalApi.confirm({
-      title: t('app.kuaizhizao.demandComputation.recomputeTitle'),
-      content: t('app.kuaizhizao.demandComputation.recomputeConfirm', { code: record.computation_code }),
-      onOk: async () => {
-        try {
-          await recomputeDemandComputation(record.id!)
-          messageApi.success(t('app.kuaizhizao.demandComputation.recomputeSubmitted'))
-          invalidateStatistics(); actionRef.current?.reload()
-          if (drawerVisible && currentComputation?.id === record.id) {
-            void getDemandComputation(record.id!, true)
-              .then(setCurrentComputation)
-              .catch(() => {})
-            if (detailTabKey === 'detail') {
-              setComputationTrackingRefreshKey((k) => k + 1)
-            } else if (detailTabKey === 'records') {
-              loadComputationRecordsTabData(record.id!)
-            }
-          }
-        } catch (error: any) {
-          messageApi.error(error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.recomputeFailed'))
-        }
-      },
-    })
   }
 
   /**
@@ -2131,9 +2545,7 @@ const DemandComputationPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => {
         const canExecute = canExecuteComputation(record.computation_status)
-        const canRecompute = isComputationCompleted(record.computation_status) || isComputationFailed(record.computation_status)
         const canExecuteByCapability = record.capabilities?.execute?.allowed !== false
-        const canRecomputeByCapability = record.capabilities?.recompute?.allowed !== false
         const parts: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail([record.id!])}>
             {t('app.kuaizhizao.demandComputation.actionDetail')}
@@ -2143,13 +2555,6 @@ const DemandComputationPage: React.FC = () => {
           parts.push(
             <Button {...rowActionKind('execute')} key="ex" onClick={() => handleExecute(record)}>
               {t('app.kuaizhizao.demandComputation.actionExecute')}
-            </Button>
-          )
-        }
-        if (canRecompute && canRecomputeByCapability && computationPerms.canUpdate) {
-          parts.push(
-            <Button {...rowActionKind('recycle')} key="rc" onClick={() => handleRecompute(record)}>
-              {t('app.kuaizhizao.demandComputation.actionRecompute')}
             </Button>
           )
         }
@@ -2164,7 +2569,7 @@ const DemandComputationPage: React.FC = () => {
       },
     },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [computationPerms.canAction, computationPerms.canDelete, computationPerms.canUpdate, handleDelete, handleDetail, handleExecute, handleRecompute, messageApi, demandComputationLifecycleValueEnum, t],
+    [computationPerms.canAction, computationPerms.canDelete, computationPerms.canUpdate, handleDelete, handleDetail, handleExecute, messageApi, demandComputationLifecycleValueEnum, t],
   )
 
   const canUseToolbarPush = selectedComputationForToolbar
@@ -2440,23 +2845,36 @@ const DemandComputationPage: React.FC = () => {
         }}
         toolBarActionsAfterDelete={[]}
         toolBarActionsAfterBatch={[
-          <UniCapabilityBatchButton
-            key="demand-computation-batch-recompute"
-            selectedRowKeys={selectedRowKeys}
-            selectedRecords={selectedComputationsForBatch}
-            capabilityKey="recompute"
-            permAllowed={computationPerms.canUpdate}
-            batchAllowed={(recs, perm) => demandComputationBatchRecomputeAllowed(recs, perm)}
-            onRun={(id) => recomputeDemandComputation(id)}
-            labels={{
-              single: t('app.kuaizhizao.demandComputation.actionRecompute'),
-              batch: t('app.kuaizhizao.demandComputation.batchRecompute'),
-            }}
-            icon={<ReloadOutlined />}
-            size="middle"
-            requireConfirm
-            onSuccess={handleComputationBatchSuccess}
-          />,
+          <Tooltip
+            key="result-analysis-tip"
+            title={
+              selectedRowKeys.length !== 1
+                ? t('app.kuaizhizao.demandComputation.analysisSelectOne')
+                : !(
+                    isComputationCompleted(selectedComputationForToolbar?.computation_status) ||
+                    isComputationFailed(selectedComputationForToolbar?.computation_status)
+                  )
+                  ? t('app.kuaizhizao.demandComputation.analysisStatusRequired')
+                  : undefined
+            }
+          >
+            <span style={{ display: 'inline-block' }}>
+              <Button
+                icon={<FundOutlined />}
+                loading={readinessSubmitting && readinessContext === 'analysis'}
+                disabled={
+                  selectedRowKeys.length !== 1 ||
+                  !(
+                    isComputationCompleted(selectedComputationForToolbar?.computation_status) ||
+                    isComputationFailed(selectedComputationForToolbar?.computation_status)
+                  )
+                }
+                onClick={() => void openResultAnalysis()}
+              >
+                {t('app.kuaizhizao.demandComputation.actionResultAnalysis')}
+              </Button>
+            </span>
+          </Tooltip>,
           <Button
             key="open-replan-dashboard"
             color="orange"
@@ -3047,100 +3465,367 @@ const DemandComputationPage: React.FC = () => {
         )}
       </Modal>
 
-      {/* 执行前：物料缺失默认值补齐 */}
+      {/* 执行前补齐 / 计算结果分析（补齐 + 重算） */}
       <Modal
         open={readinessModalVisible}
         destroyOnHidden
-        onCancel={() => setReadinessModalVisible(false)}
-        title={t('app.kuaizhizao.demandComputation.readinessTitle')}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        footer={[
-          <Button key="cancel" onClick={() => setReadinessModalVisible(false)}>
-            {t('common.cancel')}
-          </Button>,
-          <Button key="skip" loading={readinessSubmitting} onClick={() => void handleReadinessSkip()}>
-            {t('app.kuaizhizao.demandComputation.readinessSkipContinue')}
-          </Button>,
-          <Button
-            key="backfill"
-            type="primary"
-            loading={readinessSubmitting}
-            disabled={!materialPerms.canUpdate}
-            onClick={() => void handleReadinessBackfillAndContinue()}
-          >
-            {t('app.kuaizhizao.demandComputation.readinessBackfillContinue')}
-          </Button>,
-        ]}
+        onCancel={() => {
+          setReadinessModalVisible(false)
+          if (readinessContext === 'analysis') setAnalysisRecord(null)
+        }}
+        title={
+          readinessContext === 'analysis'
+            ? t('app.kuaizhizao.demandComputation.analysisTitle', {
+                code: analysisRecord?.computation_code || '',
+              })
+            : t('app.kuaizhizao.demandComputation.readinessTitle')
+        }
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        styles={{
+          body: {
+            maxHeight: MODAL_CONFIG.BODY_MAX_HEIGHT,
+            overflow: 'auto',
+          },
+        }}
+        footer={
+          readinessContext === 'analysis'
+            ? [
+                <Button
+                  key="close"
+                  onClick={() => {
+                    setReadinessModalVisible(false)
+                    setAnalysisRecord(null)
+                  }}
+                >
+                  {t('common.close')}
+                </Button>,
+                <Button
+                  key="backfill"
+                  loading={readinessSubmitting}
+                  disabled={!materialPerms.canUpdate || readinessBackfillableGaps.length === 0}
+                  onClick={() => void handleAnalysisBackfill()}
+                >
+                  {t('app.kuaizhizao.demandComputation.analysisBackfill')}
+                </Button>,
+                <Button
+                  key="recompute"
+                  type="primary"
+                  icon={<ReloadOutlined />}
+                  loading={readinessSubmitting}
+                  disabled={!computationPerms.canUpdate}
+                  onClick={() => void handleAnalysisRecompute()}
+                >
+                  {t('app.kuaizhizao.demandComputation.actionRecompute')}
+                </Button>,
+              ]
+            : [
+                <Button key="cancel" onClick={() => setReadinessModalVisible(false)}>
+                  {t('common.cancel')}
+                </Button>,
+                <Button key="skip" loading={readinessSubmitting} onClick={() => void handleReadinessSkip()}>
+                  {t('app.kuaizhizao.demandComputation.readinessSkipContinue')}
+                </Button>,
+                <Button
+                  key="backfill"
+                  type="primary"
+                  loading={readinessSubmitting}
+                  disabled={!materialPerms.canUpdate || readinessBackfillableGaps.length === 0}
+                  onClick={() => void handleReadinessBackfillAndContinue()}
+                >
+                  {t('app.kuaizhizao.demandComputation.readinessBackfillContinue')}
+                </Button>,
+              ]
+        }
       >
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: token.marginMD }}
-          message={t('app.kuaizhizao.demandComputation.readinessHint', { count: readinessGaps.length })}
-        />
-        {!materialPerms.canUpdate ? (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: token.marginMD }}
-            message={t('app.kuaizhizao.demandComputation.readinessNoMaterialUpdatePerm')}
-          />
-        ) : null}
-        <Table
-          size="small"
-          rowKey={(r) => readinessRowKey(r)}
-          pagination={{ pageSize: 10, hideOnSinglePage: true }}
-          dataSource={readinessGaps}
-          columns={[
-            {
-              title: t('app.kuaizhizao.demandComputation.colMaterialCode'),
-              dataIndex: 'material_code',
-              width: 120,
-            },
-            {
-              title: t('app.kuaizhizao.demandComputation.colMaterialName'),
-              dataIndex: 'material_name',
-              ellipsis: true,
-            },
-            {
-              title: t('app.kuaizhizao.demandComputation.readinessField'),
-              dataIndex: 'label',
-              width: 140,
-            },
-            {
-              title: t('app.kuaizhizao.demandComputation.readinessValue'),
-              width: 200,
-              render: (_, gap) => {
-                const key = readinessRowKey(gap)
-                const value = readinessValues[key]
-                if (gap.value_type === 'supplier_id') {
-                  return (
-                    <SupplierSelectDropdown
-                      style={{ width: '100%' }}
-                      value={value != null && value !== '' ? Number(value) : undefined}
-                      disabled={!materialPerms.canUpdate}
-                      hostResource={DEMAND_COMPUTATION_RESOURCE}
-                      onChange={(v) =>
-                        setReadinessValues((prev) => ({ ...prev, [key]: v ?? null }))
+        {readinessContext === 'analysis' ? (
+          <Tabs
+            activeKey={analysisMainTab}
+            onChange={(key) => setAnalysisMainTab(key as 'results' | 'masterData')}
+            items={[
+              {
+                key: 'results',
+                label: t('app.kuaizhizao.demandComputation.analysisTabResults', {
+                  count: analysisItems.length,
+                }),
+                children: analysisItems.length === 0 ? (
+                  <Empty
+                    description={t('app.kuaizhizao.demandComputation.analysisNoResults')}
+                    style={{ margin: `${token.marginLG}px 0` }}
+                  />
+                ) : (
+                  <>
+                    <Alert
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: token.marginSM }}
+                      message={t('app.kuaizhizao.demandComputation.analysisResultsHint', {
+                        count: analysisItems.length,
+                      })}
+                    />
+                    {analysisSourceTabItems.length > 1 ? (
+                      <Tabs
+                        activeKey={analysisSourceTab}
+                        onChange={(key) => {
+                          setAnalysisSourceTab(key)
+                          setAnalysisTablePage(1)
+                        }}
+                        items={analysisSourceTabItems.map((tab) => ({
+                          key: tab.key,
+                          label: tab.label,
+                        }))}
+                        style={{ marginBottom: token.marginSM }}
+                      />
+                    ) : null}
+                    <Table
+                      size="small"
+                      dataSource={filteredAnalysisItems}
+                      rowKey={(r, i) => `${r.id ?? r.material_id}-${analysisSourceTab}-${i}`}
+                      scroll={{ x: 1100 }}
+                      pagination={{
+                        current: analysisTablePage,
+                        pageSize: analysisTablePageSize,
+                        showSizeChanger: true,
+                        pageSizeOptions: ['10', '20', '50', '100'],
+                        showTotal: (total) =>
+                          t('app.kuaizhizao.demandComputation.totalItems', { count: total }),
+                        onChange: (page, size) => {
+                          setAnalysisTablePage(page)
+                          if (size != null) setAnalysisTablePageSize(size)
+                        },
+                        onShowSizeChange: (_page, size) => {
+                          setAnalysisTablePage(1)
+                          setAnalysisTablePageSize(size)
+                        },
+                      }}
+                      columns={[
+                        {
+                          title: t('app.kuaizhizao.demandComputation.colMaterial'),
+                          key: 'material',
+                          width: 220,
+                          render: (_: unknown, r: DemandComputationItem) => (
+                            <MaterialStackedCell
+                              material_name={r.material_name}
+                              material_code={r.material_code}
+                            />
+                          ),
+                        },
+                        {
+                          title: t('app.kuaizhizao.demandComputation.colUnit'),
+                          dataIndex: 'material_unit',
+                          width: 100,
+                          render: (_: unknown, r: DemandComputationItem) => (
+                            <MaterialUnitSelect
+                              materialId={r.material_id}
+                              value={r.material_unit}
+                              size="small"
+                              disabled
+                              noStyle
+                            />
+                          ),
+                        },
+                        {
+                          title: t('app.kuaizhizao.demandComputation.colDemandTime'),
+                          dataIndex: 'delivery_date',
+                          width: 110,
+                          render: (v: string | null | undefined) => formatDateBySiteSetting(v),
+                        },
+                        {
+                          title: t('app.kuaizhizao.demandComputation.colPlannedTime'),
+                          key: 'planned_date',
+                          width: 110,
+                          render: (_: unknown, r: DemandComputationItem) =>
+                            formatDateBySiteSetting(
+                              r.production_start_date || r.procurement_start_date || undefined,
+                            ),
+                        },
+                        {
+                          title: t('app.kuaizhizao.demandComputation.colRequiredQty'),
+                          dataIndex: 'required_quantity',
+                          width: 90,
+                          align: 'right' as const,
+                          render: formatQuantity,
+                        },
+                        {
+                          title: t('app.kuaizhizao.demandComputation.colAvailableInventory'),
+                          dataIndex: 'available_inventory',
+                          width: 90,
+                          align: 'right' as const,
+                          render: (v: number, r: DemandComputationItem) =>
+                            renderAvailableInventoryCell(
+                              v,
+                              r.detail_results as Record<string, unknown> | undefined,
+                            ),
+                        },
+                        {
+                          title: t('app.kuaizhizao.demandComputation.colNetRequirement'),
+                          dataIndex: 'net_requirement',
+                          width: 90,
+                          align: 'right' as const,
+                          render: formatQuantity,
+                        },
+                        {
+                          title: t('app.kuaizhizao.demandComputation.colSuggestedWorkOrder'),
+                          dataIndex: 'suggested_work_order_quantity',
+                          width: 90,
+                          align: 'right' as const,
+                          render: (v: number, r: DemandComputationItem) =>
+                            r.material_source_type === 'Outsource'
+                              ? '-'
+                              : formatQuantity(v),
+                        },
+                        {
+                          title: t('app.kuaizhizao.demandComputation.colSuggestedOutsource'),
+                          dataIndex: 'suggested_work_order_quantity',
+                          width: 90,
+                          align: 'right' as const,
+                          render: (v: number, r: DemandComputationItem) =>
+                            r.material_source_type === 'Outsource' ? formatQuantity(v) : '-',
+                        },
+                        {
+                          title: t('app.kuaizhizao.demandComputation.colSuggestedPurchase'),
+                          dataIndex: 'suggested_purchase_order_quantity',
+                          width: 90,
+                          align: 'right' as const,
+                          render: formatQuantity,
+                        },
+                        {
+                          title: t('app.kuaizhizao.demandComputation.colSource'),
+                          dataIndex: 'material_source_type',
+                          width: 80,
+                          render: (sourceType: string) => getMaterialSourceTypeLabel(sourceType, t),
+                        },
+                      ]}
+                    />
+                  </>
+                ),
+              },
+              {
+                key: 'masterData',
+                label: t('app.kuaizhizao.demandComputation.analysisTabMasterData', {
+                  count: readinessGaps.length,
+                }),
+                children: (
+                  <>
+                    <Alert
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: token.marginMD }}
+                      message={
+                        readinessGaps.length > 0
+                          ? t('app.kuaizhizao.demandComputation.analysisHint', {
+                              count: readinessGaps.length,
+                            })
+                          : t('app.kuaizhizao.demandComputation.analysisReady')
                       }
                     />
-                  )
-                }
-                return (
-                  <InputNumber
-                    style={{ width: '100%' }}
-                    min={0}
-                    disabled={!materialPerms.canUpdate}
-                    value={value == null || value === '' ? null : Number(value)}
-                    onChange={(v) =>
-                      setReadinessValues((prev) => ({ ...prev, [key]: v }))
-                    }
-                  />
-                )
+                    {readinessGaps.some((g) => g.blocking || g.value_type === 'info') ? (
+                      <Alert
+                        type="warning"
+                        showIcon
+                        style={{ marginBottom: token.marginMD }}
+                        message={t('app.kuaizhizao.demandComputation.analysisBlockingHint')}
+                      />
+                    ) : null}
+                    {!materialPerms.canUpdate ? (
+                      <Alert
+                        type="warning"
+                        showIcon
+                        style={{ marginBottom: token.marginMD }}
+                        message={t('app.kuaizhizao.demandComputation.readinessNoMaterialUpdatePerm')}
+                      />
+                    ) : null}
+                    {readinessGaps.length === 0 ? (
+                      <Empty
+                        description={t('app.kuaizhizao.demandComputation.analysisReady')}
+                        style={{ margin: `${token.marginLG}px 0` }}
+                      />
+                    ) : (
+                      <Tabs
+                        activeKey={readinessActiveFieldTab}
+                        onChange={setReadinessActiveFieldTab}
+                        items={readinessGapsByField.map((group) => ({
+                          key: group.field,
+                          label: `${group.label} (${group.gaps.length})`,
+                          children: (
+                            <>
+                              <Alert
+                                type="info"
+                                showIcon
+                                style={{ marginBottom: token.marginSM }}
+                                message={getReadinessFieldHelp(group.field)}
+                              />
+                              <Table
+                                size="small"
+                                rowKey={(r) => readinessRowKey(r)}
+                                scroll={{ x: 960 }}
+                                pagination={{ pageSize: 20, hideOnSinglePage: true }}
+                                dataSource={group.gaps}
+                                columns={readinessTableColumns}
+                              />
+                            </>
+                          ),
+                        }))}
+                      />
+                    )}
+                  </>
+                ),
               },
-            },
-          ]}
-        />
+            ]}
+          />
+        ) : (
+          <>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: token.marginMD }}
+              message={t('app.kuaizhizao.demandComputation.readinessHint', {
+                count: readinessGaps.length,
+              })}
+            />
+            {readinessGaps.some((g) => g.blocking || g.value_type === 'info') ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: token.marginMD }}
+                message={t('app.kuaizhizao.demandComputation.readinessBlockingHint')}
+              />
+            ) : null}
+            {!materialPerms.canUpdate ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: token.marginMD }}
+                message={t('app.kuaizhizao.demandComputation.readinessNoMaterialUpdatePerm')}
+              />
+            ) : null}
+            <Tabs
+              activeKey={readinessActiveFieldTab}
+              onChange={setReadinessActiveFieldTab}
+              items={readinessGapsByField.map((group) => ({
+                key: group.field,
+                label: `${group.label} (${group.gaps.length})`,
+                children: (
+                  <>
+                    <Alert
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: token.marginSM }}
+                      message={getReadinessFieldHelp(group.field)}
+                    />
+                    <Table
+                      size="small"
+                      rowKey={(r) => readinessRowKey(r)}
+                      scroll={{ x: 960 }}
+                      pagination={{ pageSize: 20, hideOnSinglePage: true }}
+                      dataSource={group.gaps}
+                      columns={readinessTableColumns}
+                    />
+                  </>
+                ),
+              }))}
+            />
+          </>
+        )}
       </Modal>
 
       {/* 执行计算 - 计算参数 Modal */}
@@ -3855,11 +4540,171 @@ const DemandComputationPage: React.FC = () => {
                               align: 'right',
                             },
                             {
+                              title: t('app.kuaizhizao.demandComputation.colMrpExceptions'),
+                              dataIndex: 'id',
+                              width: 88,
+                              render: (_, record: DemandComputationItem) => {
+                                const exceptions = Array.isArray(record.detail_results?.exceptions)
+                                  ? record.detail_results.exceptions
+                                  : []
+                                if (!exceptions.length) return '-'
+                                const color =
+                                  exceptions.some((e: { code?: string }) =>
+                                    ['PAST_DUE_START', 'SHORTAGE_WITHIN_LEAD_TIME', 'PAST_DUE_SUPPLY'].includes(
+                                      String(e?.code || ''),
+                                    ),
+                                  )
+                                    ? 'error'
+                                    : 'warning'
+                                return (
+                                  <Button
+                                    type="link"
+                                    size="small"
+                                    danger={color === 'error'}
+                                    onClick={() => {
+                                      modalApi.info({
+                                        title: t('app.kuaizhizao.demandComputation.mrpExceptionTitle'),
+                                        width: 560,
+                                        content: (
+                                          <ul style={{ maxHeight: 320, overflow: 'auto', paddingLeft: 18 }}>
+                                            {exceptions.map(
+                                              (
+                                                ex: { code?: string; severity?: string; message?: string; qty?: number },
+                                                idx: number,
+                                              ) => (
+                                                <li key={idx} style={{ marginBottom: 6 }}>
+                                                  <Tag color={color}>{ex.code || 'INFO'}</Tag>
+                                                  <span>{ex.message || '-'}</span>
+                                                  {ex.qty != null ? (
+                                                    <Typography.Text type="secondary" style={{ marginLeft: 6 }}>
+                                                      ({ex.qty})
+                                                    </Typography.Text>
+                                                  ) : null}
+                                                </li>
+                                              ),
+                                            )}
+                                          </ul>
+                                        ),
+                                      })
+                                    }}
+                                  >
+                                    {t('app.kuaizhizao.demandComputation.mrpExceptionCount', {
+                                      count: exceptions.length,
+                                    })}
+                                  </Button>
+                                )
+                              },
+                            },
+                            {
+                              title: t('app.kuaizhizao.demandComputation.colPlannedOrderFirm'),
+                              dataIndex: 'id',
+                              width: 140,
+                              render: (_, record: DemandComputationItem) => {
+                                const supply = record.detail_results?.supply_calculation || {}
+                                const orders = Array.isArray(supply.planned_orders)
+                                  ? supply.planned_orders
+                                  : []
+                                const hasOrders = orders.length > 0
+                                const isFirm = orders.some((po: { firm?: boolean }) => po?.firm)
+                                const isFrozen =
+                                  !!record.detail_results?.planned_orders_frozen ||
+                                  !!supply.frozen ||
+                                  orders.some((po: { frozen?: boolean }) => po?.frozen)
+                                const canFirm =
+                                  computationPerms.canUpdate &&
+                                  isComputationCompleted(currentComputation?.computation_status) &&
+                                  hasOrders
+                                const refreshDetail = async () => {
+                                  if (!currentComputation?.id) return
+                                  const data = await getDemandComputation(currentComputation.id, true)
+                                  setCurrentComputation(data)
+                                }
+                                return (
+                                  <Space size={4} wrap>
+                                    {isFirm ? (
+                                      <Tag color="blue">{t('app.kuaizhizao.demandComputation.firmTag')}</Tag>
+                                    ) : null}
+                                    {isFrozen ? (
+                                      <Tag color="purple">{t('app.kuaizhizao.demandComputation.frozenTag')}</Tag>
+                                    ) : null}
+                                    {canFirm && !isFirm ? (
+                                      <>
+                                        <Button
+                                          type="link"
+                                          size="small"
+                                          onClick={async () => {
+                                            try {
+                                              await firmPlannedOrders(currentComputation!.id!, record.id!, {
+                                                firm: true,
+                                                frozen: false,
+                                              })
+                                              messageApi.success(t('app.kuaizhizao.demandComputation.firmSuccess'))
+                                              await refreshDetail()
+                                            } catch (e: any) {
+                                              messageApi.error(e?.response?.data?.detail || String(e?.message || e))
+                                            }
+                                          }}
+                                        >
+                                          {t('app.kuaizhizao.demandComputation.firmPlannedOrder')}
+                                        </Button>
+                                        <Button
+                                          type="link"
+                                          size="small"
+                                          onClick={async () => {
+                                            try {
+                                              await firmPlannedOrders(currentComputation!.id!, record.id!, {
+                                                firm: true,
+                                                frozen: true,
+                                              })
+                                              messageApi.success(t('app.kuaizhizao.demandComputation.firmSuccess'))
+                                              await refreshDetail()
+                                            } catch (e: any) {
+                                              messageApi.error(e?.response?.data?.detail || String(e?.message || e))
+                                            }
+                                          }}
+                                        >
+                                          {t('app.kuaizhizao.demandComputation.firmAndFreeze')}
+                                        </Button>
+                                      </>
+                                    ) : null}
+                                    {canFirm && isFirm ? (
+                                      <Button
+                                        type="link"
+                                        size="small"
+                                        onClick={async () => {
+                                          try {
+                                            await firmPlannedOrders(currentComputation!.id!, record.id!, {
+                                              firm: false,
+                                              frozen: false,
+                                            })
+                                            messageApi.success(t('app.kuaizhizao.demandComputation.unfirmSuccess'))
+                                            await refreshDetail()
+                                          } catch (e: any) {
+                                            messageApi.error(e?.response?.data?.detail || String(e?.message || e))
+                                          }
+                                        }}
+                                      >
+                                        {t('app.kuaizhizao.demandComputation.unfirmPlannedOrder')}
+                                      </Button>
+                                    ) : null}
+                                    {!hasOrders ? '-' : null}
+                                  </Space>
+                                )
+                              },
+                            },
+                            {
                               title: t('app.kuaizhizao.demandComputation.colTraceability'),
                               dataIndex: 'id',
                               width: 72,
                               render: (_, record) => {
-                                const ids = record.detail_results?.demand_item_ids || []
+                                const ids =
+                                  (Array.isArray(record.demand_item_ids) && record.demand_item_ids.length
+                                    ? record.demand_item_ids
+                                    : null) ||
+                                  (Array.isArray(record.detail_results?.demand_item_ids)
+                                    ? record.detail_results.demand_item_ids
+                                    : []) ||
+                                  []
                                 return (
                                   <Button
                                     type="link"

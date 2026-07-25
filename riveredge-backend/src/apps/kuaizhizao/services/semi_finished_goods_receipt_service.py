@@ -357,6 +357,9 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                         work_order_id=receipt.work_order_id,
                         work_order_code=receipt.work_order_code,
                         ledger_production_date=to_site_date(receipt_time),
+                        movement_type="semi_fg_receipt",
+                        to_warehouse_id=wh_id,
+                        idempotency_key=f"semi_finished_goods_receipt:{receipt_id}:inc:{item.id}",
                     )
             except Exception as inv_e:
                 logger.error("半成品入库确认-更新库存失败: %s", inv_e)
