@@ -223,13 +223,15 @@ WORK_ORDER_IN_PROGRESS_STATUS = (
 
 
 def _normalize_naive_local_datetime(value: datetime) -> datetime:
-    """比较用：统一为站点墙钟 naive（勿用服务器本机时区）。"""
-    from infra.config.infra_config import infra_settings
+    """比较用：统一为站点墙钟 naive（勿用服务器本机时区）。
+
+    aware：按瞬时转到站点时区后剥 tz；naive：视为已是站点墙钟（历史业务字段口径）。
+    """
+    from core.utils.timezone_utils import site_timezone_name
     from zoneinfo import ZoneInfo
 
-    tz = ZoneInfo(infra_settings.TIMEZONE or "Asia/Shanghai")
     if value.tzinfo is not None:
-        return value.astimezone(tz).replace(tzinfo=None)
+        return value.astimezone(ZoneInfo(site_timezone_name())).replace(tzinfo=None)
     return value
 
 
@@ -3445,7 +3447,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             - delay_days: 延期天数
             - status: 工单状态
         """
-        now = resolve_business_datetime()
+        # 两侧必须同为站点墙钟 naive；不可把 UTC aware 的 resolve_business_datetime()
+        # 直接与剥掉 tz 后的 planned_end 比较（会 TypeError → 500）。
+        now = _normalize_naive_local_datetime(resolve_business_datetime())
         query = WorkOrder.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
