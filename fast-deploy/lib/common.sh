@@ -3951,44 +3951,40 @@ sync_sibling_git_repo() {
     clean_url="$(_git_strip_auth_url "$url")"
 
     if [ ! -d "$path/.git" ]; then
-        log_info "克隆 ${name}: ${clean_url} → ${path}"
+        log_info "克隆 ${name}: ${clean_url} → ${path}（分支 ${branch}）"
         mkdir -p "$(dirname "$path")"
+        # 主仓 / 专业包 / 定制包 / 终端仓统一默认 develop；禁止回落到 main
         if ! git clone --branch "$branch" --single-branch "$auth_url" "$path"; then
-            # 空仓或默认分支非 develop 时再试不指定 branch
+            log_error "克隆 ${name} 失败：请确认私仓存在分支 ${branch}，以及 Token/SSH 权限"
             rm -rf "$path"
-            git clone "$auth_url" "$path" || {
-                log_error "克隆 ${name} 失败（检查私仓权限 / Token / SSH）"
-                return 1
-            }
-            git -C "$path" checkout -B "$branch" "origin/${branch}" 2>/dev/null \
-                || git -C "$path" checkout -B "$branch" "origin/main" 2>/dev/null \
-                || true
+            return 1
         fi
         git -C "$path" remote set-url origin "$clean_url"
     else
-        log_info "同步 ${name}: ${path} (${branch})"
+        log_info "同步 ${name}: ${path}（分支 ${branch}）"
         (
             cd "$path"
             # 临时注入鉴权 URL，同步后立刻还原，避免 Token 落在 .git/config
             git remote set-url origin "$auth_url"
             git fetch origin --prune --tags
-            git fetch origin "$branch" || git fetch origin
+            git fetch origin "$branch" || {
+                git remote set-url origin "$clean_url"
+                log_error "${name}: 拉取分支 ${branch} 失败"
+                exit 1
+            }
             git remote set-url origin "$clean_url"
-            if git rev-parse --verify "origin/${branch}" >/dev/null 2>&1; then
-                git checkout -B "$branch" "origin/${branch}"
-            elif git rev-parse --verify "origin/main" >/dev/null 2>&1; then
-                git checkout -B main "origin/main"
-            else
-                log_error "${name}: 远程无 ${branch}/main"
+            if ! git rev-parse --verify "origin/${branch}" >/dev/null 2>&1; then
+                log_error "${name}: 远程无分支 ${branch}（已统一使用 develop，勿再配置 main）"
                 exit 1
             fi
+            git checkout -B "$branch" "origin/${branch}"
         ) || {
             git -C "$path" remote set-url origin "$clean_url" 2>/dev/null || true
             log_error "同步 ${name} 失败"
             return 1
         }
     fi
-    log_ok "${name} @ $(git -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?')"
+    log_ok "${name} @ $(git -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?') [${branch}]"
 }
 
 write_workspace_yaml_from_deploy_env() {

@@ -915,8 +915,9 @@ wizard_configure_pro_repo() {
     [ -n "${input:-}" ] && cur_url="$input"
     read -rp "$(echo -e "${WIZARD_DIM}本地路径 [${cur_path}]${WIZARD_RESET} › ")" input || true
     [ -n "${input:-}" ] && cur_path="$input"
-    read -rp "$(echo -e "${WIZARD_DIM}分支 [${cur_branch}]${WIZARD_RESET} › ")" input || true
+    read -rp "$(echo -e "${WIZARD_DIM}分支 [${cur_branch}，须与私仓 develop 一致]${WIZARD_RESET} › ")" input || true
     [ -n "${input:-}" ] && cur_branch="$input"
+    [ -n "$cur_branch" ] || cur_branch="develop"
     wizard_prompt_git_token "$cur_token" "专业仓"
     cur_token="$REPLY"
 
@@ -945,8 +946,9 @@ wizard_configure_custom_repo() {
     [ -n "${input:-}" ] && cur_url="$input"
     read -rp "$(echo -e "${WIZARD_DIM}本地路径 [${cur_path}]${WIZARD_RESET} › ")" input || true
     [ -n "${input:-}" ] && cur_path="$input"
-    read -rp "$(echo -e "${WIZARD_DIM}分支 [${cur_branch}]${WIZARD_RESET} › ")" input || true
+    read -rp "$(echo -e "${WIZARD_DIM}分支 [${cur_branch}，须与私仓 develop 一致]${WIZARD_RESET} › ")" input || true
     [ -n "${input:-}" ] && cur_branch="$input"
+    [ -n "$cur_branch" ] || cur_branch="develop"
     wizard_prompt_git_token "$cur_token" "定制仓"
     cur_token="$REPLY"
 
@@ -975,8 +977,9 @@ wizard_configure_client_repo() {
     [ -n "${input:-}" ] && cur_url="$input"
     read -rp "$(echo -e "${WIZARD_DIM}本地路径 [${cur_path}]${WIZARD_RESET} › ")" input || true
     [ -n "${input:-}" ] && cur_path="$input"
-    read -rp "$(echo -e "${WIZARD_DIM}分支 [${cur_branch}]${WIZARD_RESET} › ")" input || true
+    read -rp "$(echo -e "${WIZARD_DIM}分支 [${cur_branch}，须与私仓 develop 一致]${WIZARD_RESET} › ")" input || true
     [ -n "${input:-}" ] && cur_branch="$input"
+    [ -n "$cur_branch" ] || cur_branch="develop"
     wizard_prompt_git_token "$cur_token" "H5 仓"
     cur_token="$REPLY"
 

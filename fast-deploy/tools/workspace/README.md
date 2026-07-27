@@ -6,13 +6,13 @@
 
 ## 一次性准备
 
-1. 将私有仓克隆到主仓**同级**目录（路径可改）：
+1. 将私有仓克隆到主仓**同级**目录（路径可改）；**分支一律 `develop`**（与主仓一致）：
 
 ```text
-f:/dev/riveredge           # 主仓 https://gitee.com/kuaigeyun/kuaigeyun
-f:/dev/kuaigeyun-pro       # 专业包 https://gitee.com/kuaigeyun/kuaigeyun-pro
-f:/dev/kuaigeyun-custom    # 定制包 https://gitee.com/kuaigeyun/kuaigeyun-custom
-f:/dev/kuaigeyun-client    # 终端仓 https://gitee.com/kuaigeyun/kuaigeyun-client（不 compose）
+f:/dev/riveredge           # 主仓 https://gitee.com/kuaigeyun/kuaigeyun  (develop)
+f:/dev/kuaigeyun-pro       # 专业包 https://gitee.com/kuaigeyun/kuaigeyun-pro  (develop)
+f:/dev/kuaigeyun-custom    # 定制包 https://gitee.com/kuaigeyun/kuaigeyun-custom  (develop)
+f:/dev/kuaigeyun-client    # 终端仓 https://gitee.com/kuaigeyun/kuaigeyun-client（不 compose，develop）
 ```
 
 2. 复制示例配置：
