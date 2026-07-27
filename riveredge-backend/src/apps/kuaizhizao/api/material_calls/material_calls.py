@@ -63,6 +63,17 @@ async def list_material_calls(
         work_order_id=work_order_id
     )
 
+
+@router.get("/{call_id}", response_model=MaterialCallRequestResponse, summary="Get material call request")
+async def get_material_call(
+    call_id: int = Path(..., description="叫料请求ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> MaterialCallRequestResponse:
+    """查询叫料单详情（含明细）"""
+    return await MaterialCallService().get_call_request(tenant_id, call_id)
+
+
 @router.patch("/{call_id}", response_model=MaterialCallRequestResponse, summary="Update material call request")
 async def update_material_call(
     call_id: int = Path(..., description="叫料请求ID"),

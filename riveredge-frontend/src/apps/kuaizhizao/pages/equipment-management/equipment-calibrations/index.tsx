@@ -1,19 +1,27 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, Tag, Typography } from 'antd';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { getCalibrationResultLifecycle } from '../../../utils/equipmentLifecycle';
+import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, Descriptions, Tag, Typography } from 'antd';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  FormModalTemplate,
+  DetailDrawerTemplate,
+  MODAL_CONFIG,
+  DRAWER_CONFIG,
+  detailDrawerDescriptionItems,
+} from '../../../../../components/layout-templates';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { equipmentApi } from '../../../services/equipment';
+import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -56,6 +64,8 @@ const EquipmentCalibrationsPage: React.FC = () => {
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const { open: drawerVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<EquipmentCalibration>();
   const [modalVisible, setModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [equipmentOptions, setEquipmentOptions] = useState<{ label: string; value: string }[]>([]);
@@ -73,6 +83,14 @@ const EquipmentCalibrationsPage: React.FC = () => {
   };
 
   useNewShortcut(handleCreate);
+
+  const handleDetail = useCallback(
+    (record: EquipmentCalibration) => {
+      if (!record.uuid) return;
+      void openDetail(async () => record as EquipmentCalibration);
+    },
+    [openDetail],
+  );
 
   const handleSubmit = async (values: any) => {
     try {
@@ -99,6 +117,35 @@ const EquipmentCalibrationsPage: React.FC = () => {
       { label: t(`${P}.resultPass`), value: '合格' },
       { label: t(`${P}.resultFail`), value: '不合格' },
       { label: t(`${P}.resultConditional`), value: '限制使用' },
+    ],
+    [t],
+  );
+
+  const detailColumns = useMemo<ProDescriptionsItemProps<EquipmentCalibration>[]>(
+    () => [
+      { title: t(`${P}.colEquipmentCode`), dataIndex: 'equipment_code' },
+      { title: t(`${P}.colEquipmentName`), dataIndex: 'equipment_name' },
+      {
+        title: t(`${P}.colCalibrationDate`),
+        dataIndex: 'calibration_date',
+        render: (_, r) => (r.calibration_date ? formatDateTime(r.calibration_date, 'YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t(`${P}.colResult`),
+        dataIndex: 'result',
+        render: (_, r) => {
+          const color = r.result === '合格' ? 'success' : r.result === '不合格' ? 'error' : 'warning';
+          const labelKey = r.result ? CALIBRATION_RESULT_LABEL_KEYS[r.result] : undefined;
+          return <Tag color={color}>{labelKey ? t(labelKey) : r.result || '-'}</Tag>;
+        },
+      },
+      { title: t(`${P}.colCertificateNo`), dataIndex: 'certificate_no' },
+      {
+        title: t(`${P}.colExpiryDate`),
+        dataIndex: 'expiry_date',
+        render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
+      },
+      { title: t(`${P}.formRemark`), dataIndex: 'remark', span: 2 },
     ],
     [t],
   );
@@ -176,36 +223,34 @@ const EquipmentCalibrationsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
       },
-      {
-        title: t(`${P}.colLifecycle`),
-        dataIndex: 'lifecycle_stage',
-        fixed: 'right',
-        align: 'left',
-        hideInSearch: true,
-        render: (_, record) => {
-          const lifecycle = getCalibrationResultLifecycle(record as Record<string, unknown>);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
-        },
-      },
       { title: t(`${P}.formRemark`), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
       ...buildDocumentAuditColumns<EquipmentCalibration>(t),
+      {
+        title: t('common.actions'),
+        valueType: 'option',
+        width: 100,
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) =>
+          perms.canRead
+            ? renderRowActionsOverflow(
+                [
+                  <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+                    {t('common.detail')}
+                  </Button>,
+                ],
+                `calibration-actions-${record.uuid ?? 'row'}`,
+              )
+            : null,
+      },
     ],
-    [t],
+    [t, perms.canRead, handleDetail],
   );
 
   if (!perms.canRead) return null;
 
   return (
+    <>
     <ListPageTemplate>
       <UniTable<EquipmentCalibration>
         headerTitle={t(`${P}.title`)}
@@ -218,6 +263,10 @@ const EquipmentCalibrationsPage: React.FC = () => {
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
+        onRow={(record) => ({
+          onClick: () => perms.canRead && handleDetail(record),
+          style: { cursor: perms.canRead ? 'pointer' : undefined },
+        })}
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolveAssetWorkflowListParams(searchFormValues, sort, {
             docDateRangeKeys: ['calibration_date_range', 'calibrationDateRange'],
@@ -245,6 +294,7 @@ const EquipmentCalibrationsPage: React.FC = () => {
         pagination={{ defaultPageSize: 20 }}
         scroll={{ x: 1500 }}
       />
+    </ListPageTemplate>
 
       <FormModalTemplate
         title={t(`${P}.createModal`)}
@@ -270,7 +320,34 @@ const EquipmentCalibrationsPage: React.FC = () => {
         <DocumentAttachmentsField category="equipment_calibration_attachments" />
         <ProFormText name="remark" label={t(`${P}.formRemark`)} />
       </FormModalTemplate>
-    </ListPageTemplate>
+
+      <DetailDrawerTemplate
+        title={`${t(`${P}.detailTitle`, { defaultValue: t('common.detail') })}${detail?.equipment_code ? ` - ${detail.equipment_code}` : ''}`}
+        open={drawerVisible}
+        loading={detailLoading}
+        onClose={closeDetail}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        basic={
+          detail ? (
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(detailColumns, detail)}
+            />
+          ) : undefined
+        }
+        supplementary={
+          detail?.attachments?.length ? (
+            <LineAttachmentsUpload
+              category="equipment_calibration_attachments"
+              value={detail.attachments}
+              readOnly
+            />
+          ) : undefined
+        }
+        supplementaryTitle={t(`${P}.formAttachments`, { defaultValue: '附件' })}
+      />
+    </>
   );
 };
 

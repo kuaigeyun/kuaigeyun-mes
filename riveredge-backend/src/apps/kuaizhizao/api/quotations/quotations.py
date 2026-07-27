@@ -123,11 +123,11 @@ async def list_quotations(
     ),
     pullable_only: Optional[bool] = Query(
         None,
-        description="仅可上拉建单：未关联有效销售订单且非已转订单状态",
+        description="仅可加载建单：未关联有效销售订单且非已转订单状态",
     ),
     pull_target: Optional[str] = Query(
         None,
-        description="上拉目标：sales_order/sales_contract；与 pullable_only 组合使用",
+        description="加载目标：sales_order/sales_contract；与 pullable_only 组合使用",
     ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),

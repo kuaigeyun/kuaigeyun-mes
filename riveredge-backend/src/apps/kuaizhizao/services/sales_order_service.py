@@ -1575,7 +1575,7 @@ class SalesOrderService:
                 | Q(salesman_name__icontains=kw)
                 | Q(contract_code__icontains=kw)
             )
-        # 上拉建销售变更：与 is_source_order_locked_for_direct_edit / 前端 isSourceOrderEligibleForChange 对齐
+        # 加载建销售变更：与 is_source_order_locked_for_direct_edit / 前端 isSourceOrderEligibleForChange 对齐
         if pullable_only and (pull_target or "").strip().lower() == "sales_order_change":
             change_eligible_statuses = (
                 "AUDITED",
@@ -3532,7 +3532,7 @@ class SalesOrderService:
         created_by: int,
     ) -> Dict[str, Any]:
         """
-        销售订单域上拉建单：从报价单创建销售订单（单一直接上游）。
+        销售订单域加载建单：从报价单创建销售订单（单一直接上游）。
         """
         if quotation_id <= 0:
             raise ValidationError("报价单ID无效")
@@ -3563,7 +3563,7 @@ class SalesOrderService:
         release_lines: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
-        销售订单域上拉建单：从销售合同创建销售订单。
+        销售订单域加载建单：从销售合同创建销售订单。
         """
         if contract_id <= 0:
             raise ValidationError("销售合同ID无效")

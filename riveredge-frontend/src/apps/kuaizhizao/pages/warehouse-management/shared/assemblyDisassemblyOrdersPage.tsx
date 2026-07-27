@@ -7,7 +7,7 @@ import {
   ProFormDigit,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Card, Col, Form as AntForm, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Col, Form as AntForm, Modal, Row, Select, Space, Table, Tag, Typography, Descriptions } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined, SnippetsOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -20,15 +20,18 @@ import {
   ListPageTemplate,
   MODAL_CONFIG,
   WAREHOUSE_DETAIL_TABLE_STYLES,
+  detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import type { LifecycleResult } from '../../../../../components/uni-lifecycle/types';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import type { LifecycleTranslateFn } from '../../../utils/lifecycleI18n';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 import { assemblyTemplateApi } from '../../../services/assembly-template';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { StatusTag } from '../../../../../constants/statusBadges';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useTranslation } from 'react-i18next';
@@ -145,6 +148,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [itemModalVisible, setItemModalVisible] = useState(false);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<number | null>(null);
   const [currentOrder, setCurrentOrder] = useState<OrderLike | null>(null);
   const [editingOrder, setEditingOrder] = useState<OrderLike | null>(null);
@@ -275,6 +279,9 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   };
 
   const openDetailDrawer = async (record: OrderLike) => {
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setCurrentOrder(null);
     try {
       const detail = await api.get(String(record.id));
       setCurrentOrder(detail as OrderLike);
@@ -282,9 +289,11 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       if (config.enableTemplateApply && detail.product_material_id) {
         await loadTemplateOptions(detail.product_material_id);
       }
-      setDetailDrawerVisible(true);
     } catch (error: any) {
       messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.detailLoadFailed', { noun: config.actionNoun }));
+      setDetailDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -603,9 +612,9 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       render: (status) => {
         const mapped = orderStatusKeys[String(status ?? '')];
         if (mapped) {
-          return <Tag color={mapped.color}>{t(mapped.key)}</Tag>;
+          return <StatusTag color={mapped.color}>{t(mapped.key)}</StatusTag>;
         }
-        return <Tag>{String(status ?? '-')}</Tag>;
+        return renderDocumentStatusTag(String(status ?? '-'), String(status ?? ''));
       },
     },
     { title: config.quantityLabel, dataIndex: 'total_quantity', render: formatQuantity },
@@ -618,6 +627,118 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
   ],
     [config, t],
+  );
+
+  const detailCollaboration = useMemo(() => {
+    if (!currentOrder) return undefined;
+    const lifecycle = config.getLifecycle(currentOrder as Record<string, unknown>, t);
+    const mainStages = lifecycle.mainStages ?? [];
+    if (!mainStages.length) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        status={lifecycle.status}
+        showLabels
+        nextStepSuggestions={lifecycle.nextStepSuggestions}
+      />
+    );
+  }, [config, currentOrder, t]);
+
+  const detailSupplementary = useMemo(() => {
+    if (
+      !config.enableTemplateApply ||
+      !canApplyTemplate ||
+      !currentOrder ||
+      currentOrder.status !== 'draft' ||
+      !api.applyTemplate
+    ) {
+      return undefined;
+    }
+    return (
+      <>
+        <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+          {t('app.kuaizhizao.assemblyOrder.applyTemplate')}
+        </Typography.Text>
+        <Space wrap>
+          <Select
+            style={{ minWidth: 280 }}
+            placeholder={t('app.kuaizhizao.assemblyOrder.selectTemplatePlaceholder')}
+            value={selectedTemplateId}
+            onChange={setSelectedTemplateId}
+            options={templateOptions.filter(
+              (opt) =>
+                !currentOrder.product_material_id ||
+                !opt.productMaterialId ||
+                opt.productMaterialId === currentOrder.product_material_id,
+            )}
+            allowClear
+          />
+          <Button icon={<SnippetsOutlined />} onClick={() => confirmApplyTemplate(currentOrder)}>
+            {t('app.kuaizhizao.assemblyOrder.applyTemplate')}
+          </Button>
+        </Space>
+      </>
+    );
+  }, [api.applyTemplate, canApplyTemplate, config.enableTemplateApply, confirmApplyTemplate, currentOrder, selectedTemplateId, t, templateOptions]);
+
+  const detailItemColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseCommon.colComponentCode'), dataIndex: 'material_code', width: 120 },
+      { title: t('app.kuaizhizao.warehouseCommon.colComponentName'), dataIndex: 'material_name', width: 150 },
+      { title: t('app.kuaizhizao.warehouseCommon.colQuantity'), dataIndex: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colUnitPrice'),
+        dataIndex: 'unit_price',
+        width: 90,
+        align: 'right' as const,
+        render: (value: unknown) => Number(value || 0).toFixed(2),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colAmount'),
+        dataIndex: 'amount',
+        width: 90,
+        align: 'right' as const,
+        render: (value: unknown) => Number(value || 0).toFixed(2),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        dataIndex: 'status',
+        width: 90,
+        render: (status: unknown) => {
+          const mapped = itemStatusKeys[String(status ?? '')];
+          if (mapped) {
+            return <StatusTag color={mapped.color}>{t(mapped.key)}</StatusTag>;
+          }
+          if (String(status ?? '') === config.itemDoneStatus) {
+            return (
+              <StatusTag color="success">
+                {config.itemDoneStatus === 'consumed'
+                  ? t('app.kuaizhizao.warehouseCommon.itemStatusConsumed')
+                  : t('app.kuaizhizao.warehouseCommon.itemStatusProduced')}
+              </StatusTag>
+            );
+          }
+          return renderDocumentStatusTag(String(status ?? '-'), String(status ?? ''));
+        },
+      },
+      { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks' },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colActions'),
+        width: 150,
+        render: (_: unknown, item: ItemLike) =>
+          currentOrder?.status === 'draft' ? (
+            <Space size={0}>
+              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openItemModal(currentOrder, item)}>
+                {t('app.kuaizhizao.warehouseCommon.edit')}
+              </Button>
+              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDeleteItem(currentOrder, item)}>
+                {t('app.kuaizhizao.warehouseCommon.delete')}
+              </Button>
+            </Space>
+          ) : null,
+      },
+    ],
+    [config.itemDoneStatus, currentOrder, t],
   );
 
   return (
@@ -795,125 +916,57 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       <DetailDrawerTemplate
         title={`${config.detailTitlePrefix}${currentOrder?.code ? ` - ${currentOrder.code}` : ''}`}
         open={detailDrawerVisible}
+        loading={detailLoading}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentOrder(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        dataSource={currentOrder || {}}
-        columns={detailColumns}
-        customContent={
-          <>
-            {config.enableTemplateApply && currentOrder?.status === 'draft' && canApplyTemplate && api.applyTemplate && (
-              <Card title={t('app.kuaizhizao.assemblyOrder.applyTemplate')} style={{ marginBottom: 16 }}>
-                <Space wrap>
-                  <Select
-                    style={{ minWidth: 280 }}
-                    placeholder={t('app.kuaizhizao.assemblyOrder.selectTemplatePlaceholder')}
-                    value={selectedTemplateId}
-                    onChange={setSelectedTemplateId}
-                    options={templateOptions.filter(
-                      (opt) =>
-                        !currentOrder.product_material_id ||
-                        !opt.productMaterialId ||
-                        opt.productMaterialId === currentOrder.product_material_id
-                    )}
-                    allowClear
-                  />
-                  <Button icon={<SnippetsOutlined />} onClick={() => confirmApplyTemplate(currentOrder)}>
-                    {t('app.kuaizhizao.assemblyOrder.applyTemplate')}
-                  </Button>
-                </Space>
-              </Card>
-            )}
-            <Card
-              title={t('app.kuaizhizao.warehouseCommon.colDetail')}
-              extra={
-                currentOrder?.status === 'draft' ? (
-                  <Space>
-                    <Button size="small" onClick={() => openEditOrderModal(currentOrder)}>
-                      {t('app.kuaizhizao.warehouseCommon.editMainOrder')}
-                    </Button>
-                    <Button size="small" onClick={() => openItemModal(currentOrder)}>
-                      {t('app.kuaizhizao.warehouseCommon.addItem')}
-                    </Button>
-                    <Button size="small" type="primary" onClick={() => confirmExecuteOrder(currentOrder)}>
-                      {config.executeActionLabel}
-                    </Button>
-                  </Space>
-                ) : undefined
-              }
-            >
-              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-              {currentOrder?.items && currentOrder.items.length > 0 ? (
+        extra={
+          currentOrder?.status === 'draft' ? (
+            <Space>
+              <Button size="small" onClick={() => openEditOrderModal(currentOrder)}>
+                {t('app.kuaizhizao.warehouseCommon.editMainOrder')}
+              </Button>
+              <Button size="small" onClick={() => openItemModal(currentOrder)}>
+                {t('app.kuaizhizao.warehouseCommon.addItem')}
+              </Button>
+              <Button size="small" type="primary" onClick={() => confirmExecuteOrder(currentOrder)}>
+                {config.executeActionLabel}
+              </Button>
+            </Space>
+          ) : null
+        }
+        basic={
+          currentOrder ? (
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(detailColumns, currentOrder)}
+            />
+          ) : undefined
+        }
+        collaboration={detailCollaboration}
+        supplementary={detailSupplementary}
+        linesTitle={t('app.kuaizhizao.warehouseCommon.colDetail')}
+        lines={
+          currentOrder ? (
+            currentOrder.items && currentOrder.items.length > 0 ? (
+              <>
+                <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
                 <Table<ItemLike>
                   className="warehouse-detail-table"
                   size="small"
                   rowKey="id"
                   pagination={false}
-                  columns={[
-                    { title: t('app.kuaizhizao.warehouseCommon.colComponentCode'), dataIndex: 'material_code', width: 120 },
-                    { title: t('app.kuaizhizao.warehouseCommon.colComponentName'), dataIndex: 'material_name', width: 150 },
-                    { title: t('app.kuaizhizao.warehouseCommon.colQuantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
-                    {
-                      title: t('app.kuaizhizao.warehouseCommon.colUnitPrice'),
-                      dataIndex: 'unit_price',
-                      width: 90,
-                      align: 'right',
-                      render: (value) => Number(value || 0).toFixed(2),
-                    },
-                    {
-                      title: t('app.kuaizhizao.warehouseCommon.colAmount'),
-                      dataIndex: 'amount',
-                      width: 90,
-                      align: 'right',
-                      render: (value) => Number(value || 0).toFixed(2),
-                    },
-                    {
-                      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
-                      dataIndex: 'status',
-                      width: 90,
-                      render: (status) => {
-                        const mapped = itemStatusKeys[String(status ?? '')];
-                        if (mapped) {
-                          return <Tag color={mapped.color}>{t(mapped.key)}</Tag>;
-                        }
-                        if (String(status ?? '') === config.itemDoneStatus) {
-                          return (
-                            <Tag color="success">
-                              {config.itemDoneStatus === 'consumed'
-                                ? t('app.kuaizhizao.warehouseCommon.itemStatusConsumed')
-                                : t('app.kuaizhizao.warehouseCommon.itemStatusProduced')}
-                            </Tag>
-                          );
-                        }
-                        return <Tag>{String(status ?? '-')}</Tag>;
-                      },
-                    },
-                    { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks' },
-                    {
-                      title: t('app.kuaizhizao.warehouseCommon.colActions'),
-                      width: 150,
-                      render: (_, item) =>
-                        currentOrder.status === 'draft' ? (
-                          <Space size={0}>
-                            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openItemModal(currentOrder, item)}>
-                              {t('app.kuaizhizao.warehouseCommon.edit')}
-                            </Button>
-                            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDeleteItem(currentOrder, item)}>
-                              {t('app.kuaizhizao.warehouseCommon.delete')}
-                            </Button>
-                          </Space>
-                        ) : null,
-                    },
-                  ]}
+                  columns={detailItemColumns}
                   dataSource={currentOrder.items}
                 />
-              ) : (
-                <Typography.Text type="secondary">{t('app.kuaizhizao.warehouseCommon.noDetailHint')}</Typography.Text>
-              )}
-            </Card>
-          </>
+              </>
+            ) : (
+              <Typography.Text type="secondary">{t('app.kuaizhizao.warehouseCommon.noDetailHint')}</Typography.Text>
+            )
+          ) : undefined
         }
       />
     </ListPageTemplate>

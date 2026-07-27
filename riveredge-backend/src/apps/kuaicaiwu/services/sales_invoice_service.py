@@ -1,5 +1,5 @@
 """
-销售发票上拉门控：候选列表、预览、已开票金额汇总。
+销售发票加载门控：候选列表、预览、已开票金额汇总。
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
 
 class SalesInvoiceService(AppBaseService[Invoice]):
-    """销售发票（销项）上拉门控服务"""
+    """销售发票（销项）加载门控服务"""
 
     _EXCLUDED_INVOICE_STATUSES = frozenset({"已作废", "已红冲"})
 
@@ -214,7 +214,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             "summary": (
                 f"将从销售订单 {code} 创建销项发票（可开票 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"销售订单 {code} 当前不可上拉销项发票"
+                else f"销售订单 {code} 当前不可加载销项发票"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
@@ -261,7 +261,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             "summary": (
                 f"将从销售出库单 {code} 创建销项发票（可开票 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"销售出库单 {code} 当前不可上拉销项发票"
+                else f"销售出库单 {code} 当前不可加载销项发票"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
@@ -420,9 +420,9 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         elif source_type == "sales_delivery":
             preview = await self.preview_pull_from_sales_delivery(tenant_id, source_id)
         else:
-            raise BusinessLogicError(f"不支持的上拉源单类型: {source_type}")
+            raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
         if preview.get("has_blocking_issues"):
-            reason = preview.get("blocking_reason") or "当前不可上拉销项发票"
+            reason = preview.get("blocking_reason") or "当前不可加载销项发票"
             raise BusinessLogicError(reason)
         items = preview.get("items") or []
         if not items:
@@ -460,7 +460,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 target_name=None,
                 relation_type="source",
                 relation_mode="pull",
-                relation_desc="上拉创建销项发票",
+                relation_desc="加载创建销项发票",
             ),
             created_by=created_by,
         )

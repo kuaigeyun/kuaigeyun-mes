@@ -1,24 +1,22 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDigit,
   ProFormSelect,
   ProFormSwitch,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Row, Col, Tag } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Modal, Row, Col } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { rowActionKind } from '../../../../../components/uni-action';
 import { inspectionItemsApi } from '../../../services/equipmentOps';
-import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -28,6 +26,13 @@ import {
   normalizeEquipmentListResponse,
   resolveMasterDataListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  buildIsActiveDescriptionColumn,
+  EquipmentMasterDetailDrawer,
+  renderEquipmentMasterRowActions,
+  renderIsActiveTag,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.equipmentOps.inspectionItem';
 const RESOURCE = 'kuaizhizao:equipment-inspection-item';
@@ -57,11 +62,13 @@ const InspectionItemsPage: React.FC = () => {
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
     undefined,
   );
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detail, setDetail] = useState<InspectionItem | null>(null);
 
   const handleCreate = () => {
     setIsEdit(false);
     setCurrent(null);
-    // FormModal destroyOnHidden：须用 initialValues，打开瞬间 setFieldsValue 无效
     setFormInitialValues({ value_type: 'boolean', is_active: true });
     setModalVisible(true);
   };
@@ -70,14 +77,35 @@ const InspectionItemsPage: React.FC = () => {
   const handleEdit = async (record: InspectionItem) => {
     if (!record.id) return;
     try {
-      const detail = await inspectionItemsApi.get(record.id);
+      const loaded = await inspectionItemsApi.get(record.id);
       setIsEdit(true);
-      setCurrent(detail);
-      setFormInitialValues({ ...detail });
+      setCurrent(loaded);
+      setFormInitialValues({ ...loaded });
       setModalVisible(true);
     } catch (error: unknown) {
       messageApi.error(error instanceof Error ? error.message : t('common.loadFailed'));
     }
+  };
+
+  const handleDetail = useCallback(async (record: InspectionItem) => {
+    if (!record.id) return;
+    setDetailVisible(true);
+    setDetailLoading(true);
+    setDetail(null);
+    try {
+      const loaded = await inspectionItemsApi.get(record.id);
+      setDetail(loaded);
+    } catch (error: unknown) {
+      messageApi.error(error instanceof Error ? error.message : t('common.loadFailed'));
+      setDetailVisible(false);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [messageApi, t]);
+
+  const closeDetail = () => {
+    setDetailVisible(false);
+    setDetail(null);
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -104,9 +132,30 @@ const InspectionItemsPage: React.FC = () => {
     }
     setModalVisible(false);
     actionRef.current?.reload();
+    if (detailVisible && detail?.id === current?.id) {
+      void handleDetail({ id: current.id });
+    }
   };
 
   const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
+
+  const detailBasicColumns = useMemo<ProDescriptionsItemProps<InspectionItem>[]>(
+    () => [
+      { title: t(`${P}.col.code`), dataIndex: 'code' },
+      { title: t(`${P}.col.name`), dataIndex: 'name' },
+      {
+        title: t(`${P}.col.valueType`),
+        dataIndex: 'value_type',
+        render: (_, record) => t(`${P}.valueType.${record.value_type || 'boolean'}`, record.value_type || '-'),
+      },
+      { title: t(`${P}.col.unit`), dataIndex: 'unit' },
+      { title: t(`${P}.col.numericMin`), dataIndex: 'numeric_min' },
+      { title: t(`${P}.col.numericMax`), dataIndex: 'numeric_max' },
+      { title: t(`${P}.col.requirement`), dataIndex: 'requirement', span: 2 },
+      buildIsActiveDescriptionColumn<InspectionItem>(t, `${P}.col.isActive`),
+    ],
+    [t],
+  );
 
   const columns: ProColumns<InspectionItem>[] = useMemo(() => alignProColumns<InspectionItem>([
       {
@@ -156,11 +205,7 @@ const InspectionItemsPage: React.FC = () => {
         width: 80,
         sorter: true,
         hideInSearch: true,
-        render: (_, r) => (
-          <Tag color={r.is_active ? 'success' : 'default'}>
-            {r.is_active ? t('common.enabled') : t('common.disabled')}
-          </Tag>
-        ),
+        render: (_, r) => renderIsActiveTag(t, r.is_active),
       },
       {
         title: t('common.updatedAt'),
@@ -172,48 +217,32 @@ const InspectionItemsPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        width: 140,
+        width: 200,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <>
-            {perms.canUpdate && (
-              <Button
-                {...rowActionKind('update')}
-                type="link"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleEdit(record);
-                }}
-              >
-                {t('common.edit')}
-              </Button>
-            )}
-            {perms.canDelete && (
-              <Button
-                {...rowActionKind('delete')}
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  Modal.confirm({
-                    title: t('common.deleteTitle'),
-                    onOk: () => record.id && handleDelete([record.id]),
-                  });
-                }}
-              >
-                {t('common.delete')}
-              </Button>
-            )}
-          </>
-        ),
+        render: (_, record) =>
+          renderEquipmentMasterRowActions({
+            record,
+            keyPrefix: `inspection-item-actions-${record.id ?? 'row'}`,
+            t,
+            canRead: perms.canRead,
+            canUpdate: perms.canUpdate,
+            canDelete: perms.canDelete,
+            onDetail: (row) => {
+              void handleDetail(row);
+            },
+            onEdit: (row) => {
+              void handleEdit(row);
+            },
+            onDelete: (row) => {
+              if (row.id != null) {
+                void handleDelete([row.id]);
+              }
+            },
+          }),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, perms, activeStatusValueEnum],
+    [t, perms, activeStatusValueEnum, handleDetail],
   );
 
   return (
@@ -251,6 +280,20 @@ const InspectionItemsPage: React.FC = () => {
           enableRowSelection={perms.canDelete}
         />
       </ListPageTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t(`${P}.detailTitle`)}${detail?.code ? ` - ${detail.code}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailBasicColumns}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && perms.canUpdate), () => {
+          if (!detail) return;
+          closeDetail();
+          void handleEdit(detail);
+        })}
+      />
 
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}

@@ -363,7 +363,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     | Q(notes__icontains=keyword)
                 )
 
-        # 上拉建采购变更：与 is_source_order_locked_for_direct_edit / create_change_order 粗过滤对齐
+        # 加载建采购变更：与 is_source_order_locked_for_direct_edit / create_change_order 粗过滤对齐
         if params.pullable_only and (params.pull_target or "").strip().lower() == "purchase_order_change":
             change_eligible_statuses = (
                 "AUDITED",

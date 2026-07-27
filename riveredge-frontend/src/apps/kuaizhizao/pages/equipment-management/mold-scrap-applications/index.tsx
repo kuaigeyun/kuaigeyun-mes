@@ -3,12 +3,13 @@ import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDatePicker,
   ProFormSelect,
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Row, Col, Tag, Input } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, SendOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, SendOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { UniTable } from '../../../../../components/uni-table';
@@ -29,6 +30,11 @@ import {
   normalizeEquipmentListResponse,
   resolveApprovalDocListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.moldOps.scrap';
 const RESOURCE = 'kuaizhizao:mold-scrap';
@@ -69,6 +75,13 @@ const MoldScrapApplicationsPage: React.FC = () => {
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<MoldScrapApplication | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<MoldScrapApplication>();
+
+  const handleDetail = (record: MoldScrapApplication) => {
+    if (!record.id) return;
+    void openDetail(() => scrapApplicationsApi.get(record.id!), t(`${P}.listFailed`));
+  };
 
   const loadMoldOptions = async () => {
     const res = await moldApi.list({ limit: 1000 });
@@ -163,6 +176,23 @@ const MoldScrapApplicationsPage: React.FC = () => {
 
   const approvalStatusValueEnum = useMemo(() => buildApprovalDocStatusValueEnum(), []);
 
+  const detailColumns: ProDescriptionsItemProps<MoldScrapApplication>[] = useMemo(
+    () => [
+      { title: t(`${P}.col.applicationNo`), dataIndex: 'application_no' },
+      { title: t(`${P}.col.mold`), dataIndex: 'mold_name' },
+      { title: t(`${P}.col.reason`), dataIndex: 'reason', span: 2 },
+      { title: t(`${P}.col.scrapDate`), dataIndex: 'scrap_date', valueType: 'date' },
+      { title: t(`${P}.col.applicant`), dataIndex: 'applicant_name' },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
+      },
+      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+    ],
+    [t],
+  );
+
   const columns: ProColumns<MoldScrapApplication>[] = useMemo(() => alignProColumns<MoldScrapApplication>([
       {
         title: t(`${P}.col.scrapDate`),
@@ -235,10 +265,9 @@ const MoldScrapApplicationsPage: React.FC = () => {
               {...rowActionKind('read')}
               type="link"
               size="small"
-              icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
-                void handleEdit(record);
+                handleDetail(record);
               }}
             >
               {t('common.detail')}
@@ -401,6 +430,24 @@ const MoldScrapApplicationsPage: React.FC = () => {
           </Col>
         </Row>
       </FormModalTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t('common.detail')}${detail?.application_no ? ` - ${detail.application_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailColumns}
+        extra={buildDetailDrawerEditExtra(
+          t,
+          Boolean(detail && perms.canUpdate && detail.status === '草稿'),
+          () => {
+            if (!detail) return;
+            closeDetail();
+            void handleEdit(detail);
+          },
+        )}
+      />
 
       <Modal
         title={t(`${P}.rejectModal`)}

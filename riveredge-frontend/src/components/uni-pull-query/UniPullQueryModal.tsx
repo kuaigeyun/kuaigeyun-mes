@@ -16,7 +16,7 @@ function resolveRowKey<T extends object>(
 }
 
 /**
- * 统一上拉取单弹窗：筛选栏 + 可选表格 + 分页 + 确认创建。
+ * 统一加载取单弹窗：筛选栏 + 可选表格 + 分页 + 确认创建。
  * 筛选区样式对齐 UniMaterialBatchPicker。
  */
 export function UniPullQueryModal<T extends object>({

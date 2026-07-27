@@ -1,15 +1,12 @@
-import { rowActionKind } from '../../../../../components/uni-action';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 /**
  * 工装台账页面
  *
  * 提供工装的 CRUD 功能，包括列表展示、创建、编辑等操作。
  * 详情抽屉包含方案绑定、保养/校验记录（只读）、运营单据链接。
  */
-
-import React, { useRef, useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import type { DescriptionsProps } from 'antd';
 import {
   ActionType,
   ProColumns,
@@ -22,13 +19,13 @@ import {
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { App, Button, Tag, Table, Descriptions, Select, Modal, Row, Col, Typography, Empty, Spin, Space, Tabs, theme as AntdTheme } from 'antd';
-import { PlusOutlined, EditOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Table, Select, Modal, Row, Col, Typography, Empty, Spin, Space, Tabs } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerSection, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -49,6 +46,7 @@ import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDa
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { formatDateTime } from '../../../../../utils/format';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateString } from '../../../../../utils/formDate';
@@ -59,36 +57,11 @@ import {
   resolveLedgerListParams,
 } from '../../../utils/equipmentListCore';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'date' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD');
-    }
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    }
-    if (col.render && dataSource != null) {
-            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
-}
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  renderEquipmentMasterRowActions,
+} from '../shared/equipmentMasterDataDetail';
 
 interface Tool {
   id?: number;
@@ -197,8 +170,6 @@ const ToolLedgerPage: React.FC = () => {
     [t, i18n.language, toolDictOptions],
   );
   const { message: messageApi } = App.useApp();
-  const { token } = AntdTheme.useToken();
-  const toolDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -208,6 +179,7 @@ const ToolLedgerPage: React.FC = () => {
   const formRef = useRef<any>(null);
 
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [toolDetail, setToolDetail] = useState<Tool | null>(null);
 
   const [toolTrackingRefreshKey, setToolTrackingRefreshKey] = useState(0);
@@ -334,15 +306,17 @@ const ToolLedgerPage: React.FC = () => {
     }
   };
 
-  const handleDetail = async (record: Tool) => {
+  const handleDetail = useCallback(async (record: Tool) => {
+    if (!record.uuid) {
+      messageApi.error(t('app.kuaizhizao.toolLedger.uuidNotFound'));
+      return;
+    }
+    setDrawerVisible(true);
+    setDetailLoading(true);
+    setToolDetail(null);
     try {
-      if (!record.uuid) {
-        messageApi.error(t('app.kuaizhizao.toolLedger.uuidNotFound'));
-        return;
-      }
       const detail = await toolApi.get(record.uuid);
       setToolDetail(detail);
-      setDrawerVisible(true);
       if (detail.id != null) {
         loadMaintenances(detail.id);
         loadCalibrations(detail.id);
@@ -352,10 +326,37 @@ const ToolLedgerPage: React.FC = () => {
       setToolTrackingRefreshKey((k) => k + 1);
     } catch (error) {
       messageApi.error(t('app.kuaizhizao.toolLedger.getDetailFailed'));
+      setDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
     }
+  }, [messageApi, t]);
+
+
+
+  const handleDelete = async (keys: React.Key[]) => {
+    Modal.confirm({
+      title: t('app.kuaizhizao.toolLedger.confirmBatchDeleteTitle'),
+      content: t('app.kuaizhizao.toolLedger.confirmBatchDeleteContent', { count: keys.length }),
+      onOk: async () => {
+        try {
+          for (const uuid of keys) {
+            await toolApi.delete(String(uuid));
+          }
+          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+          if (toolDetail?.uuid && keys.map(String).includes(String(toolDetail.uuid))) {
+            setDrawerVisible(false);
+            setToolDetail(null);
+            setMaintenances([]);
+            setCalibrations([]);
+          }
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || t('common.deleteFailed'));
+        }
+      },
+    });
   };
-
-
 
   const handleSubmit = async (values: any) => {
     try {
@@ -519,38 +520,32 @@ const ToolLedgerPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 150,
+      width: 200,
       fixed: 'right',
       hideInSearch: true,
-      render: (_, record) => [
-        <Button {...rowActionKind('read')}
-          key="detail"
-          type="link"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={(e) => {
-            e.stopPropagation();
-            void handleDetail(record);
-          }}
-        >
-          {t('common.detail')}
-        </Button>,
-        <Button {...rowActionKind('update')}
-          key="edit"
-          type="link"
-          size="small"
-          icon={<EditOutlined />}
-          onClick={(e) => {
-            e.stopPropagation();
-            void handleEdit(record);
-          }}
-        >
-          {t('common.edit')}
-        </Button>,
-      ],
+      render: (_, record) =>
+        renderEquipmentMasterRowActions({
+          record,
+          keyPrefix: `tool-ledger-actions-${record.uuid ?? 'row'}`,
+          t,
+          canRead: perms.canRead,
+          canUpdate: perms.canUpdate,
+          canDelete: perms.canDelete,
+          onDetail: (row) => {
+            void handleDetail(row);
+          },
+          onEdit: (row) => {
+            void handleEdit(row);
+          },
+          onDelete: (row) => {
+            if (row.uuid != null) {
+              void handleDelete([row.uuid]);
+            }
+          },
+        }),
     },
   ], SALES_DOC_LIST_FIELD_RANK),
-  [t, activeStatusValueEnum, toolStatusValueEnum],
+  [t, activeStatusValueEnum, toolStatusValueEnum, perms, handleDetail],
   );
 
   const maintenanceTableColumns = useMemo(
@@ -566,7 +561,7 @@ const ToolLedgerPage: React.FC = () => {
         title: t('app.kuaizhizao.toolOps.maintenance.col.status'),
         dataIndex: 'status',
         width: 90,
-        render: (v: string) => (v ? <Tag>{v}</Tag> : '-'),
+        render: (v: string) => (v ? renderDocumentStatusTag(v, v) : '-'),
       },
       { title: t('app.kuaizhizao.toolOps.maintenance.col.executor'), dataIndex: 'applicant_name', width: 90 },
     ],
@@ -631,29 +626,7 @@ const ToolLedgerPage: React.FC = () => {
           }}
           enableRowSelection={perms.canDelete}
           showDeleteButton={perms.canDelete}
-          onDelete={async (keys) => {
-            Modal.confirm({
-              title: t('app.kuaizhizao.toolLedger.confirmBatchDeleteTitle'),
-              content: t('app.kuaizhizao.toolLedger.confirmBatchDeleteContent', { count: keys.length }),
-              onOk: async () => {
-                try {
-                  for (const uuid of keys) {
-                    await toolApi.delete(String(uuid));
-                  }
-                  messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-                  if (toolDetail?.uuid && keys.map(String).includes(String(toolDetail.uuid))) {
-                    setDrawerVisible(false);
-                    setToolDetail(null);
-                              setMaintenances([]);
-                    setCalibrations([]);
-                  }
-                  actionRef.current?.reload();
-                } catch (error: any) {
-                  messageApi.error(error.message || t('common.deleteFailed'));
-                }
-              },
-            });
-          }}
+          onDelete={handleDelete}
           showCreateButton={perms.canCreate}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
@@ -879,29 +852,26 @@ const ToolLedgerPage: React.FC = () => {
         </Row>
       </FormModalTemplate>
 
-      <DetailDrawerTemplate
+      <EquipmentMasterDetailDrawer
         open={drawerVisible}
-        zIndex={toolDetailDrawerZIndex}
+        loading={detailLoading}
+        detail={toolDetail}
+        title={t('app.kuaizhizao.toolLedger.detailTitle', { code: toolDetail?.code || '' })}
         onClose={() => {
           setDrawerVisible(false);
           setToolDetail(null);
           setMaintenances([]);
           setCalibrations([]);
         }}
-        title={t('app.kuaizhizao.toolLedger.detailTitle', { code: toolDetail?.code || '' })}
-        columns={[]}
-        column={2}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        customContent={
+        basicColumns={detailBaseColumns}
+        extra={buildDetailDrawerEditExtra(t, Boolean(toolDetail && perms.canUpdate), () => {
+          if (!toolDetail) return;
+          setDrawerVisible(false);
+          void handleEdit(toolDetail);
+        })}
+        lines={
           toolDetail ? (
             <>
-              <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
-                <Descriptions
-                  column={2}
-                  size="small"
-                  items={buildDescriptionItemsFromColumns(toolDetail, detailBaseColumns)}
-                />
-              </DetailDrawerSection>
               <DetailDrawerSection title={t('app.kuaizhizao.toolOps.schemeBindings.title')}>
                 <div style={{ marginBottom: 12 }}>
                   <Typography.Text type="secondary">{t('app.kuaizhizao.toolOps.schemeBindings.maintenance')}</Typography.Text>
@@ -1050,7 +1020,7 @@ const ToolLedgerPage: React.FC = () => {
                 ]}
               />
             </>
-          ) : null
+          ) : undefined
         }
       />
 

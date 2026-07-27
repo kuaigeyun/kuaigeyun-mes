@@ -19,7 +19,7 @@ import {
 } from '../../../../../hooks/useDocumentCapabilities';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Space, Table, Row, Col, Form as AntForm, InputNumber, Input, Select, Dropdown, Tag, Card, Typography, Spin, Empty, Modal, Switch, Alert, List } from 'antd';
+import { App, Button, Space, Table, Row, Col, Form as AntForm, InputNumber, Input, Select, Dropdown, Tag, Card, Typography, Spin, Empty, Modal, Switch, Alert, List, Descriptions } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined, EditOutlined, PrinterOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
@@ -36,7 +36,7 @@ import {
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { salesOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, MODAL_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, MODAL_CONFIG, FormModalTemplate, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
@@ -200,16 +200,6 @@ const SalesReturnsPage: React.FC = () => {
     returnDetail?.id,
     trackingRefreshKey,
   );
-
-  const handleCopy = async (text?: string) => {
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      messageApi.success(t('common.copySuccess'));
-    } catch {
-      messageApi.error(t('common.copyFailed'));
-    }
-  };
 
   const fallbackReturnReasonOptions = useMemo(
     () => buildDictFallbackOptions(t, RETURN_REASON_VALUES),
@@ -1185,69 +1175,122 @@ const SalesReturnsPage: React.FC = () => {
     setImportModalVisible(false);
   };
 
-  // 详情列 definition
-  const detailColumns: ProDescriptionsItemProps<SalesReturnDetail>[] = [
-    {
-      title: t('app.kuaizhizao.salesReturn.colReturnCode'),
-      dataIndex: 'return_code',
-    },
-    {
-      title: t('app.kuaizhizao.salesReturn.colSalesDeliveryCode'),
-      dataIndex: 'sales_delivery_code',
-    },
-    {
-      title: t('app.kuaizhizao.salesReturn.colSalesOrderCode'),
-      dataIndex: 'sales_order_code',
-    },
-    {
-      title: t('app.kuaizhizao.salesReturn.customer'),
-      dataIndex: 'customer_name',
-    },
-    {
-      title: t('app.kuaizhizao.salesReturn.colWarehouse'),
-      dataIndex: 'warehouse_name',
-    },
-    {
-      title: t('app.kuaizhizao.salesReturn.returnStatus'),
-      dataIndex: 'status',
-      render: (status) => {
-        const statusMap: Record<string, { text: string; color: string }> = {
-          '待退货': { text: t('app.kuaizhizao.salesReturn.statusPending'), color: 'default' },
-          '已退货': { text: t('app.kuaizhizao.salesReturn.statusReturned'), color: 'success' },
-          '已取消': { text: t('app.kuaizhizao.salesReturn.statusCancelled'), color: 'error' },
-        };
-        const config = statusMap[(status as any) || ''] || { text: getReturnStatusLabel(status as string), color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+  const detailBasicColumns = useMemo<ProDescriptionsItemProps<SalesReturnDetail>[]>(
+    () => [
+      {
+        title: t('app.kuaizhizao.salesReturn.colReturnCode'),
+        dataIndex: 'return_code',
+        render: (_, record) =>
+          record.return_code ? (
+            <Typography.Text copyable={{ text: record.return_code }}>{record.return_code}</Typography.Text>
+          ) : (
+            '-'
+          ),
       },
-    },
-    {
-      title: t('app.kuaizhizao.salesReturn.returnReason'),
-      dataIndex: 'return_reason',
-    },
-    {
-      title: t('app.kuaizhizao.salesReturn.returnType'),
-      dataIndex: 'return_type',
-    },
-    {
-      title: t('app.kuaizhizao.salesReturn.totalQuantity'),
-      dataIndex: 'total_quantity',
-      render: formatQuantity,
-    },
-    {
-      title: t('app.kuaizhizao.salesReturn.totalAmount'),
-      dataIndex: 'total_amount',
-      render: (text) => `¥${text?.toLocaleString() || 0}`,
-    },
-    {
-      title: t('app.kuaizhizao.salesReturn.returnTime'),
-      dataIndex: 'return_time',
-      valueType: 'dateTime',
-    },
-    {
-      title: t('app.kuaizhizao.salesReturn.returner'),
-      dataIndex: 'returner_name',
-    },
-  ];
+      {
+        title: t('app.kuaizhizao.salesReturn.colSalesDeliveryCode'),
+        dataIndex: 'sales_delivery_code',
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.colSalesOrderCode'),
+        dataIndex: 'sales_order_code',
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.customer'),
+        dataIndex: 'customer_name',
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.colWarehouse'),
+        dataIndex: 'warehouse_name',
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.returnStatus'),
+        dataIndex: 'status',
+        render: (_, record) => {
+          const status = record.status;
+          const statusMap: Record<string, { text: string; color: string }> = {
+            '待退货': { text: t('app.kuaizhizao.salesReturn.statusPending'), color: 'default' },
+            '已退货': { text: t('app.kuaizhizao.salesReturn.statusReturned'), color: 'success' },
+            '已取消': { text: t('app.kuaizhizao.salesReturn.statusCancelled'), color: 'error' },
+          };
+          const config = statusMap[status || ''] || {
+            text: getReturnStatusLabel(status),
+            color: 'default',
+          };
+          return <Tag color={config.color}>{config.text}</Tag>;
+        },
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.returnReason'),
+        dataIndex: 'return_reason',
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.returnType'),
+        dataIndex: 'return_type',
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.totalQuantity'),
+        dataIndex: 'total_quantity',
+        render: (_, record) => formatQuantity(record.total_quantity),
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.totalAmount'),
+        dataIndex: 'total_amount',
+        render: (_, record) => `¥${Number(record.total_amount ?? 0).toLocaleString()}`,
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.returnTime'),
+        dataIndex: 'return_time',
+        valueType: 'dateTime',
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.returner'),
+        dataIndex: 'returner_name',
+      },
+      {
+        title: t('app.kuaizhizao.common.fieldNotes'),
+        dataIndex: 'notes',
+        span: 2,
+      },
+    ],
+    [getReturnStatusLabel, t],
+  );
+
+  const detailCollaboration = useMemo(() => {
+    if (!returnDetail) return undefined;
+    const lifecycle = getSalesReturnLifecycle(returnDetail as any, t);
+    const mainStages = lifecycle.mainStages ?? [];
+    if (!mainStages.length) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        status={lifecycle.status}
+        showLabels
+        nextStepSuggestions={lifecycle.nextStepSuggestions}
+        hideNextStepSuggestions
+      />
+    );
+  }, [returnDetail, t]);
+
+  const salesReturnTraceDocument = useMemo(() => {
+    if (returnDetail?.id == null) return null;
+    return {
+      documentType: 'sales_return',
+      documentId: returnDetail.id,
+      selfDocumentId: returnDetail.id,
+      renderBriefActions: (doc: Parameters<typeof WarehouseTraceBriefPrimaryActions>[0]['doc']) => (
+        <WarehouseTraceBriefPrimaryActions
+          doc={doc}
+          t={t}
+          navigate={navigate}
+          closeDrawer={() => {
+            setDetailDrawerVisible(false);
+            setReturnDetail(null);
+          }}
+        />
+      ),
+    };
+  }, [navigate, returnDetail?.id, t]);
 
   return (
     <>
@@ -1876,8 +1919,6 @@ const SalesReturnsPage: React.FC = () => {
           resetSalesReturnDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        dataSource={returnDetail || undefined}
         extra={
           returnDetail?.id != null ? (
             <Space size="small">
@@ -1915,145 +1956,84 @@ const SalesReturnsPage: React.FC = () => {
             </Space>
           ) : null
         }
-        customContent={
+        basic={
           returnDetail ? (
-            <div style={{ padding: '16px 0' }}>
-              <DetailDrawerSection title={t('app.kuaizhizao.salesReturn.basicInfo')}>
-                <Table
-                  size="small"
-                  pagination={false}
-                  columns={[
-                    { title: t('app.kuaizhizao.salesReturn.fieldLabel'), dataIndex: 'k', width: 120 },
-                    { title: t('app.kuaizhizao.salesReturn.valueLabel'), dataIndex: 'v' },
-                  ]}
-                  dataSource={[
-                    {
-                      key: 'return_code',
-                      k: t('app.kuaizhizao.salesReturn.colReturnCode'),
-                      v: (
-                        <Space size={4}>
-                          <span>{returnDetail.return_code || '-'}</span>
-                          {returnDetail.return_code ? <Button type="link" size="small" icon={<CopyOutlined style={{ fontSize: 12 }} />} onClick={() => handleCopy(returnDetail.return_code)} /> : null}
-                        </Space>
-                      ),
-                    },
-                    { key: 'sales_delivery_code', k: t('app.kuaizhizao.salesReturn.colSalesDeliveryCode'), v: returnDetail.sales_delivery_code || '-' },
-                    { key: 'sales_order_code', k: t('app.kuaizhizao.salesReturn.colSalesOrderCode'), v: returnDetail.sales_order_code || '-' },
-                    { key: 'customer_name', k: t('app.kuaizhizao.salesReturn.customer'), v: returnDetail.customer_name || '-' },
-                    { key: 'warehouse_name', k: t('app.kuaizhizao.salesReturn.colWarehouse'), v: returnDetail.warehouse_name || '-' },
-                    { key: 'status', k: t('common.status'), v: getReturnStatusLabel(returnDetail.status) },
-                    { key: 'return_reason', k: t('app.kuaizhizao.salesReturn.returnReason'), v: returnDetail.return_reason || '-' },
-                    { key: 'return_type', k: t('app.kuaizhizao.salesReturn.returnType'), v: returnDetail.return_type || '-' },
-                    { key: 'return_time', k: t('app.kuaizhizao.salesReturn.returnTime'), v: returnDetail.return_time || '-' },
-                  ]}
-                  rowKey="key"
-                />
-                {hasCustomFieldsDetailContent(salesReturnListCustomFields, salesReturnDetailCustomFieldValues) ? (
-                  <div style={{ marginTop: 16 }}>
-                    <CustomFieldsDetailSection
-                      customFields={salesReturnListCustomFields}
-                      customFieldValues={salesReturnDetailCustomFieldValues}
-                    />
-                  </div>
-                ) : null}
-                {returnDetail.notes ? (
+            <>
+              <Descriptions
+                column={3}
+                size="small"
+                items={detailDrawerDescriptionItems(
+                  detailBasicColumns.filter((col) => {
+                    if (col.dataIndex !== 'notes') return true;
+                    const notes = String(returnDetail.notes ?? '').trim();
+                    return notes.length > 0;
+                  }),
+                  returnDetail,
+                )}
+              />
+              {hasCustomFieldsDetailContent(salesReturnListCustomFields, salesReturnDetailCustomFieldValues) ? (
+                <div style={{ marginTop: 16 }}>
+                  <CustomFieldsDetailSection
+                    customFields={salesReturnListCustomFields}
+                    customFieldValues={salesReturnDetailCustomFieldValues}
+                  />
+                </div>
+              ) : null}
+            </>
+          ) : undefined
+        }
+        collaboration={detailCollaboration}
+        collaborationTitle={t('app.kuaizhizao.salesOrder.lifecycle')}
+        collaborationAuditRecord={returnDetail}
+        traceDocument={salesReturnTraceDocument}
+        linesTitle={t('app.kuaizhizao.salesReturn.itemsInfo')}
+        lines={
+          returnDetail ? (
+            <>
+              <style>{`
+                .sales-return-detail-items .ant-table-wrapper .ant-table-body,
+                .sales-return-detail-items .ant-table-wrapper .ant-table-content {
+                  overflow: visible !important;
+                }
+                .sales-return-detail-items .ant-table-thead > tr > th {
+                  white-space: nowrap !important;
+                }
+              `}</style>
+              {returnDetail.items && returnDetail.items.length > 0 ? (
+                <div className="sales-return-detail-items" style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}>
                   <Table
                     size="small"
                     pagination={false}
-                    style={{ marginTop: 16 }}
-                    showHeader={false}
+                    tableLayout="fixed"
+                    style={{ minWidth: 860 }}
                     columns={[
-                      { title: t('app.kuaizhizao.salesReturn.fieldLabel'), dataIndex: 'k', width: 120 },
-                      { title: t('app.kuaizhizao.salesReturn.valueLabel'), dataIndex: 'v' },
+                      { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
+                      { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
+                      { title: t('app.kuaizhizao.salesReturn.returnQuantity'), dataIndex: 'return_quantity', width: 100, align: 'right', render: formatQuantity },
+                      { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
+                      { title: t('app.kuaizhizao.salesReturn.amount'), dataIndex: 'total_amount', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
+                      { title: t('app.kuaizhizao.salesReturn.import.batchNumber'), dataIndex: 'batch_number', width: 120 },
+                      { title: t('app.kuaizhizao.salesReturn.location'), dataIndex: 'location_code', width: 100 },
                     ]}
-                    dataSource={[{ key: 'notes', k: t('app.kuaizhizao.common.fieldNotes'), v: returnDetail.notes }]}
-                    rowKey="key"
+                    dataSource={returnDetail.items}
+                    rowKey="id"
                   />
-                ) : null}
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.kuaizhizao.salesOrder.lifecycle')}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lifecycle = getSalesReturnLifecycle(returnDetail as any, t);
-                    return (
-                      <>
-                        {(lifecycle.mainStages ?? []).length > 0 && (
-                          <UniLifecycleStepper
-                            steps={lifecycle.mainStages ?? []}
-                            status={lifecycle.status}
-                            showLabels
-                            nextStepSuggestions={lifecycle.nextStepSuggestions}
-                            hideNextStepSuggestions
-                          />
-                        )}
-                      </>
-                    );
-                  })()}
-                  {returnDetail.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType="sales_return"
-                      documentId={returnDetail.id}
-                      active={detailDrawerVisible}
-                      selfDocumentId={returnDetail.id}
-                      renderBriefActions={(doc) => (
-                        <WarehouseTraceBriefPrimaryActions
-                          doc={doc}
-                          t={t}
-                          navigate={navigate}
-                          closeDrawer={() => {
-                            setDetailDrawerVisible(false);
-                            setReturnDetail(null);
-                          }}
-                        />
-                      )}
-                    />
-                  ) : null}
                 </div>
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.kuaizhizao.salesReturn.itemsInfo')}>
-                <style>{`
-                  .sales-return-detail-items .ant-table-wrapper .ant-table-body,
-                  .sales-return-detail-items .ant-table-wrapper .ant-table-content {
-                    overflow: visible !important;
-                  }
-                  .sales-return-detail-items .ant-table-thead > tr > th {
-                    white-space: nowrap !important;
-                  }
-                `}</style>
-                {returnDetail.items && returnDetail.items.length > 0 ? (
-                  <div className="sales-return-detail-items" style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}>
-                    <Table
-                      size="small"
-                      pagination={false}
-                      tableLayout="fixed"
-                      style={{ minWidth: 860 }}
-                      columns={[
-                        { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
-                        { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
-                        { title: t('app.kuaizhizao.salesReturn.returnQuantity'), dataIndex: 'return_quantity', width: 100, align: 'right' , render: formatQuantity },
-                        { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
-                        { title: t('app.kuaizhizao.salesReturn.amount'), dataIndex: 'total_amount', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
-                        { title: t('app.kuaizhizao.salesReturn.import.batchNumber'), dataIndex: 'batch_number', width: 120 },
-                        { title: t('app.kuaizhizao.salesReturn.location'), dataIndex: 'location_code', width: 100 },
-                      ]}
-                      dataSource={returnDetail.items}
-                      rowKey="id"
-                    />
-                  </div>
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.salesReturn.emptyItems')} />
-                )}
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.kuaizhizao.salesReturn.operationHistory')}>
-                {salesReturnTracking.loading && <Spin />}
-                {salesReturnTracking.error && <Typography.Text type="danger">{salesReturnTracking.error}</Typography.Text>}
-                {salesReturnTracking.data && <DocumentTrackingTimelineBody data={salesReturnTracking.data} />}
-              </DetailDrawerSection>
-            </div>
-          ) : null
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.salesReturn.emptyItems')} />
+              )}
+            </>
+          ) : undefined
+        }
+        timelineTitle={t('app.kuaizhizao.salesReturn.operationHistory')}
+        timeline={
+          returnDetail ? (
+            <>
+              {salesReturnTracking.loading && <Spin />}
+              {salesReturnTracking.error && <Typography.Text type="danger">{salesReturnTracking.error}</Typography.Text>}
+              {salesReturnTracking.data && <DocumentTrackingTimelineBody data={salesReturnTracking.data} />}
+            </>
+          ) : undefined
         }
       />
       {PrintModal}

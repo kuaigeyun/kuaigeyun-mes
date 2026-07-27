@@ -12,17 +12,26 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormTextArea, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Tag, Button, Divider, Typography } from 'antd';
+import { App, Button, Divider, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import { renderRowActionsOverflow, rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
 import { ExceptionListPage } from '../../../services/production';
 import { ACTIVE_QUALITY_EXCEPTION_STATUSES } from '../../../constants/exceptionStatuses';
 import { qualityImprovementApi } from '../../../services/quality-improvement';
-import { buildInspectionDetailPath } from '../../quality-management/components/inspectionTemplateUtils';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import {
+  hasQualityExceptionHandlingInfo,
+  QualityExceptionDetailBasicContent,
+  QualityExceptionDetailHandlingContent,
+} from '../components/ProductionExceptionDetailContent';
+import {
+  buildQualityExceptionActionButtons,
+  hasQualityExceptionActions,
+  renderQualityExceptionActionGroup,
+} from '../components/ProductionExceptionDetailActions';
 import { formatDateTime } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -143,6 +152,23 @@ const QualityExceptionsPage: React.FC = () => {
     }, 100);
   };
 
+  const handleStart8D = useCallback(async (record: QualityException) => {
+    try {
+      const report = await qualityImprovementApi.eightD.startFromException(
+        Number(record.id),
+        `${record.work_order_code || t(`${Q}.defaultReportTitle`)}-${record.problem_description || t(`${Q}.defaultReportSuffix`)}`,
+      );
+      messageApi.success(t(`${Q}.message.start8DSuccess`));
+      setDetailDrawerVisible(false);
+      setCurrentRecord(null);
+      if (report?.id) {
+        navigate(`/apps/kuaizhizao/quality-management/eight-d-reports?report_id=${report.id}`);
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t(`${Q}.message.start8DFailed`));
+    }
+  }, [messageApi, navigate, t]);
+
   const handleException = async (values: any) => {
     try {
       if (!currentRecord?.id) {
@@ -183,6 +209,7 @@ const QualityExceptionsPage: React.FC = () => {
       });
       messageApi.success(t(`${P}.message.handleSuccess`));
       setHandleModalVisible(false);
+      setDetailDrawerVisible(false);
       setCurrentRecord(null);
       setCurrentAction('');
       invalidateMenuBadgeCounts();
@@ -295,75 +322,19 @@ const QualityExceptionsPage: React.FC = () => {
             <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
               {t('common.detail')}
             </Button>,
-            record.status === 'pending' ? (
-              <Button
-                key="investigate"
-                {...rowActionKind('audit')}
-                {...rowActionLabelKeep()}
-                onClick={() => openHandleModal(record, 'investigate')}
-              >
-                {t(`${P}.action.investigate`)}
-              </Button>
-            ) : null,
-            record.status === 'investigating' ? (
-              <Button
-                key="correct"
-                {...rowActionKind('update')}
-                {...rowActionLabelKeep()}
-                onClick={() => openHandleModal(record, 'correct')}
-              >
-                {t(`${P}.action.correct`)}
-              </Button>
-            ) : null,
-            record.status === 'correcting' ? (
-              <Button
-                key="close"
-                {...rowActionKind('complete')}
-                {...rowActionLabelKeep()}
-                onClick={() => openHandleModal(record, 'close')}
-              >
-                {t(`${P}.action.close`)}
-              </Button>
-            ) : null,
-            (record.status === 'pending' ||
-              record.status === 'investigating' ||
-              record.status === 'correcting') ? (
-              <Button
-                key="cancel"
-                {...rowActionKind('reject')}
-                onClick={() => openHandleModal(record, 'cancel')}
-              >
-                {t(`${P}.action.cancel`)}
-              </Button>
-            ) : null,
-            canCreate8D ? (
-              <Button
-                key="start8d"
-                {...rowActionKind('create')}
-                {...rowActionLabelKeep()}
-                onClick={async () => {
-                  try {
-                    const report = await qualityImprovementApi.eightD.startFromException(
-                      Number(record.id),
-                      `${record.work_order_code || t(`${Q}.defaultReportTitle`)}-${record.problem_description || t(`${Q}.defaultReportSuffix`)}`,
-                    );
-                    messageApi.success(t(`${Q}.message.start8DSuccess`));
-                    if (report?.id) {
-                      navigate(`/apps/kuaizhizao/quality-management/eight-d-reports?report_id=${report.id}`);
-                    }
-                  } catch (error: any) {
-                    messageApi.error(error?.message || t(`${Q}.message.start8DFailed`));
-                  }
-                }}
-              >
-                {t(`${Q}.action.start8D`)}
-              </Button>
-            ) : null,
+            ...buildQualityExceptionActionButtons({
+              record,
+              t,
+              onAction: (action) => openHandleModal(record, action),
+              onStart8D: () => { void handleStart8D(record); },
+              canCreate8D,
+              keyPrefix: `quality-exception-actions-${record.id ?? 'row'}`,
+            }),
           ],
           { keyPrefix: `quality-exception-actions-${record.id ?? 'row'}` },
         ),
     },
-  ], SALES_DOC_LIST_FIELD_RANK), [qualityStatusValueEnum, t, canCreate8D, navigate, messageApi]);
+  ], SALES_DOC_LIST_FIELD_RANK), [qualityStatusValueEnum, t, canCreate8D, handleStart8D]);
 
   return (
     <ListPageTemplate>
@@ -455,106 +426,41 @@ const QualityExceptionsPage: React.FC = () => {
           setCurrentRecord(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        customContent={
+        basic={
           currentRecord ? (
-            <div style={{ padding: '16px 0' }}>
-              <p><strong>{t(`${P}.col.exceptionType`)}:</strong> {exceptionTypeLabel(currentRecord.exception_type)}</p>
-              <p><strong>{t(`${P}.col.workOrderCode`)}:</strong> {currentRecord.work_order_code || '-'}</p>
-              <p><strong>{t(`${P}.col.materialCode`)}:</strong> {currentRecord.material_code || '-'}</p>
-              <p><strong>{t(`${P}.col.materialName`)}:</strong> {currentRecord.material_name || '-'}</p>
-              {currentRecord.batch_no && (
-                <p><strong>{t(`${P}.col.batchNo`)}:</strong> {currentRecord.batch_no}</p>
-              )}
-              <p><strong>{t(`${Q}.col.problemDescription`)}:</strong> {currentRecord.problem_description}</p>
-              {currentRecord.inspection_record_id ? (
-                <Space wrap style={{ marginBottom: 8 }}>
-                  <Button
-                    type="link"
-                    size="small"
-                    onClick={() => {
-                      const path = buildInspectionDetailPath(
-                        currentRecord.inspection_source_type,
-                        currentRecord.inspection_record_id,
-                      );
-                      if (path) {
-                        setDetailDrawerVisible(false);
-                        navigate(path);
-                      }
-                    }}
-                  >
-                    {t(`${Q}.action.viewSourceInspection`)}
-                  </Button>
-                  <Button
-                    type="link"
-                    size="small"
-                    onClick={() => {
-                      setDetailDrawerVisible(false);
-                      const q = new URLSearchParams();
-                      if (currentRecord.inspection_source_type === 'incoming_inspection') {
-                        q.set('incoming_inspection_id', String(currentRecord.inspection_record_id));
-                      } else if (currentRecord.inspection_source_type === 'process_inspection') {
-                        q.set('process_inspection_id', String(currentRecord.inspection_record_id));
-                      } else if (currentRecord.inspection_source_type === 'finished_goods_inspection') {
-                        q.set('finished_goods_inspection_id', String(currentRecord.inspection_record_id));
-                      }
-                      navigate(`/apps/kuaizhizao/quality-management/nonconforming-ledger?${q.toString()}`);
-                    }}
-                  >
-                    {t(`${Q}.action.viewNonconformingLedger`)}
-                  </Button>
-                </Space>
-              ) : null}
-              <p><strong>{t(`${Q}.col.severity`)}:</strong>
-                <Tag color={
-                  currentRecord.severity === 'critical' ? 'red' :
-                    currentRecord.severity === 'major' ? 'orange' : 'default'
-                }>
-                  {severityLabel(currentRecord.severity)}
-                </Tag>
-              </p>
-              <p><strong>{t(`${P}.col.status`)}:</strong>
-                <Tag color={
-                  currentRecord.status === 'closed' ? 'success' :
-                    currentRecord.status === 'correcting' || currentRecord.status === 'investigating' ? 'processing' :
-                      currentRecord.status === 'cancelled' ? 'error' : 'default'
-                }>
-                  {statusLabel(currentRecord.status)}
-                </Tag>
-              </p>
-              {currentRecord.root_cause && (
-                <p><strong>{t(`${Q}.field.rootCause`)}:</strong> {currentRecord.root_cause}</p>
-              )}
-              {currentRecord.corrective_action && (
-                <p><strong>{t(`${Q}.field.correctiveAction`)}:</strong> {currentRecord.corrective_action}</p>
-              )}
-              {currentRecord.preventive_action && (
-                <p><strong>{t(`${Q}.field.preventiveAction`)}:</strong> {currentRecord.preventive_action}</p>
-              )}
-              {currentRecord.responsible_person_name && (
-                <p><strong>{t(`${P}.col.responsiblePerson`)}:</strong> {currentRecord.responsible_person_name}</p>
-              )}
-              {currentRecord.planned_completion_date && (
-                <p><strong>{t(`${Q}.field.plannedCompletionDate`)}:</strong> {currentRecord.planned_completion_date}</p>
-              )}
-              {currentRecord.actual_completion_date && (
-                <p><strong>{t(`${Q}.field.actualCompletionDate`)}:</strong> {currentRecord.actual_completion_date}</p>
-              )}
-              {currentRecord.verification_result && (
-                <p><strong>{t(`${Q}.field.verificationResult`)}:</strong> {currentRecord.verification_result}</p>
-              )}
-              {currentRecord.handled_by_name && (
-                <>
-                  <p><strong>{t(`${P}.field.handler`)}:</strong> {currentRecord.handled_by_name}</p>
-                  <p><strong>{t(`${P}.field.handledAt`)}:</strong> {currentRecord.handled_at}</p>
-                </>
-              )}
-              {currentRecord.remarks && (
-                <p><strong>{t(`${P}.field.remarks`)}:</strong> {currentRecord.remarks}</p>
-              )}
-            </div>
-          ) : null
+            <QualityExceptionDetailBasicContent
+              record={currentRecord}
+              t={t}
+              exceptionTypeLabel={exceptionTypeLabel}
+              severityLabel={severityLabel}
+              statusLabel={statusLabel}
+              navigate={navigate}
+              onCloseDrawer={() => {
+                setDetailDrawerVisible(false);
+                setCurrentRecord(null);
+              }}
+            />
+          ) : undefined
         }
+        lines={
+          currentRecord && hasQualityExceptionHandlingInfo(currentRecord) ? (
+            <QualityExceptionDetailHandlingContent record={currentRecord} t={t} />
+          ) : undefined
+        }
+        linesTitle={t(`${Q}.section.corrective`)}
+        collaboration={
+          currentRecord && hasQualityExceptionActions(currentRecord, canCreate8D)
+            ? renderQualityExceptionActionGroup({
+                record: currentRecord,
+                t,
+                onAction: (action) => openHandleModal(currentRecord, action),
+                onStart8D: () => { void handleStart8D(currentRecord); },
+                canCreate8D,
+                keyPrefix: `quality-exception-drawer-${currentRecord.id ?? 'row'}`,
+              })
+            : undefined
+        }
+        collaborationTitle={t(`${P}.section.actions`)}
       />
 
       <FormModalTemplate

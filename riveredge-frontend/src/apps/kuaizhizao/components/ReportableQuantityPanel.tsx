@@ -11,12 +11,23 @@ import {
   getWorkOrderMaterialLossTotal,
 } from '../utils/workOrderReporting';
 import { warehouseApi } from '../services/warehouse-execution';
+import { convertBaseQtyToProductionDisplay } from '../../../utils/materialScenarioUnit';
 
 export interface ReportableQuantityPanelProps {
   operation: any;
+  /** 工单计划数量（基础单位） */
   workOrderQuantity: number;
   operations?: any[];
   workOrderId?: number;
+  /** 生产场景展示单位；与基础单位不同时，面板数值按生产单位展示 */
+  unitContext?: {
+    product_unit?: string;
+    productUnit?: string;
+    base_unit?: string;
+    baseUnit?: string;
+    unit_to_base_factor?: number;
+    unitToBaseFactor?: number;
+  };
 }
 
 const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
@@ -24,11 +35,21 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
   workOrderQuantity,
   operations = [],
   workOrderId,
+  unitContext,
 }) => {
   const { token } = theme.useToken();
   const { t } = useTranslation();
   const { planRemaining, materialRemaining, effectiveRemaining } =
     getReportableQuantityBreakdown(operation, workOrderQuantity);
+
+  const toDisplay = (baseQty: number) =>
+    unitContext ? convertBaseQtyToProductionDisplay(baseQty, unitContext) : baseQty;
+
+  const unitSuffix = (() => {
+    const productUnit = String(unitContext?.product_unit ?? unitContext?.productUnit ?? '').trim();
+    const baseUnit = String(unitContext?.base_unit ?? unitContext?.baseUnit ?? '').trim();
+    return productUnit && baseUnit && productUnit !== baseUnit ? ` ${productUnit}` : '';
+  })();
 
   const operationQualified =
     Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
@@ -72,12 +93,12 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
     {
       key: 'plan',
       title: t('apps.kuaizhizao.workOrder.quickReport.workOrderPlanQty'),
-      value: workOrderQuantity,
+      value: `${toDisplay(workOrderQuantity)}${unitSuffix}`,
     },
     {
       key: 'loss',
       title: t('apps.kuaizhizao.workOrder.quickReport.cumulativeMaterialLoss'),
-      value: cumulativeLoss,
+      value: `${toDisplay(cumulativeLoss)}${unitSuffix}`,
       valueStyle: {
         color: cumulativeLoss > 0 ? token.colorError : token.colorTextTertiary,
       },
@@ -85,7 +106,7 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
     {
       key: 'replenish',
       title: t('apps.kuaizhizao.workOrder.quickReport.replenishmentQty'),
-      value: replenishmentQty,
+      value: `${toDisplay(replenishmentQty)}${unitSuffix}`,
       valueStyle: {
         color: replenishmentQty > 0 ? token.colorWarning : token.colorTextTertiary,
       },
@@ -93,22 +114,25 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
     {
       key: 'qualified',
       title: t('apps.kuaizhizao.workOrder.quickReport.reportedQualifiedQty'),
-      value: operationQualified,
+      value: `${toDisplay(operationQualified)}${unitSuffix}`,
     },
     {
       key: 'planRemaining',
       title: t('apps.kuaizhizao.workOrder.quickReport.planRemainingTitle'),
-      value: planRemaining,
+      value: `${toDisplay(planRemaining)}${unitSuffix}`,
     },
     {
       key: 'materialRemaining',
       title: t('apps.kuaizhizao.workOrder.quickReport.materialRemainingTitle'),
-      value: materialRemaining ?? '—',
+      value:
+        materialRemaining == null
+          ? '—'
+          : `${toDisplay(materialRemaining)}${unitSuffix}`,
     },
     {
       key: 'effective',
       title: t('apps.kuaizhizao.workOrder.quickReport.effectiveReportableTitle'),
-      value: effectiveRemaining,
+      value: `${toDisplay(effectiveRemaining)}${unitSuffix}`,
       valueStyle: { color: token.colorPrimary },
     },
   ];

@@ -52,10 +52,23 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
   buildInspectorTimeStackedColumn,
-  qualifiedQuantityColumnProps,
+  buildQualityInspectionListCodeColumn,
+  buildQualityInspectionListMaterialColumn,
+  buildQualityInspectionListMaterialHiddenColumns,
+  buildQualityInspectionListQuantityResultColumns,
+  buildQualityInspectionListSearchColumns,
   stackedPrimarySecondaryColumn,
-  unqualifiedQuantityColumnProps,
 } from '../components/qualityTableColumns';
+import {
+  buildQualityInspectionDetailCodeColumn,
+  buildQualityInspectionDetailMaterialColumns,
+  buildQualityInspectionDetailPeopleColumns,
+  buildQualityInspectionDetailQuantityStatusColumns,
+} from '../components/qualityDetailColumns';
+import {
+  buildProcessWorkOrderPullColumns,
+  type QualityPullCandidateBase,
+} from '../components/qualityPullQueryColumns';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -119,9 +132,13 @@ const PROCESS_RESOURCE = 'kuaizhizao:quality-management-process-inspection';
 const PROCESS_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_process_inspections';
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
 
-type ProcessPullWorkOrderCandidate = {
-  id: number;
-  code: string;
+type ProcessPullWorkOrderCandidate = QualityPullCandidateBase & {
+  work_order_code?: string;
+  product_name?: string;
+  material_code?: string;
+  sales_order_code?: string;
+  planned_quantity?: number | null;
+  completed_quantity?: number | null;
   capabilities?: { pull_process_inspection?: { allowed?: boolean; reason?: string } };
 };
 
@@ -529,6 +546,8 @@ const ProcessInspectionPage: React.FC = () => {
     [t],
   );
 
+  const processWorkOrderPullColumns = useMemo(() => buildProcessWorkOrderPullColumns(t), [t]);
+
   const pullFromWorkOrderQuery = useUniPullQuery<ProcessPullWorkOrderCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
@@ -538,7 +557,7 @@ const ProcessInspectionPage: React.FC = () => {
       try {
         const res = await qualityApi.processInspection.listWorkOrderPullCandidates({
           skip: 0,
-          limit: 200,
+          limit: 100,
           keyword: keyword.trim() || undefined,
         });
         const rows = (res.data || []) as ProcessPullWorkOrderCandidate[];
@@ -677,13 +696,10 @@ const ProcessInspectionPage: React.FC = () => {
 
   const detailBaseColumns: ProDescriptionsItemProps<ProcessInspection>[] = useMemo(
     () => [
-      {
-        title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
-        dataIndex: 'inspection_code',
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.inspection_code ?? '') }}>{r.inspection_code ?? '-'}</Typography.Text>
-        ),
-      },
+      buildQualityInspectionDetailCodeColumn<ProcessInspection>(t),
+      ...buildQualityInspectionDetailMaterialColumns<ProcessInspection>(t),
+      { title: t('app.kuaizhizao.quality.common.columns.materialSpec'), dataIndex: 'material_spec', render: (val) => val || '-' },
+      { title: t('app.kuaizhizao.quality.common.columns.batchNo'), dataIndex: 'batch_number', render: (val) => val || '-' },
       {
         title: t('app.kuaizhizao.quality.common.columns.workOrderCode'),
         dataIndex: 'work_order_code',
@@ -694,38 +710,8 @@ const ProcessInspectionPage: React.FC = () => {
       { title: t('app.kuaizhizao.quality.common.columns.operationName'), dataIndex: 'operation_name' },
       { title: t('app.kuaizhizao.quality.common.columns.workshop'), dataIndex: 'workshop_name', render: (val) => val || '-' },
       { title: t('app.kuaizhizao.quality.common.columns.workstation'), dataIndex: 'workstation_name', render: (val) => val || '-' },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.materialCode'),
-        dataIndex: 'material_code',
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.material_code ?? '') }}>{r.material_code ?? '-'}</Typography.Text>
-        ),
-      },
-      { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name' },
-      { title: t('app.kuaizhizao.quality.common.columns.materialSpec'), dataIndex: 'material_spec', render: (val) => val || '-' },
-      { title: t('app.kuaizhizao.quality.common.columns.batchNo'), dataIndex: 'batch_number', render: (val) => val || '-' },
-      { title: t('app.kuaizhizao.quality.common.columns.inspectionQty'), dataIndex: 'inspection_quantity', valueType: 'digit' },
-      { title: t('app.kuaizhizao.quality.common.columns.qualifiedQty'), dataIndex: 'qualified_quantity', valueType: 'digit' },
-      { title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'), dataIndex: 'unqualified_quantity', valueType: 'digit' },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.inspectionStatus'),
-        dataIndex: 'status',
-        render: (_, r) => renderQualityDocStatusTag(t, r.status),
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.qualityStatus'),
-        dataIndex: 'quality_status',
-        render: (_, r) => renderQualityQualityStatusTag(t, r.quality_status),
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.inspectionResult'),
-        dataIndex: 'inspection_result',
-        render: (_, r) => renderQualityResultTag(t, r.inspection_result),
-      },
-      { title: t('app.kuaizhizao.quality.common.columns.inspector'), dataIndex: 'inspector_name' },
-      { title: t('app.kuaizhizao.quality.common.columns.inspectionTime'), dataIndex: 'inspection_time', valueType: 'dateTime' },
-      { title: t('app.kuaizhizao.quality.common.columns.reviewer'), dataIndex: 'reviewer_name', render: (val) => val || '-' },
-      { title: t('app.kuaizhizao.quality.common.columns.reviewTime'), dataIndex: 'review_time', valueType: 'dateTime', render: (val) => formatDateTimeBySiteSetting(val) },
+      ...buildQualityInspectionDetailQuantityStatusColumns<ProcessInspection>(t),
+      ...buildQualityInspectionDetailPeopleColumns<ProcessInspection>(t),
     ],
     [t]
   );
@@ -866,52 +852,12 @@ const ProcessInspectionPage: React.FC = () => {
   // 表格列定义
   const columns: ProColumns<ProcessInspection>[] = useMemo(
     () => alignProColumns<ProcessInspection>([
-    {
-      title: t('app.kuaizhizao.quality.common.columns.inspectionTime'),
-      dataIndex: 'inspection_time_range',
-      valueType: 'dateRange',
-      hideInTable: true,
-      formItemProps: formDateRangeFormItemProps,
-      search: { order: 10 } as ProColumns['search'],
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
-      dataIndex: 'created_at_range',
-      valueType: 'dateRange',
-      hideInTable: true,
-      formItemProps: formDateRangeFormItemProps,
-      search: { order: 11 } as ProColumns['search'],
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.status'),
-      dataIndex: 'status',
-      valueType: 'select',
-      valueEnum: inspectionDocStatusValueEnum,
-      hideInTable: true,
-      search: { order: 20 } as ProColumns['search'],
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.qualityStatus'),
-      dataIndex: 'quality_status',
-      valueType: 'select',
-      valueEnum: inspectionQualityStatusValueEnum,
-      hideInTable: true,
-      search: { order: 21 } as ProColumns['search'],
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
-      dataIndex: 'inspection_code',
-      width: 140,
-      ellipsis: true,
-      fixed: 'left',
-      sorter: true,
-      search: { order: 30 } as ProColumns['search'],
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.inspection_code ?? '') }} ellipsis>
-          {r.inspection_code ?? '-'}
-        </Typography.Text>
-      ),
-    },
+    ...buildQualityInspectionListSearchColumns<ProcessInspection>(
+      t,
+      inspectionDocStatusValueEnum,
+      inspectionQualityStatusValueEnum,
+    ),
+    buildQualityInspectionListCodeColumn<ProcessInspection>(t),
     stackedPrimarySecondaryColumn<ProcessInspection>(
       t('app.kuaizhizao.quality.common.columns.operationWorkOrder'),
       'operationWorkOrder',
@@ -930,49 +876,10 @@ const ProcessInspectionPage: React.FC = () => {
       hideInTable: true,
       ellipsis: true,
     },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.material'),
-      key: 'material_name',
-      dataIndex: 'material_name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      render: (_, r) => (
-        <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
-      ),
-    },
-    { title: t('app.kuaizhizao.quality.common.columns.materialCode'), dataIndex: 'material_code', hideInTable: true },
-    { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name', hideInTable: true },
+    buildQualityInspectionListMaterialColumn<ProcessInspection>(t),
+    ...buildQualityInspectionListMaterialHiddenColumns<ProcessInspection>(t),
     buildInspectorTimeStackedColumn<ProcessInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
-    {
-      title: t('app.kuaizhizao.quality.common.columns.inspectionQty'),
-      dataIndex: 'inspection_quantity',
-      width: 100,
-      align: 'right',
-      sorter: true,
-      hideInSearch: true,
-      render: (text) => text || 0,
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.qualifiedQty'),
-      dataIndex: 'qualified_quantity',
-      sorter: true,
-      hideInSearch: true,
-      ...qualifiedQuantityColumnProps,
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'),
-      dataIndex: 'unqualified_quantity',
-      sorter: true,
-      hideInSearch: true,
-      ...unqualifiedQuantityColumnProps,
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.inspectionResult'),
-      dataIndex: 'inspection_result',
-      width: 100,
-      sorter: true,
-      hideInSearch: true,
-      render: (_, r) => renderQualityResultTag(t, r.inspection_result),
-    },
+    ...buildQualityInspectionListQuantityResultColumns<ProcessInspection>(t, renderQualityResultTag),
     ...buildDocumentAuditColumns<ProcessInspection>(t),
     ...inspectionCustomFieldColumns,
     ...(processAuditColumn ? [processAuditColumn] : []),
@@ -1243,7 +1150,7 @@ const ProcessInspectionPage: React.FC = () => {
         onCancel={pullFromWorkOrderQuery.closeModal}
         onOk={pullFromWorkOrderQuery.handleConfirm}
         rowKey="id"
-        columns={[{ title: t('app.kuaizhizao.quality.process.form.selectWorkOrder'), dataIndex: 'code', ellipsis: true }]}
+        columns={processWorkOrderPullColumns}
         dataSource={pullFromWorkOrderQuery.dataSource}
         loading={pullFromWorkOrderQuery.loading}
         confirmLoading={pullFromWorkOrderQuery.confirmLoading}

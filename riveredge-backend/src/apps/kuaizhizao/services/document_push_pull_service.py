@@ -1,7 +1,7 @@
 """
-单据下推和上拉服务模块
+单据下推和加载服务模块
 
-提供单据下推和上拉功能，支持从上游单据生成下游单据，或从下游单据关联上游单据。
+提供单据下推和加载功能，支持从上游单据生成下游单据，或从下游单据关联上游单据。
 
 Author: Luigi Lu
 Date: 2025-01-14
@@ -31,7 +31,7 @@ from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 
 
 class DocumentPushPullService:
-    """单据下推和上拉服务"""
+    """单据下推和加载服务"""
     
     def __init__(self):
         self.relation_service = DocumentRelationNewService()
@@ -125,13 +125,13 @@ class DocumentPushPullService:
         created_by: int = None
     ) -> Dict[str, Any]:
         """
-        单据上拉功能
+        单据加载功能
         
-        从下游单据上拉到上游单据，建立关联关系。
+        从下游单据加载到上游单据，建立关联关系。
         
-        支持的上拉场景：
-        - work_order -> demand_computation: 从工单上拉到需求计算
-        - purchase_order -> demand_computation: 从采购单上拉到需求计算
+        支持的加载场景：
+        - work_order -> demand_computation: 从工单加载到需求计算
+        - purchase_order -> demand_computation: 从采购单加载到需求计算
         
         Args:
             tenant_id: 租户ID
@@ -146,7 +146,7 @@ class DocumentPushPullService:
             
         Raises:
             NotFoundError: 源单据或目标单据不存在
-            BusinessLogicError: 上拉操作不符合业务规则
+            BusinessLogicError: 加载操作不符合业务规则
         """
         async with in_transaction():
             # 验证源单据和目标单据存在
@@ -172,7 +172,7 @@ class DocumentPushPullService:
                 target_name=self._get_document_name(target_doc, target_type),
                 relation_type="source",
                 relation_mode="pull",
-                relation_desc=f"从{target_type}上拉到{source_type}",
+                relation_desc=f"从{target_type}加载到{source_type}",
                 business_mode=getattr(source_doc, "business_mode", None),
                 demand_id=self._get_demand_id(source_doc, source_type),
             )
@@ -185,7 +185,7 @@ class DocumentPushPullService:
             
             return {
                 "success": True,
-                "message": "上拉成功",
+                "message": "加载成功",
                 "relation": relation.model_dump() if hasattr(relation, "model_dump") else relation,
             }
     

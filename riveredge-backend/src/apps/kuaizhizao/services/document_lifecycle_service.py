@@ -1412,6 +1412,7 @@ def get_delivery_notice_lifecycle(
 # 销售/采购变更单生命周期
 # ---------------------------------------------------------------------------
 ORDER_CHANGE_MAIN_STAGES = [
+    {"key": "pending_apply", "label": "待生效"},
     {"key": "applied", "label": "已生效"},
 ]
 
@@ -1451,14 +1452,30 @@ def get_sales_order_change_lifecycle(
             "milestones": [],
         }
 
+    if _is_rejected(review_status) or s in ("REJECTED", "已驳回"):
+        cap_suggestions = sales_order_change_capabilities_to_suggestions(
+            derive_sales_order_change_capabilities(shim),
+            current_stage_key="",
+        )
+        return _mode_a_terminal_exception_lifecycle(
+            "已驳回",
+            ORDER_CHANGE_MAIN_STAGES,
+            cap_suggestions,
+        )
+
     cap_suggestions = sales_order_change_capabilities_to_suggestions(
         derive_sales_order_change_capabilities(shim),
-        current_stage_key="",
+        current_stage_key="pending_apply",
     )
-    return _mode_a_pre_effective_lifecycle(
-        ORDER_CHANGE_MAIN_STAGES,
-        cap_suggestions,
-    )
+    return {
+        "current_stage_key": "pending_apply",
+        "current_stage_name": "待生效",
+        "status": "normal",
+        "main_stages": _build_main_stages(ORDER_CHANGE_MAIN_STAGES, "pending_apply"),
+        "sub_stages": [],
+        "next_step_suggestions": cap_suggestions,
+        "milestones": [],
+    }
 
 
 def get_purchase_order_change_lifecycle(

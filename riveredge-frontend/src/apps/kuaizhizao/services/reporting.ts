@@ -97,7 +97,7 @@ export interface ReportingListResponse {
   success: boolean;
 }
 
-/** 报工上拉源（工单工序）候选行 */
+/** 报工加载源（工单工序）候选行 */
 export interface ReportingPullCandidate {
   pull_row_key: string;
   work_order_id: number;

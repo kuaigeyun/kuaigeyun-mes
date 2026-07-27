@@ -19,8 +19,8 @@ import { EightDDetailDrawer } from './components/EightDDetailDrawer';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import {
-  getEightDSeverityText,
   getEightDStatusText,
+  resolveEightDSeverityDisplay,
 } from './components/eightDMeta';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -150,7 +150,10 @@ const EightDReportsPage: React.FC = () => {
       width: 90,
       sorter: true,
       hideInSearch: true,
-      render: (_, row) => <Tag>{getEightDSeverityText(t, row.severity)}</Tag>,
+      render: (_, row) => {
+        const { label, color } = resolveEightDSeverityDisplay(t, row.severity);
+        return <Tag color={color}>{label}</Tag>;
+      },
     },
     {
       title: t('app.kuaizhizao.eightD.columns.owner'),

@@ -35,7 +35,7 @@ import { getDataDictionaryList, getDictionaryItemList } from '../../../../../ser
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherInboundLifecycle } from '../../../utils/otherInboundLifecycle';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
@@ -45,6 +45,7 @@ import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocation
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { renderWarehouseReasonTypeMarkerTag } from '../shared/warehouseMarkerTags';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
@@ -152,6 +153,7 @@ const OtherInboundPage: React.FC = () => {
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [inboundDetail, setInboundDetail] = useState<OtherInboundDetail | null>(null);
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -308,7 +310,8 @@ const OtherInboundPage: React.FC = () => {
         width: 100,
         sorter: true,
         hideInSearch: true,
-        render: (v) => <Tag>{translateReasonTypeLabel(t, String(v || ''))}</Tag>,
+        render: (v) =>
+          renderWarehouseReasonTypeMarkerTag(translateReasonTypeLabel(t, String(v || '')), String(v || '')),
       },
       {
         title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'),
@@ -410,15 +413,21 @@ const OtherInboundPage: React.FC = () => {
   );
 
   const handleDetail = async (record: OtherInbound) => {
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setInboundDetail(null);
+    resetOtherInboundDetailFieldValues();
     try {
       const detail = await warehouseApi.otherInbound.get(record.id!.toString());
       setInboundDetail(detail as OtherInboundDetail);
-      setDetailDrawerVisible(true);
       if (record.id != null) {
         await loadOtherInboundFieldValuesForDetail(record.id);
       }
     } catch {
       messageApi.error(t('app.kuaizhizao.warehouseOtherInbound.msg.loadDetailFailed'));
+      setDetailDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -704,7 +713,8 @@ const OtherInboundPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.reasonType'),
         dataIndex: 'reason_type',
-        render: (_, record) => translateReasonTypeLabel(t, record.reason_type),
+        render: (_, record) =>
+          renderWarehouseReasonTypeMarkerTag(translateReasonTypeLabel(t, record.reason_type), record.reason_type),
       },
       { title: t('app.kuaizhizao.warehouseOtherInbound.field.reasonDesc'), dataIndex: 'reason_desc', span: 2 },
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.warehouse'), dataIndex: 'warehouse_name' },
@@ -765,6 +775,48 @@ const OtherInboundPage: React.FC = () => {
     ],
     [t],
   );
+
+  const detailCollaboration = useMemo(() => {
+    if (!inboundDetail) return undefined;
+    const lifecycle = getOtherInboundLifecycle(inboundDetail as unknown as Record<string, unknown>, t);
+    const mainStages = lifecycle.mainStages ?? [];
+    if (!mainStages.length) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        status={lifecycle.status}
+        showLabels
+        nextStepSuggestions={lifecycle.nextStepSuggestions}
+      />
+    );
+  }, [inboundDetail, t]);
+
+  const detailSupplementary = useMemo(() => {
+    if (!inboundDetail) return undefined;
+    const nodes: React.ReactNode[] = [];
+    if (hasCustomFieldsDetailContent(otherInboundListCustomFields, otherInboundDetailCustomFieldValues)) {
+      nodes.push(
+        <CustomFieldsDetailSection
+          key="custom-fields"
+          customFields={otherInboundListCustomFields}
+          customFieldValues={otherInboundDetailCustomFieldValues}
+        />,
+      );
+    }
+    if (inboundDetail.notes) {
+      nodes.push(
+        <Descriptions
+          key="notes"
+          column={2}
+          size="small"
+          style={nodes.length > 0 ? { marginTop: 16 } : undefined}
+          items={detailDrawerDescriptionItems([detailNotesColumn], inboundDetail)}
+        />,
+      );
+    }
+    if (nodes.length === 0) return undefined;
+    return <>{nodes}</>;
+  }, [detailNotesColumn, inboundDetail, otherInboundDetailCustomFieldValues, otherInboundListCustomFields]);
 
   return (
     <>
@@ -838,6 +890,7 @@ const OtherInboundPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`${t('app.kuaizhizao.warehouseOtherInbound.detailTitle')}${inboundDetail?.inbound_code ? ` - ${inboundDetail.inbound_code}` : ''}`}
         open={detailDrawerVisible}
+        loading={detailLoading}
         onClose={() => {
           setDetailDrawerVisible(false);
           setInboundDetail(null);
@@ -846,26 +899,12 @@ const OtherInboundPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           inboundDetail ? (
-            <>
-              <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, inboundDetail)} />
-              {hasCustomFieldsDetailContent(otherInboundListCustomFields, otherInboundDetailCustomFieldValues) ? (
-                <div style={{ marginTop: 16 }}>
-                  <CustomFieldsDetailSection
-                    customFields={otherInboundListCustomFields}
-                    customFieldValues={otherInboundDetailCustomFieldValues}
-                  />
-                </div>
-              ) : null}
-              {inboundDetail.notes ? (
-                <Descriptions
-                  column={2}
-                  style={{ marginTop: 16 }}
-                  items={detailDrawerDescriptionItems([detailNotesColumn], inboundDetail)}
-                />
-              ) : null}
-            </>
+            <Descriptions column={2} size="small" items={detailDrawerDescriptionItems(detailColumns, inboundDetail)} />
           ) : undefined
         }
+        collaboration={detailCollaboration}
+        supplementary={detailSupplementary}
+        linesTitle={t('app.kuaizhizao.warehouseOtherInbound.field.lines')}
         lines={
           inboundDetail?.items && inboundDetail.items.length > 0 ? (
             <>

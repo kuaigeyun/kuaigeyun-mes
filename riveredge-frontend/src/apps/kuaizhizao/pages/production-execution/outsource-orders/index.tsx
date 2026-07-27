@@ -1,7 +1,7 @@
 /**
  * 工序委外管理页面
  *
- * 提供工序委外的 CRUD 功能；新建须经上拉选源 → 数量预览 → 录入表单。
+ * 提供工序委外的 CRUD 功能；新建须经加载选源 → 数量预览 → 录入表单。
  *
  * Author: Luigi Lu
  * Date: 2025-01-04
@@ -718,7 +718,7 @@ export const OutsourceOrdersTable: React.FC = () => {
     });
   };
 
-  /** 工序委外单须经上拉选源创建 */
+  /** 工序委外单须经加载选源创建 */
   const handleCreate = () => {
     pullFromWorkOrderQuery.openModal();
   };

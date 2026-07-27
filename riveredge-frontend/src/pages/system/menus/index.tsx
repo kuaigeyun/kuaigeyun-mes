@@ -15,9 +15,7 @@ import {
   AppstoreOutlined,
   LinkOutlined,
   CheckCircleOutlined,
-  SyncOutlined,
   HomeOutlined,
-  SettingOutlined,
 } from '@ant-design/icons';
 import { App, Button, Tag, Space, Popconfirm, Tooltip, Descriptions, Col, Modal, Spin, Switch, Typography } from 'antd';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
@@ -57,6 +55,7 @@ import CustomMenuLayoutEditor, {
   type CustomLayoutEditorState,
 } from './CustomMenuLayoutEditor';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
+import { renderMenuIconMarker, renderMenuSourceMarker } from './menuMeta';
 
 // 菜单图标展示（与侧栏 ManufacturingIcons 一致）
 const IconItem = ({ icon }: { icon?: string }) => renderMenuIconByKey(icon, 16);
@@ -118,15 +117,7 @@ const MenuListPage: React.FC = () => {
       {
         title: t('pages.system.menus.icon'),
         dataIndex: 'icon',
-        render: (_: unknown, row: Menu) =>
-          row?.icon ? (
-            <Space size={6}>
-              {renderMenuIconByKey(row.icon, 16)}
-              <span>{row.icon}</span>
-            </Space>
-          ) : (
-            '—'
-          ),
+        render: (_: unknown, row: Menu) => renderMenuIconMarker(row?.icon, 16),
       },
       { title: t('pages.system.menus.component'), dataIndex: 'component' },
       { title: t('pages.system.menus.permissionCode'), dataIndex: 'permission_code' },
@@ -651,15 +642,7 @@ const MenuListPage: React.FC = () => {
         dataIndex: 'icon',
         width: 100,
         hideInSearch: true,
-        render: (_: any, record: Menu) =>
-          record.icon ? (
-            <Space size={4}>
-              {renderMenuIconByKey(record.icon, 14)}
-              <Tag>{record.icon}</Tag>
-            </Space>
-          ) : (
-            '-'
-          ),
+        render: (_: any, record: Menu) => renderMenuIconMarker(record.icon, 14),
     },
     {
         title: t('pages.system.menus.component'),
@@ -698,14 +681,10 @@ const MenuListPage: React.FC = () => {
         render: (_: any, record: Menu) =>
           record.application_uuid ? (
             <Tooltip title={t('menu.system.appMenuSyncTip')}>
-              <Tag color="blue" icon={<SyncOutlined />}>
-                {t('menu.system.appMenu')}
-              </Tag>
+              {renderMenuSourceMarker(t, record.application_uuid)}
             </Tooltip>
           ) : (
-            <Tag color="geekblue" icon={<SettingOutlined />}>
-              {t('menu.system.systemMenu')}
-            </Tag>
+            renderMenuSourceMarker(t, record.application_uuid)
           ),
     },
     {

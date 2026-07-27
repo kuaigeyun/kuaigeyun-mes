@@ -17,7 +17,7 @@ import {
   type DemandComputation,
   type ComputationCompareResult,
 } from '../../../services/demand-computation';
-import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode';
+import { buildDemandBusinessModeValueEnum } from '../../../utils/businessMode';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
@@ -142,16 +142,7 @@ const ComputationHistoryTab: React.FC = () => {
         valueType: 'select',
         sorter: true,
         hideInSearch: false,
-        valueEnum: {
-          MTS: { text: getDemandBusinessModeLabel('MTS') },
-          MTO: { text: getDemandBusinessModeLabel('MTO') },
-          ATO: { text: getDemandBusinessModeLabel('ATO') },
-        },
-        render: (_, record) => (
-          <Tag color={getDemandBusinessModeTagColor(record.business_mode)}>
-            {getDemandBusinessModeLabel(record.business_mode)}
-          </Tag>
-        ),
+        valueEnum: buildDemandBusinessModeValueEnum(),
       },
       {
         title: t('app.kuaizhizao.demandComputation.colComputationStatus'),

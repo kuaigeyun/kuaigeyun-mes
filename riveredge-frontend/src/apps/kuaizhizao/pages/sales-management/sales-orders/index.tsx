@@ -4584,6 +4584,7 @@ const SalesOrdersPage: React.FC = () => {
             width={DRAWER_CONFIG.HALF_WIDTH}
             zIndex={salesOrderDetailDrawerZIndex}
             collaborationTitleSuffix={<SalesOrderDetailCollaborationTitleSuffix />}
+            collaborationAuditRecord={currentSalesOrder}
             extra={
               <Space size="small">
                 <Button icon={<BellOutlined />} onClick={handleOpenReminder}>

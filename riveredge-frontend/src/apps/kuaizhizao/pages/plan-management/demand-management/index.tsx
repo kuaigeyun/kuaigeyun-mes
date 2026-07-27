@@ -81,7 +81,7 @@ import { demandComputationPushPercent } from '../../sales-management/shared/push
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
-import { getDemandBusinessModeTagColor } from '../../../utils/businessMode';
+import { getDemandBusinessModeTagColor, buildDemandBusinessModeValueEnum } from '../../../utils/businessMode';
 import { getDemandTypeTagProps, normalizeDemandTypeKey } from '../../../utils/demandType';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
@@ -789,11 +789,11 @@ const DemandManagementPage: React.FC = () => {
       uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: false,
-      valueEnum: {
-        MTS: { text: t('app.kuaizhizao.demandManagement.businessModeMts'), status: 'Processing' },
-        MTO: { text: t('app.kuaizhizao.demandManagement.businessModeMto'), status: 'Success' },
-        ATO: { text: t('app.kuaizhizao.demandManagement.businessModeAto'), status: 'Warning' },
-      },
+      valueEnum: buildDemandBusinessModeValueEnum((mode) => {
+        if (mode === 'MTS') return t('app.kuaizhizao.demandManagement.businessModeMts');
+        if (mode === 'MTO') return t('app.kuaizhizao.demandManagement.businessModeMto');
+        return t('app.kuaizhizao.demandManagement.businessModeAto');
+      }),
     },
     {
       title: t('app.kuaizhizao.salesForecast.startDate'),

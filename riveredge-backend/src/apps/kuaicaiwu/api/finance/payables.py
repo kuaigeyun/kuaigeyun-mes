@@ -62,7 +62,7 @@ async def create_payable(
         pull_source_id = data.pull_source_id
         if pull_source_type and pull_source_id:
             if pull_source_type not in _PULL_SOURCE_TYPES:
-                raise BusinessLogicError(f"不支持的上拉源单类型: {pull_source_type}")
+                raise BusinessLogicError(f"不支持的加载源单类型: {pull_source_type}")
             pull_preview = await payable_pull_service.assert_pull_create_allowed(
                 tenant_id=tenant_id,
                 source_type=pull_source_type,

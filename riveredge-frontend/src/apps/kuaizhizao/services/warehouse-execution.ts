@@ -60,7 +60,7 @@ export const warehouseApi = {
           warehouse_name: params.warehouse_name,
         },
       }),
-    /** 工单上拉创建生产领料单（单条、带明细） */
+    /** 工单加载创建生产领料单（单条、带明细） */
     pullFromWorkOrder: async (data: {
       work_order_id: number;
       warehouse_id: number;
@@ -101,6 +101,7 @@ export const warehouseApi = {
     batchFromWorkOrder: async (data: { work_order_id: number }) =>
       apiRequest('/apps/kuaizhizao/material-calls/batch-from-work-order', { method: 'POST', data }),
     update: async (id: number, data: any) => apiRequest(`/apps/kuaizhizao/material-calls/${id}`, { method: 'PATCH', data }),
+    get: async (id: number) => apiRequest(`/apps/kuaizhizao/material-calls/${id}`, { method: 'GET' }),
     cancel: async (id: number) => apiRequest(`/apps/kuaizhizao/material-calls/${id}/cancel`, { method: 'POST' }),
   },
   otherInbound: {

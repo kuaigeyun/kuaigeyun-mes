@@ -3696,6 +3696,7 @@ const PurchaseOrdersPage: React.FC = () => {
         collaborationTitleSuffix={
           orderDetail ? <PurchaseOrderCollaborationTitleSuffix lifecycle={purchaseOrderLifecycle} /> : null
         }
+        collaborationAuditRecord={orderDetail}
         extra={
           orderDetail && (
             <DetailDrawerActions

@@ -53,17 +53,31 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
   buildInspectorTimeStackedColumn,
-  qualifiedQuantityColumnProps,
+  buildQualityInspectionListCodeColumn,
+  buildQualityInspectionListMaterialColumn,
+  buildQualityInspectionListMaterialHiddenColumns,
+  buildQualityInspectionListQuantityResultColumns,
+  buildQualityInspectionListSearchColumns,
   stackedPrimarySecondaryColumn,
-  unqualifiedQuantityColumnProps,
 } from '../components/qualityTableColumns';
+import {
+  buildQualityInspectionDetailCodeColumn,
+  buildQualityInspectionDetailMaterialColumns,
+  buildQualityInspectionDetailPeopleColumns,
+  buildQualityInspectionDetailQuantityStatusColumns,
+} from '../components/qualityDetailColumns';
+import {
+  buildIncomingCustomerMaterialPullColumns,
+  buildIncomingPurchaseReceiptPullColumns,
+  type QualityPullCandidateBase,
+} from '../components/qualityPullQueryColumns';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
-import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
+import { DetailAuditPhaseTitleExtra } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
@@ -503,14 +517,30 @@ const IncomingInspectionPage: React.FC = () => {
     }
   };
 
-  // 从采购入库单 / 代工来料单上拉创建来料检验单
-  type PullSourceCandidate = {
-    id: number;
-    code: string;
+  // 从采购入库单 / 代工来料单加载创建来料检验单
+  type PullSourceCandidate = QualityPullCandidateBase & {
+    receipt_code?: string;
+    purchase_order_code?: string;
+    supplier_name?: string;
+    registration_code?: string;
+    customer_name?: string;
+    sales_order_code?: string;
+    work_order_code?: string;
+    registration_date?: string | null;
+    total_quantity?: number | null;
     capabilities?: {
       pull_incoming_inspection?: { allowed?: boolean; reason?: string };
     };
   };
+
+  const purchaseReceiptPullColumns = useMemo(
+    () => buildIncomingPurchaseReceiptPullColumns(t),
+    [t],
+  );
+  const customerMaterialPullColumns = useMemo(
+    () => buildIncomingCustomerMaterialPullColumns(t),
+    [t],
+  );
 
   const resetPullPreview = () => {
     setPullPreviewOpen(false);
@@ -586,7 +616,7 @@ const IncomingInspectionPage: React.FC = () => {
       try {
         const res = await qualityApi.incomingInspection.listPurchaseReceiptPullCandidates({
           skip: 0,
-          limit: 200,
+          limit: 100,
           keyword: keyword.trim() || undefined,
         });
         const rows = (res.data || []) as PullSourceCandidate[];
@@ -619,7 +649,7 @@ const IncomingInspectionPage: React.FC = () => {
       try {
         const res = await qualityApi.incomingInspection.listCustomerMaterialPullCandidates({
           skip: 0,
-          limit: 200,
+          limit: 100,
           keyword: keyword.trim() || undefined,
         });
         const rows = (res.data || []) as PullSourceCandidate[];
@@ -809,21 +839,8 @@ const IncomingInspectionPage: React.FC = () => {
 
   const detailBaseColumns: ProDescriptionsItemProps<IncomingInspection>[] = useMemo(
     () => [
-      {
-        title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
-        dataIndex: 'inspection_code',
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.inspection_code ?? '') }}>{r.inspection_code ?? '-'}</Typography.Text>
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.materialCode'),
-        dataIndex: 'material_code',
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.material_code ?? '') }}>{r.material_code ?? '-'}</Typography.Text>
-        ),
-      },
-      { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name' },
+      buildQualityInspectionDetailCodeColumn<IncomingInspection>(t),
+      ...buildQualityInspectionDetailMaterialColumns<IncomingInspection>(t),
       {
         title: t('app.kuaizhizao.quality.common.columns.purchaseReceiptCode'),
         dataIndex: 'purchase_receipt_code',
@@ -832,28 +849,8 @@ const IncomingInspectionPage: React.FC = () => {
         ),
       },
       { title: t('app.kuaizhizao.quality.common.columns.supplier'), dataIndex: 'supplier_name' },
-      { title: t('app.kuaizhizao.quality.common.columns.inspectionQty'), dataIndex: 'inspection_quantity', valueType: 'digit' },
-      { title: t('app.kuaizhizao.quality.common.columns.qualifiedQty'), dataIndex: 'qualified_quantity', valueType: 'digit' },
-      { title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'), dataIndex: 'unqualified_quantity', valueType: 'digit' },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.inspectionStatus'),
-        dataIndex: 'status',
-        render: (_, r) => renderQualityDocStatusTag(t, r.status),
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.qualityStatus'),
-        dataIndex: 'quality_status',
-        render: (_, r) => renderQualityQualityStatusTag(t, r.quality_status),
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.inspectionResult'),
-        dataIndex: 'inspection_result',
-        render: (_, r) => renderQualityResultTag(t, r.inspection_result),
-      },
-      { title: t('app.kuaizhizao.quality.common.columns.inspector'), dataIndex: 'inspector_name' },
-      { title: t('app.kuaizhizao.quality.common.columns.inspectionTime'), dataIndex: 'inspection_time', valueType: 'dateTime' },
-      { title: t('app.kuaizhizao.quality.common.columns.reviewer'), dataIndex: 'reviewer_name', render: (val) => val || '-' },
-      { title: t('app.kuaizhizao.quality.common.columns.reviewTime'), dataIndex: 'review_time', valueType: 'dateTime', render: (val) => formatDateTimeBySiteSetting(val) },
+      ...buildQualityInspectionDetailQuantityStatusColumns<IncomingInspection>(t),
+      ...buildQualityInspectionDetailPeopleColumns<IncomingInspection>(t),
     ],
     [t]
   );
@@ -995,52 +992,12 @@ const IncomingInspectionPage: React.FC = () => {
   // 表格列定义
   const columns: ProColumns<IncomingInspection>[] = useMemo(
     () => alignProColumns<IncomingInspection>([
-    {
-      title: t('app.kuaizhizao.quality.common.columns.inspectionTime'),
-      dataIndex: 'inspection_time_range',
-      valueType: 'dateRange',
-      hideInTable: true,
-      formItemProps: formDateRangeFormItemProps,
-      search: { order: 10 } as ProColumns['search'],
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
-      dataIndex: 'created_at_range',
-      valueType: 'dateRange',
-      hideInTable: true,
-      formItemProps: formDateRangeFormItemProps,
-      search: { order: 11 } as ProColumns['search'],
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.status'),
-      dataIndex: 'status',
-      valueType: 'select',
-      valueEnum: inspectionDocStatusValueEnum,
-      hideInTable: true,
-      search: { order: 20 } as ProColumns['search'],
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.qualityStatus'),
-      dataIndex: 'quality_status',
-      valueType: 'select',
-      valueEnum: inspectionQualityStatusValueEnum,
-      hideInTable: true,
-      search: { order: 21 } as ProColumns['search'],
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
-      dataIndex: 'inspection_code',
-      width: 140,
-      ellipsis: true,
-      fixed: 'left',
-      sorter: true,
-      search: { order: 30 } as ProColumns['search'],
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.inspection_code ?? '') }} ellipsis>
-          {r.inspection_code ?? '-'}
-        </Typography.Text>
-      ),
-    },
+    ...buildQualityInspectionListSearchColumns<IncomingInspection>(
+      t,
+      inspectionDocStatusValueEnum,
+      inspectionQualityStatusValueEnum,
+    ),
+    buildQualityInspectionListCodeColumn<IncomingInspection>(t),
     stackedPrimarySecondaryColumn<IncomingInspection>(
       t('app.kuaizhizao.quality.common.columns.supplierReceipt'),
       'supplierReceipt',
@@ -1059,70 +1016,32 @@ const IncomingInspectionPage: React.FC = () => {
       hideInTable: true,
       ellipsis: true,
     },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.material'),
-      key: 'material_name',
-      dataIndex: 'material_name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      render: (_, r) => (
-        <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
-      ),
-    },
-    { title: t('app.kuaizhizao.quality.common.columns.materialCode'), dataIndex: 'material_code', hideInTable: true },
-    { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name', hideInTable: true },
+    buildQualityInspectionListMaterialColumn<IncomingInspection>(t),
+    ...buildQualityInspectionListMaterialHiddenColumns<IncomingInspection>(t),
     buildInspectorTimeStackedColumn<IncomingInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
-    {
-      title: t('app.kuaizhizao.quality.common.columns.inspectionQty'),
-      dataIndex: 'inspection_quantity',
-      width: 100,
-      align: 'right',
-      sorter: true,
-      hideInSearch: true,
-      render: (text) => text || 0,
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.qualifiedQty'),
-      dataIndex: 'qualified_quantity',
-      sorter: true,
-      hideInSearch: true,
-      ...qualifiedQuantityColumnProps,
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'),
-      dataIndex: 'unqualified_quantity',
-      sorter: true,
-      hideInSearch: true,
-      ...unqualifiedQuantityColumnProps,
-    },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.inspectionResult'),
-      dataIndex: 'inspection_result',
-      width: 100,
-      sorter: true,
-      hideInSearch: true,
-      render: (_, r) => renderQualityResultTag(t, r.inspection_result),
-    },
-    {
-      title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
-      dataIndex: 'pushed_purchase_return_quantity',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      render: (_, record) => {
-        const percent = incomingInspectionReturnPushPercent(
-          record.pushed_purchase_return_quantity,
-          record.unqualified_quantity,
-        );
-        return (
-          <DocumentPushProgressBar
-            percent={percent}
-            tooltip={t('app.kuaizhizao.salesManagement.pushProgress.percentOnly', {
-              percent: Math.round(percent),
-            })}
-          />
-        );
+    ...buildQualityInspectionListQuantityResultColumns<IncomingInspection>(t, renderQualityResultTag, [
+      {
+        title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+        dataIndex: 'pushed_purchase_return_quantity',
+        width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, record) => {
+          const percent = incomingInspectionReturnPushPercent(
+            record.pushed_purchase_return_quantity,
+            record.unqualified_quantity,
+          );
+          return (
+            <DocumentPushProgressBar
+              percent={percent}
+              tooltip={t('app.kuaizhizao.salesManagement.pushProgress.percentOnly', {
+                percent: Math.round(percent),
+              })}
+            />
+          );
+        },
       },
-    },
+    ]),
     ...buildDocumentAuditColumns<IncomingInspection>(t),
     ...inspectionCustomFieldColumns,
     ...(incomingAuditColumn ? [incomingAuditColumn] : []),
@@ -1467,26 +1386,25 @@ const IncomingInspectionPage: React.FC = () => {
                 ) : null}
               </DetailDrawerSection>
 
-              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.lifecycle')}>
-                <DetailLifecycleCollaborationBlock
-                  record={inspectionDetail}
-                  auditEnabled={incomingAuditEnabled}
-                >
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {(() => {
-                      const lc = getIncomingInspectionLifecycle(inspectionDetail as Record<string, unknown>);
-                      const mainStages = lc.mainStages ?? [];
-                      if (mainStages.length === 0) return null;
-                      return (
-                        <UniLifecycleStepper
-                          steps={mainStages}
-                          showLabels
-                          status={lc.status}
-                          nextStepSuggestions={lc.nextStepSuggestions}
-                          hideNextStepSuggestions
-                        />
-                      );
-                    })()}
+              <DetailDrawerSection
+                title={t('app.kuaizhizao.quality.common.sections.lifecycle')}
+                titleExtra={<DetailAuditPhaseTitleExtra record={inspectionDetail} />}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lc = getIncomingInspectionLifecycle(inspectionDetail as Record<string, unknown>);
+                    const mainStages = lc.mainStages ?? [];
+                    if (mainStages.length === 0) return null;
+                    return (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        showLabels
+                        status={lc.status}
+                        nextStepSuggestions={lc.nextStepSuggestions}
+                        hideNextStepSuggestions
+                      />
+                    );
+                  })()}
                     {inspectionDetail.id != null ? (
                       <DetailDrawerInlineFullChain
                       documentType='incoming_inspection'
@@ -1506,8 +1424,7 @@ const IncomingInspectionPage: React.FC = () => {
                 )}
                     />
                   ) : null}
-                  </div>
-                </DetailLifecycleCollaborationBlock>
+                </div>
               </DetailDrawerSection>
 
               <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.detailInfo')}>
@@ -1535,13 +1452,13 @@ const IncomingInspectionPage: React.FC = () => {
         }
       />
 
-      <UniPullQueryModal<{ id: number; code: string }>
+      <UniPullQueryModal<PullSourceCandidate>
         open={pullFromCustomerMaterialQuery.open}
         title={pullFromCustomerMaterialAction.label}
         onCancel={pullFromCustomerMaterialQuery.closeModal}
         onOk={pullFromCustomerMaterialQuery.handleConfirm}
         rowKey="id"
-        columns={[{ title: t('app.kuaizhizao.quality.incoming.form.selectCustomerMaterial'), dataIndex: 'code', ellipsis: true }]}
+        columns={customerMaterialPullColumns}
         dataSource={pullFromCustomerMaterialQuery.dataSource}
         loading={pullFromCustomerMaterialQuery.loading}
         confirmLoading={pullFromCustomerMaterialQuery.confirmLoading}
@@ -1564,13 +1481,13 @@ const IncomingInspectionPage: React.FC = () => {
         onScopeChange={pullFromCustomerMaterialQuery.handleScopeChange}
       />
 
-      <UniPullQueryModal<{ id: number; code: string }>
+      <UniPullQueryModal<PullSourceCandidate>
         open={pullFromPurchaseReceiptQuery.open}
         title={pullFromPurchaseReceiptAction.label}
         onCancel={pullFromPurchaseReceiptQuery.closeModal}
         onOk={pullFromPurchaseReceiptQuery.handleConfirm}
         rowKey="id"
-        columns={[{ title: t('app.kuaizhizao.quality.incoming.form.selectReceipt'), dataIndex: 'code', ellipsis: true }]}
+        columns={purchaseReceiptPullColumns}
         dataSource={pullFromPurchaseReceiptQuery.dataSource}
         loading={pullFromPurchaseReceiptQuery.loading}
         confirmLoading={pullFromPurchaseReceiptQuery.confirmLoading}

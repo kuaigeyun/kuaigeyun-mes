@@ -185,7 +185,7 @@ class ReportingWorkerStatisticsItemResponse(BaseModel):
 
 
 class ReportingPullCandidateItem(BaseSchema):
-    """报工上拉源（工单工序）候选行。"""
+    """报工加载源（工单工序）候选行。"""
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -213,7 +213,7 @@ class ReportingPullCandidateItem(BaseSchema):
 
 
 class ReportingPullCandidateListResponse(BaseModel):
-    """报工上拉源分页列表。"""
+    """报工加载源分页列表。"""
 
     data: list[ReportingPullCandidateItem] = Field(default_factory=list)
     total: int = Field(0, description="总行数")

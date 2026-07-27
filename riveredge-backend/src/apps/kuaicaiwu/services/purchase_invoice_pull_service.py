@@ -1,5 +1,5 @@
 """
-采购发票上拉门控：候选列表、预览、已开票金额汇总。
+采购发票加载门控：候选列表、预览、已开票金额汇总。
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
 
 class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
-    """采购发票（进项）上拉门控服务"""
+    """采购发票（进项）加载门控服务"""
 
     _EXCLUDED_INVOICE_STATUSES = frozenset({"已作废", "已红冲"})
 
@@ -244,7 +244,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             "summary": (
                 f"将从采购订单 {code} 创建进项发票（可开票 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"采购订单 {code} 当前不可上拉进项发票"
+                else f"采购订单 {code} 当前不可加载进项发票"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
@@ -291,7 +291,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             "summary": (
                 f"将从采购入库单 {code} 创建进项发票（可开票 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"采购入库单 {code} 当前不可上拉进项发票"
+                else f"采购入库单 {code} 当前不可加载进项发票"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
@@ -450,9 +450,9 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
         elif source_type == "purchase_receipt":
             preview = await self.preview_pull_from_purchase_receipt(tenant_id, source_id)
         else:
-            raise BusinessLogicError(f"不支持的上拉源单类型: {source_type}")
+            raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
         if preview.get("has_blocking_issues"):
-            reason = preview.get("blocking_reason") or "当前不可上拉进项发票"
+            reason = preview.get("blocking_reason") or "当前不可加载进项发票"
             raise BusinessLogicError(reason)
         items = preview.get("items") or []
         if not items:
@@ -490,7 +490,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
                 target_name=None,
                 relation_type="source",
                 relation_mode="pull",
-                relation_desc="上拉创建进项发票",
+                relation_desc="加载创建进项发票",
             ),
             created_by=created_by,
         )

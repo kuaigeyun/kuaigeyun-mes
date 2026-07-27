@@ -1071,7 +1071,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         limit: int = 20,
     ) -> ReportingPullCandidateListResponse:
         """
-        报工上拉源：一次查询返回在制工单×工序分页行（含可报数量）。
+        报工加载源：一次查询返回在制工单×工序分页行（含可报数量）。
 
         scope=reportable：仅本次可报>0；scope=all：全部工序行。
         """

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDatePicker,
   ProFormSelect,
   ProFormText,
@@ -11,7 +12,7 @@ import {
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { App, Button, Modal, Row, Col, Tag } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -19,6 +20,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { moldApi } from '../../../services/equipment';
 import { borrowsApi } from '../../../services/moldOps';
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString } from '../../../../../utils/formDate';
@@ -30,6 +32,11 @@ import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.moldOps.borrow';
 const RESOURCE = 'kuaizhizao:mold-borrow';
@@ -84,6 +91,13 @@ const MoldBorrowsPage: React.FC = () => {
   );
   const [submitting, setSubmitting] = useState(false);
   const [moldOptions, setMoldOptions] = useState<{ label: string; value: number }[]>([]);
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<MoldBorrow>();
+
+  const handleDetail = (record: MoldBorrow) => {
+    if (!record.id) return;
+    void openDetail(() => borrowsApi.get(record.id!), t(`${P}.listFailed`));
+  };
 
   const loadMoldOptions = async () => {
     const res = await moldApi.list({ limit: 1000 });
@@ -174,6 +188,41 @@ const MoldBorrowsPage: React.FC = () => {
     [],
   );
 
+  const detailColumns: ProDescriptionsItemProps<MoldBorrow>[] = useMemo(
+    () => [
+      {
+        title: t(`${P}.col.borrowNo`),
+        dataIndex: 'document_no',
+        render: (_, r) => r.document_no ?? r.borrow_no ?? '-',
+      },
+      { title: t(`${P}.col.mold`), dataIndex: 'mold_name' },
+      {
+        title: t(`${P}.col.workOrderNo`),
+        dataIndex: 'source_no',
+        render: (_, r) => r.source_no ?? r.work_order_no ?? '-',
+      },
+      {
+        title: t(`${P}.col.department`),
+        dataIndex: 'department_name',
+        render: (_, r) => r.department_name ?? r.department ?? '-',
+      },
+      { title: t(`${P}.col.borrower`), dataIndex: 'borrower_name' },
+      { title: t(`${P}.col.borrowDate`), dataIndex: 'borrow_date', valueType: 'date' },
+      {
+        title: t(`${P}.col.expectedReturnDate`),
+        dataIndex: 'expected_return_date',
+        valueType: 'date',
+      },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
+      },
+      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+    ],
+    [t],
+  );
+
   const columns: ProColumns<MoldBorrow>[] = useMemo(() => alignProColumns<MoldBorrow>([
       {
         title: t(`${P}.col.borrowDate`),
@@ -242,7 +291,7 @@ const MoldBorrowsPage: React.FC = () => {
         width: 90,
         sorter: true,
         hideInSearch: true,
-        render: (_, r) => <Tag>{r.status ?? '-'}</Tag>,
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
       },
       {
         title: t('common.updatedAt'),
@@ -263,10 +312,9 @@ const MoldBorrowsPage: React.FC = () => {
               {...rowActionKind('read')}
               type="link"
               size="small"
-              icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
-                void handleEdit(record);
+                handleDetail(record);
               }}
             >
               {t('common.detail')}
@@ -409,6 +457,24 @@ const MoldBorrowsPage: React.FC = () => {
           </Col>
         </Row>
       </FormModalTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t('common.detail')}${detail?.document_no ?? detail?.borrow_no ? ` - ${detail.document_no ?? detail.borrow_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailColumns}
+        extra={buildDetailDrawerEditExtra(
+          t,
+          Boolean(detail && perms.canUpdate && detail.status === '领用中'),
+          () => {
+            if (!detail) return;
+            closeDetail();
+            void handleEdit(detail);
+          },
+        )}
+      />
     </>
   );
 };

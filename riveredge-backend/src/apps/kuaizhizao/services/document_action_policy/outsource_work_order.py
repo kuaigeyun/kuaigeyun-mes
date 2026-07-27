@@ -1,4 +1,4 @@
-"""委外工单业务态 capabilities（出库发料 + 入库收货/退料/退货上拉门禁）。"""
+"""委外工单业务态 capabilities（出库发料 + 入库收货/退料/退货加载门禁）。"""
 
 from __future__ import annotations
 

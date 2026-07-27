@@ -34,7 +34,7 @@ import { getDataDictionaryList, getDictionaryItemList } from '../../../../../ser
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherOutboundLifecycle } from '../../../utils/otherOutboundLifecycle';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import dayjs from 'dayjs';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useTranslation } from 'react-i18next';
@@ -42,6 +42,7 @@ import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocation
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { renderWarehouseReasonTypeMarkerTag } from '../shared/warehouseMarkerTags';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
@@ -138,6 +139,7 @@ const OtherOutboundPage: React.FC = () => {
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [outboundDetail, setOutboundDetail] = useState<OtherOutboundDetail | null>(null);
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -302,7 +304,11 @@ const OtherOutboundPage: React.FC = () => {
       width: 100,
       sorter: true,
       hideInSearch: true,
-      render: (v) => <Tag>{translateReasonTypeLabel(t, v as string | undefined)}</Tag>,
+      render: (v) =>
+        renderWarehouseReasonTypeMarkerTag(
+          translateReasonTypeLabel(t, v as string | undefined),
+          v as string | undefined,
+        ),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'),
@@ -397,15 +403,21 @@ const OtherOutboundPage: React.FC = () => {
   ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, otherOutboundCustomFieldColumns, otherOutboundStatusValueEnum, reasonTypeOptions, reasonTypeLoading]);
 
   const handleDetail = async (record: OtherOutbound) => {
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setOutboundDetail(null);
+    resetOtherOutboundDetailFieldValues();
     try {
       const detail = await warehouseApi.otherOutbound.get(record.id!.toString());
       setOutboundDetail(detail as OtherOutboundDetail);
-      setDetailDrawerVisible(true);
       if (record.id != null) {
         await loadOtherOutboundFieldValuesForDetail(record.id);
       }
     } catch {
       messageApi.error(t('app.kuaizhizao.otherOutbound.msg.loadDetailFailed'));
+      setDetailDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -587,7 +599,12 @@ const OtherOutboundPage: React.FC = () => {
 
   const detailColumns: ProDescriptionsItemProps<OtherOutboundDetail>[] = useMemo(() => [
     { title: t('app.kuaizhizao.otherOutbound.col.outboundCode'), dataIndex: 'outbound_code' },
-    { title: t('app.kuaizhizao.otherOutbound.col.reasonType'), dataIndex: 'reason_type', render: (_, record) => translateReasonTypeLabel(t, record.reason_type) },
+    {
+      title: t('app.kuaizhizao.otherOutbound.col.reasonType'),
+      dataIndex: 'reason_type',
+      render: (_, record) =>
+        renderWarehouseReasonTypeMarkerTag(translateReasonTypeLabel(t, record.reason_type), record.reason_type),
+    },
     { title: t('app.kuaizhizao.otherOutbound.field.reasonDesc'), dataIndex: 'reason_desc', span: 2 },
     { title: t('app.kuaizhizao.warehouseReports.colWarehouse'), dataIndex: 'warehouse_name' },
     {
@@ -612,6 +629,48 @@ const OtherOutboundPage: React.FC = () => {
     dataIndex: 'notes',
     span: 2,
   }), [t]);
+
+  const detailCollaboration = useMemo(() => {
+    if (!outboundDetail) return undefined;
+    const lifecycle = getOtherOutboundLifecycle(outboundDetail as unknown as Record<string, unknown>, t);
+    const mainStages = lifecycle.mainStages ?? [];
+    if (!mainStages.length) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        status={lifecycle.status}
+        showLabels
+        nextStepSuggestions={lifecycle.nextStepSuggestions}
+      />
+    );
+  }, [outboundDetail, t]);
+
+  const detailSupplementary = useMemo(() => {
+    if (!outboundDetail) return undefined;
+    const nodes: React.ReactNode[] = [];
+    if (hasCustomFieldsDetailContent(otherOutboundListCustomFields, otherOutboundDetailCustomFieldValues)) {
+      nodes.push(
+        <CustomFieldsDetailSection
+          key="custom-fields"
+          customFields={otherOutboundListCustomFields}
+          customFieldValues={otherOutboundDetailCustomFieldValues}
+        />,
+      );
+    }
+    if (outboundDetail.notes) {
+      nodes.push(
+        <Descriptions
+          key="notes"
+          column={2}
+          size="small"
+          style={nodes.length > 0 ? { marginTop: 16 } : undefined}
+          items={detailDrawerDescriptionItems([detailNotesColumn], outboundDetail)}
+        />,
+      );
+    }
+    if (nodes.length === 0) return undefined;
+    return <>{nodes}</>;
+  }, [detailNotesColumn, outboundDetail, otherOutboundDetailCustomFieldValues, otherOutboundListCustomFields]);
 
   return (
     <>
@@ -685,6 +744,7 @@ const OtherOutboundPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`${t('app.kuaizhizao.otherOutbound.detailTitle')}${outboundDetail?.outbound_code ? ` - ${outboundDetail.outbound_code}` : ''}`}
         open={detailDrawerVisible}
+        loading={detailLoading}
         onClose={() => {
           setDetailDrawerVisible(false);
           setOutboundDetail(null);
@@ -693,26 +753,12 @@ const OtherOutboundPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           outboundDetail ? (
-            <>
-              <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, outboundDetail)} />
-              {hasCustomFieldsDetailContent(otherOutboundListCustomFields, otherOutboundDetailCustomFieldValues) ? (
-                <div style={{ marginTop: 16 }}>
-                  <CustomFieldsDetailSection
-                    customFields={otherOutboundListCustomFields}
-                    customFieldValues={otherOutboundDetailCustomFieldValues}
-                  />
-                </div>
-              ) : null}
-              {outboundDetail.notes ? (
-                <Descriptions
-                  column={2}
-                  style={{ marginTop: 16 }}
-                  items={detailDrawerDescriptionItems([detailNotesColumn], outboundDetail)}
-                />
-              ) : null}
-            </>
+            <Descriptions column={2} size="small" items={detailDrawerDescriptionItems(detailColumns, outboundDetail)} />
           ) : undefined
         }
+        collaboration={detailCollaboration}
+        supplementary={detailSupplementary}
+        linesTitle={t('app.kuaizhizao.warehouseOutbound.section.lines')}
         lines={
           outboundDetail?.items && outboundDetail.items.length > 0 ? (
             <>

@@ -9,7 +9,9 @@
  * - 已下推类：geekblue
  */
 
+import React from 'react';
 import type { CSSProperties } from 'react';
+import { Tag } from 'antd';
 import type { TagProps } from 'antd';
 import { RE_STATUS_BADGE_DRAFT_CLASS, STATUS_TAG_VARIANT } from '../constants/statusBadges';
 
@@ -41,6 +43,7 @@ const LIFECYCLE_STAGE_TAG_LOOKUP: Record<string, Pick<TagProps, 'color' | 'style
   PENDING: { color: 'warning' },
   SUBMITTED: { color: 'warning' },
   待检验: { color: 'warning' },
+  待点检: { color: 'warning' },
   已检验: { color: 'success' },
   待收货: { color: 'processing' },
   已通知: { color: 'cyan' },
@@ -125,8 +128,21 @@ const LIFECYCLE_STAGE_TAG_LOOKUP: Record<string, Pick<TagProps, 'color' | 'style
   待领料: { color: 'processing' },
   已领料: { color: 'success' },
 
+  领用中: { color: 'processing' },
+  已归还: { color: 'success' },
+
+  合格: { color: 'success' },
+  不合格: { color: 'error' },
+
+  completed: { color: 'success' },
+  processing: { color: 'processing' },
+  partial: { color: 'warning' },
+  cancelled: { color: 'error' },
+  picking: { color: 'processing' },
+  failed: { color: 'error' },
+  success: { color: 'success' },
+
   // 报工等：待审核若仅显示中文
-  pending: { color: 'warning' },
   approved: { color: 'success' },
   rejected: { color: 'error' },
 };
@@ -152,4 +168,17 @@ export function getDocumentLifecycleStageTagProps(
     return { ...fromUpper, variant: STATUS_TAG_VARIANT };
   }
   return { style: UNKNOWN_STYLE, variant: STATUS_TAG_VARIANT };
+}
+
+/**
+ * 单据/流程状态徽章（solid）。优先按原始码查色，展示文案用 displayLabel。
+ */
+export function renderDocumentStatusTag(
+  displayLabel: string | null | undefined,
+  rawCode?: string | null,
+): React.ReactNode {
+  const text = (displayLabel ?? '').trim();
+  if (!text || text === '-') return '-';
+  const lookupKey = (rawCode ?? text).trim();
+  return React.createElement(Tag, getDocumentLifecycleStageTagProps(lookupKey), text);
 }

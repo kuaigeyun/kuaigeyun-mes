@@ -8,7 +8,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, Table, theme, Descriptions, Select, Typography } from 'antd';
+import { App, Popconfirm, Button, Space, Modal, Table, theme, Descriptions, Select, Typography } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -60,7 +60,14 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
-import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import {
+  buildOperationReportingTypeValueEnum,
+  renderOperationActiveStatusTag,
+  renderOperationDefectTypeMarkers,
+  renderOperationOverReportModeMarker,
+  renderOperationPersonnelMarkers,
+  renderOperationReportingTypeMarker,
+} from '../../../utils/operationMeta';
 
 /**
  * 工序信息管理列表页面组件
@@ -74,6 +81,11 @@ const OperationsPage: React.FC = () => {
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const operationReportingTypeValueEnum = useMemo(
+    () => buildOperationReportingTypeValueEnum(t),
+    [t],
+  );
 
   const operationActiveValueEnum = useMemo(
     () => buildMasterCrudActiveValueEnum(t, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
@@ -205,11 +217,7 @@ const OperationsPage: React.FC = () => {
       {
         title: t('field.route.isActive'),
         dataIndex: 'isActive',
-        render: (_: unknown, record: Operation) => (
-          <Tag color={record.isActive ? 'success' : 'default'} variant="solid">
-            {record.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
-          </Tag>
-        ),
+        render: (_: unknown, record: Operation) => renderOperationActiveStatusTag(t, record.isActive),
       },
       {
         title: t('field.operation.defectTypeUuids'),
@@ -217,15 +225,7 @@ const OperationsPage: React.FC = () => {
         span: 2,
         render: (_: unknown, record: Operation) => {
           const dts = record.defectTypes ?? record.defect_types ?? [];
-          const arr = Array.isArray(dts) ? dts : [];
-          if (!arr.length) return '-';
-          return (
-            <Space size="small" wrap>
-              {arr.map((d: DefectTypeMinimal) => (
-                <Tag key={d.uuid}>{d.name ?? d.code}</Tag>
-              ))}
-            </Space>
-          );
+          return renderOperationDefectTypeMarkers(Array.isArray(dts) ? dts : [], 99);
         },
       },
       {
@@ -234,15 +234,7 @@ const OperationsPage: React.FC = () => {
         span: 2,
         render: (_: unknown, record: Operation) => {
           const names = record.defaultOperatorNames ?? record.default_operator_names ?? [];
-          const arr = Array.isArray(names) ? names : [];
-          if (!arr.length) return '-';
-          return (
-            <Space size="small" wrap>
-              {arr.map((name: string, idx: number) => (
-                <Tag key={idx}>{name}</Tag>
-              ))}
-            </Space>
-          );
+          return renderOperationPersonnelMarkers(Array.isArray(names) ? names : [], 99);
         },
       },
       { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
@@ -626,15 +618,12 @@ const OperationsPage: React.FC = () => {
       dataIndex: 'reportingType',
       width: 120,
       valueType: 'select',
-      valueEnum: {
-        quantity: { text: t('field.operation.reportingTypeQuantity'), status: 'Processing' },
-        status: { text: t('field.operation.reportingTypeStatus'), status: 'Success' },
-      },
-      render: (_: any, record: Operation) => (
-        <Tag color={record.reportingType === 'quantity' ? 'blue' : 'green'}>
-          {record.reportingType === 'quantity' ? t('field.operation.reportingTypeQuantity') : t('field.operation.reportingTypeStatus')}
-        </Tag>
-      ),
+      valueEnum: operationReportingTypeValueEnum,
+      render: (_: any, record: Operation) =>
+        renderOperationReportingTypeMarker(
+          t,
+          record.reportingType ?? (record as { reporting_type?: string }).reporting_type,
+        ),
       sorter: true,
     },
     {
@@ -642,13 +631,11 @@ const OperationsPage: React.FC = () => {
       dataIndex: 'overReportMode',
       width: 120,
       hideInSearch: true,
-      render: (_: any, record: any) => {
-        const m = record.overReportMode ?? record.over_report_mode ?? 'none';
-        const v = Number(record.overReportValue ?? record.over_report_value ?? 0) || 0;
-        if (!m || m === 'none') return <Tag>—</Tag>;
-        const label = m === 'fixed' ? `+${v}` : `${v}%`;
-        return <Tag color="blue">{label}</Tag>;
-      },
+      render: (_: any, record: any) =>
+        renderOperationOverReportModeMarker(
+          record.overReportMode ?? record.over_report_mode,
+          record.overReportValue ?? record.over_report_value,
+        ),
     },
     {
       title: t('field.operation.defectTypeUuids'),
@@ -658,16 +645,7 @@ const OperationsPage: React.FC = () => {
       ellipsis: true,
       render: (_: any, record: Operation) => {
         const dts = record.defectTypes ?? record.defect_types ?? [];
-        const arr = Array.isArray(dts) ? dts : [];
-        if (!arr.length) return '-';
-        return (
-          <Space size="small" wrap>
-            {arr.slice(0, 3).map((d: DefectTypeMinimal) => (
-              <Tag key={d.uuid}>{d.name ?? d.code}</Tag>
-            ))}
-            {arr.length > 3 && <Tag>+{arr.length - 3}</Tag>}
-          </Space>
-        );
+        return renderOperationDefectTypeMarkers(Array.isArray(dts) ? dts : []);
       },
     },
     {
@@ -678,16 +656,7 @@ const OperationsPage: React.FC = () => {
       ellipsis: true,
       render: (_: any, record: Operation) => {
         const names = record.defaultOperatorNames ?? record.default_operator_names ?? [];
-        const arr = Array.isArray(names) ? names : [];
-        if (!arr.length) return '-';
-        return (
-          <Space size="small" wrap>
-            {arr.slice(0, 3).map((name: string, idx: number) => (
-              <Tag key={idx}>{name}</Tag>
-            ))}
-            {arr.length > 3 && <Tag>+{arr.length - 3}</Tag>}
-          </Space>
-        );
+        return renderOperationPersonnelMarkers(Array.isArray(names) ? names : []);
       },
     },
     {
@@ -705,11 +674,7 @@ const OperationsPage: React.FC = () => {
       width: 100,
       hideInSearch: true,
       valueEnum: operationActiveValueEnum,
-      render: (_: any, record: Operation) => (
-        <Tag color={record.isActive ? 'success' : 'default'} variant="solid">
-          {record.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
-        </Tag>
-      ),
+      render: (_: any, record: Operation) => renderOperationActiveStatusTag(t, record.isActive),
       sorter: true,
     },
     ...customFieldColumns,
@@ -751,7 +716,7 @@ const OperationsPage: React.FC = () => {
       ),
     },
     ];
-  }, [customFields, t, operationActiveValueEnum]);
+  }, [customFields, t, operationActiveValueEnum, operationReportingTypeValueEnum]);
 
   return (
     <ListPageTemplate>

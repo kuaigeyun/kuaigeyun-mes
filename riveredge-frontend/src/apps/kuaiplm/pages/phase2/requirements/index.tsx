@@ -27,9 +27,17 @@ import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhiz
 import {
   plmCodeTitleSearchColumns,
   plmCreatedUpdatedColumns,
+  plmListActionColumn,
   PLM_PHASE2_PINNED_STATUS_FIELD,
   resolvePhase2RequirementListParams,
 } from '../../../utils/plmListCore';
+import {
+  buildPhase2PriorityValueEnum,
+  buildPhase2RequirementStatusValueEnum,
+  getPhase2RequirementStatusOptions,
+  renderPhase2PriorityMarker,
+  renderPhase2RequirementStatusTag,
+} from '../../../components/phase2Meta';
 
 const RequirementsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -101,17 +109,9 @@ const RequirementsPage: React.FC = () => {
     messageApi.error(t('app.kuaiplm.phase2.requirements.batchStatusFailed'));
   };
 
-  const priorityLabelMap: Record<string, string> = {
-    high: t('app.kuaiplm.phase2.common.priority.high'),
-    normal: t('app.kuaiplm.phase2.common.priority.normal'),
-    low: t('app.kuaiplm.phase2.common.priority.low'),
-  };
-  const requirementStatusLabelMap: Record<string, string> = {
-    DRAFT: t('app.kuaiplm.phase2.common.status.draft'),
-    IN_PROGRESS: t('app.kuaiplm.phase2.common.status.inProgress'),
-    DONE: t('app.kuaiplm.phase2.common.status.done'),
-    ARCHIVED: t('app.kuaiplm.phase2.common.status.archived'),
-  };
+  const requirementStatusValueEnum = useMemo(() => buildPhase2RequirementStatusValueEnum(t), [t]);
+  const priorityValueEnum = useMemo(() => buildPhase2PriorityValueEnum(t), [t]);
+  const requirementStatusOptions = useMemo(() => getPhase2RequirementStatusOptions(t), [t]);
   const sourceTypeLabelMap: Record<string, string> = {
     customer: t('app.kuaiplm.phase2.common.source.customer'),
     purchase_inquiry: t('app.kuaiplm.phase2.common.source.purchaseInquiry'),
@@ -151,22 +151,19 @@ const RequirementsPage: React.FC = () => {
         dataIndex: 'priority',
         width: 90,
         sorter: true,
-        valueEnum: Object.fromEntries(
-          Object.entries(priorityLabelMap).map(([value, label]) => [value, { text: label }]),
-        ),
-        render: (_, row) => priorityLabelMap[row.priority || ''] || row.priority || '-',
+        valueEnum: priorityValueEnum,
+        render: (_, row) => renderPhase2PriorityMarker(t, row.priority),
       },
       {
         title: t('app.kuaiplm.phase2.requirements.columns.status'),
         dataIndex: 'status',
         width: 90,
-        valueEnum: Object.fromEntries(
-          Object.entries(requirementStatusLabelMap).map(([value, label]) => [value, { text: label }]),
-        ),
-        render: (_, row) => requirementStatusLabelMap[row.status || ''] || row.status || '-',
+        valueEnum: requirementStatusValueEnum,
+        render: (_, row) => renderPhase2RequirementStatusTag(t, row.status),
       },
       {
         title: t('app.kuaiplm.phase2.requirements.columns.source'),
+        key: 'requirement_source_type',
         dataIndex: 'source_type',
         width: 140,
         hideInSearch: true,
@@ -187,11 +184,7 @@ const RequirementsPage: React.FC = () => {
         },
       },
       ...plmCreatedUpdatedColumns<RdRequirement>(t),
-      {
-        title: t('common.actions'),
-        valueType: 'option',
-        width: 180,
-        render: (_, row) => [
+      plmListActionColumn<RdRequirement>(t, (_, row) => [
           <Button
             {...rowActionKind('read')}
             key="detail"
@@ -233,10 +226,9 @@ const RequirementsPage: React.FC = () => {
           >
             {t('common.delete')}
           </Button>,
-        ],
-      },
+        ]),
     ],
-    [messageApi, modalApi, priorityLabelMap, requirementStatusLabelMap, sourceTypeLabelMap, t],
+    [messageApi, modalApi, priorityValueEnum, requirementStatusValueEnum, sourceTypeLabelMap, t],
   );
 
   return (
@@ -387,12 +379,7 @@ const RequirementsPage: React.FC = () => {
         <ProFormSelect
           name="status"
           label={t('app.kuaiplm.phase2.requirements.form.status')}
-          options={[
-            { value: 'DRAFT', label: t('app.kuaiplm.phase2.common.status.draft') },
-            { value: 'IN_PROGRESS', label: t('app.kuaiplm.phase2.common.status.inProgress') },
-            { value: 'DONE', label: t('app.kuaiplm.phase2.common.status.done') },
-            { value: 'ARCHIVED', label: t('app.kuaiplm.phase2.common.status.archived') },
-          ]}
+          options={requirementStatusOptions}
         />
         <ProFormSelect
           name="source_type"
@@ -434,12 +421,7 @@ const RequirementsPage: React.FC = () => {
         <ProFormSelect
           name="status"
           label={t('app.kuaiplm.phase2.requirements.form.status')}
-          options={[
-            { value: 'DRAFT', label: t('app.kuaiplm.phase2.common.status.draft') },
-            { value: 'IN_PROGRESS', label: t('app.kuaiplm.phase2.common.status.inProgress') },
-            { value: 'DONE', label: t('app.kuaiplm.phase2.common.status.done') },
-            { value: 'ARCHIVED', label: t('app.kuaiplm.phase2.common.status.archived') },
-          ]}
+          options={requirementStatusOptions}
         />
         <ProFormSelect
           name="source_type"

@@ -814,7 +814,7 @@ async def get_push_preview(
     outsource_only: bool = Query(False, description="仅委外工单预览"),
     generate_mode: Optional[str] = Query(
         None,
-        description="生成粒度：work_order_only=仅工单（与工单上拉一致）",
+        description="生成粒度：work_order_only=仅工单（与工单加载一致）",
     ),
     push_mode: Optional[str] = Query(
         None,

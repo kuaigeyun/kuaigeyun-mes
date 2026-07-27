@@ -1,7 +1,8 @@
 import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDigit, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
-import { Alert, App, Button, Empty, Modal, Spin, Table, Typography } from 'antd';
+import { Alert, App, Button, Descriptions, Empty, Modal, Spin, Table, Typography } from 'antd';
+import type { DescriptionsProps, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
@@ -14,15 +15,20 @@ import {
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import {
-  MaterialStackedCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
-import {
   buildInspectorTimeStackedColumn,
-  qualifiedQuantityColumnProps,
+  buildQualityInspectionListCodeColumn,
+  buildQualityInspectionListMaterialColumn,
+  buildQualityInspectionListMaterialHiddenColumns,
+  buildQualityInspectionListQuantityResultColumns,
+  buildQualityInspectionListSearchColumns,
   stackedPrimarySecondaryColumn,
-  unqualifiedQuantityColumnProps,
 } from '../components/qualityTableColumns';
+import {
+  buildQualityInspectionDetailCodeColumn,
+  buildQualityInspectionDetailMaterialColumns,
+  buildQualityInspectionDetailPeopleColumns,
+  buildQualityInspectionDetailQuantityStatusColumns,
+} from '../components/qualityDetailColumns';
 import { DetailDrawerTemplate, FormModalTemplate, ListPageTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { OQCInspection, qualityImprovementApi } from '../../../services/quality-improvement';
 import type { DocumentPushPreview } from '../../../services/purchase-requisition';
@@ -39,8 +45,7 @@ import PermissionGuard from '../../../../../components/permission/PermissionGuar
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useTranslation } from 'react-i18next';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import {formatDateTime, formatQuantity} from '../../../../../utils/format';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
@@ -56,21 +61,51 @@ import {
   getQualityQualityStatusValueEnum,
   getQualityReleaseDecisionValueEnum,
   qualityInspectionUniAuditProps,
-  renderQualityQualityStatusTag,
   renderQualityResultTag,
   renderReleaseDecisionTag,
 } from '../components/qualityMeta';
+import {
+  buildOqcSalesDeliveryPullColumns,
+  buildOqcShipmentNoticePullColumns,
+  type QualityPullCandidateBase,
+} from '../components/qualityPullQueryColumns';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const OQC_RESOURCE = 'kuaizhizao:quality-management-oqc-inspection';
+
+function buildDescriptionItemsFromColumns<T extends Record<string, unknown>>(
+  dataSource: T,
+  cols: ProDescriptionsItemProps<T>[],
+): NonNullable<DescriptionsProps['items']> {
+  return cols.map((col, index) => {
+    const dataIndex = col.dataIndex as keyof T | undefined;
+    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
+    let content: React.ReactNode = value as React.ReactNode;
+    if (col.valueType === 'dateTime' && value) {
+      content = formatDateTime(String(value), 'YYYY-MM-DD HH:mm:ss');
+    }
+    if (col.render && dataSource != null) {
+      content = (
+        col.render as (dom: React.ReactNode, entity: T, i: number) => React.ReactNode
+      )(content, dataSource, index);
+    }
+    return {
+      key: String(col.key ?? col.dataIndex ?? index),
+      label: col.title as React.ReactNode,
+      children: content !== undefined && content !== null ? content : '-',
+      span: col.span ?? 1,
+    };
+  });
+}
 
 function renderOqcRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
-type OqcPullSourceCandidate = {
-  id: number;
-  code: string;
+type OqcPullSourceCandidate = QualityPullCandidateBase & {
+  notice_code?: string;
+  delivery_code?: string;
+  customer_name?: string;
   capabilities?: { pull_oqc_inspection?: { allowed?: boolean; reason?: string } };
 };
 
@@ -215,6 +250,9 @@ const OQCInspectionPage: React.FC = () => {
     [t],
   );
 
+  const oqcShipmentNoticePullColumns = useMemo(() => buildOqcShipmentNoticePullColumns(t), [t]);
+  const oqcSalesDeliveryPullColumns = useMemo(() => buildOqcSalesDeliveryPullColumns(t), [t]);
+
   const pullFromShipmentNoticeQuery = useUniPullQuery<OqcPullSourceCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
@@ -224,7 +262,7 @@ const OQCInspectionPage: React.FC = () => {
       try {
         const res = await qualityImprovementApi.oqc.listShipmentNoticePullCandidates({
           skip: 0,
-          limit: 200,
+          limit: 100,
           keyword: keyword.trim() || undefined,
         });
         const rows = (res.data || []) as OqcPullSourceCandidate[];
@@ -257,7 +295,7 @@ const OQCInspectionPage: React.FC = () => {
       try {
         const res = await qualityImprovementApi.oqc.listSalesDeliveryPullCandidates({
           skip: 0,
-          limit: 200,
+          limit: 100,
           keyword: keyword.trim() || undefined,
         });
         const rows = (res.data || []) as OqcPullSourceCandidate[];
@@ -393,53 +431,41 @@ const OQCInspectionPage: React.FC = () => {
     [handleDeleteRow, handleDetail, oqcPerms, openConductModal, t],
   );
 
+  const detailBaseColumns: ProDescriptionsItemProps<OQCInspection>[] = useMemo(
+    () => [
+      buildQualityInspectionDetailCodeColumn<OQCInspection>(t),
+      ...buildQualityInspectionDetailMaterialColumns<OQCInspection>(t),
+      {
+        title: t('app.kuaizhizao.quality.oqc.columns.shipmentNotice'),
+        dataIndex: 'shipment_notice_code',
+        render: (val) => val || '-',
+      },
+      {
+        title: t('app.kuaizhizao.quality.oqc.columns.salesOrder'),
+        dataIndex: 'sales_order_code',
+        render: (val) => val || '-',
+      },
+      { title: t('app.kuaizhizao.quality.oqc.columns.customer'), dataIndex: 'customer_name', render: (val) => val || '-' },
+      ...buildQualityInspectionDetailQuantityStatusColumns<OQCInspection>(t),
+      {
+        title: t('app.kuaizhizao.quality.oqc.columns.releaseDecision'),
+        dataIndex: 'release_decision',
+        render: (_, r) => renderReleaseDecisionTag(t, r.release_decision),
+      },
+      { title: t('app.kuaizhizao.quality.oqc.form.releaseNote'), dataIndex: 'release_note', render: (val) => val || '-' },
+      ...buildQualityInspectionDetailPeopleColumns<OQCInspection>(t),
+    ],
+    [t],
+  );
+
   const columns: ProColumns<OQCInspection>[] = useMemo(
     () => alignProColumns<OQCInspection>([
-      {
-        title: t('app.kuaizhizao.quality.common.columns.inspectionTime'),
-        dataIndex: 'inspection_time_range',
-        valueType: 'dateRange',
-        hideInTable: true,
-        formItemProps: formDateRangeFormItemProps,
-        search: { order: 10 } as ProColumns['search'],
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
-        dataIndex: 'created_at_range',
-        valueType: 'dateRange',
-        hideInTable: true,
-        formItemProps: formDateRangeFormItemProps,
-        search: { order: 11 } as ProColumns['search'],
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.status'),
-        dataIndex: 'status',
-        valueType: 'select',
-        valueEnum: inspectionDocStatusValueEnum,
-        hideInTable: true,
-        search: { order: 20 } as ProColumns['search'],
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.qualityStatus'),
-        dataIndex: 'quality_status',
-        valueType: 'select',
-        valueEnum: inspectionQualityStatusValueEnum,
-        hideInTable: true,
-        search: { order: 21 } as ProColumns['search'],
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
-        dataIndex: 'inspection_code',
-        width: 150,
-        fixed: 'left',
-        sorter: true,
-        search: { order: 30 } as ProColumns['search'],
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.inspection_code ?? '') }} ellipsis>
-            {r.inspection_code ?? '-'}
-          </Typography.Text>
-        ),
-      },
+      ...buildQualityInspectionListSearchColumns<OQCInspection>(
+        t,
+        inspectionDocStatusValueEnum,
+        inspectionQualityStatusValueEnum,
+      ),
+      buildQualityInspectionListCodeColumn<OQCInspection>(t),
       stackedPrimarySecondaryColumn<OQCInspection>(
         t('app.kuaizhizao.quality.oqc.columns.customer'),
         'customerShipmentNotice',
@@ -449,65 +475,19 @@ const OQCInspectionPage: React.FC = () => {
       ),
       { title: t('app.kuaizhizao.quality.oqc.columns.shipmentNotice'), dataIndex: 'shipment_notice_code', hideInTable: true },
       { title: t('app.kuaizhizao.quality.oqc.columns.customer'), dataIndex: 'customer_name', hideInTable: true, hideInSearch: true },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.material'),
-        key: 'material',
-        dataIndex: 'material_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        render: (_, r) => (
-          <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
-        ),
-      },
-      { title: t('app.kuaizhizao.quality.common.columns.materialCode'), dataIndex: 'material_code', hideInTable: true },
-      { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name', hideInTable: true },
+      buildQualityInspectionListMaterialColumn<OQCInspection>(t),
+      ...buildQualityInspectionListMaterialHiddenColumns<OQCInspection>(t),
       buildInspectorTimeStackedColumn<OQCInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
-      {
-        title: t('app.kuaizhizao.quality.common.columns.inspectionQty'),
-        dataIndex: 'inspection_quantity',
-        valueType: 'digit',
-        width: 100,
-        align: 'right',
-        sorter: true,
-        hideInSearch: true,
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.qualifiedQty'),
-        dataIndex: 'qualified_quantity',
-        sorter: true,
-        hideInSearch: true,
-        ...qualifiedQuantityColumnProps,
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'),
-        dataIndex: 'unqualified_quantity',
-        sorter: true,
-        hideInSearch: true,
-        ...unqualifiedQuantityColumnProps,
-      },
-      {
-        title: t('app.kuaizhizao.quality.oqc.columns.releaseDecision'),
-        dataIndex: 'release_decision',
-        width: 100,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, row) => renderReleaseDecisionTag(t, row.release_decision),
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.inspectionResult'),
-        dataIndex: 'inspection_result',
-        width: 100,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, r) => renderQualityResultTag(t, r.inspection_result),
-      },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.qualityStatus'),
-        dataIndex: 'quality_status',
-        width: 100,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, r) => renderQualityQualityStatusTag(t, r.quality_status),
-      },
+      ...buildQualityInspectionListQuantityResultColumns<OQCInspection>(t, renderQualityResultTag, [
+        {
+          title: t('app.kuaizhizao.quality.oqc.columns.releaseDecision'),
+          dataIndex: 'release_decision',
+          width: 100,
+          sorter: true,
+          hideInSearch: true,
+          render: (_, row) => renderReleaseDecisionTag(t, row.release_decision),
+        },
+      ]),
       ...buildDocumentAuditColumns<OQCInspection>(t),
       ...(oqcAuditColumn ? [oqcAuditColumn] : []),
       {
@@ -673,7 +653,7 @@ const OQCInspectionPage: React.FC = () => {
           onCancel={pullFromShipmentNoticeQuery.closeModal}
           onOk={pullFromShipmentNoticeQuery.handleConfirm}
           rowKey="id"
-          columns={[{ title: t('app.kuaizhizao.quality.oqc.form.shipmentNotice'), dataIndex: 'code', ellipsis: true }]}
+          columns={oqcShipmentNoticePullColumns}
           dataSource={pullFromShipmentNoticeQuery.dataSource}
           loading={pullFromShipmentNoticeQuery.loading}
           confirmLoading={pullFromShipmentNoticeQuery.confirmLoading}
@@ -702,7 +682,7 @@ const OQCInspectionPage: React.FC = () => {
           onCancel={pullFromSalesDeliveryQuery.closeModal}
           onOk={pullFromSalesDeliveryQuery.handleConfirm}
           rowKey="id"
-          columns={[{ title: t('app.kuaizhizao.quality.oqc.form.salesDelivery'), dataIndex: 'code', ellipsis: true }]}
+          columns={oqcSalesDeliveryPullColumns}
           dataSource={pullFromSalesDeliveryQuery.dataSource}
           loading={pullFromSalesDeliveryQuery.loading}
           confirmLoading={pullFromSalesDeliveryQuery.confirmLoading}
@@ -812,19 +792,7 @@ const OQCInspectionPage: React.FC = () => {
           customContent={
             detailRecord ? (
               <div style={{ padding: '16px 0' }}>
-                <p><strong>{t('app.kuaizhizao.quality.common.columns.inspectionCode')}:</strong> {detailRecord.inspection_code}</p>
-                <p><strong>{t('app.kuaizhizao.quality.oqc.columns.shipmentNotice')}:</strong> {detailRecord.shipment_notice_code || '-'}</p>
-                <p><strong>{t('app.kuaizhizao.quality.oqc.columns.salesOrder')}:</strong> {detailRecord.sales_order_code || '-'}</p>
-                <p><strong>{t('app.kuaizhizao.quality.oqc.columns.customer')}:</strong> {detailRecord.customer_name || '-'}</p>
-                <p><strong>{t('app.kuaizhizao.quality.common.columns.materialCode')}:</strong> {detailRecord.material_code}</p>
-                <p><strong>{t('app.kuaizhizao.quality.common.columns.materialName')}:</strong> {detailRecord.material_name}</p>
-                <p><strong>{t('app.kuaizhizao.quality.common.columns.inspectionQty')}:</strong> {detailRecord.inspection_quantity}</p>
-                <p><strong>{t('app.kuaizhizao.quality.common.columns.qualifiedQty')}:</strong> {detailRecord.qualified_quantity}</p>
-                <p><strong>{t('app.kuaizhizao.quality.common.columns.unqualifiedQty')}:</strong> {detailRecord.unqualified_quantity}</p>
-                <p><strong>{t('app.kuaizhizao.quality.common.columns.inspectionResult')}:</strong> {renderQualityResultTag(t, detailRecord.inspection_result)}</p>
-                <p><strong>{t('app.kuaizhizao.quality.common.columns.qualityStatus')}:</strong> {renderQualityQualityStatusTag(t, detailRecord.quality_status)}</p>
-                <p><strong>{t('app.kuaizhizao.quality.oqc.columns.releaseDecision')}:</strong> {renderReleaseDecisionTag(t, detailRecord.release_decision)}</p>
-                <p><strong>{t('app.kuaizhizao.quality.common.columns.inspectionTime')}:</strong> {detailRecord.inspection_time ? formatDateTime(detailRecord.inspection_time, 'YYYY-MM-DD HH:mm:ss') : '-'}</p>
+                <Descriptions column={3} items={buildDescriptionItemsFromColumns(detailRecord, detailBaseColumns)} />
                 <div style={{ marginTop: 16 }}>
                   <Typography.Text strong>{t('app.kuaizhizao.quality.common.columns.lifecycle')}</Typography.Text>
                   <div style={{ marginTop: 8 }}>
@@ -879,6 +847,16 @@ const OQCInspectionPage: React.FC = () => {
             inspection={currentRow as Record<string, unknown>}
             photoCategory="oqc_inspection_attachments"
           />
+          <ProFormDigit
+            name="qualified_quantity"
+            label={t('app.kuaizhizao.quality.common.form.qualifiedQty')}
+            rules={[{ required: true }]}
+          />
+          <ProFormDigit
+            name="unqualified_quantity"
+            label={t('app.kuaizhizao.quality.common.form.unqualifiedQty')}
+            rules={[{ required: true }]}
+          />
           <ProFormSelect
             name="inspection_result"
             label={t('app.kuaizhizao.quality.common.columns.inspectionResult')}
@@ -889,16 +867,6 @@ const OQCInspectionPage: React.FC = () => {
             name="quality_status"
             label={t('app.kuaizhizao.quality.common.columns.qualityStatus')}
             valueEnum={getQualityQualityStatusValueEnum(t)}
-            rules={[{ required: true }]}
-          />
-          <ProFormDigit
-            name="qualified_quantity"
-            label={t('app.kuaizhizao.quality.common.form.qualifiedQty')}
-            rules={[{ required: true }]}
-          />
-          <ProFormDigit
-            name="unqualified_quantity"
-            label={t('app.kuaizhizao.quality.common.form.unqualifiedQty')}
             rules={[{ required: true }]}
           />
           <ProFormSelect

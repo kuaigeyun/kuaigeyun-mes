@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback } from 'react';
-import { App, Table } from 'antd';
+import { App, Table, Tag } from 'antd';
 import {
   InboxOutlined,
   AlertOutlined,

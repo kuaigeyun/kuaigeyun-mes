@@ -1301,6 +1301,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             response = response.model_copy(
                 update=WorkOrderTrackingService.tracking_fields_for_response(work_order)
             )
+            if material:
+                from apps.kuaizhizao.utils.material_unit_utils import build_work_order_unit_fields
+
+                response = response.model_copy(update=build_work_order_unit_fields(material, work_order))
             if serial_split_children:
                 response = response.model_copy(
                     update={"serial_split_child_count": len(serial_split_children)}
@@ -1354,6 +1358,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             spec = (getattr(product, "specification", None) or "").strip() if product else ""
             if spec:
                 response.material_spec = spec
+            if product:
+                from apps.kuaizhizao.utils.material_unit_utils import build_work_order_unit_fields
+
+                response = response.model_copy(update=build_work_order_unit_fields(product, work_order))
         else:
             response.manufacturing_mode = "fabrication"
         if work_order.sales_order_id and not work_order.sales_order_code:
@@ -1902,13 +1910,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         product_ids = list({wo.product_id for wo in work_orders if wo.product_id})
         manufacturing_mode_by_product: dict[int, str] = {}
         material_spec_by_product: dict[int, str] = {}
+        material_by_product: dict[int, Material] = {}
         if product_ids:
             materials = await Material.filter(
                 tenant_id=tenant_id,
                 id__in=product_ids,
                 deleted_at__isnull=True,
-            ).only("id", "source_config", "specification")
+            ).only("id", "source_config", "specification", "base_unit", "units")
             for m in materials:
+                material_by_product[m.id] = m
                 sc = m.source_config or {}
                 if isinstance(sc, dict):
                     manufacturing_mode_by_product[m.id] = sc.get("manufacturing_mode") or "fabrication"
@@ -2109,6 +2119,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 ) if wo.product_id else "fabrication"
                 if wo.product_id and wo.product_id in material_spec_by_product:
                     item_dict["material_spec"] = material_spec_by_product[wo.product_id]
+                if wo.product_id and wo.product_id in material_by_product:
+                    from apps.kuaizhizao.utils.material_unit_utils import build_work_order_unit_fields
+
+                    item_dict.update(build_work_order_unit_fields(material_by_product[wo.product_id], wo))
 
                 if wo.sales_order_id and not item_dict.get("sales_order_code"):
                     snap = so_snapshot_map.get(wo.sales_order_id)

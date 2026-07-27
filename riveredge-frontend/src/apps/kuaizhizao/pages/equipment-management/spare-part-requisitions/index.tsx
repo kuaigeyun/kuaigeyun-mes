@@ -1,22 +1,30 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
   ProFormSelect,
   ProFormTextArea,
+  ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
+import type { ColumnsType } from 'antd/es/table';
 import { App, Button, Modal, Row, Col, Tag, Input, Table, InputNumber, Select } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, SendOutlined, CheckOutlined, CloseOutlined, PlusOutlined } from '@ant-design/icons';
+import { SendOutlined, CheckOutlined, CloseOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  MasterDataLinesTable,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { equipmentApi, sparePartApi } from '../../../services/equipment';
 import { sparePartRequisitionsApi } from '../../../services/equipmentOps';
-import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -47,6 +55,7 @@ interface SparePartRequisition {
   applicant_name?: string;
   status?: string;
   reject_reason?: string;
+  remark?: string;
   updated_at?: string;
   lines?: RequisitionLine[];
 }
@@ -73,6 +82,16 @@ const SparePartRequisitionsPage: React.FC = () => {
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<SparePartRequisition | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<SparePartRequisition>();
+
+  const handleDetail = useCallback(
+    (record: SparePartRequisition) => {
+      if (!record.id) return;
+      void openDetail(() => sparePartRequisitionsApi.get(record.id!) as Promise<SparePartRequisition>);
+    },
+    [openDetail],
+  );
 
   const loadOptions = async () => {
     const [eqRes, partRes] = await Promise.all([
@@ -106,25 +125,29 @@ const SparePartRequisitionsPage: React.FC = () => {
 
   const handleEdit = async (record: SparePartRequisition) => {
     if (!record.id) return;
-    const detail = await sparePartRequisitionsApi.get(record.id);
-    setIsEdit(true);
-    setCurrent(detail);
-    setLines(
-      (detail.lines ?? []).length > 0
-        ? detail.lines!.map((l) => ({
-            spare_part_id: l.spare_part_id,
-            quantity: l.quantity,
-            warehouse_location: l.warehouse_location,
-          }))
-        : [{ quantity: 1, warehouse_location: '默认库位' }],
-    );
-    setModalVisible(true);
-    void loadOptions();
-    formRef.current?.setFieldsValue({
-      equipment_id: detail.equipment_id,
-      purpose: detail.purpose,
-      remark: detail.remark,
-    });
+    try {
+      const loaded = await sparePartRequisitionsApi.get(record.id);
+      setIsEdit(true);
+      setCurrent(loaded);
+      setLines(
+        (loaded.lines ?? []).length > 0
+          ? loaded.lines!.map((l) => ({
+              spare_part_id: l.spare_part_id,
+              quantity: l.quantity,
+              warehouse_location: l.warehouse_location,
+            }))
+          : [{ quantity: 1, warehouse_location: '默认库位' }],
+      );
+      setModalVisible(true);
+      void loadOptions();
+      formRef.current?.setFieldsValue({
+        equipment_id: loaded.equipment_id,
+        purpose: loaded.purpose,
+        remark: loaded.remark,
+      });
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.listFailed`)));
+    }
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -166,9 +189,41 @@ const SparePartRequisitionsPage: React.FC = () => {
     }
     setModalVisible(false);
     actionRef.current?.reload();
+    if (detailVisible && detail?.id === current?.id && current?.id) {
+      void handleDetail({ id: current.id });
+    }
   };
 
   const approvalStatusValueEnum = useMemo(() => buildApprovalDocStatusValueEnum(), []);
+
+  const detailBasicColumns = useMemo<ProDescriptionsItemProps<SparePartRequisition>[]>(
+    () => [
+      { title: t(`${P}.col.requisitionNo`), dataIndex: 'requisition_no' },
+      { title: t(`${P}.col.equipment`), dataIndex: 'equipment_name' },
+      { title: t(`${P}.col.purpose`), dataIndex: 'purpose', span: 2 },
+      { title: t(`${P}.col.applicant`), dataIndex: 'applicant_name' },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        render: (_, r) => (
+          <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>
+        ),
+      },
+      { title: t(`${P}.form.remark`, { defaultValue: '备注' }), dataIndex: 'remark', span: 2 },
+      { title: t(`${P}.form.rejectReason`, { defaultValue: '驳回原因' }), dataIndex: 'reject_reason', span: 2 },
+    ],
+    [t],
+  );
+
+  const detailLineColumns = useMemo<ColumnsType<RequisitionLine>>(
+    () => [
+      { title: t(`${P}.line.part`), dataIndex: 'part_name', render: (_, row) => row.part_name ?? row.part_no ?? '-' },
+      { title: t(`${P}.line.partNo`, { defaultValue: '料号' }), dataIndex: 'part_no', width: 120 },
+      { title: t(`${P}.line.quantity`), dataIndex: 'quantity', width: 80, align: 'right' },
+      { title: t(`${P}.line.location`), dataIndex: 'warehouse_location' },
+    ],
+    [t],
+  );
 
   const columns: ProColumns<SparePartRequisition>[] = useMemo(() => alignProColumns<SparePartRequisition>([
       {
@@ -238,81 +293,82 @@ const SparePartRequisitionsPage: React.FC = () => {
         width: 280,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <>
-            <Button {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleEdit(record)}>
-              {t('common.detail')}
-            </Button>
-            {perms.canUpdate && record.status === '草稿' && (
-              <Button {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
-                {t('common.edit')}
-              </Button>
-            )}
-            {perms.canAction?.('submit') && record.status === '草稿' && (
-              <Button
-                {...rowActionKind('submit')}
-                type="link"
-                size="small"
-                icon={<SendOutlined />}
-                onClick={async () => {
-                  if (!record.id) return;
-                  try {
-                    await sparePartRequisitionsApi.submit(record.id);
-                    messageApi.success(t(`${P}.submitSuccess`));
-                    actionRef.current?.reload();
-                  } catch (error: unknown) {
-                    messageApi.error(
-                      error instanceof Error ? error.message : t('common.operationFailed'),
-                    );
-                  }
-                }}
-              >
-                {t(`${P}.action.submit`)}
-              </Button>
-            )}
-            {perms.canAction?.('approve') && record.status === '已提交' && (
-              <Button
-                {...rowActionKind('approve')}
-                type="link"
-                size="small"
-                icon={<CheckOutlined />}
-                onClick={async () => {
-                  if (!record.id) return;
-                  try {
-                    await sparePartRequisitionsApi.approve(record.id);
-                    messageApi.success(t(`${P}.approveSuccess`));
-                    actionRef.current?.reload();
-                  } catch (error: unknown) {
-                    messageApi.error(
-                      error instanceof Error ? error.message : t('common.operationFailed'),
-                    );
-                  }
-                }}
-              >
-                {t(`${P}.action.approve`)}
-              </Button>
-            )}
-            {perms.canAction?.('reject') && record.status === '已提交' && (
-              <Button
-                {...rowActionKind('reject')}
-                type="link"
-                size="small"
-                danger
-                icon={<CloseOutlined />}
-                onClick={() => {
-                  setRejectTarget(record);
-                  setRejectReason('');
-                  setRejectModalVisible(true);
-                }}
-              >
-                {t(`${P}.action.reject`)}
-              </Button>
-            )}
-          </>
-        ),
+        render: (_, record) =>
+          renderRowActionsOverflow(
+            [
+              perms.canRead ? (
+                <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+                  {t('common.detail')}
+                </Button>
+              ) : null,
+              perms.canUpdate && record.status === '草稿' ? (
+                <Button key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)}>
+                  {t('common.edit')}
+                </Button>
+              ) : null,
+              perms.canAction?.('submit') && record.status === '草稿' ? (
+                <Button
+                  key="submit"
+                  {...rowActionKind('submit')}
+                  icon={<SendOutlined />}
+                  onClick={async () => {
+                    if (!record.id) return;
+                    try {
+                      await sparePartRequisitionsApi.submit(record.id);
+                      messageApi.success(t(`${P}.submitSuccess`));
+                      actionRef.current?.reload();
+                    } catch (error: unknown) {
+                      messageApi.error(
+                        error instanceof Error ? error.message : t('common.operationFailed'),
+                      );
+                    }
+                  }}
+                >
+                  {t(`${P}.action.submit`)}
+                </Button>
+              ) : null,
+              perms.canAction?.('approve') && record.status === '已提交' ? (
+                <Button
+                  key="approve"
+                  {...rowActionKind('approve')}
+                  icon={<CheckOutlined />}
+                  onClick={async () => {
+                    if (!record.id) return;
+                    try {
+                      await sparePartRequisitionsApi.approve(record.id);
+                      messageApi.success(t(`${P}.approveSuccess`));
+                      actionRef.current?.reload();
+                    } catch (error: unknown) {
+                      messageApi.error(
+                        error instanceof Error ? error.message : t('common.operationFailed'),
+                      );
+                    }
+                  }}
+                >
+                  {t(`${P}.action.approve`)}
+                </Button>
+              ) : null,
+              perms.canAction?.('reject') && record.status === '已提交' ? (
+                <Button
+                  key="reject"
+                  {...rowActionKind('reject')}
+                  danger
+                  icon={<CloseOutlined />}
+                  onClick={() => {
+                    setRejectTarget(record);
+                    setRejectReason('');
+                    setRejectModalVisible(true);
+                  }}
+                >
+                  {t(`${P}.action.reject`)}
+                </Button>
+              ) : null,
+            ],
+            `requisition-actions-${record.id ?? 'row'}`,
+          ),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, perms, messageApi, approvalStatusValueEnum],
+    [t, perms, messageApi, approvalStatusValueEnum, handleDetail],
   );
 
   return (
@@ -327,6 +383,10 @@ const SparePartRequisitionsPage: React.FC = () => {
           showAdvancedSearch={true}
           pinnedTabsField={APPROVAL_DOC_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
+          onRow={(record) => ({
+            onClick: () => perms.canRead && handleDetail(record),
+            style: { cursor: perms.canRead ? 'pointer' : undefined },
+          })}
           request={async (params, sort, _filter, searchFormValues) => {
             try {
               const listParams = resolveApprovalDocListParams(searchFormValues, sort);
@@ -350,6 +410,33 @@ const SparePartRequisitionsPage: React.FC = () => {
           enableRowSelection={perms.canDelete}
         />
       </ListPageTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t(`${P}.detailTitle`, { defaultValue: t('common.detail') })}${detail?.requisition_no ? ` - ${detail.requisition_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailBasicColumns}
+        linesTitle={t(`${P}.form.lines`)}
+        lines={
+          <MasterDataLinesTable
+            rows={detail?.lines ?? []}
+            columns={detailLineColumns}
+            rowKey={(row) => String(row.spare_part_id ?? row.part_no ?? '')}
+            emptyDescription={t('common.noData')}
+          />
+        }
+        extra={buildDetailDrawerEditExtra(
+          t,
+          Boolean(detail && perms.canUpdate && detail.status === '草稿'),
+          () => {
+            if (!detail) return;
+            closeDetail();
+            void handleEdit(detail);
+          },
+        )}
+      />
 
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}

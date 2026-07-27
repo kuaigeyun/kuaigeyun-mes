@@ -26,7 +26,7 @@ import { UniTableDetailHeader } from '../../../../../components/uni-table-detail
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecycle';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -107,6 +107,7 @@ const MaterialBorrowsPage: React.FC = () => {
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [borrowDetail, setBorrowDetail] = useState<MaterialBorrowDetail | null>(null);
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -326,12 +327,17 @@ const MaterialBorrowsPage: React.FC = () => {
   ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, materialBorrowStatusValueEnum]);
 
   const handleDetail = async (record: MaterialBorrow) => {
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setBorrowDetail(null);
     try {
       const detail = await warehouseApi.materialBorrow.get(record.id!.toString());
       setBorrowDetail(detail as MaterialBorrowDetail);
-      setDetailDrawerVisible(true);
     } catch {
       messageApi.error(t('app.kuaizhizao.materialBorrow.msg.loadDetailFailed'));
+      setDetailDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -548,6 +554,21 @@ const MaterialBorrowsPage: React.FC = () => {
     { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 2 },
   ], [t]);
 
+  const detailCollaboration = useMemo(() => {
+    if (!borrowDetail) return undefined;
+    const lifecycle = getMaterialBorrowLifecycle(borrowDetail as unknown as Record<string, unknown>, t);
+    const mainStages = lifecycle.mainStages ?? [];
+    if (!mainStages.length) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        status={lifecycle.status}
+        showLabels
+        nextStepSuggestions={lifecycle.nextStepSuggestions}
+      />
+    );
+  }, [borrowDetail, t]);
+
   return (
     <>
       <ListPageTemplate>
@@ -644,13 +665,16 @@ const MaterialBorrowsPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`${t('app.kuaizhizao.materialBorrow.detailTitle')}${borrowDetail?.borrow_code ? ` - ${borrowDetail.borrow_code}` : ''}`}
         open={detailDrawerVisible}
+        loading={detailLoading}
         onClose={() => { setDetailDrawerVisible(false); setBorrowDetail(null); }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           borrowDetail ? (
-            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, borrowDetail)} />
+            <Descriptions column={2} size="small" items={detailDrawerDescriptionItems(detailColumns, borrowDetail)} />
           ) : undefined
         }
+        collaboration={detailCollaboration}
+        linesTitle={t('app.kuaizhizao.warehouseOutbound.section.lines')}
         lines={
           borrowDetail?.items && borrowDetail.items.length > 0 ? (
             <>

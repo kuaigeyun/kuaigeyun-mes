@@ -63,7 +63,6 @@ import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DR
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
-import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import { AmountDisplay } from '../../../../../components/permission';
 import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
@@ -3814,44 +3813,43 @@ const QuotationsPage: React.FC = () => {
             </Typography.Text>
           ) : undefined
         }
+        collaborationAuditRecord={quotationDetail}
         collaborationLifecycle={
           quotationDetail && quotationLifecycleDetail
             ? (() => {
                 const lifecycle = quotationLifecycleDetail;
                 const mainStages = lifecycle.mainStages ?? [];
                 return (
-                  <DetailLifecycleCollaborationBlock record={quotationDetail} auditEnabled={quotationAuditRequired}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                      {mainStages.length > 0 ? (
-                        <UniLifecycleStepper
-                          steps={mainStages}
-                          status={lifecycle.status}
-                          showLabels
-                          nextStepSuggestions={lifecycle.nextStepSuggestions}
-                          hideNextStepSuggestions={hideQuotationStepperNextRow}
-                        />
-                      ) : null}
-                      {quotationDetail.id != null ? (
-                        <DetailDrawerInlineFullChain
-                        documentType="quotation"
-                        documentId={quotationDetail.id}
-                        active={detailDrawerVisible}
-                        selfDocumentId={quotationDetail.id}
-                        renderBriefActions={(doc) =>
-                          doc.document_type === 'sales_order' ? (
-                            <Button
-                              type="primary"
-                              size="small"
-                              onClick={() => openLinkedSalesOrderDrawer(doc.document_id)}
-                            >
-                              {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
-                            </Button>
-                          ) : null
-                        }
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {mainStages.length > 0 ? (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                        nextStepSuggestions={lifecycle.nextStepSuggestions}
+                        hideNextStepSuggestions={hideQuotationStepperNextRow}
                       />
                     ) : null}
-                    </div>
-                  </DetailLifecycleCollaborationBlock>
+                    {quotationDetail.id != null ? (
+                      <DetailDrawerInlineFullChain
+                      documentType="quotation"
+                      documentId={quotationDetail.id}
+                      active={detailDrawerVisible}
+                      selfDocumentId={quotationDetail.id}
+                      renderBriefActions={(doc) =>
+                        doc.document_type === 'sales_order' ? (
+                          <Button
+                            type="primary"
+                            size="small"
+                            onClick={() => openLinkedSalesOrderDrawer(doc.document_id)}
+                          >
+                            {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
+                          </Button>
+                        ) : null
+                      }
+                    />
+                  ) : null}
+                  </div>
                 );
               })()
             : undefined

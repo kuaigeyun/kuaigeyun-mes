@@ -1,26 +1,25 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDigit,
   ProFormSelect,
   ProFormSwitch,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Row, Col, Tag } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Modal, Row, Col } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { FormListDetailTable } from '../../../../../components/form-list-detail-table';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { rowActionKind } from '../../../../../components/uni-action';
 import { equipmentApi } from '../../../services/equipment';
 import { inspectionSchemesApi, patrolRoutesApi } from '../../../services/equipmentOps';
-import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -30,6 +29,14 @@ import {
   normalizeEquipmentListResponse,
   resolveMasterDataListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  buildIsActiveDescriptionColumn,
+  EquipmentMasterDetailDrawer,
+  MasterDataLinesTable,
+  renderEquipmentMasterRowActions,
+  renderIsActiveTag,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.equipmentOps.patrolRoute';
 const RESOURCE = 'kuaizhizao:equipment-patrol-route';
@@ -38,6 +45,8 @@ interface RouteStep {
   sort_order?: number;
   equipment_id?: number;
   scheme_id?: number;
+  equipment_code?: string;
+  equipment_name?: string;
 }
 
 interface PatrolRoute {
@@ -65,6 +74,9 @@ const PatrolRoutesPage: React.FC = () => {
   );
   const [equipmentOptions, setEquipmentOptions] = useState<{ label: string; value: number }[]>([]);
   const [schemeOptions, setSchemeOptions] = useState<{ label: string; value: number }[]>([]);
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detail, setDetail] = useState<PatrolRoute | null>(null);
 
   const loadOptions = async () => {
     const [eqRes, schRes] = await Promise.all([
@@ -96,19 +108,44 @@ const PatrolRoutesPage: React.FC = () => {
 
   const handleEdit = async (record: PatrolRoute) => {
     if (!record.id) return;
-    const detail = await patrolRoutesApi.get(record.id);
-    setIsEdit(true);
-    setCurrent(detail);
-    setFormInitialValues({
-      ...detail,
-      steps: (detail.steps ?? []).map((s: RouteStep, i: number) => ({
-        equipment_id: s.equipment_id,
-        scheme_id: s.scheme_id,
-        sort_order: s.sort_order ?? i,
-      })),
-    });
-    setModalVisible(true);
-    void loadOptions();
+    try {
+      const loaded = await patrolRoutesApi.get(record.id);
+      setIsEdit(true);
+      setCurrent(loaded);
+      setFormInitialValues({
+        ...loaded,
+        steps: (loaded.steps ?? []).map((s: RouteStep, i: number) => ({
+          equipment_id: s.equipment_id,
+          scheme_id: s.scheme_id,
+          sort_order: s.sort_order ?? i,
+        })),
+      });
+      setModalVisible(true);
+      void loadOptions();
+    } catch (error: unknown) {
+      messageApi.error(error instanceof Error ? error.message : t('common.loadFailed'));
+    }
+  };
+
+  const handleDetail = useCallback(async (record: PatrolRoute) => {
+    if (!record.id) return;
+    setDetailVisible(true);
+    setDetailLoading(true);
+    setDetail(null);
+    try {
+      const loaded = await patrolRoutesApi.get(record.id);
+      setDetail(loaded);
+    } catch (error: unknown) {
+      messageApi.error(error instanceof Error ? error.message : t('common.loadFailed'));
+      setDetailVisible(false);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [messageApi, t]);
+
+  const closeDetail = () => {
+    setDetailVisible(false);
+    setDetail(null);
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -143,9 +180,45 @@ const PatrolRoutesPage: React.FC = () => {
     }
     setModalVisible(false);
     actionRef.current?.reload();
+    if (detailVisible && detail?.id === current?.id && current?.id) {
+      void handleDetail({ id: current.id });
+    }
   };
 
   const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
+
+  const detailBasicColumns = useMemo<ProDescriptionsItemProps<PatrolRoute>[]>(
+    () => [
+      { title: t(`${P}.col.code`), dataIndex: 'code' },
+      { title: t(`${P}.col.name`), dataIndex: 'name' },
+      { title: t(`${P}.col.workshop`), dataIndex: 'workshop_name' },
+      { title: t(`${P}.col.description`), dataIndex: 'description', span: 2 },
+      buildIsActiveDescriptionColumn<PatrolRoute>(t, `${P}.col.isActive`),
+    ],
+    [t],
+  );
+
+  const detailStepColumns = useMemo<ColumnsType<RouteStep>>(
+    () => [
+      { title: t(`${P}.form.sortOrder`), dataIndex: 'sort_order', width: 80, align: 'right' },
+      {
+        title: t(`${P}.form.equipment`),
+        key: 'equipment',
+        render: (_, row) => {
+          if (row.equipment_code || row.equipment_name) {
+            return `${row.equipment_code ?? '-'} - ${row.equipment_name ?? '-'}`;
+          }
+          return row.equipment_id ?? '-';
+        },
+      },
+      {
+        title: t(`${P}.form.scheme`),
+        dataIndex: 'scheme_id',
+        render: (value) => value ?? '-',
+      },
+    ],
+    [t],
+  );
 
   const columns: ProColumns<PatrolRoute>[] = useMemo(() => alignProColumns<PatrolRoute>([
       {
@@ -194,11 +267,7 @@ const PatrolRoutesPage: React.FC = () => {
         width: 80,
         sorter: true,
         hideInSearch: true,
-        render: (_, r) => (
-          <Tag color={r.is_active ? 'success' : 'default'}>
-            {r.is_active ? t('common.enabled') : t('common.disabled')}
-          </Tag>
-        ),
+        render: (_, r) => renderIsActiveTag(t, r.is_active),
       },
       {
         title: t('common.updatedAt'),
@@ -210,48 +279,32 @@ const PatrolRoutesPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        width: 140,
+        width: 200,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <>
-            {perms.canUpdate && (
-              <Button
-                {...rowActionKind('update')}
-                type="link"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleEdit(record);
-                }}
-              >
-                {t('common.edit')}
-              </Button>
-            )}
-            {perms.canDelete && (
-              <Button
-                {...rowActionKind('delete')}
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  Modal.confirm({
-                    title: t('common.deleteTitle'),
-                    onOk: () => record.id && handleDelete([record.id]),
-                  });
-                }}
-              >
-                {t('common.delete')}
-              </Button>
-            )}
-          </>
-        ),
+        render: (_, record) =>
+          renderEquipmentMasterRowActions({
+            record,
+            keyPrefix: `patrol-route-actions-${record.id ?? 'row'}`,
+            t,
+            canRead: perms.canRead,
+            canUpdate: perms.canUpdate,
+            canDelete: perms.canDelete,
+            onDetail: (row) => {
+              void handleDetail(row);
+            },
+            onEdit: (row) => {
+              void handleEdit(row);
+            },
+            onDelete: (row) => {
+              if (row.id != null) {
+                void handleDelete([row.id]);
+              }
+            },
+          }),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, perms, activeStatusValueEnum],
+    [t, perms, activeStatusValueEnum, handleDetail],
   );
 
   return (
@@ -289,6 +342,29 @@ const PatrolRoutesPage: React.FC = () => {
           enableRowSelection={perms.canDelete}
         />
       </ListPageTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t(`${P}.detailTitle`)}${detail?.code ? ` - ${detail.code}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailBasicColumns}
+        linesTitle={t(`${P}.form.steps`)}
+        lines={
+          <MasterDataLinesTable
+            rows={detail?.steps ?? []}
+            columns={detailStepColumns}
+            rowKey={(row) => String(row.equipment_id ?? row.sort_order ?? '')}
+            emptyDescription={t('common.noData')}
+          />
+        }
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && perms.canUpdate), () => {
+          if (!detail) return;
+          closeDetail();
+          void handleEdit(detail);
+        })}
+      />
 
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}

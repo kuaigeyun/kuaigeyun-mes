@@ -117,9 +117,25 @@ export function inboundReceiptTypeLabel(t: TFunction, type: InboundReceiptType):
 
 export function inboundReceiptTypeValueEnum(
   t: TFunction,
-): Record<string, { text: string; status: 'default' }> {
+): Record<string, { text: string; status: string }> {
+  const colors: Record<InboundReceiptType, string> = {
+    purchase: 'blue',
+    finished_goods: 'success',
+    semi_finished_goods: 'cyan',
+    production_return: 'warning',
+    customer_material: 'geekblue',
+    sales_return: 'orange',
+    outsource_receipt: 'purple',
+    outsource_material_return: 'volcano',
+    outsource_product_return: 'magenta',
+    other_inbound: 'gold',
+    material_return: 'lime',
+  };
   return Object.fromEntries(
-    INBOUND_RECEIPT_TYPES.map((key) => [key, { text: inboundReceiptTypeLabel(t, key), status: 'default' as const }]),
+    INBOUND_RECEIPT_TYPES.map((key) => [
+      key,
+      { text: inboundReceiptTypeLabel(t, key), status: colors[key] },
+    ]),
   );
 }
 

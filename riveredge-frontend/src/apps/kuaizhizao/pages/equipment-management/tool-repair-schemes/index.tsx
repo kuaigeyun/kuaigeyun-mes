@@ -1,25 +1,24 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDigit,
   ProFormSelect,
   ProFormSwitch,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Row, Col, Tag } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Modal, Row, Col } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { FormListDetailTable } from '../../../../../components/form-list-detail-table';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { rowActionKind } from '../../../../../components/uni-action';
 import { repairItemsApi, repairSchemesApi } from '../../../services/toolOps';
-import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -29,6 +28,15 @@ import {
   normalizeEquipmentListResponse,
   resolveMasterDataListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  buildIsActiveDescriptionColumn,
+  EquipmentMasterDetailDrawer,
+  MasterDataLinesTable,
+  renderEquipmentMasterRowActions,
+  renderIsActiveTag,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.toolOps.repairScheme';
 const RESOURCE = 'kuaizhizao:tool-repair-scheme';
@@ -36,6 +44,8 @@ const RESOURCE = 'kuaizhizao:tool-repair-scheme';
 interface SchemeLine {
   item_id?: number;
   sort_order?: number;
+  item_code?: string;
+  item_name?: string;
 }
 
 interface RepairScheme {
@@ -59,6 +69,13 @@ const ToolRepairSchemesPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<RepairScheme | null>(null);
   const [itemOptions, setItemOptions] = useState<{ label: string; value: number }[]>([]);
+  const {
+    open: detailVisible,
+    loading: detailLoading,
+    detail,
+    openDetail,
+    closeDetail,
+  } = useEquipmentDetailDrawer<RepairScheme>();
 
   const loadItemOptions = async () => {
     const res = await repairItemsApi.list({ limit: 1000, is_active: true });
@@ -82,19 +99,31 @@ const ToolRepairSchemesPage: React.FC = () => {
 
   const handleEdit = async (record: RepairScheme) => {
     if (!record.id) return;
-    const detail = await repairSchemesApi.get(record.id);
-    setIsEdit(true);
-    setCurrent(detail);
-    setModalVisible(true);
-    void loadItemOptions();
-    formRef.current?.setFieldsValue({
-      ...detail,
-      lines: (detail.lines ?? []).map((l: SchemeLine, i: number) => ({
-        item_id: l.item_id,
-        sort_order: l.sort_order ?? i,
-      })),
-    });
+    try {
+      const loaded = await repairSchemesApi.get(record.id);
+      setIsEdit(true);
+      setCurrent(loaded);
+      setModalVisible(true);
+      void loadItemOptions();
+      formRef.current?.setFieldsValue({
+        ...loaded,
+        lines: (loaded.lines ?? []).map((l: SchemeLine, i: number) => ({
+          item_id: l.item_id,
+          sort_order: l.sort_order ?? i,
+        })),
+      });
+    } catch (error: unknown) {
+      messageApi.error(error instanceof Error ? error.message : t('common.loadFailed'));
+    }
   };
+
+  const handleDetail = useCallback(
+    async (record: RepairScheme) => {
+      if (!record.id) return;
+      await openDetail(() => repairSchemesApi.get(record.id));
+    },
+    [openDetail],
+  );
 
   const handleDelete = async (keys: React.Key[]) => {
     Modal.confirm({
@@ -130,9 +159,34 @@ const ToolRepairSchemesPage: React.FC = () => {
     }
     setModalVisible(false);
     actionRef.current?.reload();
+    if (detailVisible && detail?.id === current?.id && current?.id) {
+      void openDetail(() => repairSchemesApi.get(current.id));
+    }
   };
 
   const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
+
+  const detailBasicColumns = useMemo<ProDescriptionsItemProps<RepairScheme>[]>(
+    () => [
+      { title: t(`${P}.col.code`), dataIndex: 'code' },
+      { title: t(`${P}.col.name`), dataIndex: 'name' },
+      { title: t(`${P}.col.description`), dataIndex: 'description', span: 2 },
+      buildIsActiveDescriptionColumn<RepairScheme>(t, `${P}.col.isActive`),
+    ],
+    [t],
+  );
+
+  const detailLineColumns = useMemo<ColumnsType<SchemeLine>>(
+    () => [
+      {
+        title: t(`${P}.form.item`),
+        key: 'item',
+        render: (_, row) => `${row.item_code ?? '-'} - ${row.item_name ?? '-'}`,
+      },
+      { title: t(`${P}.form.sortOrder`), dataIndex: 'sort_order', width: 80, align: 'right' },
+    ],
+    [t],
+  );
 
   const columns: ProColumns<RepairScheme>[] = useMemo(() => alignProColumns<RepairScheme>([
       {
@@ -175,11 +229,7 @@ const ToolRepairSchemesPage: React.FC = () => {
         width: 80,
         sorter: true,
         hideInSearch: true,
-        render: (_, r) => (
-          <Tag color={r.is_active ? 'success' : 'default'}>
-            {r.is_active ? t('common.enabled') : t('common.disabled')}
-          </Tag>
-        ),
+        render: (_, r) => renderIsActiveTag(t, r.is_active),
       },
       {
         title: t('common.updatedAt'),
@@ -187,52 +237,36 @@ const ToolRepairSchemesPage: React.FC = () => {
         hideInTable: true,
         hideInSearch: true,
       },
-      ...buildDocumentAuditColumns<Record<string, unknown>>(t),
+      ...buildDocumentAuditColumns<RepairScheme>(t),
       {
         title: t('common.actions'),
         key: 'action',
-        width: 140,
+        width: 200,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <>
-            {perms.canUpdate && (
-              <Button
-                {...rowActionKind('update')}
-                type="link"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleEdit(record);
-                }}
-              >
-                {t('common.edit')}
-              </Button>
-            )}
-            {perms.canDelete && (
-              <Button
-                {...rowActionKind('delete')}
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  Modal.confirm({
-                    title: t('common.deleteTitle'),
-                    onOk: () => record.id && handleDelete([record.id]),
-                  });
-                }}
-              >
-                {t('common.delete')}
-              </Button>
-            )}
-          </>
-        ),
+        render: (_, record) =>
+          renderEquipmentMasterRowActions({
+            record,
+            keyPrefix: `tool-repair-scheme-actions-${record.id ?? 'row'}`,
+            t,
+            canRead: perms.canRead,
+            canUpdate: perms.canUpdate,
+            canDelete: perms.canDelete,
+            onDetail: (row) => {
+              void handleDetail(row);
+            },
+            onEdit: (row) => {
+              void handleEdit(row);
+            },
+            onDelete: (row) => {
+              if (row.id != null) {
+                void handleDelete([row.id]);
+              }
+            },
+          }),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, perms, activeStatusValueEnum],
+    [t, perms, activeStatusValueEnum, handleDetail],
   );
 
   return (
@@ -270,6 +304,29 @@ const ToolRepairSchemesPage: React.FC = () => {
           enableRowSelection={perms.canDelete}
         />
       </ListPageTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t(`${P}.detailTitle`)}${detail?.code ? ` - ${detail.code}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailBasicColumns}
+        linesTitle={t(`${P}.form.lines`)}
+        lines={
+          <MasterDataLinesTable
+            rows={detail?.lines ?? []}
+            columns={detailLineColumns}
+            rowKey={(row) => String(row.item_id ?? row.sort_order ?? '')}
+            emptyDescription={t('common.noData')}
+          />
+        }
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && perms.canUpdate), () => {
+          if (!detail) return;
+          closeDetail();
+          void handleEdit(detail);
+        })}
+      />
 
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
@@ -344,3 +401,4 @@ const ToolRepairSchemesPage: React.FC = () => {
 };
 
 export default ToolRepairSchemesPage;
+

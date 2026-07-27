@@ -1,23 +1,21 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDigit,
   ProFormSwitch,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Row, Col, Tag } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Modal, Row, Col } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { rowActionKind } from '../../../../../components/uni-action';
 import { maintenanceItemsApi } from '../../../services/equipmentOps';
-import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -27,6 +25,13 @@ import {
   normalizeEquipmentListResponse,
   resolveMasterDataListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  buildIsActiveDescriptionColumn,
+  EquipmentMasterDetailDrawer,
+  renderEquipmentMasterRowActions,
+  renderIsActiveTag,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.equipmentOps.maintenanceItem';
 const RESOURCE = 'kuaizhizao:equipment-maintenance-item';
@@ -53,6 +58,9 @@ const MaintenanceItemsPage: React.FC = () => {
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
     undefined,
   );
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detail, setDetail] = useState<MaintenanceItem | null>(null);
 
   const handleCreate = () => {
     setIsEdit(false);
@@ -66,14 +74,35 @@ const MaintenanceItemsPage: React.FC = () => {
   const handleEdit = async (record: MaintenanceItem) => {
     if (!record.id) return;
     try {
-      const detail = await maintenanceItemsApi.get(record.id);
+      const loaded = await maintenanceItemsApi.get(record.id);
       setIsEdit(true);
-      setCurrent(detail);
-      setFormInitialValues({ ...detail });
+      setCurrent(loaded);
+      setFormInitialValues({ ...loaded });
       setModalVisible(true);
     } catch (error: unknown) {
       messageApi.error(error instanceof Error ? error.message : t('common.loadFailed'));
     }
+  };
+
+  const handleDetail = useCallback(async (record: MaintenanceItem) => {
+    if (!record.id) return;
+    setDetailVisible(true);
+    setDetailLoading(true);
+    setDetail(null);
+    try {
+      const loaded = await maintenanceItemsApi.get(record.id);
+      setDetail(loaded);
+    } catch (error: unknown) {
+      messageApi.error(error instanceof Error ? error.message : t('common.loadFailed'));
+      setDetailVisible(false);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [messageApi, t]);
+
+  const closeDetail = () => {
+    setDetailVisible(false);
+    setDetail(null);
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -100,9 +129,23 @@ const MaintenanceItemsPage: React.FC = () => {
     }
     setModalVisible(false);
     actionRef.current?.reload();
+    if (detailVisible && detail?.id === current?.id && current?.id) {
+      void handleDetail({ id: current.id });
+    }
   };
 
   const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
+
+  const detailBasicColumns = useMemo<ProDescriptionsItemProps<MaintenanceItem>[]>(
+    () => [
+      { title: t(`${P}.col.code`), dataIndex: 'code' },
+      { title: t(`${P}.col.name`), dataIndex: 'name' },
+      { title: t(`${P}.col.standardHours`), dataIndex: 'standard_hours' },
+      { title: t(`${P}.col.requirement`), dataIndex: 'requirement', span: 2 },
+      buildIsActiveDescriptionColumn<MaintenanceItem>(t, `${P}.col.isActive`),
+    ],
+    [t],
+  );
 
   const columns: ProColumns<MaintenanceItem>[] = useMemo(() => alignProColumns<MaintenanceItem>([
       {
@@ -145,11 +188,7 @@ const MaintenanceItemsPage: React.FC = () => {
         width: 80,
         sorter: true,
         hideInSearch: true,
-        render: (_, r) => (
-          <Tag color={r.is_active ? 'success' : 'default'}>
-            {r.is_active ? t('common.enabled') : t('common.disabled')}
-          </Tag>
-        ),
+        render: (_, r) => renderIsActiveTag(t, r.is_active),
       },
       {
         title: t('common.updatedAt'),
@@ -161,48 +200,32 @@ const MaintenanceItemsPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        width: 140,
+        width: 200,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <>
-            {perms.canUpdate && (
-              <Button
-                {...rowActionKind('update')}
-                type="link"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleEdit(record);
-                }}
-              >
-                {t('common.edit')}
-              </Button>
-            )}
-            {perms.canDelete && (
-              <Button
-                {...rowActionKind('delete')}
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  Modal.confirm({
-                    title: t('common.deleteTitle'),
-                    onOk: () => record.id && handleDelete([record.id]),
-                  });
-                }}
-              >
-                {t('common.delete')}
-              </Button>
-            )}
-          </>
-        ),
+        render: (_, record) =>
+          renderEquipmentMasterRowActions({
+            record,
+            keyPrefix: `maintenance-item-actions-${record.id ?? 'row'}`,
+            t,
+            canRead: perms.canRead,
+            canUpdate: perms.canUpdate,
+            canDelete: perms.canDelete,
+            onDetail: (row) => {
+              void handleDetail(row);
+            },
+            onEdit: (row) => {
+              void handleEdit(row);
+            },
+            onDelete: (row) => {
+              if (row.id != null) {
+                void handleDelete([row.id]);
+              }
+            },
+          }),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, perms, activeStatusValueEnum],
+    [t, perms, activeStatusValueEnum, handleDetail],
   );
 
   return (
@@ -240,6 +263,20 @@ const MaintenanceItemsPage: React.FC = () => {
           enableRowSelection={perms.canDelete}
         />
       </ListPageTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t(`${P}.detailTitle`)}${detail?.code ? ` - ${detail.code}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailBasicColumns}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && perms.canUpdate), () => {
+          if (!detail) return;
+          closeDetail();
+          void handleEdit(detail);
+        })}
+      />
 
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}

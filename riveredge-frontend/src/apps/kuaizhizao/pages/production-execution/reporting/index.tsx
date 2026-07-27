@@ -3,7 +3,7 @@ import { renderRowActionsOverflow, rowActionKind } from '../../../../../componen
  * 报工管理页面
  *
  * 提供报工记录的管理和查询功能；扫码报工见移动端 kiosk。
- * 新建报工须经上拉选源 → 数量预览 → 录入表单，禁止手工选工单/工序。
+ * 新建报工须经加载选源 → 数量预览 → 录入表单，禁止手工选工单/工序。
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
@@ -98,6 +98,10 @@ import { useTranslation } from 'react-i18next';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import {formatDateTime, formatQuantity} from '../../../../../utils/format';
+import {
+  convertBaseQtyToProductionDisplay,
+  convertProductionInputToBaseQty,
+} from '../../../../../utils/materialScenarioUnit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -193,20 +197,29 @@ function getOperationDefectTypeOptions(operation: any): OperationDefectOption[] 
 }
 
 function buildReportingPullPreview(
-  workOrder: { code?: string; name?: string; quantity?: number },
+  workOrder: {
+    code?: string;
+    name?: string;
+    quantity?: number;
+    product_unit?: string;
+    unit_to_base_factor?: number;
+    base_unit?: string;
+  },
   operation: { operation_id?: number; operation_code?: string; operation_name?: string; name?: string },
   workOrderQuantity: number,
   t: (key: string, options?: Record<string, unknown>) => string,
 ): PushPreviewResponse {
   const breakdown = getReportableQuantityBreakdown(operation, workOrderQuantity);
+  const toDisplay = (baseQty: number) => convertBaseQtyToProductionDisplay(baseQty, workOrder);
+  const unitSuffix = workOrder.product_unit ? ` ${workOrder.product_unit}` : '';
   const items = [
     {
       item_id: Number(operation.operation_id ?? 0),
       material_code: String(operation.operation_code ?? ''),
       material_name: String(operation.operation_name ?? operation.name ?? ''),
-      quantity: breakdown.planCap,
-      pushed_quantity: breakdown.operationCompleted,
-      max_push_quantity: breakdown.effectiveRemaining,
+      quantity: toDisplay(breakdown.planCap),
+      pushed_quantity: toDisplay(breakdown.operationCompleted),
+      max_push_quantity: toDisplay(breakdown.effectiveRemaining),
     },
   ];
   let blockingReason: string | null = null;
@@ -218,7 +231,7 @@ function buildReportingPullPreview(
     summary: t('app.kuaizhizao.workReporting.pullPreviewSummary', {
       workOrderCode: workOrder.code ?? '',
       operationName: operation.operation_name ?? operation.name ?? '',
-      max: breakdown.effectiveRemaining,
+      max: `${toDisplay(breakdown.effectiveRemaining)}${unitSuffix}`,
     }),
     items,
     tip: t('app.kuaizhizao.workReporting.pullPreviewTip'),
@@ -800,7 +813,7 @@ const ReportingPage: React.FC = () => {
   }, [reportingModalVisible, reportIsLastOperation, reportWorkOrderId]);
 
   /**
-   * 处理新建报工（打开上拉选源）
+   * 处理新建报工（打开加载选源）
    */
   const handleNewReporting = () => {
     pullFromWorkOrderQuery.openModal();
@@ -835,15 +848,20 @@ const ReportingPage: React.FC = () => {
       operation_id: Number(operation.operation_id),
     };
     if (operation.standard_time) {
-      autoFillValues.work_hours =
-        parseFloat(operation.standard_time.toString()) *
-        parseFloat(workOrder.quantity?.toString() || '1');
+      const qtyDisplay =
+        Number(workOrder.display_quantity ?? workOrder.displayQuantity) ||
+        convertBaseQtyToProductionDisplay(
+          parseFloat(workOrder.quantity?.toString() || '0') || 0,
+          workOrder,
+        )
+      autoFillValues.work_hours = parseFloat(operation.standard_time.toString()) * qtyDisplay
     }
     if (operation.reporting_type === 'quantity') {
-      const remaining = getRemainingReportableQuantity(
+      const remainingBase = getRemainingReportableQuantity(
         operation,
         parseFloat(workOrder.quantity?.toString() || '0') || 0,
-      );
+      )
+      const remaining = convertBaseQtyToProductionDisplay(remainingBase, workOrder)
       if (remaining > 0) {
         autoFillValues.qualified_quantity = remaining;
         autoFillValues.unqualified_quantity = 0;
@@ -875,7 +893,7 @@ const ReportingPage: React.FC = () => {
         return true;
       };
 
-      // 上拉锁定源以 state 为准（隐藏表单项可能是字符串或 Modal 挂载前未写入）
+      // 加载锁定源以 state 为准（隐藏表单项可能是字符串或 Modal 挂载前未写入）
       const workOrderId = Number(reportWorkOrderId ?? standardValues.work_order_id);
       const operationId = Number(reportOperationId ?? standardValues.operation_id);
       const workOrder = (Array.isArray(reportWorkOrders) ? reportWorkOrders : []).find(
@@ -919,23 +937,26 @@ const ReportingPage: React.FC = () => {
           messageApi.warning(t('app.kuaizhizao.workReporting.quantityMustBePositive'));
           return;
         }
-        const rem = getRemainingReportableQuantity(
+        const remBase = getRemainingReportableQuantity(
           operation,
           parseFloat(workOrder.quantity?.toString() || '0') || 0,
-        );
+        )
+        const rem = convertBaseQtyToProductionDisplay(remBase, workOrder)
         if (rq > rem + 1e-9) {
           messageApi.warning(
-            t('apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit', { max: rem }),
-          );
-          return;
+            t('apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit', {
+              max: reportSelectedWorkOrder?.product_unit ? `${rem} ${reportSelectedWorkOrder.product_unit}` : rem,
+            }),
+          )
+          return
         }
         if (uq > 0 && !standardValues.defect_type) {
           messageApi.warning(t('app.kuaizhizao.workOrder.kioskSelectDefectType'));
           return;
         }
-        reportingData.reported_quantity = rq;
-        reportingData.qualified_quantity = qq;
-        reportingData.unqualified_quantity = uq;
+        reportingData.reported_quantity = convertProductionInputToBaseQty(rq, workOrder)
+        reportingData.qualified_quantity = convertProductionInputToBaseQty(qq, workOrder)
+        reportingData.unqualified_quantity = convertProductionInputToBaseQty(uq, workOrder)
       }
       if (reportIsLastOperation) {
         if (reportWarehouseRequired && !standardValues.inbound_warehouse_id) {
@@ -1705,6 +1726,7 @@ const ReportingPage: React.FC = () => {
                 workOrderQuantity={Number(reportSelectedWorkOrder.quantity ?? 0) || 0}
                 operations={reportOperations}
                 workOrderId={reportWorkOrderId ?? undefined}
+                unitContext={reportSelectedWorkOrder}
               />
             </Col>
           </>
@@ -1746,7 +1768,11 @@ const ReportingPage: React.FC = () => {
           <>
             <ProFormDigit
               name="qualified_quantity"
-              label={t('app.kuaizhizao.workReporting.colQualifiedQty')}
+              label={
+                reportSelectedWorkOrder?.product_unit
+                  ? `${t('app.kuaizhizao.workReporting.colQualifiedQty')}（${reportSelectedWorkOrder.product_unit}）`
+                  : t('app.kuaizhizao.workReporting.colQualifiedQty')
+              }
               placeholder={t('app.kuaizhizao.workReporting.formQualifiedQtyRequired')}
               rules={[{ required: true, message: t('app.kuaizhizao.workReporting.formQualifiedQtyRequired') }]}
               min={0}
@@ -1755,7 +1781,11 @@ const ReportingPage: React.FC = () => {
             />
             <ProFormDigit
               name="unqualified_quantity"
-              label={t('app.kuaizhizao.workReporting.colUnqualifiedQty')}
+              label={
+                reportSelectedWorkOrder?.product_unit
+                  ? `${t('app.kuaizhizao.workReporting.colUnqualifiedQty')}（${reportSelectedWorkOrder.product_unit}）`
+                  : t('app.kuaizhizao.workReporting.colUnqualifiedQty')
+              }
               placeholder={t('app.kuaizhizao.workReporting.unqualifiedQtyRequired')}
               rules={[{ required: true, message: t('app.kuaizhizao.workReporting.unqualifiedQtyRequired') }]}
               min={0}
@@ -1767,13 +1797,19 @@ const ReportingPage: React.FC = () => {
                 const qq = Number(qqIn) || 0;
                 const uq = Number(uqIn) || 0;
                 const total = qq + uq;
-                const rem =
+                const remBase =
                   reportSelectedWorkOrder && reportSelectedOperation
                     ? getRemainingReportableQuantity(
                         reportSelectedOperation,
                         Number(reportSelectedWorkOrder.quantity ?? 0) || 0,
                       )
                     : 0;
+                const rem = reportSelectedWorkOrder
+                  ? convertBaseQtyToProductionDisplay(remBase, reportSelectedWorkOrder)
+                  : remBase;
+                const unitLabel = reportSelectedWorkOrder?.product_unit
+                  ? ` ${reportSelectedWorkOrder.product_unit}`
+                  : '';
                 const over = total > rem + 1e-9;
                 return (
                   <Col span={24} style={{ marginBottom: 16 }}>
@@ -1781,11 +1817,16 @@ const ReportingPage: React.FC = () => {
                       <span style={{ color: 'var(--ant-color-text-secondary)' }}>
                         {t('app.kuaizhizao.workReporting.formReportedQtyAuto')}
                       </span>
-                      <span style={{ fontWeight: 600 }}>{formatQuantity(total)}</span>
+                      <span style={{ fontWeight: 600 }}>
+                        {formatQuantity(total)}
+                        {unitLabel}
+                      </span>
                     </div>
                     {over ? (
                       <Typography.Text type="danger" style={{ display: 'block', marginTop: 8 }}>
-                        {t('apps.kuaizhizao.workOrder.quickReport.exceedEffective', { max: rem })}
+                        {t('apps.kuaizhizao.workOrder.quickReport.exceedEffective', {
+                          max: `${rem}${unitLabel}`,
+                        })}
                       </Typography.Text>
                     ) : null}
                   </Col>

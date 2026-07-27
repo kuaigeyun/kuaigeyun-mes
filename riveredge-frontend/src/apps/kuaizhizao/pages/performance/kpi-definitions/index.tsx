@@ -5,7 +5,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, Typography, Descriptions, Spin, theme as AntdTheme } from 'antd';
+import { App, Popconfirm, Button, Space, Typography, theme as AntdTheme } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import { ProFormText, ProFormDigit, ProFormSelect, ProFormSwitch, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
@@ -13,11 +13,9 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import {
   ListPageTemplate,
   FormModalTemplate,
-  DetailDrawerTemplate,
-  DetailDrawerSection,
   MODAL_CONFIG,
-  DRAWER_CONFIG,
 } from '../../../../../components/layout-templates';
+import { PerformanceConfigDetailDrawer } from '../shared/performanceConfigDetailDrawer';
 import { employeePerformanceApi } from '../../../services/performance';
 import type { KPIDefinition } from '../../../types/performance';
 import {
@@ -26,7 +24,6 @@ import {
   getPerformanceYesNoValueEnum,
   renderActiveTag,
 } from '../components/performanceMeta';
-import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   normalizePerformanceListResponse,
@@ -288,7 +285,7 @@ const KpiDefinitionsPage: React.FC = () => {
         <ProFormSwitch name="is_active" label={t('app.kuaizhizao.performance.common.form.active')} colProps={{ span: 12 }} />
       </FormModalTemplate>
 
-      <DetailDrawerTemplate
+      <PerformanceConfigDetailDrawer
         title={t('app.kuaizhizao.performance.kpi.detailTitle')}
         open={drawerVisible}
         zIndex={detailDrawerZIndex}
@@ -296,20 +293,10 @@ const KpiDefinitionsPage: React.FC = () => {
           setDrawerVisible(false);
           setDetail(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
         loading={detailLoading}
-        columns={[]}
-        customContent={
-          detailLoading && !detail ? (
-            <div style={{ textAlign: 'center', padding: 48 }}>
-              <Spin />
-            </div>
-          ) : detail ? (
-            <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.basicInfo')}>
-              <Descriptions column={2} size="small" items={buildMasterDetailDescriptionItems(detail, detailColumns)} />
-            </DetailDrawerSection>
-          ) : null
-        }
+        detail={detail}
+        detailColumns={detailColumns}
+        t={t}
       />
     </>
   );

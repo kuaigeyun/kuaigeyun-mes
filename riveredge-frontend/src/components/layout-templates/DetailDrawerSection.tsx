@@ -13,6 +13,8 @@ import { Card, theme } from 'antd';
 export interface DetailDrawerSectionProps {
   /** 区块标题（可为字符串或自定义节点，如标题 + 辅助说明） */
   title: ReactNode;
+  /** 标题行右侧附加内容（如审核状态） */
+  titleExtra?: ReactNode;
   /** 区块内容 */
   children: ReactNode;
   /** 是否显示（默认 true） */
@@ -28,6 +30,7 @@ export interface DetailDrawerSectionProps {
  */
 export const DetailDrawerSection: React.FC<DetailDrawerSectionProps> = ({
   title,
+  titleExtra,
   children,
   visible = true,
   style,
@@ -38,6 +41,7 @@ export const DetailDrawerSection: React.FC<DetailDrawerSectionProps> = ({
   return (
     <Card
       title={title}
+      extra={titleExtra}
       size="small"
       variant="outlined"
       style={{ marginBottom, ...style }}

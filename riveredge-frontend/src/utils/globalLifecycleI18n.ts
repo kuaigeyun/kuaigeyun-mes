@@ -72,6 +72,7 @@ export const LIFECYCLE_ONLY_STAGE_KEYS = [
   'customer_confirmed',
   'running',
   'applied',
+  'pending_apply',
   'picking',
   'pending_inbound',
   'pending_outbound',

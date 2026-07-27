@@ -14,7 +14,7 @@ import { Card, Badge, Button, Space, Timeline, Tag, Row, Col, Select, Input, App
 import { ProDescriptions } from '@ant-design/pro-components';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { ReloadOutlined, HistoryOutlined, EditOutlined, PlayCircleOutlined, PauseCircleOutlined, WarningOutlined } from '@ant-design/icons';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { equipmentStatusApi } from '../../../services/equipment';
 import { ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -97,9 +97,9 @@ const EquipmentStatusPage: React.FC = () => {
 
   // 详情和编辑相关状态
   const [detailVisible, setDetailVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [currentEquipment, setCurrentEquipment] = useState<EquipmentStatus | null>(null);
   const [historyList, setHistoryList] = useState<StatusHistoryItem[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
 
   const [eqStatusTrackingRefreshKey, setEqStatusTrackingRefreshKey] = useState(0);
 
@@ -213,20 +213,28 @@ const EquipmentStatusPage: React.FC = () => {
    * 处理查看详情
    */
   const handleViewDetail = async (equipment: EquipmentStatus) => {
-    try {
-      setCurrentEquipment(equipment);
-      setDetailVisible(true);
-      setEqStatusTrackingRefreshKey((k) => k + 1);
+    setCurrentEquipment(equipment);
+    setDetailVisible(true);
+    setDetailLoading(true);
+    setHistoryList([]);
+    setEqStatusTrackingRefreshKey((k) => k + 1);
 
-      // 加载状态历史
-      setHistoryLoading(true);
+    try {
       const historyData = await equipmentStatusApi.getStatusHistory(equipment.equipment.uuid);
       setHistoryList(historyData.items || []);
     } catch (error: any) {
       messageApi.error(t(`${P}.historyFailed`, { message: error.message || t('common.unknownError') }));
+      setDetailVisible(false);
+      setCurrentEquipment(null);
     } finally {
-      setHistoryLoading(false);
+      setDetailLoading(false);
     }
+  };
+
+  const closeDetail = () => {
+    setDetailVisible(false);
+    setCurrentEquipment(null);
+    setHistoryList([]);
   };
 
   /**
@@ -550,134 +558,121 @@ const EquipmentStatusPage: React.FC = () => {
       <DetailDrawerTemplate
         title={t(`${P}.detailTitle`)}
         open={detailVisible}
+        loading={detailLoading}
         zIndex={equipmentStatusDrawerZIndex}
-        onClose={() => {
-          setDetailVisible(false);
-          setCurrentEquipment(null);
-          setHistoryList([]);
-        }}
+        onClose={closeDetail}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        customContent={
-          currentEquipment ? (
-            <>
-              <DetailDrawerSection title={t(`${P}.section.lifecycle`)}>
-                {currentEquipment.equipment?.id != null ? (
-                  <DetailDrawerInlineFullChain
-                    documentType="equipment"
-                    documentId={currentEquipment.equipment.id}
-                    active={detailVisible}
-                    selfDocumentId={currentEquipment.equipment.id}
-                    renderBriefActions={(doc) => (
-                      <EquipmentTraceBriefPrimaryActions
-                        doc={doc}
-                        t={t}
-                        navigate={navigate}
-                        closeDrawer={() => {
-                          setDetailVisible(false);
-                          setCurrentEquipment(null);
-                          setHistoryList([]);
-                        }}
-                      />
-                    )}
+        collaborationTitle={t(`${P}.section.lifecycle`)}
+        traceDocument={
+          currentEquipment?.equipment?.id != null
+            ? {
+                documentType: 'equipment',
+                documentId: currentEquipment.equipment.id,
+                selfDocumentId: currentEquipment.equipment.id,
+                renderBriefActions: (doc) => (
+                  <EquipmentTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={closeDetail}
                   />
-                ) : null}
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t(`${P}.section.realtimeMonitor`)}>
-                <ProDescriptions
-                  title={false}
-                  bordered
-                  column={2}
-                  dataSource={{
-                    code: currentEquipment.equipment.code,
-                    name: currentEquipment.equipment.name,
-                    type: currentEquipment.equipment.type || '-',
-                    category: currentEquipment.equipment.category || '-',
-                    status: getStatusTag(currentEquipment.status),
-                    is_online: (
-                      <Badge
-                        status={currentEquipment.is_online ? 'success' : 'error'}
-                        text={currentEquipment.is_online ? t(`${P}.online`) : t(`${P}.offline`)}
-                      />
-                    ),
-                    runtime_hours: formatMetric(currentEquipment.runtime_hours, 2, hoursSuffix),
-                    temperature: formatMetric(currentEquipment.temperature, 1, '°C'),
-                    pressure: formatMetric(currentEquipment.pressure, 2),
-                    vibration: formatMetric(currentEquipment.vibration, 2),
-                    last_maintenance_date: currentEquipment.last_maintenance_date
-                      ? formatDateTime(currentEquipment.last_maintenance_date, 'YYYY-MM-DD')
-                      : undefined,
-                    next_maintenance_date: currentEquipment.next_maintenance_date
-                      ? formatDateTime(currentEquipment.next_maintenance_date, 'YYYY-MM-DD')
-                      : undefined,
-                    monitored_at: currentEquipment.monitored_at
-                      ? formatDateTime(currentEquipment.monitored_at, 'YYYY-MM-DD HH:mm:ss')
-                      : undefined,
-                  }}
-                  columns={drawerDescriptionColumns}
-                />
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t(`${P}.section.statusHistory`)}>
-                {historyLoading ? (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                ) : (
-                  <Timeline
-                    items={historyList.map((history) => ({
-                      color:
-                        history.to_status === '故障' ? 'red' : history.to_status === '维修中' ? 'orange' : 'blue',
-                      children: (
-                        <div>
-                          <div>
-                            <Tag color={getStatusColor(history.to_status)}>{translateStatus(history.to_status)}</Tag>
-                            {history.from_status && (
-                              <>
-                                <span style={{ margin: '0 8px' }}>←</span>
-                                <Tag>{translateStatus(history.from_status)}</Tag>
-                              </>
-                            )}
-                          </div>
-                          <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
-                            {formatDateTime(history.status_changed_at, 'YYYY-MM-DD HH:mm:ss')}
-                            {history.changed_by_name && ` - ${history.changed_by_name}`}
-                          </div>
-                          {history.reason && (
-                            <div style={{ marginTop: 4, color: '#666' }}>
-                              {t(`${P}.history.reason`, { reason: history.reason })}
-                            </div>
-                          )}
-                          {history.remark && (
-                            <div style={{ marginTop: 4, color: '#999', fontSize: 12 }}>
-                              {t(`${P}.history.remark`, { remark: history.remark })}
-                            </div>
-                          )}
-                        </div>
-                      ),
-                    }))}
-                  />
-                )}
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t(`${P}.section.operationHistory`)}>
-                {equipmentDocTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {equipmentDocTracking.error && !equipmentDocTracking.loading && (
-                  <Typography.Text type="danger">{equipmentDocTracking.error}</Typography.Text>
-                )}
-                {equipmentDocTracking.data && !equipmentDocTracking.loading && (
-                  <DocumentTrackingTimelineBody data={equipmentDocTracking.data} />
-                )}
-                {!equipmentDocTracking.loading && !equipmentDocTracking.data && !equipmentDocTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noOperationRecords`)} />
-                )}
-              </DetailDrawerSection>
-            </>
-          ) : null
+                ),
+              }
+            : null
         }
+        basic={
+          currentEquipment ? (
+            <ProDescriptions
+              title={false}
+              bordered
+              column={2}
+              dataSource={{
+                code: currentEquipment.equipment.code,
+                name: currentEquipment.equipment.name,
+                type: currentEquipment.equipment.type || '-',
+                category: currentEquipment.equipment.category || '-',
+                status: getStatusTag(currentEquipment.status),
+                is_online: (
+                  <Badge
+                    status={currentEquipment.is_online ? 'success' : 'error'}
+                    text={currentEquipment.is_online ? t(`${P}.online`) : t(`${P}.offline`)}
+                  />
+                ),
+                runtime_hours: formatMetric(currentEquipment.runtime_hours, 2, hoursSuffix),
+                temperature: formatMetric(currentEquipment.temperature, 1, '°C'),
+                pressure: formatMetric(currentEquipment.pressure, 2),
+                vibration: formatMetric(currentEquipment.vibration, 2),
+                last_maintenance_date: currentEquipment.last_maintenance_date
+                  ? formatDateTime(currentEquipment.last_maintenance_date, 'YYYY-MM-DD')
+                  : undefined,
+                next_maintenance_date: currentEquipment.next_maintenance_date
+                  ? formatDateTime(currentEquipment.next_maintenance_date, 'YYYY-MM-DD')
+                  : undefined,
+                monitored_at: currentEquipment.monitored_at
+                  ? formatDateTime(currentEquipment.monitored_at, 'YYYY-MM-DD HH:mm:ss')
+                  : undefined,
+              }}
+              columns={drawerDescriptionColumns}
+            />
+          ) : undefined
+        }
+        basicTitle={t(`${P}.section.realtimeMonitor`)}
+        lines={
+          detailLoading ? (
+            <div style={{ textAlign: 'center', padding: 24 }}>
+              <Spin />
+            </div>
+          ) : (
+            <Timeline
+              items={historyList.map((history) => ({
+                color:
+                  history.to_status === '故障' ? 'red' : history.to_status === '维修中' ? 'orange' : 'blue',
+                children: (
+                  <div>
+                    <div>
+                      <Tag color={getStatusColor(history.to_status)}>{translateStatus(history.to_status)}</Tag>
+                      {history.from_status && (
+                        <>
+                          <span style={{ margin: '0 8px' }}>←</span>
+                          <Tag>{translateStatus(history.from_status)}</Tag>
+                        </>
+                      )}
+                    </div>
+                    <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
+                      {formatDateTime(history.status_changed_at, 'YYYY-MM-DD HH:mm:ss')}
+                      {history.changed_by_name && ` - ${history.changed_by_name}`}
+                    </div>
+                    {history.reason && (
+                      <div style={{ marginTop: 4, color: '#666' }}>
+                        {t(`${P}.history.reason`, { reason: history.reason })}
+                      </div>
+                    )}
+                    {history.remark && (
+                      <div style={{ marginTop: 4, color: '#999', fontSize: 12 }}>
+                        {t(`${P}.history.remark`, { remark: history.remark })}
+                      </div>
+                    )}
+                  </div>
+                ),
+              }))}
+            />
+          )
+        }
+        linesTitle={t(`${P}.section.statusHistory`)}
+        timeline={
+          equipmentDocTracking.loading ? (
+            <div style={{ textAlign: 'center', padding: 24 }}>
+              <Spin />
+            </div>
+          ) : equipmentDocTracking.error ? (
+            <Typography.Text type="danger">{equipmentDocTracking.error}</Typography.Text>
+          ) : equipmentDocTracking.data ? (
+            <DocumentTrackingTimelineBody data={equipmentDocTracking.data} />
+          ) : (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noOperationRecords`)} />
+          )
+        }
+        timelineTitle={t(`${P}.section.operationHistory`)}
       />
 
       {/* 状态更新Modal */}

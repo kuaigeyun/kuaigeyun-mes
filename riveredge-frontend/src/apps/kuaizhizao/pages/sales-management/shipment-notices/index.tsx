@@ -11,7 +11,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
+import { DetailAuditPhaseTitleExtra } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
@@ -1740,22 +1740,23 @@ const ShipmentNoticesPage: React.FC = () => {
                 />
               </DetailDrawerSection>
 
-              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
+              <DetailDrawerSection
+                title={t('app.uniDetail.sectionCollaboration')}
+                titleExtra={<DetailAuditPhaseTitleExtra record={noticeDetail} />}
+              >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
                     const lc = getShipmentNoticeLifecycle(noticeDetail as Record<string, unknown>, t);
                     const mainStages = lc.mainStages ?? [];
                     if (mainStages.length === 0) return null;
                     return (
-                      <DetailLifecycleCollaborationBlock record={noticeDetail} auditEnabled={shipmentNoticeAuditEnabled}>
-                        <UniLifecycleStepper
-                          steps={mainStages}
-                          showLabels
-                          status={lc.status}
-                          nextStepSuggestions={lc.nextStepSuggestions}
-                          hideNextStepSuggestions
-                        />
-                      </DetailLifecycleCollaborationBlock>
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        showLabels
+                        status={lc.status}
+                        nextStepSuggestions={lc.nextStepSuggestions}
+                        hideNextStepSuggestions
+                      />
                     );
                   })()}
                   {noticeDetail.id != null ? (

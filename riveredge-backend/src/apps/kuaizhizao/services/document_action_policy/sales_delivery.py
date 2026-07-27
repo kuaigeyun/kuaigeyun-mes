@@ -1,4 +1,4 @@
-"""销售出库单 — 送货单上拉 capabilities（唯一真源）。"""
+"""销售出库单 — 送货单加载 capabilities（唯一真源）。"""
 
 from __future__ import annotations
 

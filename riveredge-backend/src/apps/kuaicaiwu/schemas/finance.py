@@ -47,9 +47,9 @@ class PayableCreate(PayableBase):
     payable_code: Optional[str] = Field(None, max_length=50, description="应付单编码（可选，如果不提供则自动生成）")
     pull_source_type: Optional[str] = Field(
         None,
-        description="上拉源单类型 purchase_order|purchase_receipt（与 source_type 手工创建区分）",
+        description="加载源单类型 purchase_order|purchase_receipt（与 source_type 手工创建区分）",
     )
-    pull_source_id: Optional[int] = Field(None, description="上拉源单ID")
+    pull_source_id: Optional[int] = Field(None, description="加载源单ID")
 
 
 class PayableUpdate(PayableBase):
@@ -111,8 +111,8 @@ class PurchaseInvoiceBase(BaseSchema):
 class PurchaseInvoiceCreate(PurchaseInvoiceBase):
     """采购发票创建schema"""
 
-    source_type: Optional[str] = Field(None, description="上拉源单类型 purchase_order|purchase_receipt")
-    source_id: Optional[int] = Field(None, description="上拉源单ID")
+    source_type: Optional[str] = Field(None, description="加载源单类型 purchase_order|purchase_receipt")
+    source_id: Optional[int] = Field(None, description="加载源单ID")
 
 
 class PurchaseInvoiceUpdate(PurchaseInvoiceBase):
@@ -174,9 +174,9 @@ class ReceivableCreate(ReceivableBase):
     receivable_code: Optional[str] = Field(None, max_length=50, description="应收单编码（可选，如果不提供则自动生成）")
     pull_source_type: Optional[str] = Field(
         None,
-        description="上拉源单类型 sales_order|sales_delivery（与 source_type 手工创建区分）",
+        description="加载源单类型 sales_order|sales_delivery（与 source_type 手工创建区分）",
     )
-    pull_source_id: Optional[int] = Field(None, description="上拉源单ID")
+    pull_source_id: Optional[int] = Field(None, description="加载源单ID")
 
 
 class ReceivableUpdate(ReceivableBase):
@@ -257,8 +257,8 @@ class PaymentVoucherBase(BaseSchema):
 class PaymentVoucherCreate(PaymentVoucherBase):
     """付款单创建schema"""
 
-    source_type: Optional[str] = Field(None, description="上拉源单类型 payable")
-    source_id: Optional[int] = Field(None, description="上拉源单ID")
+    source_type: Optional[str] = Field(None, description="加载源单类型 payable")
+    source_id: Optional[int] = Field(None, description="加载源单ID")
 
 
 class PaymentVoucherUpdate(BaseSchema):
@@ -316,8 +316,8 @@ class ReceiptVoucherBase(BaseSchema):
 class ReceiptVoucherCreate(ReceiptVoucherBase):
     """收款单创建schema"""
 
-    source_type: Optional[str] = Field(None, description="上拉源单类型 receivable")
-    source_id: Optional[int] = Field(None, description="上拉源单ID")
+    source_type: Optional[str] = Field(None, description="加载源单类型 receivable")
+    source_id: Optional[int] = Field(None, description="加载源单ID")
 
 
 class ReceiptVoucherUpdate(BaseSchema):
@@ -384,8 +384,8 @@ class SalesInvoiceCreate(SalesInvoiceBase):
     invoice_amount: Decimal = Field(..., ge=0, description="不含税金额")
     tax_amount: Decimal = Field(..., ge=0, description="税额")
     total_amount: Decimal = Field(..., ge=0, description="价税合计")
-    source_type: Optional[str] = Field(None, description="上拉源单类型 sales_order|sales_delivery")
-    source_id: Optional[int] = Field(None, description="上拉源单ID")
+    source_type: Optional[str] = Field(None, description="加载源单类型 sales_order|sales_delivery")
+    source_id: Optional[int] = Field(None, description="加载源单ID")
 
 
 class SalesInvoiceUpdate(BaseSchema):

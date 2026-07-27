@@ -10,11 +10,11 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, Popconfirm, Modal, Typography } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Tag, Button, Space, Popconfirm, Modal, Typography, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
@@ -72,6 +72,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<BarcodeMappingRule | null>(null);
 
   /**
@@ -138,14 +139,18 @@ const BarcodeMappingRulesPage: React.FC = () => {
    * 处理查看详情
    */
   const handleDetail = async (record: BarcodeMappingRule) => {
-    if (record.id) {
-      try {
-        const detailData = await warehouseApi.barcodeMappingRule.get(record.id.toString());
-        setCurrentRecord(detailData);
-        setDetailDrawerVisible(true);
-      } catch (error) {
-        messageApi.error(t('app.kuaizhizao.barcodeMapping.loadDetailFailed'));
-      }
+    if (!record.id) return;
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setCurrentRecord(null);
+    try {
+      const detailData = await warehouseApi.barcodeMappingRule.get(record.id.toString());
+      setCurrentRecord(detailData);
+    } catch {
+      messageApi.error(t('app.kuaizhizao.barcodeMapping.loadDetailFailed'));
+      setDetailDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -246,6 +251,46 @@ const BarcodeMappingRulesPage: React.FC = () => {
       ),
     },
   ], [t]);
+
+  const detailColumns: ProDescriptionsItemProps<BarcodeMappingRule>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.barcodeMapping.colRuleCode'), dataIndex: 'code' },
+      { title: t('app.kuaizhizao.barcodeMapping.colRuleName'), dataIndex: 'name' },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colCustomer'),
+        dataIndex: 'customer_name',
+        render: (_, record) => record.customer_name || t('app.kuaizhizao.barcodeMapping.allCustomers'),
+      },
+      { title: t('app.kuaizhizao.barcodeMapping.colBarcodePattern'), dataIndex: 'barcode_pattern', span: 2 },
+      {
+        title: t('app.kuaizhizao.barcodeMapping.colBarcodeType'),
+        dataIndex: 'barcode_type',
+        render: (_, record) => (
+          <Tag color={record.barcode_type === '2d' ? 'blue' : 'default'}>
+            {record.barcode_type === '2d'
+              ? t('app.kuaizhizao.warehouseCommon.barcodeType2d')
+              : t('app.kuaizhizao.warehouseCommon.barcodeType1d')}
+          </Tag>
+        ),
+      },
+      { title: t('app.kuaizhizao.barcodeMapping.colMappedMaterialCode'), dataIndex: 'material_code' },
+      { title: t('app.kuaizhizao.barcodeMapping.colMappedMaterialName'), dataIndex: 'material_name' },
+      {
+        title: t('app.kuaizhizao.barcodeMapping.colEnabledStatus'),
+        dataIndex: 'is_enabled',
+        render: (_, record) => (
+          <Tag color={record.is_enabled ? 'success' : 'default'}>
+            {record.is_enabled
+              ? t('app.kuaizhizao.warehouseCommon.enabled')
+              : t('app.kuaizhizao.warehouseCommon.disabled')}
+          </Tag>
+        ),
+      },
+      { title: t('app.kuaizhizao.barcodeMapping.colPriority'), dataIndex: 'priority' },
+      { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
+    ],
+    [t],
+  );
 
   /**
    * 处理表单提交
@@ -454,35 +499,20 @@ const BarcodeMappingRulesPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`${t('app.kuaizhizao.barcodeMapping.detailTitle')}${currentRecord?.code ? ` - ${currentRecord.code}` : ''}`}
         open={detailDrawerVisible}
-        onClose={() => setDetailDrawerVisible(false)}
+        loading={detailLoading}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setCurrentRecord(null);
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        customContent={
+        basic={
           currentRecord ? (
-            <div style={{ padding: '16px 0' }}>
-              <p><strong>{t('app.kuaizhizao.barcodeMapping.colRuleCode')}：</strong>{currentRecord.code}</p>
-              <p><strong>{t('app.kuaizhizao.barcodeMapping.colRuleName')}：</strong>{currentRecord.name}</p>
-              <p><strong>{t('app.kuaizhizao.warehouseCommon.colCustomer')}：</strong>{currentRecord.customer_name || t('app.kuaizhizao.barcodeMapping.allCustomers')}</p>
-              <p><strong>{t('app.kuaizhizao.barcodeMapping.colBarcodePattern')}：</strong>{currentRecord.barcode_pattern}</p>
-              <p><strong>{t('app.kuaizhizao.barcodeMapping.colBarcodeType')}：</strong>
-                <Tag color={currentRecord.barcode_type === '2d' ? 'blue' : 'default'}>
-                  {currentRecord.barcode_type === '2d'
-                    ? t('app.kuaizhizao.warehouseCommon.barcodeType2d')
-                    : t('app.kuaizhizao.warehouseCommon.barcodeType1d')}
-                </Tag>
-              </p>
-              <p><strong>{t('app.kuaizhizao.barcodeMapping.colMappedMaterialCode')}：</strong>{currentRecord.material_code}</p>
-              <p><strong>{t('app.kuaizhizao.barcodeMapping.colMappedMaterialName')}：</strong>{currentRecord.material_name}</p>
-              <p><strong>{t('app.kuaizhizao.barcodeMapping.colEnabledStatus')}：</strong>
-                <Tag color={currentRecord.is_enabled ? 'success' : 'default'}>
-                  {currentRecord.is_enabled
-                    ? t('app.kuaizhizao.warehouseCommon.enabled')
-                    : t('app.kuaizhizao.warehouseCommon.disabled')}
-                </Tag>
-              </p>
-              <p><strong>{t('app.kuaizhizao.barcodeMapping.colPriority')}：</strong>{currentRecord.priority}</p>
-            </div>
-          ) : null
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(detailColumns, currentRecord)}
+            />
+          ) : undefined
         }
       />
     </ListPageTemplate>

@@ -301,6 +301,14 @@ import {
 } from '../../../../../utils/spreadsheetImportTemplate'
 import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues'
 import { formatDateTime, formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format'
+import {
+  convertBaseQtyToProductionDisplay,
+  convertProductionInputToBaseQty,
+  convertToBaseQuantity,
+  formatWorkOrderDisplayQuantity,
+  resolveMaterialScenarioUnit,
+} from '../../../../../utils/materialScenarioUnit'
+import type { Material } from '../../../../master-data/types/material'
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate'
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns'
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar'
@@ -423,7 +431,17 @@ interface WorkOrder {
   product_code?: string
   product_name?: string
   quantity?: number
+  display_quantity?: number
+  displayQuantity?: number
   split_remaining_quantity?: number
+  display_split_remaining_quantity?: number
+  displaySplitRemainingQuantity?: number
+  product_unit?: string
+  productUnit?: string
+  base_unit?: string
+  baseUnit?: string
+  unit_to_base_factor?: number
+  unitToBaseFactor?: number
   production_mode?: 'MTS' | 'MTO'
   sales_order_id?: number
   sales_order_code?: string
@@ -851,17 +869,21 @@ function renderWorkOrderPriorityTag(
 }
 
 function formatWorkOrderListQuantity(record: WorkOrder): string {
-  const qtyLabel = formatQuantity(record.quantity)
+  const planned = formatWorkOrderDisplayQuantity(record, 'quantity')
+  const qtyLabel = formatQuantity(planned.value)
+  const unitSuffix = planned.unit ? ` ${planned.unit}` : ''
   const isSplitParent =
     (record.row_kind || 'work_order') === 'work_order' &&
     ['split', '已拆分'].includes(record.status || '')
   if (isSplitParent && record.split_remaining_quantity != null) {
-    const remainingLabel = formatQuantity(record.split_remaining_quantity)
+    const remaining = formatWorkOrderDisplayQuantity(record, 'split_remaining_quantity')
+    const remainingLabel = formatQuantity(remaining.value)
     if (remainingLabel !== '—') {
-      return `${qtyLabel}(${remainingLabel})`
+      const remUnit = remaining.unit || planned.unit
+      return `${qtyLabel}${unitSuffix}(${remainingLabel}${remUnit ? ` ${remUnit}` : ''})`
     }
   }
-  return qtyLabel
+  return qtyLabel === '—' ? qtyLabel : `${qtyLabel}${unitSuffix}`
 }
 
 function isSplitParentWorkOrder(record: WorkOrder): boolean {
@@ -1654,6 +1676,7 @@ const WorkOrdersPage: React.FC = () => {
     validationErrors?: string[]
     canCreateWorkOrder?: boolean
   } | null>(null)
+  const [formProductMaterial, setFormProductMaterial] = useState<Material | null>(null)
   const [completeTrackingModalOpen, setCompleteTrackingModalOpen] = useState(false)
   const [completeTrackingLoading, setCompleteTrackingLoading] = useState(false)
   const [completeTrackingWorkOrder, setCompleteTrackingWorkOrder] = useState<WorkOrder | null>(null)
@@ -2113,11 +2136,13 @@ const WorkOrdersPage: React.FC = () => {
     if (!quickReportingModalVisible || !quickReportingWorkOrder || !quickReportingOperation) {
       return undefined
     }
-    const qty = Number(quickReportingWorkOrder.quantity) || 0
+    const qtyBase = Number(quickReportingWorkOrder.quantity) || 0
+    const qtyDisplay =
+      Number(quickReportingWorkOrder.display_quantity ?? quickReportingWorkOrder.displayQuantity) ||
+      convertBaseQtyToProductionDisplay(qtyBase, quickReportingWorkOrder)
     const stdH =
       quickReportingOperation.standard_time != null
-        ? parseFloat(String(quickReportingOperation.standard_time)) *
-          parseFloat(String(quickReportingWorkOrder.quantity ?? 1))
+        ? parseFloat(String(quickReportingOperation.standard_time)) * qtyDisplay
         : undefined
     if (quickReportingOperation.reporting_type === 'status') {
       return {
@@ -2126,7 +2151,8 @@ const WorkOrdersPage: React.FC = () => {
         remarks: undefined,
       }
     }
-    const rem = getRemainingReportableQuantity(quickReportingOperation, qty)
+    const remBase = getRemainingReportableQuantity(quickReportingOperation, qtyBase)
+    const rem = convertBaseQtyToProductionDisplay(remBase, quickReportingWorkOrder)
     return {
       qualified_quantity: rem,
       unqualified_quantity: 0,
@@ -2905,6 +2931,20 @@ const WorkOrdersPage: React.FC = () => {
         setSelectedOperations([])
       }
       // 编辑时 product_id 禁用，不加载物料来源（属性字段在编辑时也不展示）
+      if (detail.product_id) {
+        try {
+          const mats = await materialApi.list({ ids: [detail.product_id], limit: 1 })
+          const mat = (mats.items ?? [])[0]
+          if (mat?.uuid) {
+            const materialDetail = await materialApi.get(mat.uuid)
+            setFormProductMaterial(materialDetail as Material)
+          }
+        } catch {
+          setFormProductMaterial(null)
+        }
+      } else {
+        setFormProductMaterial(null)
+      }
       // 延迟设置表单值，确保表单已渲染
       setTimeout(() => {
         const mode = detail.production_mode || 'MTS'
@@ -2916,7 +2956,10 @@ const WorkOrdersPage: React.FC = () => {
           product_id: detail.product_id,
           product_code: detail.product_code,
           product_name: detail.product_name,
-          quantity: detail.quantity,
+          quantity:
+            detail.display_quantity ??
+            detail.displayQuantity ??
+            convertBaseQtyToProductionDisplay(Number(detail.quantity) || 0, detail),
           production_mode: mode,
           variant_attributes: variantAttrs != null
             ? (typeof variantAttrs === 'string' ? variantAttrs : JSON.stringify(variantAttrs, null, 2))
@@ -3278,7 +3321,11 @@ const WorkOrdersPage: React.FC = () => {
           messageApi.warning('合格数与不合格数之和须大于 0')
           return
         }
-        const rem = getRemainingReportableQuantity(quickReportingOperation, Number(quickReportingWorkOrder.quantity) || 0)
+        const remBase = getRemainingReportableQuantity(
+          quickReportingOperation,
+          Number(quickReportingWorkOrder.quantity) || 0,
+        )
+        const rem = convertBaseQtyToProductionDisplay(remBase, quickReportingWorkOrder)
         if (rq > rem + 1e-9) {
           messageApi.warning(
             t('apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit', { max: rem })
@@ -3296,9 +3343,9 @@ const WorkOrdersPage: React.FC = () => {
             return
           }
         }
-        reportingData.reported_quantity = rq
-        reportingData.qualified_quantity = qq
-        reportingData.unqualified_quantity = uq
+        reportingData.reported_quantity = convertProductionInputToBaseQty(rq, quickReportingWorkOrder)
+        reportingData.qualified_quantity = convertProductionInputToBaseQty(qq, quickReportingWorkOrder)
+        reportingData.unqualified_quantity = convertProductionInputToBaseQty(uq, quickReportingWorkOrder)
       }
       if (quickReportingIsLastOperation) {
         if (quickReportingWarehouseRequired && !values.inbound_warehouse_id) {
@@ -4359,6 +4406,23 @@ const WorkOrdersPage: React.FC = () => {
         values.production_mode = 'MTO'
       } else {
         values.production_mode = values.production_mode || 'MTS'
+      }
+
+      const quantityContext =
+        formProductMaterial ??
+        (currentWorkOrder
+          ? {
+              unit_to_base_factor: currentWorkOrder.unit_to_base_factor ?? currentWorkOrder.unitToBaseFactor,
+              product_unit: currentWorkOrder.product_unit ?? currentWorkOrder.productUnit,
+              base_unit: currentWorkOrder.base_unit ?? currentWorkOrder.baseUnit,
+            }
+          : null)
+      if (values.quantity != null && quantityContext) {
+        if (formProductMaterial) {
+          values.quantity = convertToBaseQuantity(formProductMaterial, Number(values.quantity))
+        } else {
+          values.quantity = convertProductionInputToBaseQty(Number(values.quantity), quantityContext)
+        }
       }
 
       // 处理工序设置
@@ -7988,12 +8052,17 @@ const WorkOrdersPage: React.FC = () => {
                   workOrderQuantity={Number(quickReportingWorkOrder.quantity) || 0}
                   operations={quickReportingRouteOperations}
                   workOrderId={quickReportingWorkOrder.id}
+                  unitContext={quickReportingWorkOrder}
                 />
               </Col>
             )}
             <ProFormDigit
               name="qualified_quantity"
-              label="合格数量"
+              label={
+                quickReportingWorkOrder?.product_unit
+                  ? `合格数量（${quickReportingWorkOrder.product_unit}）`
+                  : '合格数量'
+              }
               placeholder="合格数量"
               rules={[{ required: true, message: '请输入合格数量' }]}
               min={0}
@@ -8006,7 +8075,11 @@ const WorkOrdersPage: React.FC = () => {
             />
             <ProFormDigit
               name="unqualified_quantity"
-              label="不合格数量"
+              label={
+                quickReportingWorkOrder?.product_unit
+                  ? `不合格数量（${quickReportingWorkOrder.product_unit}）`
+                  : '不合格数量'
+              }
               placeholder="不合格数量"
               rules={[{ required: true, message: '请输入不合格数量' }]}
               min={0}
@@ -8022,23 +8095,34 @@ const WorkOrdersPage: React.FC = () => {
                 const qq = Number(qqIn) || 0
                 const uq = Number(uqIn) || 0
                 const total = qq + uq
-                const rem =
+                const remBase =
                   quickReportingWorkOrder && quickReportingOperation
                     ? getRemainingReportableQuantity(
                         quickReportingOperation,
-                        Number(quickReportingWorkOrder.quantity) || 0
+                        Number(quickReportingWorkOrder.quantity) || 0,
                       )
                     : 0
+                const rem = quickReportingWorkOrder
+                  ? convertBaseQtyToProductionDisplay(remBase, quickReportingWorkOrder)
+                  : remBase
+                const unitLabel = quickReportingWorkOrder?.product_unit
+                  ? ` ${quickReportingWorkOrder.product_unit}`
+                  : ''
                 const over = total > rem + 1e-9
                 return (
                   <Col span={24} style={{ marginBottom: 16 }}>
                     <div>
                       <span style={{ color: token.colorTextSecondary }}>报工数量（自动合计）：</span>
-                      <span style={{ fontWeight: 600 }}>{total}</span>
+                      <span style={{ fontWeight: 600 }}>
+                        {total}
+                        {unitLabel}
+                      </span>
                     </div>
                     {over && (
                       <Typography.Text type="danger" style={{ display: 'block', marginTop: 8 }}>
-                        {t('apps.kuaizhizao.workOrder.quickReport.exceedEffective', { max: rem })}
+                        {t('apps.kuaizhizao.workOrder.quickReport.exceedEffective', {
+                          max: `${rem}${unitLabel}`,
+                        })}
                       </Typography.Text>
                     )}
                   </Col>
@@ -8306,6 +8390,7 @@ const WorkOrdersPage: React.FC = () => {
                   if (material) {
                     try {
                       const materialDetail = await materialApi.get(material.uuid)
+                      setFormProductMaterial(materialDetail as Material)
                       const sourceType = materialDetail.sourceType || materialDetail.source_type
                       setSelectedMaterialSourceInfo(resolveMaterialSourceValidation(sourceType, t))
                       loadProcessRouteForMaterial(material.uuid)
@@ -8316,6 +8401,7 @@ const WorkOrdersPage: React.FC = () => {
                   } else setSelectedMaterialSourceInfo(null)
                 } else {
                   setSelectedMaterialSourceInfo(null)
+                  setFormProductMaterial(null)
                 }
               }}
             />
@@ -8442,7 +8528,13 @@ const WorkOrdersPage: React.FC = () => {
 
         <ProFormDigit
           name="quantity"
-          label={t('app.kuaizhizao.workOrder.colPlannedQty')}
+          label={
+            formProductMaterial
+              ? `${t('app.kuaizhizao.workOrder.colPlannedQty')}（${resolveMaterialScenarioUnit(formProductMaterial, 'production')}）`
+              : currentWorkOrder?.product_unit
+                ? `${t('app.kuaizhizao.workOrder.colPlannedQty')}（${currentWorkOrder.product_unit}）`
+                : t('app.kuaizhizao.workOrder.colPlannedQty')
+          }
           placeholder={t('app.kuaizhizao.workOrder.formEnter')}
           min={0}
           precision={2}
@@ -9234,7 +9326,7 @@ const WorkOrdersPage: React.FC = () => {
         ) : null}
       </FormModalTemplate>
 
-      {/* 工序委外上拉预览 */}
+      {/* 工序委外加载预览 */}
       <Modal
         title={t('app.kuaizhizao.outsourceOrder.pullPreviewTitle')}
         open={outsourcePreviewOpen}

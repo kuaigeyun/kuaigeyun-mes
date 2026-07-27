@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App, Button, Empty, Modal, Space, Spin, Table, Tag, Typography } from 'antd';
+import { App, Button, Empty, Modal, Space, Spin, Table, Typography } from 'antd';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { ReloadOutlined } from '@ant-design/icons';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
@@ -21,34 +22,15 @@ import {
   type DemandReplanTaskItem,
 } from '../../../services/demand-computation';
 
-const riskColor: Record<string, string> = {
-  low: 'success',
-  medium: 'warning',
-  high: 'error',
-};
-
-const taskStatusColor: Record<string, string> = {
-  pending: 'default',
-  running: 'processing',
-  completed: 'success',
-  failed: 'error',
-  cancelled: 'default',
-};
-
-const approvalStatusColor: Record<string, string> = {
-  not_required: 'default',
-  pending: 'warning',
-  approved: 'success',
-  rejected: 'error',
-};
+import {
+  renderDemandReplanApprovalStatusTag,
+  renderDemandReplanEventStatusTag,
+  renderDemandReplanModeMarker,
+  renderDemandReplanRiskMarker,
+  renderDemandReplanTaskStatusTag,
+} from '../../../utils/demandReplanTags';
 
 const isActionableTaskStatus = (status?: string) => status === 'pending' || status === 'failed';
-
-const eventStatusTagColor = (status?: string) => {
-  if (status === 'analyzed') return 'success';
-  if (status === 'failed') return 'error';
-  return 'default';
-};
 
 function formatReplanTaskError(
   task: DemandReplanTaskItem,
@@ -391,7 +373,11 @@ const DemandReplanDashboardPage: React.FC = () => {
         hideInSearch: false,
         valueType: 'select',
         valueEnum: taskModeValueEnum,
-        render: (_, row) => <Tag>{modeText[row.mode as keyof typeof modeText] || row.mode}</Tag>,
+        render: (_, row) =>
+          renderDemandReplanModeMarker(
+            modeText[row.mode as keyof typeof modeText] || row.mode || '-',
+            row.mode,
+          ),
       },
       {
         title: t('app.kuaizhizao.demandReplan.col.riskLevel'),
@@ -401,11 +387,8 @@ const DemandReplanDashboardPage: React.FC = () => {
         hideInSearch: false,
         valueType: 'select',
         valueEnum: taskRiskValueEnum,
-        render: (_, row) => (
-          <Tag color={riskColor[row.risk_level] || 'default'}>
-            {labelFromMap(riskLevelText, row.risk_level)}
-          </Tag>
-        ),
+        render: (_, row) =>
+          renderDemandReplanRiskMarker(labelFromMap(riskLevelText, row.risk_level), row.risk_level),
       },
       {
         title: t('app.kuaizhizao.demandReplan.col.approvalStatus'),
@@ -415,11 +398,11 @@ const DemandReplanDashboardPage: React.FC = () => {
         hideInSearch: false,
         valueType: 'select',
         valueEnum: taskApprovalValueEnum,
-        render: (_, row) => (
-          <Tag color={approvalStatusColor[row.approval_status] || 'default'}>
-            {labelFromMap(approvalStatusText, row.approval_status)}
-          </Tag>
-        ),
+        render: (_, row) =>
+          renderDemandReplanApprovalStatusTag(
+            labelFromMap(approvalStatusText, row.approval_status),
+            row.approval_status,
+          ),
       },
       {
         title: t('app.kuaizhizao.demandReplan.col.taskStatus'),
@@ -429,11 +412,8 @@ const DemandReplanDashboardPage: React.FC = () => {
         hideInSearch: false,
         valueType: 'select',
         valueEnum: taskStatusValueEnum,
-        render: (_, row) => (
-          <Tag color={taskStatusColor[row.status] || 'default'}>
-            {labelFromMap(taskStatusText, row.status)}
-          </Tag>
-        ),
+        render: (_, row) =>
+          renderDemandReplanTaskStatusTag(labelFromMap(taskStatusText, row.status), row.status),
       },
       {
         title: t('app.kuaizhizao.demandReplan.col.createdAt'),
@@ -515,15 +495,15 @@ const DemandReplanDashboardPage: React.FC = () => {
         title: t('app.kuaizhizao.demandReplan.col.mode'),
         dataIndex: 'mode',
         width: 100,
-        render: (mode: string) => <Tag>{modeText[mode as keyof typeof modeText] || mode}</Tag>,
+        render: (mode: string) =>
+          renderDemandReplanModeMarker(modeText[mode as keyof typeof modeText] || mode || '-', mode),
       },
       {
         title: t('app.kuaizhizao.demandReplan.col.taskStatus'),
         dataIndex: 'status',
         width: 100,
-        render: (status: string) => (
-          <Tag color={taskStatusColor[status] || 'default'}>{labelFromMap(taskStatusText, status)}</Tag>
-        ),
+        render: (status: string) =>
+          renderDemandReplanTaskStatusTag(labelFromMap(taskStatusText, status), status),
       },
       {
         title: t('app.kuaizhizao.demandReplan.col.actions'),
@@ -580,9 +560,10 @@ const DemandReplanDashboardPage: React.FC = () => {
                 <Typography.Text strong style={{ fontSize: 13 }}>
                   {row.source_code || row.event_code || t('app.kuaizhizao.demandReplan.docFallback', { id: row.id })}
                 </Typography.Text>
-                <Tag color={eventStatusTagColor(row.event_status)}>
-                  {labelFromMap(eventStatusText, row.event_status)}
-                </Tag>
+                {renderDemandReplanEventStatusTag(
+                  labelFromMap(eventStatusText, row.event_status),
+                  row.event_status,
+                )}
               </div>
               <div style={{ marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -654,17 +635,17 @@ const DemandReplanDashboardPage: React.FC = () => {
                 <Space>
                   {selectedEventId ? (
                     <>
-                      <Tag color="blue">
+                      <MarkerTag color="processing">
                         {t('app.kuaizhizao.demandReplan.currentDoc', {
                           code: selectedEventCode || String(selectedEventId),
                         })}
-                      </Tag>
+                      </MarkerTag>
                       <Button type="link" size="small" onClick={() => setSelectedEventId(null)}>
                         {t('app.kuaizhizao.demandReplan.clearEventFilter')}
                       </Button>
                     </>
                   ) : (
-                    <Tag>{t('app.kuaizhizao.demandReplan.currentDocAll')}</Tag>
+                    <MarkerTag color="default">{t('app.kuaizhizao.demandReplan.currentDocAll')}</MarkerTag>
                   )}
                 </Space>
               ),
@@ -809,9 +790,8 @@ const DemandReplanDashboardPage: React.FC = () => {
                     title: t('app.kuaizhizao.demandReplan.impactCol.risk'),
                     dataIndex: 'risk_level',
                     width: 90,
-                    render: (v: string) => (
-                      <Tag color={riskColor[String(v)] || 'default'}>{labelFromMap(riskLevelText, String(v))}</Tag>
-                    ),
+                    render: (v: string) =>
+                      renderDemandReplanRiskMarker(labelFromMap(riskLevelText, String(v)), v),
                   },
                   {
                     title: t('app.kuaizhizao.demandReplan.impactCol.approval'),
@@ -819,9 +799,9 @@ const DemandReplanDashboardPage: React.FC = () => {
                     width: 80,
                     render: (v) =>
                       v ? (
-                        <Tag color="warning">{t('app.kuaizhizao.demandReplan.yes')}</Tag>
+                        <MarkerTag color="warning">{t('app.kuaizhizao.demandReplan.yes')}</MarkerTag>
                       ) : (
-                        <Tag>{t('app.kuaizhizao.demandReplan.no')}</Tag>
+                        <MarkerTag color="default">{t('app.kuaizhizao.demandReplan.no')}</MarkerTag>
                       ),
                   },
                   { title: t('app.kuaizhizao.demandReplan.impactCol.reason'), dataIndex: 'impact_reason' },

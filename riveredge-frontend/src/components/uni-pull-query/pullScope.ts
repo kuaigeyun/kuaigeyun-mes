@@ -1,5 +1,5 @@
 /**
- * 上拉取单分段：可加载 / 全部（前端过滤 + 分页切片）。
+ * 加载取单分段：可加载 / 全部（前端过滤 + 分页切片）。
  */
 
 export const UNI_PULL_SCOPE_PULLABLE = 'pullable';

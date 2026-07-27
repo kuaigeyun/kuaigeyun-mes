@@ -85,11 +85,11 @@ async def list_purchase_orders(
     order_by: Optional[str] = Query(None, description="排序字段，如 order_date、-updated_at"),
     pullable_only: Optional[bool] = Query(
         None,
-        description="仅可上拉建单；需配合 pull_target",
+        description="仅可加载建单；需配合 pull_target",
     ),
     pull_target: Optional[str] = Query(
         None,
-        description="上拉目标：purchase_order_change；与 pullable_only 组合使用",
+        description="加载目标：purchase_order_change；与 pullable_only 组合使用",
     ),
     current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)

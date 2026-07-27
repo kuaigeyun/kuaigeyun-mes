@@ -8,16 +8,16 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * Date: 2026-01-16
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import type { DescriptionsProps } from 'antd';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Space, Tag, notification, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
 import { CheckOutlined, EyeOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG, MultiTabListPageTemplate } from '../../../../../components/layout-templates';
+import { FormModalTemplate, DetailDrawerTemplate, DRAWER_CONFIG, MultiTabListPageTemplate, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
 import { maintenanceReminderApi, equipmentApi } from '../../../services/equipment';
 import { ProFormTextArea } from '@ant-design/pro-components';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -35,36 +35,6 @@ import {
 } from '../../../utils/equipmentListCore';
 
 const P = 'app.kuaizhizao.maintenanceReminder';
-
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'date' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD');
-    }
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    }
-    if (col.render && dataSource != null) {
-            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
-}
 
 interface MaintenanceReminder {
   id?: number;
@@ -104,16 +74,15 @@ const MaintenanceRemindersPage: React.FC = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [selectedRows, setSelectedRows] = useState<MaintenanceReminder[]>([]);
-
-  // 详情相关状态
-  const [detailVisible, setDetailVisible] = useState(false);
-  const [currentReminder, setCurrentReminder] = useState<MaintenanceReminder | null>(null);
+  const { open: detailVisible, loading: detailLoading, detail, setDetail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<MaintenanceReminder>();
+  const [handleTarget, setHandleTarget] = useState<MaintenanceReminder | null>(null);
 
   const [reminderTrackingRefreshKey, setReminderTrackingRefreshKey] = useState(0);
 
   const reminderTracking = useDocumentTracking(
-    detailVisible && currentReminder?.id ? 'maintenance_reminder' : undefined,
-    currentReminder?.id,
+    detailVisible && detail?.id ? 'maintenance_reminder' : undefined,
+    detail?.id,
     reminderTrackingRefreshKey,
   );
 
@@ -173,8 +142,8 @@ const MaintenanceRemindersPage: React.FC = () => {
       messageApi.success(t(`${P}.markReadSuccess`));
       actionRef.current?.reload();
       fetchUnreadCount();
-      if (detailVisible && currentReminder?.uuid === record.uuid) {
-        setCurrentReminder((prev) => (prev ? { ...prev, is_read: true } : null));
+      if (detailVisible && detail?.uuid === record.uuid) {
+        setDetail((prev) => (prev ? { ...prev, is_read: true } : null));
         setReminderTrackingRefreshKey((k) => k + 1);
       }
     } catch (error: any) {
@@ -186,7 +155,7 @@ const MaintenanceRemindersPage: React.FC = () => {
    * 处理标记为已处理
    */
   const handleMarkAsHandled = async (record: MaintenanceReminder) => {
-    setCurrentReminder(record);
+    setHandleTarget(record);
     setHandleModalVisible(true);
     setTimeout(() => {
       handleFormRef.current?.resetFields();
@@ -198,24 +167,25 @@ const MaintenanceRemindersPage: React.FC = () => {
    */
   const handleMarkAsHandledSubmit = async (values: any) => {
     try {
-      if (!currentReminder?.uuid) {
+      if (!handleTarget?.uuid) {
         messageApi.error(t(`${P}.uuidNotFound`));
         return;
       }
 
-      const drawerUuid = currentReminder.uuid;
+      const drawerUuid = handleTarget.uuid;
       const updated = (await maintenanceReminderApi.markAsHandled({
-        reminder_uuid: currentReminder.uuid,
+        reminder_uuid: handleTarget.uuid,
         remark: values.remark,
         attachments: normalizeDocumentAttachments(values.attachments),
       })) as MaintenanceReminder;
 
       messageApi.success(t(`${P}.markHandledSuccess`));
       setHandleModalVisible(false);
+      setHandleTarget(null);
       actionRef.current?.reload();
       fetchUnreadCount();
       if (detailVisible && updated?.uuid === drawerUuid) {
-        setCurrentReminder(updated);
+        setDetail(updated);
         setReminderTrackingRefreshKey((k) => k + 1);
       }
     } catch (error: any) {
@@ -251,11 +221,14 @@ const MaintenanceRemindersPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleViewDetail = async (record: MaintenanceReminder) => {
-    setCurrentReminder(record);
-    setDetailVisible(true);
-    setReminderTrackingRefreshKey((k) => k + 1);
-  };
+  const handleViewDetail = useCallback(
+    (record: MaintenanceReminder) => {
+      if (!record.uuid) return;
+      setReminderTrackingRefreshKey((k) => k + 1);
+      void openDetail(async () => record as MaintenanceReminder);
+    },
+    [openDetail],
+  );
 
   /**
    * 手动检查维护计划
@@ -640,95 +613,86 @@ const MaintenanceRemindersPage: React.FC = () => {
       <DetailDrawerTemplate
         title={t(`${P}.detailTitle`)}
         open={detailVisible}
+        loading={detailLoading}
         zIndex={reminderDetailDrawerZIndex}
         onClose={() => {
-          setDetailVisible(false);
-          setCurrentReminder(null);
+          closeDetail();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        column={2}
-        customContent={
-          currentReminder ? (
-            <>
-              <DetailDrawerSection title={t(`${P}.section.basicInfo`)}>
-                <Descriptions
-                  column={2}
-                  size="small"
-                  items={buildDescriptionItemsFromColumns(currentReminder, detailBaseColumns)}
-                />
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t(`${P}.section.lifecycle`)}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lc = getMaintenanceReminderLifecycle(currentReminder as Record<string, unknown>, t);
-                    const mainStages = lc.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        showLabels
-                        status={lc.status}
-                        nextStepSuggestions={lc.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  <Typography.Text type="secondary">
-                    {t(`${P}.readHandleStatus`, {
-                      read: currentReminder.is_read ? t(`${P}.yes`) : t(`${P}.no`),
-                      readAt: currentReminder.read_at
-                        ? `（${formatDateTime(currentReminder.read_at, 'YYYY-MM-DD HH:mm:ss')}）`
-                        : '',
-                      handled: currentReminder.is_handled ? t(`${P}.yes`) : t(`${P}.no`),
-                      handledAt: currentReminder.handled_at
-                        ? `（${formatDateTime(currentReminder.handled_at, 'YYYY-MM-DD HH:mm:ss')}，${currentReminder.handled_by_name || '-'}）`
-                        : '',
-                    })}
-                  </Typography.Text>
-                  {currentReminder.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType="maintenance_reminder"
-                      documentId={currentReminder.id}
-                      active={detailVisible}
-                      selfDocumentId={currentReminder.id}
-                      renderBriefActions={(doc) => (
-                        <EquipmentTraceBriefPrimaryActions
-                          doc={doc}
-                          t={t}
-                          navigate={navigate}
-                          closeDrawer={() => {
-                            setDetailVisible(false);
-                            setCurrentReminder(null);
-                          }}
-                        />
-                      )}
-                    />
-                  ) : null}
-                </div>
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t(`${P}.section.detailInfo`)}>
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noDetailLines`)} />
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t(`${P}.section.operationHistory`)}>
-                {reminderTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {reminderTracking.error && !reminderTracking.loading && (
-                  <Typography.Text type="danger">{reminderTracking.error}</Typography.Text>
-                )}
-                {reminderTracking.data && !reminderTracking.loading && (
-                  <DocumentTrackingTimelineBody data={reminderTracking.data} />
-                )}
-                {!reminderTracking.loading && !reminderTracking.data && !reminderTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noOperationRecords`)} />
-                )}
-              </DetailDrawerSection>
-            </>
-          ) : null
+        basic={
+          detail ? (
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(detailBaseColumns, detail)}
+            />
+          ) : undefined
         }
+        basicTitle={t(`${P}.section.basicInfo`)}
+        collaborationTitle={t(`${P}.section.lifecycle`)}
+        collaborationLifecycle={
+          detail ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {(() => {
+                const lc = getMaintenanceReminderLifecycle(detail as Record<string, unknown>, t);
+                const mainStages = lc.mainStages ?? [];
+                if (mainStages.length === 0) return null;
+                return (
+                  <UniLifecycleStepper
+                    steps={mainStages}
+                    showLabels
+                    status={lc.status}
+                    nextStepSuggestions={lc.nextStepSuggestions}
+                    hideNextStepSuggestions
+                  />
+                );
+              })()}
+              <Typography.Text type="secondary">
+                {t(`${P}.readHandleStatus`, {
+                  read: detail.is_read ? t(`${P}.yes`) : t(`${P}.no`),
+                  readAt: detail.read_at
+                    ? `（${formatDateTime(detail.read_at, 'YYYY-MM-DD HH:mm:ss')}）`
+                    : '',
+                  handled: detail.is_handled ? t(`${P}.yes`) : t(`${P}.no`),
+                  handledAt: detail.handled_at
+                    ? `（${formatDateTime(detail.handled_at, 'YYYY-MM-DD HH:mm:ss')}，${detail.handled_by_name || '-'}）`
+                    : '',
+                })}
+              </Typography.Text>
+            </div>
+          ) : undefined
+        }
+        traceDocument={
+          detail?.id != null
+            ? {
+                documentType: 'maintenance_reminder',
+                documentId: detail.id,
+                selfDocumentId: detail.id,
+                renderBriefActions: (doc) => (
+                  <EquipmentTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={closeDetail}
+                  />
+                ),
+              }
+            : null
+        }
+        timeline={
+          reminderTracking.loading ? (
+            <div style={{ textAlign: 'center', padding: 24 }}>
+              <Spin />
+            </div>
+          ) : reminderTracking.error ? (
+            <Typography.Text type="danger">{reminderTracking.error}</Typography.Text>
+          ) : reminderTracking.data ? (
+            <DocumentTrackingTimelineBody data={reminderTracking.data} />
+          ) : (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noOperationRecords`)} />
+          )
+        }
+        timelineTitle={t(`${P}.section.operationHistory`)}
       />
 
       {/* 标记已处理Modal */}

@@ -12,7 +12,7 @@ import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Form as AntForm, InputNumber, Row, Col, Tooltip, Alert, Spin, Empty } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Row, Col, Tooltip, Alert, Spin, Empty } from 'antd';
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -25,18 +25,15 @@ import {
   ImportOutlined,
   RollbackOutlined,
 } from '@ant-design/icons';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniPullQueryModal, filterByPullScope, paginatePullRows, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import {
   MultiTabListPageTemplate,
   FormModalTemplate,
-  DetailDrawerTemplate,
-  DetailDrawerSection,
   MODAL_CONFIG,
-  DRAWER_CONFIG,
   WAREHOUSE_DETAIL_TABLE_STYLES,
 } from '../../../../../components/layout-templates';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { batchingOrderApi } from '../../../services/batching-order';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { batchingOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
@@ -46,6 +43,11 @@ import BatchingTaskQueue from './BatchingTaskQueue';
 import LineSidePrepSplitView from './LineSidePrepSplitView';
 import OutsourceMaterialPanel from './OutsourceMaterialPanel';
 import {
+  MaterialCenterDetailDrawer,
+  loadMaterialCenterDetail,
+  type MaterialCenterDetailRequest,
+} from './materialCenterDetail';
+import {
   getMaterialCenterTabs,
   DEFAULT_MATERIAL_CENTER_TAB,
   isBatchingTaskTab,
@@ -53,7 +55,6 @@ import {
   type MaterialCenterTabKey,
   type BatchingTaskTabKey,
 } from './materialCenterTabs';
-import { getBatchingOrderStageName, getBatchingOrderLifecycle } from '../../../utils/batchingOrderLifecycle';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
@@ -63,38 +64,7 @@ import dayjs from 'dayjs';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
 
-interface BatchingOrder {
-  id?: number;
-  uuid?: string;
-  code?: string;
-  warehouse_id?: number;
-  warehouse_name?: string;
-  work_order_id?: number;
-  work_order_code?: string;
-  batching_date?: string;
-  status?: string;
-  total_items?: number;
-  target_warehouse_id?: number;
-  target_warehouse_name?: string;
-  remarks?: string;
-  executed_by?: number;
-  executed_by_name?: string;
-  executed_at?: string;
-  created_at?: string;
-  updated_at?: string;
-  items?: BatchingOrderItem[];
-}
-
-interface BatchingOrderItem {
-  id?: number;
-  material_id?: number;
-  material_code?: string;
-  material_name?: string;
-  unit?: string;
-  required_quantity?: number;
-  picked_quantity?: number;
-  status?: string;
-}
+const MATERIAL_CENTER_RESOURCE = 'kuaizhizao:warehouse-management-batching-center';
 
 interface PullWorkOrderCandidate {
   id: number;
@@ -128,6 +98,7 @@ const BatchingCenterPage: React.FC = () => {
   const { t } = useTranslation();
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'batching_order.pull_from_work_order');
   const { message: messageApi } = App.useApp();
+  const perms = useResourcePermissions(MATERIAL_CENTER_RESOURCE);
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [searchParams] = useSearchParams();
@@ -170,8 +141,10 @@ const BatchingCenterPage: React.FC = () => {
   const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
   const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
   const [pullPreviewData, setPullPreviewData] = useState<BatchingPullPreview | null>(null);
-  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
-  const [currentOrder, setCurrentOrder] = useState<BatchingOrder | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailRequest, setDetailRequest] = useState<MaterialCenterDetailRequest | null>(null);
+  const [detailData, setDetailData] = useState<Record<string, unknown> | null>(null);
   const formRef = useRef<any>(null);
   const pullQueryCloseRef = useRef<(() => void) | null>(null);
   const defaultBatchingItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', required_quantity: 1 };
@@ -352,12 +325,26 @@ const BatchingCenterPage: React.FC = () => {
     }
   };
 
-  const openBatchingDetail = (orderId: number) => {
-    batchingOrderApi.get(String(orderId)).then((order) => {
-      setCurrentOrder(order);
-      setDetailDrawerVisible(true);
-    });
-  };
+  const openMaterialCenterDetail = useCallback((request: MaterialCenterDetailRequest) => {
+    setDetailRequest(request);
+    setDetailOpen(true);
+    setDetailLoading(true);
+    setDetailData(null);
+    loadMaterialCenterDetail(request)
+      .then((data) => setDetailData(data))
+      .catch((error: unknown) => {
+        messageApi.error(getApiErrorMessage(error, t('common.loadFailed')));
+        setDetailOpen(false);
+        setDetailRequest(null);
+      })
+      .finally(() => setDetailLoading(false));
+  }, [messageApi, t]);
+
+  const closeMaterialCenterDetail = useCallback(() => {
+    setDetailOpen(false);
+    setDetailRequest(null);
+    setDetailData(null);
+  }, []);
 
   const tabIcons: Record<MaterialCenterTabKey, React.ReactNode> = {
     line_side_prep: <CarryOutOutlined />,
@@ -387,20 +374,22 @@ const BatchingCenterPage: React.FC = () => {
           tab.key === 'line_side_prep' ? (
             <LineSidePrepSplitView
               onCreate={() => handleCreate()}
-              onOpenBatchingDetail={openBatchingDetail}
+              onOpenDetail={openMaterialCenterDetail}
+              canRead={perms.canRead}
               onRefreshBatchingList={invalidateMenuBadgeCounts}
             />
           ) : isBatchingTaskTab(tab.key) ? (
             <BatchingTaskQueue
               taskType={tab.key as BatchingTaskTabKey}
-              onOpenBatchingDetail={openBatchingDetail}
+              onOpenDetail={openMaterialCenterDetail}
+              canRead={perms.canRead}
               onRefreshBatchingList={invalidateMenuBadgeCounts}
             />
           ) : (
-            <OutsourceMaterialPanel mode={tab.key} />
+            <OutsourceMaterialPanel mode={tab.key} onOpenDetail={openMaterialCenterDetail} canRead={perms.canRead} />
           ),
       })),
-    [materialCenterTabs, invalidateMenuBadgeCounts, t],
+    [materialCenterTabs, invalidateMenuBadgeCounts, openMaterialCenterDetail, perms.canRead, t],
   );
 
   return (
@@ -723,82 +712,13 @@ const BatchingCenterPage: React.FC = () => {
         ) : null}
       </Modal>
 
-      {/* 详情 Drawer */}
-      <DetailDrawerTemplate
-        title={t('app.kuaizhizao.batchingCenter.detailTitle')}
-        open={detailDrawerVisible}
-        onClose={() => {
-          setDetailDrawerVisible(false);
-          setCurrentOrder(null);
-        }}
-        dataSource={currentOrder || {}}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[
-          { title: t('app.kuaizhizao.batchingCenter.batchingCode'), dataIndex: 'code' },
-          { title: t('app.kuaizhizao.warehouseCommon.colWarehouse'), dataIndex: 'warehouse_name' },
-          { title: t('app.kuaizhizao.warehouseCommon.colWorkOrder'), dataIndex: 'work_order_code' },
-          { title: t('app.kuaizhizao.batchingCenter.batchingDate'), dataIndex: 'batching_date', valueType: 'date' },
-          {
-            title: t('app.kuaizhizao.warehouseCommon.colStatus'),
-            dataIndex: 'status',
-            render: (_, entity) => {
-              const stageName = getBatchingOrderStageName(entity?.status);
-              return <Tag>{stageName}</Tag>;
-            },
-          },
-          { title: t('app.kuaizhizao.warehouseCommon.colMaterialKindCount'), dataIndex: 'total_items' },
-          { title: t('app.kuaizhizao.warehouseCommon.colTargetLineSideWarehouse'), dataIndex: 'target_warehouse_name' },
-          { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks' },
-          { title: t('app.kuaizhizao.warehouseCommon.colExecutor'), dataIndex: 'executed_by_name' },
-          { title: t('app.kuaizhizao.warehouseCommon.colExecutedAt'), dataIndex: 'executed_at', valueType: 'dateTime' },
-        ]}
-      >
-        <DetailDrawerSection title={t('app.kuaizhizao.warehouseCommon.lifecycleSection')}>
-          {(() => {
-            const lifecycle = getBatchingOrderLifecycle(currentOrder as unknown as Record<string, unknown>, t);
-            const mainStages = lifecycle.mainStages ?? [];
-            if (mainStages.length === 0) return null;
-            return (
-              <UniLifecycleStepper
-                steps={mainStages}
-                status={lifecycle.status}
-                showLabels
-                nextStepSuggestions={lifecycle.nextStepSuggestions}
-              />
-            );
-          })()}
-        </DetailDrawerSection>
-        {currentOrder?.items && currentOrder.items.length > 0 && (
-          <Card title={t('app.kuaizhizao.batchingCenter.batchingItems')} style={{ marginTop: 16 }}>
-            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-            <Table
-              className="warehouse-detail-table"
-              columns={[
-                { title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'), dataIndex: 'material_code', width: 120 },
-                { title: t('app.kuaizhizao.warehouseCommon.colMaterialName'), dataIndex: 'material_name', width: 150 },
-                { title: t('app.kuaizhizao.batchingCenter.requiredQty'), dataIndex: 'required_quantity', width: 100, align: 'right' , render: formatQuantity },
-                { title: t('app.kuaizhizao.warehouseCommon.colPickedQty'), dataIndex: 'picked_quantity', width: 100, align: 'right' },
-                {
-                  title: t('app.kuaizhizao.warehouseCommon.colStatus'),
-                  dataIndex: 'status',
-                  width: 100,
-                  render: (status: string) => {
-                    const map: Record<string, string> = {
-                      pending: t('app.kuaizhizao.warehouseCommon.statusPendingPick'),
-                      picked: t('app.kuaizhizao.warehouseCommon.statusPicked'),
-                    };
-                    return <Tag>{map[status] ?? status}</Tag>;
-                  },
-                },
-              ]}
-              dataSource={currentOrder.items}
-              rowKey="id"
-              pagination={false}
-              size="small"
-            />
-          </Card>
-        )}
-      </DetailDrawerTemplate>
+      <MaterialCenterDetailDrawer
+        kind={detailRequest?.kind ?? null}
+        open={detailOpen}
+        loading={detailLoading}
+        detail={detailData}
+        onClose={closeMaterialCenterDetail}
+      />
     </>
   );
 };

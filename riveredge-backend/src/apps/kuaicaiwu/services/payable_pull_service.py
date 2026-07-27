@@ -1,5 +1,5 @@
 """
-应付单上拉门控：采购订单/采购入库候选列表、预览、已应付金额汇总；列表下推付款 capability。
+应付单加载门控：采购订单/采购入库候选列表、预览、已应付金额汇总；列表下推付款 capability。
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
 
 class PayablePullService(AppBaseService[Payable]):
-    """应付单上拉门控服务"""
+    """应付单加载门控服务"""
 
     _PO_ELIGIBLE_STATUSES = frozenset(
         {
@@ -243,7 +243,7 @@ class PayablePullService(AppBaseService[Payable]):
             "summary": (
                 f"将从采购订单 {code} 创建应付单（可应付 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"采购订单 {code} 当前不可上拉应付单"
+                else f"采购订单 {code} 当前不可加载应付单"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
@@ -290,7 +290,7 @@ class PayablePullService(AppBaseService[Payable]):
             "summary": (
                 f"将从采购入库单 {code} 创建应付单（可应付 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"采购入库单 {code} 当前不可上拉应付单"
+                else f"采购入库单 {code} 当前不可加载应付单"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
@@ -447,9 +447,9 @@ class PayablePullService(AppBaseService[Payable]):
         elif source_type == "purchase_receipt":
             preview = await self.preview_pull_from_purchase_receipt(tenant_id, source_id)
         else:
-            raise BusinessLogicError(f"不支持的上拉源单类型: {source_type}")
+            raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
         if preview.get("has_blocking_issues"):
-            reason = preview.get("blocking_reason") or "当前不可上拉应付单"
+            reason = preview.get("blocking_reason") or "当前不可加载应付单"
             raise BusinessLogicError(reason)
         items = preview.get("items") or []
         if not items:
@@ -487,7 +487,7 @@ class PayablePullService(AppBaseService[Payable]):
                 target_name=None,
                 relation_type="source",
                 relation_mode="pull",
-                relation_desc="上拉创建应付单",
+                relation_desc="加载创建应付单",
             ),
             created_by=created_by,
         )
@@ -497,7 +497,7 @@ class PayablePullService(AppBaseService[Payable]):
         tenant_id: int,
         payables: List[Any],
     ) -> List[Dict[str, Any]]:
-        """为应付单列表补充下推付款 capability（实际创建付款单在付款页上拉）。"""
+        """为应付单列表补充下推付款 capability（实际创建付款单在付款页加载）。"""
         from apps.kuaicaiwu.services.payment_pull_service import PaymentPullService
 
         if not payables:

@@ -23,7 +23,7 @@ class DocumentRelation(BaseModel):
     
     关联方式（relation_mode）：
     - push: 下推（从上游单据生成下游单据）
-    - pull: 上拉（从下游单据关联上游单据）
+    - pull: 加载（从下游单据关联上游单据）
     - manual: 手动关联
     
     注意：继承自BaseModel，自动获得id、uuid、tenant_id、created_at、updated_at字段

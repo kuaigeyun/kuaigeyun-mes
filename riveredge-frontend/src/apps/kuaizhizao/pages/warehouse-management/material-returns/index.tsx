@@ -11,7 +11,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, Descriptions, Form, Input, InputNumber, Modal, Row, Space, Table, Typography } from 'antd';
+import { App, Button, Col, Descriptions, Form, Input, InputNumber, Modal, Row, Space, Table, Tag, Typography } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -20,7 +20,7 @@ import { UniTableDetailHeader } from '../../../../../components/uni-table-detail
 import CodeField from '../../../../../components/code-field';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getMaterialReturnLifecycle } from '../../../utils/materialReturnLifecycle';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -93,6 +93,7 @@ const MaterialReturnsPage: React.FC = () => {
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [returnDetail, setReturnDetail] = useState<MaterialReturnDetail | null>(null);
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -169,12 +170,17 @@ const MaterialReturnsPage: React.FC = () => {
   };
 
   const handleDetail = async (record: MaterialReturn) => {
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setReturnDetail(null);
     try {
       const detail = await warehouseApi.materialReturn.get(record.id!.toString());
       setReturnDetail(detail as MaterialReturnDetail);
-      setDetailDrawerVisible(true);
     } catch {
       messageApi.error(t('app.kuaizhizao.warehouseMaterialReturn.msg.loadDetailFailed'));
+      setDetailDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -469,19 +475,14 @@ const MaterialReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseMaterialReturn.col.status'),
         dataIndex: 'status',
-        render: (_, record) => {
-          const lifecycle = getMaterialReturnLifecycle(record as unknown as Record<string, unknown>, t);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
+        render: (s) => {
+          const map: Record<string, { textKey: string; color: string }> = {
+            待归还: { textKey: 'app.kuaizhizao.warehouseMaterialReturn.status.pending', color: 'default' },
+            已归还: { textKey: 'app.kuaizhizao.warehouseMaterialReturn.status.returned', color: 'success' },
+            已取消: { textKey: 'app.kuaizhizao.warehouseMaterialReturn.status.cancelled', color: 'error' },
+          };
+          const c = map[(s as string) || ''] || { textKey: '', color: 'default' };
+          return <Tag color={c.color}>{c.textKey ? t(c.textKey) : (s as string) || '-'}</Tag>;
         },
       },
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.returnTime'), dataIndex: 'return_time', valueType: 'dateTime' },
@@ -500,6 +501,21 @@ const MaterialReturnsPage: React.FC = () => {
     ],
     [t],
   );
+
+  const detailCollaboration = useMemo(() => {
+    if (!returnDetail) return undefined;
+    const lifecycle = getMaterialReturnLifecycle(returnDetail as unknown as Record<string, unknown>, t);
+    const mainStages = lifecycle.mainStages ?? [];
+    if (!mainStages.length) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        status={lifecycle.status}
+        showLabels
+        nextStepSuggestions={lifecycle.nextStepSuggestions}
+      />
+    );
+  }, [returnDetail, t]);
 
   const createFormItemColumns = useMemo(
     () => [
@@ -599,13 +615,16 @@ const MaterialReturnsPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`${t('app.kuaizhizao.warehouseMaterialReturn.detailTitle')}${returnDetail?.return_code ? ` - ${returnDetail.return_code}` : ''}`}
         open={detailDrawerVisible}
+        loading={detailLoading}
         onClose={() => { setDetailDrawerVisible(false); setReturnDetail(null); }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           returnDetail ? (
-            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, returnDetail)} />
+            <Descriptions column={2} size="small" items={detailDrawerDescriptionItems(detailColumns, returnDetail)} />
           ) : undefined
         }
+        collaboration={detailCollaboration}
+        linesTitle={t('app.kuaizhizao.warehouseMaterialReturn.field.returnDetails')}
         lines={
           returnDetail?.items && returnDetail.items.length > 0 ? (
             <>

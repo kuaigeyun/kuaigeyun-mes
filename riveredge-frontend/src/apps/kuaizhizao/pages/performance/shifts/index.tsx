@@ -5,20 +5,15 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Popconfirm, Space, Spin, Typography, theme as AntdTheme } from 'antd';
+import { App, Button, Popconfirm, Space, Typography, theme as AntdTheme } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
-import {
-  ListPageTemplate,
-  DetailDrawerTemplate,
-  DetailDrawerSection,
-  DRAWER_CONFIG,
-} from '../../../../../components/layout-templates';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { PerformanceConfigDetailDrawer } from '../shared/performanceConfigDetailDrawer';
 import { shiftApi } from '../../../services/performance';
 import type { Shift } from '../../../types/performance';
 import { ShiftFormModal } from '../../../components/ShiftFormModal';
-import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   getPerformanceInactiveActiveValueEnum,
@@ -252,29 +247,15 @@ const ShiftsPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <DetailDrawerTemplate
+      <PerformanceConfigDetailDrawer
         title={t('app.kuaizhizao.performance.shifts.detailTitle')}
         open={drawerVisible}
         zIndex={detailDrawerZIndex}
         onClose={handleCloseDetail}
-        width={DRAWER_CONFIG.HALF_WIDTH}
         loading={detailLoading}
-        columns={[]}
-        customContent={
-          detailLoading && !shiftDetail ? (
-            <div style={{ textAlign: 'center', padding: 48 }}>
-              <Spin />
-            </div>
-          ) : shiftDetail ? (
-            <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.basicInfo')}>
-              <Descriptions
-                column={2}
-                size="small"
-                items={buildMasterDetailDescriptionItems(shiftDetail, detailColumns)}
-              />
-            </DetailDrawerSection>
-          ) : null
-        }
+        detail={shiftDetail}
+        detailColumns={detailColumns}
+        t={t}
       />
     </>
   );

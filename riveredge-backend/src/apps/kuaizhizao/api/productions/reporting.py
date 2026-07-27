@@ -391,7 +391,7 @@ async def list_reporting_pull_candidates(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ReportingPullCandidateListResponse:
-    """在制工单工序上拉源（服务端分页，避免前端 N+1 拉工序）。"""
+    """在制工单工序加载源（服务端分页，避免前端 N+1 拉工序）。"""
     _ = current_user
     return await reporting_service.list_reporting_pull_candidates(
         tenant_id=tenant_id,

@@ -35,7 +35,7 @@ import {
   theme,
   Alert,
 } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, DownOutlined } from '@ant-design/icons';
+import { PlusOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, DownOutlined, RollbackOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
@@ -787,7 +787,6 @@ const ReceiptNoticesPage: React.FC = () => {
               key="d"
               type="link"
               size="small"
-              icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
                 handleDetail(record);
@@ -802,7 +801,6 @@ const ReceiptNoticesPage: React.FC = () => {
                 key="e"
                 type="link"
                 size="small"
-                icon={<EditOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleEdit(record);
@@ -818,8 +816,6 @@ const ReceiptNoticesPage: React.FC = () => {
                 key="n"
                 type="link"
                 size="small"
-                icon={<SendOutlined />}
-                style={{ color: '#1890ff' }}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleNotify(record);
@@ -835,8 +831,6 @@ const ReceiptNoticesPage: React.FC = () => {
                 key="del"
                 type="link"
                 size="small"
-                danger
-                icon={<DeleteOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDelete(record);
@@ -848,7 +842,7 @@ const ReceiptNoticesPage: React.FC = () => {
           }
           if (record.capabilities?.withdraw?.allowed === true) {
             parts.push(
-              <Button {...rowActionKind('skip')}
+              <Button {...rowActionKind('revoke')}
                 key="w"
                 type="link"
                 size="small"
@@ -1521,7 +1515,7 @@ const ReceiptNoticesPage: React.FC = () => {
                 single: t('app.kuaizhizao.shipmentNotice.withdrawNotify'),
                 batch: t('app.kuaizhizao.shipmentNotice.batchWithdrawNotify'),
               }}
-              icon={<AppstoreAddOutlined />}
+              icon={<RollbackOutlined />}
               size="middle"
               color="orange"
               variant="solid"

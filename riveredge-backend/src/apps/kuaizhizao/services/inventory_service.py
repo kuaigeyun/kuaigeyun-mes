@@ -678,6 +678,21 @@ class InventoryService:
                 if wh and wh.warehouse_type == "line_side":
                     use_line_side = True
 
+            if warehouse_id is not None:
+                from apps.kuaizhizao.utils.inventory_helper import (
+                    assert_outbound_warehouse_stock_available,
+                )
+
+                await assert_outbound_warehouse_stock_available(
+                    tenant_id=tenant_id,
+                    material_id=material_id,
+                    warehouse_id=int(warehouse_id),
+                    quantity=quantity,
+                    batch_no=batch_no,
+                    ownership_type=ownership_type,
+                    customer_id=customer_id,
+                )
+
             if not use_line_side:
                 from apps.master_data.models.material_batch import MaterialBatch
                 from apps.master_data.models.material import Material

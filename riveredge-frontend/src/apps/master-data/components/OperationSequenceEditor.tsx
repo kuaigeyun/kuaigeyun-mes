@@ -27,7 +27,7 @@ import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../utils/globalSubmitShortcut';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../utils/modalEventIsolation';
 import { PlusOutlined, HolderOutlined } from '@ant-design/icons';
-import { SequenceIndexCell, StepDragHandleContext } from '../../../components/sequence-index-cell';
+import { renderOperationReportingTypeMarker } from '../utils/operationMeta';
 import {
   DndContext,
   closestCenter,
@@ -49,6 +49,7 @@ import { supplierApi, unwrapSupplyPagedList } from '../services/supply-chain';
 import {
   MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET,
   MODAL_NESTED_ABOVE_PARENT_OFFSET,
+  FILE_PREVIEW_OVERLAY_Z_INDEX,
 } from '../../../components/layout-templates/constants';
 
 const operationPickModalStyles = {
@@ -201,21 +202,19 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
         placeholder={searchPlaceholder}
         value={keyword}
         onChange={(e) => setKeyword(e.target.value)}
-        style={{ marginBottom: onQuickAdd ? 4 : 8 }}
+        style={{ marginBottom: 8 }}
       />
-      {onQuickAdd ? (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-          <Button type="link" size="small" icon={<PlusOutlined />} onClick={onQuickAdd}>
-            {quickAddLabel ?? t('app.master-data.operationSequence.quickAddOperation')}
-          </Button>
-        </div>
-      ) : null}
       {mode === 'multiple' ? (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {t('app.master-data.operationSequence.pickSelected', { count: multipleValue.length })}
           </Typography.Text>
           <Space size={0}>
+            {onQuickAdd ? (
+              <Button type="link" size="small" icon={<PlusOutlined />} onClick={onQuickAdd}>
+                {quickAddLabel ?? t('app.master-data.operationSequence.quickAddOperation')}
+              </Button>
+            ) : null}
             <Button type="link" size="small" disabled={!filtered.length} onClick={handleSelectAllFiltered}>
               {t('app.master-data.operationSequence.pickSelectAll')}
             </Button>
@@ -228,6 +227,12 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
               {t('app.master-data.operationSequence.pickClear')}
             </Button>
           </Space>
+        </div>
+      ) : onQuickAdd ? (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <Button type="link" size="small" icon={<PlusOutlined />} onClick={onQuickAdd}>
+            {quickAddLabel ?? t('app.master-data.operationSequence.quickAddOperation')}
+          </Button>
         </div>
       ) : null}
       {mode === 'multiple' && selectedOperations.length > 0 ? (
@@ -360,6 +365,9 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   const pickModalZIndex =
     nestedModalZIndex ??
     token.zIndexPopupBase + MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET + MODAL_NESTED_ABOVE_PARENT_OFFSET;
+  /** 与选择/替换工序 Modal 一致：须高于业务 Modal 抬升层（见 FILE_PREVIEW_OVERLAY_Z_INDEX） */
+  const effectivePickModalZIndex = Math.max(pickModalZIndex, FILE_PREVIEW_OVERLAY_Z_INDEX);
+  const operationFormModalZIndex = effectivePickModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   /** 受控：列表以父组件 value 为唯一真源，避免本地 state 被旧 value 同步打回 */
   const operations = value ?? [];
   const commitOperations = useCallback(
@@ -448,8 +456,6 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     },
     [addModalVisible, replaceModalVisible, operations],
   );
-
-  const operationFormModalZIndex = pickModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -605,11 +611,8 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       title: t('app.master-data.operationSequence.reportingType'),
       key: 'reportingType',
       width: 120,
-      render: (_: any, record: OperationItem) => (
-        <Tag color={record.reportingType === 'quantity' ? 'blue' : 'green'}>
-          {record.reportingType === 'quantity' ? t('app.master-data.operationSequence.reportingByQuantity') : record.reportingType === 'status' ? t('app.master-data.operationSequence.reportingByStatus') : '-'}
-        </Tag>
-      ),
+      render: (_: any, record: OperationItem) =>
+        renderOperationReportingTypeMarker(t, record.reportingType),
     },
     ...(showNodeOperationColumn
       ? [
@@ -817,7 +820,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         open={addModalVisible}
         centered
         width={520}
-        zIndex={Math.max(pickModalZIndex, 2000)}
+        zIndex={effectivePickModalZIndex}
         getContainer={() => document.body}
         destroyOnHidden
         styles={operationPickModalStyles}
@@ -854,7 +857,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         open={replaceModalVisible}
         centered
         width={520}
-        zIndex={Math.max(pickModalZIndex, 2000)}
+        zIndex={effectivePickModalZIndex}
         getContainer={() => document.body}
         destroyOnHidden
         styles={operationPickModalStyles}

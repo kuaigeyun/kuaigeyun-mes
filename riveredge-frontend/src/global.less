@@ -47,6 +47,32 @@
   border-color: var(--re-badge-draft-border) !important;
 }
 
+/* 与 statusBadges.ts MarkerTag（re-marker-tag）配套：Lucide svg / anticon 与文字垂直居中 */
+.ant-tag.re-marker-tag {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  /* 与 antd Tag icon 槽位默认间距（paddingInline ≈ 7px）一致 */
+  column-gap: 6px;
+
+  > svg {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  > .anticon {
+    display: inline-flex;
+    align-items: center;
+    line-height: 0;
+  }
+
+  /* 统一由 column-gap 控制间距，避免 Lucide svg 与 anticon 两套规则不一致 */
+  > .anticon + .ant-tag-content,
+  > svg + .ant-tag-content {
+    margin-inline-start: 0;
+  }
+}
+
 /* solid 默认色：避免「禁用」等徽章呈近黑、视觉过重 */
 .ant-tag.ant-tag-solid.ant-tag-default {
   background: var(--re-badge-default-solid-bg) !important;

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDatePicker,
   ProFormDigit,
   ProFormSelect,
@@ -27,6 +28,11 @@ import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.toolOps.return';
 const RESOURCE = 'kuaizhizao:tool-return';
@@ -42,6 +48,7 @@ interface ToolReturn {
   return_date?: string;
   manufacture_qty?: number;
   usage_count?: number;
+  remark?: string;
   updated_at?: string;
 }
 
@@ -55,6 +62,8 @@ const ToolReturnsPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<ToolReturn | null>(null);
   const [borrowOptions, setBorrowOptions] = useState<{ label: string; value: number }[]>([]);
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<ToolReturn>();
 
   const loadBorrowOptions = async () => {
     const res = await borrowsApi.listOutstanding({ limit: 500 });
@@ -75,6 +84,11 @@ const ToolReturnsPage: React.FC = () => {
     formRef.current?.setFieldsValue({ return_date: dayjs(), usage_count: 1 });
   };
   useNewShortcut(handleCreate);
+
+  const handleDetail = (record: ToolReturn) => {
+    if (!record.id) return;
+    void openDetail(() => returnsApi.get(record.id!) as Promise<ToolReturn>, t(`${P}.listFailed`));
+  };
 
   const handleEdit = async (record: ToolReturn) => {
     if (!record.id) return;
@@ -124,6 +138,23 @@ const ToolReturnsPage: React.FC = () => {
     setModalVisible(false);
     actionRef.current?.reload();
   };
+
+  const detailColumns: ProDescriptionsItemProps<ToolReturn>[] = useMemo(
+    () => [
+      { title: t(`${P}.col.returnNo`), dataIndex: 'return_no' },
+      { title: t(`${P}.col.borrowNo`), dataIndex: 'borrow_no' },
+      { title: t(`${P}.col.tool`), dataIndex: 'tool_name' },
+      {
+        title: t(`${P}.col.returnDate`),
+        dataIndex: 'return_date',
+        render: (_, r) => (r.return_date ? formatDateTime(r.return_date) : '-'),
+      },
+      { title: t(`${P}.col.manufactureQty`), dataIndex: 'manufacture_qty' },
+      { title: t(`${P}.col.usageCount`), dataIndex: 'usage_count' },
+      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+    ],
+    [t],
+  );
 
   const columns: ProColumns<ToolReturn>[] = useMemo(() => alignProColumns<ToolReturn>([
       {
@@ -185,7 +216,7 @@ const ToolReturnsPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
-                void handleEdit(record);
+                handleDetail(record);
               }}
             >
               {t('common.detail')}
@@ -263,6 +294,20 @@ const ToolReturnsPage: React.FC = () => {
           enableRowSelection={perms.canDelete}
         />
       </ListPageTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t('common.detail')}${detail?.return_no ? ` - ${detail.return_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailColumns}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && perms.canUpdate), () => {
+          if (!detail) return;
+          closeDetail();
+          void handleEdit(detail);
+        })}
+      />
 
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}

@@ -11,10 +11,16 @@ import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Tag, Button } from 'antd';
+import { App, Button } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import { renderRowActionsOverflow, rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { DeliveryDelayExceptionDetailContent } from '../components/ProductionExceptionDetailContent';
+import {
+  buildDeliveryDelayExceptionActionButtons,
+  hasDeliveryDelayExceptionActions,
+  renderDeliveryDelayExceptionActionGroup,
+} from '../components/ProductionExceptionDetailActions';
 import { apiRequest } from '../../../../../services/api';
 import { ExceptionListPage } from '../../../services/production';
 import { ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES } from '../../../constants/exceptionStatuses';
@@ -160,6 +166,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
         messageApi.success(t(`${P}.message.handleSuccess`));
       }
       setHandleModalVisible(false);
+      setDetailDrawerVisible(false);
       setCurrentRecord(null);
       setCurrentAction('');
       invalidateMenuBadgeCounts();
@@ -263,55 +270,12 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
             <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
               {t('common.detail')}
             </Button>,
-            record.status === 'pending' ? (
-              <Button
-                key="adjust"
-                {...rowActionKind('update')}
-                {...rowActionLabelKeep()}
-                onClick={() => openHandleModal(record, 'adjust_plan')}
-              >
-                {t(`${P}.action.adjustPlan`)}
-              </Button>
-            ) : null,
-            record.status === 'pending' ? (
-              <Button
-                key="resources"
-                {...rowActionKind('assign')}
-                {...rowActionLabelKeep()}
-                onClick={() => openHandleModal(record, 'increase_resources')}
-              >
-                {t(`${P}.action.increaseResources`)}
-              </Button>
-            ) : null,
-            record.status === 'pending' ? (
-              <Button
-                key="expedite"
-                {...rowActionKind('execute')}
-                {...rowActionLabelKeep()}
-                onClick={() => openHandleModal(record, 'expedite')}
-              >
-                {t(`${P}.action.expedite`)}
-              </Button>
-            ) : null,
-            record.status === 'pending' ? (
-              <Button
-                key="resolve"
-                {...rowActionKind('complete')}
-                {...rowActionLabelKeep()}
-                onClick={() => openHandleModal(record, 'resolve')}
-              >
-                {t(`${P}.action.resolve`)}
-              </Button>
-            ) : null,
-            record.status === 'pending' ? (
-              <Button
-                key="cancel"
-                {...rowActionKind('reject')}
-                onClick={() => openHandleModal(record, 'cancel')}
-              >
-                {t(`${P}.action.cancel`)}
-              </Button>
-            ) : null,
+            ...buildDeliveryDelayExceptionActionButtons({
+              record,
+              t,
+              onAction: (action) => openHandleModal(record, action),
+              keyPrefix: `delivery-delay-actions-${record.id ?? 'row'}`,
+            }),
           ],
           { keyPrefix: `delivery-delay-actions-${record.id ?? 'row'}` },
         ),
@@ -400,52 +364,28 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
           setCurrentRecord(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        customContent={
+        basic={
           currentRecord ? (
-            <div style={{ padding: '16px 0' }}>
-              <p><strong>{t(`${P}.col.workOrderCode`)}:</strong> {currentRecord.work_order_code}</p>
-              <p><strong>{t(`${P}.col.plannedEndDate`)}:</strong> {currentRecord.planned_end_date}</p>
-              {currentRecord.actual_end_date && (
-                <p><strong>{t(`${P}.field.actualEndDate`)}:</strong> {currentRecord.actual_end_date}</p>
-              )}
-              <p><strong>{t(`${P}.col.delayDays`)}:</strong>
-                <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
-                  {t(`${P}.label.daysUnit`, { count: currentRecord.delay_days ?? 0 })}
-                </span>
-              </p>
-              <p><strong>{t(`${P}.col.delayReason`)}:</strong> {currentRecord.delay_reason || '-'}</p>
-              <p><strong>{t(`${P}.col.alertLevel`)}:</strong>
-                <Tag color={
-                  currentRecord.alert_level === 'critical' ? 'red' :
-                    currentRecord.alert_level === 'high' ? 'orange' :
-                      currentRecord.alert_level === 'medium' ? 'gold' : 'default'
-                }>
-                  {alertLevelLabel(currentRecord.alert_level)}
-                </Tag>
-              </p>
-              <p><strong>{t(`${P}.col.status`)}:</strong>
-                <Tag color={
-                  currentRecord.status === 'resolved' ? 'success' :
-                    currentRecord.status === 'processing' ? 'processing' :
-                      currentRecord.status === 'cancelled' ? 'error' : 'default'
-                }>
-                  {statusLabel(currentRecord.status)}
-                </Tag>
-              </p>
-              <p><strong>{t(`${P}.col.suggestedAction`)}:</strong> {suggestedActionLabel(currentRecord.suggested_action)}</p>
-              {currentRecord.handled_by_name && (
-                <>
-                  <p><strong>{t(`${P}.field.handler`)}:</strong> {currentRecord.handled_by_name}</p>
-                  <p><strong>{t(`${P}.field.handledAt`)}:</strong> {currentRecord.handled_at}</p>
-                </>
-              )}
-              {currentRecord.remarks && (
-                <p><strong>{t(`${P}.field.remarks`)}:</strong> {currentRecord.remarks}</p>
-              )}
-            </div>
-          ) : null
+            <DeliveryDelayExceptionDetailContent
+              record={currentRecord}
+              t={t}
+              alertLevelLabel={alertLevelLabel}
+              statusLabel={statusLabel}
+              suggestedActionLabel={suggestedActionLabel}
+            />
+          ) : undefined
         }
+        collaboration={
+          currentRecord && hasDeliveryDelayExceptionActions(currentRecord)
+            ? renderDeliveryDelayExceptionActionGroup({
+                record: currentRecord,
+                t,
+                onAction: (action) => openHandleModal(currentRecord, action),
+                keyPrefix: `delivery-delay-drawer-${currentRecord.id ?? 'row'}`,
+              })
+            : undefined
+        }
+        collaborationTitle={t(`${P}.section.actions`)}
       />
 
       <FormModalTemplate

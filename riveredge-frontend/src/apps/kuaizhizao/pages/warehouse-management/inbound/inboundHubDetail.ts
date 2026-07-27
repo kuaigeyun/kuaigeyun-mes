@@ -6,34 +6,55 @@ import {
   outsourceProductReturnApi,
 } from '../../../services/production';
 import type { InboundHubOrder } from './inboundHubTypes';
+import { normalizeInboundHubDetail } from './inboundHubNormalize';
 
-export async function fetchInboundHubDetail(record: InboundHubOrder): Promise<Record<string, unknown> | null> {
+export async function fetchInboundHubDetail(
+  record: InboundHubOrder,
+): Promise<Record<string, unknown> | null> {
   const id = String(record.id);
+  const receiptType = record.receipt_type;
+  if (!receiptType) return null;
   try {
-    switch (record.receipt_type) {
+    let raw: Record<string, unknown> | null = null;
+    switch (receiptType) {
       case 'purchase':
-        return (await warehouseApi.purchaseReceipt.get(id)) as Record<string, unknown>;
+        raw = (await warehouseApi.purchaseReceipt.get(id)) as Record<string, unknown>;
+        break;
       case 'finished_goods':
-        return (await warehouseApi.finishedGoodsReceipt.get(id)) as Record<string, unknown>;
+        raw = (await warehouseApi.finishedGoodsReceipt.get(id)) as Record<string, unknown>;
+        break;
       case 'semi_finished_goods':
-        return (await warehouseApi.semiFinishedGoodsReceipt.get(id)) as Record<string, unknown>;
+        raw = (await warehouseApi.semiFinishedGoodsReceipt.get(id)) as Record<string, unknown>;
+        break;
       case 'production_return':
-        return (await warehouseApi.productionReturn.get(id)) as Record<string, unknown>;
+        raw = (await warehouseApi.productionReturn.get(id)) as Record<string, unknown>;
+        break;
       case 'sales_return':
-        return (await warehouseApi.salesReturn.get(id)) as Record<string, unknown>;
+        raw = (await warehouseApi.salesReturn.get(id)) as Record<string, unknown>;
+        break;
       case 'other_inbound':
-        return (await warehouseApi.otherInbound.get(id)) as Record<string, unknown>;
+        raw = (await warehouseApi.otherInbound.get(id)) as Record<string, unknown>;
+        break;
       case 'material_return':
-        return (await warehouseApi.materialReturn.get(id)) as Record<string, unknown>;
+        raw = (await warehouseApi.materialReturn.get(id)) as Record<string, unknown>;
+        break;
       case 'outsource_receipt':
-        return (await outsourceMaterialReceiptApi.get(id)) as Record<string, unknown>;
+        raw = (await outsourceMaterialReceiptApi.get(id)) as Record<string, unknown>;
+        break;
       case 'outsource_material_return':
-        return (await outsourceMaterialReturnApi.get(id)) as Record<string, unknown>;
+        raw = (await outsourceMaterialReturnApi.get(id)) as Record<string, unknown>;
+        break;
       case 'outsource_product_return':
-        return (await outsourceProductReturnApi.get(id)) as Record<string, unknown>;
+        raw = (await outsourceProductReturnApi.get(id)) as Record<string, unknown>;
+        break;
+      case 'customer_material':
+        raw = (await customerMaterialRegistrationApi.get(id)) as Record<string, unknown>;
+        break;
       default:
         return null;
     }
+    if (!raw) return null;
+    return normalizeInboundHubDetail(receiptType, raw, record) as Record<string, unknown>;
   } catch {
     return null;
   }

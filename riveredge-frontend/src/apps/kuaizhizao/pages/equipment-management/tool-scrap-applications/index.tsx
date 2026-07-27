@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDatePicker,
   ProFormSelect,
   ProFormTextArea,
@@ -29,6 +30,11 @@ import {
   normalizeEquipmentListResponse,
   resolveApprovalDocListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.toolOps.scrap';
 const RESOURCE = 'kuaizhizao:tool-scrap';
@@ -44,6 +50,7 @@ interface ToolScrapApplication {
   applicant_name?: string;
   status?: string;
   reject_reason?: string;
+  remark?: string;
   updated_at?: string;
 }
 
@@ -68,6 +75,8 @@ const ToolScrapApplicationsPage: React.FC = () => {
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<ToolScrapApplication | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<ToolScrapApplication>();
 
   const loadToolOptions = async () => {
     const res = await toolApi.list({ limit: 1000 });
@@ -88,6 +97,14 @@ const ToolScrapApplicationsPage: React.FC = () => {
     formRef.current?.setFieldsValue({ scrap_date: dayjs() });
   };
   useNewShortcut(handleCreate);
+
+  const handleDetail = (record: ToolScrapApplication) => {
+    if (!record.id) return;
+    void openDetail(
+      () => scrapApplicationsApi.get(record.id!) as Promise<ToolScrapApplication>,
+      t(`${P}.listFailed`),
+    );
+  };
 
   const handleEdit = async (record: ToolScrapApplication) => {
     if (!record.id) return;
@@ -161,6 +178,30 @@ const ToolScrapApplicationsPage: React.FC = () => {
   };
 
   const approvalStatusValueEnum = useMemo(() => buildApprovalDocStatusValueEnum(), []);
+
+  const detailColumns: ProDescriptionsItemProps<ToolScrapApplication>[] = useMemo(
+    () => [
+      { title: t(`${P}.col.applicationNo`), dataIndex: 'application_no' },
+      { title: t(`${P}.col.tool`), dataIndex: 'tool_name' },
+      { title: t(`${P}.col.reason`), dataIndex: 'reason', span: 2 },
+      {
+        title: t(`${P}.col.scrapDate`),
+        dataIndex: 'scrap_date',
+        render: (_, r) => (r.scrap_date ? formatDateTime(r.scrap_date) : '-'),
+      },
+      { title: t(`${P}.col.applicant`), dataIndex: 'applicant_name' },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        render: (_, r) => (
+          <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>
+        ),
+      },
+      { title: t(`${P}.form.rejectReason`), dataIndex: 'reject_reason', span: 2 },
+      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+    ],
+    [t],
+  );
 
   const columns: ProColumns<ToolScrapApplication>[] = useMemo(() => alignProColumns<ToolScrapApplication>([
       {
@@ -237,7 +278,7 @@ const ToolScrapApplicationsPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
-                void handleEdit(record);
+                handleDetail(record);
               }}
             >
               {t('common.detail')}
@@ -363,6 +404,24 @@ const ToolScrapApplicationsPage: React.FC = () => {
           enableRowSelection={false}
         />
       </ListPageTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t('common.detail')}${detail?.application_no ? ` - ${detail.application_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailColumns}
+        extra={buildDetailDrawerEditExtra(
+          t,
+          Boolean(detail && perms.canUpdate && detail.status === '草稿'),
+          () => {
+            if (!detail) return;
+            closeDetail();
+            void handleEdit(detail);
+          },
+        )}
+      />
 
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}

@@ -6,7 +6,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
-import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Descriptions, Form, Input, Space, Tag } from 'antd';
 import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, RollbackOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -17,7 +17,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
@@ -55,7 +55,6 @@ import { OrderChangeImpactModal } from '../../../components/order-change/OrderCh
 import { isSourceOrderEligibleForChange } from '../../../utils/orderChangeSourceOrder';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
-import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -450,6 +449,77 @@ const SalesOrderChangesPage: React.FC = () => {
     const color = amount > 0 ? '#52c41a' : amount < 0 ? '#ff4d4f' : undefined;
     return <span style={{ color }}>{text}</span>;
   }, []);
+
+  const detailBasicColumns = useMemo<ProDescriptionsItemProps<SalesOrderChange>[]>(
+    () => [
+      {
+        title: t('app.kuaizhizao.salesOrderChange.colSourceOrderCode'),
+        dataIndex: 'source_order_code',
+      },
+      {
+        title: t('app.kuaizhizao.customerFollowUp.colCustomer'),
+        dataIndex: 'customer_name',
+      },
+      {
+        title: t('app.kuaizhizao.salesOrderChange.colCategory'),
+        dataIndex: 'change_category',
+        render: (_, record) => formatOrderChangeCategory(record.change_category),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrderChange.colVersion'),
+        dataIndex: 'change_version',
+        render: (_, record) => (record.change_version != null ? `V${record.change_version}` : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrderChange.colBeforeAmount'),
+        dataIndex: 'before_total_amount',
+        render: (_, record) => formatNumber(record.before_total_amount, 2),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrderChange.colAfterAmount'),
+        dataIndex: 'after_total_amount',
+        render: (_, record) => formatNumber(record.after_total_amount, 2),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrderChange.colDeltaAmount'),
+        dataIndex: 'delta_amount',
+        render: (_, record) => renderDeltaAmount(record.delta_amount),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrderChange.colAppliedAt'),
+        dataIndex: 'applied_at',
+        render: (_, record) =>
+          record.applied_at ? formatDateTime(record.applied_at, 'YYYY-MM-DD HH:mm') : '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesOrderChange.colChangeReason'),
+        dataIndex: 'change_reason',
+        span: 2,
+      },
+      {
+        title: t('app.kuaizhizao.salesOrderChange.notes'),
+        dataIndex: 'notes',
+        span: 2,
+      },
+    ],
+    [renderDeltaAmount, t],
+  );
+
+  const detailCollaboration = useMemo(() => {
+    if (!detail) return undefined;
+    const lc = getOrderChangeLifecycle(detail as Record<string, unknown>, t);
+    const mainStages = lc.mainStages ?? [];
+    if (!mainStages.length) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        status={lc.status}
+        showLabels
+        nextStepSuggestions={lc.nextStepSuggestions}
+        hideNextStepSuggestions
+      />
+    );
+  }, [detail, t]);
 
   const columns: ProColumns<SalesOrderChange>[] = useMemo(
     () => alignProColumns<SalesOrderChange>([
@@ -921,45 +991,26 @@ const SalesOrderChangesPage: React.FC = () => {
             </Space>
           ) : null
         }
-      >
-        {detail && (
-          <>
-            {(() => {
-              const lc = getOrderChangeLifecycle(detail as Record<string, unknown>, t);
-              const mainStages = lc.mainStages ?? [];
-              if (!mainStages.length) return null;
-              return (
-                <DetailLifecycleCollaborationBlock record={detail} auditEnabled={auditEnabled}>
-                  <UniLifecycleStepper
-                    steps={mainStages}
-                    status={lc.status}
-                    showLabels
-                    nextStepSuggestions={lc.nextStepSuggestions}
-                    hideNextStepSuggestions
-                  />
-                </DetailLifecycleCollaborationBlock>
-              );
-            })()}
-            <Descriptions column={2} size="small" style={{ marginTop: 16 }}>
-              <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colSourceOrderCode')}>{detail.source_order_code}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.customerFollowUp.colCustomer')}>{detail.customer_name}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colCategory')}>
-                {formatOrderChangeCategory(detail.change_category)}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colBeforeAmount')}>{detail.before_total_amount}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colAfterAmount')}>{detail.after_total_amount}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colDeltaAmount')}>
-                {renderDeltaAmount(detail.delta_amount)}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colAppliedAt')}>{detail.applied_at ? formatDateTime(detail.applied_at, 'YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colChangeReason')} span={2}>{detail.change_reason}</Descriptions.Item>
-            </Descriptions>
-            <div style={{ marginTop: 16 }}>
-              <OrderChangeItemsTable items={detail.items ?? []} />
-            </div>
-          </>
-        )}
-      </DetailDrawerTemplate>
+        basic={
+          detail ? (
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(
+                detailBasicColumns.filter((col) => {
+                  if (col.dataIndex !== 'notes') return true;
+                  const notes = String(detail.notes ?? '').trim();
+                  return notes.length > 0;
+                }),
+                detail,
+              )}
+            />
+          ) : undefined
+        }
+        collaboration={detailCollaboration}
+        collaborationAuditRecord={detail}
+        lines={detail ? <OrderChangeItemsTable items={detail.items ?? []} /> : undefined}
+      />
 
       <OrderChangeImpactModal
         open={impactOpen}

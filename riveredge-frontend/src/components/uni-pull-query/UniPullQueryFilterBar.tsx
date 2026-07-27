@@ -18,7 +18,7 @@ export interface UniPullQueryFilterBarProps {
 }
 
 /**
- * 上拉取单筛选栏，样式对齐 UniMaterialBatchPicker。
+ * 加载取单筛选栏，样式对齐 UniMaterialBatchPicker。
  */
 export const UniPullQueryFilterBar: React.FC<UniPullQueryFilterBarProps> = ({
   searchDraft,

@@ -108,7 +108,7 @@ router.include_router(material_call_router)
 router.include_router(demand_router)  # 统一需求管理（新设计）
 router.include_router(demand_computation_router)  # 统一需求计算（新设计）
 router.include_router(state_transition_router)  # 状态流转管理
-router.include_router(document_push_pull_router)  # 单据下推和上拉
+router.include_router(document_push_pull_router)  # 单据下推和加载
 router.include_router(document_relation_router)  # 单据关联关系
 router.include_router(scheduling_config_router)  # 排程配置
 router.include_router(visual_scheduling_router)  # 可视排产诊断

@@ -10,7 +10,28 @@ export interface DetailAuditPhaseRowProps {
   label?: string;
 }
 
-/** 详情协作区「审核状态」行（与 UniLifecycleStepper 分离展示） */
+/** 详情协作区标题行右侧：审核状态 + 徽章 */
+export function DetailAuditPhaseTitleExtra({
+  record,
+  label,
+}: DetailAuditPhaseRowProps) {
+  const { t } = useTranslation();
+
+  if (!record?.audit) return null;
+
+  const title = label ?? t('components.uniAudit.colAuditStatus', { defaultValue: '审核状态' });
+
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 400 }}>
+      <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+        {title}
+      </Typography.Text>
+      <AuditPhaseBadge record={record} variant="column" />
+    </div>
+  );
+}
+
+/** @deprecated 请改用 DetailDrawerTemplate.collaborationAuditRecord / DetailDrawerSection.titleExtra */
 export function DetailAuditPhaseRow({
   record,
   label,
@@ -30,21 +51,15 @@ export function DetailAuditPhaseRow({
 }
 
 export interface DetailLifecycleCollaborationBlockProps {
-  record: AuditPhaseRecord | null | undefined;
+  record?: AuditPhaseRecord | null | undefined;
   /** @deprecated */
   auditEnabled?: boolean;
   children: React.ReactNode;
 }
 
-/** 详情协作区：审核状态 + 生命周期 Stepper（审核与业务主轴分离） */
+/** @deprecated 审核状态已移至生命周期区块标题右侧；此组件仅保留 children 包裹 */
 export function DetailLifecycleCollaborationBlock({
-  record,
   children,
 }: DetailLifecycleCollaborationBlockProps) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <DetailAuditPhaseRow record={record} />
-      {children}
-    </div>
-  );
+  return <>{children}</>;
 }

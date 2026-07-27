@@ -11,7 +11,14 @@ import { renderRowActionsOverflow, rowActionKind } from '../../../../../componen
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
+import {
+  ActionType,
+  ProColumns,
+  ProFormDependency,
+  ProFormInstance,
+  ProFormSelect,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
 import { App, Tag, Button, Space, Modal, Steps, Timeline, Card, Divider } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { EyeOutlined, UserOutlined, ArrowRightOutlined, CheckCircleOutlined, CloseCircleOutlined, RollbackOutlined } from '@ant-design/icons';
@@ -77,6 +84,7 @@ const ExceptionProcessPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const startFormRef = useRef<ProFormInstance>();
   const tableRowsRef = useRef<ExceptionProcessRecord[]>([]);
   const exceptionProcessPerms = useResourcePermissions(EXCEPTION_PROCESS_RESOURCE);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -708,55 +716,45 @@ const ExceptionProcessPage: React.FC = () => {
         }}
         onFinish={handleStart}
         width={MODAL_CONFIG.STANDARD_WIDTH}
-        formItems={[
-          {
-            name: 'exception_type',
-            label: t(`${P}.col.exceptionType`),
-            valueType: 'select',
-            rules: [{ required: true, message: t(`${PROC}.validation.exceptionTypeRequired`) }],
-            valueEnum: exceptionTypeValueEnum,
-            fieldProps: {
-              onChange: (_: string) => {
-                const form = (document.querySelector('.ant-pro-form') as any)?.__form;
-                if (form) {
-                  form.setFieldsValue({ exception_id: undefined });
-                }
-              },
+        formRef={startFormRef}
+      >
+        <ProFormSelect
+          name="exception_type"
+          label={t(`${P}.col.exceptionType`)}
+          valueEnum={exceptionTypeValueEnum}
+          rules={[{ required: true, message: t(`${PROC}.validation.exceptionTypeRequired`) }]}
+          fieldProps={{
+            onChange: () => {
+              startFormRef.current?.setFieldsValue({ exception_id: undefined });
             },
-          },
-          {
-            name: 'exception_id',
-            label: t(`${PROC}.field.exceptionRecord`),
-            valueType: 'select',
-            rules: [{ required: true, message: t(`${PROC}.validation.exceptionRecordRequired`) }],
-            dependencies: ['exception_type'],
-            request: async (params: any) => {
-              const exceptionType = params.exception_type;
-              if (!exceptionType) {
-                return [];
-              }
-              const filtered = exceptionList.filter((item) => item.exception_type === exceptionType);
-              return filtered.map((item) => ({
-                label: item.display_name || `${item.id}`,
+          }}
+        />
+        <ProFormDependency name={['exception_type']}>
+          {({ exception_type: exceptionType }) => {
+            const options = exceptionList
+              .filter((item) => item.exception_type === exceptionType)
+              .map((item) => ({
+                label: item.display_name || String(item.id),
                 value: item.id,
               }));
-            },
-          },
-          {
-            name: 'assigned_to',
-            label: t(`${P}.col.assignedTo`),
-            renderFormItem: () => <UniUserSelect name="assigned_to" />
-          },
-          {
-            name: 'remarks',
-            label: t(`${P}.field.remarks`),
-            valueType: 'textarea',
-            fieldProps: {
-              rows: 4,
-            },
-          },
-        ]}
-      />
+            return (
+              <ProFormSelect
+                name="exception_id"
+                label={t(`${PROC}.field.exceptionRecord`)}
+                rules={[{ required: true, message: t(`${PROC}.validation.exceptionRecordRequired`) }]}
+                options={options}
+                disabled={!exceptionType}
+              />
+            );
+          }}
+        </ProFormDependency>
+        <UniUserSelect name="assigned_to" label={t(`${P}.col.assignedTo`)} />
+        <ProFormTextArea
+          name="remarks"
+          label={t(`${P}.field.remarks`)}
+          fieldProps={{ rows: 4 }}
+        />
+      </FormModalTemplate>
 
       <FormModalTemplate
         title={t(`${PROC}.modal.assign`)}
@@ -766,23 +764,19 @@ const ExceptionProcessPage: React.FC = () => {
         }}
         onFinish={handleAssign}
         width={MODAL_CONFIG.STANDARD_WIDTH}
-        formItems={[
-          {
-            name: 'assigned_to',
-            label: t(`${P}.col.assignedTo`),
-            rules: [{ required: true, message: t(`${PROC}.validation.assigneeRequired`) }],
-            renderFormItem: () => <UniUserSelect name="assigned_to" />
-          },
-          {
-            name: 'comment',
-            label: t(`${P}.field.remarks`),
-            valueType: 'textarea',
-            fieldProps: {
-              rows: 4,
-            },
-          },
-        ]}
-      />
+      >
+        <UniUserSelect
+          name="assigned_to"
+          label={t(`${P}.col.assignedTo`)}
+          required
+          rules={[{ required: true, message: t(`${PROC}.validation.assigneeRequired`) }]}
+        />
+        <ProFormTextArea
+          name="comment"
+          label={t(`${P}.field.remarks`)}
+          fieldProps={{ rows: 4 }}
+        />
+      </FormModalTemplate>
 
       <FormModalTemplate
         title={t(`${PROC}.modal.stepTransition`)}
@@ -792,24 +786,19 @@ const ExceptionProcessPage: React.FC = () => {
         }}
         onFinish={handleStepTransition}
         width={MODAL_CONFIG.STANDARD_WIDTH}
-        formItems={[
-          {
-            name: 'to_step',
-            label: t(`${PROC}.field.targetStep`),
-            valueType: 'select',
-            rules: [{ required: true, message: t(`${PROC}.validation.targetStepRequired`) }],
-            valueEnum: stepValueEnum,
-          },
-          {
-            name: 'comment',
-            label: t(`${P}.field.remarks`),
-            valueType: 'textarea',
-            fieldProps: {
-              rows: 4,
-            },
-          },
-        ]}
-      />
+      >
+        <ProFormSelect
+          name="to_step"
+          label={t(`${PROC}.field.targetStep`)}
+          valueEnum={stepValueEnum}
+          rules={[{ required: true, message: t(`${PROC}.validation.targetStepRequired`) }]}
+        />
+        <ProFormTextArea
+          name="comment"
+          label={t(`${P}.field.remarks`)}
+          fieldProps={{ rows: 4 }}
+        />
+      </FormModalTemplate>
 
       <FormModalTemplate
         title={t(`${PROC}.modal.resolve`)}
@@ -819,25 +808,18 @@ const ExceptionProcessPage: React.FC = () => {
         }}
         onFinish={handleResolve}
         width={MODAL_CONFIG.STANDARD_WIDTH}
-        formItems={[
-          {
-            name: 'comment',
-            label: t(`${P}.field.remarks`),
-            valueType: 'textarea',
-            fieldProps: {
-              rows: 4,
-            },
-          },
-          {
-            name: 'verification_result',
-            label: t(`${P}.quality.field.verificationResult`),
-            valueType: 'textarea',
-            fieldProps: {
-              rows: 4,
-            },
-          },
-        ]}
-      />
+      >
+        <ProFormTextArea
+          name="comment"
+          label={t(`${P}.field.remarks`)}
+          fieldProps={{ rows: 4 }}
+        />
+        <ProFormTextArea
+          name="verification_result"
+          label={t(`${P}.quality.field.verificationResult`)}
+          fieldProps={{ rows: 4 }}
+        />
+      </FormModalTemplate>
     </>
   );
 };

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDatePicker,
   ProFormSelect,
   ProFormText,
@@ -14,13 +15,13 @@ import { App, Button, Modal, Row, Col, Tag, Table, Input, Switch, Select } from 
 import {
   EditOutlined,
   DeleteOutlined,
-  EyeOutlined,
   SendOutlined,
   CheckOutlined,
   CloseOutlined,
   CheckCircleOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -39,6 +40,12 @@ import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  MasterDataLinesTable,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.moldOps.repair';
 const RESOURCE = 'kuaizhizao:mold-repair';
@@ -67,6 +74,7 @@ interface MoldRepair {
   applicant_name?: string;
   status?: string;
   completion_result?: string;
+  remark?: string;
   updated_at?: string;
   lines?: RepairLine[];
 }
@@ -98,6 +106,13 @@ const MoldRepairsPage: React.FC = () => {
   const [completeModalVisible, setCompleteModalVisible] = useState(false);
   const [completeTarget, setCompleteTarget] = useState<MoldRepair | null>(null);
   const [completionResult, setCompletionResult] = useState('维修完成');
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<MoldRepair>();
+
+  const handleDetail = (record: MoldRepair) => {
+    if (!record.id) return;
+    void openDetail(() => repairsApi.get(record.id!), t(`${P}.listFailed`));
+  };
 
   const completionResultOptions = useMemo(
     () => [
@@ -297,6 +312,38 @@ const MoldRepairsPage: React.FC = () => {
     [],
   );
 
+  const detailColumns: ProDescriptionsItemProps<MoldRepair>[] = useMemo(
+    () => [
+      { title: t(`${P}.col.documentNo`), dataIndex: 'document_no' },
+      { title: t(`${P}.col.mold`), dataIndex: 'mold_name' },
+      { title: t(`${P}.col.repairDate`), dataIndex: 'repair_date', valueType: 'date' },
+      { title: t(`${P}.col.faultDescription`), dataIndex: 'fault_description', span: 2 },
+      { title: t(`${P}.col.urgency`), dataIndex: 'urgency' },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
+      },
+      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+    ],
+    [t],
+  );
+
+  const detailLineColumns = useMemo<ColumnsType<RepairLine>>(
+    () => [
+      { title: t(`${P}.line.item`), dataIndex: 'item_name', width: 140 },
+      { title: t(`${P}.line.requirement`), dataIndex: 'requirement', ellipsis: true },
+      {
+        title: t(`${P}.line.executed`),
+        dataIndex: 'executed',
+        width: 80,
+        render: (_, row) => (row.executed ? t('common.yes') : t('common.no')),
+      },
+      { title: t(`${P}.line.remark`), dataIndex: 'remark', width: 140 },
+    ],
+    [t],
+  );
+
   const columns: ProColumns<MoldRepair>[] = useMemo(() => alignProColumns<MoldRepair>([
       {
         title: t(`${P}.col.repairDate`),
@@ -369,10 +416,9 @@ const MoldRepairsPage: React.FC = () => {
               {...rowActionKind('read')}
               type="link"
               size="small"
-              icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
-                void handleEdit(record);
+                handleDetail(record);
               }}
             >
               {t('common.detail')}
@@ -590,6 +636,32 @@ const MoldRepairsPage: React.FC = () => {
           />
         )}
       </FormModalTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t('common.detail')}${detail?.document_no ? ` - ${detail.document_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailColumns}
+        extra={buildDetailDrawerEditExtra(
+          t,
+          Boolean(detail && perms.canUpdate && (detail.status === '草稿' || detail.status === '已驳回')),
+          () => {
+            if (!detail) return;
+            closeDetail();
+            void handleEdit(detail);
+          },
+        )}
+        lines={
+          <MasterDataLinesTable
+            rows={detail?.lines ?? []}
+            columns={detailLineColumns}
+            rowKey={(row) => String(row.item_id ?? row.line_no ?? '')}
+            emptyDescription={t('common.noData')}
+          />
+        }
+      />
 
       <Modal
         title={t(`${P}.rejectModal`)}

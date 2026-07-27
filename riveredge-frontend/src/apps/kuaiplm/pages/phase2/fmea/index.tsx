@@ -6,7 +6,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { useSearchParams } from 'react-router-dom';
-import { App, Button, Tag, Alert } from 'antd';
+import { App, Button, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
@@ -24,15 +24,16 @@ import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhiz
 import {
   plmCodeTitleSearchColumns,
   plmCreatedUpdatedColumns,
+  plmListActionColumn,
   PLM_PHASE2_PINNED_STATUS_FIELD,
   resolvePhase2FmeaListParams,
 } from '../../../utils/plmListCore';
-
-const RISK_COLOR: Record<string, string> = {
-  高: 'red',
-  中: 'orange',
-  低: 'green',
-};
+import {
+  buildPhase2FmeaStatusValueEnum,
+  getPhase2FmeaStatusOptions,
+  renderPhase2FmeaStatusTag,
+  renderPhase2FmeaTypeMarker,
+} from '../../../components/phase2Meta';
 
 const FmeaPage: React.FC = () => {
   const { t } = useTranslation();
@@ -103,17 +104,8 @@ const FmeaPage: React.FC = () => {
     messageApi.error(t('app.kuaiplm.phase2.fmea.batchStatusFailed'));
   };
 
-  const fmeaStatusLabelMap: Record<string, string> = {
-    DRAFT: t('app.kuaiplm.phase2.common.status.draft'),
-    IN_REVIEW: t('app.kuaiplm.phase2.common.status.inReview'),
-    CLOSED: t('app.kuaiplm.phase2.common.status.closed'),
-    ARCHIVED: t('app.kuaiplm.phase2.common.status.archived'),
-  };
-  const riskLevelLabelMap: Record<string, string> = {
-    高: t('app.kuaiplm.phase2.common.risk.high'),
-    中: t('app.kuaiplm.phase2.common.risk.medium'),
-    低: t('app.kuaiplm.phase2.common.risk.low'),
-  };
+  const fmeaStatusValueEnum = useMemo(() => buildPhase2FmeaStatusValueEnum(t), [t]);
+  const fmeaStatusOptions = useMemo(() => getPhase2FmeaStatusOptions(t), [t]);
 
   const columns: ProColumns<RdFmeaRecord>[] = useMemo(
     () => [
@@ -142,42 +134,26 @@ const FmeaPage: React.FC = () => {
         dataIndex: 'fmea_type',
         width: 100,
         sorter: true,
+        hideInSearch: true,
+        render: (_, row) => renderPhase2FmeaTypeMarker(row.fmea_type),
+      },
+      {
+        title: t('app.kuaiplm.phase2.fmea.columns.material'),
+        dataIndex: 'material_name',
+        width: 160,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, row) => row.material_name || row.material_code || '-',
       },
       {
         title: t('app.kuaiplm.phase2.fmea.columns.status'),
         dataIndex: 'status',
         width: 90,
-        valueEnum: Object.fromEntries(
-          Object.entries(fmeaStatusLabelMap).map(([value, label]) => [value, { text: label }]),
-        ),
-        render: (_, row) => fmeaStatusLabelMap[row.status || ''] || row.status || '-',
-      },
-      {
-        title: t('app.kuaiplm.phase2.fmea.columns.riskLevel'),
-        dataIndex: 'risk_level',
-        width: 100,
-        hideInSearch: true,
-        render: (_, row) =>
-          row.risk_level ? (
-            <Tag color={RISK_COLOR[row.risk_level] ?? 'default'}>
-              {riskLevelLabelMap[row.risk_level] || row.risk_level}
-            </Tag>
-          ) : (
-            '-'
-          ),
-      },
-      {
-        title: t('app.kuaiplm.phase2.fmea.columns.owner'),
-        dataIndex: 'owner_name',
-        width: 100,
-        hideInSearch: true,
+        valueEnum: fmeaStatusValueEnum,
+        render: (_, row) => renderPhase2FmeaStatusTag(t, row.status),
       },
       ...plmCreatedUpdatedColumns<RdFmeaRecord>(t),
-    {
-      title: t('common.actions'),
-      valueType: 'option',
-      width: 180,
-      render: (_, row) => [
+      plmListActionColumn<RdFmeaRecord>(t, (_, row) => [
             <Button
               {...rowActionKind('read')}
               key="detail"
@@ -214,10 +190,9 @@ const FmeaPage: React.FC = () => {
             >
               {t('common.delete')}
             </Button>,
-          ],
-    },
+          ]),
     ],
-    [fmeaStatusLabelMap, messageApi, modalApi, riskLevelLabelMap, t],
+    [fmeaStatusValueEnum, messageApi, modalApi, t],
   );
 
   return (
@@ -311,16 +286,8 @@ const FmeaPage: React.FC = () => {
             { value: 'PFMEA', label: 'PFMEA' },
           ]}
         />
-        <ProFormSelect
-          name="risk_level"
-          label={t('app.kuaiplm.phase2.fmea.form.riskLevel')}
-          options={[
-            { value: '高', label: t('app.kuaiplm.phase2.common.risk.high') },
-            { value: '中', label: t('app.kuaiplm.phase2.common.risk.medium') },
-            { value: '低', label: t('app.kuaiplm.phase2.common.risk.low') },
-          ]}
-        />
-        <ProFormText name="owner_name" label={t('app.kuaiplm.phase2.fmea.form.owner')} />
+        <ProFormText name="material_code" label={t('app.kuaiplm.phase2.fmea.form.materialCode')} />
+        <ProFormText name="material_name" label={t('app.kuaiplm.phase2.fmea.form.materialName')} />
         <ProFormTextArea name="description" label={t('app.kuaiplm.phase2.fmea.form.description')} />
       </FormModalTemplate>
 
@@ -350,23 +317,10 @@ const FmeaPage: React.FC = () => {
         <ProFormSelect
           name="status"
           label={t('app.kuaiplm.phase2.fmea.form.status')}
-          options={[
-            { value: 'DRAFT', label: t('app.kuaiplm.phase2.common.status.draft') },
-            { value: 'IN_REVIEW', label: t('app.kuaiplm.phase2.common.status.inReview') },
-            { value: 'CLOSED', label: t('app.kuaiplm.phase2.common.status.closed') },
-            { value: 'ARCHIVED', label: t('app.kuaiplm.phase2.common.status.archived') },
-          ]}
+          options={fmeaStatusOptions}
         />
-        <ProFormSelect
-          name="risk_level"
-          label={t('app.kuaiplm.phase2.fmea.form.riskLevel')}
-          options={[
-            { value: '高', label: t('app.kuaiplm.phase2.common.risk.high') },
-            { value: '中', label: t('app.kuaiplm.phase2.common.risk.medium') },
-            { value: '低', label: t('app.kuaiplm.phase2.common.risk.low') },
-          ]}
-        />
-        <ProFormText name="owner_name" label={t('app.kuaiplm.phase2.fmea.form.owner')} />
+        <ProFormText name="material_code" label={t('app.kuaiplm.phase2.fmea.form.materialCode')} />
+        <ProFormText name="material_name" label={t('app.kuaiplm.phase2.fmea.form.materialName')} />
         <ProFormTextArea name="description" label={t('app.kuaiplm.phase2.fmea.form.description')} />
       </FormModalTemplate>
 
@@ -391,23 +345,10 @@ const FmeaPage: React.FC = () => {
         <ProFormSelect
           name="status"
           label={t('app.kuaiplm.phase2.fmea.form.status')}
-          options={[
-            { value: 'DRAFT', label: t('app.kuaiplm.phase2.common.status.draft') },
-            { value: 'IN_REVIEW', label: t('app.kuaiplm.phase2.common.status.inReview') },
-            { value: 'CLOSED', label: t('app.kuaiplm.phase2.common.status.closed') },
-            { value: 'ARCHIVED', label: t('app.kuaiplm.phase2.common.status.archived') },
-          ]}
+          options={fmeaStatusOptions}
         />
-        <ProFormSelect
-          name="risk_level"
-          label={t('app.kuaiplm.phase2.fmea.form.riskLevel')}
-          options={[
-            { value: '高', label: t('app.kuaiplm.phase2.common.risk.high') },
-            { value: '中', label: t('app.kuaiplm.phase2.common.risk.medium') },
-            { value: '低', label: t('app.kuaiplm.phase2.common.risk.low') },
-          ]}
-        />
-        <ProFormText name="owner_name" label={t('app.kuaiplm.phase2.fmea.form.owner')} />
+        <ProFormText name="material_code" label={t('app.kuaiplm.phase2.fmea.form.materialCode')} />
+        <ProFormText name="material_name" label={t('app.kuaiplm.phase2.fmea.form.materialName')} />
         <ProFormTextArea name="description" label={t('app.kuaiplm.phase2.fmea.form.description')} />
       </FormModalTemplate>
     </ListPageTemplate>

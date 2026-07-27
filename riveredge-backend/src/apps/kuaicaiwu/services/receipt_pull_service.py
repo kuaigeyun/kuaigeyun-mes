@@ -1,5 +1,5 @@
 """
-收款单上拉门控：应收单候选列表、预览、已收款/待占用金额汇总。
+收款单加载门控：应收单候选列表、预览、已收款/待占用金额汇总。
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
 
 class ReceiptPullService(AppBaseService[Receipt]):
-    """收款单上拉门控服务"""
+    """收款单加载门控服务"""
 
     _EXCLUDED_RECEIPT_STATUSES = frozenset({"Cancelled"})
 
@@ -184,7 +184,7 @@ class ReceiptPullService(AppBaseService[Receipt]):
             "summary": (
                 f"将从应收单 {code} 创建收款单（可收款 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"应收单 {code} 当前不可上拉收款单"
+                else f"应收单 {code} 当前不可加载收款单"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
@@ -272,10 +272,10 @@ class ReceiptPullService(AppBaseService[Receipt]):
         total_amount: Decimal,
     ) -> Dict[str, Any]:
         if source_type != "receivable":
-            raise BusinessLogicError(f"不支持的上拉源单类型: {source_type}")
+            raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
         preview = await self.preview_pull_from_receivable(tenant_id, source_id)
         if preview.get("has_blocking_issues"):
-            reason = preview.get("blocking_reason") or "当前不可上拉收款单"
+            reason = preview.get("blocking_reason") or "当前不可加载收款单"
             raise BusinessLogicError(reason)
         items = preview.get("items") or []
         if not items:
@@ -313,7 +313,7 @@ class ReceiptPullService(AppBaseService[Receipt]):
                 target_name=None,
                 relation_type="source",
                 relation_mode="pull",
-                relation_desc="上拉创建收款单",
+                relation_desc="加载创建收款单",
             ),
             created_by=created_by,
         )

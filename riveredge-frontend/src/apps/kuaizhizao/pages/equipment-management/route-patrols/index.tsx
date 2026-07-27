@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -7,24 +7,31 @@ import {
   ProFormDatePicker,
   ProFormSelect,
   ProFormTextArea,
+  ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
+import type { ColumnsType } from 'antd/es/table';
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { App, Button, Modal, Row, Col, Tag, Table, Switch, Input, Typography } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { rowActionKind } from '../../../../../components/uni-action';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  MasterDataLinesTable,
+  renderEquipmentMasterRowActions,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
 import { patrolRoutesApi, routePatrolsApi } from '../../../services/equipmentOps';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { ROUTES } from '../../../constants/routes';
 import {
   buildAbnormalityValueEnum,
@@ -92,6 +99,16 @@ const RoutePatrolsPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [previewLines, setPreviewLines] = useState<RoutePatrolLine[]>([]);
   const [routeOptions, setRouteOptions] = useState<{ label: string; value: number }[]>([]);
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<RoutePatrol>();
+
+  const handleDetail = useCallback(
+    (record: RoutePatrol) => {
+      if (!record.id) return;
+      void openDetail(() => routePatrolsApi.get(record.id!) as Promise<RoutePatrol>);
+    },
+    [openDetail],
+  );
 
   const loadRouteOptions = async () => {
     const res = await patrolRoutesApi.list({ limit: 1000, is_active: true });
@@ -207,6 +224,9 @@ const RoutePatrolsPage: React.FC = () => {
       setFormInitialValues(undefined);
       setPreviewLines([]);
       actionRef.current?.reload();
+      if (detailVisible && detail?.id === current?.id && current?.id) {
+        void handleDetail({ id: current.id });
+      }
     } catch (error: unknown) {
       messageApi.error(getApiErrorMessage(error, t(`${P}.submitFailed`)));
     } finally {
@@ -290,6 +310,85 @@ const RoutePatrolsPage: React.FC = () => {
   const routePatrolStatusValueEnum = useMemo(() => buildSpotCheckStatusValueEnum(t), [t]);
   const abnormalityValueEnum = useMemo(() => buildAbnormalityValueEnum(t, P), [t]);
 
+  const detailBasicColumns = useMemo<ProDescriptionsItemProps<RoutePatrol>[]>(
+    () => [
+      { title: t(`${P}.col.documentNo`), dataIndex: 'document_no' },
+      { title: t(`${P}.col.route`), dataIndex: 'route_name' },
+      { title: t(`${P}.col.patrolDate`), dataIndex: 'patrol_date', valueType: 'date' },
+      { title: t(`${P}.col.inspector`), dataIndex: 'inspector_name' },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
+      },
+      {
+        title: t(`${P}.col.abnormality`),
+        dataIndex: 'has_abnormality',
+        render: (_, r) =>
+          r.has_abnormality ? (
+            <Tag color="error">{t(`${P}.abnormal`)}</Tag>
+          ) : (
+            <Tag color="success">{t(`${P}.normal`)}</Tag>
+          ),
+      },
+      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+    ],
+    [t],
+  );
+
+  const detailLineColumns = useMemo<ColumnsType<RoutePatrolLine>>(
+    () => [
+      { title: t(`${P}.line.step`), dataIndex: 'step_no', width: 60 },
+      { title: t(`${P}.line.equipment`), dataIndex: 'equipment_name', width: 140 },
+      { title: t(`${P}.line.item`), dataIndex: 'item_name', width: 120 },
+      { title: t(`${P}.line.measuredValue`), dataIndex: 'measured_value', width: 120 },
+      {
+        title: t(`${P}.line.isPass`),
+        dataIndex: 'is_pass',
+        width: 80,
+        render: (_, row) =>
+          row.is_pass === false ? (
+            <Tag color="error">{t(`${P}.abnormal`)}</Tag>
+          ) : (
+            <Tag color="success">{t(`${P}.normal`)}</Tag>
+          ),
+      },
+      {
+        title: t(`${P}.line.photos`, { defaultValue: '照片' }),
+        dataIndex: 'attachments',
+        width: 180,
+        render: (_, row) => (
+          <LineAttachmentsUpload
+            category="equipment_route_patrol_line"
+            value={row.attachments}
+            readOnly
+          />
+        ),
+      },
+      {
+        title: t(`${P}.line.fault`),
+        dataIndex: 'fault_report_uuid',
+        width: 100,
+        render: (_, row) =>
+          row.fault_report_uuid ? (
+            <Typography.Link
+              onClick={() =>
+                navigate(
+                  `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(row.fault_report_uuid!)}`,
+                )
+              }
+            >
+              {t(`${P}.viewFault`)}
+            </Typography.Link>
+          ) : (
+            '-'
+          ),
+      },
+      { title: t(`${P}.line.remark`, { defaultValue: '备注' }), dataIndex: 'remark', ellipsis: true },
+    ],
+    [t, navigate],
+  );
+
   const columns: ProColumns<RoutePatrol>[] = useMemo(() => alignProColumns<RoutePatrol>([
       {
         title: t(`${P}.col.patrolDate`),
@@ -361,7 +460,7 @@ const RoutePatrolsPage: React.FC = () => {
         width: 90,
         sorter: true,
         hideInSearch: true,
-        render: (_, r) => <Tag>{r.status ?? '-'}</Tag>,
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
       },
       {
         title: t(`${P}.col.abnormality`),
@@ -382,7 +481,7 @@ const RoutePatrolsPage: React.FC = () => {
             <Typography.Link
               onClick={(e) => {
                 e.stopPropagation();
-                void handleEdit(r);
+                void handleDetail(r);
               }}
             >
               {t(`${P}.viewFault`)}
@@ -404,57 +503,29 @@ const RoutePatrolsPage: React.FC = () => {
         width: 160,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <>
-            <Button
-              {...rowActionKind('read')}
-              type="link"
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={(e) => {
-                e.stopPropagation();
-                void handleEdit(record);
-              }}
-            >
-              {t('common.detail')}
-            </Button>
-            {perms.canUpdate && (
-              <Button
-                {...rowActionKind('update')}
-                type="link"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleEdit(record);
-                }}
-              >
-                {t('common.edit')}
-              </Button>
-            )}
-            {perms.canDelete && (
-              <Button
-                {...rowActionKind('delete')}
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  Modal.confirm({
-                    title: t('common.deleteTitle'),
-                    onOk: () => record.id && handleDelete([record.id]),
-                  });
-                }}
-              >
-                {t('common.delete')}
-              </Button>
-            )}
-          </>
-        ),
+        render: (_, record) =>
+          renderEquipmentMasterRowActions({
+            record,
+            keyPrefix: `route-patrol-actions-${record.id ?? 'row'}`,
+            t,
+            canRead: perms.canRead,
+            canUpdate: perms.canUpdate,
+            canDelete: perms.canDelete,
+            onDetail: (row) => {
+              void handleDetail(row);
+            },
+            onEdit: (row) => {
+              void handleEdit(row);
+            },
+            onDelete: (row) => {
+              if (row.id != null) {
+                void handleDelete([row.id]);
+              }
+            },
+          }),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, perms, routePatrolStatusValueEnum, abnormalityValueEnum],
+    [t, perms, routePatrolStatusValueEnum, abnormalityValueEnum, handleDetail],
   );
 
   return (
@@ -469,6 +540,10 @@ const RoutePatrolsPage: React.FC = () => {
           showAdvancedSearch
           pinnedTabsField={EQUIPMENT_OPS_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
+          onRow={(record) => ({
+            onClick: () => perms.canRead && handleDetail(record),
+            style: { cursor: perms.canRead ? 'pointer' : undefined },
+          })}
           request={async (params, sort, _filter, searchFormValues) => {
             try {
               const listParams = resolveRoutePatrolListParams(searchFormValues, sort);
@@ -492,6 +567,29 @@ const RoutePatrolsPage: React.FC = () => {
           enableRowSelection={perms.canDelete}
         />
       </ListPageTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t(`${P}.detailTitle`, { defaultValue: t('common.detail') })}${detail?.document_no ? ` - ${detail.document_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailBasicColumns}
+        linesTitle={t(`${P}.form.lines`, { defaultValue: '巡检项' })}
+        lines={
+          <MasterDataLinesTable
+            rows={detail?.lines ?? []}
+            columns={detailLineColumns}
+            rowKey={(row) => String(row.step_no ?? row.equipment_id ?? '')}
+            emptyDescription={t('common.noData')}
+          />
+        }
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && perms.canUpdate), () => {
+          if (!detail) return;
+          closeDetail();
+          void handleEdit(detail);
+        })}
+      />
 
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}

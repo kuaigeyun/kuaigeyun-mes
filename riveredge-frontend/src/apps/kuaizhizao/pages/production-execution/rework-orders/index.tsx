@@ -13,8 +13,8 @@ import { renderRowActionsOverflow, rowActionKind } from '../../../../../componen
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
-import { App, Alert, Button, Card, Col, Empty, InputNumber, Modal, Row, Spin, Table, Tag, Typography, message } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, FormOutlined } from '@ant-design/icons';
+import { App, Alert, Button, Card, Col, Descriptions, Empty, InputNumber, Modal, Row, Spin, Table, Tag, Typography, message } from 'antd';
+import { EditOutlined, DeleteOutlined, FormOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
@@ -27,7 +27,7 @@ import {
   paginatePullRows,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
-import { DetailDrawerActions, DetailDrawerSection, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { DetailDrawerActions, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { qualityApi, reworkOrderApi, workOrderApi } from '../../../services/production';
@@ -41,7 +41,8 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
+import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
@@ -226,9 +227,9 @@ const ReworkOrdersPage: React.FC = () => {
   }, [reworkListCustomFields.length]);
 
   /**
-   * 详情列定义
+   * 详情抽屉基本信息列
    */
-  const detailColumns: ProDescriptionsItemProps<ReworkOrder>[] = useMemo(() => [
+  const detailBasicColumns: ProDescriptionsItemProps<ReworkOrder>[] = useMemo(() => [
     {
       title: t('app.kuaizhizao.reworkOrder.colCode'),
       dataIndex: 'code',
@@ -323,6 +324,47 @@ const ReworkOrdersPage: React.FC = () => {
       render: (text) => text || '-',
     },
   ], [t]);
+
+  const detailCollaboration = useMemo(() => {
+    if (!reworkOrderDetail) return undefined;
+    const lifecycle = getReworkOrderLifecycle(reworkOrderDetail);
+    const mainStages = lifecycle.mainStages ?? [];
+    if (!mainStages.length) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        status={lifecycle.status}
+        showLabels
+        nextStepSuggestions={lifecycle.nextStepSuggestions}
+        hideNextStepSuggestions
+      />
+    );
+  }, [reworkOrderDetail]);
+
+  const reworkOrderTraceDocument = useMemo(() => {
+    if (reworkOrderDetail?.id == null) return null;
+    return {
+      documentType: 'rework_order',
+      documentId: reworkOrderDetail.id,
+      selfDocumentId: reworkOrderDetail.id,
+      renderBriefActions: (doc: Parameters<typeof WarehouseTraceBriefPrimaryActions>[0]['doc']) => (
+        <WarehouseTraceBriefPrimaryActions
+          doc={doc}
+          t={t}
+          navigate={navigate}
+          closeDrawer={() => {
+            setDetailDrawerVisible(false);
+            resetReworkDetailFieldValues();
+          }}
+        />
+      ),
+    };
+  }, [navigate, reworkOrderDetail?.id, t]);
+
+  const reworkOrderTracking = useDocumentTracking(
+    detailDrawerVisible && reworkOrderDetail?.id ? 'rework_order' : undefined,
+    reworkOrderDetail?.id,
+  );
 
   /**
    * 表格列定义
@@ -1637,15 +1679,13 @@ const ReworkOrdersPage: React.FC = () => {
 
       {/* 详情Drawer */}
       <DetailDrawerTemplate
-        title={t('app.kuaizhizao.reworkOrder.detailTitle')}
+        title={`${t('app.kuaizhizao.reworkOrder.detailTitle')}${reworkOrderDetail?.code ? ` - ${reworkOrderDetail.code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
           resetReworkDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={detailColumns}
-        dataSource={reworkOrderDetail ?? undefined}
         extra={
           reworkOrderDetail && (() => {
             const lifecycle = getReworkOrderLifecycle(reworkOrderDetail);
@@ -1709,40 +1749,57 @@ const ReworkOrdersPage: React.FC = () => {
             );
           })()
         }
-      >
-        {hasCustomFieldsDetailContent(reworkListCustomFields, reworkDetailCustomFieldValues) ? (
-          <DetailDrawerSection title={t('app.kuaizhizao.reworkOrder.sectionCustomFields')}>
-            <CustomFieldsDetailSection
-              customFields={reworkListCustomFields}
-              customFieldValues={reworkDetailCustomFieldValues}
-            />
-          </DetailDrawerSection>
-        ) : null}
-        {reworkOrderDetail && (() => {
-          const lifecycle = getReworkOrderLifecycle(reworkOrderDetail);
-          const mainStages = lifecycle.mainStages ?? [];
-          if (mainStages.length === 0) return null;
-          return (
-            <DetailDrawerSection title={t('app.kuaizhizao.reworkOrder.sectionLifecycle')}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {mainStages.length > 0 && (
-                  <UniLifecycleStepper
-                    steps={mainStages}
-                    status={lifecycle.status}
-                    showLabels
-                    nextStepSuggestions={lifecycle.nextStepSuggestions}
-                  />
+        basic={
+          reworkOrderDetail ? (
+            <>
+              <Descriptions
+                column={3}
+                size="small"
+                items={detailDrawerDescriptionItems(
+                  detailBasicColumns.filter((col) => {
+                    if (col.dataIndex !== 'remarks') return true;
+                    const remarks = String(reworkOrderDetail.remarks ?? '').trim();
+                    return remarks.length > 0;
+                  }),
+                  reworkOrderDetail,
                 )}
-              </div>
-            </DetailDrawerSection>
-          );
-        })()}
-        {reworkOrderDetail?.id && (
-          <DetailDrawerSection title={t('app.kuaizhizao.reworkOrder.sectionOperationHistory')}>
-            <DocumentTrackingPanel documentType="rework_order" documentId={reworkOrderDetail.id} />
-          </DetailDrawerSection>
-        )}
-      </DetailDrawerTemplate>
+              />
+              {hasCustomFieldsDetailContent(reworkListCustomFields, reworkDetailCustomFieldValues) ? (
+                <div style={{ marginTop: 16 }}>
+                  <CustomFieldsDetailSection
+                    customFields={reworkListCustomFields}
+                    customFieldValues={reworkDetailCustomFieldValues}
+                  />
+                </div>
+              ) : null}
+            </>
+          ) : undefined
+        }
+        collaboration={detailCollaboration}
+        collaborationTitle={t('app.kuaizhizao.reworkOrder.sectionLifecycle')}
+        traceDocument={reworkOrderTraceDocument}
+        timelineTitle={t('app.uniDetail.sectionTimeline')}
+        timeline={
+          reworkOrderDetail ? (
+            <>
+              {reworkOrderTracking.loading ? (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <Spin />
+                </div>
+              ) : null}
+              {reworkOrderTracking.error && !reworkOrderTracking.loading ? (
+                <Typography.Text type="danger">{reworkOrderTracking.error}</Typography.Text>
+              ) : null}
+              {reworkOrderTracking.data && !reworkOrderTracking.loading ? (
+                <DocumentTrackingTimelineBody data={reworkOrderTracking.data} />
+              ) : null}
+              {!reworkOrderTracking.loading && !reworkOrderTracking.data && !reworkOrderTracking.error ? (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('components.documentTrackingPanel.noOperations')} />
+              ) : null}
+            </>
+          ) : undefined
+        }
+      />
 
       <FormModalTemplate
         title={t('app.kuaizhizao.reworkOrder.reportModalTitle')}

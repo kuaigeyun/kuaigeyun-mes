@@ -1,11 +1,16 @@
 import React, { useRef, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Tag, Typography } from 'antd';
-import { EyeOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, Descriptions, Modal, Tag, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  DetailDrawerTemplate,
+  DRAWER_CONFIG,
+  detailDrawerDescriptionItems,
+} from '../../../../../components/layout-templates';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { maintenancePlanApi } from '../../../services/equipment';
 import { formatDateTime } from '../../../../../utils/format';
@@ -21,6 +26,7 @@ import {
 } from '../../../utils/equipmentListCore';
 import { ROUTES } from '../../../constants/routes';
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
+import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.maintenanceExecution';
 const RESOURCE = 'kuaizhizao:maintenance-plan';
@@ -65,14 +71,12 @@ const MaintenanceExecutionsPage: React.FC = () => {
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [drawerVisible, setDrawerVisible] = useState(false);
-  const [detail, setDetail] = useState<MaintenanceExecution | null>(null);
+  const { open: drawerVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<MaintenanceExecution>();
 
-  const handleDetail = async (record: MaintenanceExecution) => {
+  const handleDetail = (record: MaintenanceExecution) => {
     if (!record.uuid) return;
-    const res = await maintenancePlanApi.getExecution(record.uuid);
-    setDetail(res);
-    setDrawerVisible(true);
+    void openDetail(() => maintenancePlanApi.getExecution(record.uuid!) as Promise<MaintenanceExecution>);
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -91,6 +95,56 @@ const MaintenanceExecutionsPage: React.FC = () => {
 
   const executionStatusValueEnum = useMemo(() => buildMaintenanceExecutionStatusValueEnum(), []);
   const executionResultValueEnum = useMemo(() => buildMaintenanceExecutionResultValueEnum(t), [t]);
+
+  const detailColumns: ProDescriptionsItemProps<MaintenanceExecution>[] = useMemo(
+    () => [
+      { title: t(`${P}.col.executionNo`), dataIndex: 'execution_no' },
+      { title: t(`${P}.col.equipmentName`), dataIndex: 'equipment_name' },
+      {
+        title: t(`${P}.col.executionDate`),
+        dataIndex: 'execution_date',
+        render: (_, r) => (r.execution_date ? formatDateTime(r.execution_date) : '-'),
+      },
+      { title: t(`${P}.col.executorName`), dataIndex: 'executor_name' },
+      {
+        title: t(`${P}.col.executionResult`),
+        dataIndex: 'execution_result',
+        render: (_, r) => (
+          <Tag color={RESULT_COLORS[r.execution_result ?? ''] ?? 'default'}>{r.execution_result ?? '-'}</Tag>
+        ),
+      },
+      { title: t(`${P}.col.status`), dataIndex: 'status' },
+      { title: t(`${P}.col.executionContent`), dataIndex: 'execution_content', span: 2 },
+      {
+        title: t(`${P}.col.source`),
+        key: 'source',
+        render: (_, r) =>
+          r.source_type === 'equipment_fault' && r.source_uuid ? (
+            <Typography.Link
+              onClick={() =>
+                navigate(
+                  `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(r.source_uuid!)}`,
+                )
+              }
+            >
+              {t(`${P}.viewFault`)}
+            </Typography.Link>
+          ) : (
+            '-'
+          ),
+      },
+      {
+        title: t(`${P}.col.sparePartsUsed`),
+        key: 'spare_parts_used',
+        span: 2,
+        render: (_, r) =>
+          r.spare_parts_used?.items?.length
+            ? r.spare_parts_used.items.map((i) => `#${i.spare_part_id}×${i.quantity}`).join(', ')
+            : '-',
+      },
+    ],
+    [t, navigate],
+  );
 
   const columns: ProColumns<MaintenanceExecution>[] = useMemo(
     () => [
@@ -211,13 +265,13 @@ const MaintenanceExecutionsPage: React.FC = () => {
         width: 120,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => [
-          perms.canRead ? (
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
-              {t('common.view')}
-            </Button>
-          ) : null,
-        ],
+        render: (_, record) =>
+          perms.canRead
+            ? renderRowActionsOverflow(
+                [<Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />],
+                { keyPrefix: `execution-${record.uuid ?? 'row'}` },
+              )
+            : null,
       },
     ],
     [t, perms.canRead, executionStatusValueEnum, executionResultValueEnum, navigate],
@@ -242,7 +296,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
           showAdvancedSearch={true}
           pinnedTabsField={MAINTENANCE_EXECUTION_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
-          onRow={(record) => ({ onClick: () => void handleDetail(record), style: { cursor: 'pointer' } })}
+          onRow={(record) => ({ onClick: () => handleDetail(record), style: { cursor: 'pointer' } })}
           request={async (params, sort, _filter, searchFormValues) => {
             try {
               const listParams = resolveMaintenanceExecutionListParams(searchFormValues, sort);
@@ -265,70 +319,50 @@ const MaintenanceExecutionsPage: React.FC = () => {
       </ListPageTemplate>
 
       <DetailDrawerTemplate
-        title={t(`${P}.detailTitle`)}
+        title={`${t(`${P}.detailTitle`)}${detail?.execution_no ? ` - ${detail.execution_no}` : ''}`}
         open={drawerVisible}
-        onClose={() => {
-          setDrawerVisible(false);
-          setDetail(null);
-        }}
+        loading={detailLoading}
+        onClose={closeDetail}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-      >
-        {detail ? (
-          <DetailDrawerSection title={t(`${P}.section.basic`)}>
-            <p>{t(`${P}.col.executionNo`)}: {detail.execution_no ?? '-'}</p>
-            <p>{t(`${P}.col.equipmentName`)}: {detail.equipment_name ?? '-'}</p>
-            <p>{t(`${P}.col.executionDate`)}: {detail.execution_date ? formatDateTime(detail.execution_date) : '-'}</p>
-            <p>{t(`${P}.col.executorName`)}: {detail.executor_name ?? '-'}</p>
-            <p>{t(`${P}.col.executionResult`)}: {detail.execution_result ?? '-'}</p>
-            <p>{t(`${P}.col.status`)}: {detail.status ?? '-'}</p>
-            <p>{t(`${P}.col.executionContent`)}: {detail.execution_content ?? '-'}</p>
-            <p>
-              {t(`${P}.col.source`)}:{' '}
-              {detail.source_type === 'equipment_fault' && detail.source_uuid ? (
-                <Typography.Link
-                  onClick={() =>
-                    navigate(
-                      `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(detail.source_uuid!)}`,
-                    )
-                  }
-                >
-                  {t(`${P}.viewFault`)}
-                </Typography.Link>
-              ) : (
-                '-'
-              )}
-            </p>
-            {detail.spare_parts_used?.items?.length ? (
-              <p>
-                {t(`${P}.col.sparePartsUsed`)}:{' '}
-                {detail.spare_parts_used.items.map((i) => `#${i.spare_part_id}×${i.quantity}`).join(', ')}
-              </p>
-            ) : null}
-            <div style={{ marginTop: 12 }}>
-              <div style={{ marginBottom: 8 }}>{t(`${P}.col.attachments`, { defaultValue: '照片' })}</div>
-              <LineAttachmentsUpload
-                category="maintenance_execution_attachments"
-                value={detail.attachments}
-                readOnly
-              />
-            </div>
-          </DetailDrawerSection>
-        ) : null}
-        {detail?.executed_items?.length ? (
-          <DetailDrawerSection title={t(`${P}.section.executedItems`, { defaultValue: '保养项' })}>
-            {detail.executed_items.map((item, index) => (
-              <div key={String(item.item_id ?? index)} style={{ marginBottom: 12 }}>
-                <p>{item.item_name ?? `#${item.item_id ?? index + 1}`}</p>
-                <LineAttachmentsUpload
-                  category="maintenance_execution_item"
-                  value={item.attachments}
-                  readOnly
-                />
-              </div>
-            ))}
-          </DetailDrawerSection>
-        ) : null}
-      </DetailDrawerTemplate>
+        basic={
+          detail ? (
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(detailColumns, detail)}
+            />
+          ) : undefined
+        }
+        supplementary={
+          detail?.attachments?.length ? (
+            <LineAttachmentsUpload
+              category="maintenance_execution_attachments"
+              value={detail.attachments}
+              readOnly
+            />
+          ) : undefined
+        }
+        supplementaryTitle={t(`${P}.col.attachments`, { defaultValue: '照片' })}
+        lines={
+          detail?.executed_items?.length ? (
+            <>
+              {detail.executed_items.map((item, index) => (
+                <div key={String(item.item_id ?? index)} style={{ marginBottom: 16 }}>
+                  <Typography.Text strong>{item.item_name ?? `#${item.item_id ?? index + 1}`}</Typography.Text>
+                  <div style={{ marginTop: 8 }}>
+                    <LineAttachmentsUpload
+                      category="maintenance_execution_item"
+                      value={item.attachments}
+                      readOnly
+                    />
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : undefined
+        }
+        linesTitle={t(`${P}.section.executedItems`, { defaultValue: '保养项' })}
+      />
     </>
   );
 };

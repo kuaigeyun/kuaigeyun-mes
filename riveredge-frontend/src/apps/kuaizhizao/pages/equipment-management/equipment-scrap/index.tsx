@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -6,9 +6,10 @@ import {
   ProFormDatePicker,
   ProFormSelect,
   ProFormTextArea,
+  ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Row, Col, Tag, Input } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, SendOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { SendOutlined, CheckOutlined, CloseOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { UniTable } from '../../../../../components/uni-table';
@@ -16,10 +17,14 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
 import { equipmentApi } from '../../../services/equipment';
 import { scrapApplicationsApi } from '../../../services/equipmentOps';
-import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -45,6 +50,7 @@ interface ScrapApplication {
   applicant_name?: string;
   status?: string;
   reject_reason?: string;
+  remark?: string;
   updated_at?: string;
 }
 
@@ -72,6 +78,16 @@ const EquipmentScrapPage: React.FC = () => {
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<ScrapApplication | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<ScrapApplication>();
+
+  const handleDetail = useCallback(
+    (record: ScrapApplication) => {
+      if (!record.id) return;
+      void openDetail(() => scrapApplicationsApi.get(record.id!) as Promise<ScrapApplication>);
+    },
+    [openDetail],
+  );
 
   const loadEquipmentOptions = async () => {
     const res = await equipmentApi.list({ limit: 1000 });
@@ -144,6 +160,9 @@ const EquipmentScrapPage: React.FC = () => {
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
+      if (detailVisible && detail?.id === current?.id && current?.id) {
+        void handleDetail({ id: current.id });
+      }
     } catch (error: unknown) {
       messageApi.error(getApiErrorMessage(error, t(`${P}.submitFailed`)));
     } finally {
@@ -176,6 +195,26 @@ const EquipmentScrapPage: React.FC = () => {
   };
 
   const approvalStatusValueEnum = useMemo(() => buildApprovalDocStatusValueEnum(), []);
+
+  const detailBasicColumns = useMemo<ProDescriptionsItemProps<ScrapApplication>[]>(
+    () => [
+      { title: t(`${P}.col.applicationNo`), dataIndex: 'application_no' },
+      { title: t(`${P}.col.equipment`), dataIndex: 'equipment_name' },
+      { title: t(`${P}.col.reason`), dataIndex: 'reason', span: 2 },
+      { title: t(`${P}.col.scrapDate`), dataIndex: 'scrap_date', valueType: 'date' },
+      { title: t(`${P}.col.applicant`), dataIndex: 'applicant_name' },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        render: (_, r) => (
+          <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>
+        ),
+      },
+      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+      { title: t(`${P}.form.rejectReason`), dataIndex: 'reject_reason', span: 2 },
+    ],
+    [t],
+  );
 
   const columns: ProColumns<ScrapApplication>[] = useMemo(() => alignProColumns<ScrapApplication>([
       {
@@ -262,102 +301,84 @@ const EquipmentScrapPage: React.FC = () => {
         width: 260,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <>
-            <Button
-              {...rowActionKind('read')}
-              type="link"
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={(e) => {
-                e.stopPropagation();
-                void handleEdit(record);
-              }}
-            >
-              {t('common.detail')}
-            </Button>
-            {perms.canUpdate && record.status === '草稿' && (
-              <Button
-                {...rowActionKind('update')}
-                type="link"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleEdit(record);
-                }}
-              >
-                {t('common.edit')}
-              </Button>
-            )}
-            {perms.canAction?.('submit') && record.status === '草稿' && (
-              <Button
-                {...rowActionKind('submit')}
-                type="link"
-                size="small"
-                icon={<SendOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleSubmitDoc(record);
-                }}
-              >
-                {t(`${P}.action.submit`)}
-              </Button>
-            )}
-            {perms.canAction?.('approve') && record.status === '已提交' && (
-              <Button
-                {...rowActionKind('approve')}
-                type="link"
-                size="small"
-                icon={<CheckOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleApprove(record);
-                }}
-              >
-                {t(`${P}.action.approve`)}
-              </Button>
-            )}
-            {perms.canAction?.('reject') && record.status === '已提交' && (
-              <Button
-                {...rowActionKind('reject')}
-                type="link"
-                size="small"
-                danger
-                icon={<CloseOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setRejectTarget(record);
-                  setRejectReason('');
-                  setRejectModalVisible(true);
-                }}
-              >
-                {t(`${P}.action.reject`)}
-              </Button>
-            )}
-            {perms.canDelete && record.status === '草稿' && (
-              <Button
-                {...rowActionKind('delete')}
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  Modal.confirm({
-                    title: t('common.deleteTitle'),
-                    onOk: () => record.id && handleDelete([record.id]),
-                  });
-                }}
-              >
-                {t('common.delete')}
-              </Button>
-            )}
-          </>
-        ),
+        render: (_, record) =>
+          renderRowActionsOverflow(
+            [
+              perms.canRead ? (
+                <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+                  {t('common.detail')}
+                </Button>
+              ) : null,
+              perms.canUpdate && record.status === '草稿' ? (
+                <Button key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)}>
+                  {t('common.edit')}
+                </Button>
+              ) : null,
+              perms.canAction?.('submit') && record.status === '草稿' ? (
+                <Button
+                  key="submit"
+                  {...rowActionKind('submit')}
+                  icon={<SendOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleSubmitDoc(record);
+                  }}
+                >
+                  {t(`${P}.action.submit`)}
+                </Button>
+              ) : null,
+              perms.canAction?.('approve') && record.status === '已提交' ? (
+                <Button
+                  key="approve"
+                  {...rowActionKind('approve')}
+                  icon={<CheckOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleApprove(record);
+                  }}
+                >
+                  {t(`${P}.action.approve`)}
+                </Button>
+              ) : null,
+              perms.canAction?.('reject') && record.status === '已提交' ? (
+                <Button
+                  key="reject"
+                  {...rowActionKind('reject')}
+                  danger
+                  icon={<CloseOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setRejectTarget(record);
+                    setRejectReason('');
+                    setRejectModalVisible(true);
+                  }}
+                >
+                  {t(`${P}.action.reject`)}
+                </Button>
+              ) : null,
+              perms.canDelete && record.status === '草稿' ? (
+                <Button
+                  key="delete"
+                  {...rowActionKind('delete')}
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    Modal.confirm({
+                      title: t('common.deleteTitle'),
+                      onOk: () => record.id && handleDelete([record.id]),
+                    });
+                  }}
+                >
+                  {t('common.delete')}
+                </Button>
+              ) : null,
+            ],
+            `scrap-actions-${record.id ?? 'row'}`,
+          ),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, perms, approvalStatusValueEnum],
+    [t, perms, approvalStatusValueEnum, handleDetail],
   );
 
   return (
@@ -372,6 +393,10 @@ const EquipmentScrapPage: React.FC = () => {
           showAdvancedSearch={true}
           pinnedTabsField={APPROVAL_DOC_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
+          onRow={(record) => ({
+            onClick: () => perms.canRead && handleDetail(record),
+            style: { cursor: perms.canRead ? 'pointer' : undefined },
+          })}
           request={async (params, sort, _filter, searchFormValues) => {
             try {
               const listParams = resolveApprovalDocListParams(searchFormValues, sort, {
@@ -397,6 +422,24 @@ const EquipmentScrapPage: React.FC = () => {
           enableRowSelection={false}
         />
       </ListPageTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t(`${P}.detailTitle`, { defaultValue: t('common.detail') })}${detail?.application_no ? ` - ${detail.application_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailBasicColumns}
+        extra={buildDetailDrawerEditExtra(
+          t,
+          Boolean(detail && perms.canUpdate && detail.status === '草稿'),
+          () => {
+            if (!detail) return;
+            closeDetail();
+            void handleEdit(detail);
+          },
+        )}
+      />
 
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}

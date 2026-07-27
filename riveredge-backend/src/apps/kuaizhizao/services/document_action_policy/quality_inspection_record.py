@@ -27,6 +27,21 @@ def _is_pending_review(review_status: Any) -> bool:
     return _norm(review_status) in _PENDING_REVIEW_STATUSES
 
 
+_CONDUCT_ALLOWED_STATUSES = frozenset({"待检验", "已检验", "已驳回", "待审核"})
+
+
+def can_conduct_quality_inspection(status: Any, inspection_result: Any = None) -> bool:
+    """检验录入/改单：未审核前可执行；反审核后 status 回落为已检验，须允许再次录入。"""
+    normalized_status = _norm(status)
+    if normalized_status == "已审核":
+        return False
+    if normalized_status in _CONDUCT_ALLOWED_STATUSES:
+        return True
+    if _norm(inspection_result) == "待检验":
+        return True
+    return False
+
+
 def derive_quality_inspection_capabilities(
     inspection: Any,
     *,
@@ -41,10 +56,10 @@ def derive_quality_inspection_capabilities(
     inspection_result = _norm(getattr(inspection, "inspection_result", None))
     unqualified_qty = float(getattr(inspection, "unqualified_quantity", 0) or 0)
 
-    conduct_allowed = status == "待检验" or inspection_result == "待检验"
+    conduct_allowed = can_conduct_quality_inspection(status, inspection_result)
     conduct_cap = _cap(
         conduct_allowed,
-        "quality_inspection.conduct.not_pending" if not conduct_allowed else None,
+        "quality_inspection.conduct.approved_locked" if not conduct_allowed else None,
     )
 
     pending_audit = _is_pending_review(review_status) and status in ("已检验", "待审核")
@@ -83,8 +98,8 @@ def derive_quality_inspection_capabilities(
             push_return_cap = _cap(False, "quality_inspection.push_purchase_return.not_allowed")
 
     update_cap = _cap(
-        status == "待检验",
-        "quality_inspection.update.not_pending" if status != "待检验" else None,
+        conduct_allowed,
+        "quality_inspection.update.not_editable" if not conduct_allowed else None,
     )
 
     delete_allowed = status == "待检验" or inspection_result == "待检验"

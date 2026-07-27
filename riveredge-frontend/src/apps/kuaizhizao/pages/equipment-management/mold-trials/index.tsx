@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDatePicker,
   ProFormDigit,
   ProFormSelect,
@@ -10,7 +11,7 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Row, Col, Tag } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { UniTable } from '../../../../../components/uni-table';
@@ -19,6 +20,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { moldApi } from '../../../services/equipment';
 import { trialsApi } from '../../../services/moldOps';
 import { formatDateTime } from '../../../../../utils/format';
@@ -30,6 +32,11 @@ import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.moldOps.trial';
 const RESOURCE = 'kuaizhizao:mold-trial';
@@ -78,6 +85,13 @@ const MoldTrialsPage: React.FC = () => {
   );
   const [submitting, setSubmitting] = useState(false);
   const [moldOptions, setMoldOptions] = useState<{ label: string; value: number }[]>([]);
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<MoldTrial>();
+
+  const handleDetail = (record: MoldTrial) => {
+    if (!record.id) return;
+    void openDetail(() => trialsApi.get(record.id!), t(`${P}.listFailed`));
+  };
 
   const resultOptions = useMemo(
     () => [
@@ -163,6 +177,27 @@ const MoldTrialsPage: React.FC = () => {
     }
   };
 
+  const detailColumns: ProDescriptionsItemProps<MoldTrial>[] = useMemo(
+    () => [
+      {
+        title: t(`${P}.col.trialNo`),
+        dataIndex: 'document_no',
+        render: (_, r) => r.document_no ?? r.trial_no ?? '-',
+      },
+      { title: t(`${P}.col.mold`), dataIndex: 'mold_name' },
+      { title: t(`${P}.col.trialDate`), dataIndex: 'trial_date', valueType: 'date' },
+      { title: t(`${P}.col.supplier`), dataIndex: 'supplier' },
+      { title: t(`${P}.col.trialCount`), dataIndex: 'trial_count' },
+      {
+        title: t(`${P}.col.result`),
+        dataIndex: 'trial_result',
+        render: (_, r) => renderDocumentStatusTag(r.trial_result ?? '-', r.trial_result),
+      },
+      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+    ],
+    [t],
+  );
+
   const columns: ProColumns<MoldTrial>[] = useMemo(() => alignProColumns<MoldTrial>([
       {
         title: t(`${P}.col.trialDate`),
@@ -207,7 +242,7 @@ const MoldTrialsPage: React.FC = () => {
         width: 100,
         sorter: true,
         hideInSearch: true,
-        render: (_, r) => <Tag>{r.trial_result ?? '-'}</Tag>,
+        render: (_, r) => renderDocumentStatusTag(r.trial_result ?? '-', r.trial_result),
       },
       {
         title: t('common.updatedAt'),
@@ -228,10 +263,9 @@ const MoldTrialsPage: React.FC = () => {
               {...rowActionKind('read')}
               type="link"
               size="small"
-              icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
-                void handleEdit(record);
+                handleDetail(record);
               }}
             >
               {t('common.detail')}
@@ -359,6 +393,20 @@ const MoldTrialsPage: React.FC = () => {
           </Col>
         </Row>
       </FormModalTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t('common.detail')}${detail?.document_no ?? detail?.trial_no ? ` - ${detail.document_no ?? detail.trial_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailColumns}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && perms.canUpdate), () => {
+          if (!detail) return;
+          closeDetail();
+          void handleEdit(detail);
+        })}
+      />
     </>
   );
 };

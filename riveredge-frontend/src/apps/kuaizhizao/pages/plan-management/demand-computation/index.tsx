@@ -97,7 +97,6 @@ import {
   getPushOptions,
   getPushPreview,
   pushAll,
-  firmPlannedOrders,
   validateMaterialSources,
   getMaterialSources,
   getDemandComputationStatistics,
@@ -119,8 +118,8 @@ import {
   resolveDemandComputationListLifecycleParams,
   LIST_LIFECYCLE_STAGE_FIELD,
 } from '../../../utils/demandComputationLifecycle'
-import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode'
-import { getDemandTypeLabel, getDemandTypeTagProps } from '../../../utils/demandType'
+import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor, buildDemandBusinessModeValueEnum } from '../../../utils/businessMode'
+import { getDemandTypeLabel, renderDemandTypeMarkerTag } from '../../../utils/demandType'
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag'
 import { listDemands, getDemand, pushDemandToComputation, previewPushDemandToComputation, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
 import {
@@ -2449,11 +2448,7 @@ const DemandComputationPage: React.FC = () => {
         demand_plan: { text: getDemandTypeLabel('demand_plan'), status: 'Warning' },
       },
       hideInSearch: false,
-      render: (_, record) => (
-        <Tag {...getDemandTypeTagProps(record.demand_type)}>
-          {getDemandTypeLabel(record.demand_type)}
-        </Tag>
-      ),
+      render: (_, record) => renderDemandTypeMarkerTag(record.demand_type),
     },
     {
       title: t('app.kuaizhizao.demandComputation.colBusinessMode'),
@@ -2461,17 +2456,8 @@ const DemandComputationPage: React.FC = () => {
       width: 100,
       valueType: 'select',
       sorter: true,
-      valueEnum: {
-        MTS: { text: getDemandBusinessModeLabel('MTS'), status: 'Processing' },
-        MTO: { text: getDemandBusinessModeLabel('MTO'), status: 'Success' },
-        ATO: { text: getDemandBusinessModeLabel('ATO'), status: 'Warning' },
-      },
+      valueEnum: buildDemandBusinessModeValueEnum(),
       hideInSearch: false,
-      render: (_, record) => (
-        <Tag color={getDemandBusinessModeTagColor(record.business_mode)}>
-          {getDemandBusinessModeLabel(record.business_mode)}
-        </Tag>
-      ),
     },
     {
       title: t('app.kuaizhizao.demandComputation.colStartTime'),
@@ -3049,7 +3035,7 @@ const DemandComputationPage: React.FC = () => {
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
 
-      {/* 上拉来源预览 Modal */}
+      {/* 加载来源预览 Modal */}
       <Modal
         title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
         open={sourcePullPreviewOpen}
@@ -4241,16 +4227,16 @@ const DemandComputationPage: React.FC = () => {
                           {
                             key: 'bm',
                             label: t('app.kuaizhizao.demandComputation.colBusinessMode'),
-                            children: getDemandBusinessModeLabel(currentComputation.business_mode),
+                            children: (
+                              <Tag color={getDemandBusinessModeTagColor(currentComputation.business_mode)}>
+                                {getDemandBusinessModeLabel(currentComputation.business_mode)}
+                              </Tag>
+                            ),
                           },
                           {
                             key: 'dtype',
                             label: t('app.kuaizhizao.demandComputation.colSourceType'),
-                            children: (
-                              <Tag {...getDemandTypeTagProps(currentComputation.demand_type)}>
-                                {getDemandTypeLabel(currentComputation.demand_type)}
-                              </Tag>
-                            ),
+                            children: renderDemandTypeMarkerTag(currentComputation.demand_type),
                           },
                           {
                             key: 'st',
@@ -4592,103 +4578,6 @@ const DemandComputationPage: React.FC = () => {
                                       count: exceptions.length,
                                     })}
                                   </Button>
-                                )
-                              },
-                            },
-                            {
-                              title: t('app.kuaizhizao.demandComputation.colPlannedOrderFirm'),
-                              dataIndex: 'id',
-                              width: 140,
-                              render: (_, record: DemandComputationItem) => {
-                                const supply = record.detail_results?.supply_calculation || {}
-                                const orders = Array.isArray(supply.planned_orders)
-                                  ? supply.planned_orders
-                                  : []
-                                const hasOrders = orders.length > 0
-                                const isFirm = orders.some((po: { firm?: boolean }) => po?.firm)
-                                const isFrozen =
-                                  !!record.detail_results?.planned_orders_frozen ||
-                                  !!supply.frozen ||
-                                  orders.some((po: { frozen?: boolean }) => po?.frozen)
-                                const canFirm =
-                                  computationPerms.canUpdate &&
-                                  isComputationCompleted(currentComputation?.computation_status) &&
-                                  hasOrders
-                                const refreshDetail = async () => {
-                                  if (!currentComputation?.id) return
-                                  const data = await getDemandComputation(currentComputation.id, true)
-                                  setCurrentComputation(data)
-                                }
-                                return (
-                                  <Space size={4} wrap>
-                                    {isFirm ? (
-                                      <Tag color="blue">{t('app.kuaizhizao.demandComputation.firmTag')}</Tag>
-                                    ) : null}
-                                    {isFrozen ? (
-                                      <Tag color="purple">{t('app.kuaizhizao.demandComputation.frozenTag')}</Tag>
-                                    ) : null}
-                                    {canFirm && !isFirm ? (
-                                      <>
-                                        <Button
-                                          type="link"
-                                          size="small"
-                                          onClick={async () => {
-                                            try {
-                                              await firmPlannedOrders(currentComputation!.id!, record.id!, {
-                                                firm: true,
-                                                frozen: false,
-                                              })
-                                              messageApi.success(t('app.kuaizhizao.demandComputation.firmSuccess'))
-                                              await refreshDetail()
-                                            } catch (e: any) {
-                                              messageApi.error(e?.response?.data?.detail || String(e?.message || e))
-                                            }
-                                          }}
-                                        >
-                                          {t('app.kuaizhizao.demandComputation.firmPlannedOrder')}
-                                        </Button>
-                                        <Button
-                                          type="link"
-                                          size="small"
-                                          onClick={async () => {
-                                            try {
-                                              await firmPlannedOrders(currentComputation!.id!, record.id!, {
-                                                firm: true,
-                                                frozen: true,
-                                              })
-                                              messageApi.success(t('app.kuaizhizao.demandComputation.firmSuccess'))
-                                              await refreshDetail()
-                                            } catch (e: any) {
-                                              messageApi.error(e?.response?.data?.detail || String(e?.message || e))
-                                            }
-                                          }}
-                                        >
-                                          {t('app.kuaizhizao.demandComputation.firmAndFreeze')}
-                                        </Button>
-                                      </>
-                                    ) : null}
-                                    {canFirm && isFirm ? (
-                                      <Button
-                                        type="link"
-                                        size="small"
-                                        onClick={async () => {
-                                          try {
-                                            await firmPlannedOrders(currentComputation!.id!, record.id!, {
-                                              firm: false,
-                                              frozen: false,
-                                            })
-                                            messageApi.success(t('app.kuaizhizao.demandComputation.unfirmSuccess'))
-                                            await refreshDetail()
-                                          } catch (e: any) {
-                                            messageApi.error(e?.response?.data?.detail || String(e?.message || e))
-                                          }
-                                        }}
-                                      >
-                                        {t('app.kuaizhizao.demandComputation.unfirmPlannedOrder')}
-                                      </Button>
-                                    ) : null}
-                                    {!hasOrders ? '-' : null}
-                                  </Space>
                                 )
                               },
                             },

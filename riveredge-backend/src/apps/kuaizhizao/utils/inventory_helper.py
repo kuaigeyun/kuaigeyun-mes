@@ -798,3 +798,190 @@ async def batch_get_material_inventory(
             inventory_map[mid] = Decimal("0")
 
     return inventory_map
+
+
+def _normalize_outbound_batch_no(batch_no: Optional[str]) -> str:
+    bn = str(batch_no or "").strip()
+    return bn if bn else "DEFAULT"
+
+
+def _outbound_ownership_filter(
+    ownership_type: Optional[str] = None,
+    customer_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    ot = ownership_type or "company_owned"
+    cid = customer_id if customer_id is not None else 0
+    return {"ownership_type": ot, "customer_id": cid}
+
+
+async def get_outbound_available_quantity(
+    tenant_id: int,
+    material_id: int,
+    warehouse_id: int,
+    *,
+    batch_no: Optional[str] = None,
+    ownership_type: Optional[str] = None,
+    customer_id: Optional[int] = None,
+) -> Decimal:
+    """
+    按出库所选仓库统计可扣减数量（与批次库存查询 / 生产领料过账口径一致）。
+
+    - 线边仓：仅汇总该 warehouse_id 下的 LineSideInventory
+    - 主仓：MaterialBatch 按物料默认仓库归属；所选仓库与默认仓库不一致时可用量为 0
+    """
+    from apps.master_data.models.material import Material
+    from apps.master_data.models.material_batch import MaterialBatch
+    from apps.master_data.models.warehouse import Warehouse
+    from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
+    from apps.master_data.services.material_service import (
+        resolve_primary_default_warehouse_from_material,
+    )
+
+    wh = await Warehouse.get_or_none(
+        id=int(warehouse_id),
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    )
+    if not wh:
+        return Decimal("0")
+
+    own = _outbound_ownership_filter(ownership_type, customer_id)
+    raw_batch = str(batch_no or "").strip()
+    ledger_bn = _normalize_outbound_batch_no(raw_batch) if raw_batch else ""
+    use_specific_batch = bool(raw_batch) and ledger_bn != "DEFAULT"
+
+    if wh.warehouse_type == "line_side":
+        line_query = LineSideInventory.filter(
+            tenant_id=tenant_id,
+            warehouse_id=int(warehouse_id),
+            material_id=material_id,
+            deleted_at__isnull=True,
+            status="available",
+        )
+        if use_specific_batch:
+            line_query = line_query.filter(batch_no=raw_batch)
+        if hasattr(LineSideInventory, "ownership_type"):
+            line_query = line_query.filter(ownership_type=own["ownership_type"])
+        if hasattr(LineSideInventory, "customer_id"):
+            line_query = line_query.filter(customer_id=own["customer_id"])
+        line_items = await line_query.all()
+        available = Decimal("0")
+        for item in line_items:
+            qty = _decimal_or_zero(item.quantity) - _decimal_or_zero(item.reserved_quantity)
+            if qty > 0:
+                available += qty
+        return available
+
+    material = await Material.get_or_none(
+        tenant_id=tenant_id,
+        id=material_id,
+        deleted_at__isnull=True,
+    )
+    material_wh = (
+        await resolve_primary_default_warehouse_from_material(tenant_id, material=material)
+        if material
+        else None
+    )
+    if material_wh and int(material_wh[0]) != int(warehouse_id):
+        return Decimal("0")
+
+    today = date.today()
+    batch_query = MaterialBatch.filter(
+        tenant_id=tenant_id,
+        material_id=material_id,
+        deleted_at__isnull=True,
+        status="in_stock",
+        quantity__gt=0,
+        **own,
+    ).filter(Q(expiry_date__isnull=True) | Q(expiry_date__gte=today))
+    if use_specific_batch:
+        batch_query = batch_query.filter(batch_no=raw_batch)
+
+    batches = await batch_query.all()
+    return sum((_decimal_or_zero(b.quantity) for b in batches), Decimal("0"))
+
+
+async def assert_outbound_warehouse_stock_available(
+    tenant_id: int,
+    material_id: int,
+    warehouse_id: int,
+    quantity: Decimal,
+    *,
+    batch_no: Optional[str] = None,
+    ownership_type: Optional[str] = None,
+    customer_id: Optional[int] = None,
+    material_label: Optional[str] = None,
+) -> None:
+    """出库前校验：所选仓库下可用库存须满足扣减数量。"""
+    from infra.exceptions.exceptions import BusinessLogicError
+    from apps.master_data.models.material import Material
+    from apps.master_data.models.warehouse import Warehouse
+    from apps.master_data.services.material_service import (
+        resolve_primary_default_warehouse_from_material,
+    )
+
+    need = _decimal_or_zero(quantity)
+    if need <= 0:
+        return
+
+    available = await get_outbound_available_quantity(
+        tenant_id=tenant_id,
+        material_id=material_id,
+        warehouse_id=warehouse_id,
+        batch_no=batch_no,
+        ownership_type=ownership_type,
+        customer_id=customer_id,
+    )
+    if available >= need:
+        return
+
+    if not material_label:
+        material = await Material.get_or_none(
+            tenant_id=tenant_id,
+            id=material_id,
+            deleted_at__isnull=True,
+        )
+        if material:
+            code = getattr(material, "main_code", None) or getattr(material, "code", "")
+            material_label = f"{material.name}（{code}）" if code else material.name
+        else:
+            material_label = f"物料ID:{material_id}"
+
+    selected_wh = await Warehouse.get_or_none(
+        id=int(warehouse_id),
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    )
+    selected_wh_name = (selected_wh.name if selected_wh else None) or f"仓库#{warehouse_id}"
+
+    material = await Material.get_or_none(
+        tenant_id=tenant_id,
+        id=material_id,
+        deleted_at__isnull=True,
+    )
+    material_wh = (
+        await resolve_primary_default_warehouse_from_material(tenant_id, material=material)
+        if material
+        else None
+    )
+
+    batch_hint = ""
+    raw_batch = str(batch_no or "").strip()
+    if raw_batch and _normalize_outbound_batch_no(raw_batch) != "DEFAULT":
+        batch_hint = f"，批号 {raw_batch}"
+
+    if (
+        selected_wh
+        and selected_wh.warehouse_type != "line_side"
+        and material_wh
+        and int(material_wh[0]) != int(warehouse_id)
+    ):
+        raise BusinessLogicError(
+            f"出库失败：{material_label} 的主仓库存归属默认仓库 {material_wh[1]}，"
+            f"不能从 {selected_wh_name} 领料/出库{batch_hint}"
+        )
+
+    raise BusinessLogicError(
+        f"出库失败：{material_label} 在 {selected_wh_name} 可用库存 {available:g}，"
+        f"不足本次出库 {need:g}{batch_hint}"
+    )

@@ -6,7 +6,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
-import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Alert, Button, Descriptions, Empty, Form, Input, Modal, Space, Spin, Table, Tag, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -16,15 +16,14 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -405,6 +404,77 @@ const PurchaseOrderChangesPage: React.FC = () => {
     const color = amount > 0 ? '#52c41a' : amount < 0 ? '#ff4d4f' : undefined;
     return <span style={{ color }}>{text}</span>;
   }, []);
+
+  const detailBasicColumns = useMemo<ProDescriptionsItemProps<PurchaseOrderChange>[]>(
+    () => [
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colSourceOrderCode'),
+        dataIndex: 'source_order_code',
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colVersion'),
+        dataIndex: 'change_version',
+        render: (_, record) => (record.change_version != null ? `V${record.change_version}` : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.supplier'),
+        dataIndex: 'supplier_name',
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colCategory'),
+        dataIndex: 'change_category',
+        render: (_, record) => formatOrderChangeCategory(record.change_category),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colBeforeAmount'),
+        dataIndex: 'before_total_amount',
+        render: (_, record) => formatNumber(record.before_total_amount, 2),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colAfterAmount'),
+        dataIndex: 'after_total_amount',
+        render: (_, record) => formatNumber(record.after_total_amount, 2),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colDeltaAmount'),
+        dataIndex: 'delta_amount',
+        render: (_, record) => renderDeltaAmount(record.delta_amount),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colAppliedAt'),
+        dataIndex: 'applied_at',
+        render: (_, record) =>
+          record.applied_at ? formatDateTime(record.applied_at, 'YYYY-MM-DD HH:mm') : '-',
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colChangeReason'),
+        dataIndex: 'change_reason',
+        span: 2,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.notes'),
+        dataIndex: 'notes',
+        span: 2,
+      },
+    ],
+    [renderDeltaAmount, t],
+  );
+
+  const detailCollaboration = useMemo(() => {
+    if (!detail) return undefined;
+    const lc = getOrderChangeLifecycle(detail as Record<string, unknown>, t);
+    const mainStages = lc.mainStages ?? [];
+    if (!mainStages.length) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        status={lc.status}
+        showLabels
+        nextStepSuggestions={lc.nextStepSuggestions}
+        hideNextStepSuggestions
+      />
+    );
+  }, [detail, t]);
 
   const columns: ProColumns<PurchaseOrderChange>[] = useMemo(
     () => alignProColumns<PurchaseOrderChange>([
@@ -847,35 +917,26 @@ const PurchaseOrderChangesPage: React.FC = () => {
             </Space>
           ) : null
         }
-      >
-        {detail && (
-          <>
-            <DetailLifecycleCollaborationBlock record={detail} auditEnabled={auditEnabled}>
-              <UniLifecycle {...getOrderChangeLifecycle(detail as Record<string, unknown>, t)} />
-            </DetailLifecycleCollaborationBlock>
-            <Descriptions column={2} size="small" style={{ marginTop: 16 }}>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colSourceOrderCode')}>{detail.source_order_code}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colVersion')}>V{detail.change_version}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.supplier')}>{detail.supplier_name}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colCategory')}>
-                {formatOrderChangeCategory(detail.change_category)}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colBeforeAmount')}>{detail.before_total_amount}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colAfterAmount')}>{detail.after_total_amount}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colDeltaAmount')}>{detail.delta_amount}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colAppliedAt')}>
-                {detail.applied_at ? formatDateTime(detail.applied_at, 'YYYY-MM-DD HH:mm') : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colChangeReason')} span={2}>
-                {detail.change_reason}
-              </Descriptions.Item>
-            </Descriptions>
-            <div style={{ marginTop: 16 }}>
-              <OrderChangeItemsTable items={detail.items ?? []} />
-            </div>
-          </>
-        )}
-      </DetailDrawerTemplate>
+        collaborationAuditRecord={detail}
+        collaboration={detailCollaboration}
+        basic={
+          detail ? (
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(
+                detailBasicColumns.filter((col) => {
+                  if (col.dataIndex !== 'notes') return true;
+                  const notes = String(detail.notes ?? '').trim();
+                  return notes.length > 0;
+                }),
+                detail,
+              )}
+            />
+          ) : undefined
+        }
+        lines={detail ? <OrderChangeItemsTable items={detail.items ?? []} /> : undefined}
+      />
 
       <OrderChangeImpactModal
         open={impactOpen}

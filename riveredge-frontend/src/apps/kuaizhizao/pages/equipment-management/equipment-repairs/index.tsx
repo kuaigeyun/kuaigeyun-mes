@@ -1,18 +1,19 @@
 import React, { useRef, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormSelect } from '@ant-design/pro-components';
-import { App, Button, Modal, Tag, Typography } from 'antd';
-import { EyeOutlined, CheckOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect } from '@ant-design/pro-components';
+import { App, Button, Descriptions, Modal, Tag, Typography } from 'antd';
+import { CheckOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection,
   FormModalTemplate,
   DRAWER_CONFIG,
   MODAL_CONFIG,
+  detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { equipmentFaultApi } from '../../../services/equipment';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -28,6 +29,7 @@ import {
 import { ROUTES } from '../../../constants/routes';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
+import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.equipmentRepair';
 const RESOURCE = 'kuaizhizao:equipment-fault';
@@ -67,19 +69,17 @@ const EquipmentRepairsPage: React.FC = () => {
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [drawerVisible, setDrawerVisible] = useState(false);
-  const [detail, setDetail] = useState<EquipmentRepair | null>(null);
+  const { open: drawerVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<EquipmentRepair>();
   const [completeVisible, setCompleteVisible] = useState(false);
   const [completeTarget, setCompleteTarget] = useState<EquipmentRepair | null>(null);
   const [completing, setCompleting] = useState(false);
 
   const repairStatusValueEnum = useMemo(() => buildEquipmentRepairStatusValueEnum(t), [t]);
 
-  const handleDetail = async (record: EquipmentRepair) => {
+  const handleDetail = (record: EquipmentRepair) => {
     if (!record.uuid) return;
-    const res = await equipmentFaultApi.getRepair(record.uuid);
-    setDetail(res);
-    setDrawerVisible(true);
+    void openDetail(() => equipmentFaultApi.getRepair(record.uuid!) as Promise<EquipmentRepair>);
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -112,8 +112,7 @@ const EquipmentRepairsPage: React.FC = () => {
       messageApi.success(t(`${P}.completeSuccess`));
       setCompleteVisible(false);
       setCompleteTarget(null);
-      setDrawerVisible(false);
-      setDetail(null);
+      closeDetail();
       actionRef.current?.reload();
     } catch (error: unknown) {
       messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
@@ -122,6 +121,55 @@ const EquipmentRepairsPage: React.FC = () => {
       setCompleting(false);
     }
   };
+
+  const detailColumns: ProDescriptionsItemProps<EquipmentRepair>[] = useMemo(
+    () => [
+      { title: t(`${P}.col.repairNo`), dataIndex: 'repair_no' },
+      { title: t(`${P}.col.equipmentName`), dataIndex: 'equipment_name' },
+      {
+        title: t(`${P}.col.linkedFault`),
+        key: 'equipment_fault_uuid',
+        render: (_, r) =>
+          r.equipment_fault_uuid ? (
+            <Typography.Link
+              onClick={() =>
+                navigate(
+                  `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(r.equipment_fault_uuid!)}`,
+                )
+              }
+            >
+              {t(`${P}.viewFault`)}
+            </Typography.Link>
+          ) : (
+            '-'
+          ),
+      },
+      {
+        title: t(`${P}.col.repairDate`),
+        dataIndex: 'repair_date',
+        render: (_, r) => (r.repair_date ? formatDateTime(r.repair_date) : '-'),
+      },
+      { title: t(`${P}.col.repairType`), dataIndex: 'repair_type' },
+      { title: t(`${P}.col.repairerName`), dataIndex: 'repairer_name' },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
+      },
+      { title: t(`${P}.col.repairResult`), dataIndex: 'repair_result' },
+      { title: t(`${P}.col.repairDescription`), dataIndex: 'repair_description', span: 2 },
+      {
+        title: t(`${P}.col.sparePartsUsed`, { defaultValue: '使用备件' }),
+        key: 'repair_parts',
+        span: 2,
+        render: (_, r) =>
+          r.repair_parts?.items?.length
+            ? r.repair_parts.items.map((i) => `#${i.spare_part_id}×${i.quantity}`).join(', ')
+            : '-',
+      },
+    ],
+    [t, navigate],
+  );
 
   const columns: ProColumns<EquipmentRepair>[] = useMemo(
     () => [
@@ -224,27 +272,27 @@ const EquipmentRepairsPage: React.FC = () => {
         width: 160,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => [
-          perms.canRead ? (
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
-              {t('common.view')}
-            </Button>
-          ) : null,
-          perms.canUpdate && record.status === '进行中' ? (
-            <Button
-              key="complete"
-              type="link"
-              size="small"
-              icon={<CheckOutlined />}
-              onClick={(e) => {
-                e.stopPropagation();
-                openComplete(record);
-              }}
-            >
-              {t(`${P}.action.complete`)}
-            </Button>
-          ) : null,
-        ],
+        render: (_, record) => {
+          const actions = [
+            perms.canRead ? (
+              <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />
+            ) : null,
+            perms.canUpdate && record.status === '进行中' ? (
+              <Button
+                key="complete"
+                {...rowActionKind('execute')}
+                icon={<CheckOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openComplete(record);
+                }}
+              >
+                {t(`${P}.action.complete`)}
+              </Button>
+            ) : null,
+          ];
+          return renderRowActionsOverflow(actions, { keyPrefix: `repair-${record.uuid ?? 'row'}` });
+        },
       },
     ],
     [t, perms.canRead, perms.canUpdate, repairStatusValueEnum, navigate],
@@ -269,7 +317,7 @@ const EquipmentRepairsPage: React.FC = () => {
           showAdvancedSearch
           pinnedTabsField={EQUIPMENT_OPS_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
-          onRow={(record) => ({ onClick: () => void handleDetail(record), style: { cursor: 'pointer' } })}
+          onRow={(record) => ({ onClick: () => handleDetail(record), style: { cursor: 'pointer' } })}
           request={async (params, sort, _filter, searchFormValues) => {
             const listParams = resolveEquipmentRepairListParams(searchFormValues, sort);
             const res = await equipmentFaultApi.listRepairs({
@@ -287,12 +335,10 @@ const EquipmentRepairsPage: React.FC = () => {
       </ListPageTemplate>
 
       <DetailDrawerTemplate
-        title={t(`${P}.detailTitle`)}
+        title={`${t(`${P}.detailTitle`)}${detail?.repair_no ? ` - ${detail.repair_no}` : ''}`}
         open={drawerVisible}
-        onClose={() => {
-          setDrawerVisible(false);
-          setDetail(null);
-        }}
+        loading={detailLoading}
+        onClose={closeDetail}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         extra={
           detail && perms.canUpdate && detail.status === '进行中' ? (
@@ -301,44 +347,26 @@ const EquipmentRepairsPage: React.FC = () => {
             </Button>
           ) : null
         }
-      >
-        {detail ? (
-          <DetailDrawerSection title={t(`${P}.section.basic`)}>
-            <p>{t(`${P}.col.repairNo`)}: {detail.repair_no ?? '-'}</p>
-            <p>{t(`${P}.col.equipmentName`)}: {detail.equipment_name ?? '-'}</p>
-            <p>
-              {t(`${P}.col.linkedFault`)}:{' '}
-              {detail.equipment_fault_uuid ? (
-                <Typography.Link
-                  onClick={() =>
-                    navigate(
-                      `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(detail.equipment_fault_uuid!)}`,
-                    )
-                  }
-                >
-                  {t(`${P}.viewFault`)}
-                </Typography.Link>
-              ) : (
-                '-'
-              )}
-            </p>
-            <p>{t(`${P}.col.repairDate`)}: {detail.repair_date ? formatDateTime(detail.repair_date) : '-'}</p>
-            <p>{t(`${P}.col.repairType`)}: {detail.repair_type ?? '-'}</p>
-            <p>{t(`${P}.col.repairerName`)}: {detail.repairer_name ?? '-'}</p>
-            <p>{t(`${P}.col.status`)}: {detail.status ?? '-'}</p>
-            <p>{t(`${P}.col.repairResult`)}: {detail.repair_result ?? '-'}</p>
-            <p>{t(`${P}.col.repairDescription`)}: {detail.repair_description ?? '-'}</p>
-            <div style={{ marginTop: 12 }}>
-              <div style={{ marginBottom: 8 }}>{t(`${P}.col.attachments`, { defaultValue: '照片' })}</div>
-              <LineAttachmentsUpload
-                category="equipment_repair_attachments"
-                value={detail.attachments}
-                readOnly
-              />
-            </div>
-          </DetailDrawerSection>
-        ) : null}
-      </DetailDrawerTemplate>
+        basic={
+          detail ? (
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(detailColumns, detail)}
+            />
+          ) : undefined
+        }
+        supplementary={
+          detail?.attachments?.length ? (
+            <LineAttachmentsUpload
+              category="equipment_repair_attachments"
+              value={detail.attachments}
+              readOnly
+            />
+          ) : undefined
+        }
+        supplementaryTitle={t(`${P}.col.attachments`, { defaultValue: '照片' })}
+      />
 
       <FormModalTemplate
         title={t(`${P}.completeModal`)}

@@ -11,10 +11,12 @@ import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActi
 import { batchingOrderApi } from '../../../services/batching-order'
 import { normalizeWarehouseListResponse } from '../../../utils/warehouseListCore'
 import BatchingTaskQueue, { type BatchingTaskRow } from './BatchingTaskQueue'
+import type { MaterialCenterDetailRequest } from './materialCenterDetail'
 
 type Props = {
   onCreate?: () => void
-  onOpenBatchingDetail?: (orderId: number) => void
+  onOpenDetail?: (request: MaterialCenterDetailRequest) => void
+  canRead?: boolean
   onRefreshBatchingList?: () => void
 }
 
@@ -24,7 +26,8 @@ function itemKey(row: BatchingTaskRow): string {
 
 const LineSidePrepSplitView: React.FC<Props> = ({
   onCreate,
-  onOpenBatchingDetail,
+  onOpenDetail,
+  canRead = true,
   onRefreshBatchingList,
 }) => {
   const { t } = useTranslation()
@@ -208,7 +211,9 @@ const LineSidePrepSplitView: React.FC<Props> = ({
           onCreate={onCreate}
           listReloadKey={listReloadKey}
           onTasksChanged={() => void refreshAll()}
-          onOpenBatchingDetail={onOpenBatchingDetail}
+          onOpenDetail={onOpenDetail}
+          canRead={canRead}
+          onRefreshBatchingList={onRefreshBatchingList}
         />
       </div>
     </div>

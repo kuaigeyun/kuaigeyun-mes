@@ -10,8 +10,8 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDependency } from '@ant-design/pro-components';
-import { App, Button, Space, Popconfirm, Typography, Row, Col } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDependency } from '@ant-design/pro-components';
+import { App, Button, Space, Popconfirm, Typography, Row, Col, Descriptions, Tag } from 'antd';
 import { WarningOutlined, ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -20,7 +20,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, MultiTabListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
+import { FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG, MultiTabListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { inventoryAlertApi } from '../../../services/inventory-alert';
 import { materialApi, materialGroupApi } from '../../../../master-data/services/material';
@@ -135,6 +135,7 @@ const InventoryAlertPage: React.FC = () => {
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [currentAlert, setCurrentAlert] = useState<InventoryAlert | null>(null);
 
   // 当前编辑的规则ID
@@ -372,12 +373,17 @@ const InventoryAlertPage: React.FC = () => {
    * 处理查看预警详情
    */
   const handleDetail = async (record: InventoryAlert) => {
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setCurrentAlert(null);
     try {
       const detail = await inventoryAlertApi.get(record.id!.toString());
       setCurrentAlert(detail);
-      setDetailDrawerVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.inventoryAlert.msgGetDetailFailed'));
+      setDetailDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -630,7 +636,7 @@ const InventoryAlertPage: React.FC = () => {
     },
   ], [t, alertTypeEnum, thresholdTypeEnum, enabledEnum, alertPerms]);
 
-  const detailColumns = useMemo(() => [
+  const detailColumns: ProDescriptionsItemProps<InventoryAlert>[] = useMemo(() => [
     {
       title: t('app.kuaizhizao.inventoryAlert.colAlertType'),
       dataIndex: 'alert_type',
@@ -1060,15 +1066,23 @@ const InventoryAlertPage: React.FC = () => {
 
       {/* 详情Drawer */}
       <DetailDrawerTemplate
-        title={t('app.kuaizhizao.inventoryAlert.detailTitle')}
+        title={`${t('app.kuaizhizao.inventoryAlert.detailTitle')}${currentAlert?.material_code ? ` - ${currentAlert.material_code}` : ''}`}
         open={detailDrawerVisible}
+        loading={detailLoading}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentAlert(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        dataSource={currentAlert || {}}
-        columns={detailColumns}
+        basic={
+          currentAlert ? (
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(detailColumns, currentAlert)}
+            />
+          ) : undefined
+        }
       />
     </>
   );

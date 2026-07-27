@@ -6,6 +6,9 @@ from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
+from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+    can_conduct_quality_inspection,
+)
 from apps.kuaizhizao.services.document_action_policy.types import (
     ActionCapability,
     CAPABILITY_REASON_MESSAGES,
@@ -30,10 +33,12 @@ def _is_pending_review(review_status: Any) -> bool:
 def derive_oqc_inspection_capabilities(inspection: Any) -> OQCInspectionCapabilities:
     status = _norm(getattr(inspection, "status", None))
     review_status = _norm(getattr(inspection, "review_status", None))
+    inspection_result = _norm(getattr(inspection, "inspection_result", None))
 
+    conduct_allowed = can_conduct_quality_inspection(status, inspection_result)
     conduct_cap = _cap(
-        status == "待检验",
-        "oqc_inspection.conduct.not_pending" if status != "待检验" else None,
+        conduct_allowed,
+        "oqc_inspection.conduct.approved_locked" if not conduct_allowed else None,
     )
 
     pending_audit = _is_pending_review(review_status) and status in ("已检验", "待审核")

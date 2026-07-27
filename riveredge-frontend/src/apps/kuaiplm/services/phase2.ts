@@ -33,6 +33,7 @@ export interface RdDesignReview {
   review_type?: string;
   status?: string;
   scheduled_at?: string | null;
+  review_date?: string | null;
   reviewer_name?: string | null;
   conclusion?: string | null;
   created_at?: string;
@@ -49,8 +50,8 @@ export interface RdFmeaRecord {
   project_name?: string | null;
   fmea_type?: string;
   status?: string;
-  owner_name?: string | null;
-  risk_level?: string | null;
+  material_code?: string | null;
+  material_name?: string | null;
   description?: string | null;
   created_at?: string;
   updated_at?: string;

@@ -60,18 +60,21 @@ async def resolve_outsource_work_order_product_unit(
     tenant_id: int,
     outsource_work_order: Any,
 ) -> str:
-    """委外工单产品单位（模型无 unit 字段，从物料 base_unit 解析）。"""
+    """委外工单产品单位：优先物料生产场景单位，否则基础单位。"""
     default = "件"
     product_id = getattr(outsource_work_order, "product_id", None)
     if product_id is None:
         return default
     from apps.master_data.models.material import Material
+    from apps.kuaizhizao.utils.material_unit_utils import resolve_material_scenario_unit
 
     material = await Material.get_or_none(
         tenant_id=tenant_id,
         id=int(product_id),
         deleted_at__isnull=True,
     )
-    if material and material.base_unit:
-        return str(material.base_unit)
+    if material:
+        unit = resolve_material_scenario_unit(material, "production")
+        if unit:
+            return str(unit)
     return default

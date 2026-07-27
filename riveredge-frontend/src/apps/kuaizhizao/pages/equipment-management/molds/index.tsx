@@ -8,19 +8,20 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useMemo, useEffect } from 'react';
+import React, { useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { App, Button, Tag, Space, message, Modal, Tabs, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Row, Col, Typography, Spin, theme as AntdTheme, Empty, Upload } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, message, Modal, Tabs, Table, Form, Input, InputNumber, DatePicker, Select, Row, Col, Typography, Spin, Empty, Upload } from 'antd';
+import { PlusOutlined, UploadOutlined } from '@ant-design/icons';
 import { uploadMultipleFiles } from '../../../../../services/file';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerSection, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { moldApi } from '../../../services/equipment';
 import {
   schemeBindingsApi,
@@ -51,6 +52,7 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { formatDateTime } from '../../../../../utils/format';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateString } from '../../../../../utils/formDate';
@@ -62,6 +64,11 @@ import {
 } from '../../../utils/equipmentListCore';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  renderEquipmentMasterRowActions,
+} from '../shared/equipmentMasterDataDetail';
 
 const MOLD_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_molds';
 
@@ -120,6 +127,7 @@ interface MoldCalibration {
 
 const MoldsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const perms = useResourcePermissions('kuaizhizao:equipment-management-molds');
   const moldDictOptions = useImportDictionaryOptions(['MOLD_TYPE', 'MOLD_STATUS']);
   const parseMoldDict = moldDictOptions.parseDict;
 
@@ -185,8 +193,6 @@ const MoldsPage: React.FC = () => {
     [t, i18n.language, moldDictOptions],
   );
   const { message: messageApi } = App.useApp();
-  const { token } = AntdTheme.useToken();
-  const moldDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
 
   // Modal 相关状态（创建/编辑模具）
@@ -198,6 +204,7 @@ const MoldsPage: React.FC = () => {
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [moldDetail, setMoldDetail] = useState<Mold | null>(null);
 
   const [moldTrackingRefreshKey, setMoldTrackingRefreshKey] = useState(0);
@@ -368,15 +375,17 @@ const MoldsPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleDetail = async (record: Mold) => {
+  const handleDetail = useCallback(async (record: Mold) => {
+    if (!record.uuid) {
+      messageApi.error(t('app.kuaizhizao.mold.uuidNotFound'));
+      return;
+    }
+    setDrawerVisible(true);
+    setDetailLoading(true);
+    setMoldDetail(null);
     try {
-      if (!record.uuid) {
-        messageApi.error(t('app.kuaizhizao.mold.uuidNotFound'));
-        return;
-      }
       const detail = await moldApi.get(record.uuid);
       setMoldDetail(detail);
-      setDrawerVisible(true);
       if (detail.id != null) {
         loadBorrowReturnLogs(detail.id);
       }
@@ -389,8 +398,11 @@ const MoldsPage: React.FC = () => {
       }
     } catch (error) {
       messageApi.error(t('app.kuaizhizao.mold.getDetailFailed'));
+      setDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
     }
-  };
+  }, [messageApi, t, loadMoldFieldValuesForDetail]);
 
   /**
    * 新建校验记录
@@ -796,53 +808,31 @@ const MoldsPage: React.FC = () => {
     ...customFieldColumns,
     {
       title: t('common.actions'),
-      width: 180,
+      width: 200,
       fixed: 'right',
-      render: (_text, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              void handleDetail(record);
-            }}
-          >
-            {t('common.detail')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              void handleEdit(record);
-            }}
-          >
-            {t('common.edit')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              Modal.confirm({
-                title: t('app.kuaizhizao.mold.confirmDeleteTitle'),
-                content: t('app.kuaizhizao.mold.confirmDeleteContent', { name: record.name }),
-                onOk: () => record.uuid && handleDelete([record.uuid]),
-              });
-            }}
-          >
-            {t('common.delete')}
-          </Button>
-        </Space>
-      ),
+      render: (_text, record) =>
+        renderEquipmentMasterRowActions({
+          record,
+          keyPrefix: `mold-actions-${record.uuid ?? 'row'}`,
+          t,
+          canRead: perms.canRead,
+          canUpdate: perms.canUpdate,
+          canDelete: perms.canDelete,
+          onDetail: (row) => {
+            void handleDetail(row);
+          },
+          onEdit: (row) => {
+            void handleEdit(row);
+          },
+          onDelete: (row) => {
+            if (row.uuid != null) {
+              void handleDelete([row.uuid]);
+            }
+          },
+        }),
     },
   ], SALES_DOC_LIST_FIELD_RANK);
-  }, [moldListCustomFields, generateMoldCustomFieldColumns, t, activeStatusValueEnum, moldStatusValueEnum]);
+  }, [moldListCustomFields, generateMoldCustomFieldColumns, t, activeStatusValueEnum, moldStatusValueEnum, perms, handleDetail]);
 
   const moldCalibrationResultOptions = useMemo(
     () => [
@@ -888,7 +878,7 @@ const MoldsPage: React.FC = () => {
         title: t('common.status'),
         dataIndex: 'status',
         width: 80,
-        render: (s: string) => <Tag>{s || '-'}</Tag>,
+        render: (s: string) => renderDocumentStatusTag(s || '-', s),
       },
     ],
     [t],
@@ -906,7 +896,7 @@ const MoldsPage: React.FC = () => {
         title: t('app.kuaizhizao.mold.colResult'),
         dataIndex: 'result',
         width: 100,
-        render: (r: string) => <Tag>{r || '-'}</Tag>,
+        render: (r: string) => renderDocumentStatusTag(r || '-', r),
       },
       { title: t('app.kuaizhizao.mold.colCertificateNo'), dataIndex: 'certificate_no', width: 140 },
       {
@@ -1234,22 +1224,25 @@ const MoldsPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 模具详情 Drawer */}
-      <DetailDrawerTemplate<Mold>
-        title={t('app.kuaizhizao.mold.detail')}
+      <EquipmentMasterDetailDrawer
         open={drawerVisible}
-        zIndex={moldDetailDrawerZIndex}
+        loading={detailLoading}
+        detail={moldDetail}
+        title={`${t('app.kuaizhizao.mold.detail')}${moldDetail?.code ? ` - ${moldDetail.code}` : ''}`}
         onClose={() => {
           setDrawerVisible(false);
           setMoldDetail(null);
-          setUsages([]);
           setCalibrations([]);
           resetMoldDetailFieldValues();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        dataSource={moldDetail}
-        columns={detailColumns}
-        customContent={
-          moldDetail && (
+        basicColumns={detailColumns}
+        extra={buildDetailDrawerEditExtra(t, Boolean(moldDetail && perms.canUpdate), () => {
+          if (!moldDetail) return;
+          setDrawerVisible(false);
+          void handleEdit(moldDetail);
+        })}
+        lines={
+          moldDetail ? (
             <>
               {hasCustomFieldsDetailContent(moldListCustomFields, moldDetailCustomFieldValues) ? (
                 <DetailDrawerSection title={t('app.master-data.customFields')}>
@@ -1312,162 +1305,134 @@ const MoldsPage: React.FC = () => {
                   {t('common.save')}
                 </Button>
               </DetailDrawerSection>
-            <Tabs
-              defaultActiveKey="basic"
-              items={[
-                {
-                  key: 'basic',
-                  label: t('app.uniDetail.sectionBasic'),
-                  children: (
-                    <>
-                      {moldDetail.design_lifetime && moldDetail.design_lifetime > 0 && (() => {
-                        const total = moldDetail.total_usage_count ?? 0;
-                        const threshold = moldDetail.design_lifetime * 0.9;
-                        if (total >= moldDetail.design_lifetime) {
-                          return <Tag color="error" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.lifetimeExpired')}</Tag>;
-                        }
-                        if (total >= threshold) {
-                          return <Tag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.lifetimeExpiring')}</Tag>;
-                        }
-                        return null;
-                      })()}
-                      {moldDetail.maintenance_interval && moldDetail.maintenance_interval > 0 && (() => {
-                        const total = moldDetail.total_usage_count ?? 0;
-                        const nextAt = (Math.floor(total / moldDetail.maintenance_interval) + 1) * moldDetail.maintenance_interval;
-                        const left = nextAt - total;
-                        if (left > 0 && left <= moldDetail.maintenance_interval * 0.2) {
-                          return <Tag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.maintenanceDueSoon', { count: left })}</Tag>;
-                        }
-                        return null;
-                      })()}
-                      {moldDetail.needs_calibration && moldDetail.next_calibration_date && (() => {
-                        const next = dayjs(moldDetail.next_calibration_date);
-                        const now = dayjs();
-                        const daysLeft = next.diff(now, 'day');
-                        if (daysLeft < 0) {
-                          return <Tag color="error" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.calibrationExpired')}</Tag>;
-                        }
-                        if (daysLeft <= 7) {
-                          return <Tag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.calibrationExpiringSoon', { days: daysLeft })}</Tag>;
-                        }
-                        return null;
-                      })()}
-                      <Descriptions column={2} size="small">
-                        {detailColumns.map((col) => {
-                          const val = (moldDetail as any)[col.dataIndex as string];
-                          let content: React.ReactNode = val;
-                          if (col.valueType === 'dateTime' && val) content = formatDateTime(val, 'YYYY-MM-DD HH:mm:ss');
-                          else if (col.valueType === 'date' && val) content = formatDateTime(val, 'YYYY-MM-DD');
-                          else if (col.render) {
-                            content = (col.render as (dom: React.ReactNode, entity: Mold, i: number) => React.ReactNode)(
-                              val,
-                              moldDetail,
-                              0,
-                            );
-                          }
-                          return (
-                            <Descriptions.Item key={String(col.dataIndex)} label={col.title as React.ReactNode}>
-                              {content ?? '-'}
-                            </Descriptions.Item>
-                          );
-                        })}
-                      </Descriptions>
-                    </>
-                  ),
-                },
-                {
-                  key: 'borrow_return_log',
-                  label: t('app.kuaizhizao.menu.reports.mold-borrow-return-log'),
-                  children: (
-                    <>
-                      <div style={{ marginBottom: 12 }}>
-                        <Space wrap>
-                          <Link to="/apps/kuaizhizao/equipment-management/mold-borrows">
-                            <Button type="primary" size="small">{t('app.kuaizhizao.menu.equipment-management.mold-borrows')}</Button>
-                          </Link>
-                          <Link to="/apps/kuaizhizao/equipment-management/mold-returns">
-                            <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-returns')}</Button>
-                          </Link>
-                        </Space>
-                      </div>
-                      <Table<MoldBorrowReturnLog>
-                        size="small"
-                        loading={borrowReturnLogsLoading}
-                        dataSource={borrowReturnLogs}
-                        rowKey={(row, index) => `${row.log_type}-${row.document_no}-${index}`}
-                        pagination={false}
-                        columns={borrowReturnLogColumns}
-                      />
-                    </>
-                  ),
-                },
-                {
-                  key: 'calibrations',
-                  label: t('app.kuaizhizao.mold.tabCalibrations'),
-                  children: (
-                    <>
-                      <div style={{ marginBottom: 12 }}>
-                        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleRecordCalibration}>
-                          {t('app.kuaizhizao.mold.createCalibration')}
-                        </Button>
-                      </div>
-                      <Table<MoldCalibration>
-                        size="small"
-                        loading={calibLoading}
-                        dataSource={calibrations}
-                        rowKey="uuid"
-                        pagination={false}
-                        columns={calibrationTableColumns}
-                      />
-                    </>
-                  ),
-                },
-                {
-                  key: 'ops',
-                  label: t('app.kuaizhizao.moldOps.opsLinks.title'),
-                  children: (
-                    <Space wrap>
-                      <Link to="/apps/kuaizhizao/equipment-management/mold-borrows">
-                        <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-borrows')}</Button>
-                      </Link>
-                      <Link to="/apps/kuaizhizao/equipment-management/mold-trials">
-                        <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-trials')}</Button>
-                      </Link>
-                      <Link to="/apps/kuaizhizao/equipment-management/mold-maintenances">
-                        <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-maintenances')}</Button>
-                      </Link>
-                      <Link to="/apps/kuaizhizao/equipment-management/mold-repairs">
-                        <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-repairs')}</Button>
-                      </Link>
-                    </Space>
-                  ),
-                },
-                {
-                  key: 'tracking_timeline',
-                  label: t('app.uniDetail.sectionTimeline'),
-                  children: (
-                    <>
-                      {moldTracking.loading && (
-                        <div style={{ textAlign: 'center', padding: 24 }}>
-                          <Spin />
+              {moldDetail.design_lifetime && moldDetail.design_lifetime > 0 && (() => {
+                const total = moldDetail.total_usage_count ?? 0;
+                const threshold = moldDetail.design_lifetime * 0.9;
+                if (total >= moldDetail.design_lifetime) {
+                  return <Tag color="error" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.lifetimeExpired')}</Tag>;
+                }
+                if (total >= threshold) {
+                  return <Tag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.lifetimeExpiring')}</Tag>;
+                }
+                return null;
+              })()}
+              {moldDetail.maintenance_interval && moldDetail.maintenance_interval > 0 && (() => {
+                const total = moldDetail.total_usage_count ?? 0;
+                const nextAt = (Math.floor(total / moldDetail.maintenance_interval) + 1) * moldDetail.maintenance_interval;
+                const left = nextAt - total;
+                if (left > 0 && left <= moldDetail.maintenance_interval * 0.2) {
+                  return <Tag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.maintenanceDueSoon', { count: left })}</Tag>;
+                }
+                return null;
+              })()}
+              {moldDetail.needs_calibration && moldDetail.next_calibration_date && (() => {
+                const next = dayjs(moldDetail.next_calibration_date);
+                const now = dayjs();
+                const daysLeft = next.diff(now, 'day');
+                if (daysLeft < 0) {
+                  return <Tag color="error" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.calibrationExpired')}</Tag>;
+                }
+                if (daysLeft <= 7) {
+                  return <Tag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.calibrationExpiringSoon', { days: daysLeft })}</Tag>;
+                }
+                return null;
+              })()}
+              <Tabs
+                defaultActiveKey="borrow_return_log"
+                items={[
+                  {
+                    key: 'borrow_return_log',
+                    label: t('app.kuaizhizao.menu.reports.mold-borrow-return-log'),
+                    children: (
+                      <>
+                        <div style={{ marginBottom: 12 }}>
+                          <Space wrap>
+                            <Link to="/apps/kuaizhizao/equipment-management/mold-borrows">
+                              <Button type="primary" size="small">{t('app.kuaizhizao.menu.equipment-management.mold-borrows')}</Button>
+                            </Link>
+                            <Link to="/apps/kuaizhizao/equipment-management/mold-returns">
+                              <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-returns')}</Button>
+                            </Link>
+                          </Space>
                         </div>
-                      )}
-                      {moldTracking.error && !moldTracking.loading && (
-                        <Typography.Text type="danger">{moldTracking.error}</Typography.Text>
-                      )}
-                      {moldTracking.data && !moldTracking.loading && (
-                        <DocumentTrackingTimelineBody data={moldTracking.data} />
-                      )}
-                      {!moldTracking.loading && !moldTracking.data && !moldTracking.error && (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.mold.noTimeline')} />
-                      )}
-                    </>
-                  ),
-                },
-              ]}
-            />
+                        <Table<MoldBorrowReturnLog>
+                          size="small"
+                          loading={borrowReturnLogsLoading}
+                          dataSource={borrowReturnLogs}
+                          rowKey={(row, index) => `${row.log_type}-${row.document_no}-${index}`}
+                          pagination={false}
+                          columns={borrowReturnLogColumns}
+                        />
+                      </>
+                    ),
+                  },
+                  {
+                    key: 'calibrations',
+                    label: t('app.kuaizhizao.mold.tabCalibrations'),
+                    children: (
+                      <>
+                        <div style={{ marginBottom: 12 }}>
+                          <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleRecordCalibration}>
+                            {t('app.kuaizhizao.mold.createCalibration')}
+                          </Button>
+                        </div>
+                        <Table<MoldCalibration>
+                          size="small"
+                          loading={calibLoading}
+                          dataSource={calibrations}
+                          rowKey="uuid"
+                          pagination={false}
+                          columns={calibrationTableColumns}
+                        />
+                      </>
+                    ),
+                  },
+                  {
+                    key: 'ops',
+                    label: t('app.kuaizhizao.moldOps.opsLinks.title'),
+                    children: (
+                      <Space wrap>
+                        <Link to="/apps/kuaizhizao/equipment-management/mold-borrows">
+                          <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-borrows')}</Button>
+                        </Link>
+                        <Link to="/apps/kuaizhizao/equipment-management/mold-trials">
+                          <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-trials')}</Button>
+                        </Link>
+                        <Link to="/apps/kuaizhizao/equipment-management/mold-maintenances">
+                          <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-maintenances')}</Button>
+                        </Link>
+                        <Link to="/apps/kuaizhizao/equipment-management/mold-repairs">
+                          <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-repairs')}</Button>
+                        </Link>
+                      </Space>
+                    ),
+                  },
+                  {
+                    key: 'tracking_timeline',
+                    label: t('app.uniDetail.sectionTimeline'),
+                    children: (
+                      <>
+                        {moldTracking.loading && (
+                          <div style={{ textAlign: 'center', padding: 24 }}>
+                            <Spin />
+                          </div>
+                        )}
+                        {moldTracking.error && !moldTracking.loading && (
+                          <Typography.Text type="danger">{moldTracking.error}</Typography.Text>
+                        )}
+                        {moldTracking.data && !moldTracking.loading && (
+                          <DocumentTrackingTimelineBody data={moldTracking.data} />
+                        )}
+                        {!moldTracking.loading && !moldTracking.data && !moldTracking.error && (
+                          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.mold.noTimeline')} />
+                        )}
+                      </>
+                    ),
+                  },
+                ]}
+              />
             </>
-          )
+          ) : undefined
         }
       />
 

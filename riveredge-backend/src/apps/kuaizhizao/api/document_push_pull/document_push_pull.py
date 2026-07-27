@@ -1,7 +1,7 @@
 """
-单据下推和上拉API模块
+单据下推和加载API模块
 
-提供单据下推和上拉功能的API接口。
+提供单据下推和加载功能的API接口。
 
 Author: Luigi Lu
 Date: 2025-01-14
@@ -29,7 +29,7 @@ class PushDocumentRequest(BaseModel):
 
 
 class PullDocumentRequest(BaseModel):
-    """上拉单据请求"""
+    """加载单据请求"""
     target_type: str = Field(..., description="目标单据类型（下游单据，如：work_order、purchase_order）")
     target_id: int = Field(..., description="目标单据ID")
     source_type: str = Field(..., description="源单据类型（上游单据，如：demand_computation）")
@@ -92,13 +92,13 @@ async def pull_document(
     tenant_id: int = Depends(get_current_tenant)
 ) -> Dict[str, Any]:
     """
-    单据上拉功能
+    单据加载功能
     
-    从下游单据上拉到上游单据，建立关联关系。
+    从下游单据加载到上游单据，建立关联关系。
     
-    支持的上拉场景：
-    - work_order -> demand_computation: 从工单上拉到需求计算
-    - purchase_order -> demand_computation: 从采购单上拉到需求计算
+    支持的加载场景：
+    - work_order -> demand_computation: 从工单加载到需求计算
+    - purchase_order -> demand_computation: 从采购单加载到需求计算
     """
     try:
         service = DocumentPushPullService()
@@ -118,7 +118,7 @@ async def pull_document(
     except BusinessLogicError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"上拉失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"加载失败: {str(e)}")
 
 
 @router.post("/reverse", summary="Reverse document push/pull")

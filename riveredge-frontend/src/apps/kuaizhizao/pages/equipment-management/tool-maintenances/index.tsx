@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDatePicker,
   ProFormSelect,
   ProFormTextArea,
@@ -10,6 +11,7 @@ import {
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { App, Button, Modal, Row, Col, Tag, Table, Input, Switch } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import {
   EditOutlined,
   DeleteOutlined,
@@ -38,6 +40,12 @@ import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  MasterDataLinesTable,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.toolOps.maintenance';
 const RESOURCE = 'kuaizhizao:tool-maintenance';
@@ -63,6 +71,7 @@ interface ToolMaintenance {
   applicant_id?: number;
   applicant_name?: string;
   status?: string;
+  remark?: string;
   updated_at?: string;
   lines?: MaintenanceLine[];
 }
@@ -91,6 +100,8 @@ const ToolMaintenancesPage: React.FC = () => {
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<ToolMaintenance | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<ToolMaintenance>();
 
   const loadOptions = async () => {
     const [toolRes, schRes] = await Promise.all([
@@ -135,6 +146,14 @@ const ToolMaintenancesPage: React.FC = () => {
     formRef.current?.setFieldsValue({ maintenance_date: dayjs() });
   };
   useNewShortcut(handleCreate);
+
+  const handleDetail = (record: ToolMaintenance) => {
+    if (!record.id) return;
+    void openDetail(
+      () => maintenancesApi.get(record.id!) as Promise<ToolMaintenance>,
+      t(`${P}.listFailed`),
+    );
+  };
 
   const handleEdit = async (record: ToolMaintenance) => {
     if (!record.id) return;
@@ -275,6 +294,43 @@ const ToolMaintenancesPage: React.FC = () => {
     [],
   );
 
+  const detailColumns: ProDescriptionsItemProps<ToolMaintenance>[] = useMemo(
+    () => [
+      { title: t(`${P}.col.documentNo`), dataIndex: 'document_no' },
+      { title: t(`${P}.col.tool`), dataIndex: 'tool_name' },
+      {
+        title: t(`${P}.col.maintenanceDate`),
+        dataIndex: 'maintenance_date',
+        render: (_, r) => (r.maintenance_date ? formatDateTime(r.maintenance_date) : '-'),
+      },
+      { title: t(`${P}.col.executor`), dataIndex: 'applicant_name' },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        render: (_, r) => (
+          <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>
+        ),
+      },
+      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+    ],
+    [t],
+  );
+
+  const detailLineColumns = useMemo<ColumnsType<MaintenanceLine>>(
+    () => [
+      { title: t(`${P}.line.item`), dataIndex: 'item_name', width: 140 },
+      { title: t(`${P}.line.requirement`), dataIndex: 'requirement', ellipsis: true },
+      {
+        title: t(`${P}.line.executed`),
+        dataIndex: 'executed',
+        width: 80,
+        render: (_, row) => (row.executed ? t('common.yes') : t('common.no')),
+      },
+      { title: t(`${P}.line.remark`), dataIndex: 'remark', width: 140 },
+    ],
+    [t],
+  );
+
   const columns: ProColumns<ToolMaintenance>[] = useMemo(() => alignProColumns<ToolMaintenance>([
       {
         title: t(`${P}.col.maintenanceDate`),
@@ -349,7 +405,7 @@ const ToolMaintenancesPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
-                void handleEdit(record);
+                handleDetail(record);
               }}
             >
               {t('common.detail')}
@@ -486,6 +542,36 @@ const ToolMaintenancesPage: React.FC = () => {
           enableRowSelection={false}
         />
       </ListPageTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t('common.detail')}${detail?.document_no ? ` - ${detail.document_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailColumns}
+        lines={
+          <MasterDataLinesTable
+            rows={detail?.lines ?? []}
+            columns={detailLineColumns}
+            rowKey={(row) => String(row.item_id ?? row.line_no ?? '')}
+            emptyDescription={t('common.noData')}
+          />
+        }
+        extra={buildDetailDrawerEditExtra(
+          t,
+          Boolean(
+            detail &&
+              perms.canUpdate &&
+              (detail.status === '草稿' || detail.status === '已驳回'),
+          ),
+          () => {
+            if (!detail) return;
+            closeDetail();
+            void handleEdit(detail);
+          },
+        )}
+      />
 
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}

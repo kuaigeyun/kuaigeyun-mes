@@ -9,29 +9,21 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, Typography, Descriptions, Empty, Spin, theme as AntdTheme } from 'antd';
+import { App, Popconfirm, Button, Space, Typography, theme as AntdTheme } from 'antd';
 import { DeleteOutlined, CalendarOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { PerformanceTraceBriefPrimaryActions } from '../PerformanceTraceBriefFooter';
+import { useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { PerformanceConfigDetailDrawer } from '../shared/performanceConfigDetailDrawer';
 import { holidayApi } from '../../../services/performance';
 import { HolidayFormModal } from '../../../components/HolidayFormModal';
 import { HolidayCnImportModal } from '../../../components/HolidayCnImportModal';
 import type { Holiday } from '../../../types/performance';
 import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
-import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
-import {
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
-} from '../../../../../components/custom-fields';
 import { getPerformanceActiveValueEnum, renderActiveTag } from '../components/performanceMeta';
-import { formatDateTime } from '../../../../../utils/format';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   normalizePerformanceListResponse,
@@ -148,6 +140,8 @@ const HolidaysPage: React.FC = () => {
       setHolidayTrackingRefreshKey((k) => k + 1);
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.holidays.getDetailFailed'));
+      setDrawerVisible(false);
+      setHolidayDetail(null);
     } finally {
       setDetailLoading(false);
     }
@@ -264,89 +258,24 @@ const HolidaysPage: React.FC = () => {
           deleteButtonText={t('app.kuaizhizao.performance.holidays.messages.deleteBatchButton')}
         />
       </ListPageTemplate>
-      <DetailDrawerTemplate
+      <PerformanceConfigDetailDrawer
         title={t('app.kuaizhizao.performance.holidays.detailTitle')}
         open={drawerVisible}
         zIndex={holidayDetailDrawerZIndex}
         onClose={handleCloseDetail}
-        width={DRAWER_CONFIG.HALF_WIDTH}
         loading={detailLoading}
-        columns={[]}
-        customContent={
-          detailLoading && !holidayDetail ? (
-            <div style={{ textAlign: 'center', padding: 48 }}>
-              <Spin />
-            </div>
-          ) : holidayDetail ? (
-            <>
-              <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.basicInfo')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={buildMasterDetailDescriptionItems(holidayDetail, holidayDetailColumns)}
-                />
-              </DetailDrawerSection>
-              {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
-                <DetailDrawerSection title={t('app.master-data.customFields')}>
-                  <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-                </DetailDrawerSection>
-              ) : null}
-              <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.lifecycle')}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lc = getPerformanceConfigActiveLifecycle(holidayDetail as unknown as Record<string, unknown>, t);
-                    const mainStages = lc.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        showLabels
-                        status={lc.status}
-                        nextStepSuggestions={lc.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  {holidayDetail.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType='performance_holiday'
-                      documentId={holidayDetail.id}
-                      active={drawerVisible}
-                      selfDocumentId={holidayDetail.id}
-                      renderBriefActions={(doc) => (
-                  <PerformanceTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={handleCloseDetail}
-                  />
-                )}
-                    />
-                  ) : null}
-                </div>
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.detailInfo')}>
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.performance.common.empty.noDetailLines')} />
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.operationLog')}>
-                {holidayTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {holidayTracking.error && !holidayTracking.loading && (
-                  <Typography.Text type="danger">{holidayTracking.error}</Typography.Text>
-                )}
-                {holidayTracking.data && !holidayTracking.loading && (
-                  <DocumentTrackingTimelineBody data={holidayTracking.data} />
-                )}
-                {!holidayTracking.loading && !holidayTracking.data && !holidayTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.performance.common.empty.noActivityLog')} />
-                )}
-              </DetailDrawerSection>
-            </>
-          ) : null
-        }
+        detail={holidayDetail}
+        detailColumns={holidayDetailColumns}
+        basicColumn={3}
+        documentType="performance_holiday"
+        detailId={holidayDetail?.id ?? null}
+        lifecycleResolver={(row, tr) => getPerformanceConfigActiveLifecycle(row as Record<string, unknown>, tr)}
+        tracking={holidayTracking}
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        showEmptyDetailPlaceholder
+        t={t}
+        navigate={navigate}
       />
       <HolidayFormModal open={modalVisible} onClose={() => { setModalVisible(false); setEditUuid(null); }} editUuid={editUuid} onSuccess={handleModalSuccess} />
       <HolidayCnImportModal

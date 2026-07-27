@@ -73,7 +73,7 @@ async def list_contracts(
     order_by: Optional[str] = Query(None, description="排序字段，如 contract_date、-updated_at（前缀-表示降序）"),
     pullable_only: Optional[bool] = Query(
         None,
-        description="仅可上拉建销售订单：生效中、已审核且在有效期内",
+        description="仅可加载建销售订单：生效中、已审核且在有效期内",
     ),
     tenant_id: int = Depends(get_current_tenant),
 ):

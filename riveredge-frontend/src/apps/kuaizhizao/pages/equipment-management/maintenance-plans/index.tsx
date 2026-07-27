@@ -9,10 +9,10 @@ import { renderRowActionsOverflow, rowActionKind } from '../../../../../componen
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import type { DescriptionsProps } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import {
   ActionType,
   ProColumns,
@@ -34,11 +34,12 @@ import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection, DetailDrawerInlineFullChain,
   MODAL_CONFIG,
   DRAWER_CONFIG,
+  detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { getMaintenancePlanLifecycle } from '../../../utils/equipmentLifecycle';
 import { maintenancePlanApi, equipmentApi, sparePartApi } from '../../../services/equipment';
@@ -103,36 +104,6 @@ function buildMaintenancePlanSubmitPayload(values: Record<string, unknown>) {
   };
 }
 
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'date' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD');
-    }
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    }
-    if (col.render && dataSource != null) {
-            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
-}
-
 function renderPlanRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   return renderRowActionsOverflow(nodes, { keyPrefix });
 }
@@ -155,6 +126,7 @@ interface MaintenancePlan {
   planned_end_date?: string;
   status?: string;
   attachments?: Array<{ uid?: string; name?: string; url?: string }>;
+  spare_parts_used?: { items?: Array<{ spare_part_id?: number; quantity?: number; warehouse_location?: string; part_no?: string; part_name?: string }> };
   created_at?: string;
   updated_at?: string;
 }
@@ -178,14 +150,13 @@ const MaintenancePlansPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const formRef = useRef<any>(null);
 
-  // Drawer 相关状态（详情查看）
-  const [drawerVisible, setDrawerVisible] = useState(false);
-  const [planDetail, setPlanDetail] = useState<MaintenancePlan | null>(null);
+  const { open: detailVisible, loading: detailLoading, detail: planDetail, setDetail: setPlanDetail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<MaintenancePlan>();
 
   const [planTrackingRefreshKey, setPlanTrackingRefreshKey] = useState(0);
 
   const planTracking = useDocumentTracking(
-    drawerVisible && planDetail?.id ? 'maintenance_plan' : undefined,
+    detailVisible && planDetail?.id ? 'maintenance_plan' : undefined,
     planDetail?.id,
     planTrackingRefreshKey,
   );
@@ -263,20 +234,20 @@ const MaintenancePlansPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleDetail = async (record: MaintenancePlan) => {
-    try {
+  const handleDetail = useCallback(
+    (record: MaintenancePlan) => {
       if (!record.uuid) {
         messageApi.error(t(`${P}.uuidNotFound`));
         return;
       }
-      const detail = await maintenancePlanApi.get(record.uuid);
-      setPlanDetail(detail);
-      setDrawerVisible(true);
       setPlanTrackingRefreshKey((k) => k + 1);
-    } catch (error) {
-      messageApi.error(t(`${P}.detailFailed`));
-    }
-  };
+      void openDetail(
+        () => maintenancePlanApi.get(record.uuid!) as Promise<MaintenancePlan>,
+        t(`${P}.detailFailed`),
+      );
+    },
+    [messageApi, openDetail, t],
+  );
 
   /**
    * 处理批量删除维护计划（keys 为 uuid 数组）
@@ -293,8 +264,7 @@ const MaintenancePlansPage: React.FC = () => {
           messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
           setSelectedRowKeys([]);
           if (planDetail?.uuid && keys.map(String).includes(String(planDetail.uuid))) {
-            setDrawerVisible(false);
-            setPlanDetail(null);
+            closeDetail();
           }
           actionRef.current?.reload();
         } catch (error: any) {
@@ -504,6 +474,32 @@ const MaintenancePlansPage: React.FC = () => {
     },
     ],
     [t]
+  );
+
+  const planSparePartLines = planDetail?.spare_parts_used?.items ?? [];
+
+  const planSparePartLineColumns: ColumnsType<(typeof planSparePartLines)[number]> = useMemo(
+    () => [
+      {
+        title: t(`${P}.form.sparePart`),
+        dataIndex: 'part_name',
+        render: (_, row) =>
+          row.part_no || row.part_name
+            ? `${row.part_no ?? ''}${row.part_no && row.part_name ? ' - ' : ''}${row.part_name ?? ''}`.trim() ||
+              String(row.spare_part_id ?? '-')
+            : String(row.spare_part_id ?? '-'),
+      },
+      {
+        title: t(`${P}.form.sparePartQty`),
+        dataIndex: 'quantity',
+        width: 100,
+      },
+      {
+        title: t(`${P}.form.sparePartLocation`),
+        dataIndex: 'warehouse_location',
+      },
+    ],
+    [t],
   );
 
   const renderPlanRowNodes = (record: MaintenancePlan): React.ReactNode[] => {
@@ -1099,85 +1095,87 @@ const MaintenancePlansPage: React.FC = () => {
       {/* 维护计划详情 Drawer */}
       <DetailDrawerTemplate
         title={t(`${P}.detailTitle`)}
-        open={drawerVisible}
+        open={detailVisible}
+        loading={detailLoading}
         zIndex={planDetailDrawerZIndex}
-        onClose={() => {
-          setDrawerVisible(false);
-          setPlanDetail(null);
-        }}
+        onClose={closeDetail}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        column={3}
-        dataSource={planDetail || undefined}
-        customContent={
+        basic={
           planDetail ? (
-            <>
-              <DetailDrawerSection title={t(`${P}.section.basicInfo`)}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={buildDescriptionItemsFromColumns(planDetail, detailBaseColumns)}
-                />
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t(`${P}.section.lifecycle`)}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lc = getMaintenancePlanLifecycle(planDetail as Record<string, unknown>, t);
-                    const mainStages = lc.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        showLabels
-                        status={lc.status}
-                        nextStepSuggestions={lc.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  {planDetail.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType='maintenance_plan'
-                      documentId={planDetail.id}
-                      active={drawerVisible}
-                      selfDocumentId={planDetail.id}
-                      renderBriefActions={(doc) => (
+            <Descriptions
+              column={3}
+              size="small"
+              items={detailDrawerDescriptionItems(detailBaseColumns, planDetail)}
+            />
+          ) : undefined
+        }
+        basicTitle={t(`${P}.section.basicInfo`)}
+        collaborationTitle={t(`${P}.section.lifecycle`)}
+        collaborationLifecycle={
+          planDetail ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {(() => {
+                const lc = getMaintenancePlanLifecycle(planDetail as Record<string, unknown>, t);
+                const mainStages = lc.mainStages ?? [];
+                if (mainStages.length === 0) return null;
+                return (
+                  <UniLifecycleStepper
+                    steps={mainStages}
+                    showLabels
+                    status={lc.status}
+                    nextStepSuggestions={lc.nextStepSuggestions}
+                    hideNextStepSuggestions
+                  />
+                );
+              })()}
+            </div>
+          ) : undefined
+        }
+        traceDocument={
+          planDetail?.id != null
+            ? {
+                documentType: 'maintenance_plan',
+                documentId: planDetail.id,
+                selfDocumentId: planDetail.id,
+                renderBriefActions: (doc) => (
                   <EquipmentTraceBriefPrimaryActions
                     doc={doc}
                     t={t}
                     navigate={navigate}
-                    closeDrawer={() => {
-                      setDrawerVisible(false);
-                      setPlanDetail(null);
-                    }}
+                    closeDrawer={closeDetail}
                   />
-                )}
-                    />
-                  ) : null}
-                </div>
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t(`${P}.section.detailInfo`)}>
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noDetailLines`)} />
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t(`${P}.section.operationHistory`)}>
-                {planTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {planTracking.error && !planTracking.loading && (
-                  <Typography.Text type="danger">{planTracking.error}</Typography.Text>
-                )}
-                {planTracking.data && !planTracking.loading && (
-                  <DocumentTrackingTimelineBody data={planTracking.data} />
-                )}
-                {!planTracking.loading && !planTracking.data && !planTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noOperationRecords`)} />
-                )}
-              </DetailDrawerSection>
-            </>
-          ) : null
+                ),
+              }
+            : null
         }
+        lines={
+          planSparePartLines.length ? (
+            <Table
+              size="small"
+              pagination={false}
+              rowKey={(row, index) => String(row.spare_part_id ?? index)}
+              dataSource={planSparePartLines}
+              columns={planSparePartLineColumns}
+            />
+          ) : (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noDetailLines`)} />
+          )
+        }
+        linesTitle={t(`${P}.section.detailInfo`)}
+        timeline={
+          planTracking.loading ? (
+            <div style={{ textAlign: 'center', padding: 24 }}>
+              <Spin />
+            </div>
+          ) : planTracking.error ? (
+            <Typography.Text type="danger">{planTracking.error}</Typography.Text>
+          ) : planTracking.data ? (
+            <DocumentTrackingTimelineBody data={planTracking.data} />
+          ) : (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noOperationRecords`)} />
+          )
+        }
+        timelineTitle={t(`${P}.section.operationHistory`)}
       />
     </>
   );

@@ -3599,6 +3599,8 @@ const SalesContractsPage: React.FC = () => {
 
         }
 
+        collaborationAuditRecord={detail}
+
         collaborationLifecycle={
 
           detail ? (

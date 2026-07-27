@@ -25,9 +25,16 @@ import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhiz
 import {
   plmCodeTitleSearchColumns,
   plmCreatedUpdatedColumns,
+  plmListActionColumn,
   PLM_PHASE2_PINNED_STATUS_FIELD,
   resolvePhase2DesignReviewListParams,
 } from '../../../utils/plmListCore';
+import {
+  buildPhase2DesignReviewStatusValueEnum,
+  getPhase2DesignReviewStatusOptions,
+  renderPhase2DesignReviewStatusTag,
+  renderPhase2ReviewTypeMarker,
+} from '../../../components/phase2Meta';
 
 const DesignReviewsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -100,12 +107,8 @@ const DesignReviewsPage: React.FC = () => {
     messageApi.error(t('app.kuaiplm.phase2.designReviews.batchStatusFailed'));
   };
 
-  const reviewStatusLabelMap: Record<string, string> = {
-    DRAFT: t('app.kuaiplm.phase2.common.status.draft'),
-    IN_PROGRESS: t('app.kuaiplm.phase2.common.status.inProgress'),
-    COMPLETED: t('app.kuaiplm.phase2.common.status.completed'),
-    ARCHIVED: t('app.kuaiplm.phase2.common.status.archived'),
-  };
+  const designReviewStatusValueEnum = useMemo(() => buildPhase2DesignReviewStatusValueEnum(t), [t]);
+  const designReviewStatusOptions = useMemo(() => getPhase2DesignReviewStatusOptions(t), [t]);
 
   const columns: ProColumns<RdDesignReview>[] = useMemo(
     () => [
@@ -135,15 +138,7 @@ const DesignReviewsPage: React.FC = () => {
         width: 100,
         sorter: true,
         hideInSearch: true,
-      },
-      {
-        title: t('app.kuaiplm.phase2.designReviews.columns.status'),
-        dataIndex: 'status',
-        width: 90,
-        valueEnum: Object.fromEntries(
-          Object.entries(reviewStatusLabelMap).map(([value, label]) => [value, { text: label }]),
-        ),
-        render: (_, row) => reviewStatusLabelMap[row.status || ''] || row.status || '-',
+        render: (_, row) => renderPhase2ReviewTypeMarker(t, row.review_type),
       },
       {
         title: t('app.kuaiplm.phase2.designReviews.columns.reviewer'),
@@ -153,21 +148,24 @@ const DesignReviewsPage: React.FC = () => {
       },
       {
         title: t('app.kuaiplm.phase2.designReviews.columns.scheduledAt'),
-        dataIndex: 'scheduled_at',
+        dataIndex: 'review_date',
         width: 132,
         uniTableKeepWidth: true,
         hideInSearch: true,
         render: (_, row) =>
-          row.scheduled_at || (row as { review_date?: string }).review_date
-            ? formatDateTime(row.scheduled_at || (row as { review_date?: string }).review_date!, 'YYYY-MM-DD HH:mm')
+          row.review_date
+            ? formatDateTime(row.review_date, 'YYYY-MM-DD HH:mm')
             : '-',
       },
+      {
+        title: t('app.kuaiplm.phase2.designReviews.columns.status'),
+        dataIndex: 'status',
+        width: 90,
+        valueEnum: designReviewStatusValueEnum,
+        render: (_, row) => renderPhase2DesignReviewStatusTag(t, row.status),
+      },
       ...plmCreatedUpdatedColumns<RdDesignReview>(t),
-    {
-      title: t('common.actions'),
-      valueType: 'option',
-      width: 180,
-      render: (_, row) => [
+      plmListActionColumn<RdDesignReview>(t, (_, row) => [
             <Button
               {...rowActionKind('read')}
               key="detail"
@@ -204,10 +202,9 @@ const DesignReviewsPage: React.FC = () => {
             >
               {t('common.delete')}
             </Button>,
-          ],
-    },
+          ]),
     ],
-    [modalApi, messageApi, reviewStatusLabelMap, t],
+    [designReviewStatusValueEnum, modalApi, messageApi, t],
   );
 
   return (
@@ -268,7 +265,7 @@ const DesignReviewsPage: React.FC = () => {
                 key: 'batch-set-in-progress',
                 label: t('app.kuaiplm.phase2.designReviews.batchSetInProgress'),
                 onClick: () => {
-                  void handleBatchSetStatus('IN_PROGRESS', t('app.kuaiplm.phase2.common.status.inProgress'));
+                  void handleBatchSetStatus('IN_REVIEW', t('app.kuaiplm.phase2.common.status.inReview'));
                 },
               },
               {
@@ -335,12 +332,7 @@ const DesignReviewsPage: React.FC = () => {
         <ProFormSelect
           name="status"
           label={t('app.kuaiplm.phase2.designReviews.form.status')}
-          options={[
-            { value: 'DRAFT', label: t('app.kuaiplm.phase2.common.status.draft') },
-            { value: 'IN_PROGRESS', label: t('app.kuaiplm.phase2.common.status.inProgress') },
-            { value: 'COMPLETED', label: t('app.kuaiplm.phase2.common.status.completed') },
-            { value: 'ARCHIVED', label: t('app.kuaiplm.phase2.common.status.archived') },
-          ]}
+          options={designReviewStatusOptions}
         />
         <ProFormText name="reviewer_name" label={t('app.kuaiplm.phase2.designReviews.form.reviewer')} />
         <ProFormTextArea name="conclusion" label={t('app.kuaiplm.phase2.designReviews.form.conclusion')} />
@@ -368,12 +360,7 @@ const DesignReviewsPage: React.FC = () => {
         <ProFormSelect
           name="status"
           label={t('app.kuaiplm.phase2.designReviews.form.status')}
-          options={[
-            { value: 'DRAFT', label: t('app.kuaiplm.phase2.common.status.draft') },
-            { value: 'IN_PROGRESS', label: t('app.kuaiplm.phase2.common.status.inProgress') },
-            { value: 'COMPLETED', label: t('app.kuaiplm.phase2.common.status.completed') },
-            { value: 'ARCHIVED', label: t('app.kuaiplm.phase2.common.status.archived') },
-          ]}
+          options={designReviewStatusOptions}
         />
         <ProFormText name="reviewer_name" label={t('app.kuaiplm.phase2.designReviews.form.reviewer')} />
         <ProFormTextArea name="conclusion" label={t('app.kuaiplm.phase2.designReviews.form.conclusion')} />

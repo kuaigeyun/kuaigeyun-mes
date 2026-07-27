@@ -989,7 +989,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     "total_items": int(row.get("c") or 0),
                     "required_quantity_total": req_total,
                     "picked_quantity_total": picked_total,
-                    # 列表总数量取应领合计；上拉创建时 issue_quantity 写入 required_quantity
+                    # 列表总数量取应领合计；加载创建时 issue_quantity 写入 required_quantity
                     "total_quantity": req_total,
                 }
             wh_rows = await ProductionPickingItem.filter(
@@ -1730,7 +1730,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         notes: Optional[str] = None,
         lines: List[Any],
     ) -> ProductionPickingWithItemsResponse:
-        """从工单上拉创建生产领料单（单条、按预览可领数量校验）。"""
+        """从工单加载创建生产领料单（单条、按预览可领数量校验）。"""
         from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.kuaizhizao.services.work_order_service import WorkOrderService
         from apps.kuaizhizao.services.document_action_policy.work_order import (
@@ -1872,7 +1872,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         target_name=None,
                         relation_type="source",
                         relation_mode="push",
-                        relation_desc="工单上拉创建生产领料单",
+                        relation_desc="工单加载创建生产领料单",
                     ),
                     created_by=created_by,
                 )
@@ -1921,7 +1921,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         return results
 
 
-# 生产退料上拉：可选取的领料单状态（唯一真源，与 capability / 预览一致）
+# 生产退料加载：可选取的领料单状态（唯一真源，与 capability / 预览一致）
 PRODUCTION_RETURN_PICKING_ELIGIBLE_STATUSES = frozenset(
     {"已领料", "已确认", "confirmed", "picked"}
 )
@@ -4278,9 +4278,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         warehouse_name: Optional[str] = None
     ) -> SalesDeliveryResponse:
         """
-        从销售订单上拉生成销售出库单（销售出库单上拉功能）
+        从销售订单加载生成销售出库单（销售出库单加载功能）
         
-        从销售订单上拉，自动生成销售出库单
+        从销售订单加载，自动生成销售出库单
         
         Args:
             tenant_id: 租户ID
@@ -4311,7 +4311,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         # 销售订单允许在「已审核/已确认/进行中」持续分批下推销售出库（与前端门禁一致）。
         pushable_statuses = ("已审核", "已确认", "进行中", "AUDITED", "CONFIRMED", "IN_PROGRESS")
         if sales_order.status not in pushable_statuses:
-            raise BusinessLogicError("只有已审核、已确认或进行中状态的销售订单才能上拉生成销售出库单")
+            raise BusinessLogicError("只有已审核、已确认或进行中状态的销售订单才能加载生成销售出库单")
         
         # 获取订单明细
         order_items = await SalesOrderItem.filter(
@@ -4434,7 +4434,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             total_amount=float(total_amount),
             shipping_address=sales_order.shipping_address,
             shipping_method=sales_order.shipping_method,
-            notes=f"从销售订单 {sales_order.order_code} 上拉生成",
+            notes=f"从销售订单 {sales_order.order_code} 加载生成",
             items=delivery_items
         )
         
@@ -4460,9 +4460,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         warehouse_name: Optional[str] = None
     ) -> SalesDeliveryResponse:
         """
-        从销售预测上拉生成销售出库单（销售出库单上拉功能）
+        从销售预测加载生成销售出库单（销售出库单加载功能）
         
-        从销售预测上拉，自动生成销售出库单（MTS模式）
+        从销售预测加载，自动生成销售出库单（MTS模式）
         
         Args:
             tenant_id: 租户ID
@@ -4489,9 +4489,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         if not sales_forecast:
             raise NotFoundError(f"销售预测不存在: {sales_forecast_id}")
         
-        # 检查预测状态（只有已审核的预测才能上拉生成出库单）
+        # 检查预测状态（只有已审核的预测才能加载生成出库单）
         if sales_forecast.status != "已审核":
-            raise BusinessLogicError("只有已审核的销售预测才能上拉生成销售出库单")
+            raise BusinessLogicError("只有已审核的销售预测才能加载生成销售出库单")
         
         # 获取预测明细
         forecast_items = await SalesForecastItem.filter(
@@ -4576,7 +4576,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             status="待出库",
             total_quantity=float(total_quantity),
             total_amount=float(total_amount),
-            notes=f"从销售预测 {sales_forecast.forecast_code} 上拉生成",
+            notes=f"从销售预测 {sales_forecast.forecast_code} 加载生成",
             items=delivery_items
         )
         

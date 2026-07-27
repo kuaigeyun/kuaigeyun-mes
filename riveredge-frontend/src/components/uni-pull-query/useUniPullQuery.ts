@@ -14,7 +14,7 @@ function resolveRowKey<T extends object>(
 }
 
 /**
- * 上拉取单弹窗状态：分段范围/打开/搜索/分页/选中/加载/提交。
+ * 加载取单弹窗状态：分段范围/打开/搜索/分页/选中/加载/提交。
  */
 export function useUniPullQuery<T extends object>(options: UseUniPullQueryOptions<T>) {
   const {

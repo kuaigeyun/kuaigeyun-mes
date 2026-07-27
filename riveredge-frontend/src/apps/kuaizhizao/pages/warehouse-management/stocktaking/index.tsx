@@ -11,8 +11,8 @@ import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, InputNumber } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Table, Row, Col, InputNumber, Descriptions, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined, DatabaseOutlined, RollbackOutlined } from '@ant-design/icons';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -23,10 +23,10 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { stocktakingApi, inventoryReportApi } from '../../../services/stocktaking';
 import { getStocktakingLifecycle } from '../../../utils/stocktakingLifecycle';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -111,6 +111,7 @@ const StocktakingPage: React.FC = () => {
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [currentStocktaking, setCurrentStocktaking] = useState<Stocktaking | null>(null);
   const [savingItemId, setSavingItemId] = useState<number | null>(null);
   const [editingActualQty, setEditingActualQty] = useState<Record<number, number>>({});
@@ -199,11 +200,16 @@ const StocktakingPage: React.FC = () => {
    * 处理查看详情
    */
   const handleDetail = async (record: Stocktaking) => {
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setCurrentStocktaking(null);
     try {
       await refreshCurrentDetail(record.id!);
-      setDetailDrawerVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgGetDetailFailed'));
+      setDetailDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -606,7 +612,7 @@ const StocktakingPage: React.FC = () => {
     },
   ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, canUpdate, canCreate, canRevoke, workflowStatusValueEnum, stocktakingTypeValueEnum]);
 
-  const detailColumns = useMemo(() => [
+  const detailColumns: ProDescriptionsItemProps<Stocktaking>[] = useMemo(() => [
     {
       title: t('app.kuaizhizao.warehouseReports.colStocktakingCode'),
       dataIndex: 'code',
@@ -787,6 +793,21 @@ const StocktakingPage: React.FC = () => {
       ),
     },
   ], [t, currentStocktaking, editingActualQty, savingItemId, canUpdate]);
+
+  const detailCollaboration = useMemo(() => {
+    if (!currentStocktaking) return undefined;
+    const lifecycle = getStocktakingLifecycle(currentStocktaking as Record<string, unknown>, t);
+    const mainStages = lifecycle.mainStages ?? [];
+    if (!mainStages.length) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        status={lifecycle.status}
+        showLabels
+        nextStepSuggestions={lifecycle.nextStepSuggestions}
+      />
+    );
+  }, [currentStocktaking, t]);
 
   return (
     <ListPageTemplate>
@@ -993,74 +1014,84 @@ const StocktakingPage: React.FC = () => {
 
       {/* 详情Drawer */}
       <DetailDrawerTemplate
-        title={t('app.kuaizhizao.stocktaking.detailTitle')}
+        title={`${t('app.kuaizhizao.stocktaking.detailTitle')}${currentStocktaking?.code ? ` - ${currentStocktaking.code}` : ''}`}
         open={detailDrawerVisible}
+        loading={detailLoading}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentStocktaking(null);
         }}
-        dataSource={currentStocktaking || {}}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={detailColumns}
-        customContent={
-          currentStocktaking && (
-            <>
-              {currentStocktaking.status === 'in_progress' && (
-                <Space style={{ marginTop: 16 }}>
-                  {isPartialType(currentStocktaking) && canCreate && (
-                    <>
-                      <Button
-                        icon={<DatabaseOutlined />}
-                        onClick={() => loadInventoryPicker(currentStocktaking)}
-                      >
-                        {t('app.kuaizhizao.stocktaking.actionPickFromInventory')}
-                      </Button>
-                      <Button
-                        icon={<PlusOutlined />}
-                        onClick={() => handleAddItem(currentStocktaking)}
-                      >
-                        {t('app.kuaizhizao.stocktaking.actionManualAddItem')}
-                      </Button>
-                    </>
-                  )}
-                  {canComplete(currentStocktaking) && canUpdate && (
-                    <Button
-                      type="primary"
-                      icon={<CheckCircleOutlined />}
-                      onClick={() => handleComplete(currentStocktaking)}
-                    >
-                      {t('app.kuaizhizao.stocktaking.actionComplete')}
-                    </Button>
-                  )}
-                  {canRevoke && (
-                    <Button icon={<RollbackOutlined />} onClick={() => handleWithdraw(currentStocktaking)}>
-                      {t('app.kuaizhizao.stocktaking.actionWithdraw')}
-                    </Button>
-                  )}
-                </Space>
+        extra={
+          currentStocktaking?.status === 'in_progress' ? (
+            <Space>
+              {isPartialType(currentStocktaking) && canCreate && (
+                <>
+                  <Button
+                    icon={<DatabaseOutlined />}
+                    onClick={() => loadInventoryPicker(currentStocktaking)}
+                  >
+                    {t('app.kuaizhizao.stocktaking.actionPickFromInventory')}
+                  </Button>
+                  <Button
+                    icon={<PlusOutlined />}
+                    onClick={() => handleAddItem(currentStocktaking)}
+                  >
+                    {t('app.kuaizhizao.stocktaking.actionManualAddItem')}
+                  </Button>
+                </>
               )}
-              {currentStocktaking.items && currentStocktaking.items.length > 0 ? (
-            <Card title={t('app.kuaizhizao.stocktaking.detailItemsTitle')} style={{ marginTop: 16 }}>
-              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-              <Table
-                className="warehouse-detail-table"
-                columns={detailItemColumns}
-                dataSource={currentStocktaking.items}
-                rowKey="id"
-                pagination={false}
-                size="small"
-                scroll={{ x: 1000 }}
-              />
-            </Card>
-              ) : (
-                <Card style={{ marginTop: 16 }}>
-                  {currentStocktaking.status === 'draft'
-                    ? t('app.kuaizhizao.stocktaking.emptyDraftHint')
-                    : t('app.kuaizhizao.stocktaking.emptyNoItems')}
-                </Card>
+              {canComplete(currentStocktaking) && canUpdate && (
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => handleComplete(currentStocktaking)}
+                >
+                  {t('app.kuaizhizao.stocktaking.actionComplete')}
+                </Button>
               )}
-            </>
-          )
+              {canRevoke && (
+                <Button icon={<RollbackOutlined />} onClick={() => handleWithdraw(currentStocktaking)}>
+                  {t('app.kuaizhizao.stocktaking.actionWithdraw')}
+                </Button>
+              )}
+            </Space>
+          ) : null
+        }
+        basic={
+          currentStocktaking ? (
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(detailColumns, currentStocktaking)}
+            />
+          ) : undefined
+        }
+        collaboration={detailCollaboration}
+        linesTitle={t('app.kuaizhizao.stocktaking.detailItemsTitle')}
+        lines={
+          currentStocktaking ? (
+            currentStocktaking.items && currentStocktaking.items.length > 0 ? (
+              <>
+                <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                <Table
+                  className="warehouse-detail-table"
+                  columns={detailItemColumns}
+                  dataSource={currentStocktaking.items}
+                  rowKey="id"
+                  pagination={false}
+                  size="small"
+                  scroll={{ x: 1000 }}
+                />
+              </>
+            ) : (
+              <Typography.Text type="secondary">
+                {currentStocktaking.status === 'draft'
+                  ? t('app.kuaizhizao.stocktaking.emptyDraftHint')
+                  : t('app.kuaizhizao.stocktaking.emptyNoItems')}
+              </Typography.Text>
+            )
+          ) : undefined
         }
       />
     </ListPageTemplate>

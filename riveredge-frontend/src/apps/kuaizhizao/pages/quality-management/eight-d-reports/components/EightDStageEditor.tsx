@@ -1,15 +1,13 @@
 import React from 'react';
 import {
-  Alert,
   Button,
-  Col,
   Form,
   Input,
-  Row,
   Select,
   Space,
   Typography,
   Upload,
+  theme,
 } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd';
@@ -20,10 +18,42 @@ import {
   EIGHT_D_SEVERITY_I18N_KEY,
   EIGHT_D_STAGE_FIELDS,
   getEightDStatusText,
+  parseEightDStageLabel,
 } from './eightDMeta';
 import { FutureDatePicker } from '../../../../../../utils/futureDatePickerShortcuts';
 
 const { TextArea } = Input;
+
+function EightDStageFieldLabel({ text, active }: { text: string; active?: boolean }) {
+  const { token } = theme.useToken();
+  const parsed = parseEightDStageLabel(text);
+  if (!parsed) {
+    return <span>{text}</span>;
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8 }}>
+      <span
+        style={{
+          fontSize: active ? 18 : 16,
+          fontWeight: 600,
+          lineHeight: 1.2,
+          color: token.colorPrimary,
+        }}
+      >
+        {parsed.code}
+      </span>
+      <span
+        style={{
+          fontSize: token.fontSize,
+          fontWeight: active ? 500 : 400,
+          color: token.colorText,
+        }}
+      >
+        {parsed.title}
+      </span>
+    </span>
+  );
+}
 
 interface EightDStageEditorProps {
   form: FormInstance;
@@ -35,57 +65,51 @@ interface EightDStageEditorProps {
 export const EightDStageEditor: React.FC<EightDStageEditorProps> = ({ form, report, saving, onSave }) => {
   const { t } = useTranslation();
   const currentStageField = EIGHT_D_STAGE_FIELDS[report.status];
-  const currentStageLabel = getEightDStatusText(t, report.status);
 
   return (
     <Form
       layout="vertical"
       form={form}
       onFinish={onSave}
-      style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: '100%' }}
     >
-      <Row gutter={12}>
-        <Col span={8}>
-          <Form.Item name="severity" label={t('app.kuaizhizao.eightD.columns.severity')}>
-            <Select
-              options={Object.entries(EIGHT_D_SEVERITY_I18N_KEY).map(([value, key]) => ({
-                value,
-                label: t(key),
-              }))}
-            />
-          </Form.Item>
-        </Col>
-        <Col span={8}>
-          <Form.Item name="owner_name" label={t('app.kuaizhizao.eightD.columns.owner')}>
-            <Input placeholder={t('app.kuaizhizao.eightD.placeholders.owner')} />
-          </Form.Item>
-        </Col>
-        <Col span={8}>
-          <Form.Item name="due_date" label={t('app.kuaizhizao.eightD.columns.dueDate')}>
-            <FutureDatePicker
-              getForm={() => form}
-              t={t}
-              showTime
-              style={{ width: '100%' }}
-            />
-          </Form.Item>
-        </Col>
-      </Row>
-
-      <Alert
-        type="info"
-        showIcon
-        message={t('app.kuaizhizao.eightD.currentStage', { stage: currentStageLabel })}
-        description={t('app.kuaizhizao.eightD.currentStageHint')}
-      />
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gap: 12,
+          width: '100%',
+        }}
+      >
+        <Form.Item name="severity" label={t('app.kuaizhizao.eightD.columns.severity')}>
+          <Select
+            options={Object.entries(EIGHT_D_SEVERITY_I18N_KEY).map(([value, key]) => ({
+              value,
+              label: t(key),
+            }))}
+          />
+        </Form.Item>
+        <Form.Item name="owner_name" label={t('app.kuaizhizao.eightD.columns.owner')}>
+          <Input placeholder={t('app.kuaizhizao.eightD.placeholders.owner')} />
+        </Form.Item>
+        <Form.Item name="due_date" label={t('app.kuaizhizao.eightD.columns.dueDate')}>
+          <FutureDatePicker
+            getForm={() => form}
+            t={t}
+            showTime
+            style={{ width: '100%' }}
+          />
+        </Form.Item>
+      </div>
 
       {Object.entries(EIGHT_D_STAGE_FIELDS).map(([status, fieldName]) => {
         const label = getEightDStatusText(t, status);
+        const isActiveStage = currentStageField === fieldName;
         return (
           <Form.Item
             key={fieldName}
             name={fieldName}
-            label={label}
+            label={<EightDStageFieldLabel text={label} active={isActiveStage} />}
             rules={
               currentStageField === fieldName
                 ? [{ required: true, message: t('app.kuaizhizao.eightD.currentStageRequired', { stage: label }) }]
@@ -134,8 +158,10 @@ export const EightDStageEditor: React.FC<EightDStageEditorProps> = ({ form, repo
         </Upload>
       </Form.Item>
 
-      <Space style={{ justifyContent: 'flex-end', width: '100%' }}>
-        <Typography.Text type="secondary">{t('app.kuaizhizao.eightD.saveHint')}</Typography.Text>
+      <Space wrap align="center" style={{ justifyContent: 'flex-end', width: '100%' }}>
+        <Typography.Text type="secondary" style={{ textAlign: 'right' }}>
+          {t('app.kuaizhizao.eightD.saveHint')}
+        </Typography.Text>
         <Button type="primary" htmlType="submit" loading={saving}>
           {t('common.save')}
         </Button>

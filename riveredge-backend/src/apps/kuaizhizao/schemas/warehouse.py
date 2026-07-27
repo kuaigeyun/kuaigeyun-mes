@@ -90,7 +90,7 @@ class ProductionPickingWithItemsResponse(ProductionPickingResponse):
 
 
 class ProductionPickingPullLineCreate(BaseSchema):
-    """生产领料 — 工单上拉录入行"""
+    """生产领料 — 工单加载录入行"""
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
     material_name: str = Field(..., max_length=200, description="物料名称")
@@ -99,7 +99,7 @@ class ProductionPickingPullLineCreate(BaseSchema):
 
 
 class ProductionPickingPullFromWorkOrderRequest(BaseSchema):
-    """生产领料 — 从工单上拉创建（单工单、带明细）"""
+    """生产领料 — 从工单加载创建（单工单、带明细）"""
     work_order_id: int = Field(..., description="工单ID")
     warehouse_id: int = Field(..., description="出库仓库ID")
     warehouse_name: str = Field(..., max_length=100, description="出库仓库名称")

@@ -33,7 +33,15 @@ import OutsourceReceiptFormContent, {
   type OutsourceReceiptLine,
 } from '../../../components/OutsourceReceiptFormContent';
 import type { OutsourceMaterialTabKey } from './materialCenterTabs';
+import type { MaterialCenterDetailKind, MaterialCenterDetailRequest } from './materialCenterDetail';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+
+const OUTSOURCE_DETAIL_KIND: Record<OutsourceMaterialTabKey, MaterialCenterDetailKind> = {
+  outsource_issue: 'outsource_issue',
+  outsource_receipt: 'outsource_receipt',
+  outsource_material_return: 'outsource_material_return',
+  outsource_product_return: 'outsource_product_return',
+};
 
 function unwrapList<T>(response: unknown): T[] {
   if (Array.isArray(response)) return response;
@@ -82,9 +90,11 @@ function resolveOutsourceStatusTagColor(status?: string): string {
 
 interface OutsourceMaterialPanelProps {
   mode: OutsourceMaterialTabKey;
+  onOpenDetail?: (request: MaterialCenterDetailRequest) => void;
+  canRead?: boolean;
 }
 
-const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode }) => {
+const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, onOpenDetail, canRead = true }) => {
   const { t } = useTranslation();
   const isIssue = mode === 'outsource_issue';
   const isReceipt = mode === 'outsource_receipt';
@@ -215,29 +225,52 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
     {
       title: t('app.kuaizhizao.warehouseCommon.colActions'),
       valueType: 'option',
-      width: 100,
+      width: 160,
       fixed: 'right',
-      render: (_, record) =>
-        isReceipt && record.status === 'draft' && record.id ? (
-          renderRowActionsOverflow(
-            [
-              <Button
-                key="complete"
-                {...rowActionKind('complete')}
-                size="small"
-                onClick={() => handleComplete(record)}
-              >
-                {t('app.kuaizhizao.warehouseCommon.complete')}
-              </Button>,
-            ],
-            { keyPrefix: `outsource-${mode}-${record.id ?? 'row'}` },
-          )
-        ) : (
-          '-'
-        ),
+      render: (_, record) => {
+        const actions: React.ReactNode[] = [];
+        if (canRead && record.id) {
+          actions.push(
+            <Button
+              key="detail"
+              {...rowActionKind('read')}
+              size="small"
+              onClick={() => onOpenDetail?.({ kind: OUTSOURCE_DETAIL_KIND[mode], id: record.id! })}
+            >
+              {t('app.kuaizhizao.warehouseCommon.detail')}
+            </Button>,
+          );
+        }
+        if (isReceipt && record.status === 'draft' && record.id) {
+          actions.push(
+            <Button
+              key="complete"
+              {...rowActionKind('complete')}
+              size="small"
+              onClick={() => handleComplete(record)}
+            >
+              {t('app.kuaizhizao.warehouseCommon.complete')}
+            </Button>,
+          );
+        }
+        if (isIssue && record.status === 'draft' && record.id) {
+          actions.push(
+            <Button
+              key="complete"
+              {...rowActionKind('complete')}
+              size="small"
+              onClick={() => handleComplete(record)}
+            >
+              {t('app.kuaizhizao.warehouseCommon.complete')}
+            </Button>,
+          );
+        }
+        if (!actions.length) return '-';
+        return renderRowActionsOverflow(actions, { keyPrefix: `outsource-${mode}-${record.id ?? 'row'}` });
+      },
     },
   ],
-    [isIssue, isMaterialReturn, isProductReturn, isReceipt, t],
+    [canRead, isIssue, isMaterialReturn, isProductReturn, isReceipt, mode, onOpenDetail, t],
   );
 
   const resetCreateState = () => {

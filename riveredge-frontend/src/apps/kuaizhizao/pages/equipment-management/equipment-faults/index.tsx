@@ -9,10 +9,9 @@ import { renderRowActionsOverflow, rowActionKind } from '../../../../../componen
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import type { DescriptionsProps } from 'antd';
 import {
   ActionType,
   ProColumns,
@@ -32,11 +31,12 @@ import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection, DetailDrawerInlineFullChain,
   MODAL_CONFIG,
   DRAWER_CONFIG,
+  detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { getEquipmentFaultLifecycle } from '../../../utils/equipmentLifecycle';
 import { equipmentFaultApi, equipmentApi, maintenancePlanApi } from '../../../services/equipment';
@@ -87,36 +87,6 @@ const FAULT_STATUS_COLORS: Record<string, string> = {
   '已关闭': 'default',
 };
 
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'date' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD');
-    }
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    }
-    if (col.render && dataSource != null) {
-      content = (col.render as (dom: React.ReactNode, entity: T, i: number) => React.ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
-}
-
 function renderFaultRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   return renderRowActionsOverflow(nodes, { keyPrefix });
 }
@@ -163,14 +133,13 @@ const EquipmentFaultsPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const formRef = useRef<any>(null);
 
-  // Drawer 相关状态（详情查看）
-  const [drawerVisible, setDrawerVisible] = useState(false);
-  const [faultDetail, setFaultDetail] = useState<EquipmentFault | null>(null);
+  const { open: detailVisible, loading: detailLoading, detail: faultDetail, setDetail: setFaultDetail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<EquipmentFault>();
 
   const [faultTrackingRefreshKey, setFaultTrackingRefreshKey] = useState(0);
 
   const faultTracking = useDocumentTracking(
-    drawerVisible && faultDetail?.id ? 'equipment_fault' : undefined,
+    detailVisible && faultDetail?.id ? 'equipment_fault' : undefined,
     faultDetail?.id,
     faultTrackingRefreshKey,
   );
@@ -267,20 +236,20 @@ const EquipmentFaultsPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleDetail = async (record: EquipmentFault) => {
-    try {
+  const handleDetail = useCallback(
+    (record: EquipmentFault) => {
       if (!record.uuid) {
         messageApi.error(t(`${P}.uuidNotFound`));
         return;
       }
-      const detail = await equipmentFaultApi.get(record.uuid);
-      setFaultDetail(detail);
-      setDrawerVisible(true);
       setFaultTrackingRefreshKey((k) => k + 1);
-    } catch (error) {
-      messageApi.error(t(`${P}.detailFailed`));
-    }
-  };
+      void openDetail(
+        () => equipmentFaultApi.get(record.uuid!) as Promise<EquipmentFault>,
+        t(`${P}.detailFailed`),
+      );
+    },
+    [messageApi, openDetail, t],
+  );
 
   /**
    * 处理批量删除故障记录（keys 为 uuid 数组）
@@ -297,8 +266,7 @@ const EquipmentFaultsPage: React.FC = () => {
           messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
           setSelectedRowKeys([]);
           if (faultDetail?.uuid && keys.map(String).includes(String(faultDetail.uuid))) {
-            setDrawerVisible(false);
-            setFaultDetail(null);
+            closeDetail();
           }
           actionRef.current?.reload();
         } catch (error: any) {
@@ -393,9 +361,8 @@ const EquipmentFaultsPage: React.FC = () => {
       setRepairFault(null);
       setRepairFormInitialValues(undefined);
       actionRef.current?.reload();
-      if (drawerVisible) {
-        setDrawerVisible(false);
-        setFaultDetail(null);
+      if (detailVisible) {
+        closeDetail();
       }
     } catch (error: any) {
       messageApi.error(error?.message || t('common.operationFailed'));
@@ -441,9 +408,8 @@ const EquipmentFaultsPage: React.FC = () => {
       setMaintFault(null);
       setMaintFormInitialValues(undefined);
       actionRef.current?.reload();
-      if (drawerVisible) {
-        setDrawerVisible(false);
-        setFaultDetail(null);
+      if (detailVisible) {
+        closeDetail();
       }
     } catch (error: any) {
       messageApi.error(error?.message || t('common.operationFailed'));
@@ -1064,16 +1030,11 @@ const EquipmentFaultsPage: React.FC = () => {
       {/* 故障记录详情 Drawer */}
       <DetailDrawerTemplate
         title={t(`${P}.detailTitle`)}
-        open={drawerVisible}
+        open={detailVisible}
+        loading={detailLoading}
         zIndex={faultDetailDrawerZIndex}
-        onClose={() => {
-          setDrawerVisible(false);
-          setFaultDetail(null);
-        }}
+        onClose={closeDetail}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        column={3}
-        dataSource={faultDetail || undefined}
         extra={
           faultDetail ? (
             <>
@@ -1090,83 +1051,80 @@ const EquipmentFaultsPage: React.FC = () => {
             </>
           ) : null
         }
-        customContent={
+        basic={
           faultDetail ? (
-            <>
-              <DetailDrawerSection title={t(`${P}.section.basicInfo`)}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={buildDescriptionItemsFromColumns(faultDetail, detailBaseColumns)}
-                />
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t(`${P}.section.lifecycle`)}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lc = getEquipmentFaultLifecycle(faultDetail as Record<string, unknown>, t);
-                    const mainStages = lc.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        showLabels
-                        status={lc.status}
-                        nextStepSuggestions={lc.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  {faultDetail.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType='equipment_fault'
-                      documentId={faultDetail.id}
-                      active={drawerVisible}
-                      selfDocumentId={faultDetail.id}
-                      renderBriefActions={(doc) => (
+            <Descriptions
+              column={3}
+              size="small"
+              items={detailDrawerDescriptionItems(detailBaseColumns, faultDetail)}
+            />
+          ) : undefined
+        }
+        basicTitle={t(`${P}.section.basicInfo`)}
+        collaborationTitle={t(`${P}.section.lifecycle`)}
+        collaborationLifecycle={
+          faultDetail ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {(() => {
+                const lc = getEquipmentFaultLifecycle(faultDetail as Record<string, unknown>, t);
+                const mainStages = lc.mainStages ?? [];
+                if (mainStages.length === 0) return null;
+                return (
+                  <UniLifecycleStepper
+                    steps={mainStages}
+                    showLabels
+                    status={lc.status}
+                    nextStepSuggestions={lc.nextStepSuggestions}
+                    hideNextStepSuggestions
+                  />
+                );
+              })()}
+            </div>
+          ) : undefined
+        }
+        traceDocument={
+          faultDetail?.id != null
+            ? {
+                documentType: 'equipment_fault',
+                documentId: faultDetail.id,
+                selfDocumentId: faultDetail.id,
+                renderBriefActions: (doc) => (
                   <EquipmentTraceBriefPrimaryActions
                     doc={doc}
                     t={t}
                     navigate={navigate}
-                    closeDrawer={() => {
-                      setDrawerVisible(false);
-                      setFaultDetail(null);
-                    }}
+                    closeDrawer={closeDetail}
                   />
-                )}
-                    />
-                  ) : null}
-                </div>
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t(`${P}.section.detailInfo`)}>
-                {currentFault?.attachments?.length ? (
-                  <LineAttachmentsUpload
-                    category="equipment_fault_attachments"
-                    value={currentFault.attachments}
-                    readOnly
-                  />
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noDetailLines`)} />
-                )}
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t(`${P}.section.operationHistory`)}>
-                {faultTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {faultTracking.error && !faultTracking.loading && (
-                  <Typography.Text type="danger">{faultTracking.error}</Typography.Text>
-                )}
-                {faultTracking.data && !faultTracking.loading && (
-                  <DocumentTrackingTimelineBody data={faultTracking.data} />
-                )}
-                {!faultTracking.loading && !faultTracking.data && !faultTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noOperationRecords`)} />
-                )}
-              </DetailDrawerSection>
-            </>
-          ) : null
+                ),
+              }
+            : null
         }
+        supplementary={
+          faultDetail?.attachments?.length ? (
+            <LineAttachmentsUpload
+              category="equipment_fault_attachments"
+              value={faultDetail.attachments}
+              readOnly
+            />
+          ) : (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noDetailLines`)} />
+          )
+        }
+        supplementaryTitle={t(`${P}.section.detailInfo`)}
+        timeline={
+          faultTracking.loading ? (
+            <div style={{ textAlign: 'center', padding: 24 }}>
+              <Spin />
+            </div>
+          ) : faultTracking.error ? (
+            <Typography.Text type="danger">{faultTracking.error}</Typography.Text>
+          ) : faultTracking.data ? (
+            <DocumentTrackingTimelineBody data={faultTracking.data} />
+          ) : (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noOperationRecords`)} />
+          )
+        }
+        timelineTitle={t(`${P}.section.operationHistory`)}
       />
     </>
   );

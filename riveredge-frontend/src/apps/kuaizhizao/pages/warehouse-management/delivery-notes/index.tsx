@@ -28,7 +28,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES, DetailDrawerSection } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniPullQueryModal, filterByPullScope, paginatePullRows, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
@@ -113,6 +113,7 @@ const DeliveryNotesPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [noticeDetail, setNoticeDetail] = useState<DeliveryNoticeDetail | null>(null);
 
   const deliveryTracking = useDocumentTracking(
@@ -338,12 +339,17 @@ const DeliveryNotesPage: React.FC = () => {
   ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t]);
 
   const handleDetail = async (record: DeliveryNotice) => {
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setNoticeDetail(null);
     try {
       const detail = await deliveryNoticeApi.get(record.id!.toString());
       setNoticeDetail(detail as DeliveryNoticeDetail);
-      setDetailDrawerVisible(true);
     } catch {
       messageApi.error(t('app.kuaizhizao.deliveryNote.msg.loadDetailFailed'));
+      setDetailDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -787,6 +793,21 @@ const DeliveryNotesPage: React.FC = () => {
     ],
     [t],
   );
+
+  const detailCollaboration = useMemo(() => {
+    if (!noticeDetail) return undefined;
+    const lc = getDeliveryNoticeLifecycle(noticeDetail as Record<string, unknown>, t);
+    const mainStages = lc.mainStages ?? [];
+    if (mainStages.length === 0) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        showLabels
+        status={lc.status}
+        nextStepSuggestions={lc.nextStepSuggestions}
+      />
+    );
+  }, [noticeDetail, t]);
 
   const pullModalColumns = useMemo(
     () => [
@@ -1315,94 +1336,58 @@ const DeliveryNotesPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`${t('app.kuaizhizao.deliveryNote.detailTitle')}${noticeDetail?.notice_code ? ` - ${noticeDetail.notice_code}` : ''}`}
         open={detailDrawerVisible}
+        loading={detailLoading}
         onClose={() => { setDetailDrawerVisible(false); setNoticeDetail(null); }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        column={3}
-        customContent={
+        basic={
           noticeDetail ? (
+            <Descriptions
+              column={3}
+              size="small"
+              items={detailDrawerDescriptionItems(detailColumns, noticeDetail)}
+            />
+          ) : undefined
+        }
+        collaboration={detailCollaboration}
+        linesTitle={t('app.kuaizhizao.deliveryNote.section.lineDetails')}
+        lines={
+          noticeDetail?.items && noticeDetail.items.length > 0 ? (
             <>
-              <DetailDrawerSection title={t('app.kuaizhizao.deliveryNote.section.basicInfo')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={detailColumns.map((col, index) => {
-                    const value = col.dataIndex
-                      ? (noticeDetail as Record<string, unknown>)[col.dataIndex as string]
-                      : undefined;
-                    let content: React.ReactNode = value as React.ReactNode;
-                    if (col.valueType === 'dateTime' && value) {
-                      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-                    } else if (col.valueType === 'date' && value) {
-                      content = formatDateTime(value as string, 'YYYY-MM-DD');
-                    }
-                    if (col.render && noticeDetail != null) {
-                      content = col.render(content, noticeDetail, index, undefined as any, col as any) as React.ReactNode;
-                    }
-                    return {
-                      key: String(col.key ?? col.dataIndex ?? index),
-                      label: col.title as React.ReactNode,
-                      children: content !== undefined && content !== null ? content : '-',
-                      span: col.span ?? 1,
-                    };
-                  })}
-                />
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.kuaizhizao.warehouseOutbound.section.lifecycle')}>
-                {(() => {
-                  const lc = getDeliveryNoticeLifecycle(noticeDetail as Record<string, unknown>, t);
-                  const mainStages = lc.mainStages ?? [];
-                  if (mainStages.length === 0) return null;
-                  return (
-                    <UniLifecycleStepper
-                      steps={mainStages}
-                      showLabels
-                      status={lc.status}
-                      nextStepSuggestions={lc.nextStepSuggestions}
-                    />
-                  );
-                })()}
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.kuaizhizao.deliveryNote.section.lineDetails')}>
-                {noticeDetail.items && noticeDetail.items.length > 0 ? (
-                  <>
-                    <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-                    <Table
-                      className="warehouse-detail-table"
-                      size="small"
-                      rowKey={(row: Record<string, unknown>, idx = 0) =>
-                        String((row as { id?: React.Key }).id ?? `${noticeDetail?.id ?? 'dn'}-${idx}`)
-                      }
-                      columns={detailItemColumns}
-                      dataSource={noticeDetail.items}
-                      pagination={false}
-                    />
-                  </>
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.deliveryNote.msg.noLineDetails')} />
-                )}
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.kuaizhizao.deliveryNote.section.operationLog')}>
-                {deliveryTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {deliveryTracking.error && !deliveryTracking.loading && (
-                  <Typography.Text type="danger">{deliveryTracking.error}</Typography.Text>
-                )}
-                {deliveryTracking.data && !deliveryTracking.loading && (
-                  <DocumentTrackingTimelineBody data={deliveryTracking.data} />
-                )}
-                {!deliveryTracking.loading && !deliveryTracking.data && !deliveryTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.deliveryNote.msg.noOperationLog')} />
-                )}
-              </DetailDrawerSection>
+              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+              <Table
+                className="warehouse-detail-table"
+                size="small"
+                rowKey={(row: Record<string, unknown>, idx = 0) =>
+                  String((row as { id?: React.Key }).id ?? `${noticeDetail?.id ?? 'dn'}-${idx}`)
+                }
+                columns={detailItemColumns}
+                dataSource={noticeDetail.items}
+                pagination={false}
+              />
             </>
-          ) : null
+          ) : noticeDetail ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.deliveryNote.msg.noLineDetails')} />
+          ) : undefined
+        }
+        timeline={
+          noticeDetail?.id != null ? (
+            <>
+              {deliveryTracking.loading && (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <Spin />
+                </div>
+              )}
+              {deliveryTracking.error && !deliveryTracking.loading && (
+                <Typography.Text type="danger">{deliveryTracking.error}</Typography.Text>
+              )}
+              {deliveryTracking.data && !deliveryTracking.loading && (
+                <DocumentTrackingTimelineBody data={deliveryTracking.data} />
+              )}
+              {!deliveryTracking.loading && !deliveryTracking.data && !deliveryTracking.error && (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.deliveryNote.msg.noOperationLog')} />
+              )}
+            </>
+          ) : undefined
         }
       />
 

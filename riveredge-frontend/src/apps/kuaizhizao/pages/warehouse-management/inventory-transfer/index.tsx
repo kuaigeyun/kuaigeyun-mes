@@ -10,17 +10,17 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, message, Card, Table, Row, Col, Typography, Tag, Form as AntForm, Input, InputNumber, Select } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
+import { App, Button, Space, Modal, message, Table, Row, Col, Typography, Tag, Form as AntForm, Input, InputNumber, Select, Descriptions } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { inventoryTransferApi } from '../../../services/inventory-transfer';
 import { getInventoryTransferLifecycle } from '../../../utils/inventoryTransferLifecycle';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { materialApi } from '../../../../master-data/services/material';
 import { storageAreaApi, storageLocationApi } from '../../../../master-data/services/warehouse';
 import dayjs from 'dayjs';
@@ -120,6 +120,7 @@ const InventoryTransferPage: React.FC = () => {
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [currentTransfer, setCurrentTransfer] = useState<InventoryTransfer | null>(null);
 
   // 仓库列表状态 (交由 UniWarehouseSelect 管理)
@@ -312,12 +313,17 @@ const InventoryTransferPage: React.FC = () => {
    * 处理查看详情
    */
   const handleDetail = async (record: InventoryTransfer) => {
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setCurrentTransfer(null);
     try {
       const detail = await inventoryTransferApi.get(record.id!.toString());
       setCurrentTransfer(detail);
-      setDetailDrawerVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.inventoryTransfer.msgGetDetailFailed'));
+      setDetailDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -610,6 +616,103 @@ const InventoryTransferPage: React.FC = () => {
     storageLocationList
       .filter((l: any) => !storageAreaId || l.storageAreaId === storageAreaId)
       .map((l: any) => ({ label: `${l.code} - ${l.name}`, value: l.id }));
+
+  const detailBasicColumns: ProDescriptionsItemProps<InventoryTransfer>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseReports.colTransferCode'), dataIndex: 'code' },
+      { title: t('app.kuaizhizao.warehouseReports.colFromWarehouse'), dataIndex: 'from_warehouse_name' },
+      { title: t('app.kuaizhizao.warehouseReports.colToWarehouse'), dataIndex: 'to_warehouse_name' },
+      { title: t('app.kuaizhizao.inventoryTransfer.colTransferDate'), dataIndex: 'transfer_date', valueType: 'date' },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        dataIndex: 'status',
+        render: (s) => {
+          const map: Record<string, { textKey: string; color: string }> = {
+            draft: { textKey: 'app.kuaizhizao.warehouseCommon.statusDraft', color: 'default' },
+            in_progress: { textKey: 'app.kuaizhizao.inventoryTransfer.statusInProgress', color: 'processing' },
+            completed: { textKey: 'app.kuaizhizao.warehouseCommon.statusCompleted', color: 'success' },
+            cancelled: { textKey: 'app.kuaizhizao.warehouseCommon.statusCancelled', color: 'error' },
+          };
+          const c = map[(s as string) || ''] || { textKey: '', color: 'default' };
+          return <Tag color={c.color}>{c.textKey ? t(c.textKey) : (s as string) || '-'}</Tag>;
+        },
+      },
+      { title: t('app.kuaizhizao.inventoryTransfer.colTotalItems'), dataIndex: 'total_items' },
+      { title: t('app.kuaizhizao.inventoryTransfer.colTotalQty'), dataIndex: 'total_quantity', render: formatQuantity },
+      {
+        title: t('app.kuaizhizao.inventoryTransfer.colTotalAmount'),
+        dataIndex: 'total_amount',
+        render: (_dom, entity) => `¥${Number(entity.total_amount ?? 0).toFixed(2)}`,
+      },
+      { title: t('app.kuaizhizao.inventoryTransfer.formTransferReason'), dataIndex: 'transfer_reason' },
+      { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
+    ],
+    [t],
+  );
+
+  const transferDetailItemColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'), dataIndex: 'material_code', width: 120 },
+      { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', width: 150 },
+      { title: t('app.kuaizhizao.inventoryTransfer.formTransferQty'), dataIndex: 'quantity', width: 100, align: 'right' as const, render: formatQuantity },
+      {
+        title: t('app.kuaizhizao.inventoryTransfer.colFromAreaLocation'),
+        width: 160,
+        render: (_: unknown, row: InventoryTransferItem) =>
+          [row.from_storage_area_code, row.from_location_code].filter(Boolean).join(' / ') || '-',
+      },
+      {
+        title: t('app.kuaizhizao.inventoryTransfer.colToAreaLocation'),
+        width: 160,
+        render: (_: unknown, row: InventoryTransferItem) =>
+          [row.to_storage_area_code, row.to_location_code].filter(Boolean).join(' / ') || '-',
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colUnitPrice'),
+        dataIndex: 'unit_price',
+        width: 100,
+        align: 'right' as const,
+        render: (value: number | string) => `¥${Number(value ?? 0).toFixed(2)}`,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colAmount'),
+        dataIndex: 'amount',
+        width: 100,
+        align: 'right' as const,
+        render: (value: number | string) => `¥${Number(value ?? 0).toFixed(2)}`,
+      },
+      { title: t('app.kuaizhizao.warehouseReports.colBatchNo'), dataIndex: 'batch_no', width: 100 },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        dataIndex: 'status',
+        width: 100,
+        render: (status: string) => {
+          const statusMap: Record<string, { text: string; color: string }> = {
+            pending: { text: t('app.kuaizhizao.inventoryTransfer.statusItemPending'), color: 'default' },
+            transferred: { text: t('app.kuaizhizao.inventoryTransfer.statusItemTransferred'), color: 'success' },
+          };
+          const statusInfo = statusMap[status] || { text: status, color: 'default' };
+          return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+        },
+      },
+    ],
+    [t],
+  );
+
+  const detailCollaboration = useMemo(() => {
+    if (!currentTransfer) return undefined;
+    const lifecycle = getInventoryTransferLifecycle(currentTransfer as Record<string, unknown>, t);
+    const mainStages = lifecycle.mainStages ?? [];
+    if (!mainStages.length) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        status={lifecycle.status}
+        showLabels
+        nextStepSuggestions={lifecycle.nextStepSuggestions}
+      />
+    );
+  }, [currentTransfer, t]);
 
   return (
     <ListPageTemplate>
@@ -1119,142 +1222,41 @@ const InventoryTransferPage: React.FC = () => {
 
       {/* 详情Drawer */}
       <DetailDrawerTemplate
-        title={t('app.kuaizhizao.inventoryTransfer.detailTitle')}
+        title={`${t('app.kuaizhizao.inventoryTransfer.detailTitle')}${currentTransfer?.code ? ` - ${currentTransfer.code}` : ''}`}
         open={detailDrawerVisible}
+        loading={detailLoading}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentTransfer(null);
         }}
-        dataSource={currentTransfer || {}}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[
-          {
-            title: t('app.kuaizhizao.warehouseReports.colTransferCode'),
-            dataIndex: 'code',
-          },
-          {
-            title: t('app.kuaizhizao.warehouseReports.colFromWarehouse'),
-            dataIndex: 'from_warehouse_name',
-          },
-          {
-            title: t('app.kuaizhizao.warehouseReports.colToWarehouse'),
-            dataIndex: 'to_warehouse_name',
-          },
-          {
-            title: t('app.kuaizhizao.inventoryTransfer.colTransferDate'),
-            dataIndex: 'transfer_date',
-            valueType: 'date',
-          },
-          {
-            title: t('app.kuaizhizao.warehouseCommon.colStatus'),
-            dataIndex: 'status',
-            valueEnum: {
-              draft: { text: t('app.kuaizhizao.warehouseCommon.statusDraft'), status: 'default' },
-              in_progress: { text: t('app.kuaizhizao.inventoryTransfer.statusInProgress'), status: 'processing' },
-              completed: { text: t('app.kuaizhizao.warehouseCommon.statusCompleted'), status: 'success' },
-              cancelled: { text: t('app.kuaizhizao.warehouseCommon.statusCancelled'), status: 'error' },
-            },
-          },
-          {
-            title: t('app.kuaizhizao.inventoryTransfer.colTotalItems'),
-            dataIndex: 'total_items',
-          },
-          {
-            title: t('app.kuaizhizao.inventoryTransfer.colTotalQty'),
-            dataIndex: 'total_quantity',
-            render: formatQuantity,
-          },
-          {
-            title: t('app.kuaizhizao.inventoryTransfer.colTotalAmount'),
-            dataIndex: 'total_amount',
-            render: (dom: React.ReactNode, entity: InventoryTransfer) => `¥${Number(entity.total_amount ?? 0).toFixed(2)}`,
-          },
-          {
-            title: t('app.kuaizhizao.inventoryTransfer.formTransferReason'),
-            dataIndex: 'transfer_reason',
-          },
-          {
-            title: t('app.kuaizhizao.warehouseCommon.colRemarks'),
-            dataIndex: 'remarks',
-          },
-        ]}
-      >
-        {currentTransfer && currentTransfer.items && currentTransfer.items.length > 0 && (
-          <Card title={t('app.kuaizhizao.inventoryTransfer.detailItemsTitle')} style={{ marginTop: 16 }}>
-            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-            <Table
-              className="warehouse-detail-table"
-              columns={[
-                {
-                  title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'),
-                  dataIndex: 'material_code',
-                  width: 120,
-                },
-                {
-                  title: t('app.kuaizhizao.warehouseReports.colMaterialName'),
-                  dataIndex: 'material_name',
-                  width: 150,
-                },
-                {
-                  title: t('app.kuaizhizao.inventoryTransfer.formTransferQty'),
-                  dataIndex: 'quantity',
-                  width: 100,
-                  align: 'right',
-      render: formatQuantity,
-                },
-                {
-                  title: t('app.kuaizhizao.inventoryTransfer.colFromAreaLocation'),
-                  width: 160,
-                  render: (_: unknown, row: InventoryTransferItem) =>
-                    [row.from_storage_area_code, row.from_location_code].filter(Boolean).join(' / ') || '-',
-                },
-                {
-                  title: t('app.kuaizhizao.inventoryTransfer.colToAreaLocation'),
-                  width: 160,
-                  render: (_: unknown, row: InventoryTransferItem) =>
-                    [row.to_storage_area_code, row.to_location_code].filter(Boolean).join(' / ') || '-',
-                },
-                {
-                  title: t('app.kuaizhizao.warehouseCommon.colUnitPrice'),
-                  dataIndex: 'unit_price',
-                  width: 100,
-                  align: 'right',
-                  render: (value: number | string) => `¥${Number(value ?? 0).toFixed(2)}`,
-                },
-                {
-                  title: t('app.kuaizhizao.warehouseCommon.colAmount'),
-                  dataIndex: 'amount',
-                  width: 100,
-                  align: 'right',
-                  render: (value: number | string) => `¥${Number(value ?? 0).toFixed(2)}`,
-                },
-                {
-                  title: t('app.kuaizhizao.warehouseReports.colBatchNo'),
-                  dataIndex: 'batch_no',
-                  width: 100,
-                },
-                {
-                  title: t('app.kuaizhizao.warehouseCommon.colStatus'),
-                  dataIndex: 'status',
-                  width: 100,
-                  render: (status: string) => {
-                    const statusMap: Record<string, { text: string; color: string }> = {
-                      pending: { text: t('app.kuaizhizao.inventoryTransfer.statusItemPending'), color: 'default' },
-                      transferred: { text: t('app.kuaizhizao.inventoryTransfer.statusItemTransferred'), color: 'success' },
-                    };
-                    const statusInfo = statusMap[status] || { text: status, color: 'default' };
-                    return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
-                  },
-                },
-              ]}
-              dataSource={currentTransfer.items}
-              rowKey="id"
-              pagination={false}
+        basic={
+          currentTransfer ? (
+            <Descriptions
+              column={2}
               size="small"
+              items={detailDrawerDescriptionItems(detailBasicColumns, currentTransfer)}
             />
-          </Card>
-        )}
-      </DetailDrawerTemplate>
+          ) : undefined
+        }
+        collaboration={detailCollaboration}
+        linesTitle={t('app.kuaizhizao.inventoryTransfer.detailItemsTitle')}
+        lines={
+          currentTransfer?.items && currentTransfer.items.length > 0 ? (
+            <>
+              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+              <Table
+                className="warehouse-detail-table"
+                columns={transferDetailItemColumns}
+                dataSource={currentTransfer.items}
+                rowKey="id"
+                pagination={false}
+                size="small"
+              />
+            </>
+          ) : undefined
+        }
+      />
     </ListPageTemplate>
   );
 };

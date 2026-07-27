@@ -74,3 +74,31 @@ export function getEightDSeverityText(t: TFunction, severity?: string | null): s
   if (!key) return severity;
   return t(key);
 }
+
+/** 8D 严重度徽章：与质量异常列表语义一致（轻微/严重/紧急） */
+export function resolveEightDSeverityDisplay(
+  t: TFunction,
+  severity?: string | null,
+): { label: string; color: 'default' | 'processing' | 'warning' | 'error' } {
+  const label = getEightDSeverityText(t, severity);
+  if (!severity || label === '-') {
+    return { label: '-', color: 'default' };
+  }
+  switch (severity) {
+    case 'critical':
+      return { label, color: 'error' };
+    case 'major':
+      return { label, color: 'warning' };
+    case 'minor':
+      return { label, color: 'processing' };
+    default:
+      return { label, color: 'default' };
+  }
+}
+
+/** 解析「D1 组建团队」类阶段标题，供表单标签样式化 */
+export function parseEightDStageLabel(text: string): { code: string; title: string } | null {
+  const matched = text.trim().match(/^(D\d+)\s*(.+)$/i);
+  if (!matched) return null;
+  return { code: matched[1].toUpperCase(), title: matched[2] };
+}

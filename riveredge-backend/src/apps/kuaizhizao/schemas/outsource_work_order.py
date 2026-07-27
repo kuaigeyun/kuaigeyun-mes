@@ -102,7 +102,7 @@ class OutsourceWorkOrderResponse(OutsourceWorkOrderBase):
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     capabilities: Optional[OutsourceWorkOrderCapabilities] = Field(
         None,
-        description="业务态动作 capabilities（与 outbound 委外发料上拉门禁一致）",
+        description="业务态动作 capabilities（与 outbound 委外发料加载门禁一致）",
     )
 
 

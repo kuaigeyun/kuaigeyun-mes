@@ -120,7 +120,7 @@ async def pull_sales_order_from_quotation(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """销售订单域上拉建单：从报价单创建销售订单（单一直接上游）。"""
+    """销售订单域加载建单：从报价单创建销售订单（单一直接上游）。"""
     try:
         return await sales_order_service.pull_sales_order_from_quotation(
             tenant_id=tenant_id,
@@ -132,10 +132,10 @@ async def pull_sales_order_from_quotation(
     except (BusinessLogicError, ValidationError) as e:
         raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/pull-from-quotation", tenant_id)
     except Exception as e:
-        logger.error(f"从报价单上拉生成销售订单失败: {e}")
+        logger.error(f"从报价单加载生成销售订单失败: {e}")
         raise _http_exception_with_trace(
             http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "从报价单上拉生成销售订单失败",
+            "从报价单加载生成销售订单失败",
             "/sales-orders/pull-from-quotation",
             tenant_id,
         )
@@ -147,7 +147,7 @@ async def pull_sales_order_from_sales_contract(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """销售订单域上拉建单：从销售合同创建销售订单。"""
+    """销售订单域加载建单：从销售合同创建销售订单。"""
     contract_id_raw = body.get("contract_id")
     if contract_id_raw is None:
         raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, "必须提供销售合同ID", "/sales-orders/pull-from-sales-contract", tenant_id)
@@ -171,10 +171,10 @@ async def pull_sales_order_from_sales_contract(
     except (BusinessLogicError, ValidationError) as e:
         raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/pull-from-sales-contract", tenant_id)
     except Exception as e:
-        logger.error(f"从销售合同上拉生成销售订单失败: {e}")
+        logger.error(f"从销售合同加载生成销售订单失败: {e}")
         raise _http_exception_with_trace(
             http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "从销售合同上拉生成销售订单失败",
+            "从销售合同加载生成销售订单失败",
             "/sales-orders/pull-from-sales-contract",
             tenant_id,
         )
@@ -508,11 +508,11 @@ async def list_sales_orders(
     list_scope: Optional[str] = Query(None, description="列表范围：all/mine/department"),
     pullable_only: Optional[bool] = Query(
         None,
-        description="仅可上拉建单；需配合 pull_target",
+        description="仅可加载建单；需配合 pull_target",
     ),
     pull_target: Optional[str] = Query(
         None,
-        description="上拉目标：sales_order_change；与 pullable_only 组合使用",
+        description="加载目标：sales_order_change；与 pullable_only 组合使用",
     ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -7,9 +7,10 @@ import {
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
+  ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Row, Col, Tag, Input } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, SendOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { SendOutlined, CheckOutlined, CloseOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { UniTable } from '../../../../../components/uni-table';
@@ -17,10 +18,15 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { equipmentApi } from '../../../services/equipment';
 import { transferApplicationsApi } from '../../../services/equipmentOps';
-import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -47,6 +53,8 @@ interface TransferApplication {
   transfer_date?: string;
   applicant_name?: string;
   status?: string;
+  remark?: string;
+  reject_reason?: string;
   updated_at?: string;
 }
 
@@ -72,6 +80,16 @@ const EquipmentTransfersPage: React.FC = () => {
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<TransferApplication | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<TransferApplication>();
+
+  const handleDetail = useCallback(
+    (record: TransferApplication) => {
+      if (!record.id) return;
+      void openDetail(() => transferApplicationsApi.get(record.id!) as Promise<TransferApplication>);
+    },
+    [openDetail],
+  );
 
   const loadEquipmentOptions = async () => {
     const res = await equipmentApi.list({ limit: 1000 });
@@ -95,20 +113,24 @@ const EquipmentTransfersPage: React.FC = () => {
 
   const handleEdit = async (record: TransferApplication) => {
     if (!record.id) return;
-    const detail = await transferApplicationsApi.get(record.id);
-    setIsEdit(true);
-    setCurrent(detail);
-    setModalVisible(true);
-    void loadEquipmentOptions();
-    formRef.current?.setFieldsValue({
-      equipment_id: detail.equipment_id,
-      to_workshop_name: detail.to_workshop_name,
-      to_workstation_name: detail.to_workstation_name,
-      to_status: detail.to_status,
-      reason: detail.reason,
-      transfer_date: detail.transfer_date ? dayjs(detail.transfer_date) : dayjs(),
-      remark: detail.remark,
-    });
+    try {
+      const loaded = await transferApplicationsApi.get(record.id);
+      setIsEdit(true);
+      setCurrent(loaded);
+      setModalVisible(true);
+      void loadEquipmentOptions();
+      formRef.current?.setFieldsValue({
+        equipment_id: loaded.equipment_id,
+        to_workshop_name: loaded.to_workshop_name,
+        to_workstation_name: loaded.to_workstation_name,
+        to_status: loaded.to_status,
+        reason: loaded.reason,
+        transfer_date: loaded.transfer_date ? dayjs(loaded.transfer_date) : dayjs(),
+        remark: loaded.remark,
+      });
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.listFailed`)));
+    }
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -144,9 +166,36 @@ const EquipmentTransfersPage: React.FC = () => {
     }
     setModalVisible(false);
     actionRef.current?.reload();
+    if (detailVisible && detail?.id === current?.id && current?.id) {
+      void handleDetail({ id: current.id });
+    }
   };
 
   const approvalStatusValueEnum = useMemo(() => buildApprovalDocStatusValueEnum(), []);
+
+  const detailBasicColumns = useMemo<ProDescriptionsItemProps<TransferApplication>[]>(
+    () => [
+      { title: t(`${P}.col.applicationNo`), dataIndex: 'application_no' },
+      { title: t(`${P}.col.equipment`), dataIndex: 'equipment_name' },
+      { title: t(`${P}.col.fromWorkshop`), dataIndex: 'from_workshop_name' },
+      { title: t(`${P}.col.toWorkshop`), dataIndex: 'to_workshop_name' },
+      { title: t(`${P}.col.toLocation`), dataIndex: 'to_workstation_name' },
+      { title: t(`${P}.form.toStatus`), dataIndex: 'to_status' },
+      { title: t(`${P}.col.transferDate`), dataIndex: 'transfer_date', valueType: 'date' },
+      { title: t(`${P}.col.applicant`, { defaultValue: '申请人' }), dataIndex: 'applicant_name' },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        render: (_, r) => (
+          <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>
+        ),
+      },
+      { title: t(`${P}.form.reason`), dataIndex: 'reason', span: 2 },
+      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+      { title: t(`${P}.form.rejectReason`, { defaultValue: '驳回原因' }), dataIndex: 'reject_reason', span: 2 },
+    ],
+    [t],
+  );
 
   const columns: ProColumns<TransferApplication>[] = useMemo(() => alignProColumns<TransferApplication>([
       {
@@ -242,69 +291,70 @@ const EquipmentTransfersPage: React.FC = () => {
         width: 280,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <>
-            <Button {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleEdit(record)}>
-              {t('common.detail')}
-            </Button>
-            {perms.canUpdate && record.status === '草稿' && (
-              <Button {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
-                {t('common.edit')}
-              </Button>
-            )}
-            {perms.canAction?.('submit') && record.status === '草稿' && (
-              <Button
-                {...rowActionKind('submit')}
-                type="link"
-                size="small"
-                icon={<SendOutlined />}
-                onClick={async () => {
-                  if (!record.id) return;
-                  await transferApplicationsApi.submit(record.id);
-                  messageApi.success(t(`${P}.submitSuccess`));
-                  actionRef.current?.reload();
-                }}
-              >
-                {t(`${P}.action.submit`)}
-              </Button>
-            )}
-            {perms.canAction?.('approve') && record.status === '已提交' && (
-              <Button
-                {...rowActionKind('approve')}
-                type="link"
-                size="small"
-                icon={<CheckOutlined />}
-                onClick={async () => {
-                  if (!record.id) return;
-                  await transferApplicationsApi.approve(record.id);
-                  messageApi.success(t(`${P}.approveSuccess`));
-                  actionRef.current?.reload();
-                }}
-              >
-                {t(`${P}.action.approve`)}
-              </Button>
-            )}
-            {perms.canAction?.('reject') && record.status === '已提交' && (
-              <Button
-                {...rowActionKind('reject')}
-                type="link"
-                size="small"
-                danger
-                icon={<CloseOutlined />}
-                onClick={() => {
-                  setRejectTarget(record);
-                  setRejectReason('');
-                  setRejectModalVisible(true);
-                }}
-              >
-                {t(`${P}.action.reject`)}
-              </Button>
-            )}
-          </>
-        ),
+        render: (_, record) =>
+          renderRowActionsOverflow(
+            [
+              perms.canRead ? (
+                <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+                  {t('common.detail')}
+                </Button>
+              ) : null,
+              perms.canUpdate && record.status === '草稿' ? (
+                <Button key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)}>
+                  {t('common.edit')}
+                </Button>
+              ) : null,
+              perms.canAction?.('submit') && record.status === '草稿' ? (
+                <Button
+                  key="submit"
+                  {...rowActionKind('submit')}
+                  icon={<SendOutlined />}
+                  onClick={async () => {
+                    if (!record.id) return;
+                    await transferApplicationsApi.submit(record.id);
+                    messageApi.success(t(`${P}.submitSuccess`));
+                    actionRef.current?.reload();
+                  }}
+                >
+                  {t(`${P}.action.submit`)}
+                </Button>
+              ) : null,
+              perms.canAction?.('approve') && record.status === '已提交' ? (
+                <Button
+                  key="approve"
+                  {...rowActionKind('approve')}
+                  icon={<CheckOutlined />}
+                  onClick={async () => {
+                    if (!record.id) return;
+                    await transferApplicationsApi.approve(record.id);
+                    messageApi.success(t(`${P}.approveSuccess`));
+                    actionRef.current?.reload();
+                  }}
+                >
+                  {t(`${P}.action.approve`)}
+                </Button>
+              ) : null,
+              perms.canAction?.('reject') && record.status === '已提交' ? (
+                <Button
+                  key="reject"
+                  {...rowActionKind('reject')}
+                  danger
+                  icon={<CloseOutlined />}
+                  onClick={() => {
+                    setRejectTarget(record);
+                    setRejectReason('');
+                    setRejectModalVisible(true);
+                  }}
+                >
+                  {t(`${P}.action.reject`)}
+                </Button>
+              ) : null,
+            ],
+            `transfer-actions-${record.id ?? 'row'}`,
+          ),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, perms, messageApi, approvalStatusValueEnum],
+    [t, perms, messageApi, approvalStatusValueEnum, handleDetail],
   );
 
   return (
@@ -319,6 +369,10 @@ const EquipmentTransfersPage: React.FC = () => {
           showAdvancedSearch={true}
           pinnedTabsField={APPROVAL_DOC_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
+          onRow={(record) => ({
+            onClick: () => perms.canRead && handleDetail(record),
+            style: { cursor: perms.canRead ? 'pointer' : undefined },
+          })}
           request={async (params, sort, _filter, searchFormValues) => {
             try {
               const listParams = resolveApprovalDocListParams(searchFormValues, sort, {
@@ -345,6 +399,24 @@ const EquipmentTransfersPage: React.FC = () => {
           enableRowSelection={perms.canDelete}
         />
       </ListPageTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t(`${P}.detailTitle`, { defaultValue: t('common.detail') })}${detail?.application_no ? ` - ${detail.application_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailBasicColumns}
+        extra={buildDetailDrawerEditExtra(
+          t,
+          Boolean(detail && perms.canUpdate && detail.status === '草稿'),
+          () => {
+            if (!detail) return;
+            closeDetail();
+            void handleEdit(detail);
+          },
+        )}
+      />
 
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}

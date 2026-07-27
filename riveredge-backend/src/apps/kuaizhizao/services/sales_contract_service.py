@@ -520,7 +520,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             )
         if contract_code and contract_code.strip():
             qs = qs.filter(contract_code__icontains=contract_code.strip())
-        # 上拉建销售订单：生效中 + 已审核 + 未过期/已到生效日（行级可释放量仍由 capabilities 判定）
+        # 加载建销售订单：生效中 + 已审核 + 未过期/已到生效日（行级可释放量仍由 capabilities 判定）
         if pullable_only:
             today = date.today()
             approved_review = ("APPROVED", "已通过", "审核通过", "通过", "已审核")

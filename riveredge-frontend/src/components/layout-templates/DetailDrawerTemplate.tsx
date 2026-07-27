@@ -1,5 +1,5 @@
 /**
- * 详情 Drawer：优先使用结构化插槽（basic / collaboration / lines / timeline）。
+ * 详情 Drawer：优先使用结构化插槽（basic / collaboration / supplementary / lines / timeline）。
  * 未使用插槽时兼容原有 columns + dataSource、customContent / plainBody、children。
  */
 
@@ -14,11 +14,12 @@ import { DRAWER_CONFIG } from './constants';
 import { getDrawerFloatingWrapperStyle } from './drawerFloatingChrome';
 import { DetailDrawerSection } from './DetailDrawerSection';
 import { DetailDrawerLinesScroll } from './DetailDrawerLinesScroll';
-import {
-  DetailDrawerInlineFullChain,
+import { DetailDrawerInlineFullChain,
   type TraceBriefDocument,
 } from './DetailDrawerInlineFullChain';
 import { detailDrawerDescriptionItems } from './detailDrawerDescriptionItems';
+import { DetailAuditPhaseTitleExtra } from '../uni-audit/DetailAuditPhaseRow';
+import type { AuditPhaseRecord } from '../uni-audit/AuditPhaseBadge';
 import './drawerSlideMotion.css';
 
 export interface DetailDrawerTemplateProps<T extends Record<string, any> = Record<string, unknown>> {
@@ -61,7 +62,16 @@ export interface DetailDrawerTemplateProps<T extends Record<string, any> = Recor
   collaborationTitle?: ReactNode;
   /** 显示在协作/生命周期区块标题同一行的附加说明（如「下一步：…」） */
   collaborationTitleSuffix?: ReactNode;
+  /** 显示在协作/生命周期区块标题行右侧（如审核状态；未传时可由 collaborationAuditRecord 自动生成） */
+  collaborationTitleExtra?: ReactNode;
+  /** 协作区审核态数据源；有 audit 时在标题右侧展示审核状态 */
+  collaborationAuditRecord?: AuditPhaseRecord | null;
   collaborationVisible?: boolean;
+
+  /** 生命周期与明细之间的附加区块（如询价单受邀供应商） */
+  supplementary?: ReactNode;
+  supplementaryTitle?: ReactNode;
+  supplementaryVisible?: boolean;
 
   lines?: ReactNode;
   linesTitle?: ReactNode;
@@ -138,7 +148,12 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   collaborationRelations,
   collaborationTitle,
   collaborationTitleSuffix,
+  collaborationTitleExtra,
+  collaborationAuditRecord,
   collaborationVisible,
+  supplementary,
+  supplementaryTitle,
+  supplementaryVisible,
   lines,
   linesTitle,
   linesVisible,
@@ -190,6 +205,14 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   const resolvedLinesTitle = linesTitle ?? t('app.uniDetail.sectionLines');
   const resolvedTimelineTitle = timelineTitle ?? t('app.uniDetail.sectionTimeline');
 
+  const resolvedCollaborationTitleExtra = useMemo(() => {
+    if (collaborationTitleExtra != null) return collaborationTitleExtra;
+    if (collaborationAuditRecord?.audit) {
+      return <DetailAuditPhaseTitleExtra record={collaborationAuditRecord} />;
+    }
+    return undefined;
+  }, [collaborationAuditRecord, collaborationTitleExtra]);
+
   const isOpen = open ?? visible ?? false;
 
   const hasBasicContent = basic != null && basic !== false;
@@ -229,6 +252,11 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
     collaborationVisible !== false &&
     (collaborationVisible === true || hasCollaborationContent);
 
+  const hasSupplementaryContent = supplementary != null && supplementary !== false;
+  const showSupplementary =
+    supplementaryVisible !== false &&
+    (supplementaryVisible === true || hasSupplementaryContent);
+
   const hasLinesContent = lines != null && lines !== false;
   const showLines = linesVisible !== false && (linesVisible === true || hasLinesContent);
 
@@ -239,6 +267,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   const usesStructuredSections =
     showBasic ||
     showCollaboration ||
+    showSupplementary ||
     showLines ||
     showTimeline;
 
@@ -267,7 +296,15 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
         <DetailDrawerSection title={resolvedBasicTitle}>{basic}</DetailDrawerSection>
       ) : null}
       {showCollaboration ? (
-        <DetailDrawerSection title={collaborationSectionTitle}>{stackedCollaboration}</DetailDrawerSection>
+        <DetailDrawerSection
+          title={collaborationSectionTitle}
+          titleExtra={resolvedCollaborationTitleExtra}
+        >
+          {stackedCollaboration}
+        </DetailDrawerSection>
+      ) : null}
+      {showSupplementary ? (
+        <DetailDrawerSection title={supplementaryTitle}>{supplementary}</DetailDrawerSection>
       ) : null}
       {showLines ? (
         <DetailDrawerSection title={resolvedLinesTitle}>

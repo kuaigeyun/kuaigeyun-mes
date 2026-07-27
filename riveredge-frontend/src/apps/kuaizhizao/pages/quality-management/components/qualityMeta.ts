@@ -2,6 +2,7 @@ import React from 'react';
 import { Tag } from 'antd';
 import type { ProColumns } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 
 export const QUALITY_DISPOSAL_I18N: Record<string, string> = {
   return: 'app.kuaizhizao.quality.common.disposal.return',
@@ -96,6 +97,7 @@ const DOC_STATUS_COLORS: Record<string, string> = {
   待检验: 'default',
 };
 
+/** 检验结果徽章色（结果/结论标识，filled；与审核状态 solid 区分） */
 const RESULT_COLORS: Record<string, string> = {
   待检验: 'warning',
   pending: 'warning',
@@ -108,6 +110,12 @@ const RESULT_COLORS: Record<string, string> = {
   部分合格: 'warning',
   partial: 'warning',
 };
+
+function resolveQualityResultColor(result?: string | null): string {
+  const raw = String(result ?? '').trim();
+  if (!raw) return RESULT_COLORS.pending;
+  return RESULT_COLORS[raw] ?? 'default';
+}
 
 export function getQualityDisposalFallbackOptions(t: TFunction, keys: string[]) {
   return keys.map((value) => ({
@@ -209,8 +217,8 @@ export function getQualityTypeText(t: TFunction, type?: string | null): string {
 
 export function renderQualityResultTag(t: TFunction, result?: string | null): React.ReactNode {
   const text = getQualityResultText(t, result);
-  const color = RESULT_COLORS[String(result ?? 'pending')] ?? 'default';
-  return React.createElement(Tag, { color, variant: 'solid' }, text);
+  const color = resolveQualityResultColor(result);
+  return React.createElement(MarkerTag, { color }, text);
 }
 
 export function renderQualityDocStatusTag(t: TFunction, status?: string | null): React.ReactNode {

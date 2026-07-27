@@ -386,6 +386,106 @@ def _work_order_product_fields(work_order: Any) -> Dict[str, Any]:
     }
 
 
+def _summarize_pull_preview_items(preview_items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """加载候选：明细行数、可加载行数、物料摘要（供取单弹窗展示）。"""
+    pushable_count = sum(
+        1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+    )
+    material_labels: List[str] = []
+    seen: set[str] = set()
+    for row in preview_items:
+        label = str(row.get("material_name") or row.get("material_code") or "").strip()
+        if not label or label in seen:
+            continue
+        seen.add(label)
+        material_labels.append(label)
+    summary = "、".join(material_labels[:3])
+    if len(material_labels) > 3:
+        summary = f"{summary} 等{len(material_labels)}种"
+    return {
+        "line_count": len(preview_items),
+        "pushable_line_count": pushable_count,
+        "material_summary": summary or None,
+    }
+
+
+def _apply_material_snapshots_to_preview_items(
+    preview_items: List[Dict[str, Any]],
+    material_snaps: Dict[int, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """用主数据物料快照补齐 preview 行上的编码/名称（兼容明细未冗余快照）。"""
+    enriched: List[Dict[str, Any]] = []
+    for row in preview_items:
+        mid = row.get("material_id")
+        code = str(row.get("material_code") or "").strip()
+        name = str(row.get("material_name") or "").strip()
+        if mid:
+            snap = material_snaps.get(int(mid)) or {}
+            code = code or str(snap.get("material_code") or "").strip()
+            name = name or str(snap.get("material_name") or "").strip()
+        enriched.append({**row, "material_code": code, "material_name": name})
+    return enriched
+
+
+async def _resolve_customer_material_pull_customer_name_map(
+    tenant_id: int,
+    registrations: List[Any],
+) -> Dict[int, str]:
+    customer_ids = [
+        int(r.customer_id)
+        for r in registrations
+        if getattr(r, "customer_id", None) and not str(getattr(r, "customer_name", "") or "").strip()
+    ]
+    if not customer_ids:
+        return {}
+    from apps.master_data.models.customer import Customer
+
+    customers = await Customer.filter(
+        tenant_id=tenant_id,
+        id__in=list(set(customer_ids)),
+        deleted_at__isnull=True,
+    ).all()
+    return {int(c.id): str(c.name or "").strip() for c in customers if c.name}
+
+
+async def _load_material_snapshot_map(
+    tenant_id: int,
+    material_ids: List[int],
+) -> Dict[int, Dict[str, Any]]:
+    from apps.kuaizhizao.services.customer_material_registration_service import (
+        CustomerMaterialRegistrationService,
+    )
+
+    return await CustomerMaterialRegistrationService._material_snapshot_map(
+        tenant_id, material_ids
+    )
+
+
+def _resolve_work_order_pull_product_display(
+    work_order: Any,
+    wf: Dict[str, Any],
+    material_snaps: Dict[int, Dict[str, Any]],
+) -> Dict[str, Optional[str]]:
+    """工单加载候选：补齐产品名称/编码（兼容工单未冗余物料快照）。"""
+    mid = wf.get("material_id")
+    code = str(wf.get("material_code") or "").strip()
+    name = str(wf.get("material_name") or "").strip()
+    if not name:
+        name = str(
+            getattr(work_order, "product_name", None)
+            or getattr(work_order, "name", None)
+            or ""
+        ).strip()
+    if mid:
+        snap = material_snaps.get(int(mid)) or {}
+        code = code or str(snap.get("material_code") or "").strip()
+        name = name or str(snap.get("material_name") or "").strip()
+    return {
+        "product_name": name or None,
+        "material_code": code or None,
+    }
+
+
 async def _resolve_inspection_template_fields(
     tenant_id: int,
     material_id: Optional[int],
@@ -1811,14 +1911,14 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         tenant_id: int,
         purchase_receipt_id: int,
     ) -> Dict[str, Any]:
-        """从采购入库单上拉创建来料检验单预览（不实际创建）。"""
+        """从采购入库单加载创建来料检验单预览（不实际创建）。"""
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
         from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 
         await _require_iqc_stage_enabled(tenant_id)
         incoming_enabled, _ = await _get_quality_policy_flags(tenant_id)
         if not incoming_enabled:
-            raise BusinessLogicError("当前组织未开启来料检验，禁止从采购入库单上拉来料检验")
+            raise BusinessLogicError("当前组织未开启来料检验，禁止从采购入库单加载来料检验")
 
         receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=purchase_receipt_id)
         if not receipt:
@@ -1844,14 +1944,14 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             "source_id": purchase_receipt_id,
             "source_code": receipt.receipt_code,
             "summary": (
-                f"将从采购入库单 {receipt.receipt_code} 创建来料检验（{pushable_count}/{len(preview_items)} 条可上拉）"
+                f"将从采购入库单 {receipt.receipt_code} 创建来料检验（{pushable_count}/{len(preview_items)} 条可加载）"
                 if preview_items and allowed
-                else f"采购入库单 {receipt.receipt_code} 当前不可上拉来料检验"
+                else f"采购入库单 {receipt.receipt_code} 当前不可加载来料检验"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
-            "tip": "确认后将按可上拉明细创建来料检验单；删除来料检验单后，可上拉数量自动回退。",
+            "tip": "确认后将按可加载明细创建来料检验单；删除来料检验单后，可加载数量自动回退。",
         }
 
     async def preview_pull_from_customer_material_registration(
@@ -1859,7 +1959,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         tenant_id: int,
         registration_id: int,
     ) -> Dict[str, Any]:
-        """从代工来料单上拉创建来料检验单预览（不实际创建）。"""
+        """从代工来料单加载创建来料检验单预览（不实际创建）。"""
         from apps.kuaizhizao.models.customer_material_registration import CustomerMaterialRegistration
         from apps.kuaizhizao.services.customer_material_registration_service import (
             CustomerMaterialRegistrationService,
@@ -1868,7 +1968,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         await _require_iqc_stage_enabled(tenant_id)
         incoming_enabled, _ = await _get_quality_policy_flags(tenant_id)
         if not incoming_enabled:
-            raise BusinessLogicError("当前组织未开启来料检验，禁止从代工来料单上拉来料检验")
+            raise BusinessLogicError("当前组织未开启来料检验，禁止从代工来料单加载来料检验")
 
         registration = await CustomerMaterialRegistration.get_or_none(
             tenant_id=tenant_id, id=registration_id, deleted_at__isnull=True
@@ -1897,14 +1997,14 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             "source_id": registration_id,
             "source_code": reg_code,
             "summary": (
-                f"将从代工来料单 {reg_code} 创建来料检验（{pushable_count}/{len(preview_items)} 条可上拉）"
+                f"将从代工来料单 {reg_code} 创建来料检验（{pushable_count}/{len(preview_items)} 条可加载）"
                 if preview_items and allowed
-                else f"代工来料单 {reg_code} 当前不可上拉来料检验"
+                else f"代工来料单 {reg_code} 当前不可加载来料检验"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
-            "tip": "确认后将按可上拉明细创建来料检验单；删除来料检验单后，可上拉数量自动回退。",
+            "tip": "确认后将按可加载明细创建来料检验单；删除来料检验单后，可加载数量自动回退。",
         }
 
     async def list_purchase_receipt_pull_candidates(
@@ -1914,7 +2014,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         limit: int = 20,
         keyword: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """来料检验上拉：采购入库单候选列表（含 capabilities）。"""
+        """来料检验加载：采购入库单候选列表（含 capabilities）。"""
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
         from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 
@@ -1972,6 +2072,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 source_allowed=_purchase_receipt_allows_iqc_creation(receipt) and bool(receipt_items),
                 preview_items=preview_items,
             )
+            pull_summary = _summarize_pull_preview_items(preview_items)
             label = f"{receipt.receipt_code or rid}"
             if getattr(receipt, "supplier_name", None):
                 label = f"{label} - {receipt.supplier_name}"
@@ -1980,7 +2081,11 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     "id": rid,
                     "code": label,
                     "receipt_code": receipt.receipt_code,
+                    "purchase_order_code": getattr(receipt, "purchase_order_code", None),
                     "supplier_name": receipt.supplier_name,
+                    "status": getattr(receipt, "status", None),
+                    "updated_at": getattr(receipt, "updated_at", None),
+                    **pull_summary,
                     "capabilities": {
                         "pull_incoming_inspection": {
                             "allowed": allowed,
@@ -1998,7 +2103,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         limit: int = 20,
         keyword: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """来料检验上拉：代工来料单候选列表（含 capabilities）。"""
+        """来料检验加载：代工来料单候选列表（含 capabilities）。"""
         from apps.kuaizhizao.models.customer_material_registration import CustomerMaterialRegistration
         from apps.kuaizhizao.services.customer_material_registration_service import (
             CustomerMaterialRegistrationService,
@@ -2026,10 +2131,24 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
         reg_svc = CustomerMaterialRegistrationService()
         policy_cache: Dict[int, str] = {}
-        rows: List[Dict[str, Any]] = []
+        reg_lines: Dict[int, List[Any]] = {}
+        all_material_ids: set[int] = set()
         for registration in registrations:
             rid = int(registration.id)
             lines = await reg_svc._effective_items(registration)
+            reg_lines[rid] = lines
+            for item in lines:
+                if item.material_id:
+                    all_material_ids.add(int(item.material_id))
+        material_snaps = await reg_svc._material_snapshot_map(tenant_id, list(all_material_ids))
+        customer_name_map = await _resolve_customer_material_pull_customer_name_map(
+            tenant_id, registrations
+        )
+
+        rows: List[Dict[str, Any]] = []
+        for registration in registrations:
+            rid = int(registration.id)
+            lines = reg_lines.get(rid, [])
             material_ids = [int(i.material_id) for i in lines if i.material_id]
             existing_rows = await IncomingInspection.filter(
                 tenant_id=tenant_id,
@@ -2047,23 +2166,40 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 existing_by_material=existing_by_material,
                 policy_cache=policy_cache,
             )
+            enriched_preview = _apply_material_snapshots_to_preview_items(
+                preview_items, material_snaps
+            )
             allowed, reason = self._derive_iqc_pull_capability(
                 source_allowed=_customer_material_allows_iqc_creation(registration) and bool(lines),
-                preview_items=preview_items,
+                preview_items=enriched_preview,
                 not_allowed_reason="incoming_inspection.pull_from_customer_material_registration.not_allowed",
                 no_lines_reason="incoming_inspection.pull_from_customer_material_registration.no_lines",
                 already_pulled_reason="incoming_inspection.pull_from_customer_material_registration.already_pulled",
             )
+            pull_summary = _summarize_pull_preview_items(enriched_preview)
             reg_code = getattr(registration, "registration_code", None) or rid
+            customer_name = str(getattr(registration, "customer_name", "") or "").strip()
+            if not customer_name and registration.customer_id:
+                customer_name = customer_name_map.get(int(registration.customer_id), "")
             label = f"{reg_code}"
-            if getattr(registration, "customer_name", None):
-                label = f"{label} - {registration.customer_name}"
+            if customer_name:
+                label = f"{label} - {customer_name}"
+            total_qty = float(getattr(registration, "total_quantity", 0) or 0)
+            if total_qty <= 0:
+                total_qty = sum(float(getattr(i, "quantity", 0) or 0) for i in lines)
             rows.append(
                 {
                     "id": rid,
                     "code": label,
                     "registration_code": reg_code,
-                    "customer_name": registration.customer_name,
+                    "customer_name": customer_name or None,
+                    "status": getattr(registration, "status", None),
+                    "sales_order_code": getattr(registration, "sales_order_code", None),
+                    "work_order_code": getattr(registration, "work_order_code", None),
+                    "registration_date": getattr(registration, "registration_date", None),
+                    "total_quantity": total_qty if total_qty > 0 else None,
+                    "updated_at": getattr(registration, "updated_at", None),
+                    **pull_summary,
                     "capabilities": {
                         "pull_incoming_inspection": {
                             "allowed": allowed,
@@ -3166,7 +3302,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         await _require_ipqc_stage_enabled(tenant_id)
         _, process_enabled = await _get_quality_policy_flags(tenant_id)
         if not process_enabled:
-            raise BusinessLogicError("当前组织未开启过程检验，禁止从工单上拉过程检验")
+            raise BusinessLogicError("当前组织未开启过程检验，禁止从工单加载过程检验")
 
         work_order = await WorkOrder.get_or_none(
             tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True
@@ -3193,14 +3329,14 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             "source_id": work_order_id,
             "source_code": wo_code,
             "summary": (
-                f"将从工单 {wo_code} 创建过程检验（{pushable_count}/{len(preview_items)} 条工序可上拉）"
+                f"将从工单 {wo_code} 创建过程检验（{pushable_count}/{len(preview_items)} 条工序可加载）"
                 if preview_items and allowed
-                else f"工单 {wo_code} 当前不可上拉过程检验"
+                else f"工单 {wo_code} 当前不可加载过程检验"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
-            "tip": "请勾选可上拉工序后确认；删除待检验单后，可上拉数量自动回退。",
+            "tip": "请勾选可加载工序后确认；删除待检验单后，可加载数量自动回退。",
         }
 
     async def list_work_order_pull_candidates(
@@ -3256,11 +3392,21 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 continue
             pending_by_wo_op.setdefault(int(row.work_order_id), {})[int(row.operation_id)] = row
 
+        wo_material_ids = [
+            int(_work_order_product_fields(wo)["material_id"])
+            for wo in work_orders
+            if _work_order_product_fields(wo).get("material_id")
+        ]
+        material_snaps = await _load_material_snapshot_map(tenant_id, wo_material_ids)
+
         policy_cache: Dict[tuple, str] = {}
         rows: List[Dict[str, Any]] = []
         for work_order in work_orders:
             wid = int(work_order.id)
             wf = _work_order_product_fields(work_order)
+            product_display = _resolve_work_order_pull_product_display(
+                work_order, wf, material_snaps
+            )
             op_ids = [
                 int(op.operation_id) for op in ops_by_wo.get(wid, []) if op.operation_id
             ]
@@ -3281,18 +3427,23 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 material_id=wf.get("material_id"),
                 ipqc_required_op_count=ipqc_required_op_count,
             )
+            pull_summary = _summarize_pull_preview_items(preview_items)
             code = str(work_order.code or wid)
-            name = str(
-                getattr(work_order, "name", None)
-                or getattr(work_order, "product_name", "")
-                or ""
-            ).strip()
+            name = str(product_display.get("product_name") or "").strip()
             label = f"{code} - {name}" if name else code
             rows.append(
                 {
                     "id": wid,
                     "code": label,
                     "work_order_code": code,
+                    "product_name": product_display.get("product_name"),
+                    "material_code": product_display.get("material_code"),
+                    "status": getattr(work_order, "status", None),
+                    "sales_order_code": getattr(work_order, "sales_order_code", None),
+                    "planned_quantity": wf.get("planned_qty"),
+                    "completed_quantity": getattr(work_order, "completed_quantity", None),
+                    "updated_at": getattr(work_order, "updated_at", None),
+                    **pull_summary,
                     "capabilities": {
                         "pull_process_inspection": {
                             "allowed": allowed,
@@ -4433,13 +4584,13 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         tenant_id: int,
         work_order_id: int,
     ) -> Dict[str, Any]:
-        """从工单上拉创建成品检验单预览（不实际创建）。"""
+        """从工单加载创建成品检验单预览（不实际创建）。"""
         from apps.kuaizhizao.models.work_order import WorkOrder
 
         await _require_fqc_stage_enabled(tenant_id)
         finished_enabled = await _is_finished_inspection_enabled(tenant_id)
         if not finished_enabled:
-            raise BusinessLogicError("当前组织未开启成品检验，禁止从工单上拉成品检验")
+            raise BusinessLogicError("当前组织未开启成品检验，禁止从工单加载成品检验")
 
         work_order = await WorkOrder.get_or_none(
             tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True
@@ -4466,14 +4617,14 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             "source_id": work_order_id,
             "source_code": wo_code,
             "summary": (
-                f"将从工单 {wo_code} 创建成品检验（可上拉 {pushable_count}/{len(preview_items)} 条）"
+                f"将从工单 {wo_code} 创建成品检验（可加载 {pushable_count}/{len(preview_items)} 条）"
                 if preview_items and allowed
-                else f"工单 {wo_code} 当前不可上拉成品检验"
+                else f"工单 {wo_code} 当前不可加载成品检验"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
-            "tip": "确认后将按可上拉数量创建成品检验单；删除待检验单后，可上拉数量自动回退。",
+            "tip": "确认后将按可加载数量创建成品检验单；删除待检验单后，可加载数量自动回退。",
         }
 
     async def list_work_order_pull_candidates(
@@ -4483,7 +4634,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         limit: int = 20,
         keyword: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """成品检验上拉：工单候选列表（含 capabilities）。"""
+        """成品检验加载：工单候选列表（含 capabilities）。"""
         from apps.kuaizhizao.models.work_order import WorkOrder
 
         await _require_fqc_stage_enabled(tenant_id)
@@ -4513,11 +4664,21 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         ).all()
         pending_by_wo = {int(row.work_order_id): row for row in pending_rows if row.work_order_id}
 
+        wo_material_ids = [
+            int(_work_order_product_fields(wo)["material_id"])
+            for wo in work_orders
+            if _work_order_product_fields(wo).get("material_id")
+        ]
+        material_snaps = await _load_material_snapshot_map(tenant_id, wo_material_ids)
+
         policy_cache: Dict[int, str] = {}
         rows: List[Dict[str, Any]] = []
         for work_order in work_orders:
             wid = int(work_order.id)
             wf = _work_order_product_fields(work_order)
+            product_display = _resolve_work_order_pull_product_display(
+                work_order, wf, material_snaps
+            )
             mid = wf.get("material_id")
             fqc_eff: Optional[str] = None
             if mid:
@@ -4539,14 +4700,23 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 material_id=mid,
                 fqc_eff=fqc_eff,
             )
+            pull_summary = _summarize_pull_preview_items(preview_items)
             code = str(work_order.code or wid)
-            name = str(getattr(work_order, "name", None) or getattr(work_order, "product_name", "") or "").strip()
+            name = str(product_display.get("product_name") or "").strip()
             label = f"{code} - {name}" if name else code
             rows.append(
                 {
                     "id": wid,
                     "code": label,
                     "work_order_code": code,
+                    "product_name": product_display.get("product_name"),
+                    "material_code": product_display.get("material_code"),
+                    "status": getattr(work_order, "status", None),
+                    "sales_order_code": getattr(work_order, "sales_order_code", None),
+                    "planned_quantity": wf.get("planned_qty"),
+                    "completed_quantity": getattr(work_order, "completed_quantity", None),
+                    "updated_at": getattr(work_order, "updated_at", None),
+                    **pull_summary,
                     "capabilities": {
                         "pull_finished_goods_inspection": {
                             "allowed": allowed,

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDatePicker,
   ProFormSelect,
   ProFormTextArea,
@@ -13,13 +14,13 @@ import { App, Button, Modal, Row, Col, Tag, Table, Input, Switch } from 'antd';
 import {
   EditOutlined,
   DeleteOutlined,
-  EyeOutlined,
   SendOutlined,
   CheckOutlined,
   CloseOutlined,
   CheckCircleOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -38,6 +39,12 @@ import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  MasterDataLinesTable,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.moldOps.maintenance';
 const RESOURCE = 'kuaizhizao:mold-maintenance';
@@ -63,6 +70,7 @@ interface MoldMaintenance {
   applicant_id?: number;
   applicant_name?: string;
   status?: string;
+  remark?: string;
   updated_at?: string;
   lines?: MaintenanceLine[];
 }
@@ -91,6 +99,13 @@ const MoldMaintenancesPage: React.FC = () => {
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<MoldMaintenance | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<MoldMaintenance>();
+
+  const handleDetail = (record: MoldMaintenance) => {
+    if (!record.id) return;
+    void openDetail(() => maintenancesApi.get(record.id!), t(`${P}.listFailed`));
+  };
 
   const loadOptions = async () => {
     const [moldRes, schRes] = await Promise.all([
@@ -275,6 +290,37 @@ const MoldMaintenancesPage: React.FC = () => {
     [],
   );
 
+  const detailColumns: ProDescriptionsItemProps<MoldMaintenance>[] = useMemo(
+    () => [
+      { title: t(`${P}.col.documentNo`), dataIndex: 'document_no' },
+      { title: t(`${P}.col.mold`), dataIndex: 'mold_name' },
+      { title: t(`${P}.col.maintenanceDate`), dataIndex: 'maintenance_date', valueType: 'date' },
+      { title: t(`${P}.col.executor`), dataIndex: 'applicant_name' },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
+      },
+      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+    ],
+    [t],
+  );
+
+  const detailLineColumns = useMemo<ColumnsType<MaintenanceLine>>(
+    () => [
+      { title: t(`${P}.line.item`), dataIndex: 'item_name', width: 140 },
+      { title: t(`${P}.line.requirement`), dataIndex: 'requirement', ellipsis: true },
+      {
+        title: t(`${P}.line.executed`),
+        dataIndex: 'executed',
+        width: 80,
+        render: (_, row) => (row.executed ? t('common.yes') : t('common.no')),
+      },
+      { title: t(`${P}.line.remark`), dataIndex: 'remark', width: 140 },
+    ],
+    [t],
+  );
+
   const columns: ProColumns<MoldMaintenance>[] = useMemo(() => alignProColumns<MoldMaintenance>([
       {
         title: t(`${P}.col.maintenanceDate`),
@@ -346,10 +392,9 @@ const MoldMaintenancesPage: React.FC = () => {
               {...rowActionKind('read')}
               type="link"
               size="small"
-              icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
-                void handleEdit(record);
+                handleDetail(record);
               }}
             >
               {t('common.detail')}
@@ -559,6 +604,32 @@ const MoldMaintenancesPage: React.FC = () => {
           />
         )}
       </FormModalTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t('common.detail')}${detail?.document_no ? ` - ${detail.document_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailColumns}
+        extra={buildDetailDrawerEditExtra(
+          t,
+          Boolean(detail && perms.canUpdate && (detail.status === '草稿' || detail.status === '已驳回')),
+          () => {
+            if (!detail) return;
+            closeDetail();
+            void handleEdit(detail);
+          },
+        )}
+        lines={
+          <MasterDataLinesTable
+            rows={detail?.lines ?? []}
+            columns={detailLineColumns}
+            rowKey={(row) => String(row.item_id ?? row.line_no ?? '')}
+            emptyDescription={t('common.noData')}
+          />
+        }
+      />
 
       <Modal
         title={t(`${P}.rejectModal`)}

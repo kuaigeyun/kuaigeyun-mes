@@ -2,7 +2,7 @@
  * 备品备件管理：主数据 CRUD、库存列表、低库存预警
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -11,20 +11,19 @@ import {
   ProFormSelect,
   ProFormSwitch,
   ProFormText,
+  ProDescriptionsItemProps,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Badge, Button, Modal, Row, Col, Tag, Typography } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Badge, Button, Modal, Row, Col, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, MODAL_CONFIG, MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { sparePartApi } from '../../../services/equipment';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { getSparePartInventoryLifecycle } from '../../../utils/equipmentLifecycle';
-import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -34,6 +33,12 @@ import {
   normalizeEquipmentListResponse,
   resolveMasterDataListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildIsActiveDescriptionColumn,
+  EquipmentMasterDetailDrawer,
+  renderIsActiveTag,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.sparePart';
 const RESOURCE = 'kuaizhizao:spare-part';
@@ -85,6 +90,13 @@ const SparePartsPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<SparePart | null>(null);
   const [adjustTarget, setAdjustTarget] = useState<SparePart | null>(null);
+  const {
+    open: detailVisible,
+    loading: detailLoading,
+    detail,
+    openDetail,
+    closeDetail,
+  } = useEquipmentDetailDrawer<SparePart>();
 
   const handleCreate = () => {
     setIsEdit(false);
@@ -97,12 +109,24 @@ const SparePartsPage: React.FC = () => {
 
   const handleEdit = async (record: SparePart) => {
     if (!record.id) return;
-    const detail = await sparePartApi.get(record.id);
-    setIsEdit(true);
-    setCurrent(detail);
-    setModalVisible(true);
-    formRef.current?.setFieldsValue(detail);
+    try {
+      const loaded = await sparePartApi.get(record.id);
+      setIsEdit(true);
+      setCurrent(loaded);
+      setModalVisible(true);
+      formRef.current?.setFieldsValue(loaded);
+    } catch (error: unknown) {
+      messageApi.error(error instanceof Error ? error.message : t('common.loadFailed'));
+    }
   };
+
+  const handleDetail = useCallback(
+    async (record: SparePart) => {
+      if (!record.id) return;
+      await openDetail(() => sparePartApi.get(record.id));
+    },
+    [openDetail],
+  );
 
   const handleDelete = async (keys: React.Key[]) => {
     Modal.confirm({
@@ -145,6 +169,23 @@ const SparePartsPage: React.FC = () => {
   };
 
   const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
+
+  const detailBasicColumns = useMemo<ProDescriptionsItemProps<SparePart>[]>(
+    () => [
+      { title: t(`${P}.col.partNo`), dataIndex: 'part_no' },
+      { title: t(`${P}.col.partName`), dataIndex: 'part_name' },
+      { title: t(`${P}.col.spec`), dataIndex: 'spec' },
+      { title: t(`${P}.col.category`), dataIndex: 'category' },
+      { title: t(`${P}.col.unit`), dataIndex: 'unit' },
+      { title: t(`${P}.col.brand`), dataIndex: 'brand' },
+      { title: t(`${P}.col.supplier`), dataIndex: 'supplier' },
+      { title: t(`${P}.col.safetyStock`), dataIndex: 'safety_stock' },
+      { title: t(`${P}.col.price`), dataIndex: 'price' },
+      { title: t(`${P}.col.description`), dataIndex: 'description', span: 2 },
+      buildIsActiveDescriptionColumn<SparePart>(t, `${P}.col.isActive`),
+    ],
+    [t],
+  );
 
   const masterColumns: ProColumns<SparePart>[] = useMemo(
     () => alignProColumns<SparePart>([
@@ -207,11 +248,7 @@ const SparePartsPage: React.FC = () => {
         width: 80,
         sorter: true,
         hideInSearch: true,
-        render: (_, r) => (
-          <Tag color={r.is_active ? 'success' : 'default'}>
-            {r.is_active ? t('common.enabled') : t('common.disabled')}
-          </Tag>
-        ),
+        render: (_, r) => renderIsActiveTag(t, r.is_active),
       },
       {
         title: t('common.updatedAt'),
@@ -223,64 +260,63 @@ const SparePartsPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        width: 200,
+        width: 240,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <>
-            {perms.canUpdate && (
-              <Button
-                {...rowActionKind('update')}
-                type="link"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleEdit(record);
-                }}
-              >
-                {t('common.edit')}
-              </Button>
-            )}
-            {perms.canUpdate && (
-              <Button
-                {...rowActionKind('update')}
-                type="link"
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setAdjustTarget(record);
-                  setAdjustModalVisible(true);
-                  adjustFormRef.current?.resetFields();
-                  adjustFormRef.current?.setFieldsValue({ operation_type: 'in', warehouse_location: '默认库位' });
-                }}
-              >
-                {t(`${P}.action.adjustStock`)}
-              </Button>
-            )}
-            {perms.canDelete && (
-              <Button
-                {...rowActionKind('delete')}
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  Modal.confirm({
-                    title: t('common.deleteTitle'),
-                    onOk: () => record.id && handleDelete([record.id]),
-                  });
-                }}
-              >
-                {t('common.delete')}
-              </Button>
-            )}
-          </>
-        ),
+        render: (_, record) =>
+          renderRowActionsOverflow(
+            [
+              perms.canRead ? (
+                <Button key="detail" {...rowActionKind('read')} onClick={() => void handleDetail(record)}>
+                  {t('common.detail')}
+                </Button>
+              ) : null,
+              perms.canUpdate ? (
+                <Button key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)}>
+                  {t('common.edit')}
+                </Button>
+              ) : null,
+              perms.canUpdate ? (
+                <Button
+                  key="adjust"
+                  {...rowActionKind('update')}
+                  onClick={() => {
+                    setAdjustTarget(record);
+                    setAdjustModalVisible(true);
+                    adjustFormRef.current?.resetFields();
+                    adjustFormRef.current?.setFieldsValue({
+                      operation_type: 'in',
+                      warehouse_location: '默认库位',
+                    });
+                  }}
+                >
+                  {t(`${P}.action.adjustStock`)}
+                </Button>
+              ) : null,
+              perms.canDelete ? (
+                <Button
+                  key="delete"
+                  {...rowActionKind('delete')}
+                  onClick={() => {
+                    Modal.confirm({
+                      title: t('common.deleteTitle'),
+                      onOk: () => {
+                        if (record.id != null) {
+                          void handleDelete([record.id]);
+                        }
+                      },
+                    });
+                  }}
+                >
+                  {t('common.delete')}
+                </Button>
+              ) : null,
+            ],
+            `spare-part-actions-${record.id ?? 'row'}`,
+          ),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, perms, activeStatusValueEnum],
+    [t, perms, activeStatusValueEnum, handleDetail],
   );
 
   const inventoryColumns: ProColumns<SpareInventoryRow>[] = useMemo(
@@ -413,6 +449,15 @@ const SparePartsPage: React.FC = () => {
             ),
           },
         ]}
+      />
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t(`${P}.detailTitle`)}${detail?.part_no ? ` - ${detail.part_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailBasicColumns}
       />
 
       <FormModalTemplate

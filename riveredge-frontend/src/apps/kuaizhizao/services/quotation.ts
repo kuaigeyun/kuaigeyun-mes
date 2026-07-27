@@ -131,9 +131,9 @@ export interface QuotationListParams {
   order_by?: string;
   /** 数据范围：all 全部 / mine 我的 / department 我的部门 */
   list_scope?: 'all' | 'mine' | 'department';
-  /** 仅可上拉建销售订单：未关联销售订单且非已转订单 */
+  /** 仅可加载建销售订单：未关联销售订单且非已转订单 */
   pullable_only?: boolean;
-  /** 上拉目标单据类型：销售订单 / 销售合同 */
+  /** 加载目标单据类型：销售订单 / 销售合同 */
   pull_target?: 'sales_order' | 'sales_contract';
 }
 

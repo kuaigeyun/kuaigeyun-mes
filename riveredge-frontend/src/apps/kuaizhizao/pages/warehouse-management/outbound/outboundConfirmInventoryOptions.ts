@@ -130,22 +130,7 @@ export async function loadBatchOptionsByMaterialId(
   if (!materialIds.length) return {};
 
   const rows = await fetchBatchQueryRows(materialIds, warehouseId, { companyOwnedOnly: true });
-  let map = rowsToBatchOptionMap(rows, labelFn);
-
-  const missingAfterWhFilter = materialIds.filter((mid) => !(map[mid]?.length));
-  if (warehouseId != null && warehouseId > 0 && missingAfterWhFilter.length) {
-    const fallbackRows = await fetchBatchQueryRows(missingAfterWhFilter, undefined, {
-      companyOwnedOnly: true,
-    });
-    const fallbackMap = rowsToBatchOptionMap(fallbackRows, labelFn);
-    for (const mid of missingAfterWhFilter) {
-      if (fallbackMap[mid]?.length) {
-        map[mid] = fallbackMap[mid];
-      }
-    }
-  }
-
-  return map;
+  return rowsToBatchOptionMap(rows, labelFn);
 }
 
 /** 出库预览：汇总物料在库可用数量（各批号 quantity 之和） */

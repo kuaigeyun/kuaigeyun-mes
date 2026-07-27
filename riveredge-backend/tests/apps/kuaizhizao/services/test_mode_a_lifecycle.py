@@ -31,7 +31,6 @@ def _assert_pre_effective(lc: dict) -> None:
         lambda: get_sales_order_lifecycle(SimpleNamespace(status="已审核", review_status="APPROVED")),
         lambda: get_demand_lifecycle(SimpleNamespace(status="草稿", review_status="PENDING", pushed_to_computation=False)),
         lambda: get_purchase_order_lifecycle(SimpleNamespace(status="待审核", review_status="PENDING")),
-        lambda: get_sales_order_change_lifecycle("待审核", "PENDING"),
         lambda: get_reporting_record_lifecycle(SimpleNamespace(status="pending")),
         lambda: get_shipment_notice_lifecycle(SimpleNamespace(status="待审核")),
         lambda: get_sales_delivery_lifecycle(SimpleNamespace(status="待审核")),
@@ -109,3 +108,32 @@ def test_sales_delivery_effective_shows_pending_outbound():
     lc = get_sales_delivery_lifecycle(SimpleNamespace(status="待出库"))
     assert lc["current_stage_name"] == "待出库"
     assert lc["current_stage_key"] == "pending_outbound"
+
+
+def test_order_change_draft_shows_pending_apply():
+    lc = get_sales_order_change_lifecycle("草稿", "PENDING")
+    assert lc["current_stage_name"] == "待生效"
+    assert lc["current_stage_key"] == "pending_apply"
+    assert [s["key"] for s in lc["main_stages"]] == ["pending_apply", "applied"]
+    assert lc["main_stages"][0]["status"] == "active"
+    assert lc["main_stages"][1]["status"] == "pending"
+
+
+def test_order_change_pending_review_shows_pending_apply():
+    lc = get_sales_order_change_lifecycle("待审核", "PENDING")
+    assert lc["current_stage_name"] == "待生效"
+    assert lc["current_stage_key"] == "pending_apply"
+
+
+def test_order_change_applied_shows_applied_stage():
+    lc = get_sales_order_change_lifecycle("已生效", "APPROVED", applied_at="2026-01-01")
+    assert lc["current_stage_name"] == "已生效"
+    assert lc["current_stage_key"] == "applied"
+    assert lc["main_stages"][0]["status"] == "done"
+    assert lc["main_stages"][1]["status"] == "active"
+
+
+def test_order_change_rejected_shows_rejected():
+    lc = get_sales_order_change_lifecycle("已驳回", "REJECTED")
+    assert lc["current_stage_name"] == "已驳回"
+    assert lc["status"] == "exception"

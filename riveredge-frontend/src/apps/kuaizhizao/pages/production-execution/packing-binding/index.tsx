@@ -66,6 +66,7 @@ import { getPackingBindingLifecycle, buildPackingBindingMethodValueEnum, resolve
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '../../../../../utils/format';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
@@ -267,11 +268,20 @@ const PackingBindingPage: React.FC = () => {
   const bindingMethodTag = useCallback(
     (m?: string) => {
       const v = (m || '').trim();
-      if (v === 'scan') return <Tag color="success">{t('app.kuaizhizao.packingBinding.bindingMethodScan')}</Tag>;
-      if (v === 'manual') return <Tag>{t('app.kuaizhizao.packingBinding.bindingMethodManual')}</Tag>;
-      return <Tag>{v || '-'}</Tag>;
+      if (v === 'scan') return <MarkerTag color="success">{t('app.kuaizhizao.packingBinding.bindingMethodScan')}</MarkerTag>;
+      if (v === 'manual') return <MarkerTag color="geekblue">{t('app.kuaizhizao.packingBinding.bindingMethodManual')}</MarkerTag>;
+      return v ? <MarkerTag color="default">{v}</MarkerTag> : '-';
     },
     [t],
+  );
+
+  const bindingSourceTag = useCallback(
+    (record: PackingBinding) => {
+      const label = getBindingSourceLabel(record);
+      const color = record.sales_delivery_id ? 'orange' : record.finished_goods_receipt_id ? 'success' : 'default';
+      return <MarkerTag color={color}>{label}</MarkerTag>;
+    },
+    [getBindingSourceLabel],
   );
 
   const getErrorMessage = useCallback(
@@ -930,14 +940,14 @@ const PackingBindingPage: React.FC = () => {
         hideInSearch: false,
         valueType: 'select',
         valueEnum: packingBindingSourceValueEnum,
-        render: (_, r) => <Tag>{getBindingSourceLabel(r)}</Tag>,
+        render: (_, r) => bindingSourceTag(r),
       },
       {
         title: t('app.kuaizhizao.packingBinding.colStatus'),
         dataIndex: 'binding_status',
         width: 90,
         hideInSearch: true,
-        render: () => <Tag color="processing">{t('app.kuaizhizao.packingBinding.statusBound')}</Tag>,
+        render: () => <StatusTag color="processing">{t('app.kuaizhizao.packingBinding.statusBound')}</StatusTag>,
       },
       {
         title: `${t('app.kuaizhizao.packingBinding.colBoundBy')}/${t('app.kuaizhizao.packingBinding.colBoundAt')}`,
@@ -1002,7 +1012,7 @@ const PackingBindingPage: React.FC = () => {
           renderPbRowActions(renderPbRowActionNodes(record), `pb-${record.id ?? 'row'}`),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [bindingMethodTag, getBindingSourceLabel, packingBindingMethodValueEnum, packingBindingSourceValueEnum, renderPbRowActionNodes, t],
+    [bindingMethodTag, bindingSourceTag, packingBindingMethodValueEnum, packingBindingSourceValueEnum, renderPbRowActionNodes, t],
   );
 
   const handleRequest = async (

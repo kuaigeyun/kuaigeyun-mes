@@ -3,13 +3,14 @@ import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDatePicker,
   ProFormDigit,
   ProFormSelect,
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Row, Col } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { UniTable } from '../../../../../components/uni-table';
@@ -27,6 +28,11 @@ import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.moldOps.return';
 const RESOURCE = 'kuaizhizao:mold-return';
@@ -44,6 +50,7 @@ interface MoldReturn {
   return_date?: string;
   manufacture_qty?: number;
   usage_count?: number;
+  remark?: string;
   updated_at?: string;
 }
 
@@ -57,6 +64,13 @@ const MoldReturnsPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<MoldReturn | null>(null);
   const [borrowOptions, setBorrowOptions] = useState<{ label: string; value: number }[]>([]);
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<MoldReturn>();
+
+  const handleDetail = (record: MoldReturn) => {
+    if (!record.id) return;
+    void openDetail(() => returnsApi.get(record.id!), t(`${P}.listFailed`));
+  };
 
   const loadBorrowOptions = async () => {
     const res = await borrowsApi.listOutstanding({ limit: 500 });
@@ -129,6 +143,27 @@ const MoldReturnsPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
+  const detailColumns: ProDescriptionsItemProps<MoldReturn>[] = useMemo(
+    () => [
+      {
+        title: t(`${P}.col.returnNo`),
+        dataIndex: 'document_no',
+        render: (_, r) => r.document_no ?? r.return_no ?? '-',
+      },
+      {
+        title: t(`${P}.col.borrowNo`),
+        dataIndex: 'borrow_document_no',
+        render: (_, r) => r.borrow_document_no ?? r.borrow_no ?? '-',
+      },
+      { title: t(`${P}.col.mold`), dataIndex: 'mold_name' },
+      { title: t(`${P}.col.returnDate`), dataIndex: 'return_date', valueType: 'date' },
+      { title: t(`${P}.col.manufactureQty`), dataIndex: 'manufacture_qty' },
+      { title: t(`${P}.col.usageCount`), dataIndex: 'usage_count' },
+      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+    ],
+    [t],
+  );
+
   const columns: ProColumns<MoldReturn>[] = useMemo(() => alignProColumns<MoldReturn>([
       {
         title: t(`${P}.col.returnDate`),
@@ -193,10 +228,9 @@ const MoldReturnsPage: React.FC = () => {
               {...rowActionKind('read')}
               type="link"
               size="small"
-              icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
-                void handleEdit(record);
+                handleDetail(record);
               }}
             >
               {t('common.detail')}
@@ -315,6 +349,20 @@ const MoldReturnsPage: React.FC = () => {
           </Col>
         </Row>
       </FormModalTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t('common.detail')}${detail?.document_no ?? detail?.return_no ? ` - ${detail.document_no ?? detail.return_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailColumns}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && perms.canUpdate), () => {
+          if (!detail) return;
+          closeDetail();
+          void handleEdit(detail);
+        })}
+      />
     </>
   );
 };

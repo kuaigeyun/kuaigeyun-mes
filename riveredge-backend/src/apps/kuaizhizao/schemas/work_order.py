@@ -272,6 +272,27 @@ class WorkOrderResponse(WorkOrderBase):
     capabilities: Optional[WorkOrderCapabilities] = Field(
         None, description="业务态动作能力（document_action_policy）"
     )
+    base_unit: Optional[str] = Field(None, description="产品基础单位（物料主数据）")
+    product_unit: Optional[str] = Field(None, description="生产场景单位（未配置时等于基础单位）")
+    unit_to_base_factor: Optional[float] = Field(
+        None,
+        description="生产单位到基础单位换算因子：1生产单位=factor×1基础单位",
+    )
+    display_quantity: Optional[Decimal] = Field(
+        None, description="计划数量（按生产单位换算后的展示值）"
+    )
+    display_split_remaining_quantity: Optional[Decimal] = Field(
+        None, description="拆分剩余数量（生产单位）"
+    )
+    display_completed_quantity: Optional[Decimal] = Field(
+        None, description="已完成数量（生产单位）"
+    )
+    display_qualified_quantity: Optional[Decimal] = Field(
+        None, description="合格数量（生产单位）"
+    )
+    display_unqualified_quantity: Optional[Decimal] = Field(
+        None, description="不合格数量（生产单位）"
+    )
 
 
 class WorkOrderOperationMinimalForGantt(BaseSchema):
@@ -389,6 +410,21 @@ class WorkOrderListResponse(BaseSchema):
     )
     capabilities: Optional[WorkOrderCapabilities] = Field(
         None, description="业务态动作能力（document_action_policy）"
+    )
+    base_unit: Optional[str] = Field(None, description="产品基础单位（物料主数据）")
+    product_unit: Optional[str] = Field(None, description="生产场景单位（未配置时等于基础单位）")
+    unit_to_base_factor: Optional[float] = Field(
+        None,
+        description="生产单位到基础单位换算因子：1生产单位=factor×1基础单位",
+    )
+    display_quantity: Optional[Decimal] = Field(
+        None, description="计划数量（按生产单位换算后的展示值）"
+    )
+    display_split_remaining_quantity: Optional[Decimal] = Field(
+        None, description="拆分剩余数量（生产单位）"
+    )
+    display_completed_quantity: Optional[Decimal] = Field(
+        None, description="已完成数量（生产单位）"
     )
 
 

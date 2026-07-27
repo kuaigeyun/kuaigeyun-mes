@@ -1,5 +1,5 @@
 /**
- * 全局业务状态徽章约定（与 `src/global.less` 中 `--re-badge-draft-*`、`.re-status-badge-draft` 一致）
+ * 全局业务状态徽章约定（与 `src/global.less` 中 `--re-badge-draft-*`、`.re-status-badge-draft`、`.re-marker-tag` 一致）
  *
  * 约定（唯一路径，禁止逐页补丁）：
  * - `app.tsx` ConfigProvider：`tag={{ variant: 'solid' }}` —— 状态类默认实心
@@ -47,6 +47,10 @@ export function StatusTag({ variant = STATUS_TAG_VARIANT, ...rest }: TagProps) {
 /**
  * 非状态标识徽章（模式/编组/版本/计数等）：强制 filled，不抢状态列焦点。
  */
-export function MarkerTag({ variant = MARKER_TAG_VARIANT, ...rest }: TagProps) {
-  return React.createElement(Tag, { variant, ...rest });
+export function MarkerTag({ variant: _variant, className, ...rest }: TagProps) {
+  return React.createElement(Tag, {
+    ...rest,
+    className: ['re-marker-tag', className].filter(Boolean).join(' ') || undefined,
+    variant: MARKER_TAG_VARIANT,
+  });
 }

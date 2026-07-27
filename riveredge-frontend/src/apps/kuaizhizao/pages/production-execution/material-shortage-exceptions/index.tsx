@@ -11,15 +11,20 @@ import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Tag, Button } from 'antd';
-import { SwapOutlined } from '@ant-design/icons';
+import { App, Button } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import { renderRowActionsOverflow, rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { MaterialShortageExceptionDetailContent } from '../components/ProductionExceptionDetailContent';
+import {
+  buildMaterialShortageExceptionActionButtons,
+  hasMaterialShortageExceptionActions,
+  renderMaterialShortageExceptionActionGroup,
+} from '../components/ProductionExceptionDetailActions';
 import { apiRequest } from '../../../../../services/api';
 import { ExceptionListPage } from '../../../services/production';
 import { ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES } from '../../../constants/exceptionStatuses';
@@ -185,6 +190,7 @@ const MaterialShortageExceptionsPage: React.FC = () => {
         messageApi.success(t(`${P}.message.handleSuccess`));
       }
       setHandleModalVisible(false);
+      setDetailDrawerVisible(false);
       setCurrentRecord(null);
       setCurrentAction('');
       invalidateMenuBadgeCounts();
@@ -300,46 +306,12 @@ const MaterialShortageExceptionsPage: React.FC = () => {
             <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
               {t('common.detail')}
             </Button>,
-            record.status === 'pending' ? (
-              <Button
-                key="purchase"
-                {...rowActionKind('execute')}
-                {...rowActionLabelKeep()}
-                onClick={() => openHandleModal(record, 'purchase')}
-              >
-                {t(`${P}.action.purchase`)}
-              </Button>
-            ) : null,
-            record.status === 'pending' ? (
-              <Button
-                key="substitute"
-                {...rowActionKind('skip')}
-                {...rowActionLabelKeep()}
-                icon={<SwapOutlined />}
-                onClick={() => openHandleModal(record, 'substitute')}
-              >
-                {t(`${P}.action.substitute`)}
-              </Button>
-            ) : null,
-            record.status === 'pending' ? (
-              <Button
-                key="resolve"
-                {...rowActionKind('complete')}
-                {...rowActionLabelKeep()}
-                onClick={() => openHandleModal(record, 'resolve')}
-              >
-                {t(`${P}.action.resolve`)}
-              </Button>
-            ) : null,
-            record.status === 'pending' ? (
-              <Button
-                key="cancel"
-                {...rowActionKind('reject')}
-                onClick={() => openHandleModal(record, 'cancel')}
-              >
-                {t(`${P}.action.cancel`)}
-              </Button>
-            ) : null,
+            ...buildMaterialShortageExceptionActionButtons({
+              record,
+              t,
+              onAction: (action) => openHandleModal(record, action),
+              keyPrefix: `material-shortage-actions-${record.id ?? 'row'}`,
+            }),
           ],
           { keyPrefix: `material-shortage-actions-${record.id ?? 'row'}` },
         ),
@@ -435,51 +407,28 @@ const MaterialShortageExceptionsPage: React.FC = () => {
           setCurrentRecord(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        customContent={
+        basic={
           currentRecord ? (
-            <div style={{ padding: '16px 0' }}>
-              <p><strong>{t(`${P}.col.workOrderCode`)}:</strong> {currentRecord.work_order_code}</p>
-              <p><strong>{t(`${P}.col.materialCode`)}:</strong> {currentRecord.material_code}</p>
-              <p><strong>{t(`${P}.col.materialName`)}:</strong> {currentRecord.material_name}</p>
-              <p><strong>{t(`${P}.col.requiredQty`)}:</strong> {currentRecord.required_quantity}</p>
-              <p><strong>{t(`${P}.col.availableQty`)}:</strong> {currentRecord.available_quantity}</p>
-              <p><strong>{t(`${P}.col.shortageQty`)}:</strong>
-                <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
-                  {currentRecord.shortage_quantity}
-                </span>
-              </p>
-              <p><strong>{t(`${P}.col.alertLevel`)}:</strong>
-                <Tag color={
-                  currentRecord.alert_level === 'critical' ? 'red' :
-                    currentRecord.alert_level === 'high' ? 'orange' :
-                      currentRecord.alert_level === 'medium' ? 'gold' : 'default'
-                }>
-                  {alertLevelLabel(currentRecord.alert_level)}
-                </Tag>
-              </p>
-              <p><strong>{t(`${P}.col.status`)}:</strong>
-                <Tag color={
-                  currentRecord.status === 'resolved' ? 'success' :
-                    currentRecord.status === 'processing' ? 'processing' :
-                      currentRecord.status === 'cancelled' ? 'error' : 'default'
-                }>
-                  {statusLabel(currentRecord.status)}
-                </Tag>
-              </p>
-              <p><strong>{t(`${P}.col.suggestedAction`)}:</strong> {suggestedActionLabel(currentRecord.suggested_action)}</p>
-              {currentRecord.alternative_material_name && (
-                <p><strong>{t(`${P}.field.alternativeMaterial`)}:</strong> {currentRecord.alternative_material_name}</p>
-              )}
-              {currentRecord.handled_by_name && (
-                <>
-                  <p><strong>{t(`${P}.field.handler`)}:</strong> {currentRecord.handled_by_name}</p>
-                  <p><strong>{t(`${P}.field.handledAt`)}:</strong> {currentRecord.handled_at}</p>
-                </>
-              )}
-            </div>
-          ) : null
+            <MaterialShortageExceptionDetailContent
+              record={currentRecord}
+              t={t}
+              alertLevelLabel={alertLevelLabel}
+              statusLabel={statusLabel}
+              suggestedActionLabel={suggestedActionLabel}
+            />
+          ) : undefined
         }
+        collaboration={
+          currentRecord && hasMaterialShortageExceptionActions(currentRecord)
+            ? renderMaterialShortageExceptionActionGroup({
+                record: currentRecord,
+                t,
+                onAction: (action) => openHandleModal(currentRecord, action),
+                keyPrefix: `material-shortage-drawer-${currentRecord.id ?? 'row'}`,
+              })
+            : undefined
+        }
+        collaborationTitle={t(`${P}.section.actions`)}
       />
 
       <FormModalTemplate

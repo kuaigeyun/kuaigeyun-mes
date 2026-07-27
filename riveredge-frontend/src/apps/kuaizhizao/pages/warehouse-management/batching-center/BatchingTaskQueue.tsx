@@ -34,6 +34,7 @@ import { batchingOrderApi } from '../../../services/batching-order';
 import { getBatchingOrderStageName } from '../../../utils/batchingOrderLifecycle';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { getBatchingTaskTypeLabel, type BatchingTaskTabKey } from './materialCenterTabs';
+import type { MaterialCenterDetailRequest } from './materialCenterDetail';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import {
   normalizeWarehouseListResponse,
@@ -154,7 +155,8 @@ function resolveTaskStatusTagColor(taskType: string, status?: string): string {
 type Props = {
   taskType: BatchingTaskTabKey;
   onCreate?: () => void;
-  onOpenBatchingDetail?: (orderId: number) => void;
+  onOpenDetail?: (request: MaterialCenterDetailRequest) => void;
+  canRead?: boolean;
   onRefreshBatchingList?: () => void;
   /** 分栏场景：外部变更后递增以触发本表 reload */
   listReloadKey?: number;
@@ -167,7 +169,8 @@ type Props = {
 const BatchingTaskQueue: React.FC<Props> = ({
   taskType,
   onCreate,
-  onOpenBatchingDetail,
+  onOpenDetail,
+  canRead = true,
   onRefreshBatchingList,
   listReloadKey,
   onTasksChanged,
@@ -646,6 +649,18 @@ const BatchingTaskQueue: React.FC<Props> = ({
           return renderRowActionsOverflow(actions, { keyPrefix });
         }
         if (record.task_type === 'material_call') {
+          if (canRead) {
+            actions.push(
+              <Button
+                key="material-call-detail"
+                {...rowActionKind('read')}
+                size="small"
+                onClick={() => onOpenDetail?.({ kind: 'material_call', id: record.task_id })}
+              >
+                {t('app.kuaizhizao.warehouseCommon.detail')}
+              </Button>,
+            );
+          }
           if (st === 'pending') {
             actions.push(
               <Button
@@ -694,16 +709,18 @@ const BatchingTaskQueue: React.FC<Props> = ({
           return actions.length ? renderRowActionsOverflow(actions, { keyPrefix }) : null;
         }
         if (record.task_type === 'batching_draft') {
-          actions.push(
-            <Button
-              key="batching-detail"
-              {...rowActionKind('read')}
-              size="small"
-              onClick={() => onOpenBatchingDetail?.(record.task_id)}
-            >
-              {t('app.kuaizhizao.warehouseCommon.detail')}
-            </Button>,
-          );
+          if (canRead) {
+            actions.push(
+              <Button
+                key="batching-detail"
+                {...rowActionKind('read')}
+                size="small"
+                onClick={() => onOpenDetail?.({ kind: 'batching_order', id: record.task_id })}
+              >
+                {t('app.kuaizhizao.warehouseCommon.detail')}
+              </Button>,
+            );
+          }
           if (['draft', 'picking'].includes(record.status ?? '')) {
             actions.push(
               <Button
@@ -730,6 +747,18 @@ const BatchingTaskQueue: React.FC<Props> = ({
           return renderRowActionsOverflow(actions, { keyPrefix });
         }
         if (record.task_type === 'backflush_alert') {
+          if (canRead) {
+            actions.push(
+              <Button
+                key="backflush-detail"
+                {...rowActionKind('read')}
+                size="small"
+                onClick={() => onOpenDetail?.({ kind: 'backflush_record', id: record.task_id })}
+              >
+                {t('app.kuaizhizao.warehouseCommon.detail')}
+              </Button>,
+            );
+          }
           actions.push(
             <Button
               key="retry-backflush"
@@ -747,7 +776,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
       },
     },
   ],
-    [t, taskType, taskTypeLabel, taskTypeMap, onOpenBatchingDetail, pullFromWorkOrderAction.label],
+    [t, taskType, taskTypeLabel, taskTypeMap, onOpenDetail, canRead, pullFromWorkOrderAction.label],
   );
 
   const completeItems: any[] =

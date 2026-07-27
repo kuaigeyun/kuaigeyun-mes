@@ -1,5 +1,5 @@
 """
-应收单上拉门控：销售订单/销售出库候选列表、预览、已应收金额汇总；列表下推收款 capability。
+应收单加载门控：销售订单/销售出库候选列表、预览、已应收金额汇总；列表下推收款 capability。
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
 
 class ReceivablePullService(AppBaseService[Receivable]):
-    """应收单上拉门控服务"""
+    """应收单加载门控服务"""
 
     _SO_ELIGIBLE_STATUSES = frozenset(
         {
@@ -238,7 +238,7 @@ class ReceivablePullService(AppBaseService[Receivable]):
             "summary": (
                 f"将从销售订单 {code} 创建应收单（可应收 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"销售订单 {code} 当前不可上拉应收单"
+                else f"销售订单 {code} 当前不可加载应收单"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
@@ -285,7 +285,7 @@ class ReceivablePullService(AppBaseService[Receivable]):
             "summary": (
                 f"将从销售出库单 {code} 创建应收单（可应收 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"销售出库单 {code} 当前不可上拉应收单"
+                else f"销售出库单 {code} 当前不可加载应收单"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
@@ -442,9 +442,9 @@ class ReceivablePullService(AppBaseService[Receivable]):
         elif source_type == "sales_delivery":
             preview = await self.preview_pull_from_sales_delivery(tenant_id, source_id)
         else:
-            raise BusinessLogicError(f"不支持的上拉源单类型: {source_type}")
+            raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
         if preview.get("has_blocking_issues"):
-            reason = preview.get("blocking_reason") or "当前不可上拉应收单"
+            reason = preview.get("blocking_reason") or "当前不可加载应收单"
             raise BusinessLogicError(reason)
         items = preview.get("items") or []
         if not items:
@@ -482,7 +482,7 @@ class ReceivablePullService(AppBaseService[Receivable]):
                 target_name=None,
                 relation_type="source",
                 relation_mode="pull",
-                relation_desc="上拉创建应收单",
+                relation_desc="加载创建应收单",
             ),
             created_by=created_by,
         )
@@ -492,7 +492,7 @@ class ReceivablePullService(AppBaseService[Receivable]):
         tenant_id: int,
         receivables: List[Any],
     ) -> List[Dict[str, Any]]:
-        """为应收单列表补充下推收款 capability（实际创建收款单在收款页上拉）。"""
+        """为应收单列表补充下推收款 capability（实际创建收款单在收款页加载）。"""
         from apps.kuaicaiwu.services.receipt_pull_service import ReceiptPullService
 
         if not receivables:

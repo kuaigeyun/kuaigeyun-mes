@@ -4,21 +4,30 @@
  * 展示全量模具校准记录，支持新建校准记录。
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, Tag, Typography } from 'antd';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { getCalibrationResultLifecycle } from '../../../utils/equipmentLifecycle';
+import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, Descriptions, Tag, Typography } from 'antd';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  FormModalTemplate,
+  DetailDrawerTemplate,
+  MODAL_CONFIG,
+  DRAWER_CONFIG,
+  detailDrawerDescriptionItems,
+} from '../../../../../components/layout-templates';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { moldApi } from '../../../services/equipment';
+import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -28,6 +37,9 @@ import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
 } from '../../../utils/equipmentListCore';
+
+const RESOURCE = 'kuaizhizao:mold-calibration';
+const P = 'app.kuaizhizao.moldCalibration';
 
 interface MoldCalibration {
   uuid?: string;
@@ -44,16 +56,19 @@ interface MoldCalibration {
 }
 
 const CALIBRATION_RESULT_LABEL_KEYS: Record<string, string> = {
-  合格: 'app.kuaizhizao.moldCalibration.resultPass',
-  不合格: 'app.kuaizhizao.moldCalibration.resultFail',
-  准用: 'app.kuaizhizao.moldCalibration.resultConditional',
+  合格: `${P}.resultPass`,
+  不合格: `${P}.resultFail`,
+  准用: `${P}.resultConditional`,
 };
 
 const MoldCalibrationsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const { open: drawerVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<MoldCalibration>();
   const [modalVisible, setModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [moldOptions, setMoldOptions] = useState<{ label: string; value: string }[]>([]);
@@ -72,6 +87,14 @@ const MoldCalibrationsPage: React.FC = () => {
 
   useNewShortcut(handleCreate);
 
+  const handleDetail = useCallback(
+    (record: MoldCalibration) => {
+      if (!record.uuid) return;
+      void openDetail(async () => record as MoldCalibration);
+    },
+    [openDetail],
+  );
+
   const handleSubmit = async (values: any) => {
     try {
       await moldApi.createCalibration({
@@ -83,20 +106,49 @@ const MoldCalibrationsPage: React.FC = () => {
         remark: values.remark,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success(t('app.kuaizhizao.moldCalibration.saveSuccess'));
+      messageApi.success(t(`${P}.saveSuccess`));
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.moldCalibration.saveFailed'));
+      messageApi.error(e?.message || t(`${P}.saveFailed`));
       throw e;
     }
   };
 
   const resultOptions = useMemo(
     () => [
-      { label: t('app.kuaizhizao.moldCalibration.resultPass'), value: '合格' },
-      { label: t('app.kuaizhizao.moldCalibration.resultFail'), value: '不合格' },
-      { label: t('app.kuaizhizao.moldCalibration.resultConditional'), value: '准用' },
+      { label: t(`${P}.resultPass`), value: '合格' },
+      { label: t(`${P}.resultFail`), value: '不合格' },
+      { label: t(`${P}.resultConditional`), value: '准用' },
+    ],
+    [t],
+  );
+
+  const detailColumns = useMemo<ProDescriptionsItemProps<MoldCalibration>[]>(
+    () => [
+      { title: t(`${P}.colMoldCode`), dataIndex: 'mold_code' },
+      { title: t(`${P}.colMoldName`), dataIndex: 'mold_name' },
+      {
+        title: t(`${P}.colCalibrationDate`),
+        dataIndex: 'calibration_date',
+        render: (_, r) => (r.calibration_date ? formatDateTime(r.calibration_date, 'YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t(`${P}.colResult`),
+        dataIndex: 'result',
+        render: (_, r) => {
+          const color = r.result === '合格' ? 'success' : r.result === '不合格' ? 'error' : 'warning';
+          const labelKey = r.result ? CALIBRATION_RESULT_LABEL_KEYS[r.result] : undefined;
+          return <Tag color={color}>{labelKey ? t(labelKey) : r.result || '-'}</Tag>;
+        },
+      },
+      { title: t(`${P}.colCertificateNo`), dataIndex: 'certificate_no' },
+      {
+        title: t(`${P}.colExpiryDate`),
+        dataIndex: 'expiry_date',
+        render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
+      },
+      { title: t(`${P}.formRemark`), dataIndex: 'remark', span: 2 },
     ],
     [t],
   );
@@ -104,7 +156,7 @@ const MoldCalibrationsPage: React.FC = () => {
   const columns: ProColumns<MoldCalibration>[] = useMemo(
     () => [
       {
-        title: t('app.kuaizhizao.moldCalibration.colCalibrationDate'),
+        title: t(`${P}.colCalibrationDate`),
         dataIndex: 'calibration_date_range',
         valueType: 'dateRange',
         hideInTable: true,
@@ -120,7 +172,7 @@ const MoldCalibrationsPage: React.FC = () => {
         search: { order: 11 } as ProColumns['search'],
       },
       {
-        title: t('app.kuaizhizao.moldCalibration.colMoldCode'),
+        title: t(`${P}.colMoldCode`),
         dataIndex: 'mold_code',
         width: 120,
         sorter: true,
@@ -131,9 +183,9 @@ const MoldCalibrationsPage: React.FC = () => {
           </Typography.Text>
         ),
       },
-      { title: t('app.kuaizhizao.moldCalibration.colMoldName'), dataIndex: 'mold_name', width: 180, ellipsis: true, sorter: true, hideInSearch: true },
+      { title: t(`${P}.colMoldName`), dataIndex: 'mold_name', width: 180, ellipsis: true, sorter: true, hideInSearch: true },
       {
-        title: t('app.kuaizhizao.moldCalibration.colCalibrationDate'),
+        title: t(`${P}.colCalibrationDate`),
         dataIndex: 'calibration_date',
         width: 132,
         uniTableKeepWidth: true,
@@ -142,7 +194,7 @@ const MoldCalibrationsPage: React.FC = () => {
         render: (_, r) => (r.calibration_date ? formatDateTime(r.calibration_date, 'YYYY-MM-DD') : '-'),
       },
       {
-        title: t('app.kuaizhizao.moldCalibration.colResult'),
+        title: t(`${P}.colResult`),
         dataIndex: 'result',
         width: 100,
         sorter: true,
@@ -154,7 +206,7 @@ const MoldCalibrationsPage: React.FC = () => {
         },
       },
       {
-        title: t('app.kuaizhizao.moldCalibration.colCertificateNo'),
+        title: t(`${P}.colCertificateNo`),
         dataIndex: 'certificate_no',
         width: 140,
         sorter: true,
@@ -166,7 +218,7 @@ const MoldCalibrationsPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.moldCalibration.colExpiryDate'),
+        title: t(`${P}.colExpiryDate`),
         dataIndex: 'expiry_date',
         width: 132,
         uniTableKeepWidth: true,
@@ -174,37 +226,37 @@ const MoldCalibrationsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
       },
-      {
-        title: t('app.kuaizhizao.moldCalibration.colLifecycle'),
-        dataIndex: 'lifecycle_stage',
-        fixed: 'right',
-        align: 'left',
-        hideInSearch: true,
-        render: (_, record) => {
-          const lifecycle = getCalibrationResultLifecycle(record as Record<string, unknown>);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
-        },
-      },
-      { title: t('app.kuaizhizao.moldCalibration.colRemark'), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
+      { title: t(`${P}.colRemark`), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
       ...buildDocumentAuditColumns<MoldCalibration>(t),
+      {
+        title: t('common.actions'),
+        valueType: 'option',
+        width: 100,
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) =>
+          perms.canRead
+            ? renderRowActionsOverflow(
+                [
+                  <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+                    {t('common.detail')}
+                  </Button>,
+                ],
+                `calibration-actions-${record.uuid ?? 'row'}`,
+              )
+            : null,
+      },
     ],
-    [t],
+    [t, perms.canRead, handleDetail],
   );
 
+  if (!perms.canRead) return null;
+
   return (
+    <>
     <ListPageTemplate>
       <UniTable<MoldCalibration>
-        headerTitle={t('app.kuaizhizao.moldCalibration.title')}
+        headerTitle={t(`${P}.title`)}
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-calibrations"
         actionRef={actionRef}
         enableRowSelection
@@ -214,6 +266,10 @@ const MoldCalibrationsPage: React.FC = () => {
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
+        onRow={(record) => ({
+          onClick: () => perms.canRead && handleDetail(record),
+          style: { cursor: perms.canRead ? 'pointer' : undefined },
+        })}
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolveAssetWorkflowListParams(searchFormValues, sort, {
             docDateRangeKeys: ['calibration_date_range', 'calibrationDateRange'],
@@ -228,20 +284,25 @@ const MoldCalibrationsPage: React.FC = () => {
           const { data, total } = normalizeEquipmentListResponse(res);
           return { data: data as MoldCalibration[], success: true, total };
         }}
-        toolBarRender={() => [
-          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            {t('app.kuaizhizao.moldCalibration.createCalibration') + NEW_SHORTCUT_HINT}
-          </Button>,
-        ]}
+        toolBarRender={() =>
+          perms.canCreate
+            ? [
+                <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+                  {t(`${P}.createCalibration`) + NEW_SHORTCUT_HINT}
+                </Button>,
+              ]
+            : []
+        }
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20 }}
         scroll={{ x: 1500 }}
       />
+    </ListPageTemplate>
 
       <FormModalTemplate
         open={modalVisible}
         onClose={() => setModalVisible(false)}
-        title={t('app.kuaizhizao.moldCalibration.createModalTitle')}
+        title={t(`${P}.createModalTitle`)}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
         onFinish={handleSubmit}
@@ -249,37 +310,64 @@ const MoldCalibrationsPage: React.FC = () => {
       >
         <ProFormSelect
           name="mold_uuid"
-          label={t('app.kuaizhizao.moldCalibration.formMold')}
+          label={t(`${P}.formMold`)}
           options={moldOptions}
-          placeholder={t('app.kuaizhizao.moldCalibration.formSelectMold')}
-          rules={[{ required: true, message: t('app.kuaizhizao.moldCalibration.formSelectMoldRequired') }]}
+          placeholder={t(`${P}.formSelectMold`)}
+          rules={[{ required: true, message: t(`${P}.formSelectMoldRequired`) }]}
           colProps={{ span: 12 }}
         />
         <ProFormDatePicker
           name="calibration_date"
-          label={t('app.kuaizhizao.moldCalibration.formCalibrationDate')}
-          rules={[{ required: true, message: t('app.kuaizhizao.moldCalibration.formSelectCalibrationDateRequired') }]}
+          label={t(`${P}.formCalibrationDate`)}
+          rules={[{ required: true, message: t(`${P}.formSelectCalibrationDateRequired`) }]}
           colProps={{ span: 12 }}
           fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
         />
         <ProFormSelect
           name="result"
-          label={t('app.kuaizhizao.moldCalibration.formResult')}
+          label={t(`${P}.formResult`)}
           options={resultOptions}
-          rules={[{ required: true, message: t('app.kuaizhizao.moldCalibration.formSelectResultRequired') }]}
+          rules={[{ required: true, message: t(`${P}.formSelectResultRequired`) }]}
           colProps={{ span: 12 }}
         />
-        <ProFormText name="certificate_no" label={t('app.kuaizhizao.moldCalibration.formCertificateNo')} colProps={{ span: 12 }} />
+        <ProFormText name="certificate_no" label={t(`${P}.formCertificateNo`)} colProps={{ span: 12 }} />
         <ProFormDatePicker
           name="expiry_date"
-          label={t('app.kuaizhizao.moldCalibration.formExpiryDate')}
+          label={t(`${P}.formExpiryDate`)}
           colProps={{ span: 12 }}
           fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
         />
         <DocumentAttachmentsField category="mold_calibration_attachments" />
-        <ProFormText name="remark" label={t('app.kuaizhizao.moldCalibration.formRemark')} colProps={{ span: 24 }} />
+        <ProFormText name="remark" label={t(`${P}.formRemark`)} colProps={{ span: 24 }} />
       </FormModalTemplate>
-    </ListPageTemplate>
+
+      <DetailDrawerTemplate
+        title={`${t(`${P}.detailTitle`, { defaultValue: t('common.detail') })}${detail?.mold_code ? ` - ${detail.mold_code}` : ''}`}
+        open={drawerVisible}
+        loading={detailLoading}
+        onClose={closeDetail}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        basic={
+          detail ? (
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(detailColumns, detail)}
+            />
+          ) : undefined
+        }
+        supplementary={
+          detail?.attachments?.length ? (
+            <LineAttachmentsUpload
+              category="mold_calibration_attachments"
+              value={detail.attachments}
+              readOnly
+            />
+          ) : undefined
+        }
+        supplementaryTitle={t(`${P}.formAttachments`, { defaultValue: '附件' })}
+      />
+    </>
   );
 };
 

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormDatePicker,
   ProFormDigit,
   ProFormSelect,
@@ -20,6 +21,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { toolApi } from '../../../services/equipment';
 import { borrowsApi } from '../../../services/toolOps';
 import { formatDateTime } from '../../../../../utils/format';
@@ -32,6 +34,11 @@ import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
 } from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.toolOps.borrow';
 const RESOURCE = 'kuaizhizao:tool-borrow';
@@ -95,6 +102,8 @@ const ToolBorrowsPage: React.FC = () => {
   );
   const [submitting, setSubmitting] = useState(false);
   const [toolOptions, setToolOptions] = useState<{ label: string; value: number }[]>([]);
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<ToolBorrow>();
 
   const loadToolOptions = async () => {
     const res = await toolApi.list({ limit: 1000 });
@@ -114,6 +123,11 @@ const ToolBorrowsPage: React.FC = () => {
     void loadToolOptions();
   };
   useNewShortcut(handleCreate);
+
+  const handleDetail = (record: ToolBorrow) => {
+    if (!record.id) return;
+    void openDetail(() => borrowsApi.get(record.id!) as Promise<ToolBorrow>, t(`${P}.listFailed`));
+  };
 
   const handleEdit = async (record: ToolBorrow) => {
     if (!record.id) return;
@@ -183,6 +197,41 @@ const ToolBorrowsPage: React.FC = () => {
     [],
   );
 
+  const detailColumns: ProDescriptionsItemProps<ToolBorrow>[] = useMemo(
+    () => [
+      {
+        title: t(`${P}.col.borrowNo`),
+        dataIndex: 'document_no',
+        render: (_, r) => r.document_no ?? r.borrow_no ?? '-',
+      },
+      { title: t(`${P}.col.tool`), dataIndex: 'tool_name' },
+      {
+        title: t(`${P}.col.workOrderNo`),
+        dataIndex: 'source_no',
+        render: (_, r) => r.source_no ?? r.work_order_no ?? '-',
+      },
+      {
+        title: t(`${P}.col.department`),
+        dataIndex: 'department_name',
+        render: (_, r) => r.department_name ?? r.department ?? '-',
+      },
+      { title: t(`${P}.col.borrower`), dataIndex: 'borrower_name' },
+      {
+        title: t(`${P}.col.borrowDate`),
+        dataIndex: 'borrow_date',
+        render: (_, r) => (r.borrow_date ? formatDateTime(r.borrow_date) : '-'),
+      },
+      { title: t(`${P}.col.plannedQty`), dataIndex: 'planned_qty' },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
+      },
+      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+    ],
+    [t],
+  );
+
   const columns: ProColumns<ToolBorrow>[] = useMemo(() => alignProColumns<ToolBorrow>([
       {
         title: t(`${P}.col.borrowDate`),
@@ -236,7 +285,7 @@ const ToolBorrowsPage: React.FC = () => {
         width: 90,
         sorter: true,
         hideInSearch: true,
-        render: (_, r) => <Tag>{r.status ?? '-'}</Tag>,
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
       },
       {
         title: t('common.updatedAt'),
@@ -260,7 +309,7 @@ const ToolBorrowsPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
-                void handleEdit(record);
+                handleDetail(record);
               }}
             >
               {t('common.detail')}
@@ -339,6 +388,24 @@ const ToolBorrowsPage: React.FC = () => {
           enableRowSelection={perms.canDelete}
         />
       </ListPageTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t('common.detail')}${detail?.document_no ?? detail?.borrow_no ? ` - ${detail.document_no ?? detail.borrow_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailColumns}
+        extra={buildDetailDrawerEditExtra(
+          t,
+          Boolean(detail && perms.canUpdate && detail.status === '领用中'),
+          () => {
+            if (!detail) return;
+            closeDetail();
+            void handleEdit(detail);
+          },
+        )}
+      />
 
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}

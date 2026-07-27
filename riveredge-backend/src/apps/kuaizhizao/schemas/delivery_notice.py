@@ -115,7 +115,7 @@ class DeliveryNoticeWithItemsResponse(DeliveryNoticeResponse):
 
 
 class DeliveryNoticePullPreviewLine(BaseSchema):
-    """送货单上拉 — 预览明细行"""
+    """送货单加载 — 预览明细行"""
     item_id: int = Field(..., description="销售出库明细ID")
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
@@ -128,7 +128,7 @@ class DeliveryNoticePullPreviewLine(BaseSchema):
 
 
 class DeliveryNoticePullPreviewResponse(BaseSchema):
-    """送货单上拉 — 销售出库预览"""
+    """送货单加载 — 销售出库预览"""
     sales_delivery_id: int = Field(..., description="销售出库单ID")
     sales_delivery_code: str = Field(..., description="销售出库单编码")
     customer_id: int = Field(..., description="客户ID")
@@ -144,7 +144,7 @@ class DeliveryNoticePullPreviewResponse(BaseSchema):
 
 
 class DeliveryNoticePullCandidate(BaseSchema):
-    """送货单上拉 — 销售出库候选项"""
+    """送货单加载 — 销售出库候选项"""
     id: int
     delivery_code: str
     sales_order_id: Optional[int] = None

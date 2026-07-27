@@ -4,9 +4,9 @@
  * 查看报工触发的物料倒冲记录，支持按工单、物料、状态筛选，失败记录可重试。
  */
 
-import React, { useMemo, useRef } from 'react';
-import type { ProColumns } from '@ant-design/pro-components';
-import { App, Button } from 'antd';
+import React, { useMemo, useRef, useState } from 'react';
+import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, Descriptions, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { warehouseApi } from '../../../services/production';
 import { UniTable } from '../../../../../components/uni-table';
@@ -14,11 +14,12 @@ import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { DetailDrawerTemplate, ListPageTemplate, detailDrawerDescriptionItems, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { renderRowActionsOverflow, rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildBackflushRecordStatusValueEnum,
@@ -52,6 +53,37 @@ const BackflushRecordsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
   const actionRef = useRef<any>(null);
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailRecord, setDetailRecord] = useState<BackflushRecordItem | null>(null);
+
+  const statusValueEnum = useMemo(() => buildBackflushRecordStatusValueEnum(t), [t]);
+
+  const renderStatusTag = (status?: string) => {
+    const key = String(status ?? '').trim();
+    const label = statusValueEnum[key]?.text ?? (key || '-');
+    let color: string | undefined;
+    if (key === 'completed') color = 'success';
+    else if (key === 'failed') color = 'error';
+    else if (key === 'pending') color = 'processing';
+    else if (key === 'cancelled') color = 'default';
+    return <Tag color={color}>{label}</Tag>;
+  };
+
+  const handleDetail = async (record: BackflushRecordItem) => {
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setDetailRecord(null);
+    try {
+      const detailData = await warehouseApi.backflushRecords.get(String(record.id));
+      setDetailRecord(detailData as BackflushRecordItem);
+    } catch {
+      message.error(t('app.kuaizhizao.warehouseCommon.detailLoadFailed', { noun: t('app.kuaizhizao.backflushRecords.headerTitle') }));
+      setDetailDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const handleRetry = (record: BackflushRecordItem) => {
     modal.confirm({
@@ -142,17 +174,57 @@ const BackflushRecordsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseCommon.colActions'),
         valueType: 'option',
-        width: 90,
+        width: 120,
         fixed: 'right',
-        render: (_, record) =>
-          record.status === 'failed' ? (
-            <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleRetry(record)}>
-              {t('app.kuaizhizao.backflushRecords.retry')}
-            </Button>
-          ) : null,
+        render: (_, record) => {
+          const actions = [
+            <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />,
+          ];
+          if (record.status === 'failed') {
+            actions.push(
+              <Button key="retry" {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleRetry(record)}>
+                {t('app.kuaizhizao.backflushRecords.retry')}
+              </Button>,
+            );
+          }
+          return renderRowActionsOverflow(actions, { keyPrefix: `backflush-${record.id}` });
+        },
       },
     ],
-    [t]
+    [t, statusValueEnum]
+  );
+
+  const detailColumns: ProDescriptionsItemProps<BackflushRecordItem>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.backflushRecords.colWorkOrderCode'), dataIndex: 'work_order_code' },
+      { title: t('app.kuaizhizao.backflushRecords.colOperationCode'), dataIndex: 'operation_code', render: (_, r) => r.operation_code || '-' },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
+        key: 'material',
+        render: (_, r) => (
+          <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        dataIndex: 'status',
+        render: (_, r) => renderStatusTag(r.status),
+      },
+      { title: t('app.kuaizhizao.batchInventoryQuery.colBatchNo'), dataIndex: 'batch_no', render: (_, r) => r.batch_no || '-' },
+      { title: t('app.kuaizhizao.backflushRecords.colReportQty'), dataIndex: 'report_quantity', render: (_, r) => formatQuantity(r.report_quantity) },
+      { title: t('app.kuaizhizao.backflushRecords.colBomQty'), dataIndex: 'bom_quantity', render: (_, r) => formatQuantity(r.bom_quantity) },
+      {
+        title: t('app.kuaizhizao.backflushRecords.colBackflushQty'),
+        key: 'backflush_quantity',
+        render: (_, r) => `${formatQuantity(r.backflush_quantity)} ${r.material_unit || ''}`.trim(),
+      },
+      { title: t('app.kuaizhizao.backflushRecords.colOutboundWarehouse'), dataIndex: 'warehouse_name', render: (_, r) => r.warehouse_name || '-' },
+      { title: t('app.kuaizhizao.backflushRecords.colErrorMessage'), dataIndex: 'error_message', span: 2, render: (_, r) => r.error_message || '-' },
+      { title: t('app.kuaizhizao.warehouseCommon.colProcessedBy'), dataIndex: 'processed_by_name', render: (_, r) => r.processed_by_name || '-' },
+      { title: t('app.kuaizhizao.warehouseCommon.colCreatedAt'), dataIndex: 'created_at', render: (_, r) => formatDateTime(r.created_at) },
+      { title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'), dataIndex: 'updated_at', render: (_, r) => formatDateTime(r.updated_at) },
+    ],
+    [t, statusValueEnum]
   );
 
   const fetchRecords = async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, unknown>) => {
@@ -186,6 +258,26 @@ const BackflushRecordsPage: React.FC = () => {
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         scroll={{ x: 1480 }}
+      />
+
+      <DetailDrawerTemplate
+        title={`${t('app.kuaizhizao.batchingCenter.detailTitleBackflush')}${detailRecord?.work_order_code ? ` - ${detailRecord.work_order_code}` : ''}`}
+        open={detailDrawerVisible}
+        loading={detailLoading}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setDetailRecord(null);
+        }}
+        width={DRAWER_CONFIG.HALF_WIDTH}
+        basic={
+          detailRecord ? (
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(detailColumns, detailRecord)}
+            />
+          ) : undefined
+        }
       />
     </ListPageTemplate>
   );

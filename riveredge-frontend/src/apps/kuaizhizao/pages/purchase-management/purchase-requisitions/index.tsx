@@ -104,7 +104,7 @@ import { useGlobalStore } from '../../../../../stores';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
+import { DetailAuditPhaseTitleExtra } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatDateTime, formatNumber, formatQuantity } from '../../../../../utils/format';
@@ -2349,27 +2349,23 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 />
               </DetailDrawerSection>
 
-              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
+              <DetailDrawerSection
+                title={t('app.uniDetail.sectionCollaboration')}
+                titleExtra={<DetailAuditPhaseTitleExtra record={currentReq} />}
+              >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
                     const lifecycle = getPurchaseRequisitionLifecycle(currentReq, purchaseRequestAuditEnabled);
                     const mainStages = lifecycle.mainStages ?? [];
-                    return (
-                      <DetailLifecycleCollaborationBlock
-                        record={currentReq}
-                        auditEnabled={purchaseRequestAuditEnabled}
-                      >
-                        {mainStages.length > 0 && (
-                          <UniLifecycleStepper
-                            steps={mainStages}
-                            status={lifecycle.status}
-                            showLabels
-                            nextStepSuggestions={lifecycle.nextStepSuggestions}
-                            hideNextStepSuggestions
-                          />
-                        )}
-                      </DetailLifecycleCollaborationBlock>
-                    );
+                    return mainStages.length > 0 ? (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                        nextStepSuggestions={lifecycle.nextStepSuggestions}
+                        hideNextStepSuggestions
+                      />
+                    ) : null;
                   })()}
                   {currentReq.id != null ? (
                     <DetailDrawerInlineFullChain

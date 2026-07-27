@@ -31,7 +31,7 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
@@ -43,7 +43,7 @@ import {
   outsourceMaterialReturnApi,
   outsourceProductReturnApi,
 } from '../../../services/production';
-import { LinkedIqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
+import { LinkedIqcPanel, LinkedFqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
 import { getInboundLifecycle } from '../../../utils/inboundLifecycle';
 import {
   warehouseApi as masterWarehouseApi,
@@ -96,13 +96,19 @@ import {
   type InboundReceiptType,
   inboundReceiptTypeLabel,
   inboundReceiptTypeSegmentOptions,
-  inboundReceiptTypeValueEnum,
   isInboundConfirmable,
   inboundConfirmCapabilityReasonMessage,
   inboundSourceDocNo,
   resolveInboundHubOperator,
 } from './inboundHubTypes';
-import { uploadMultipleFiles } from '../../../../../services/file';
+import { inboundReceiptTypeMarkerValueEnum, renderInboundReceiptTypeMarkerTag } from '../shared/warehouseMarkerTags';
+import {
+  normalizeInboundHubDetail,
+  resolveInboundHubDetailItems,
+  resolveInboundHubStatusLabel,
+  resolveInboundHubStatusTagColor,
+} from './inboundHubNormalize';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { inboundReceiptTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintConfig';
@@ -541,6 +547,7 @@ const InboundPage: React.FC = () => {
   }, [finishedGoodsReceiptListCustomFields.length]);
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<InboundOrder | null>(null);
   const [inboundTrackingRefreshKey, setInboundTrackingRefreshKey] = useState(0);
   const [editableReceiptQuantities, setEditableReceiptQuantities] = useState<Record<number, number>>({});
@@ -606,6 +613,9 @@ const InboundPage: React.FC = () => {
   const inboundTracking = useDocumentTracking(inboundDocTrackingType, currentOrder?.id, inboundTrackingRefreshKey);
 
   const handleDetail = async (record: InboundOrder) => {
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setCurrentOrder(null);
     try {
       let detailData: any;
       if (record.receipt_type === 'purchase') {
@@ -644,8 +654,9 @@ const InboundPage: React.FC = () => {
           setEditableReceiptQuantities({});
           setPurchaseReceiptAttachments([]);
         }
-        setCurrentOrder({ ...detailData, receipt_type: record.receipt_type });
-        setDetailDrawerVisible(true);
+        setCurrentOrder(
+          normalizeInboundHubDetail(record.receipt_type!, detailData as Record<string, unknown>, record),
+        );
         setInboundTrackingRefreshKey((k) => k + 1);
         if (record.receipt_type === 'purchase' && record.id != null) {
           await loadPurchaseReceiptFieldValuesForDetail(record.id);
@@ -662,6 +673,9 @@ const InboundPage: React.FC = () => {
         error?.message ??
         t('app.kuaizhizao.warehouseInbound.msg.loadDetailFailed');
       messageApi.error(typeof msg === 'string' ? msg : t('app.kuaizhizao.warehouseInbound.msg.loadDetailFailed'));
+      setDetailDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -726,7 +740,9 @@ const InboundPage: React.FC = () => {
         items: mappedItems,
       });
       const detail = await warehouseApi.purchaseReceipt.get(String(currentOrder.id));
-      setCurrentOrder({ ...detail, receipt_type: 'purchase' });
+      setCurrentOrder(
+        normalizeInboundHubDetail('purchase', detail as Record<string, unknown>, currentOrder),
+      );
       const quantities: Record<number, number> = {};
       ((detail as any).items || []).forEach((it: any) => {
         if (it?.id != null) quantities[it.id] = Number(it.receipt_quantity ?? 0);
@@ -1281,7 +1297,9 @@ const InboundPage: React.FC = () => {
             detailData = await warehouseApi.semiFinishedGoodsReceipt.get(String(order.id));
           else detailData = await warehouseApi.productionReturn.get(String(order.id));
 
-          setCurrentOrder({ ...detailData, receipt_type: order.receipt_type });
+          setCurrentOrder(
+            normalizeInboundHubDetail(order.receipt_type!, detailData as Record<string, unknown>, order),
+          );
           const quantities: Record<number, number> = {};
           (detailData.items || []).forEach((it: any) => {
             if (it?.id != null) quantities[it.id] = Number(it.receipt_quantity ?? 0);
@@ -1467,7 +1485,13 @@ const InboundPage: React.FC = () => {
                 detailData = await warehouseApi.productionReturn.get(String(record.id));
               }
               if (detailData) {
-                setCurrentOrder({ ...detailData, receipt_type: record.receipt_type });
+                setCurrentOrder(
+                  normalizeInboundHubDetail(
+                    record.receipt_type!,
+                    detailData as Record<string, unknown>,
+                    record,
+                  ),
+                );
                 if (record.receipt_type === 'purchase' && record.id != null) {
                   await loadPurchaseReceiptFieldValuesForDetail(record.id);
                 } else if (record.receipt_type === 'production_return' && record.id != null) {
@@ -1624,7 +1648,8 @@ const InboundPage: React.FC = () => {
       dataIndex: 'receipt_type',
       width: 100,
       hideInSearch: true,
-      valueEnum: inboundReceiptTypeValueEnum(t),
+      valueEnum: inboundReceiptTypeMarkerValueEnum(t),
+      render: (_, record) => renderInboundReceiptTypeMarkerTag(t, record.receipt_type),
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.status'),
@@ -1827,6 +1852,181 @@ const InboundPage: React.FC = () => {
     inboundPerms,
     packingBindingPerms.canRead,
   ],
+  );
+
+  const inboundDetailCollaboration = useMemo(() => {
+    if (!currentOrder) return undefined;
+    const lifecycle = getInboundLifecycle(currentOrder);
+    const mainStages = lifecycle.mainStages ?? [];
+    if (mainStages.length === 0) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        status={lifecycle.status}
+        showLabels
+        nextStepSuggestions={lifecycle.nextStepSuggestions}
+        hideNextStepSuggestions
+      />
+    );
+  }, [currentOrder]);
+
+  const inboundTraceDocument = useMemo(() => {
+    if (!currentOrder || !inboundDocTrackingType || currentOrder.id == null) return undefined;
+    return {
+      documentType: inboundDocTrackingType,
+      documentId: currentOrder.id,
+      selfDocumentId: currentOrder.id,
+      renderBriefActions: (doc: Parameters<typeof WarehouseTraceBriefPrimaryActions>[0]['doc']) => (
+        <WarehouseTraceBriefPrimaryActions
+          doc={doc}
+          t={t}
+          navigate={navigate}
+          closeDrawer={() => {
+            setDetailDrawerVisible(false);
+            setCurrentOrder(null);
+            setEditableReceiptQuantities({});
+          }}
+        />
+      ),
+    };
+  }, [currentOrder, inboundDocTrackingType, navigate, t]);
+
+  const inboundDetailSupplementary = useMemo(() => {
+    if (!currentOrder) return undefined;
+    const nodes: React.ReactNode[] = [];
+    if (
+      currentOrder.receipt_type === 'purchase' &&
+      hasCustomFieldsDetailContent(purchaseReceiptListCustomFields, purchaseReceiptDetailCustomFieldValues)
+    ) {
+      nodes.push(
+        <CustomFieldsDetailSection
+          key="purchase-custom-fields"
+          customFields={purchaseReceiptListCustomFields}
+          customFieldValues={purchaseReceiptDetailCustomFieldValues}
+        />,
+      );
+    }
+    if (
+      currentOrder.receipt_type === 'production_return' &&
+      hasCustomFieldsDetailContent(productionReturnListCustomFields, productionReturnDetailCustomFieldValues)
+    ) {
+      nodes.push(
+        <CustomFieldsDetailSection
+          key="production-return-custom-fields"
+          customFields={productionReturnListCustomFields}
+          customFieldValues={productionReturnDetailCustomFieldValues}
+        />,
+      );
+    }
+    if (
+      currentOrder.receipt_type === 'finished_goods' &&
+      hasCustomFieldsDetailContent(finishedGoodsReceiptListCustomFields, finishedGoodsReceiptDetailCustomFieldValues)
+    ) {
+      nodes.push(
+        <CustomFieldsDetailSection
+          key="finished-goods-custom-fields"
+          customFields={finishedGoodsReceiptListCustomFields}
+          customFieldValues={finishedGoodsReceiptDetailCustomFieldValues}
+        />,
+      );
+    }
+    if (currentOrder.notes) {
+      nodes.push(
+        <Descriptions
+          key="notes"
+          column={3}
+          size="small"
+          style={nodes.length > 0 ? { marginTop: 16 } : undefined}
+          items={[
+            {
+              key: 'notes',
+              label: t('app.kuaizhizao.warehouseInbound.field.notes'),
+              span: 3,
+              children: currentOrder.notes,
+            },
+          ]}
+        />,
+      );
+    }
+    if (currentOrder.receipt_type === 'purchase' && currentOrder.id) {
+      nodes.push(
+        <div key="iqc" style={{ marginTop: nodes.length > 0 ? 16 : undefined }}>
+          <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+            {t('app.kuaizhizao.warehouseInbound.section.iqc')}
+          </Typography.Text>
+          <LinkedIqcPanel
+            purchaseReceiptId={currentOrder.id}
+            active={detailDrawerVisible}
+            onNavigate={(path) => {
+              setDetailDrawerVisible(false);
+              navigate(path);
+            }}
+          />
+        </div>,
+      );
+    }
+    if (currentOrder.receipt_type === 'customer_material' && currentOrder.id) {
+      nodes.push(
+        <div key="iqc-cm" style={{ marginTop: nodes.length > 0 ? 16 : undefined }}>
+          <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+            {t('app.kuaizhizao.warehouseInbound.section.iqc')}
+          </Typography.Text>
+          <LinkedIqcPanel
+            customerMaterialRegistrationId={currentOrder.id}
+            active={detailDrawerVisible}
+            onNavigate={(path) => {
+              setDetailDrawerVisible(false);
+              navigate(path);
+            }}
+          />
+        </div>,
+      );
+    }
+    if (
+      (currentOrder.receipt_type === 'finished_goods' || currentOrder.receipt_type === 'semi_finished_goods') &&
+      currentOrder.work_order_id
+    ) {
+      nodes.push(
+        <div key="fqc" style={{ marginTop: nodes.length > 0 ? 16 : undefined }}>
+          <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+            {t('app.kuaizhizao.warehouseInbound.section.fqc')}
+          </Typography.Text>
+          <LinkedFqcPanel
+            workOrderId={currentOrder.work_order_id}
+            active={detailDrawerVisible}
+            onNavigate={(path) => {
+              setDetailDrawerVisible(false);
+              navigate(path);
+            }}
+          />
+        </div>,
+      );
+    }
+    if (nodes.length === 0) return undefined;
+    return <>{nodes}</>;
+  }, [
+    currentOrder,
+    detailDrawerVisible,
+    finishedGoodsReceiptDetailCustomFieldValues,
+    finishedGoodsReceiptListCustomFields,
+    navigate,
+    productionReturnDetailCustomFieldValues,
+    productionReturnListCustomFields,
+    purchaseReceiptDetailCustomFieldValues,
+    purchaseReceiptListCustomFields,
+    t,
+  ]);
+
+  const inboundDetailLinesTitle = useMemo(() => {
+    if (!currentOrder) return undefined;
+    return currentOrder.receipt_type === 'production_return'
+      ? t('app.kuaizhizao.warehouseInbound.section.returnDetails')
+      : t('app.kuaizhizao.warehouseInbound.section.detailInfo');
+  }, [currentOrder, t]);
+
+  const inboundDetailItems = useMemo(
+    () => (currentOrder ? resolveInboundHubDetailItems(currentOrder) : []),
+    [currentOrder],
   );
 
   return (
@@ -2287,7 +2487,7 @@ const InboundPage: React.FC = () => {
           resetFinishedGoodsReceiptDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
+        loading={detailLoading}
         extra={
           currentOrder ? (
             <Space>
@@ -2335,242 +2535,76 @@ const InboundPage: React.FC = () => {
             </Space>
           ) : null
         }
-        customContent={
+        basic={
+          currentOrder ? (
+            <Descriptions
+              column={3}
+              size="small"
+              items={[
+                {
+                  key: 'code',
+                  label: t('app.kuaizhizao.warehouseInbound.col.docNo'),
+                  children: (
+                    <Typography.Text copyable={{ text: String(currentOrder.receipt_code || currentOrder.return_code || '') }}>
+                      {currentOrder.receipt_code || currentOrder.return_code || '-'}
+                    </Typography.Text>
+                  ),
+                },
+                {
+                  key: 'type',
+                  label: t('app.kuaizhizao.warehouseInbound.field.type'),
+                  children: renderInboundReceiptTypeMarkerTag(t, currentOrder.receipt_type),
+                },
+                {
+                  key: 'status',
+                  label: t('app.kuaizhizao.warehouseInbound.field.status'),
+                  children: (
+                    <StatusTag color={resolveInboundHubStatusTagColor(currentOrder.status)}>
+                      {resolveInboundHubStatusLabel(t, currentOrder.status, currentOrder.receipt_type)}
+                    </StatusTag>
+                  ),
+                },
+                ...(currentOrder.supplier_name
+                  ? [{ key: 'supplier', label: t('app.kuaizhizao.warehouseInbound.field.supplier'), children: currentOrder.supplier_name }]
+                  : []),
+                ...(currentOrder.purchase_order_code
+                  ? [{ key: 'po', label: t('app.kuaizhizao.warehouseInbound.field.purchaseOrderCode'), children: currentOrder.purchase_order_code }]
+                  : []),
+                ...(currentOrder.work_order_code
+                  ? [{ key: 'wo', label: t('app.kuaizhizao.warehouseInbound.field.workOrderCode'), children: currentOrder.work_order_code }]
+                  : []),
+                ...(currentOrder.picking_code
+                  ? [{ key: 'pick', label: t('app.kuaizhizao.warehouseInbound.field.pickingCode'), children: currentOrder.picking_code }]
+                  : []),
+                ...(currentOrder.workshop_name
+                  ? [{ key: 'ws', label: t('app.kuaizhizao.warehouseInbound.field.workshop'), children: currentOrder.workshop_name }]
+                  : []),
+                {
+                  key: 'wh',
+                  label: t('app.kuaizhizao.warehouseInbound.field.warehouse'),
+                  children: currentOrder.warehouse_name ?? '-',
+                },
+                {
+                  key: 'date',
+                  label: t('app.kuaizhizao.warehouseInbound.field.date'),
+                  children: formatInboundDateDisplay(currentOrder),
+                },
+                {
+                  key: 'op',
+                  label: t('app.kuaizhizao.warehouseInbound.field.operator'),
+                  children: resolveInboundHubOperator(currentOrder) || '-',
+                },
+              ]}
+            />
+          ) : undefined
+        }
+        collaboration={inboundDetailCollaboration}
+        traceDocument={inboundTraceDocument}
+        supplementary={inboundDetailSupplementary}
+        linesTitle={inboundDetailLinesTitle}
+        lines={
           currentOrder ? (
             <>
-              <DetailDrawerSection title={t('app.kuaizhizao.warehouseInbound.section.basicInfo')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={[
-                    {
-                      key: 'code',
-                      label: t('app.kuaizhizao.warehouseInbound.col.docNo'),
-                      children: (
-                        <Typography.Text copyable={{ text: String(currentOrder.receipt_code || currentOrder.return_code || '') }}>
-                          {currentOrder.receipt_code || currentOrder.return_code || '-'}
-                        </Typography.Text>
-                      ),
-                    },
-                    {
-                      key: 'type',
-                      label: t('app.kuaizhizao.warehouseInbound.field.type'),
-                      children: (
-                        <Tag
-                          color={
-                            currentOrder.receipt_type === 'purchase'
-                              ? 'processing'
-                              : currentOrder.receipt_type === 'finished_goods'
-                                ? 'success'
-                                : currentOrder.receipt_type === 'semi_finished_goods'
-                                  ? 'blue'
-                                  : 'warning'
-                          }
-                        >
-                          {currentOrder.receipt_type
-                            ? inboundReceiptTypeLabel(t, currentOrder.receipt_type as InboundReceiptType)
-                            : t('app.kuaizhizao.warehouseInbound.fallbackDoc')}
-                        </Tag>
-                      ),
-                    },
-                    {
-                      key: 'status',
-                      label: t('app.kuaizhizao.warehouseInbound.field.status'),
-                      children: (
-                        <Tag
-                          color={
-                            currentOrder.status === '已完成' ||
-                            currentOrder.status === '已入库' ||
-                            currentOrder.status === '已退料'
-                              ? 'success'
-                              : currentOrder.status === '已确认' || currentOrder.status === '待退料'
-                                ? 'processing'
-                                : currentOrder.status === '已取消'
-                                  ? 'error'
-                                  : 'default'
-                          }
-                        >
-                          {currentOrder.status ?? '-'}
-                        </Tag>
-                      ),
-                    },
-                    ...(currentOrder.supplier_name
-                      ? [{ key: 'supplier', label: t('app.kuaizhizao.warehouseInbound.field.supplier'), children: currentOrder.supplier_name }]
-                      : []),
-                    ...(currentOrder.purchase_order_code
-                      ? [{ key: 'po', label: t('app.kuaizhizao.warehouseInbound.field.purchaseOrderCode'), children: currentOrder.purchase_order_code }]
-                      : []),
-                    ...(currentOrder.work_order_code
-                      ? [{ key: 'wo', label: t('app.kuaizhizao.warehouseInbound.field.workOrderCode'), children: currentOrder.work_order_code }]
-                      : []),
-                    ...(currentOrder.picking_code
-                      ? [{ key: 'pick', label: t('app.kuaizhizao.warehouseInbound.field.pickingCode'), children: currentOrder.picking_code }]
-                      : []),
-                    ...(currentOrder.workshop_name
-                      ? [{ key: 'ws', label: t('app.kuaizhizao.warehouseInbound.field.workshop'), children: currentOrder.workshop_name }]
-                      : []),
-                    {
-                      key: 'wh',
-                      label: t('app.kuaizhizao.warehouseInbound.field.warehouse'),
-                      children: currentOrder.warehouse_name ?? '-',
-                    },
-                    {
-                      key: 'date',
-                      label: t('app.kuaizhizao.warehouseInbound.field.date'),
-                      children: formatInboundDateDisplay(currentOrder),
-                    },
-                    {
-                      key: 'op',
-                      label: t('app.kuaizhizao.warehouseInbound.field.operator'),
-                      children: resolveInboundHubOperator(currentOrder) || '-',
-                    },
-                  ]}
-                />
-                {currentOrder.receipt_type === 'purchase' &&
-                hasCustomFieldsDetailContent(purchaseReceiptListCustomFields, purchaseReceiptDetailCustomFieldValues) ? (
-                  <div style={{ marginTop: 16 }}>
-                    <CustomFieldsDetailSection
-                      customFields={purchaseReceiptListCustomFields}
-                      customFieldValues={purchaseReceiptDetailCustomFieldValues}
-                    />
-                  </div>
-                ) : null}
-                {currentOrder.receipt_type === 'production_return' &&
-                hasCustomFieldsDetailContent(
-                  productionReturnListCustomFields,
-                  productionReturnDetailCustomFieldValues,
-                ) ? (
-                  <div style={{ marginTop: 16 }}>
-                    <CustomFieldsDetailSection
-                      customFields={productionReturnListCustomFields}
-                      customFieldValues={productionReturnDetailCustomFieldValues}
-                    />
-                  </div>
-                ) : null}
-                {currentOrder.receipt_type === 'finished_goods' &&
-                hasCustomFieldsDetailContent(
-                  finishedGoodsReceiptListCustomFields,
-                  finishedGoodsReceiptDetailCustomFieldValues,
-                ) ? (
-                  <div style={{ marginTop: 16 }}>
-                    <CustomFieldsDetailSection
-                      customFields={finishedGoodsReceiptListCustomFields}
-                      customFieldValues={finishedGoodsReceiptDetailCustomFieldValues}
-                    />
-                  </div>
-                ) : null}
-                {currentOrder.notes ? (
-                  <Descriptions
-                    column={3}
-                    size="small"
-                    style={{ marginTop: 16 }}
-                    items={[{ key: 'notes', label: t('app.kuaizhizao.warehouseInbound.field.notes'), span: 3, children: currentOrder.notes }]}
-                  />
-                ) : null}
-                {currentOrder.receipt_type === 'purchase' ? (
-                  <div style={{ marginTop: 16 }}>
-                    <Typography.Text strong>{t('app.kuaizhizao.warehouseInbound.section.attachments')}</Typography.Text>
-                    {isEditablePurchaseReceipt(currentOrder) ? (
-                      <Upload
-                        fileList={purchaseReceiptAttachments}
-                        onChange={({ fileList }) => setPurchaseReceiptAttachments(fileList)}
-                        customRequest={async (options) => {
-                          try {
-                            const res = await uploadMultipleFiles([options.file as File], {
-                              category: 'purchase_receipt_attachments',
-                            });
-                            options.onSuccess?.(res[0], options.file as any);
-                          } catch (err) {
-                            options.onError?.(err as Error);
-                          }
-                        }}
-                        multiple
-                        style={{ marginTop: 8, display: 'block' }}
-                      >
-                        <Button>{t('app.kuaizhizao.warehouseInbound.action.uploadAttachments')}</Button>
-                      </Upload>
-                    ) : (currentOrder.attachments?.length ?? 0) > 0 ? (
-                      <ul style={{ marginTop: 8, paddingLeft: 20 }}>
-                        {(currentOrder.attachments ?? []).map((file) => (
-                          <li key={file.uid ?? file.name}>
-                            <a href={file.url} target="_blank" rel="noreferrer">
-                              {file.name ?? t('app.kuaizhizao.warehouseInbound.detail.attachmentFallback')}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-                        {t('app.kuaizhizao.warehouseInbound.detail.noAttachments')}
-                      </Typography.Text>
-                    )}
-                  </div>
-                ) : null}
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.kuaizhizao.warehouseInbound.section.lifecycle')}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lifecycle = getInboundLifecycle(currentOrder);
-                    const mainStages = lifecycle.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        status={lifecycle.status}
-                        showLabels
-                        nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  {(() => {
-                    const trackingType = inboundDocumentTrackingType(currentOrder);
-                    if (!trackingType || currentOrder.id == null) return null;
-                    return (
-                    <DetailDrawerInlineFullChain
-                      documentType={trackingType}
-                      documentId={currentOrder.id}
-                      active={detailDrawerVisible}
-                      selfDocumentId={currentOrder.id}
-                      renderBriefActions={(doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setCurrentOrder(null);
-                      setEditableReceiptQuantities({});
-                    }}
-                  />
-                )}
-                    />
-                    );
-                  })()}
-                </div>
-              </DetailDrawerSection>
-
-              {currentOrder.receipt_type === 'purchase' && currentOrder.id ? (
-                <DetailDrawerSection title={t('app.kuaizhizao.warehouseInbound.section.iqc')}>
-                  <LinkedIqcPanel
-                    purchaseReceiptId={currentOrder.id}
-                    active={detailDrawerVisible}
-                    onNavigate={(path) => {
-                      setDetailDrawerVisible(false);
-                      navigate(path);
-                    }}
-                  />
-                </DetailDrawerSection>
-              ) : null}
-
-              <DetailDrawerSection
-                title={
-                  currentOrder.receipt_type === 'production_return'
-                    ? t('app.kuaizhizao.warehouseInbound.section.returnDetails')
-                    : t('app.kuaizhizao.warehouseInbound.section.detailInfo')
-                }
-              >
                 <style>{`
                   .inbound-detail-drawer-items .ant-table-wrapper .ant-table-body,
                   .inbound-detail-drawer-items .ant-table-wrapper .ant-table-content {
@@ -2578,7 +2612,7 @@ const InboundPage: React.FC = () => {
                   }
                 `}</style>
                 <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-                {currentOrder.items && currentOrder.items.length > 0 ? (
+                {inboundDetailItems.length > 0 ? (
                   <div
                     className="inbound-detail-drawer-items"
                     style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
@@ -2677,34 +2711,35 @@ const InboundPage: React.FC = () => {
                                 { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
                               ]
                       }
-                      dataSource={currentOrder.items}
+                      dataSource={inboundDetailItems}
                     />
                   </div>
                 ) : (
                   <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseInbound.detail.noDetails')} />
                 )}
-              </DetailDrawerSection>
 
-              {currentOrder?.id != null && (
-                <DetailDrawerSection title={t('app.kuaizhizao.warehouseInbound.section.operationLog')}>
-                  {inboundTracking.loading && (
-                    <div style={{ textAlign: 'center', padding: 24 }}>
-                      <Spin />
-                    </div>
-                  )}
-                  {inboundTracking.error && !inboundTracking.loading && (
-                    <Typography.Text type="danger">{inboundTracking.error}</Typography.Text>
-                  )}
-                  {inboundTracking.data && !inboundTracking.loading && (
-                    <DocumentTrackingTimelineBody data={inboundTracking.data} />
-                  )}
-                  {!inboundTracking.loading && !inboundTracking.data && !inboundTracking.error && (
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseInbound.detail.noOperationLog')} />
-                  )}
-                </DetailDrawerSection>
+            </>
+          ) : undefined
+        }
+        timeline={
+          currentOrder?.id != null ? (
+            <>
+              {inboundTracking.loading && (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <Spin />
+                </div>
+              )}
+              {inboundTracking.error && !inboundTracking.loading && (
+                <Typography.Text type="danger">{inboundTracking.error}</Typography.Text>
+              )}
+              {inboundTracking.data && !inboundTracking.loading && (
+                <DocumentTrackingTimelineBody data={inboundTracking.data} />
+              )}
+              {!inboundTracking.loading && !inboundTracking.data && !inboundTracking.error && (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseInbound.detail.noOperationLog')} />
               )}
             </>
-          ) : null
+          ) : undefined
         }
       />
       <PurchaseReceiptIqcReviewModal

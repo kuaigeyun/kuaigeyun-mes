@@ -3883,7 +3883,7 @@ class DemandComputationService(AppBaseService):
         *,
         generate_mode: str = "work_order_only",
     ) -> List[Dict[str, Any]]:
-        """按与 generate_orders 一致的规则构建工单上拉预览明细（数量三列）。"""
+        """按与 generate_orders 一致的规则构建工单加载预览明细（数量三列）。"""
         from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
         from apps.kuaizhizao.utils.work_order_group_bom_tree import (
             flatten_production_tree,

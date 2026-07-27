@@ -413,6 +413,21 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             out.append(await self._build_response(r, by_req.get(r.id, [])))
         return out
 
+    async def get_call_request(
+        self,
+        tenant_id: int,
+        call_id: int,
+    ) -> MaterialCallRequestResponse:
+        """查询叫料单详情（含明细）"""
+        header = await MaterialCallRequest.filter(
+            id=call_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not header:
+            raise NotFoundError(f"叫料单不存在: {call_id}")
+        return await self._build_response(header)
+
     async def _resolve_warehouses_for_material_call(
         self, tenant_id: int, call_req: MaterialCallRequest, wo
     ) -> Tuple[int, str, int, str]:

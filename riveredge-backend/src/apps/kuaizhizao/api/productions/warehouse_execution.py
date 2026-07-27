@@ -3518,7 +3518,7 @@ async def pull_sales_delivery_from_order(
     tenant_id: int = Depends(get_current_tenant),
 ) -> SalesDeliveryResponse:
     """
-    从销售订单上拉生成销售出库单
+    从销售订单加载生成销售出库单
     
     - **sales_order_id**: 销售订单ID（必填）
     - **delivery_quantities**: 出库数量字典 {item_id: quantity}（可选）
@@ -3572,7 +3572,7 @@ async def pull_sales_delivery_from_forecast(
     tenant_id: int = Depends(get_current_tenant),
 ) -> SalesDeliveryResponse:
     """
-    从销售预测上拉生成销售出库单（MTS模式）
+    从销售预测加载生成销售出库单（MTS模式）
     
     - **sales_forecast_id**: 销售预测ID（必填）
     - **delivery_quantities**: 出库数量字典 {item_id: quantity}（可选）

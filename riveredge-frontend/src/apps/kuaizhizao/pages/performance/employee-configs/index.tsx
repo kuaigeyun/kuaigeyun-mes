@@ -5,20 +5,19 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Typography, Descriptions, Spin, theme as AntdTheme } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Typography, theme as AntdTheme } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { ProFormSelect, ProFormDigit, ProFormSwitch, ProFormDatePicker, ProFormField } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import {
   ListPageTemplate,
   FormModalTemplate,
-  DetailDrawerTemplate,
-  DetailDrawerSection,
   MODAL_CONFIG,
-  DRAWER_CONFIG,
 } from '../../../../../components/layout-templates';
+import { PerformanceConfigDetailDrawer } from '../shared/performanceConfigDetailDrawer';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { employeePerformanceApi } from '../../../services/performance';
 import type { EmployeePerformanceConfig } from '../../../types/performance';
@@ -35,7 +34,6 @@ import {
   getPieceRateModeText,
   renderActiveTag,
 } from '../components/performanceMeta';
-import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   normalizePerformanceListResponse,
@@ -185,7 +183,12 @@ const EmployeeConfigsPage: React.FC = () => {
         sorter: true,
         valueType: 'select',
         valueEnum: Object.fromEntries(calcModeOptions.map((o) => [o.value, { text: o.label }])),
-        render: (_, r) => <Tag>{getCalcModeText(t, r.calc_mode)}</Tag>,
+        render: (_, r) => {
+          const mode = r.calc_mode;
+          const label = getCalcModeText(t, mode);
+          const color = mode === 'piece' ? 'geekblue' : mode === 'time' ? 'cyan' : mode === 'mixed' ? 'purple' : 'default';
+          return <MarkerTag color={color}>{label}</MarkerTag>;
+        },
       },
       { title: t('app.kuaizhizao.performance.employeeConfigs.columns.hourlyRate'), dataIndex: 'hourly_rate', width: 120, align: 'right' },
       { title: t('app.kuaizhizao.performance.employeeConfigs.columns.defaultPieceRate'), dataIndex: 'default_piece_rate', width: 140, align: 'right' },
@@ -339,7 +342,7 @@ const EmployeeConfigsPage: React.FC = () => {
         <ProFormSwitch name="is_active" label={t('app.kuaizhizao.performance.common.form.active')} formItemProps={modalFieldLayoutFromColSpan(12)} />
       </FormModalTemplate>
 
-      <DetailDrawerTemplate
+      <PerformanceConfigDetailDrawer
         title={t('app.kuaizhizao.performance.employeeConfigs.detailTitle')}
         open={drawerVisible}
         zIndex={detailDrawerZIndex}
@@ -347,20 +350,10 @@ const EmployeeConfigsPage: React.FC = () => {
           setDrawerVisible(false);
           setDetail(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
         loading={detailLoading}
-        columns={[]}
-        customContent={
-          detailLoading && !detail ? (
-            <div style={{ textAlign: 'center', padding: 48 }}>
-              <Spin />
-            </div>
-          ) : detail ? (
-            <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.basicInfo')}>
-              <Descriptions column={2} size="small" items={buildMasterDetailDescriptionItems(detail, detailColumns)} />
-            </DetailDrawerSection>
-          ) : null
-        }
+        detail={detail}
+        detailColumns={detailColumns}
+        t={t}
       />
     </>
   );

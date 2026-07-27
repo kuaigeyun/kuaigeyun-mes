@@ -6,7 +6,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
-import { ActionType, ProColumns, ProFormDatePicker, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormDatePicker, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Col, DatePicker, Descriptions, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Spin, Switch, Table, Tag, Tooltip, Typography, Alert } from 'antd';
 import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FormOutlined, PlusOutlined, SwapOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -16,7 +16,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, FORM_LAYOUT, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, FORM_LAYOUT, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
@@ -27,7 +27,7 @@ import {
 } from '../../../../../components/uni-pull-query';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
@@ -1153,6 +1153,94 @@ const PurchaseInquiriesPage: React.FC = () => {
     [t],
   );
 
+  const detailBasicColumns = useMemo<ProDescriptionsItemProps<PurchaseInquiry>[]>(
+    () => [
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.source'),
+        dataIndex: 'source_code',
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.colBuyer'),
+        dataIndex: 'buyer_name',
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.inquiryDate'),
+        dataIndex: 'inquiry_date',
+        valueType: 'date',
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline'),
+        dataIndex: 'quote_deadline',
+        valueType: 'date',
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.notes'),
+        dataIndex: 'notes',
+        span: 2,
+      },
+    ],
+    [t],
+  );
+
+  const detailCollaboration = useMemo(() => {
+    if (!detail) return undefined;
+    const lifecycle = getPurchaseInquiryLifecycle(detail as Record<string, unknown>);
+    const mainStages = lifecycle.mainStages ?? [];
+    if (!mainStages.length) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        status={lifecycle.status}
+        showLabels
+        nextStepSuggestions={lifecycle.nextStepSuggestions}
+        hideNextStepSuggestions
+      />
+    );
+  }, [detail]);
+
+  const detailSupplementary = useMemo(() => {
+    if (!detail) return undefined;
+    return (
+      <>
+        {isInquiryDraft(detail) ? (
+          <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+            {t('app.kuaizhizao.purchaseInquiry.hintAfterPublish')}
+          </Typography.Text>
+        ) : null}
+        {(isInquiryQuoting(detail) || isInquiryPendingCompare(detail)) ? (
+          <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+            {t('app.kuaizhizao.purchaseInquiry.hintQuoting')}
+          </Typography.Text>
+        ) : null}
+        {(detail.vendors ?? []).length > 0 ? (
+          <Table
+            size="small"
+            pagination={false}
+            rowKey="supplier_id"
+            dataSource={detail.vendors ?? []}
+            columns={detailVendorColumns}
+          />
+        ) : (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseInquiry.emptyVendorsInDetail')} />
+        )}
+      </>
+    );
+  }, [detail, detailVendorColumns, t]);
+
+  const detailLines = useMemo(() => {
+    if (!detail) return undefined;
+    return (
+      <Table
+        size="small"
+        rowKey="id"
+        pagination={false}
+        dataSource={detail.items ?? []}
+        columns={detailItemColumns}
+        locale={{ emptyText: t('app.kuaizhizao.salesReturn.emptyItems') }}
+      />
+    );
+  }, [detail, detailItemColumns, t]);
+
   const quoteItemColumns = useMemo(
     () => [
       { title: t('app.kuaizhizao.purchaseInquiry.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
@@ -1523,54 +1611,29 @@ const PurchaseInquiriesPage: React.FC = () => {
             </Space>
           ) : null
         }
-      >
-        {detail && (
-          <>
-            <UniLifecycle {...getPurchaseInquiryLifecycle(detail as Record<string, unknown>)} />
-            <Descriptions column={2} size="small" style={{ marginTop: 16 }}>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.source')}>{detail.source_code || '-'}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.colBuyer')}>{detail.buyer_name || '-'}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.inquiryDate')}>{detail.inquiry_date ? formatDateTime(detail.inquiry_date, 'YYYY-MM-DD') : '-'}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline')}>{detail.quote_deadline ? formatDateTime(detail.quote_deadline, 'YYYY-MM-DD') : '-'}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.notes')} span={2}>{detail.notes || '-'}</Descriptions.Item>
-            </Descriptions>
-            <div style={{ marginTop: 16 }}>
-              <h4 style={{ marginBottom: 8 }}>{t('app.kuaizhizao.purchaseInquiry.invitedVendors')}</h4>
-              {isInquiryDraft(detail) && (
-                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                  {t('app.kuaizhizao.purchaseInquiry.hintAfterPublish')}
-                </Typography.Text>
+        basic={
+          detail ? (
+            <Descriptions
+              column={3}
+              size="small"
+              items={detailDrawerDescriptionItems(
+                detailBasicColumns.filter((col) => {
+                  if (col.dataIndex !== 'notes') return true;
+                  const notes = String(detail.notes ?? '').trim();
+                  return notes.length > 0;
+                }),
+                detail,
               )}
-              {(isInquiryQuoting(detail) || isInquiryPendingCompare(detail)) && (
-                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                  {t('app.kuaizhizao.purchaseInquiry.hintQuoting')}
-                </Typography.Text>
-              )}
-              {(detail.vendors ?? []).length > 0 ? (
-                <Table
-                  size="small"
-                  pagination={false}
-                  rowKey="supplier_id"
-                  dataSource={detail.vendors ?? []}
-                  columns={detailVendorColumns}
-                />
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseInquiry.emptyVendorsInDetail')} />
-              )}
-            </div>
-            <div style={{ marginTop: 16 }}>
-              <h4>{t('app.kuaizhizao.purchaseInquiry.inquiryItems')}</h4>
-              <Table
-                size="small"
-                rowKey="id"
-                pagination={false}
-                dataSource={detail.items ?? []}
-                columns={detailItemColumns}
-              />
-            </div>
-          </>
-        )}
-      </DetailDrawerTemplate>
+            />
+          ) : undefined
+        }
+        collaboration={detailCollaboration}
+        collaborationAuditRecord={detail}
+        supplementaryTitle={t('app.kuaizhizao.purchaseInquiry.invitedVendors')}
+        supplementary={detailSupplementary}
+        linesTitle={t('app.kuaizhizao.purchaseInquiry.inquiryItems')}
+        lines={detailLines}
+      />
 
       <Modal
         title={`${t('app.kuaizhizao.purchaseInquiry.enterSupplierQuoteTitle')}${quoteSupplierId && detail?.vendors ? ` - ${detail.vendors.find((v) => v.supplier_id === quoteSupplierId)?.supplier_name ?? ''}` : ''}`}

@@ -290,7 +290,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         const whFilter = wid > 0 ? wid : undefined;
         // 库存数量必须与过账扣减一致（仅在库 MaterialBatch）；禁止 summary_only 虚高。
         const [stockMap, batchMap] = await Promise.all([
-          loadAvailableQtyByMaterialId(allMids),
+          loadAvailableQtyByMaterialId(allMids, whFilter),
           batchMids.length
             ? loadBatchOptionsByMaterialId(
                 batchMids,

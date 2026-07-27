@@ -81,6 +81,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
   const replenishmentPerms = useResourcePermissions('kuaizhizao:warehouse-management-replenishment-suggestions');
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [suggestionDetail, setSuggestionDetail] = useState<ReplenishmentSuggestion | null>(null);
 
   const [processModalVisible, setProcessModalVisible] = useState(false);
@@ -208,12 +209,17 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
   ], [t, replenishmentPerms]);
 
   const handleDetail = async (record: ReplenishmentSuggestion) => {
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setSuggestionDetail(null);
     try {
       const detail = await warehouseApi.replenishmentSuggestion.get(record.id!.toString());
       setSuggestionDetail(detail);
-      setDetailDrawerVisible(true);
-    } catch (error) {
+    } catch {
       messageApi.error(t('app.kuaizhizao.replenishmentSuggestions.msgGetDetailFailed'));
+      setDetailDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -412,6 +418,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
             : t('app.kuaizhizao.replenishmentSuggestions.detailTitle')
         }
         open={detailDrawerVisible}
+        loading={detailLoading}
         onClose={() => {
           setDetailDrawerVisible(false);
           setSuggestionDetail(null);
@@ -419,7 +426,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           suggestionDetail ? (
-            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, suggestionDetail)} />
+            <Descriptions column={2} size="small" items={detailDrawerDescriptionItems(detailColumns, suggestionDetail)} />
           ) : undefined
         }
       />

@@ -33,6 +33,7 @@ from apps.kuaizhizao.schemas.quality_improvement import (
     SPCSampleResponse,
 )
 from apps.kuaizhizao.services.spc_list_core import apply_spc_sample_list_filters
+from apps.kuaizhizao.services.quality_service import _summarize_pull_preview_items
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from tortoise.transactions import in_transaction
 from datetime import timezone
@@ -420,7 +421,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
     ) -> Dict[int, OQCInspection]:
         """
         同一出货链路（发货通知 / 销售出库）下按物料取最早一张未删除 OQC。
-        竞争源：通知仓库时 notice 自动建单 + 销售出库自动建单 / ensure 补建 / 人工双路径上拉。
+        竞争源：通知仓库时 notice 自动建单 + 销售出库自动建单 / ensure 补建 / 人工双路径加载。
         """
         mids = sorted({int(m) for m in material_ids if m})
         if not mids:
@@ -785,7 +786,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
 
         toggles = await get_quality_inspection_stage_toggles(tenant_id)
         if not toggles.get("oqc_enabled", True):
-            raise BusinessLogicError("当前组织已关闭出货检验（OQC）环节，禁止上拉出货检验")
+            raise BusinessLogicError("当前组织已关闭出货检验（OQC）环节，禁止加载出货检验")
 
     def _derive_oqc_pull_capability(
         self,
@@ -963,14 +964,14 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             "source_id": notice_id,
             "source_code": notice_code,
             "summary": (
-                f"将从发货通知单 {notice_code} 创建出货检验（{pushable_count}/{len(preview_items)} 条可上拉）"
+                f"将从发货通知单 {notice_code} 创建出货检验（{pushable_count}/{len(preview_items)} 条可加载）"
                 if preview_items and allowed
-                else f"发货通知单 {notice_code} 当前不可上拉出货检验"
+                else f"发货通知单 {notice_code} 当前不可加载出货检验"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
-            "tip": "请勾选可上拉明细后确认；删除出货检验单后，可上拉数量自动回退。",
+            "tip": "请勾选可加载明细后确认；删除出货检验单后，可加载数量自动回退。",
         }
 
     async def preview_pull_from_sales_delivery(
@@ -1012,14 +1013,14 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             "source_id": delivery_id,
             "source_code": delivery_code,
             "summary": (
-                f"将从销售出库单 {delivery_code} 创建出货检验（{pushable_count}/{len(preview_items)} 条可上拉）"
+                f"将从销售出库单 {delivery_code} 创建出货检验（{pushable_count}/{len(preview_items)} 条可加载）"
                 if preview_items and allowed
-                else f"销售出库单 {delivery_code} 当前不可上拉出货检验"
+                else f"销售出库单 {delivery_code} 当前不可加载出货检验"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
-            "tip": "请勾选可上拉明细后确认；删除出货检验单后，可上拉数量自动回退。",
+            "tip": "请勾选可加载明细后确认；删除出货检验单后，可加载数量自动回退。",
         }
 
     async def list_shipment_notice_pull_candidates(
@@ -1090,6 +1091,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                 no_lines_reason="oqc_inspection.pull_from_shipment_notice.no_lines",
                 already_pulled_reason="oqc_inspection.pull_from_shipment_notice.already_pulled",
             )
+            pull_summary = _summarize_pull_preview_items(preview_items)
             label = f"{notice.notice_code or nid}"
             if getattr(notice, "customer_name", None):
                 label = f"{label} - {notice.customer_name}"
@@ -1099,6 +1101,9 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     "code": label,
                     "notice_code": notice.notice_code,
                     "customer_name": notice.customer_name,
+                    "status": getattr(notice, "status", None),
+                    "updated_at": getattr(notice, "updated_at", None),
+                    **pull_summary,
                     "capabilities": {
                         "pull_oqc_inspection": {
                             "allowed": allowed,
@@ -1178,6 +1183,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                 no_lines_reason="oqc_inspection.pull_from_sales_delivery.no_lines",
                 already_pulled_reason="oqc_inspection.pull_from_sales_delivery.already_pulled",
             )
+            pull_summary = _summarize_pull_preview_items(preview_items)
             label = f"{delivery.delivery_code or did}"
             if getattr(delivery, "customer_name", None):
                 label = f"{label} - {delivery.customer_name}"
@@ -1187,6 +1193,9 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     "code": label,
                     "delivery_code": delivery.delivery_code,
                     "customer_name": delivery.customer_name,
+                    "status": getattr(delivery, "status", None),
+                    "updated_at": getattr(delivery, "updated_at", None),
+                    **pull_summary,
                     "capabilities": {
                         "pull_oqc_inspection": {
                             "allowed": allowed,

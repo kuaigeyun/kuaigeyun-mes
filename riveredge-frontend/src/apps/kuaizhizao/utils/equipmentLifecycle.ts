@@ -283,24 +283,6 @@ export function getToolMaintenanceLifecycle(record: Record<string, unknown> | nu
   };
 }
 
-/** 校验记录（结果） */
-export function getCalibrationResultLifecycle(record: Record<string, unknown> | null | undefined): LifecycleResult {
-  if (!record) return { percent: 0, stageName: '-', mainStages: [] };
-  const result = String(record.result ?? '').trim();
-  const ok = result === '合格' || result === '准用';
-  return {
-    percent: ok ? 100 : 40,
-    stageName: result || '待判定',
-    status: ok ? 'success' : 'exception',
-    mainStages: [
-      { key: 'cal', label: '校验', status: 'done' },
-      { key: 'res', label: result || '结果', status: 'active' },
-    ],
-    subStages: [],
-    nextStepSuggestions: !ok ? ['复检或处置'] : [],
-  };
-}
-
 /** 保养/校准到期提醒（due_type / reminder_type） */
 export function getDueReminderLifecycle(record: Record<string, unknown> | null | undefined): LifecycleResult {
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };

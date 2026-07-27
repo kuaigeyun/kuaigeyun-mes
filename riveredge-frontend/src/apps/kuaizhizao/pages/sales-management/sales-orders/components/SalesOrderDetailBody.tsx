@@ -18,7 +18,7 @@ import { DictionaryLabel } from '../../../../../../components/dictionary-label';
 import { MaterialBomIndicator } from '../../../../components/MaterialBomIndicator';
 import { MaterialInventoryIndicator } from '../../../../components/MaterialInventoryIndicator';
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
-import { DetailLifecycleCollaborationBlock } from '../../../../../../components/uni-audit/DetailAuditPhaseRow';
+import { DetailAuditPhaseTitleExtra } from '../../../../../../components/uni-audit/DetailAuditPhaseRow';
 import type { LifecycleResult } from '../../../../../../components/uni-lifecycle/types';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
 import { DetailDrawerSection, DetailDrawerInlineFullChain } from '../../../../../../components/layout-templates';
@@ -188,6 +188,12 @@ export const SalesOrderDetailProvider: React.FC<
       {PrintModal}
     </SalesOrderDetailContext.Provider>
   );
+};
+
+/** DetailDrawerSection 生命周期标题行右侧审核状态（须在 Provider 内） */
+export const SalesOrderDetailCollaborationTitleExtra: React.FC = () => {
+  const { order } = useSalesOrderDetailContext();
+  return <DetailAuditPhaseTitleExtra record={order} />;
 };
 
 /** DetailDrawerTemplate.collaborationTitleSuffix（须在 Provider 内） */
@@ -382,8 +388,7 @@ export const SalesOrderDetailCollaborationPane: React.FC<SalesOrderDetailCollabo
   const closeDrawer = onCloseDrawer ?? (() => {});
 
   return (
-    <DetailLifecycleCollaborationBlock record={order} auditEnabled={auditEnabled}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {mainStages.length > 0 && (
           <UniLifecycleStepper
             steps={mainStages}
@@ -477,8 +482,7 @@ export const SalesOrderDetailCollaborationPane: React.FC<SalesOrderDetailCollabo
           )}
         />
       ) : null}
-      </div>
-    </DetailLifecycleCollaborationBlock>
+    </div>
   );
 };
 
@@ -661,7 +665,10 @@ export const SalesOrderDetailBody: React.FC<SalesOrderDetailBodyProps & { auditR
       <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
         <SalesOrderDetailBasicPane />
       </DetailDrawerSection>
-      <DetailDrawerSection title={<SalesOrderDetailCollaborationDrawerTitle />}>
+      <DetailDrawerSection
+        title={<SalesOrderDetailCollaborationDrawerTitle />}
+        titleExtra={<SalesOrderDetailCollaborationTitleExtra />}
+      >
         <SalesOrderDetailCollaborationPane />
       </DetailDrawerSection>
       <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
