@@ -70,3 +70,46 @@ def test_sales_return_draft_review_from_review_status():
     audit = derive_audit_phase("sales_return", "待退货", "草稿", enabled=True)
     assert audit["phase"] == "draft"
     assert "submit" in audit["allowed_actions"]
+
+
+def test_quality_inspection_pre_conduct_ignores_preset_approved():
+    """未检验时即使 review=APPROVED（历史预置），审核列应为 none。"""
+    for entity in (
+        "incoming_inspection",
+        "process_inspection",
+        "finished_goods_inspection",
+        "oqc_inspection",
+    ):
+        audit = derive_audit_phase(entity, "待检验", "APPROVED", enabled=False)
+        assert audit["phase"] == "none", entity
+
+
+def test_quality_inspection_pending_after_conduct():
+    audit = derive_audit_phase(
+        "incoming_inspection", "已检验", "PENDING", enabled=True
+    )
+    assert audit["phase"] == "pending"
+    assert set(audit["allowed_actions"]) == {"approve", "reject"}
+
+
+def test_quality_inspection_approved_after_auto_or_manual():
+    audit = derive_audit_phase(
+        "oqc_inspection", "已审核", "APPROVED", enabled=False
+    )
+    assert audit["phase"] == "approved"
+    assert audit["allowed_actions"] == ["revoke"]
+
+    manual = derive_audit_phase(
+        "incoming_inspection", "已审核", "通过", enabled=True
+    )
+    assert manual["phase"] == "approved"
+    assert manual["allowed_actions"] == ["revoke"]
+
+
+def test_quality_inspection_auto_pending_has_no_submit_withdraw():
+    """检验单无草稿提交态；关审时 pending 不得注入 submit/withdraw。"""
+    audit = derive_audit_phase(
+        "incoming_inspection", "已检验", "PENDING", enabled=False
+    )
+    assert audit["phase"] == "pending"
+    assert audit["allowed_actions"] == []

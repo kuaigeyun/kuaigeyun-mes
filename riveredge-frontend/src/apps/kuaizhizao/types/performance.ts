@@ -367,3 +367,80 @@ export interface ShiftRosterCreate {
   periodStart: string;
   remarks?: string;
 }
+
+/** 厂级工作日历配置（租户单条） */
+export interface WorkCalendarConfig {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  workDayStart: string;
+  workDayEnd: string;
+  breakStart?: string | null;
+  breakEnd?: string | null;
+  /** fixed=固定时段；shift=按已发布班次合成 */
+  windowSource?: 'fixed' | 'shift';
+  createdAt?: string;
+  updatedAt?: string;
+  createdByName?: string;
+  updatedByName?: string;
+}
+
+export interface WorkCalendarConfigUpdate {
+  workDayStart: string;
+  workDayEnd: string;
+  breakStart?: string | null;
+  breakEnd?: string | null;
+  windowSource?: 'fixed' | 'shift';
+}
+
+/** APS 一次拉取的有效日历 */
+export interface EffectiveWorkCalendar {
+  config: WorkCalendarConfig;
+  holidayDates: string[];
+  overtimeByDate: Record<string, Array<{ startTime: string; endTime: string }>>;
+  /** 班次模式按日基础窗 */
+  dayWindowsByDate?: Record<string, Array<{ startTime: string; endTime: string }>>;
+}
+
+export interface StationUnavailableWindow {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  stationId: number;
+  startAt: string;
+  endAt: string;
+  reason?: string | null;
+  isActive: boolean;
+}
+
+/** 加班计划 */
+export interface OvertimePlan {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  overtimeDate: string;
+  startTime: string;
+  endTime: string;
+  name?: string | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  createdByName?: string;
+  updatedByName?: string;
+}
+
+export interface OvertimePlanCreate {
+  overtimeDate: string;
+  startTime: string;
+  endTime: string;
+  name?: string;
+  isActive?: boolean;
+}
+
+export interface OvertimePlanUpdate {
+  overtimeDate?: string;
+  startTime?: string;
+  endTime?: string;
+  name?: string;
+  isActive?: boolean;
+}

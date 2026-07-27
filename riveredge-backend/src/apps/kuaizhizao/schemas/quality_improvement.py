@@ -189,6 +189,45 @@ class OQCInspectionResponse(OQCInspectionBase):
         from_attributes = True
 
 
+class EnsureOqcForSalesDeliveryLineSummary(BaseSchema):
+    """销售出库确认前：明细行出货检验摘要"""
+    delivery_item_id: int = Field(..., description="出库明细 ID")
+    material_id: int = Field(..., description="物料 ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    delivery_quantity: float = Field(..., description="出库数量")
+    oqc_required: bool = Field(False, description="是否需要出货检验")
+    oqc_mode: Optional[str] = Field(None, description="检验策略：none/simple/plan")
+    plan_label: Optional[str] = Field(None, description="检验方案展示名")
+    inspection_id: Optional[int] = Field(None, description="关联出货检验单 ID")
+    inspection_code: Optional[str] = Field(None, description="出货检验单号")
+    inspection_status: Optional[str] = Field(None, description="检验单状态")
+    quality_status: Optional[str] = Field(None, description="质量状态")
+    review_status: Optional[str] = Field(None, description="审核状态")
+    release_decision: Optional[str] = Field(None, description="放行结论")
+    passed: bool = Field(False, description="是否检验合格放行（含审核要求）")
+    can_outbound: bool = Field(True, description="是否允许确认出库")
+
+
+class EnsureOqcForSalesDeliveryResponse(BaseSchema):
+    """销售出库确认前：补齐出货检验单并评估是否允许确认出库"""
+    can_confirm_outbound: bool = Field(..., description="是否允许确认出库")
+    requires_oqc: bool = Field(False, description="是否存在需要出货检验的明细物料")
+    gate_enabled: bool = Field(False, description="是否启用出货检门禁")
+    oqc_stage_enabled: bool = Field(True, description="组织是否开启出货检验环节")
+    created_count: int = Field(0, description="本次自动创建的出货检验单数量")
+    created_inspections: List[OQCInspectionResponse] = Field(
+        default_factory=list, description="本次自动创建的出货检验单"
+    )
+    pending_inspections: List[OQCInspectionResponse] = Field(
+        default_factory=list, description="尚未合格放行的出货检验单"
+    )
+    line_summaries: List[EnsureOqcForSalesDeliveryLineSummary] = Field(
+        default_factory=list, description="按出库明细行的出货检验摘要"
+    )
+    message: Optional[str] = Field(None, description="门禁拦截时的提示文案")
+
+
 class SPCSampleBase(BaseSchema):
     chart_type: str = Field("imr", description="控制图类型")
     characteristic_name: str = Field(..., description="质量特性")

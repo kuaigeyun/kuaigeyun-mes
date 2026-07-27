@@ -13,6 +13,7 @@ from tortoise.exceptions import IntegrityError
 from core.models.invitation_code import InvitationCode
 from core.schemas.invitation_code import InvitationCodeCreate, InvitationCodeUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class InvitationCodeService:
@@ -183,7 +184,7 @@ class InvitationCodeService:
         invitation_code = await InvitationCodeService.get_invitation_code_by_uuid(tenant_id, uuid)
         
         # 软删除
-        invitation_code.deleted_at = datetime.now()
+        invitation_code.deleted_at = resolve_business_datetime()
         await invitation_code.save()
     
     @staticmethod

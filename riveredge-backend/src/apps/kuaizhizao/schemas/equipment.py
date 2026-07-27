@@ -47,7 +47,11 @@ class EquipmentBase(BaseModel):
     work_center_name: Optional[str] = Field(None, max_length=200, description="工作中心名称")
     responsible_person_id: Optional[int] = Field(None, description="设备负责人ID（可选）")
     responsible_person_name: Optional[str] = Field(None, max_length=100, description="设备负责人姓名")
-    status: str = Field(default="正常", max_length=50, description="设备状态（正常、维修中、停用、报废）")
+    status: str = Field(
+        default="正常",
+        max_length=50,
+        description="设备状态（正常、故障、维修中、停用、校验中、报废）",
+    )
     is_active: bool = Field(default=True, description="是否启用")
     description: Optional[str] = Field(None, description="描述")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
@@ -67,7 +71,7 @@ class EquipmentBase(BaseModel):
         Raises:
             ValueError: 如果设备状态不合法
         """
-        allowed_statuses = ["正常", "维修中", "停用", "校验中", "报废"]
+        allowed_statuses = ["正常", "故障", "维修中", "停用", "校验中", "报废"]
         if v not in allowed_statuses:
             raise ValueError(f"设备状态必须是 {allowed_statuses} 之一")
         return v
@@ -115,7 +119,11 @@ class EquipmentUpdate(BaseModel):
     work_center_name: Optional[str] = Field(None, max_length=200, description="工作中心名称")
     responsible_person_id: Optional[int] = Field(None, description="设备负责人ID（可选）")
     responsible_person_name: Optional[str] = Field(None, max_length=100, description="设备负责人姓名")
-    status: Optional[str] = Field(None, max_length=50, description="设备状态（正常、维修中、停用、报废）")
+    status: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="设备状态（正常、故障、维修中、停用、校验中、报废）",
+    )
     is_active: Optional[bool] = Field(None, description="是否启用")
     description: Optional[str] = Field(None, description="描述")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
@@ -136,7 +144,7 @@ class EquipmentUpdate(BaseModel):
             ValueError: 如果设备状态不合法
         """
         if v is not None:
-            allowed_statuses = ["正常", "维修中", "停用", "校验中", "报废"]
+            allowed_statuses = ["正常", "故障", "维修中", "停用", "校验中", "报废"]
             if v not in allowed_statuses:
                 raise ValueError(f"设备状态必须是 {allowed_statuses} 之一")
         return v

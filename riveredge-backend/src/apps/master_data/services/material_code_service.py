@@ -16,6 +16,7 @@ from loguru import logger
 from apps.master_data.models.material import Material
 from apps.master_data.models.material_code_alias import MaterialCodeAlias
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class MaterialCodeService:
@@ -618,7 +619,7 @@ class MaterialCodeService:
         
         # 软删除源物料
         from datetime import datetime
-        source_material.deleted_at = datetime.now()
+        source_material.deleted_at = resolve_business_datetime()
         await source_material.save()
         
         logger.info(f"物料 {source_material_id} 已合并到物料 {target_material_id}")

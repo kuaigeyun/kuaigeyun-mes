@@ -1,4 +1,5 @@
 import React, { useRef, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -9,7 +10,7 @@ import {
 } from '@ant-design/pro-components';
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
-import { App, Button, Modal, Row, Col, Tag, Table, Switch, Input } from 'antd';
+import { App, Button, Modal, Row, Col, Tag, Table, Switch, Input, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -25,6 +26,7 @@ import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { ROUTES } from '../../../constants/routes';
 import {
   buildAbnormalityValueEnum,
   buildSpotCheckStatusValueEnum,
@@ -32,6 +34,8 @@ import {
   normalizeEquipmentListResponse,
   resolveSpotCheckListParams,
 } from '../../../utils/equipmentListCore';
+import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
+import type { DocumentAttachmentFile } from '../../../utils/documentAttachments';
 
 const P = 'app.kuaizhizao.equipmentOps.spotCheck';
 const RESOURCE = 'kuaizhizao:equipment-spot-check';
@@ -54,6 +58,7 @@ interface SpotCheckLine {
   measured_value?: string;
   is_pass?: boolean;
   remark?: string;
+  attachments?: DocumentAttachmentFile[];
 }
 
 interface SpotCheck {
@@ -67,11 +72,14 @@ interface SpotCheck {
   inspector_name?: string;
   status?: string;
   has_abnormality?: boolean;
+  fault_report_uuid?: string;
+  abnormality_description?: string;
   updated_at?: string;
   lines?: SpotCheckLine[];
 }
 
 const SpotChecksPage: React.FC = () => {
+  const navigate = useNavigate();
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
@@ -220,16 +228,24 @@ const SpotChecksPage: React.FC = () => {
         measured_value: l.measured_value,
         is_pass: l.is_pass ?? true,
         remark: l.remark,
+        attachments: l.attachments?.length ? l.attachments : undefined,
       })),
     };
     setSubmitting(true);
     try {
+      let saved: SpotCheck | null = null;
       if (isEdit && current?.id) {
-        await spotChecksApi.update(current.id, payload);
+        saved = (await spotChecksApi.update(current.id, payload)) as SpotCheck;
         messageApi.success(t('common.updateSuccess'));
       } else {
-        await spotChecksApi.create(payload);
+        saved = (await spotChecksApi.create(payload)) as SpotCheck;
         messageApi.success(t('common.createSuccess'));
+      }
+      const abnormal =
+        Boolean(saved?.has_abnormality) ||
+        previewLines.some((l) => l.is_pass === false);
+      if (abnormal || saved?.fault_report_uuid) {
+        messageApi.info(t(`${P}.faultAutoCreated`));
       }
       setModalVisible(false);
       setFormInitialValues(undefined);
@@ -288,6 +304,22 @@ const SpotChecksPage: React.FC = () => {
               ...(isBoolean ? { measured_value: checked ? '是' : '否' } : {}),
             };
             setPreviewLines(next);
+          }}
+        />
+      ),
+    },
+    {
+      title: t(`${P}.line.photos`, { defaultValue: '照片' }),
+      dataIndex: 'attachments',
+      width: 180,
+      render: (_: unknown, row: SpotCheckLine, index: number) => (
+        <LineAttachmentsUpload
+          category="equipment_spot_check_line"
+          value={row.attachments}
+          onChange={(next) => {
+            const copy = [...previewLines];
+            copy[index] = { ...copy[index], attachments: next };
+            setPreviewLines(copy);
           }}
         />
       ),
@@ -380,6 +412,27 @@ const SpotChecksPage: React.FC = () => {
           r.has_abnormality ? <Tag color="error">{t(`${P}.abnormal`)}</Tag> : <Tag color="success">{t(`${P}.normal`)}</Tag>,
       },
       {
+        title: t(`${P}.col.linkedFault`),
+        dataIndex: 'fault_report_uuid',
+        width: 120,
+        hideInSearch: true,
+        render: (_, r) =>
+          r.fault_report_uuid ? (
+            <Typography.Link
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(
+                  `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(r.fault_report_uuid!)}`,
+                );
+              }}
+            >
+              {t(`${P}.viewFault`)}
+            </Typography.Link>
+          ) : (
+            '-'
+          ),
+      },
+      {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         hideInTable: true,
@@ -442,7 +495,7 @@ const SpotChecksPage: React.FC = () => {
         ),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, perms, spotCheckStatusValueEnum, abnormalityValueEnum],
+    [t, perms, spotCheckStatusValueEnum, abnormalityValueEnum, navigate],
   );
 
   return (

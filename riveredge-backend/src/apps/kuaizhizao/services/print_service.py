@@ -66,7 +66,7 @@ from apps.kuaizhizao.models.material_borrow import MaterialBorrow
 from apps.kuaizhizao.models.material_borrow_item import MaterialBorrowItem
 from apps.kuaizhizao.models.material_return import MaterialReturn
 from apps.kuaizhizao.models.material_return_item import MaterialReturnItem
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 _FILE_DOWNLOAD_PATH_RE = re.compile(
     r"^/?api/v\d+/core/files/(?P<uuid>[0-9a-fA-F-]{32,36})/download/?$"
@@ -576,7 +576,7 @@ class DocumentPrintService:
             id=document_id,
             deleted_at__isnull=True,
             formal_document_generated_at__isnull=True,
-        ).update(formal_document_generated_at=datetime.now())
+        ).update(formal_document_generated_at=resolve_business_datetime())
 
     # 单据类型到模板代码的映射
     DOCUMENT_TEMPLATE_CODES = {
@@ -787,7 +787,7 @@ class DocumentPrintService:
     ) -> Dict[str, Any]:
         """在已准备好的单据变量上查找模板并渲染（html/pdf）。"""
         loc = i18n or await PrintLocalization.for_tenant(tenant_id)
-        document_data["print_time"] = loc.format_datetime(datetime.now()) or datetime.now().strftime("%Y-%m-%d %H:%M")
+        document_data["print_time"] = loc.format_datetime(resolve_business_datetime()) or resolve_business_datetime().strftime("%Y-%m-%d %H:%M")
         if not document_data.get("company_logo"):
             document_data["company_logo"] = await _resolve_company_logo_for_print(tenant_id)
         if not document_data.get("logo") and document_data.get("company_logo"):

@@ -20,10 +20,12 @@ import {
   ProFormSelect,
   ProFormDatePicker,
   ProFormTextArea,
+  ProFormText,
 } from '@ant-design/pro-components';
 import { App, Button, Tag, Modal, Row, Col, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -37,12 +39,12 @@ import {
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { getEquipmentFaultLifecycle } from '../../../utils/equipmentLifecycle';
-import { equipmentFaultApi, equipmentApi } from '../../../services/equipment';
+import { equipmentFaultApi, equipmentApi, maintenancePlanApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString, coerceFormDate } from '../../../../../utils/formDate';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
@@ -53,8 +55,12 @@ import {
 } from '../../../utils/equipmentListCore';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { ROUTES } from '../../../constants/routes';
 
 const P = 'app.kuaizhizao.equipmentFault';
+const FAULT_RESOURCE = 'kuaizhizao:equipment-fault';
+const MAINT_RESOURCE = 'kuaizhizao:maintenance-plan';
 
 function toApiDateTimeString(value: unknown): string | undefined {
   const d = coerceFormDate(value);
@@ -142,6 +148,8 @@ const EquipmentFaultsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
   const faultDetailDrawerZIndex = token.zIndexPopupBase;
+  const perms = useResourcePermissions(FAULT_RESOURCE);
+  const maintPerms = useResourcePermissions(MAINT_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const [, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -175,6 +183,43 @@ const EquipmentFaultsPage: React.FC = () => {
   >(undefined);
   const [repairSubmitting, setRepairSubmitting] = useState(false);
   const repairFormRef = useRef<any>(null);
+
+  // 转保养 Modal 状态
+  const [maintModalVisible, setMaintModalVisible] = useState(false);
+  const [maintFault, setMaintFault] = useState<EquipmentFault | null>(null);
+  const [maintFormInitialValues, setMaintFormInitialValues] = useState<
+    Record<string, unknown> | undefined
+  >(undefined);
+  const [maintSubmitting, setMaintSubmitting] = useState(false);
+  const maintFormRef = useRef<any>(null);
+
+  const canStartRepair = (record: EquipmentFault) =>
+    Boolean(
+      perms.canCreate &&
+        record.repair_required &&
+        record.status !== '已修复' &&
+        record.status !== '已关闭',
+    );
+
+  const canStartMaint = (record: EquipmentFault) =>
+    Boolean(
+      maintPerms.canCreate &&
+        record.status !== '已修复' &&
+        record.status !== '已关闭' &&
+        record.equipment_uuid,
+    );
+
+  const goSourceDocument = (sourceType?: string, sourceUuid?: string) => {
+    if (!sourceUuid) return;
+    if (sourceType === 'spot_check') {
+      navigate(ROUTES.EQUIPMENT_SPOT_CHECKS);
+      return;
+    }
+    if (sourceType === 'route_patrol') {
+      navigate(ROUTES.EQUIPMENT_ROUTE_PATROLS);
+      return;
+    }
+  };
 
   /**
    * 处理新建故障记录
@@ -337,7 +382,7 @@ const EquipmentFaultsPage: React.FC = () => {
         equipment_fault_uuid: repairFault.uuid,
         repair_date:
           toApiDateTimeString(values.repair_date) ??
-          new Date().toISOString().slice(0, 19).replace('T', ' '),
+          formatDateTimeBySiteSetting(new Date()),
         repair_type: values.repair_type ?? '现场维修',
         repair_description: values.repair_description ?? '',
         status: values.status ?? '进行中',
@@ -348,11 +393,63 @@ const EquipmentFaultsPage: React.FC = () => {
       setRepairFault(null);
       setRepairFormInitialValues(undefined);
       actionRef.current?.reload();
+      if (drawerVisible) {
+        setDrawerVisible(false);
+        setFaultDetail(null);
+      }
     } catch (error: any) {
       messageApi.error(error?.message || t('common.operationFailed'));
       throw error;
     } finally {
       setRepairSubmitting(false);
+    }
+  };
+
+  const handleCreateMaintenance = (record: EquipmentFault) => {
+    if (!record.uuid || !record.equipment_uuid) {
+      messageApi.error(t(`${P}.incompleteInfo`));
+      return;
+    }
+    setMaintFault(record);
+    setMaintFormInitialValues({
+      execution_date: dayjs(),
+      execution_content: t(`${P}.repairDescriptionTemplate`, {
+        faultNo: record.fault_no,
+        description: record.fault_description || '',
+      }),
+      status: '草稿',
+    });
+    setMaintModalVisible(true);
+  };
+
+  const handleMaintenanceSubmit = async (values: any) => {
+    if (!maintFault?.uuid || !maintFault?.equipment_uuid) return;
+    setMaintSubmitting(true);
+    try {
+      await maintenancePlanApi.execute({
+        equipment_uuid: maintFault.equipment_uuid,
+        execution_date:
+          toApiDateTimeString(values.execution_date) ??
+          formatDateTimeBySiteSetting(new Date()),
+        execution_content: values.execution_content ?? '',
+        status: values.status ?? '草稿',
+        source_type: 'equipment_fault',
+        source_uuid: maintFault.uuid,
+      });
+      messageApi.success(t(`${P}.maintenanceCreated`));
+      setMaintModalVisible(false);
+      setMaintFault(null);
+      setMaintFormInitialValues(undefined);
+      actionRef.current?.reload();
+      if (drawerVisible) {
+        setDrawerVisible(false);
+        setFaultDetail(null);
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.operationFailed'));
+      throw error;
+    } finally {
+      setMaintSubmitting(false);
     }
   };
 
@@ -422,14 +519,20 @@ const EquipmentFaultsPage: React.FC = () => {
     {
       title: t(`${P}.col.sourceType`),
       dataIndex: 'source_type',
-      render: (_, r) => r.source_type ?? '-',
+      render: (_, r) => {
+        if (r.source_type === 'spot_check') return t(`${P}.source.spotCheck`);
+        if (r.source_type === 'route_patrol') return t(`${P}.source.routePatrol`);
+        return r.source_type ?? '-';
+      },
     },
     {
       title: t(`${P}.col.sourceUuid`),
       dataIndex: 'source_uuid',
       render: (_, r) =>
         r.source_uuid ? (
-          <Typography.Text copyable={{ text: String(r.source_uuid) }}>{r.source_uuid}</Typography.Text>
+          <Typography.Link onClick={() => goSourceDocument(r.source_type, r.source_uuid)}>
+            {t(`${P}.source.viewSource`)}
+          </Typography.Link>
         ) : (
           '-'
         ),
@@ -445,61 +548,83 @@ const EquipmentFaultsPage: React.FC = () => {
       valueType: 'dateTime',
     },
     ],
-    [t]
+    [t, navigate]
   );
 
   const renderFaultRowNodes = (record: EquipmentFault): React.ReactNode[] => {
-    const nodes: React.ReactNode[] = [
-      <Button {...rowActionKind('read')}
-        key="detail"
-        type="link"
-        size="small"
-        icon={<EyeOutlined />}
-        onClick={(e) => {
-          e.stopPropagation();
-          void handleDetail(record);
-        }}
-      >
-        {t('common.detail')}
-      </Button>,
-      <Button {...rowActionKind('update')}
-        key="edit"
-        type="link"
-        size="small"
-        icon={<EditOutlined />}
-        onClick={(e) => {
-          e.stopPropagation();
-          void handleEdit(record);
-        }}
-      >
-        {t('common.edit')}
-      </Button>,
-      <Button {...rowActionKind('delete')}
-        key="del"
-        type="link"
-        size="small"
-        danger
-        icon={<DeleteOutlined />}
-        onClick={(e) => {
-          e.stopPropagation();
-          Modal.confirm({
-            title: t(`${P}.deleteTitle`),
-            content: t(`${P}.deleteContent`, { code: record.fault_no }),
-            onOk: () => record.uuid && handleDelete([record.uuid]),
-          });
-        }}
-      >
-        {t('common.delete')}
-      </Button>,
-    ];
-    if (record.repair_required && record.status !== '已修复') {
+    const nodes: React.ReactNode[] = [];
+    if (perms.canRead) {
       nodes.push(
-        <Button {...rowActionKind('update')} key="repair" onClick={(e) => {
+        <Button {...rowActionKind('read')}
+          key="detail"
+          type="link"
+          size="small"
+          icon={<EyeOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleDetail(record);
+          }}
+        >
+          {t('common.detail')}
+        </Button>,
+      );
+    }
+    if (perms.canUpdate) {
+      nodes.push(
+        <Button {...rowActionKind('update')}
+          key="edit"
+          type="link"
+          size="small"
+          icon={<EditOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleEdit(record);
+          }}
+        >
+          {t('common.edit')}
+        </Button>,
+      );
+    }
+    if (perms.canDelete) {
+      nodes.push(
+        <Button {...rowActionKind('delete')}
+          key="del"
+          type="link"
+          size="small"
+          danger
+          icon={<DeleteOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            Modal.confirm({
+              title: t(`${P}.deleteTitle`),
+              content: t(`${P}.deleteContent`, { code: record.fault_no }),
+              onOk: () => record.uuid && handleDelete([record.uuid]),
+            });
+          }}
+        >
+          {t('common.delete')}
+        </Button>,
+      );
+    }
+    if (canStartRepair(record)) {
+      nodes.push(
+        <Button {...rowActionKind('create')} key="repair" type="link" size="small" onClick={(e) => {
           e.stopPropagation();
           handleCreateRepair(record);
         }}
         >
           {t(`${P}.action.createRepair`)}
+        </Button>
+      );
+    }
+    if (canStartMaint(record)) {
+      nodes.push(
+        <Button {...rowActionKind('create')} key="maint" type="link" size="small" onClick={(e) => {
+          e.stopPropagation();
+          handleCreateMaintenance(record);
+        }}
+        >
+          {t(`${P}.action.createMaintenance`)}
         </Button>
       );
     }
@@ -680,9 +805,9 @@ const EquipmentFaultsPage: React.FC = () => {
             onClick: () => void handleDetail(record),
             style: { cursor: 'pointer' },
           })}
-          showDeleteButton={true}
+          showDeleteButton={perms.canDelete}
           onDelete={handleDelete}
-          showCreateButton={true}
+          showCreateButton={perms.canCreate}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
           scroll={{ x: 1900 }}
@@ -887,6 +1012,55 @@ const EquipmentFaultsPage: React.FC = () => {
         </Row>
       </FormModalTemplate>
 
+      {/* 转保养 Modal */}
+      <FormModalTemplate
+        title={t(`${P}.maintenanceModal`)}
+        open={maintModalVisible}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMaintModalVisible(false);
+            setMaintFault(null);
+            setMaintFormInitialValues(undefined);
+          }
+        }}
+        formRef={maintFormRef}
+        initialValues={maintFormInitialValues}
+        onFinish={handleMaintenanceSubmit}
+        submitter={{
+          submitButtonProps: { loading: maintSubmitting },
+        }}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+      >
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="execution_date"
+              label={t('app.kuaizhizao.maintenanceExecution.col.executionDate')}
+              fieldProps={{ showTime: true, style: { width: '100%' } }}
+              formItemProps={formDateFormItemProps}
+              rules={[{ required: true }]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="equipment_name"
+              label={t(`${P}.col.equipmentName`)}
+              disabled
+              initialValue={maintFault?.equipment_name}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={24}>
+            <ProFormTextArea
+              name="execution_content"
+              label={t('app.kuaizhizao.maintenanceExecution.col.executionContent')}
+              fieldProps={{ rows: 4 }}
+            />
+          </Col>
+        </Row>
+      </FormModalTemplate>
+
       {/* 故障记录详情 Drawer */}
       <DetailDrawerTemplate
         title={t(`${P}.detailTitle`)}
@@ -900,6 +1074,22 @@ const EquipmentFaultsPage: React.FC = () => {
         columns={[]}
         column={3}
         dataSource={faultDetail || undefined}
+        extra={
+          faultDetail ? (
+            <>
+              {canStartRepair(faultDetail) ? (
+                <Button type="primary" onClick={() => handleCreateRepair(faultDetail)}>
+                  {t(`${P}.action.createRepair`)}
+                </Button>
+              ) : null}
+              {canStartMaint(faultDetail) ? (
+                <Button style={{ marginLeft: 8 }} onClick={() => handleCreateMaintenance(faultDetail)}>
+                  {t(`${P}.action.createMaintenance`)}
+                </Button>
+              ) : null}
+            </>
+          ) : null
+        }
         customContent={
           faultDetail ? (
             <>
@@ -948,7 +1138,15 @@ const EquipmentFaultsPage: React.FC = () => {
                 </div>
               </DetailDrawerSection>
               <DetailDrawerSection title={t(`${P}.section.detailInfo`)}>
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noDetailLines`)} />
+                {currentFault?.attachments?.length ? (
+                  <LineAttachmentsUpload
+                    category="equipment_fault_attachments"
+                    value={currentFault.attachments}
+                    readOnly
+                  />
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noDetailLines`)} />
+                )}
               </DetailDrawerSection>
               <DetailDrawerSection title={t(`${P}.section.operationHistory`)}>
                 {faultTracking.loading && (

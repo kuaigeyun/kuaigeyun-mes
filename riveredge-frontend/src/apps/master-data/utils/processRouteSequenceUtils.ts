@@ -38,10 +38,25 @@ function toOpItemBase(
     standard_time?: number;
     setupTime?: number;
     setup_time?: number;
+    isOutsourced?: boolean;
+    is_outsourced?: boolean;
+    outsourceLeadTimeDays?: number;
+    outsource_lead_time_days?: number;
+    outsourceSupplierId?: number;
+    outsource_supplier_id?: number;
+    outsourceSupplierName?: string;
+    outsource_supplier_name?: string;
   },
   itemOverrides?: Record<string, unknown>,
 ): OperationItem {
-  const merged = { ...op, ...(itemOverrides || {}) };
+  const merged = { ...op, ...(itemOverrides || {}) } as Record<string, unknown>;
+  const isOutsourced = Boolean(
+    merged.isOutsourced ?? merged.is_outsourced ?? false,
+  );
+  const leadRaw = merged.outsourceLeadTimeDays ?? merged.outsource_lead_time_days;
+  const supplierIdRaw = merged.outsourceSupplierId ?? merged.outsource_supplier_id;
+  const supplierId =
+    supplierIdRaw != null && Number(supplierIdRaw) > 0 ? Number(supplierIdRaw) : undefined;
   return {
     uuid: op.uuid,
     code: op.code || '',
@@ -60,6 +75,14 @@ function toOpItemBase(
       Number(merged.standardTime ?? merged.standard_time ?? 0) || undefined,
     ),
     setupTime: hoursToDisplayMinutes(Number(merged.setupTime ?? merged.setup_time ?? 0) || undefined),
+    isOutsourced,
+    outsourceLeadTimeDays: isOutsourced
+      ? Math.max(0, Number(leadRaw ?? 1) || 1)
+      : undefined,
+    outsourceSupplierId: isOutsourced ? supplierId : undefined,
+    outsourceSupplierName: isOutsourced
+      ? String(merged.outsourceSupplierName ?? merged.outsource_supplier_name ?? '') || undefined
+      : undefined,
   };
 }
 
@@ -164,6 +187,20 @@ export function buildOperationSequencePayload(
       const setupHours = displayMinutesToHours(op.setupTime);
       if (setupHours != null) {
         row.setup_time = setupHours;
+      }
+      if (op.isOutsourced) {
+        row.is_outsourced = true;
+        row.isOutsourced = true;
+        row.outsource_lead_time_days = Math.max(0, Number(op.outsourceLeadTimeDays ?? 1) || 1);
+        row.outsourceLeadTimeDays = row.outsource_lead_time_days;
+        if (op.outsourceSupplierId != null && op.outsourceSupplierId > 0) {
+          row.outsource_supplier_id = op.outsourceSupplierId;
+          row.outsourceSupplierId = op.outsourceSupplierId;
+        }
+        if (op.outsourceSupplierName) {
+          row.outsource_supplier_name = op.outsourceSupplierName;
+          row.outsourceSupplierName = op.outsourceSupplierName;
+        }
       }
       return row;
     }),

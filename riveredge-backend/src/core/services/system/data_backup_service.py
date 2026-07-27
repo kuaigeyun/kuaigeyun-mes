@@ -20,6 +20,7 @@ from core.services.system.backup_storage import (
 )
 from core.schemas.data_backup import DataBackupCreate
 from core.tasks.dispatcher import TaskEvent, dispatch_event
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class DataBackupService:
@@ -198,7 +199,7 @@ class DataBackupService:
         上传备份文件并创建备份记录
         """
         backup_dir = resolve_data_backup_dir()
-        ts = datetime.now().strftime("%Y%m%d%H%M%S")
+        ts = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
         safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in backup_name)[:100]
         filename = f"{safe_name}_{ts}.zip"
         file_path = os.path.join(backup_dir, filename)
@@ -225,8 +226,8 @@ class DataBackupService:
                 file_size=file_size,
                 status="success",
                 source_type="uploaded",
-                started_at=datetime.now(),
-                completed_at=datetime.now(),
+                started_at=resolve_business_datetime(),
+                completed_at=resolve_business_datetime(),
             )
             logger.info(f"已上传备份文件: {backup.uuid} -> {file_path}")
             return backup
@@ -298,7 +299,7 @@ class DataBackupService:
         )
 
         backup.restore_status = "running"
-        backup.restore_started_at = datetime.now()
+        backup.restore_started_at = resolve_business_datetime()
         backup.restore_completed_at = None
         backup.restore_error_message = None
         await backup.save()
@@ -330,6 +331,6 @@ class DataBackupService:
                 "触发恢复任务失败: "
                 f"{DataBackupService._flatten_exception_message(e)}"
             )
-            backup.restore_completed_at = datetime.now()
+            backup.restore_completed_at = resolve_business_datetime()
             await backup.save()
             return False

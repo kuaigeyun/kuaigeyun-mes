@@ -13,6 +13,7 @@ from apps.kuaizhizao.models.equipment_point_inspection import EquipmentPointInsp
 from apps.kuaizhizao.models.equipment import Equipment
 from apps.kuaizhizao.services.equipment_fault_service import EquipmentFaultService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class EquipmentPointInspectionService:
@@ -34,7 +35,7 @@ class EquipmentPointInspectionService:
         # 创建记录
         record = await EquipmentPointInspectionRecord.create(
             tenant_id=tenant_id,
-            record_no=f"INSP-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            record_no=f"INSP-{resolve_business_datetime().strftime('%Y%m%d%H%M%S')}",
             equipment_id=equipment_id,
             equipment_uuid=equipment.uuid,
             inspection_date=data.get("inspection_date") or date.today(),
@@ -51,7 +52,7 @@ class EquipmentPointInspectionService:
             # 调用故障服务
             fault_data = {
                 "equipment_id": record.equipment_id,
-                "fault_date": datetime.now(),
+                "fault_date": resolve_business_datetime(),
                 "fault_type": "点检异常",
                 "fault_description": f"点检记录 {record.record_no} 发现异常: {record.abnormality_description}",
                 "fault_level": "一般",

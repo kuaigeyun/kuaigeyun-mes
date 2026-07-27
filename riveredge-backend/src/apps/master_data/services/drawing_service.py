@@ -33,7 +33,9 @@ from infra.models.user import User
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    from core.utils.timezone_utils import now_utc
+
+    return now_utc()
 
 
 def _norm_uuid_list(value: Any) -> List[str]:

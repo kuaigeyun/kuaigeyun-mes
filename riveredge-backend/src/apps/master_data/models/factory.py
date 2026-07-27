@@ -246,6 +246,7 @@ class Workstation(BaseModel):
     work_center_name = fields.CharField(max_length=200, null=True, description="关联工作中心名称")
     
     # 状态信息
+    max_parallel = fields.IntField(default=1, description="同刻最大并行工序数")
     is_active = fields.BooleanField(default=True, description="是否启用")
 
     

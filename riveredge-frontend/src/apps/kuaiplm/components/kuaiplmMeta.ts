@@ -66,6 +66,27 @@ export const KUAIPLM_ROUTE_CHANGE_TYPE_I18N: Record<string, string> = {
   other: 'app.kuaiplm.common.routeChangeType.other',
 };
 
+/** BOM + 工艺路线变更类型码 → i18n（我的任务/审批内容展示共用） */
+export const KUAIPLM_CHANGE_TYPE_I18N: Record<string, string> = {
+  ...KUAIPLM_BOM_CHANGE_TYPE_I18N,
+  ...KUAIPLM_ROUTE_CHANGE_TYPE_I18N,
+};
+
+/** 审批任务标题前缀（历史存量中文前缀 → i18n） */
+export const KUAIPLM_APPROVAL_TITLE_PREFIX_I18N: Array<{
+  prefix: string;
+  i18nKey: string;
+}> = [
+  {
+    prefix: 'BOM 工程变更',
+    i18nKey: 'app.kuaiplm.common.approvalTitle.bomChange',
+  },
+  {
+    prefix: '工艺路线变更',
+    i18nKey: 'app.kuaiplm.common.approvalTitle.routeChange',
+  },
+];
+
 export const KUAIPLM_ENGINEERING_LINK_I18N: Record<string, string> = {
   bom: 'app.kuaiplm.common.engineeringLink.bom',
   drawing: 'app.kuaiplm.common.engineeringLink.drawing',

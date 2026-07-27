@@ -141,7 +141,7 @@ const codeRulePagezhHant = {
   'codeRulePage.master-data-defect-type.codeFieldLabel': '不良品編碼',
   'codeRulePage.master-data-defect-type.pageName': '不良品項',
   'codeRulePage.master-data-engineering-bom.codeFieldLabel': 'BOM編碼',
-  'codeRulePage.master-data-engineering-bom.pageName': '物料清單BOM',
+  'codeRulePage.master-data-engineering-bom.pageName': '物料清單 (BOM)',
   'codeRulePage.master-data-factory-plant.codeFieldLabel': '廠區編碼',
   'codeRulePage.master-data-factory-plant.pageName': '廠區管理',
   'codeRulePage.master-data-factory-production-line.codeFieldLabel': '產線編碼',

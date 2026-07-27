@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
-from core.utils.timezone_utils import is_future_datetime
+from core.utils.timezone_utils import is_future_datetime, resolve_business_datetime, today_site_str
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
@@ -80,43 +80,71 @@ async def _resolve_work_order_operation_for_reporting(
     return await base.filter(id=operation_id).order_by("-id").first()
 
 
-def _plan_quantity_reached(work_order: WorkOrder, work_order_operation: WorkOrderOperation) -> bool:
-    """工序累计合格产出是否已达工单计划数量（完成态口径，与进度圈 100% 一致）。"""
+async def _effective_completion_quantity(
+    tenant_id: int,
+    work_order_id: int,
+    work_order_operation: WorkOrderOperation,
+) -> Decimal:
+    """
+    工序完成判定用数量：
+    - none/simple：报工累计合格
+    - plan：过程检验放行后的可转下道合格（未检完不得算完成）
+    """
+    from apps.kuaizhizao.services.operation_transfer_service import (
+        resolve_operation_transfer_qualified,
+    )
+
+    return await resolve_operation_transfer_qualified(
+        tenant_id, work_order_id, work_order_operation
+    )
+
+
+async def _plan_quantity_reached(
+    tenant_id: int,
+    work_order: WorkOrder,
+    work_order_operation: WorkOrderOperation,
+) -> bool:
+    """工序有效合格产出是否已达工单计划数量。"""
     plan = Decimal(str(work_order.quantity or 0))
     if plan <= 0:
         return False
-    qualified = Decimal(str(work_order_operation.qualified_quantity or 0))
-    return qualified >= plan
+    effective = await _effective_completion_quantity(
+        tenant_id, int(work_order.id), work_order_operation
+    )
+    return effective >= plan
 
 
-def _maybe_mark_operation_completed(
+async def _maybe_mark_operation_completed(
+    tenant_id: int,
     work_order: WorkOrder,
     work_order_operation: WorkOrderOperation,
     *,
     now: Optional[datetime] = None,
 ) -> bool:
     """
-    计划合格产量达标即将工序置为 completed。
+    有效合格产量达标即将工序置为 completed。
 
-    超报上限仅约束继续报工，不推迟完成状态（否则 UI 进度 100% 仍显示进行中）。
+    方案质检须检验放行后才达标；超报上限仅约束继续报工。
     """
     if work_order_operation.status == "completed":
         return False
-    if not _plan_quantity_reached(work_order, work_order_operation):
+    if not await _plan_quantity_reached(tenant_id, work_order, work_order_operation):
         return False
     work_order_operation.status = "completed"
     work_order_operation.actual_end_date = (
-        work_order_operation.actual_end_date or now or datetime.now()
+        work_order_operation.actual_end_date or now or resolve_business_datetime()
     )
     return True
 
 
-def _reconcile_operation_completion_status(
+async def _reconcile_operation_completion_status(
+    tenant_id: int,
     work_order: WorkOrder,
     work_order_operation: WorkOrderOperation,
 ) -> bool:
     """
-    按数量报工时，合格未达标却为 completed 的工序回退为进行中（修正历史误标完成）。
+    按数量报工时，有效合格未达标却为 completed 的工序回退为进行中
+    （含方案质检已报未检被误标完成的历史数据）。
     """
     reporting_type = work_order_operation.reporting_type or "quantity"
     if reporting_type != "quantity":
@@ -126,24 +154,69 @@ def _reconcile_operation_completion_status(
     plan = Decimal(str(work_order.quantity or 0))
     if plan <= 0:
         return False
-    qualified = Decimal(str(work_order_operation.qualified_quantity or 0))
-    if qualified >= plan:
+    if await _plan_quantity_reached(tenant_id, work_order, work_order_operation):
         return False
     work_order_operation.status = "in_progress"
     work_order_operation.actual_end_date = None
     return True
 
 
-def _sync_operation_completion_status(
+async def _sync_operation_completion_status(
+    tenant_id: int,
     work_order: WorkOrder,
     work_order_operation: WorkOrderOperation,
     *,
     now: Optional[datetime] = None,
 ) -> bool:
     """校正并完成工序状态；返回 status 是否变更。"""
-    if _reconcile_operation_completion_status(work_order, work_order_operation):
+    if await _reconcile_operation_completion_status(
+        tenant_id, work_order, work_order_operation
+    ):
         return True
-    return _maybe_mark_operation_completed(work_order, work_order_operation, now=now)
+    return await _maybe_mark_operation_completed(
+        tenant_id, work_order, work_order_operation, now=now
+    )
+
+
+async def sync_work_order_operations_completion(
+    tenant_id: int,
+    work_order_id: int,
+) -> None:
+    """按有效合格口径重算工序/工单完成态（报工、过程检验后调用）。"""
+    work_order = await WorkOrder.get_or_none(
+        id=work_order_id,
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    )
+    if not work_order:
+        return
+
+    operations = await WorkOrderOperation.filter(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        deleted_at__isnull=True,
+    ).all()
+    status_changed = False
+    for op in operations:
+        if await _sync_operation_completion_status(tenant_id, work_order, op):
+            await op.save()
+            status_changed = True
+    if not status_changed and not operations:
+        return
+
+    all_completed = bool(operations) and all(op.status == "completed" for op in operations)
+    if all_completed and work_order.status != "completed":
+        work_order.status = "completed"
+        work_order.actual_end_date = work_order.actual_end_date or resolve_business_datetime()
+        await work_order.save()
+    elif (
+        not all_completed
+        and work_order.status == "completed"
+        and not getattr(work_order, "manually_completed", False)
+    ):
+        work_order.status = "in_progress"
+        work_order.actual_end_date = None
+        await work_order.save()
 
 
 REPORTING_SORTABLE_FIELDS = frozenset({
@@ -562,6 +635,21 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not work_order_operation:
                 raise NotFoundError(f"工单工序不存在: 工单ID={reporting_data.work_order_id}, 工序ID={reporting_data.operation_id}")
 
+            from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+            from apps.kuaizhizao.utils.outsource_operation import is_outsourced_flag
+
+            has_active_outsource = await OutsourceOrder.filter(
+                tenant_id=tenant_id,
+                work_order_operation_id=work_order_operation.id,
+                deleted_at__isnull=True,
+            ).exclude(status="cancelled").exists()
+            if is_outsourced_flag(
+                work_order_operation, has_active_outsource_order=has_active_outsource
+            ):
+                raise ValidationError(
+                    "该工序为委外工序，请通过委外接收完成数量，不可厂内报工"
+                )
+
             # 报工会将 pending 工序隐式置为 in_progress，等同开工，须同样校验领料
             if work_order_operation.status == "pending":
                 from apps.kuaizhizao.services.work_order_service import WorkOrderService
@@ -768,9 +856,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             if should_auto_approve and reporting_data.status == 'pending':
                 reporting_data.status = 'approved'
-                approved_at = datetime.now()
+                approved_at = resolve_business_datetime()
                 approved_by = reported_by
                 approved_by_name = recorder_name or reporting_data.worker_name or "自动审核"
+            elif reporting_data.status == "approved" and approved_at is None:
+                # 调用方直接落已审核时，补齐审核时间，确保后续质检自动建单能触发
+                approved_at = resolve_business_datetime()
+                approved_by = reported_by
+                approved_by_name = recorder_name or reporting_data.worker_name or "系统"
 
             # 关键主数据标识以后端查询结果为准，避免前端篡改编码/名称
             trusted_work_order_code = getattr(work_order, "code", None) or reporting_data.work_order_code
@@ -819,7 +912,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             # 更新工单工序状态和进度（核心功能，新增）
             if work_order_operation.status == 'pending':
                 work_order_operation.status = 'in_progress'
-                work_order_operation.actual_start_date = work_order_operation.actual_start_date or datetime.now()
+                work_order_operation.actual_start_date = work_order_operation.actual_start_date or resolve_business_datetime()
             
             # 更新工序完成数量
             work_order_operation.completed_quantity = (
@@ -833,18 +926,20 @@ class ReportingService(AppBaseService[ReportingRecord]):
             ) + reporting_data.unqualified_quantity
             if reporting_type == "status" and reported_quantity_dec > 0:
                 work_order_operation.status = "completed"
-                work_order_operation.actual_end_date = datetime.now()
+                work_order_operation.actual_end_date = resolve_business_datetime()
             else:
-                _sync_operation_completion_status(work_order, work_order_operation)
+                await _sync_operation_completion_status(
+                    tenant_id, work_order, work_order_operation
+                )
             
             await work_order_operation.save()
 
             # 更新工单状态为进行中（如果是从released变为in_progress）
             if work_order.status == 'released':
                 work_order.status = 'in_progress'
-                work_order.actual_start_date = work_order.actual_start_date or datetime.now()
+                work_order.actual_start_date = work_order.actual_start_date or resolve_business_datetime()
             
-            # 检查工单是否完成（以最后一道工序完成为依据，即所有工序都完成）
+            # 检查工单是否完成（以最后一道工序完成为依据；方案质检须检验放行后工序才 completed）
             all_operations = await WorkOrderOperation.filter(
                 tenant_id=tenant_id,
                 work_order_id=work_order.id,
@@ -853,7 +948,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
             all_completed = len(all_operations) > 0 and all(op.status == 'completed' for op in all_operations)
             if all_completed and work_order.status != 'completed':
                 work_order.status = 'completed'
-                work_order.actual_end_date = work_order.actual_end_date or datetime.now()
+                work_order.actual_end_date = work_order.actual_end_date or resolve_business_datetime()
+            elif (
+                not all_completed
+                and work_order.status == 'completed'
+                and not getattr(work_order, "manually_completed", False)
+            ):
+                work_order.status = 'in_progress'
+                work_order.actual_end_date = None
 
             # 工单头已完成/合格数量 = 末道工序累计（不按全工序报工相加）
             if all_operations:
@@ -898,7 +1000,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 )
 
             # 报工生效时自动触发质量检验需求（根据策略自动创建检验单）
-            if approved_at is not None:
+            if reporting_record.status == "approved":
                 try:
                     await self._trigger_quality_inspection_from_reporting(
                         tenant_id=tenant_id,
@@ -1330,7 +1432,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             approved_by_name = await self.get_user_name(approved_by)
 
             # 更新审核信息
-            record.approved_at = datetime.now()
+            record.approved_at = resolve_business_datetime()
             record.approved_by = approved_by
             record.approved_by_name = approved_by_name
 
@@ -1459,7 +1561,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             
             # 记录在备注中
             user_info = await self.get_user_info(revoked_by)
-            revocation_note = f"\n[撤回审核] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 由 {user_info['name']} 撤回审核"
+            revocation_note = f"\n[撤回审核] {resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')} 由 {user_info['name']} 撤回审核"
             if record.remarks:
                 record.remarks += revocation_note
             else:
@@ -1506,7 +1608,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         # 获取用户信息
         user_info = await self.get_user_info(revoked_by)
         revoked_by_name = user_info['name']
-        now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        now_str = resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')
 
         # 记录受影响的工单ID，用于最后刷新进度
         affected_work_order_ids = set()
@@ -1794,7 +1896,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 source_id=work_order.id,
                 source_no=work_order.code,
                 reporting_record_id=reporting_record_id,
-                return_date=datetime.now(),
+                return_date=resolve_business_datetime(),
                 usage_count=usage_count,
                 operator_name=operator_name,
             )
@@ -1814,7 +1916,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
         将工单头的已完成/合格数量与「末道工序」行对齐。
 
         多道工序时，各工序报工合格数表示该工序产出，不能简单相加作为工单成品数量；
-        工单维度应以 sequence 最大的工序上的累计完成/合格为准。
+        工单维度应以 sequence 最大的工序为准：
+        - completed_quantity：末道报工完成数（现场产出）
+        - qualified_quantity：末道有效合格（方案质检为检验放行数，未检完不计）
         """
         operations = await WorkOrderOperation.filter(
             tenant_id=tenant_id,
@@ -1827,7 +1931,13 @@ class ReportingService(AppBaseService[ReportingRecord]):
             return
         last_op = max(operations, key=lambda op: (op.sequence or 0, op.id or 0))
         work_order.completed_quantity = last_op.completed_quantity or Decimal("0")
-        work_order.qualified_quantity = last_op.qualified_quantity or Decimal("0")
+        from apps.kuaizhizao.services.operation_transfer_service import (
+            resolve_operation_transfer_qualified,
+        )
+
+        work_order.qualified_quantity = await resolve_operation_transfer_qualified(
+            tenant_id, int(work_order.id), last_op
+        )
 
     async def _update_work_order_progress(
         self,
@@ -1849,40 +1959,19 @@ class ReportingService(AppBaseService[ReportingRecord]):
         )
 
         if work_order:
-            all_operations = await WorkOrderOperation.filter(
+            await sync_work_order_operations_completion(tenant_id, work_order_id)
+            work_order = await WorkOrder.get_or_none(
+                id=work_order_id,
                 tenant_id=tenant_id,
-                work_order_id=work_order_id,
                 deleted_at__isnull=True,
-            ).all()
-            status_changed = False
-            for op in all_operations:
-                if _sync_operation_completion_status(work_order, op):
-                    await op.save()
-                    status_changed = True
+            )
+            if not work_order:
+                return
 
             await self._sync_work_order_header_quantities_from_last_operation(tenant_id, work_order)
 
             # 更新不合格数量（从报废记录统计）
             await self._update_work_order_unqualified_quantity(tenant_id, work_order_id, work_order)
-
-            # 工单完成判断：以最后一道工序完成为依据，而非完成数量达到计划数量
-            all_operations = await WorkOrderOperation.filter(
-                tenant_id=tenant_id,
-                work_order_id=work_order_id,
-                deleted_at__isnull=True,
-            ).all()
-            all_completed = len(all_operations) > 0 and all(op.status == 'completed' for op in all_operations)
-            if all_completed and work_order.status != 'completed':
-                work_order.status = 'completed'
-                work_order.actual_end_date = datetime.now()
-            elif (
-                status_changed
-                and not all_completed
-                and work_order.status == 'completed'
-                and not work_order.manually_completed
-            ):
-                work_order.status = 'in_progress'
-                work_order.actual_end_date = None
 
             await work_order.save()
 
@@ -1984,7 +2073,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 )
 
             # 生成报废单编码
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="SCRAP_RECORD_CODE",
@@ -2105,7 +2194,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 )
 
             # 生成不良品记录编码
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="DEFECT_RECORD_CODE",
@@ -2288,7 +2377,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             # 构建修正备注（记录修正历史）
             correction_note = (
-                f"\n[数据修正] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} "
+                f"\n[数据修正] {resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')} "
                 f"由 {corrected_by_name} 修正，原因：{correction_reason}"
             )
             if reporting_record.remarks:

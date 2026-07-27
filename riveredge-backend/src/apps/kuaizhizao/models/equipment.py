@@ -123,7 +123,11 @@ class Equipment(BaseModel):
     responsible_person_name = fields.CharField(max_length=100, null=True, description="设备负责人姓名")
     
     # 状态信息
-    status = fields.CharField(max_length=50, default="正常", description="设备状态（正常、维修中、停用、校验中、报废）")
+    status = fields.CharField(
+        max_length=50,
+        default="正常",
+        description="设备状态（正常、故障、维修中、停用、校验中、报废）",
+    )
     is_active = fields.BooleanField(default=True, description="是否启用")
     
     # 运行及校验扩展

@@ -42,3 +42,11 @@ class BatchResponse(BaseSchema):
     message: str = Field(..., description="消息")
     data: BatchOperationResult = Field(..., description="操作结果")
 
+
+def batch_result_message(result: dict, action: str, entity_label: str) -> str:
+    """批量结果文案；全成功时不带「失败 0 个」。"""
+    failed = result["failed_count"]
+    if failed == 0:
+        return f"成功{action} {result['success_count']} 个{entity_label}"
+    return f"成功{action} {result['success_count']} 个{entity_label}，失败 {failed} 个"
+

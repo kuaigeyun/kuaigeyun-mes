@@ -71,12 +71,13 @@ from core.services.business.code_generation_service import CodeGenerationService
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 T = TypeVar("T")
 
 
 def _now_doc_no(prefix: str) -> str:
-    return f"{prefix}{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    return f"{prefix}{resolve_business_datetime().strftime('%Y%m%d%H%M%S')}"
 
 
 async def _generate_code(tenant_id: int, rule_code: str, prefix: str) -> str:
@@ -182,7 +183,7 @@ async def _create_fault_from_ops(
 ) -> EquipmentFault:
     fault_data = EquipmentFaultCreate(
         equipment_uuid=equipment.uuid,
-        fault_date=datetime.now(),
+        fault_date=resolve_business_datetime(),
         fault_type="其他",
         fault_description=description,
         fault_level="一般",
@@ -249,7 +250,7 @@ class _MasterCRUDMixin:
 
     async def _soft_delete(self, tenant_id: int, row_id: int) -> None:
         row = await self._get(tenant_id, row_id)
-        row.deleted_at = datetime.now()
+        row.deleted_at = resolve_business_datetime()
         await row.save()
 
 
@@ -315,7 +316,7 @@ class EquipmentInspectionSchemeService(_MasterCRUDMixin):
             tenant_id=tenant_id,
             scheme_id=scheme_id,
             deleted_at__isnull=True,
-        ).update(deleted_at=datetime.now())
+        ).update(deleted_at=resolve_business_datetime())
         for idx, line in enumerate(lines):
             snap = await _snapshot_inspection_item(tenant_id, line.item_id)
             await EquipmentInspectionSchemeLine.create(
@@ -406,7 +407,7 @@ class EquipmentPatrolRouteService(_MasterCRUDMixin):
             tenant_id=tenant_id,
             route_id=route_id,
             deleted_at__isnull=True,
-        ).update(deleted_at=datetime.now())
+        ).update(deleted_at=resolve_business_datetime())
         for idx, step in enumerate(steps):
             equipment = await _get_equipment_or_raise(tenant_id, step.equipment_id)
             await EquipmentPatrolRouteStep.create(
@@ -542,7 +543,7 @@ class EquipmentMaintenanceSchemeService(_MasterCRUDMixin):
             tenant_id=tenant_id,
             scheme_id=scheme_id,
             deleted_at__isnull=True,
-        ).update(deleted_at=datetime.now())
+        ).update(deleted_at=resolve_business_datetime())
         for idx, line in enumerate(lines):
             snap = await _snapshot_maintenance_item(tenant_id, line.item_id)
             await EquipmentMaintenanceSchemeLine.create(
@@ -650,7 +651,7 @@ class EquipmentSchemeBindingService:
                 equipment_id=equipment.id,
                 scheme_type=data.scheme_type,
                 deleted_at__isnull=True,
-            ).update(deleted_at=datetime.now())
+            ).update(deleted_at=resolve_business_datetime())
             bindings = []
             for scheme_id in data.scheme_ids:
                 payload = dict(
@@ -673,7 +674,7 @@ class EquipmentSchemeBindingService:
         ).first()
         if not binding:
             raise NotFoundError(f"绑定记录不存在: {binding_id}")
-        binding.deleted_at = datetime.now()
+        binding.deleted_at = resolve_business_datetime()
         await binding.save()
 
 
@@ -826,6 +827,7 @@ class EquipmentSpotCheckService:
                     measured_value=line_input.measured_value,
                     is_pass=is_pass,
                     remark=line_input.remark,
+                    attachments=line_input.attachments,
                 )
                 if not is_pass:
                     label = line_input.item_name or line_input.item_code or str(line_input.item_id)
@@ -921,13 +923,13 @@ class EquipmentSpotCheckService:
             for k, v in update_data.items():
                 setattr(header, k, v)
             apply_update_audit(header, current_user)
-            await header.save()
             if data.lines is not None:
                 await EquipmentSpotCheckLine.filter(
                     tenant_id=tenant_id,
                     spot_check_id=header.id,
                     deleted_at__isnull=True,
-                ).update(deleted_at=datetime.now())
+                ).update(deleted_at=resolve_business_datetime())
+                failed_descriptions: List[str] = []
                 for line_input in data.lines:
                     is_pass = _line_is_pass(
                         line_input.value_type,
@@ -949,12 +951,43 @@ class EquipmentSpotCheckService:
                         measured_value=line_input.measured_value,
                         is_pass=is_pass,
                         remark=line_input.remark,
+                        attachments=line_input.attachments,
                     )
+                    if not is_pass:
+                        label = line_input.item_name or line_input.item_code or str(line_input.item_id)
+                        failed_descriptions.append(
+                            f"{label}: {line_input.measured_value or '不合格'}"
+                        )
+                has_abnormality = len(failed_descriptions) > 0
+                header.has_abnormality = has_abnormality
+                if has_abnormality:
+                    header.abnormality_description = "；".join(failed_descriptions)
+                    # 新变异常且尚无关联故障时补建（避免重复）
+                    if not header.fault_report_uuid:
+                        equipment = await _get_equipment_or_raise(
+                            tenant_id, header.equipment_id
+                        )
+                        fault = await _create_fault_from_ops(
+                            tenant_id=tenant_id,
+                            equipment=equipment,
+                            source_type="spot_check",
+                            source_uuid=header.uuid,
+                            description=(
+                                f"点检单 {header.document_no} 不合格项: "
+                                f"{header.abnormality_description}"
+                            ),
+                            reporter_id=header.inspector_id,
+                            reporter_name=header.inspector_name,
+                        )
+                        header.fault_report_uuid = fault.uuid
+                else:
+                    header.abnormality_description = None
+            await header.save()
             return header
 
     async def delete(self, tenant_id: int, row_id: int) -> None:
         header = await self.get(tenant_id, row_id)
-        header.deleted_at = datetime.now()
+        header.deleted_at = resolve_business_datetime()
         await header.save()
 
 
@@ -1090,6 +1123,7 @@ class EquipmentRoutePatrolService:
                     is_pass=is_pass,
                     fault_report_uuid=fault_uuid,
                     remark=line_input.remark,
+                    attachments=line_input.attachments,
                 )
 
             header.has_abnormality = has_abnormality
@@ -1169,28 +1203,45 @@ class EquipmentRoutePatrolService:
             for k, v in update_data.items():
                 setattr(header, k, v)
             apply_update_audit(header, current_user)
-            await header.save()
             if data.lines is not None:
+                old_lines = await EquipmentRoutePatrolLine.filter(
+                    tenant_id=tenant_id,
+                    route_patrol_id=header.id,
+                    deleted_at__isnull=True,
+                )
+                # 按 equipment_id + item_id 继承原行故障 UUID，避免 update 重复建故障
+                prior_fault: dict[tuple[int, Optional[int]], str] = {}
+                for ol in old_lines:
+                    if ol.fault_report_uuid:
+                        prior_fault[(ol.equipment_id, ol.item_id)] = ol.fault_report_uuid
                 await EquipmentRoutePatrolLine.filter(
                     tenant_id=tenant_id,
                     route_patrol_id=header.id,
                     deleted_at__isnull=True,
-                ).update(deleted_at=datetime.now())
+                ).update(deleted_at=resolve_business_datetime())
+                has_abnormality = False
                 for line_input in data.lines:
                     equipment = await _get_equipment_or_raise(tenant_id, line_input.equipment_id)
                     is_pass = line_input.is_pass
                     fault_uuid: Optional[str] = None
                     if not is_pass:
-                        fault = await _create_fault_from_ops(
-                            tenant_id=tenant_id,
-                            equipment=equipment,
-                            source_type="route_patrol",
-                            source_uuid=header.uuid,
-                            description=f"巡检单 {header.document_no} 不合格项",
-                            reporter_id=header.inspector_id,
-                            reporter_name=header.inspector_name,
-                        )
-                        fault_uuid = fault.uuid
+                        has_abnormality = True
+                        inherit_key = (equipment.id, line_input.item_id)
+                        fault_uuid = prior_fault.get(inherit_key)
+                        if not fault_uuid:
+                            fault = await _create_fault_from_ops(
+                                tenant_id=tenant_id,
+                                equipment=equipment,
+                                source_type="route_patrol",
+                                source_uuid=header.uuid,
+                                description=(
+                                    f"巡检单 {header.document_no} 设备 {equipment.name} "
+                                    f"不合格: {line_input.measured_value or line_input.item_name or ''}"
+                                ),
+                                reporter_id=header.inspector_id,
+                                reporter_name=header.inspector_name,
+                            )
+                            fault_uuid = fault.uuid
                     await EquipmentRoutePatrolLine.create(
                         tenant_id=tenant_id,
                         route_patrol_id=header.id,
@@ -1206,12 +1257,15 @@ class EquipmentRoutePatrolService:
                         is_pass=is_pass,
                         fault_report_uuid=fault_uuid,
                         remark=line_input.remark,
+                        attachments=line_input.attachments,
                     )
+                header.has_abnormality = has_abnormality
+            await header.save()
             return header
 
     async def delete(self, tenant_id: int, row_id: int) -> None:
         header = await self.get(tenant_id, row_id)
-        header.deleted_at = datetime.now()
+        header.deleted_at = resolve_business_datetime()
         await header.save()
 
 
@@ -1364,7 +1418,7 @@ class EquipmentScrapApplicationService:
             row.status = "已审核"
             row.approver_id = approver_id
             row.approver_name = approver_name
-            row.approved_at = datetime.now()
+            row.approved_at = resolve_business_datetime()
             if not row.scrap_date:
                 row.scrap_date = date.today()
             apply_update_audit(row, current_user)
@@ -1389,7 +1443,7 @@ class EquipmentScrapApplicationService:
         row.reject_reason = reject_reason
         row.approver_id = approver_id
         row.approver_name = approver_name
-        row.approved_at = datetime.now()
+        row.approved_at = resolve_business_datetime()
         apply_update_audit(row, current_user)
         await row.save()
         return row
@@ -1398,7 +1452,7 @@ class EquipmentScrapApplicationService:
         row = await self.get(tenant_id, row_id)
         if row.status not in ("草稿", "已驳回"):
             raise ValidationError("仅草稿或已驳回状态可删除")
-        row.deleted_at = datetime.now()
+        row.deleted_at = resolve_business_datetime()
         await row.save()
 
 
@@ -1564,7 +1618,7 @@ class EquipmentTransferApplicationService:
             row.status = "已审核"
             row.approver_id = approver_id
             row.approver_name = approver_name
-            row.approved_at = datetime.now()
+            row.approved_at = resolve_business_datetime()
             if not row.transfer_date:
                 row.transfer_date = date.today()
             apply_update_audit(row, current_user)
@@ -1598,7 +1652,7 @@ class EquipmentTransferApplicationService:
         row.reject_reason = reject_reason
         row.approver_id = approver_id
         row.approver_name = approver_name
-        row.approved_at = datetime.now()
+        row.approved_at = resolve_business_datetime()
         apply_update_audit(row, current_user)
         await row.save()
         return row
@@ -1607,7 +1661,7 @@ class EquipmentTransferApplicationService:
         row = await self.get(tenant_id, row_id)
         if row.status not in ("草稿", "已驳回"):
             raise ValidationError("仅草稿或已驳回状态可删除")
-        row.deleted_at = datetime.now()
+        row.deleted_at = resolve_business_datetime()
         await row.save()
 
 

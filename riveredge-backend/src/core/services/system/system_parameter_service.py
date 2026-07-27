@@ -13,6 +13,7 @@ from core.models.system_parameter import SystemParameter
 from core.schemas.system_parameter import SystemParameterCreate, SystemParameterUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache import cache
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class SystemParameterService:
@@ -297,7 +298,7 @@ class SystemParameterService:
         
         # 软删除
         from datetime import datetime
-        parameter.deleted_at = datetime.now()
+        parameter.deleted_at = resolve_business_datetime()
         await parameter.save()
         
         # 删除缓存

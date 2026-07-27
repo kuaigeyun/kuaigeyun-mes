@@ -5,7 +5,7 @@
  * 工位视图：splitTasks + segments[]，由 RiverGantt 原生渲染同一行分段（可按段拖拽/拉伸/改派）。
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Empty, Spin, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -30,6 +30,10 @@ import {
   resolveStationRowIdForOperation,
 } from './workOrderOperationLinks';
 import dayjs from 'dayjs';
+import { stationUnavailableApi, workCalendarApi } from '../../services/performance';
+import type { StationUnavailableWindow } from '../../types/performance';
+import { buildNonWorkTimeBands } from '../../utils/workCalendarBands';
+import type { EffectiveWorkCalendar } from '../../types/performance';
 import { ensureGanttIconsCssLoaded } from '../../../../utils/loadGanttIconsCss';
 import { GanttTaskLabel } from './GanttTaskLabel';
 import { scrollGanttToToday } from './scrollGanttToToday';
@@ -207,9 +211,10 @@ function buildSchedulingGanttScales(t: TFunction, viewMode: ViewMode): RiverGant
   const year = t(`${GANTT_I18N}.scale.year`);
   const monthShort = t(`${GANTT_I18N}.scale.monthShort`);
   if (viewMode === 'day') {
+    // 最小刻度为小时，列宽明显大于周视图（周视图最小刻度为日）
     return [
-      { unit: 'month', step: 1, format: monthYear },
-      { unit: 'day', step: 1, format: '%d' },
+      { unit: 'day', step: 1, format: '%m-%d' },
+      { unit: 'hour', step: 2, format: '%H' },
     ];
   }
   if (viewMode === 'month') {
@@ -298,6 +303,8 @@ export interface GanttSchedulingChartProps {
   onBatchUpdateOperationStations?: (updates: GanttOperationStationUpdate[]) => void | Promise<void>;
   onWorkOrderSelect?: (workOrderId: number | null) => void;
   onOperationSelect?: (operationId: number, workOrderId: number | null) => void;
+  /** 双击工序节点：打开整单设置 */
+  onOperationDoubleClick?: (operationId: number, workOrderId: number | null) => void;
   onRefresh?: () => void;
   nonDraggableTaskIds?: Array<number | string>;
   onBlockedDragAttempt?: (taskId: number | string) => void;
@@ -320,6 +327,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   onBatchUpdateOperationStations,
   onWorkOrderSelect,
   onOperationSelect,
+  onOperationDoubleClick,
   onRefresh,
   nonDraggableTaskIds = [],
   onBlockedDragAttempt,
@@ -342,6 +350,8 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   const lockedTaskIds = useMemo(() => new Set(nonDraggableTaskIds.map((id) => String(id))), [nonDraggableTaskIds]);
   const [selectedWorkOrderId, setSelectedWorkOrderId] = useState<number | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Array<number | string>>([]);
+  /** 当前点击的工序节点（同工单其余节点仅流程高亮） */
+  const [primarySelectedTaskId, setPrimarySelectedTaskId] = useState<string | null>(null);
   const [dragConflictIds, setDragConflictIds] = useState<Set<string>>(new Set());
 
   const safeWorkOrders = workOrders ?? [];
@@ -423,9 +433,13 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
           if (hasSelected) {
             next = {
               ...next,
-              segments: t.segments.map((seg) => {
+              segments: t.segments.map((seg, index) => {
                 if (seg.work_order_id !== selectedWorkOrderId) return seg;
-                const extra = 'gantt-wo-flow-selected';
+                const segId = operationTaskIdFromSegment(seg, index);
+                const isPrimary = primarySelectedTaskId != null && segId === primarySelectedTaskId;
+                const extra = isPrimary
+                  ? 'gantt-wo-flow-selected gantt-wo-flow-primary'
+                  : 'gantt-wo-flow-selected';
                 return {
                   ...seg,
                   css: [seg.css, extra].filter(Boolean).join(' '),
@@ -435,14 +449,20 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
             };
           }
         } else if (t.work_order_id === selectedWorkOrderId && isOperationTaskId(t.id)) {
-          decorateSlice(String(t.id), 'gantt-wo-flow-selected', 'gantt-wo-flow-selected');
+          const tid = String(t.id);
+          const isPrimary = primarySelectedTaskId != null && tid === primarySelectedTaskId;
+          const extra = isPrimary
+            ? 'gantt-wo-flow-selected gantt-wo-flow-primary'
+            : 'gantt-wo-flow-selected';
+          decorateSlice(tid, extra, extra);
         }
       }
 
-      if (t.segments?.length) {
+      // 必须基于 next.segments，避免覆盖上面的流程/主节点高亮 class
+      if (next.segments?.length) {
         next = {
           ...next,
-          segments: t.segments.map((seg, index) => {
+          segments: next.segments.map((seg, index) => {
             const segId = operationTaskIdFromSegment(seg, index);
             if (!dragConflictIds.has(segId)) return seg;
             return {
@@ -452,12 +472,12 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
             };
           }),
         };
-      } else if (dragConflictIds.has(String(t.id))) {
-        decorateSlice(String(t.id), 'gantt-drag-conflict gantt-task-red', 'gantt-drag-conflict gantt-task-red');
+      } else if (dragConflictIds.has(String(next.id))) {
+        decorateSlice(String(next.id), 'gantt-drag-conflict gantt-task-red', 'gantt-drag-conflict gantt-task-red');
       }
       return next;
     });
-  }, [tasks, selectedWorkOrderId, dragConflictIds]);
+  }, [tasks, selectedWorkOrderId, primarySelectedTaskId, dragConflictIds]);
 
   const processFlowLinks = useMemo(() => {
     if (!RESOURCE_LEVELS.includes(taskLevel) || selectedWorkOrderId == null) return [];
@@ -469,6 +489,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
     if (!safeWorkOrders.some((w) => w.id === selectedWorkOrderId)) {
       setSelectedWorkOrderId(null);
       setSelectedTaskIds([]);
+      setPrimarySelectedTaskId(null);
       onWorkOrderSelect?.(null);
     }
   }, [safeWorkOrders, selectedWorkOrderId, onWorkOrderSelect]);
@@ -503,19 +524,22 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
       if (woId != null) {
         setSelectedWorkOrderId(woId);
         setSelectedTaskIds(getWorkOrderOperationTaskIds(woId, safeWorkOrdersRef.current));
+        setPrimarySelectedTaskId(isOperationTaskId(targetFocusId) ? String(targetFocusId) : null);
         onWorkOrderSelect?.(woId);
       }
       onFocusTaskConsumed?.();
     });
   }, [focusTaskId, onFocusTaskConsumed, onWorkOrderSelect, taskLevel]);
 
-  useEffect(() => {
-    if (taskLevel === 'station') return;
-    if (!scrollToTodayToken || !ganttApiRef.current) return;
-    scrollGanttToToday(ganttApiRef.current, wrapperRef.current);
-  }, [scrollToTodayToken, taskLevel]);
-
   const scales = useMemo(() => buildSchedulingGanttScales(t, viewMode), [t, viewMode]);
+  /** 日视图按小时放大；周视图保持日格，略宽于默认便于拖拽 */
+  const cellWidth = viewMode === 'day' ? 36 : viewMode === 'week' ? 48 : undefined;
+
+  // 切日/周/月或点「回到今天」：将今日线滚入视口（工位视图同样生效）
+  useLayoutEffect(() => {
+    if (!ganttApiRef.current) return;
+    scrollGanttToToday(ganttApiRef.current, wrapperRef.current);
+  }, [viewMode, cellWidth, scrollToTodayToken]);
 
   const ganttColumns = useMemo(() => {
     const taskHeader = resolveGanttColumnHeader(t, taskLevel);
@@ -563,28 +587,100 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
     () => (freezeHorizonDays > 0 ? dayjs().add(freezeHorizonDays, 'day').endOf('day').toDate() : null),
     [freezeHorizonDays]
   );
-  const showTodayMarker = viewMode === 'day' || viewMode === 'week';
+  const showTodayMarker = true;
+
+  const [effectiveCalendar, setEffectiveCalendar] = useState<EffectiveWorkCalendar | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const dateFrom = dayjs(start).format('YYYY-MM-DD');
+    const dateTo = dayjs(end).format('YYYY-MM-DD');
+    workCalendarApi
+      .getEffective({ dateFrom, dateTo })
+      .then((data) => {
+        if (!cancelled) setEffectiveCalendar(data);
+      })
+      .catch(() => {
+        if (!cancelled) setEffectiveCalendar(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [start, end]);
+
+  const timeBands = useMemo(() => {
+    if (!effectiveCalendar) return [];
+    const density = viewMode === 'month' ? 'month' : viewMode === 'day' ? 'day' : 'week';
+    return buildNonWorkTimeBands(start, end, effectiveCalendar, density);
+  }, [effectiveCalendar, start, end, viewMode]);
+
+  const [stationDowntimes, setStationDowntimes] = useState<StationUnavailableWindow[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    const dateFrom = dayjs(start).format('YYYY-MM-DD');
+    const dateTo = dayjs(end).format('YYYY-MM-DD');
+    stationUnavailableApi
+      .list({ dateFrom, dateTo, limit: 500 })
+      .then((res: any) => {
+        const items = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+        if (!cancelled) setStationDowntimes(items as StationUnavailableWindow[]);
+      })
+      .catch(() => {
+        if (!cancelled) setStationDowntimes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [start, end]);
+
+  const resourceTimeBands = useMemo(
+    () =>
+      stationDowntimes
+        .filter((w) => w.isActive !== false)
+        .map((w) => ({
+          resourceId: stationResourceId(w.stationId),
+          start: new Date(w.startAt),
+          end: new Date(w.endAt),
+          className: 'gantt-station-downtime-band',
+          title: w.reason || undefined,
+        })),
+    [stationDowntimes]
+  );
 
   const selectWorkOrderGroup = useCallback(
-    (woId: number | null, toggle?: boolean) => {
+    (woId: number | null, toggle?: boolean, primaryTaskId?: string | null) => {
       if (woId == null) {
         setSelectedWorkOrderId(null);
         setSelectedTaskIds([]);
+        setPrimarySelectedTaskId(null);
         onWorkOrderSelect?.(null);
         return;
       }
-      if (selectedWorkOrderId === woId && toggle) {
+      // 同工单再次点击另一节点：保持流程高亮，只切换当前节点
+      if (selectedWorkOrderId === woId && toggle && primaryTaskId) {
+        if (primarySelectedTaskId === primaryTaskId) {
+          setSelectedWorkOrderId(null);
+          setSelectedTaskIds([]);
+          setPrimarySelectedTaskId(null);
+          onWorkOrderSelect?.(null);
+          return;
+        }
+        setPrimarySelectedTaskId(primaryTaskId);
+        return;
+      }
+      if (selectedWorkOrderId === woId && toggle && !primaryTaskId) {
         setSelectedWorkOrderId(null);
         setSelectedTaskIds([]);
+        setPrimarySelectedTaskId(null);
         onWorkOrderSelect?.(null);
         return;
       }
       setSelectedWorkOrderId(woId);
       const ids = getWorkOrderOperationTaskIds(woId, safeWorkOrders);
       setSelectedTaskIds(ids);
+      setPrimarySelectedTaskId(primaryTaskId ?? (ids[0] != null ? String(ids[0]) : null));
       onWorkOrderSelect?.(woId);
     },
-    [onWorkOrderSelect, safeWorkOrders, selectedWorkOrderId]
+    [onWorkOrderSelect, primarySelectedTaskId, safeWorkOrders, selectedWorkOrderId]
   );
 
   const handleSelectTask = useCallback(
@@ -597,13 +693,18 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
         if (opId && onOperationSelect) {
           onOperationSelect(opId, woId);
         }
-        selectWorkOrderGroup(woId, ev.toggle);
+        selectWorkOrderGroup(woId, ev.toggle, String(ev.id));
         return;
       }
       if (isStationResourceTaskId(ev.id)) {
         const stationTask = tasks.find((t) => String(t.id) === String(ev.id));
         if (stationTask?.segments?.length === 1 && stationTask.segments[0].work_order_id != null) {
-          selectWorkOrderGroup(stationTask.segments[0].work_order_id, ev.toggle);
+          const opId = stationTask.segments[0].operation_id;
+          selectWorkOrderGroup(
+            stationTask.segments[0].work_order_id,
+            ev.toggle,
+            opId != null ? `op-${opId}` : null
+          );
           return;
         }
         if (stationTask?.segments && stationTask.segments.length > 1) {
@@ -613,6 +714,30 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
       selectWorkOrderGroup(null);
     },
     [taskLevel, tasks, safeWorkOrders, selectWorkOrderGroup, onOperationSelect]
+  );
+
+  const handleDoubleClickTask = useCallback(
+    (ev: { id: number | string; segmentIndex?: number }) => {
+      if (!RESOURCE_LEVELS.includes(taskLevel) || !onOperationDoubleClick) return;
+      let opId: number | null = null;
+      let woId: number | null = null;
+      if (isOperationTaskId(ev.id)) {
+        const opMatch = String(ev.id).match(/^op-(\d+)$/i);
+        opId = opMatch ? Number(opMatch[1]) : null;
+        woId = resolveWorkOrderIdFromTask(ev.id, tasks, safeWorkOrders);
+      } else if (isStationResourceTaskId(ev.id) && ev.segmentIndex != null) {
+        const stationTask = tasks.find((t) => String(t.id) === String(ev.id));
+        const seg = stationTask?.segments?.[ev.segmentIndex];
+        opId = seg?.operation_id != null ? Number(seg.operation_id) : null;
+        woId = seg?.work_order_id != null ? Number(seg.work_order_id) : null;
+      }
+      if (opId == null || opId <= 0) return;
+      if (woId != null) {
+        selectWorkOrderGroup(woId, false, `op-${opId}`);
+      }
+      onOperationDoubleClick(opId, woId);
+    },
+    [taskLevel, onOperationDoubleClick, tasks, safeWorkOrders, selectWorkOrderGroup]
   );
 
   const handleGanttInit = useCallback(
@@ -753,18 +878,23 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
         tasks={displayTasks}
         links={processFlowLinks}
         selected={selectedTaskIds}
+        primarySelectedId={primarySelectedTaskId}
         scales={scales}
         start={start}
         end={end}
         zoom
+        cellWidth={cellWidth}
         splitTasks={taskLevel === 'station'}
         cellHeight={GANTT_ROW_HEIGHT}
         taskTemplate={schedulingTaskTemplate}
         todayMarker={showTodayMarker}
         freezeUntil={freezeUntil}
+        timeBands={timeBands}
+        resourceTimeBands={resourceTimeBands}
         nonDraggableTaskIds={nonDraggableTaskIds}
         onUpdateTask={handleUpdateTask}
         onSelectTask={handleSelectTask}
+        onDoubleClickTask={handleDoubleClickTask}
         onBlockedDragAttempt={onBlockedDragAttempt}
         init={handleGanttInit}
         readonly={readonly}

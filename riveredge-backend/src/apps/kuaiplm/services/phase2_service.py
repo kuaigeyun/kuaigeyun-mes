@@ -24,6 +24,7 @@ from apps.kuaiplm.schemas.phase2 import (
     RdRequirementUpdate,
 )
 from infra.exceptions.exceptions import NotFoundError
+from core.utils.timezone_utils import resolve_business_datetime
 from apps.kuaiplm.services.plm_list_core import (
     PHASE2_DESIGN_REVIEW_SORT_DB_COLS,
     PHASE2_FMEA_SORT_DB_COLS,
@@ -135,7 +136,7 @@ class Phase2Service(AppBaseService[RdRequirement]):
             raise NotFoundError(f"需求不存在: {requirement_id}")
         user_info = await self.get_user_info(deleted_by)
         await row.update_from_dict({
-            "deleted_at": datetime.now(),
+            "deleted_at": resolve_business_datetime(),
             "updated_by": deleted_by,
             "updated_by_name": user_info["name"],
         }).save()
@@ -244,7 +245,7 @@ class Phase2Service(AppBaseService[RdRequirement]):
             raise NotFoundError(f"设计评审不存在: {review_id}")
         user_info = await self.get_user_info(deleted_by)
         await row.update_from_dict({
-            "deleted_at": datetime.now(),
+            "deleted_at": resolve_business_datetime(),
             "updated_by": deleted_by,
             "updated_by_name": user_info["name"],
         }).save()
@@ -353,7 +354,7 @@ class Phase2Service(AppBaseService[RdRequirement]):
             raise NotFoundError(f"FMEA 记录不存在: {fmea_id}")
         user_info = await self.get_user_info(deleted_by)
         await row.update_from_dict({
-            "deleted_at": datetime.now(),
+            "deleted_at": resolve_business_datetime(),
             "updated_by": deleted_by,
             "updated_by_name": user_info["name"],
         }).save()

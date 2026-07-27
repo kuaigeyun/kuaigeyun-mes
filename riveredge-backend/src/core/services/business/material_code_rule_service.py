@@ -20,6 +20,7 @@ from core.models.material_code_rule import (
 )
 from core.services.business.material_code_rule_engine import MaterialCodeRuleEngine
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class MaterialCodeRuleService:
@@ -195,7 +196,7 @@ class MaterialCodeRuleService:
                 tenant_id=tenant_id,
                 rule_id=rule_id,
                 deleted_at__isnull=True
-            ).update(deleted_at=datetime.now())
+            ).update(deleted_at=resolve_business_datetime())
             
             # 创建新的类型配置
             for type_config in material_types:
@@ -433,7 +434,7 @@ class MaterialCodeRuleService:
             rule_config=rule_config,
             change_description=change_description,
             changed_by=changed_by,
-            changed_at=datetime.now(),
+            changed_at=resolve_business_datetime(),
         )
         
         return history

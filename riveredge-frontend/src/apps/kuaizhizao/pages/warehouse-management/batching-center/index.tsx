@@ -43,11 +43,13 @@ import { batchingOrderCapabilityReasonMessage } from '../../../../../hooks/useDo
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import BatchingTaskQueue from './BatchingTaskQueue';
+import LineSidePrepSplitView from './LineSidePrepSplitView';
 import OutsourceMaterialPanel from './OutsourceMaterialPanel';
 import {
   getMaterialCenterTabs,
   DEFAULT_MATERIAL_CENTER_TAB,
   isBatchingTaskTab,
+  resolveMaterialCenterTabKey,
   type MaterialCenterTabKey,
   type BatchingTaskTabKey,
 } from './materialCenterTabs';
@@ -154,6 +156,8 @@ const BatchingCenterPage: React.FC = () => {
   );
   const initialTab = useMemo(() => {
     const tab = searchParams.get('tab');
+    const aliased = resolveMaterialCenterTabKey(tab);
+    if (aliased) return aliased;
     if (tab && materialCenterTabs.some((item) => item.key === tab)) {
       return tab as MaterialCenterTabKey;
     }
@@ -356,6 +360,7 @@ const BatchingCenterPage: React.FC = () => {
   };
 
   const tabIcons: Record<MaterialCenterTabKey, React.ReactNode> = {
+    line_side_prep: <CarryOutOutlined />,
     batching_draft: <CarryOutOutlined />,
     material_call: <PhoneOutlined />,
     outsource_issue: <ExportOutlined />,
@@ -378,16 +383,22 @@ const BatchingCenterPage: React.FC = () => {
             </Space>
           </Tooltip>
         ),
-        children: isBatchingTaskTab(tab.key) ? (
-          <BatchingTaskQueue
-            taskType={tab.key as BatchingTaskTabKey}
-            onCreate={tab.key === 'batching_draft' ? () => handleCreate() : undefined}
-            onOpenBatchingDetail={openBatchingDetail}
-            onRefreshBatchingList={invalidateMenuBadgeCounts}
-          />
-        ) : (
-          <OutsourceMaterialPanel mode={tab.key} />
-        ),
+        children:
+          tab.key === 'line_side_prep' ? (
+            <LineSidePrepSplitView
+              onCreate={() => handleCreate()}
+              onOpenBatchingDetail={openBatchingDetail}
+              onRefreshBatchingList={invalidateMenuBadgeCounts}
+            />
+          ) : isBatchingTaskTab(tab.key) ? (
+            <BatchingTaskQueue
+              taskType={tab.key as BatchingTaskTabKey}
+              onOpenBatchingDetail={openBatchingDetail}
+              onRefreshBatchingList={invalidateMenuBadgeCounts}
+            />
+          ) : (
+            <OutsourceMaterialPanel mode={tab.key} />
+          ),
       })),
     [materialCenterTabs, invalidateMenuBadgeCounts, t],
   );

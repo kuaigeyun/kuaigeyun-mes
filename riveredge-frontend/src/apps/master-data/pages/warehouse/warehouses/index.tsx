@@ -8,7 +8,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Table, Tag, Typography, theme } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Table, Tag, Tooltip, Typography, theme } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -863,24 +863,26 @@ const WarehousesPage: React.FC = () => {
           ) : null,
         ].filter(Boolean)}
         toolBarActionsAfterBatch={[
-          <Button {...rowActionKind('update')}
-            key="syncLineSide"
-            loading={syncLineSideLoading}
-            onClick={async () => {
-              try {
-                setSyncLineSideLoading(true);
-                const res = await warehouseApi.syncLineSide();
-                messageApi.success(res.message);
-                actionRef.current?.reload();
-              } catch (e: any) {
-                messageApi.error(e?.message || t('common.operationFailed'));
-              } finally {
-                setSyncLineSideLoading(false);
-              }
-            }}
-          >
-            {t('field.warehouse.syncLineSide')}
-          </Button>,
+          <Tooltip key="syncLineSideTip" title={t('field.warehouse.syncLineSideTip')}>
+            <Button {...rowActionKind('update')}
+              key="syncLineSide"
+              loading={syncLineSideLoading}
+              onClick={async () => {
+                try {
+                  setSyncLineSideLoading(true);
+                  const res = await warehouseApi.syncLineSide();
+                  messageApi.success(res.message);
+                  actionRef.current?.reload();
+                } catch (e: any) {
+                  messageApi.error(e?.message || t('common.operationFailed'));
+                } finally {
+                  setSyncLineSideLoading(false);
+                }
+              }}
+            >
+              {t('field.warehouse.syncLineSide')}
+            </Button>
+          </Tooltip>,
         ]}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}

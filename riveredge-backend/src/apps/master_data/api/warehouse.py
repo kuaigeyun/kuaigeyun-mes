@@ -167,8 +167,8 @@ async def sync_line_side_warehouses(
     tenant_id: Annotated[int, Depends(get_current_tenant)]
 ):
     """
-    根据车间/工位/工作中心自动建立线边仓。
-    为每个车间、工位、工作中心创建对应的线边仓（若不存在）。
+    根据车间/工作中心自动建立线边仓（不按工位批量建仓）。
+    为每个车间、工作中心创建对应的线边仓（若不存在）。
     """
     result = await WarehouseService.sync_line_side_warehouses(tenant_id, current_user=current_user)
     return {
@@ -234,10 +234,16 @@ async def batch_delete_warehouses(
     """
     try:
         result = await WarehouseService.batch_delete_warehouses(tenant_id, request.uuids)
+        failed = result["failed_count"]
+        message = (
+            f"成功删除 {result['success_count']} 个仓库"
+            if failed == 0
+            else f"成功删除 {result['success_count']} 个仓库，失败 {failed} 个"
+        )
         return {
-            "success": result["failed_count"] == 0,
-            "message": f"成功删除 {result['success_count']} 个仓库，失败 {result['failed_count']} 个",
-            "data": result
+            "success": failed == 0,
+            "message": message,
+            "data": result,
         }
     except Exception as e:
         from loguru import logger
@@ -396,10 +402,16 @@ async def batch_delete_storage_areas(
     """
     try:
         result = await WarehouseService.batch_delete_storage_areas(tenant_id, request.uuids)
+        failed = result["failed_count"]
+        message = (
+            f"成功删除 {result['success_count']} 个库区"
+            if failed == 0
+            else f"成功删除 {result['success_count']} 个库区，失败 {failed} 个"
+        )
         return {
-            "success": result["failed_count"] == 0,
-            "message": f"成功删除 {result['success_count']} 个库区，失败 {result['failed_count']} 个",
-            "data": result
+            "success": failed == 0,
+            "message": message,
+            "data": result,
         }
     except Exception as e:
         from loguru import logger
@@ -556,10 +568,16 @@ async def batch_delete_storage_locations(
     """
     try:
         result = await WarehouseService.batch_delete_storage_locations(tenant_id, request.uuids)
+        failed = result["failed_count"]
+        message = (
+            f"成功删除 {result['success_count']} 个库位"
+            if failed == 0
+            else f"成功删除 {result['success_count']} 个库位，失败 {failed} 个"
+        )
         return {
-            "success": result["failed_count"] == 0,
-            "message": f"成功删除 {result['success_count']} 个库位，失败 {result['failed_count']} 个",
-            "data": result
+            "success": failed == 0,
+            "message": message,
+            "data": result,
         }
     except Exception as e:
         from loguru import logger

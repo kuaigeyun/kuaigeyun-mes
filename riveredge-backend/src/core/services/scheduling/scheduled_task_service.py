@@ -16,6 +16,7 @@ from core.services.messaging.message_service import MessageService
 from core.schemas.message_template import SendMessageRequest
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class ScheduledTaskService:
@@ -194,7 +195,7 @@ class ScheduledTaskService:
         # if scheduled_task.inngest_function_id:
         #     await unregister_scheduled_task(scheduled_task.inngest_function_id)
         
-        scheduled_task.deleted_at = datetime.now()
+        scheduled_task.deleted_at = resolve_business_datetime()
         await scheduled_task.save()
     
     @staticmethod
@@ -286,7 +287,7 @@ class ScheduledTaskService:
         scheduled_task = await ScheduledTaskService.get_scheduled_task_by_uuid(tenant_id, task_uuid)
         
         scheduled_task.is_running = True
-        scheduled_task.last_run_at = datetime.now()
+        scheduled_task.last_run_at = resolve_business_datetime()
         await scheduled_task.save()
         
         return scheduled_task
@@ -321,7 +322,7 @@ class ScheduledTaskService:
         
         # 更新执行结果
         scheduled_task.is_running = False
-        scheduled_task.last_run_at = datetime.now()
+        scheduled_task.last_run_at = resolve_business_datetime()
         scheduled_task.last_run_status = status
         scheduled_task.last_error = error
         

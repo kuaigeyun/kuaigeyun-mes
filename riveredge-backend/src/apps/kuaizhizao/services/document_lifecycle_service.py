@@ -1597,11 +1597,16 @@ def get_incoming_inspection_lifecycle(
     inspection: Any,
     milestones: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
-    """来料检验单生命周期计算"""
+    """来料检验单生命周期计算。
+
+    主阶段仅看业务检验完成态（status / inspection_result），不看 review_status。
+    审核在执行检验之后（人工待审或合格自动通过）；创建不得预置审核结论。
+    审核态由 record.audit / 审核状态列独立展示。
+    """
     status = _norm(getattr(inspection, "status", None))
     review_status = _norm(getattr(inspection, "review_status", None))
+    inspection_result = _norm(getattr(inspection, "inspection_result", None))
     milestones = milestones or []
-    actions = {m.get("action") for m in milestones}
 
     from apps.kuaizhizao.services.document_action_policy.lifecycle_suggestions import (
         quality_inspection_capabilities_to_suggestions,
@@ -1617,11 +1622,35 @@ def get_incoming_inspection_lifecycle(
             current_stage_key=stage_key,
         )
 
-    is_done = status in ("已审核", "audited", "approved") or _is_approved(review_status)
+    # 业务已完成检验（含自动/人工审核后落库的「已审核」）
+    inspected = status in ("已检验", "inspected", "已审核", "audited", "approved") or inspection_result in (
+        "已检验",
+        "inspected",
+    )
+    # 审核列独立；子阶段「结果审核」仅在检验完成后才可能完成
+    audit_done = inspected and _is_approved(review_status)
     sub_stages = [
-        {"key": "receiving", "label": "接单", "status": "done" if status not in ("", "pending", "待检验") or milestones else "active"},
-        {"key": "testing", "label": "检验执行", "status": "done" if status in ("已检验", "inspected") or is_done else "active" if status in ("pending", "待检验") and milestones else "pending"},
-        {"key": "review", "label": "结果审核", "status": "done" if is_done else "active" if status in ("inspected", "已检验") else "pending"},
+        {
+            "key": "receiving",
+            "label": "接单",
+            "status": "done" if status or milestones else "active",
+        },
+        {
+            "key": "testing",
+            "label": "检验执行",
+            "status": (
+                "done"
+                if inspected
+                else "active"
+                if status in ("pending", "待检验") or inspection_result in ("pending", "待检验", "")
+                else "pending"
+            ),
+        },
+        {
+            "key": "review",
+            "label": "结果审核",
+            "status": "done" if audit_done else "active" if inspected else "pending",
+        },
     ]
 
     if _is_rejected(review_status) or status in ("已驳回", "rejected"):
@@ -1632,16 +1661,17 @@ def get_incoming_inspection_lifecycle(
             sub_stages=sub_stages,
         )
 
-    if is_done or status in ("已检验", "inspected"):
+    if inspected:
         for ss in sub_stages:
-            ss["status"] = "done"
+            if ss["key"] != "review" or audit_done:
+                ss["status"] = "done"
         return {
             "current_stage_key": "inspected",
             "current_stage_name": "已检验",
-            "status": "success" if is_done else "normal",
+            "status": "success" if audit_done else "normal",
             "main_stages": _build_main_stages(INCOMING_INSPECTION_MAIN_STAGES, "inspected"),
             "sub_stages": sub_stages,
-            "next_step_suggestions": [] if is_done else _qi_sugg("pending_review"),
+            "next_step_suggestions": [] if audit_done else _qi_sugg("pending_review"),
             "milestones": milestones,
         }
 

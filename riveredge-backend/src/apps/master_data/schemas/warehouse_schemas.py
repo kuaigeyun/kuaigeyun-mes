@@ -31,8 +31,12 @@ class WarehouseBase(BaseModel):
     is_active: bool = Field(True, description="是否启用", alias="isActive")
     warehouse_type: str = Field(default="normal", max_length=20, description="仓库类型", alias="warehouseType")
     workshop_id: Optional[int] = Field(None, description="关联车间ID（线边仓时必填）", alias="workshopId")
-    workstation_id: Optional[int] = Field(None, description="关联工位ID（工位级线边仓可选）", alias="workstationId")
-    work_center_id: Optional[int] = Field(None, description="关联工作中心ID", alias="workCenterId")
+    workstation_id: Optional[int] = Field(
+        None,
+        description="关联工位ID（已弃用：线边仓不按工位建仓，工位在制走报工/WIP）",
+        alias="workstationId",
+    )
+    work_center_id: Optional[int] = Field(None, description="关联工作中心ID（线边仓可选）", alias="workCenterId")
 
     model_config = ConfigDict(populate_by_name=True)
     
@@ -63,9 +67,13 @@ class WarehouseCreate(WarehouseBase):
 
     @model_validator(mode="after")
     def validate_line_side_workshop(self):
-        """线边仓时 workshop_id 必填"""
+        """线边仓时 workshop_id 必填；禁止新建工位级线边仓"""
         if self.warehouse_type == "line_side" and not self.workshop_id:
             raise ValueError("线边仓必须关联车间")
+        if self.workstation_id:
+            raise ValueError(
+                "线边仓不支持按工位建仓，请关联车间或工作中心；工位级在制请通过报工/WIP管理"
+            )
         return self
 
 
@@ -78,10 +86,23 @@ class WarehouseUpdate(BaseModel):
     is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
     warehouse_type: Optional[str] = Field(None, max_length=20, description="仓库类型", alias="warehouseType")
     workshop_id: Optional[int] = Field(None, description="关联车间ID", alias="workshopId")
-    workstation_id: Optional[int] = Field(None, description="关联工位ID", alias="workstationId")
+    workstation_id: Optional[int] = Field(
+        None,
+        description="关联工位ID（已弃用；仅允许清空，不可新关联）",
+        alias="workstationId",
+    )
     work_center_id: Optional[int] = Field(None, description="关联工作中心ID", alias="workCenterId")
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def reject_workstation_level_line_side(self):
+        """更新时不允许新设工位关联（可显式传 null 清空历史数据）"""
+        if "workstation_id" in self.model_fields_set and self.workstation_id is not None:
+            raise ValueError(
+                "线边仓不支持按工位建仓，请关联车间或工作中心；工位级在制请通过报工/WIP管理"
+            )
+        return self
     
     @validator("code")
     def validate_code(cls, v):

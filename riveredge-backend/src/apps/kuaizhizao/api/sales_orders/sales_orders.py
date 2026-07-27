@@ -262,8 +262,9 @@ async def get_sales_order_statistics(
     """
     from apps.kuaizhizao.models.sales_order import SalesOrder
 
-    tz = zoneinfo.ZoneInfo("Asia/Shanghai")
-    today = datetime.now(tz).date()
+    from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+
+    today = to_site_date(resolve_business_datetime())
     # 基础过滤：租户隔离 + 未删除
     base = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
     base = await sales_order_service._apply_sales_order_list_scope(

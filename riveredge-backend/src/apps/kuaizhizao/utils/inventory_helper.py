@@ -637,13 +637,14 @@ async def get_material_detailed_locations(
         logger.warning(f"获取主仓明细失败: {e}")
 
     try:
+        # 与 batch_get_material_inventory 同口径：不按过期日过滤线边（过期字段常为空/类型不一致，
+        # 套用 batch_filter 失败会被吞掉，导致半成品入线边后齐套「库存数量」恒为 0）
         line_items = await LineSideInventory.filter(
             tenant_id=tenant_id,
             material_id=material_id,
             deleted_at__isnull=True,
             status="available",
-            quantity__gt=0,
-        ).filter(batch_filter).all()
+        ).all()
 
         wh_ids = {int(item.warehouse_id) for item in line_items if item.warehouse_id}
         wh_map: Dict[int, Warehouse] = {}
@@ -663,7 +664,7 @@ async def get_material_detailed_locations(
                 or (wh.name if wh else "")
                 or f"仓库({wh_id})"
             )
-            wh_type = wh.warehouse_type if wh else "line_side"
+            wh_type = (wh.warehouse_type if wh else None) or "line_side"
             avail = _decimal_or_zero(item.quantity) - _decimal_or_zero(item.reserved_quantity)
             if avail <= 0:
                 continue
@@ -672,7 +673,9 @@ async def get_material_detailed_locations(
     except Exception as e:
         logger.warning(f"获取线边仓明细失败: {e}")
 
-    if material and not by_wh:
+    # 仅在完全无实物库存时补默认仓占位；有线边/主仓库存时不再用 0 数量的半成品仓遮挡
+    has_positive = any(_decimal_or_zero(r.get("quantity")) > 0 for r in by_wh.values())
+    if material and not has_positive:
         for wh_id, wh_name in await _list_material_default_warehouses(tenant_id, material):
             wh = await Warehouse.get_or_none(
                 tenant_id=tenant_id,
@@ -687,6 +690,10 @@ async def get_material_detailed_locations(
 
     locations: list[Dict[str, Any]] = []
     for row in by_wh.values():
+        qty = _decimal_or_zero(row["quantity"])
+        # 有正库存时隐藏 0 数量占位仓，避免成品工单齐套只看到「半成品仓 0」
+        if has_positive and qty <= 0:
+            continue
         locations.append(
             {
                 "warehouse_id": row["warehouse_id"],
@@ -699,7 +706,7 @@ async def get_material_detailed_locations(
         )
     locations.sort(
         key=lambda x: (
-            0 if (x.get("warehouse_type") or "") != "line_side" else 1,
+            0 if (x.get("warehouse_type") or "") == "line_side" else 1,
             str(x.get("warehouse_name") or ""),
         )
     )

@@ -26,6 +26,7 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
 class OutsourceMaterialReturnService(AppBaseService[OutsourceMaterialReturn]):
@@ -173,7 +174,7 @@ class OutsourceMaterialReturnService(AppBaseService[OutsourceMaterialReturn]):
 
             code = return_data.code
             if not code:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 existing_codes = await OutsourceMaterialReturn.filter(
                     tenant_id=tenant_id,
                     code__startswith=f"OMR-{today}",
@@ -196,7 +197,7 @@ class OutsourceMaterialReturnService(AppBaseService[OutsourceMaterialReturn]):
                     raise ValidationError(f"委外退料单编码 {code} 已存在")
 
             user_info = await self.get_user_info(created_by)
-            now = datetime.now()
+            now = resolve_business_datetime()
             material_return = await OutsourceMaterialReturn.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),

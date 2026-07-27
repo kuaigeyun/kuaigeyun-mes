@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from core.models.mobile_push_device import MobilePushDevice
+from core.utils.timezone_utils import now_utc
 
 
 async def register_mobile_push_device(
@@ -16,7 +17,7 @@ async def register_mobile_push_device(
     provider: str = "fcm",
     device_id: str | None = None,
 ) -> MobilePushDevice:
-    now = datetime.now(timezone.utc)
+    now = now_utc()
     normalized_token = token.strip()
     normalized_platform = platform.strip().lower() or "android"
     normalized_provider = provider.strip().lower() or "fcm"

@@ -23,6 +23,7 @@ from apps.master_data.schemas.shift_scheduling_schemas import (
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 def week_bounds(anchor: date) -> Tuple[date, date]:
@@ -123,7 +124,7 @@ class ShiftSchedulingService:
         ).first()
         if not row:
             raise NotFoundError(f"班次 {shift_uuid} 不存在")
-        row.deleted_at = datetime.now()
+        row.deleted_at = resolve_business_datetime()
         await row.save()
 
     # ---------- 排班周期 ----------
@@ -379,7 +380,7 @@ class ShiftSchedulingService:
         from infra.models.user import User
 
         async with in_transaction():
-            await ShiftAssignment.filter(roster_id=roster.id).update(deleted_at=datetime.now())
+            await ShiftAssignment.filter(roster_id=roster.id).update(deleted_at=resolve_business_datetime())
             for item in data.assignments:
                 if item.employee_id not in allowed:
                     if roster.scope_type == "employee":
@@ -447,7 +448,7 @@ class ShiftSchedulingService:
             raise ValidationError("排班表已发布")
         await ShiftSchedulingService._validate_publish_conflicts(tenant_id, roster)
         roster.status = "published"
-        roster.published_at = datetime.now()
+        roster.published_at = resolve_business_datetime()
         apply_update_audit(roster, operator)
         await roster.save()
         return await ShiftSchedulingService.get_roster_by_uuid(tenant_id, roster_uuid)

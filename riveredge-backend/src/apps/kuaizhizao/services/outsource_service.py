@@ -36,6 +36,7 @@ from apps.kuaizhizao.services.over_report_rules import (
     tuple_from_model,
 )
 from loguru import logger
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 OUTSOURCE_ORDER_SORTABLE_FIELDS = frozenset({
     "code",
@@ -213,7 +214,7 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
 
             # 生成委外单编码（如果未提供）
             if not outsource_order_data.code:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 code = await self.generate_code(
                     tenant_id=tenant_id,
                     code_type="OUTSOURCE_ORDER_CODE",
@@ -288,8 +289,99 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
             except Exception as e:
                 logger.warning("建立工单→工序委外关联失败: %s", e)
 
+            await self._apply_outsource_to_work_order_operation(
+                work_order_operation,
+                outsource_order=outsource_order,
+                remarks=outsource_order_data.remarks,
+            )
+
             logger.info(f"创建委外单成功: {code}, 工单: {work_order.code}, 工序: {outsource_order_data.operation_name}")
             return OutsourceOrderResponse.model_validate(outsource_order)
+
+    async def _apply_outsource_to_work_order_operation(
+        self,
+        work_order_operation: WorkOrderOperation,
+        *,
+        outsource_order: OutsourceOrder,
+        remarks: Optional[str] = None,
+    ) -> None:
+        """创建委外单后：落章委外类型、清空本厂派工、同步计划窗。"""
+        from apps.kuaizhizao.utils.outsource_operation import (
+            OUTSOURCE_KIND_AD_HOC,
+            OUTSOURCE_KIND_NONE,
+            OUTSOURCE_KIND_PLANNED,
+            normalize_outsource_kind,
+        )
+
+        kind = normalize_outsource_kind(getattr(work_order_operation, "outsource_kind", None))
+        # 下达自动创建的计划委外保持 planned；其余视为临时委外
+        auto_planned = bool(remarks and "计划工序委外" in str(remarks))
+        if kind == OUTSOURCE_KIND_NONE and not auto_planned:
+            work_order_operation.outsource_kind = OUTSOURCE_KIND_AD_HOC
+        elif kind == OUTSOURCE_KIND_NONE and auto_planned:
+            work_order_operation.outsource_kind = OUTSOURCE_KIND_PLANNED
+
+        work_order_operation.assigned_station_id = None
+        work_order_operation.assigned_station_name = None
+        work_order_operation.assigned_worker_id = None
+        work_order_operation.assigned_worker_name = None
+        work_order_operation.assigned_team_id = None
+        work_order_operation.assigned_team_name = None
+        work_order_operation.assigned_equipment_id = None
+        work_order_operation.assigned_equipment_name = None
+        work_order_operation.assigned_mold_id = None
+        work_order_operation.assigned_mold_name = None
+        work_order_operation.assigned_tool_id = None
+        work_order_operation.assigned_tool_name = None
+
+        if outsource_order.planned_start_date:
+            work_order_operation.planned_start_date = outsource_order.planned_start_date
+        if outsource_order.planned_end_date:
+            work_order_operation.planned_end_date = outsource_order.planned_end_date
+        if not work_order_operation.default_outsource_supplier_id and outsource_order.supplier_id:
+            work_order_operation.default_outsource_supplier_id = outsource_order.supplier_id
+            work_order_operation.default_outsource_supplier_name = outsource_order.supplier_name
+
+        await work_order_operation.save()
+
+    async def _restore_work_order_operation_after_outsource_cancel(
+        self,
+        tenant_id: int,
+        work_order_operation_id: int,
+    ) -> None:
+        """取消委外单后：若无其它有效委外单则恢复工序委外状态。"""
+        from apps.kuaizhizao.utils.outsource_operation import (
+            OUTSOURCE_KIND_AD_HOC,
+            OUTSOURCE_KIND_NONE,
+            OUTSOURCE_KIND_PLANNED,
+            normalize_outsource_kind,
+        )
+
+        op = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            id=work_order_operation_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not op:
+            return
+        still_active = await OutsourceOrder.filter(
+            tenant_id=tenant_id,
+            work_order_operation_id=work_order_operation_id,
+            deleted_at__isnull=True,
+        ).exclude(status="cancelled").exists()
+        if still_active:
+            return
+        kind = normalize_outsource_kind(getattr(op, "outsource_kind", None))
+        if kind == OUTSOURCE_KIND_AD_HOC:
+            # 临时委外取消：若仍有提前期+默认供应商（曾是计划）则恢复 planned
+            if op.outsource_lead_time_days is not None and op.default_outsource_supplier_id:
+                op.outsource_kind = OUTSOURCE_KIND_PLANNED
+            else:
+                op.outsource_kind = OUTSOURCE_KIND_NONE
+            await op.save(update_fields=["outsource_kind", "updated_at"])
+        elif kind == OUTSOURCE_KIND_PLANNED:
+            # 计划委外单取消后仍保持 planned（可再次下达补建草稿）
+            pass
 
     async def create_outsource_order_from_work_order(
         self,
@@ -559,6 +651,7 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
                 update_dict['supplier_code'] = supplier.code
                 update_dict['supplier_name'] = supplier.name
 
+            prev_status = outsource_order.status
             # 更新字段
             for key, value in update_dict.items():
                 setattr(outsource_order, key, value)
@@ -566,6 +659,16 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
             outsource_order.updated_by = updated_by
             outsource_order.updated_by_name = user_info["name"]
             await outsource_order.save()
+
+            if (
+                update_dict.get("status") == "cancelled"
+                and prev_status != "cancelled"
+                and outsource_order.work_order_operation_id
+            ):
+                await self._restore_work_order_operation_after_outsource_cancel(
+                    tenant_id,
+                    int(outsource_order.work_order_operation_id),
+                )
 
             logger.info(f"更新委外单成功: {outsource_order.code}")
             return OutsourceOrderResponse.model_validate(outsource_order)
@@ -606,7 +709,7 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
             user_info = await self.get_user_info(deleted_by)
 
             # 软删除
-            outsource_order.deleted_at = datetime.now()
+            outsource_order.deleted_at = resolve_business_datetime()
             outsource_order.updated_by = deleted_by
             outsource_order.updated_by_name = user_info["name"]
             await outsource_order.save()

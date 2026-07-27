@@ -11,7 +11,7 @@ from loguru import logger
 
 from core.models.scheduled_task import ScheduledTask
 from core.tasks.dispatcher import TaskEvent, dispatch_event
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 
 async def run_scheduled_task_scheduler_tick() -> Dict[str, Any]:
@@ -19,7 +19,7 @@ async def run_scheduled_task_scheduler_tick() -> Dict[str, Any]:
     每分钟执行一次，检查所有启用的定时任务，判断是否需要执行。
     需要执行时投递 scheduled-task/execute 事件。
     """
-    now = datetime.now()
+    now = resolve_business_datetime()
     executed_count = 0
 
     try:

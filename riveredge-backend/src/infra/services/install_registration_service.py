@@ -24,6 +24,7 @@ from infra.services.build_provenance_service import (
     resolve_install_instance_id,
 )
 from infra.utils.simple_rate_limit import SlidingWindowRateLimiter
+from core.utils.timezone_utils import now_utc
 
 _REGISTER_LIMITER = SlidingWindowRateLimiter(max_calls=10, window_seconds=60)
 
@@ -66,7 +67,7 @@ class InstallRegistrationService:
         host_hint = str(payload.get("host_hint") or "").strip() or None
         remote_is_official = is_official_git_remote(build_git_remote)
 
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         existing = await InstallRegistration.get_or_none(install_instance_id=request_id)
         if existing:
             existing.git_commit = git_commit or existing.git_commit

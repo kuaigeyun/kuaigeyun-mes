@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import type { Material } from '../../apps/master-data/types/material';
 import type { UniVariantSkuBatchPickerProps } from './types';
 import { VariantSkuPickerPanel } from './VariantSkuPickerPanel';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
 
 export type { UniVariantSkuBatchPickerProps } from './types';
 
@@ -98,6 +99,8 @@ export const UniVariantSkuBatchPicker: React.FC<UniVariantSkuBatchPickerProps> =
       okText={t('common.confirm')}
       cancelText={t('common.cancel')}
       okButtonProps={{ disabled: !masterMaterialUuid }}
+      maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+      wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
     >
       <VariantSkuPickerPanel
         active={open}

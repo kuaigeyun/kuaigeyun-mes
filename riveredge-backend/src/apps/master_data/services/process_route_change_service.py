@@ -27,6 +27,7 @@ from apps.common.audit_actor import apply_create_audit, apply_update_audit, audi
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 from loguru import logger
+from core.utils.timezone_utils import now_utc
 
 
 def _to_process_route_change_response(change: ProcessRouteChange) -> ProcessRouteChangeResponse:
@@ -530,7 +531,7 @@ class ProcessRouteChangeService:
         
         # 更新执行信息
         change.status = "executed"
-        change.applied_at = datetime.utcnow()
+        change.applied_at = now_utc()
         await change.save()
         try:
             from apps.kuaizhizao.services.demand_change_event_service import DemandChangeEventService
@@ -583,5 +584,5 @@ class ProcessRouteChangeService:
             raise NotFoundError("工艺路线变更记录", change_uuid)
         
         # 软删除
-        change.deleted_at = datetime.utcnow()
+        change.deleted_at = now_utc()
         await change.save()

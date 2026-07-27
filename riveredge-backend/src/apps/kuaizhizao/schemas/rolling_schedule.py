@@ -35,6 +35,11 @@ class RollingScheduleUpdateLinesRequest(BaseSchema):
     lines: List[RollingScheduleLineInput] = Field(..., description="计划行（全量替换）")
 
 
+class RollingScheduleSyncFromApsRequest(BaseSchema):
+    plan_date: date = Field(..., description="滚动计划日（锚点）")
+    work_order_ids: List[int] = Field(..., min_length=1, description="APS 确认涉及的工单ID")
+
+
 class RollingScheduleLineResponse(BaseSchema):
     id: int
     work_order_id: int

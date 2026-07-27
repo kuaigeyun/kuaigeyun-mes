@@ -113,6 +113,10 @@ const INSPECTION_SOURCE_QUERY_KEY: Record<string, string> = {
   oqc_inspection: 'oqc_inspection_id',
 };
 
+/**
+ * 跳转到检验列表页（可带单据 id 查询参数供列表过滤）。
+ * 不用于自动打开详情抽屉——四类检验单详情仅由操作列「详情」打开。
+ */
 export function buildInspectionDetailPath(sourceType?: string | null, inspectionId?: number | null): string | null {
   if (!sourceType || !inspectionId || !INSPECTION_SOURCE_PATH[sourceType]) return null;
   const key = INSPECTION_SOURCE_QUERY_KEY[sourceType];

@@ -24,7 +24,7 @@ from infra.domain.package_config import get_all_package_configs
 from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.models.tenant import Tenant, TenantPlan, TenantStatus
 from infra.models.user import User
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import now_utc, resolve_business_datetime, to_api_isoformat
 
 try:
     import psutil  # type: ignore
@@ -106,7 +106,7 @@ async def get_system_info(
                             "mac_address": "N/A",
                         })
                         break
-            uptime_seconds = max(0, int(datetime.now().timestamp() - psutil.boot_time()))
+            uptime_seconds = max(0, int(resolve_business_datetime().timestamp() - psutil.boot_time()))
 
         # 获取系统基本信息
         system_info = {
@@ -225,7 +225,7 @@ async def get_tenant_statistics(
             "total": total_tenants,
             "by_status": by_status,
             "by_plan": by_plan,
-            "updated_at": to_api_isoformat(datetime.now())
+            "updated_at": to_api_isoformat(resolve_business_datetime())
         }
 
     except Exception as e:
@@ -270,7 +270,7 @@ async def get_users_statistics(
 
         total_users = await User.filter(base_q).count()
 
-        now = datetime.now()
+        now = resolve_business_datetime()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_start = today_start - timedelta(days=today_start.weekday())
         month_start = today_start.replace(day=1)
@@ -344,7 +344,7 @@ async def get_users_statistics(
             "by_source": by_source,
             "by_region": by_region,
             "registration_trend": registration_trend,
-            "updated_at": to_api_isoformat(datetime.now()),
+            "updated_at": to_api_isoformat(resolve_business_datetime()),
         }
     except Exception as e:
         raise HTTPException(
@@ -371,7 +371,7 @@ async def get_access_statistics(
         success_count = await LoginLog.filter(base_q & Q(login_status="success")).count()
         failed_count = await LoginLog.filter(base_q & Q(login_status="failed")).count()
 
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         start_dt, end_dt = _parse_date_range(start, end)
         if not end_dt:
             end_dt = now
@@ -458,7 +458,7 @@ async def get_access_statistics(
             "login_trend": login_trend,
             "dau_trend": dau_trend,
             "by_region": by_region,
-            "updated_at": to_api_isoformat(datetime.now()),
+            "updated_at": to_api_isoformat(resolve_business_datetime()),
         }
     except Exception as e:
         raise HTTPException(

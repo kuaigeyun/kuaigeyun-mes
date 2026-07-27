@@ -15,7 +15,7 @@ import asyncio
 from datetime import datetime
 
 from core.services.logging.online_user_service import OnlineUserService
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 
 class WebSocketManager:
@@ -48,7 +48,7 @@ class WebSocketManager:
         Returns:
             str: 连接ID
         """
-        return f"{tenant_id}_{user_id}_{datetime.now().timestamp()}"
+        return f"{tenant_id}_{user_id}_{resolve_business_datetime().timestamp()}"
     
     async def connect(self, websocket: WebSocket, tenant_id: int, user_id: int, channels: Optional[list] = None) -> str:
         """
@@ -73,7 +73,7 @@ class WebSocketManager:
             "tenant_id": tenant_id,
             "user_id": user_id,
             "channels": set(channels or []),
-            "connected_at": datetime.now(),
+            "connected_at": resolve_business_datetime(),
         }
         
         # 添加到租户分组
@@ -335,7 +335,7 @@ class WebSocketService:
                         )
                         await websocket_manager.send_personal_message(connection_id, {
                             "type": "pong",
-                            "timestamp": to_api_isoformat(datetime.now()),
+                            "timestamp": to_api_isoformat(resolve_business_datetime()),
                         })
                     
                     else:
@@ -367,7 +367,7 @@ class WebSocketService:
             "type": "data",
             "channel": channel,
             "data": data,
-            "timestamp": to_api_isoformat(datetime.now()),
+            "timestamp": to_api_isoformat(resolve_business_datetime()),
         }
         await websocket_manager.broadcast_to_tenant(tenant_id, message)
     
@@ -385,7 +385,7 @@ class WebSocketService:
             "type": "data",
             "channel": channel,
             "data": data,
-            "timestamp": to_api_isoformat(datetime.now()),
+            "timestamp": to_api_isoformat(resolve_business_datetime()),
         }
         await websocket_manager.broadcast_to_user(user_id, message)
     
@@ -402,6 +402,6 @@ class WebSocketService:
             "type": "data",
             "channel": channel,
             "data": data,
-            "timestamp": to_api_isoformat(datetime.now()),
+            "timestamp": to_api_isoformat(resolve_business_datetime()),
         }
         await websocket_manager.broadcast_to_channel(channel, message)

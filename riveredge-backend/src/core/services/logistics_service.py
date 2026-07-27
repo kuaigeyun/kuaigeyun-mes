@@ -12,6 +12,7 @@ import os
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
 from loguru import logger
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class LogisticsService:
@@ -59,7 +60,7 @@ class LogisticsService:
     @staticmethod
     def _mock_track(carrier: str, tracking_number: str) -> Dict[str, Any]:
         """返回模拟物流轨迹（开发/演示用）"""
-        now = datetime.now()
+        now = resolve_business_datetime()
         traces = [
             {
                 "time": (now - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),

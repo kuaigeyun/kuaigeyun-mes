@@ -15,6 +15,7 @@ from apps.kuaizhizao.models.demand_replan_task import DemandReplanTask
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.services.demand_computation_service import DemandComputationService
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class DemandReplanningOrchestratorService:
@@ -25,7 +26,7 @@ class DemandReplanningOrchestratorService:
 
     @staticmethod
     async def _generate_task_code(tenant_id: int) -> str:
-        ts = datetime.now().strftime("%Y%m%d%H%M%S")
+        ts = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
         count = await DemandReplanTask.filter(tenant_id=tenant_id).count()
         return f"RPLAN-{ts}-{count + 1:04d}"
 
@@ -107,11 +108,11 @@ class DemandReplanningOrchestratorService:
 
         await DemandReplanTask.filter(tenant_id=tenant_id, id=task_id).update(
             status="running",
-            started_at=datetime.now(),
+            started_at=resolve_business_datetime(),
             operator_id=operator_id,
             approval_status="approved" if (task.approval_status == "pending" and force) else task.approval_status,
             approved_by=operator_id if (task.approval_status == "pending" and force) else task.approved_by,
-            approved_at=datetime.now() if (task.approval_status == "pending" and force) else task.approved_at,
+            approved_at=resolve_business_datetime() if (task.approval_status == "pending" and force) else task.approved_at,
             approval_comment=approval_comment or task.approval_comment,
             error_message=None,
         )
@@ -131,7 +132,7 @@ class DemandReplanningOrchestratorService:
             err_msg = "未找到可重算的需求计算，请确认上游单据已下推需求计算"
             await DemandReplanTask.filter(tenant_id=tenant_id, id=task_id).update(
                 status="failed",
-                finished_at=datetime.now(),
+                finished_at=resolve_business_datetime(),
                 result_summary={
                     "target_count": 0,
                     "success_count": 0,
@@ -181,7 +182,7 @@ class DemandReplanningOrchestratorService:
         }
         await DemandReplanTask.filter(tenant_id=tenant_id, id=task_id).update(
             status=status,
-            finished_at=datetime.now(),
+            finished_at=resolve_business_datetime(),
             result_summary=result_summary,
             error_message=(
                 failed[0]["error"][:500]

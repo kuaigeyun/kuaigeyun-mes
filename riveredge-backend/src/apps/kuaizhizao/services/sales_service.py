@@ -53,6 +53,7 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.user_service import UserService
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 
 
 class SalesForecastService(AppBaseService[SalesForecast]):
@@ -153,7 +154,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             code = getattr(forecast_data, "forecast_code", None) or ""
             code = (code.strip() if isinstance(code, str) else "") or None
             if not code or code == "AUTO":
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 try:
                     code = await self.generate_code(tenant_id, "SALES_FORECAST_CODE", prefix=f"SF{today}")
                 except Exception as e:
@@ -368,8 +369,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         
     async def get_forecast_statistics(self, tenant_id: int) -> Dict[str, Any]:
         """获取销售预测统计（列表页指标卡，字段与销售订单 statistics 对齐）"""
-        tz = zoneinfo.ZoneInfo("Asia/Shanghai")
-        today = datetime.now(tz).date()
+        today = to_site_date(resolve_business_datetime())
         base = SalesForecast.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         cancelled = ["CANCELLED", "已取消", "cancelled"]
@@ -546,10 +546,10 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 source_name=updated_forecast.forecast_name or updated_forecast.forecast_code,
                 changed_fields=["sales_forecast_updated"],
                 payload={"forecast_id": forecast_id},
-                effective_at=datetime.now(),
+                effective_at=resolve_business_datetime(),
                 trigger_reason="sales_forecast_updated",
                 requested_by=updated_by,
-                correlation_id=f"sales_forecast:{forecast_id}:{int(datetime.now().timestamp())}",
+                correlation_id=f"sales_forecast:{forecast_id}:{int(resolve_business_datetime().timestamp())}",
                 auto_create_task=True,
             )
         except Exception:
@@ -698,7 +698,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
                 reviewer_id=approved_by,
                 reviewer_name=approver_name,
-                review_time=datetime.now(),
+                review_time=resolve_business_datetime(),
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 status=status,
@@ -1086,7 +1086,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         os.makedirs(export_dir, exist_ok=True)
         
         # 生成文件名
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = resolve_business_datetime().strftime('%Y%m%d_%H%M%S')
         filename = f"sales_forecasts_{timestamp}.csv"
         file_path = os.path.join(export_dir, filename)
         
@@ -1309,7 +1309,7 @@ class SalesOrderService(AppBaseService[SalesOrder]):
             from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
             
             user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "SALES_ORDER_CODE", prefix=f"SO{today}")
 
             # 提取items（如果存在）
@@ -1444,7 +1444,7 @@ class SalesOrderService(AppBaseService[SalesOrder]):
             await SalesOrder.filter(tenant_id=tenant_id, id=order_id).update(
                 reviewer_id=approved_by,
                 reviewer_name=approver_name,
-                review_time=datetime.now(),
+                review_time=resolve_business_datetime(),
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 status=status,
@@ -1968,7 +1968,7 @@ class SalesOrderService(AppBaseService[SalesOrder]):
         os.makedirs(export_dir, exist_ok=True)
         
         # 生成文件名
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = resolve_business_datetime().strftime('%Y%m%d_%H%M%S')
         filename = f"sales_orders_{timestamp}.csv"
         file_path = os.path.join(export_dir, filename)
         

@@ -8,7 +8,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
+import { Alert, App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -734,6 +734,13 @@ const ProductionLinesPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate>
+        <Alert
+          type="info"
+          showIcon
+          closable
+          style={{ marginBottom: 12 }}
+          message={t('app.master-data.productionLines.dimensionHint')}
+        />
         <UniTable<ProductionLine>
         columnPersistenceId="apps.master-data.pages.factory.production-lines.status-v2"
         actionRef={actionRef}

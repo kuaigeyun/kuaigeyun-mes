@@ -16,6 +16,7 @@ from core.schemas.custom_field import CustomFieldCreate, CustomFieldUpdate
 from core.services.data.data_dictionary_service import DataDictionaryService
 from core.services.system.installed_feature_scope import custom_field_table_visibility_q
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class CustomFieldService:
@@ -275,7 +276,7 @@ class CustomFieldService:
         
         # 软删除
         from datetime import datetime
-        field.deleted_at = datetime.now()
+        field.deleted_at = resolve_business_datetime()
         await field.save()
     
     @staticmethod

@@ -26,6 +26,7 @@ from apps.kuaiplm.schemas.knowledge_base import (
 )
 from infra.exceptions.exceptions import NotFoundError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class KbService(AppBaseService[KbSpace]):
@@ -76,7 +77,7 @@ class KbService(AppBaseService[KbSpace]):
         row = await KbSpace.get_or_none(tenant_id=tenant_id, id=space_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError(f"知识空间不存在: {space_id}")
-        row.deleted_at = datetime.now()
+        row.deleted_at = resolve_business_datetime()
         user = await User.filter(id=deleted_by).first()
         apply_update_audit(row, user)
         await row.save()
@@ -189,7 +190,7 @@ class KbService(AppBaseService[KbSpace]):
         row = await KbArticle.get_or_none(tenant_id=tenant_id, id=article_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError(f"文章不存在: {article_id}")
-        row.deleted_at = datetime.now()
+        row.deleted_at = resolve_business_datetime()
         user = await User.filter(id=deleted_by).first()
         apply_update_audit(row, user)
         await row.save()

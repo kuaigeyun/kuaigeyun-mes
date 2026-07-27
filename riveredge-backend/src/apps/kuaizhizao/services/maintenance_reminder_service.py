@@ -16,7 +16,7 @@ from apps.kuaizhizao.models.maintenance_reminder import MaintenanceReminder
 from apps.kuaizhizao.models.equipment import Equipment
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.equipment_service import EquipmentService
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -45,7 +45,7 @@ class MaintenanceReminderService:
         Returns:
             Dict[str, Any]: 检查结果，包含创建的提醒数量
         """
-        now = datetime.now()
+        now = resolve_business_datetime()
         reminder_count = 0
         created_reminders: list[MaintenanceReminder] = []
 
@@ -266,7 +266,7 @@ class MaintenanceReminderService:
         Returns:
             int: 标记为已读的数量
         """
-        now = datetime.now()
+        now = resolve_business_datetime()
         count = 0
 
         for reminder_uuid in reminder_uuids:
@@ -327,7 +327,7 @@ class MaintenanceReminderService:
                 pass
 
         reminder.is_handled = True
-        reminder.handled_at = datetime.now()
+        reminder.handled_at = resolve_business_datetime()
         reminder.handled_by = handled_by
         reminder.handled_by_name = user_name
         if attachments is not None:

@@ -17,6 +17,7 @@ from core.services.base import BaseService
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.services.user_service import UserService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 T = TypeVar('T', bound=Model)
 
@@ -64,7 +65,7 @@ class AppBaseService(BaseService[T]):
         """
         if prefix is None:
             # 如果没有提供前缀，使用日期作为默认前缀
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             prefix = today
 
         # 构建上下文变量
@@ -294,7 +295,7 @@ class AppBaseService(BaseService[T]):
             await self.model.filter(
                 tenant_id=tenant_id,
                 id=record_id
-            ).update(deleted_at=datetime.now())
+            ).update(deleted_at=resolve_business_datetime())
         else:
             # 硬删除
             await record.delete()

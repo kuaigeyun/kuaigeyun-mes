@@ -17,6 +17,7 @@ from apps.kuaizhizao.models.spare_part import SparePart, SparePartInventory, Spa
 from apps.kuaizhizao.schemas.equipment_extra import SparePartCreate, SparePartUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class SparePartService:
@@ -126,7 +127,7 @@ class SparePartService:
 
     async def delete_spare_part(self, tenant_id: int, spare_part_id: int) -> None:
         part = await self.get_spare_part(tenant_id, spare_part_id)
-        part.deleted_at = datetime.now()
+        part.deleted_at = resolve_business_datetime()
         part.is_active = False
         await part.save()
 
@@ -175,7 +176,7 @@ class SparePartService:
         # 记录流水
         await SparePartStockRecord.create(
             tenant_id=tenant_id,
-            record_no=f"STK-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            record_no=f"STK-{resolve_business_datetime().strftime('%Y%m%d%H%M%S')}",
             spare_part_id=spare_part_id,
             spare_part_uuid=spare_part.uuid,
             operation_type=operation_type,

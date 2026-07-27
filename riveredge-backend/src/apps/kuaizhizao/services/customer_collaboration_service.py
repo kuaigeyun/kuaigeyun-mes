@@ -15,7 +15,7 @@ from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.master_data.models.customer import Customer
 from core.services.base import BaseService
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
@@ -137,7 +137,7 @@ class CustomerCollaborationService(BaseService):
             "in_progress_work_orders": in_progress_work_orders,
             "progress_percentage": progress_percentage,
             "work_orders": work_order_details,
-            "updated_at": to_api_isoformat(datetime.now()),
+            "updated_at": to_api_isoformat(resolve_business_datetime()),
         }
     
     async def get_customer_order_summary(
@@ -188,5 +188,5 @@ class CustomerCollaborationService(BaseService):
             "in_progress_orders": in_progress_orders,
             "completed_orders": completed_orders,
             "total_amount": total_amount,
-            "updated_at": to_api_isoformat(datetime.now()),
+            "updated_at": to_api_isoformat(resolve_business_datetime()),
         }

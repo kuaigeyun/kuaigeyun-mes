@@ -11,6 +11,7 @@ from typing import Any, Optional, Type
 from apps.common.audit_actor import operator_name_from_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 _SUBMITTABLE_REVIEW = frozenset({"草稿", "draft", "驳回", "rejected", "已驳回"})
 _PENDING_REVIEW = frozenset({"待审核", "pending_review", "pending_approval", "已提交"})
@@ -49,7 +50,7 @@ async def _auto_approve_finance(
         "review_status": "已审核",
         "reviewer_id": updated_by,
         "reviewer_name": approver_name,
-        "review_time": datetime.now(),
+        "review_time": resolve_business_datetime(),
         "review_remarks": "自动审核",
         "updated_by": updated_by,
         "updated_by_name": approver_name,

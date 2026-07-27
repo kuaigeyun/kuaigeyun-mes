@@ -2,7 +2,8 @@ import { renderRowActionsOverflow, rowActionKind } from '../../../../../componen
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDigit, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { Alert, App, Button, Empty, Modal, Spin, Table, Typography } from 'antd';
-import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { useSearchParams } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -77,6 +78,9 @@ type PullPreviewKind = 'shipment_notice' | 'sales_delivery';
 
 const OQCInspectionPage: React.FC = () => {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
+  const salesDeliveryIdFromQuery = searchParams.get('sales_delivery_id') || undefined;
+  const oqcInspectionIdFromQuery = searchParams.get('oqc_inspection_id') || searchParams.get('id') || undefined;
   const pullFromShipmentNoticeAction = resolveKuaizhizaoDocumentAction(t, 'oqc_inspection.pull_from_shipment_notice');
   const pullFromSalesDeliveryAction = resolveKuaizhizaoDocumentAction(t, 'oqc_inspection.pull_from_sales_delivery');
   const { message: messageApi } = App.useApp();
@@ -108,7 +112,7 @@ const OQCInspectionPage: React.FC = () => {
     [selectedRowKeys],
   );
   const oqcAuditBatchHandlers = useMemo(
-    () => createUniAuditBatchHandlers('oqc_inspection', ['approve', 'revoke']),
+    () => createUniAuditBatchHandlers('oqc_inspection'),
     [],
   );
   const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
@@ -175,11 +179,24 @@ const OQCInspectionPage: React.FC = () => {
         pullPreviewKind === 'shipment_notice'
           ? await qualityImprovementApi.oqc.createFromShipmentNotice(pullPreviewSourceId, selectedIds)
           : await qualityImprovementApi.oqc.createFromSalesDelivery(pullPreviewSourceId, selectedIds);
-      messageApi.success(t('app.kuaizhizao.quality.oqc.messages.createSuccess', { count: created.length }));
+      if (!created?.length) {
+        messageApi.warning(t('app.kuaizhizao.quality.oqc.messages.alreadyExists'));
+      } else {
+        messageApi.success(
+          t('app.kuaizhizao.quality.oqc.messages.createSuccess', { count: created.length }),
+        );
+      }
       resetPullPreview();
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.createFailed'));
+      const errMsg = String(e?.message || '');
+      if (errMsg.includes('均已存在检验单')) {
+        messageApi.warning(t('app.kuaizhizao.quality.oqc.messages.alreadyExists'));
+        resetPullPreview();
+        actionRef.current?.reload();
+      } else {
+        messageApi.error(errMsg || t('app.kuaizhizao.quality.oqc.messages.createFailed'));
+      }
     } finally {
       setPullPreviewConfirming(false);
     }
@@ -286,27 +303,25 @@ const OQCInspectionPage: React.FC = () => {
     setDetailDrawerVisible(true);
   }, []);
 
+  const handleDeleteRow = useCallback(
+    (record: OQCInspection) => {
+      if (record.id == null) return;
+      Modal.confirm({
+        title: t('app.kuaizhizao.quality.oqc.messages.deleteConfirm', { count: 1 }),
+        content: t('app.kuaizhizao.quality.oqc.messages.deleteConfirmDescription'),
+        onOk: async () => {
+          await qualityImprovementApi.oqc.delete(Number(record.id));
+          messageApi.success(t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: 1 }));
+          actionRef.current?.reload();
+        },
+      });
+    },
+    [messageApi, t],
+  );
+
   const renderOqcRowNodes = useCallback(
     (record: OQCInspection): React.ReactNode[] => {
       const gates = oqcInspectionRowGates(record, oqcPerms, t);
-      if (gates.conduct.allowed) {
-        return [
-          <Button
-            {...rowActionKind('execute')}
-            key="inspect"
-            size="small"
-            type="primary"
-            disabled={gates.conduct.disabled}
-            title={gates.conduct.title}
-            onClick={(e) => {
-              e.stopPropagation();
-              openConductModal(record);
-            }}
-          >
-            {t('app.kuaizhizao.quality.oqc.actions.conduct')}
-          </Button>,
-        ];
-      }
       const nodes: React.ReactNode[] = [
         <Button
           {...rowActionKind('read')}
@@ -321,6 +336,26 @@ const OQCInspectionPage: React.FC = () => {
         >
           {t('app.kuaizhizao.quality.common.actions.detail')}
         </Button>,
+      ];
+      if (gates.conduct.allowed) {
+        nodes.push(
+          <Button
+            {...rowActionKind('execute')}
+            key="inspect"
+            size="small"
+            type="primary"
+            disabled={gates.conduct.disabled}
+            title={gates.conduct.title}
+            onClick={(e) => {
+              e.stopPropagation();
+              openConductModal(record);
+            }}
+          >
+            {t('app.kuaizhizao.quality.oqc.actions.conduct')}
+          </Button>,
+        );
+      }
+      nodes.push(
         <UniWorkflowActions
           {...rowActionKind('skip')}
           key="wf"
@@ -332,10 +367,30 @@ const OQCInspectionPage: React.FC = () => {
             onSuccess: () => actionRef.current?.reload(),
           })}
         />,
-      ];
+      );
+      if (gates.delete.allowed) {
+        nodes.push(
+          <Button
+            {...rowActionKind('delete')}
+            key="delete"
+            size="small"
+            type="link"
+            danger
+            icon={<DeleteOutlined />}
+            disabled={gates.delete.disabled}
+            title={gates.delete.title}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteRow(record);
+            }}
+          >
+            {t('common.delete')}
+          </Button>,
+        );
+      }
       return nodes;
     },
-    [handleDetail, oqcPerms, openConductModal, t],
+    [handleDeleteRow, handleDetail, oqcPerms, openConductModal, t],
   );
 
   const columns: ProColumns<OQCInspection>[] = useMemo(
@@ -578,16 +633,31 @@ const OQCInspectionPage: React.FC = () => {
                 ]
               : []
           }
+          params={{
+            sales_delivery_id: salesDeliveryIdFromQuery,
+            oqc_inspection_id: oqcInspectionIdFromQuery,
+          }}
           request={async (params, sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
             const listParams = resolveQualityInspectionListParams(searchFormValues, sort);
+            const salesDeliveryId = params.sales_delivery_id || salesDeliveryIdFromQuery;
+            const oqcInspectionId = params.oqc_inspection_id || oqcInspectionIdFromQuery;
             const result = await qualityImprovementApi.oqc.list({
               skip,
               limit: pageSize,
               ...listParams,
+              ...(salesDeliveryId ? { sales_delivery_id: Number(salesDeliveryId) } : {}),
+              ...(oqcInspectionId && !salesDeliveryId ? { keyword: String(oqcInspectionId) } : {}),
             });
-            const { data, total } = normalizeQualityInspectionListResponse(result);
+            let { data, total } = normalizeQualityInspectionListResponse(result);
+            if (oqcInspectionId) {
+              const idNum = Number(oqcInspectionId);
+              if (Number.isFinite(idNum) && idNum > 0) {
+                data = (data as OQCInspection[]).filter((row) => Number(row.id) === idNum);
+                total = data.length;
+              }
+            }
             tableRowsRef.current = data as OQCInspection[];
             return {
               success: true,
@@ -781,7 +851,7 @@ const OQCInspectionPage: React.FC = () => {
         <FormModalTemplate
           title={t('app.kuaizhizao.quality.oqc.modal.conductTitle', { code: currentRow?.inspection_code || '' })}
           open={conductVisible}
-          width={MODAL_CONFIG.LARGE_WIDTH}
+          width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
           formRef={conductFormRef}
           onClose={() => {
             setConductVisible(false);

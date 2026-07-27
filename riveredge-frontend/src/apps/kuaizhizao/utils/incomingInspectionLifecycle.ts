@@ -1,6 +1,9 @@
 /**
- * 来料/工序/成品检验单生命周期：待检验→已检验→已确认
+ * 来料/工序/成品检验单生命周期：待检验→已检验
  * 优先使用后端 record.lifecycle；单据审核态由 record.audit 独立列展示。
+ *
+ * 主阶段只看业务检验完成态（status / inspection_result），不看 review_status。
+ * 未开人工审核时创建会预置 review_status=APPROVED，不得据此判为「已检验」。
  */
 
 import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
@@ -12,7 +15,6 @@ function norm(s: string | undefined): string {
 }
 
 const REJECTED_VALUES = ['REJECTED', '已驳回', '审核驳回', 'rejected'];
-const APPROVED_VALUES = ['APPROVED', '审核通过', '通过', '已通过', '已审核'];
 
 function isRejected(reviewStatus: string, status: string): boolean {
   const r = norm(reviewStatus);
@@ -20,8 +22,11 @@ function isRejected(reviewStatus: string, status: string): boolean {
   return REJECTED_VALUES.includes(r) || ['已驳回', 'rejected'].includes(s);
 }
 
-function isApproved(reviewStatus: string): boolean {
-  return APPROVED_VALUES.includes(norm(reviewStatus));
+function isInspected(status: string, inspectionResult: string): boolean {
+  return (
+    ['已检验', 'inspected', '已审核', 'audited', 'approved'].includes(status) ||
+    ['已检验', 'inspected'].includes(inspectionResult)
+  );
 }
 
 const MAIN_STAGES = [
@@ -45,6 +50,7 @@ function buildMainStages(currentKey: string, isException = false) {
 function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecycle {
   const status = norm(record?.status as string);
   const reviewStatus = norm(record?.review_status as string);
+  const inspectionResult = norm(record?.inspection_result as string);
 
   if (isRejected(reviewStatus, status)) {
     return {
@@ -55,16 +61,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
       next_step_suggestions: [],
     };
   }
-  if (isApproved(reviewStatus) || status === '已审核' || status === 'audited' || status === 'approved') {
-    return {
-      current_stage_key: 'inspected',
-      current_stage_name: '已检验',
-      status: 'success',
-      main_stages: buildMainStages('inspected'),
-      next_step_suggestions: [],
-    };
-  }
-  if (status === '已检验' || status === 'inspected') {
+  if (isInspected(status, inspectionResult)) {
     return {
       current_stage_key: 'inspected',
       current_stage_name: '已检验',

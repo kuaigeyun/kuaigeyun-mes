@@ -18,7 +18,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 
-import type { UniverSheetInstance } from '../univer/bootstrap-sheet';
+import { relayoutUniverSheet, type UniverSheetInstance } from '../univer/bootstrap-sheet';
 import { buildImportTemplateFileName } from './build-import-template-file-name';
 import { UniImportSheetHost } from './uni-import-sheet-host';
 import { downloadImportTemplateXlsx, parseImportXlsxFile } from './uni-import-xlsx';
@@ -82,7 +82,7 @@ export interface UniImportProps {
    */
   width?: string | number;
   /**
-   * 弹窗内容区高度（默认：620；表格可视区域约为 height - 32，即 588px）
+   * 弹窗内容区高度（默认：620；表格宿主撑满 body）
    */
   height?: number;
   /**
@@ -831,11 +831,26 @@ export const UniImport: React.FC<UniImportProps> = ({
         <style>{`
           .uni-import-modal .ant-modal-body {
             padding: 8px 0 !important;
+            /* 禁止 Modal 再出原生横滚；超宽只走 Univer 视口滚动条 */
+            overflow: hidden !important;
+            display: flex !important;
+            flex-direction: column !important;
+            min-width: 0 !important;
           }
           .uni-import-sheet-host {
             width: 100%;
+            max-width: 100%;
+            min-width: 0;
             height: 100%;
             border-radius: 0;
+          }
+          /* 禁止 Univer 根节点按内容撑破宿主，否则列裁切但引擎仍认「未超宽」 */
+          .uni-import-sheet-host > * {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            height: 100% !important;
+            box-sizing: border-box !important;
           }
         `}</style>
       )}
@@ -848,6 +863,13 @@ export const UniImport: React.FC<UniImportProps> = ({
         keyboard={false}
         maskClosable={false}
         width={width}
+        afterOpenChange={(opened) => {
+          if (!opened || !univerInstanceRef.current) return;
+          const host = document.querySelector(
+            '.uni-import-modal .uni-import-sheet-host',
+          ) as HTMLElement | null;
+          relayoutUniverSheet(univerInstanceRef.current, host);
+        }}
         footer={
           <div
             style={{
@@ -930,29 +952,34 @@ export const UniImport: React.FC<UniImportProps> = ({
         centered
         styles={{
           body: {
-            padding: '16px',
+            padding: '8px 0',
             height: `${height}px`,
             overflow: 'hidden',
             position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: 0,
           },
         }}
       >
-        <UniImportSheetHost
-          isDark={isDark}
-          uploadedSheetRows={uploadedSheetRows}
-          headers={headersRef.current}
-          exampleRow={exampleRowRef.current}
-          columnOptions={columnOptions}
-          height={height}
-          loading={loading}
-          onLoadingChange={setLoading}
-          instanceRef={univerInstanceRef}
-          messageApi={messageApi}
-          onSheetRowsChange={(rows) => {
-            // 仅写 ref：确认导入读原文；避免 setState 重建 Univer 冲掉粘贴
-            uploadedSheetRowsRef.current = rows;
-          }}
-        />
+        <div style={{ flex: 1, minHeight: 0, minWidth: 0, width: '100%', position: 'relative' }}>
+          <UniImportSheetHost
+            isDark={isDark}
+            uploadedSheetRows={uploadedSheetRows}
+            headers={headersRef.current}
+            exampleRow={exampleRowRef.current}
+            columnOptions={columnOptions}
+            height={height}
+            loading={loading}
+            onLoadingChange={setLoading}
+            instanceRef={univerInstanceRef}
+            messageApi={messageApi}
+            onSheetRowsChange={(rows) => {
+              // 仅写 ref：确认导入读原文；避免 setState 重建 Univer 冲掉粘贴
+              uploadedSheetRowsRef.current = rows;
+            }}
+          />
+        </div>
       </Modal>
       {showMappingImport && headers && headers.length > 0 && (
         <UniImportMappingModal

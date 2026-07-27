@@ -32,6 +32,7 @@ from apps.kuaiplm.schemas.gate_template import (
 from apps.kuaiplm.utils.gate_template_seed import ensure_system_gate_templates
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 def _slugify_gate_key(name: str) -> str:
@@ -304,6 +305,6 @@ class RdGateTemplateService(AppBaseService[RdGateTemplate]):
                 await RdGateTemplateStage.filter(
                     tenant_id=tenant_id, template_id=template.id
                 ).delete()
-            template.deleted_at = datetime.now()
+            template.deleted_at = resolve_business_datetime()
             apply_update_audit(template, user)
             await template.save()

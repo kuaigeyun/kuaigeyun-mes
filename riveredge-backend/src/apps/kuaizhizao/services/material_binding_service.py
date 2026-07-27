@@ -26,6 +26,7 @@ from apps.kuaizhizao.schemas.material_binding import (
 
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class MaterialBindingService(AppBaseService[MaterialBinding]):
@@ -131,7 +132,7 @@ class MaterialBindingService(AppBaseService[MaterialBinding]):
                 binding_method=binding_data.binding_method,
                 bound_by=bound_by,
                 bound_by_name=user_info["name"],
-                bound_at=binding_data.bound_at or datetime.now(),
+                bound_at=binding_data.bound_at or resolve_business_datetime(),
                 remarks=binding_data.remarks,
             )
 
@@ -218,7 +219,7 @@ class MaterialBindingService(AppBaseService[MaterialBinding]):
             raise NotFoundError(f"物料绑定记录不存在: {binding_id}")
 
         # 软删除
-        binding.deleted_at = datetime.now()
+        binding.deleted_at = resolve_business_datetime()
         await binding.save()
 
         # TODO: 恢复库存（根据绑定类型进行反向操作）

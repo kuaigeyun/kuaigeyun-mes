@@ -21,6 +21,7 @@ from core.services.file.image_compress import compress_image_content, effective_
 from core.services.file.image_tier_service import ImageTierService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.config.infra_config import infra_settings as settings
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class FileService:
@@ -63,7 +64,7 @@ class FileService:
         Returns:
             str: 文件存储路径（相对路径）
         """
-        now = datetime.now()
+        now = resolve_business_datetime()
         year = now.strftime("%Y")
         month = now.strftime("%m")
         
@@ -401,7 +402,7 @@ class FileService:
         file = await FileService.get_file_by_uuid(tenant_id, uuid)
         
         # 软删除
-        file.deleted_at = datetime.now()
+        file.deleted_at = resolve_business_datetime()
         await file.save()
         
         ImageTierService.delete_tier_cache(uuid)
@@ -439,7 +440,7 @@ class FileService:
             tenant_id=tenant_id,
             uuid__in=uuids,
             deleted_at__isnull=True
-        ).update(deleted_at=datetime.now())
+        ).update(deleted_at=resolve_business_datetime())
         
         # 执行物理删除
         for file_uuid, path in files_to_delete:

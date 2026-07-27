@@ -14,6 +14,7 @@ from loguru import logger
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from core.models.model_fields import model_has_field
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class BatchOperationService:
@@ -297,7 +298,7 @@ class BatchOperationService:
                 deleted_count = await model_class.filter(
                     tenant_id=tenant_id,
                     **{f"{id_field}__in": valid_ids}
-                ).update(deleted_at=datetime.now())
+                ).update(deleted_at=resolve_business_datetime())
                 
                 # 记录成功
                 for index, record_id in enumerate(unique_record_ids):

@@ -25,6 +25,7 @@ from apps.kuaizhizao.schemas.scrap_record import (
 
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class ScrapRecordService(AppBaseService[ScrapRecord]):
@@ -84,7 +85,7 @@ class ScrapRecordService(AppBaseService[ScrapRecord]):
             if approved:
                 # 审批同意：更新状态为confirmed
                 scrap_record.status = 'confirmed'
-                scrap_record.confirmed_at = datetime.now()
+                scrap_record.confirmed_at = resolve_business_datetime()
                 scrap_record.confirmed_by = approved_by
                 scrap_record.confirmed_by_name = user_info["name"]
                 await scrap_record.save()
@@ -140,7 +141,7 @@ class ScrapRecordService(AppBaseService[ScrapRecord]):
                     raise ValidationError("驳回时必须填写驳回原因")
 
                 scrap_record.status = 'cancelled'
-                scrap_record.remarks = (scrap_record.remarks or '') + f"\n[审批驳回] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 由 {user_info['name']} 驳回，原因：{rejection_reason}"
+                scrap_record.remarks = (scrap_record.remarks or '') + f"\n[审批驳回] {resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')} 由 {user_info['name']} 驳回，原因：{rejection_reason}"
                 await scrap_record.save()
 
                 logger.info(f"报废记录 {scrap_record.code} 审批驳回，审批人: {user_info['name']}, 原因: {rejection_reason}")

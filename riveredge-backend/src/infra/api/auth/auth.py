@@ -89,6 +89,19 @@ class WeComUnbindResponse(BaseModel):
     message: str = "企业微信账号已解绑"
 
 
+class WeComBootstrapTenantResponse(BaseModel):
+    """企微 H5 无 tenant_id 时的组织发现结果。"""
+
+    tenant_id: int | None = Field(
+        None,
+        description="唯一启用企微连接器时的组织 ID；多组织时为 null",
+    )
+    candidates_count: int = Field(
+        0,
+        description="启用企微连接器且凭证完整的组织数量",
+    )
+
+
 # 创建路由
 router = APIRouter(prefix="/auth", tags=["Platform - Auth"])
 
@@ -173,6 +186,39 @@ async def wecom_authorize_url(
         state=state,
     )
     return WeComAuthorizeUrlResponse(authorize_url=authorize_url, state=state)
+
+
+@router.get("/wecom/bootstrap-tenant", response_model=WeComBootstrapTenantResponse)
+async def wecom_bootstrap_tenant():
+    """
+    企微移动端 H5 打开且 URL 无 tenant_id 时：若全站仅有一个启用且凭证完整的企微组织，返回该组织 ID，供静默 OAuth。
+    多组织时不猜测，由前端依赖本地记忆或 URL 参数。
+    """
+    from core.models.integration_config import IntegrationConfig
+
+    rows = await IntegrationConfig.filter(
+        type="wecom",
+        is_active=True,
+        deleted_at__isnull=True,
+    )
+    tenant_ids: list[int] = []
+    seen: set[int] = set()
+    for row in rows:
+        tid = int(row.tenant_id)
+        if tid in seen:
+            continue
+        creds = await get_wecom_credentials(tid)
+        if not creds:
+            continue
+        seen.add(tid)
+        tenant_ids.append(tid)
+
+    if len(tenant_ids) == 1:
+        return WeComBootstrapTenantResponse(tenant_id=tenant_ids[0], candidates_count=1)
+    return WeComBootstrapTenantResponse(
+        tenant_id=None,
+        candidates_count=len(tenant_ids),
+    )
 
 
 @router.get("/wecom/wwlogin-config", response_model=WeComWWLoginConfigResponse)

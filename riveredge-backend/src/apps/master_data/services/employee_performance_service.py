@@ -8,6 +8,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
 
+from tortoise.expressions import Q
+
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from infra.models.user import User
 from apps.master_data.models.employee_performance import (
@@ -31,6 +33,7 @@ from apps.master_data.schemas.employee_performance_schemas import (
     PerformanceSummaryResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class EmployeePerformanceConfigService:
@@ -145,7 +148,7 @@ class EmployeePerformanceConfigService:
         ).first()
         if not config:
             raise NotFoundError(f"绩效配置 {config_id} 不存在")
-        await config.update_from_dict({"deleted_at": datetime.now()})
+        await config.update_from_dict({"deleted_at": resolve_business_datetime()})
 
 
 class PieceRateService:
@@ -160,6 +163,9 @@ class PieceRateService:
     ) -> Optional[Decimal]:
         """获取工序（及可选物料）的计件单价，优先工序+物料，其次仅工序"""
         dt = as_of_date or date.today()
+        effective_q = (Q(effective_from__isnull=True) | Q(effective_from__lte=dt)) & (
+            Q(effective_to__isnull=True) | Q(effective_to__gte=dt)
+        )
         # 优先：工序+物料
         if material_id:
             rate = await PieceRate.filter(
@@ -168,11 +174,7 @@ class PieceRateService:
                 material_id=material_id,
                 is_active=True,
                 deleted_at__isnull=True,
-            ).filter(
-                (PieceRate.effective_from.isnull()) | (PieceRate.effective_from <= dt)
-            ).filter(
-                (PieceRate.effective_to.isnull()) | (PieceRate.effective_to >= dt)
-            ).order_by("-effective_from").first()
+            ).filter(effective_q).order_by("-effective_from").first()
             if rate:
                 return rate.rate
         # 其次：仅工序
@@ -182,11 +184,7 @@ class PieceRateService:
             material_id__isnull=True,
             is_active=True,
             deleted_at__isnull=True,
-        ).filter(
-            (PieceRate.effective_from.isnull()) | (PieceRate.effective_from <= dt)
-        ).filter(
-            (PieceRate.effective_to.isnull()) | (PieceRate.effective_to >= dt)
-        ).order_by("-effective_from").first()
+        ).filter(effective_q).order_by("-effective_from").first()
         if rate:
             return rate.rate
         return None
@@ -324,17 +322,16 @@ class HourlyRateService:
         if config and config.hourly_rate is not None:
             return config.hourly_rate
         dt = as_of_date or date.today()
+        effective_q = (Q(effective_from__isnull=True) | Q(effective_from__lte=dt)) & (
+            Q(effective_to__isnull=True) | Q(effective_to__gte=dt)
+        )
         if department_id:
             rate = await HourlyRate.filter(
                 tenant_id=tenant_id,
                 department_id=department_id,
                 is_active=True,
                 deleted_at__isnull=True,
-            ).filter(
-                (HourlyRate.effective_from.isnull()) | (HourlyRate.effective_from <= dt)
-            ).filter(
-                (HourlyRate.effective_to.isnull()) | (HourlyRate.effective_to >= dt)
-            ).order_by("-effective_from").first()
+            ).filter(effective_q).order_by("-effective_from").first()
             if rate:
                 return rate.rate
         if position_id:
@@ -343,11 +340,7 @@ class HourlyRateService:
                 position_id=position_id,
                 is_active=True,
                 deleted_at__isnull=True,
-            ).filter(
-                (HourlyRate.effective_from.isnull()) | (HourlyRate.effective_from <= dt)
-            ).filter(
-                (HourlyRate.effective_to.isnull()) | (HourlyRate.effective_to >= dt)
-            ).order_by("-effective_from").first()
+            ).filter(effective_q).order_by("-effective_from").first()
             if rate:
                 return rate.rate
         return None
@@ -415,7 +408,7 @@ class HourlyRateService:
         rate = await HourlyRate.filter(id=rate_id, tenant_id=tenant_id, deleted_at__isnull=True).first()
         if not rate:
             raise NotFoundError(f"工时单价 {rate_id} 不存在")
-        await rate.update_from_dict({"deleted_at": datetime.now()})
+        await rate.update_from_dict({"deleted_at": resolve_business_datetime()})
 
 
 class KPIDefinitionService:
@@ -506,4 +499,4 @@ class KPIDefinitionService:
         kpi = await KPIDefinition.filter(id=kpi_id, tenant_id=tenant_id, deleted_at__isnull=True).first()
         if not kpi:
             raise NotFoundError(f"KPI 指标 {kpi_id} 不存在")
-        await kpi.update_from_dict({"deleted_at": datetime.now()})
+        await kpi.update_from_dict({"deleted_at": resolve_business_datetime()})

@@ -77,12 +77,13 @@ from core.services.business.code_generation_service import CodeGenerationService
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 T = TypeVar("T")
 
 
 def _now_doc_no(prefix: str) -> str:
-    return f"{prefix}{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    return f"{prefix}{resolve_business_datetime().strftime('%Y%m%d%H%M%S')}"
 
 
 async def _generate_code(tenant_id: int, rule_code: str, prefix: str) -> str:
@@ -191,7 +192,7 @@ class _MasterCRUDMixin:
 
     async def _soft_delete(self, tenant_id: int, row_id: int) -> None:
         row = await self._get(tenant_id, row_id)
-        row.deleted_at = datetime.now()
+        row.deleted_at = resolve_business_datetime()
         await row.save()
 
 
@@ -254,7 +255,7 @@ class MoldMaintenanceSchemeService(_MasterCRUDMixin):
             tenant_id=tenant_id,
             scheme_id=scheme_id,
             deleted_at__isnull=True,
-        ).update(deleted_at=datetime.now())
+        ).update(deleted_at=resolve_business_datetime())
         for idx, line in enumerate(lines):
             snap = await _snapshot_maintenance_item(tenant_id, line.item_id)
             await MoldMaintenanceSchemeLine.create(
@@ -388,7 +389,7 @@ class MoldRepairSchemeService(_MasterCRUDMixin):
             tenant_id=tenant_id,
             scheme_id=scheme_id,
             deleted_at__isnull=True,
-        ).update(deleted_at=datetime.now())
+        ).update(deleted_at=resolve_business_datetime())
         for idx, line in enumerate(lines):
             snap = await _snapshot_repair_item(tenant_id, line.item_id)
             await MoldRepairSchemeLine.create(
@@ -501,7 +502,7 @@ class MoldSchemeBindingService:
                 mold_id=mold.id,
                 scheme_type=data.scheme_type,
                 deleted_at__isnull=True,
-            ).update(deleted_at=datetime.now())
+            ).update(deleted_at=resolve_business_datetime())
             bindings = []
             for scheme_id in data.scheme_ids:
                 payload = dict(
@@ -524,7 +525,7 @@ class MoldSchemeBindingService:
         ).first()
         if not binding:
             raise NotFoundError(f"绑定记录不存在: {binding_id}")
-        binding.deleted_at = datetime.now()
+        binding.deleted_at = resolve_business_datetime()
         await binding.save()
 
 
@@ -638,7 +639,7 @@ class MoldTrialService:
         async with in_transaction():
             row = await self.get(tenant_id, row_id)
             mold_id = row.mold_id
-            row.deleted_at = datetime.now()
+            row.deleted_at = resolve_business_datetime()
             await row.save()
             await MoldStatusService.resolve(tenant_id, mold_id)
 
@@ -676,7 +677,7 @@ class MoldBorrowService:
                 mold_uuid=mold.uuid,
                 mold_code=mold.code,
                 mold_name=mold.name,
-                borrow_date=data.borrow_date or datetime.now(),
+                borrow_date=data.borrow_date or resolve_business_datetime(),
                 borrower_id=data.borrower_id or operator_id,
                 borrower_name=data.borrower_name or operator_name,
                 department_name=data.department_name,
@@ -786,7 +787,7 @@ class MoldBorrowService:
             if row.status != OUTSTANDING_BORROW_STATUS:
                 raise ValidationError("仅领用中状态可删除")
             mold_id = row.mold_id
-            row.deleted_at = datetime.now()
+            row.deleted_at = resolve_business_datetime()
             await row.save()
             await MoldStatusService.resolve(tenant_id, mold_id)
 
@@ -841,7 +842,7 @@ class MoldReturnService:
                 mold_code=mold.code,
                 mold_name=mold.name,
                 borrow_id=borrow.id if borrow else None,
-                return_date=data.return_date or datetime.now(),
+                return_date=data.return_date or resolve_business_datetime(),
                 usage_count=data.usage_count,
                 operator_id=data.operator_id or operator_id,
                 operator_name=data.operator_name or operator_name,
@@ -953,7 +954,7 @@ class MoldReturnService:
                 if borrow:
                     borrow.status = OUTSTANDING_BORROW_STATUS
                     await borrow.save()
-            row.deleted_at = datetime.now()
+            row.deleted_at = resolve_business_datetime()
             await row.save()
             await MoldStatusService.resolve(tenant_id, mold.id)
 
@@ -1166,7 +1167,7 @@ class MoldMaintenanceService:
                     tenant_id=tenant_id,
                     maintenance_id=header.id,
                     deleted_at__isnull=True,
-                ).update(deleted_at=datetime.now())
+                ).update(deleted_at=resolve_business_datetime())
                 await self._create_lines(tenant_id, header.id, data.lines)
             return header
 
@@ -1199,7 +1200,7 @@ class MoldMaintenanceService:
             row.status = "进行中"
             row.approver_id = approver_id
             row.approver_name = approver_name
-            row.approved_at = datetime.now()
+            row.approved_at = resolve_business_datetime()
             if not row.maintenance_date:
                 row.maintenance_date = date.today()
             apply_update_audit(row, current_user)
@@ -1223,7 +1224,7 @@ class MoldMaintenanceService:
         row.reject_reason = reject_reason
         row.approver_id = approver_id
         row.approver_name = approver_name
-        row.approved_at = datetime.now()
+        row.approved_at = resolve_business_datetime()
         apply_update_audit(row, current_user)
         await row.save()
         return row
@@ -1234,7 +1235,7 @@ class MoldMaintenanceService:
             raise ValidationError("仅进行中状态可完修")
         async with in_transaction():
             row.status = "已完成"
-            row.completed_at = datetime.now()
+            row.completed_at = resolve_business_datetime()
             if not row.maintenance_date:
                 row.maintenance_date = date.today()
             await row.save()
@@ -1250,7 +1251,7 @@ class MoldMaintenanceService:
             if row.status not in ("草稿", "已驳回"):
                 raise ValidationError("仅草稿或已驳回状态可删除")
             mold_id = row.mold_id
-            row.deleted_at = datetime.now()
+            row.deleted_at = resolve_business_datetime()
             await row.save()
             if row.status in OPEN_MAINTENANCE_STATUSES:
                 await MoldStatusService.resolve(tenant_id, mold_id)
@@ -1465,7 +1466,7 @@ class MoldRepairService:
                     tenant_id=tenant_id,
                     repair_id=header.id,
                     deleted_at__isnull=True,
-                ).update(deleted_at=datetime.now())
+                ).update(deleted_at=resolve_business_datetime())
                 await self._create_lines(tenant_id, header.id, data.lines)
             return header
 
@@ -1498,7 +1499,7 @@ class MoldRepairService:
             row.status = "进行中"
             row.approver_id = approver_id
             row.approver_name = approver_name
-            row.approved_at = datetime.now()
+            row.approved_at = resolve_business_datetime()
             if not row.repair_date:
                 row.repair_date = date.today()
             apply_update_audit(row, current_user)
@@ -1522,7 +1523,7 @@ class MoldRepairService:
         row.reject_reason = reject_reason
         row.approver_id = approver_id
         row.approver_name = approver_name
-        row.approved_at = datetime.now()
+        row.approved_at = resolve_business_datetime()
         apply_update_audit(row, current_user)
         await row.save()
         return row
@@ -1533,7 +1534,7 @@ class MoldRepairService:
             raise ValidationError("仅进行中状态可完修")
         async with in_transaction():
             row.status = "已完成"
-            row.completed_at = datetime.now()
+            row.completed_at = resolve_business_datetime()
             if not row.repair_date:
                 row.repair_date = date.today()
             await row.save()
@@ -1546,7 +1547,7 @@ class MoldRepairService:
             if row.status not in ("草稿", "已驳回"):
                 raise ValidationError("仅草稿或已驳回状态可删除")
             mold_id = row.mold_id
-            row.deleted_at = datetime.now()
+            row.deleted_at = resolve_business_datetime()
             await row.save()
             if row.status in OPEN_REPAIR_STATUSES:
                 await MoldStatusService.resolve(tenant_id, mold_id)
@@ -1685,7 +1686,7 @@ class MoldScrapApplicationService:
             row.status = "已审核"
             row.approver_id = approver_id
             row.approver_name = approver_name
-            row.approved_at = datetime.now()
+            row.approved_at = resolve_business_datetime()
             if not row.scrap_date:
                 row.scrap_date = date.today()
             apply_update_audit(row, current_user)
@@ -1710,7 +1711,7 @@ class MoldScrapApplicationService:
         row.reject_reason = reject_reason
         row.approver_id = approver_id
         row.approver_name = approver_name
-        row.approved_at = datetime.now()
+        row.approved_at = resolve_business_datetime()
         apply_update_audit(row, current_user)
         await row.save()
         return row
@@ -1719,7 +1720,7 @@ class MoldScrapApplicationService:
         row = await self.get(tenant_id, row_id)
         if row.status not in ("草稿", "已驳回"):
             raise ValidationError("仅草稿或已驳回状态可删除")
-        row.deleted_at = datetime.now()
+        row.deleted_at = resolve_business_datetime()
         await row.save()
 
 

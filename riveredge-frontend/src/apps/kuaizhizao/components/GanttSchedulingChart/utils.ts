@@ -103,6 +103,45 @@ export function workOrderToGanttTask(wo: WorkOrderForGantt): GanttTask {
  */
 const UNASSIGNED_STATION_LABEL = '未分配工位';
 
+/** 甘特节点 hover 文案（原生 title） */
+export function buildGanttNodeTooltip(input: {
+  workOrderCode?: string;
+  productName?: string;
+  operationName?: string;
+  stationName?: string;
+  equipmentName?: string;
+  moldName?: string;
+  start?: Date | string | null;
+  end?: Date | string | null;
+  outsourceKind?: string | null;
+  supplierName?: string | null;
+  leadTimeDays?: number | null;
+}): string {
+  const fmt = (v?: Date | string | null) => {
+    if (!v) return '-';
+    const d = dayjs(v);
+    return d.isValid() ? d.format('YYYY-MM-DD HH:mm') : '-';
+  };
+  const kind = String(input.outsourceKind || '').toLowerCase();
+  const isOutsource = kind === 'planned' || kind === 'ad_hoc';
+  return [
+    `工单：${input.workOrderCode || '-'}`,
+    `产品：${input.productName || '-'}`,
+    `工序：${input.operationName || '-'}`,
+    isOutsource
+      ? `委外：${kind === 'planned' ? '计划委外' : '临时委外'}`
+      : `工位：${input.stationName || '-'}`,
+    isOutsource && input.supplierName ? `供应商：${input.supplierName}` : null,
+    isOutsource && input.leadTimeDays != null ? `提前期：${input.leadTimeDays} 天` : null,
+    `开始：${fmt(input.start)}`,
+    `结束：${fmt(input.end)}`,
+    !isOutsource && input.equipmentName ? `设备：${input.equipmentName}` : null,
+    !isOutsource && input.moldName ? `模具：${input.moldName}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 export function operationToGanttTask(
   op: {
     id?: number;
@@ -115,6 +154,10 @@ export function operationToGanttTask(
     assigned_equipment_name?: string | null;
     assigned_mold_name?: string | null;
     assigned_tool_name?: string | null;
+    outsource_kind?: string | null;
+    outsource_lead_time_days?: number | null;
+    default_outsource_supplier_name?: string | null;
+    is_outsourced?: boolean;
   },
   wo: WorkOrderForGantt,
   viewLevel: 'station_child' | 'legacy' = 'legacy'
@@ -164,6 +207,19 @@ export function operationToGanttTask(
     text: label.text,
     gantt_primary_label: label.gantt_primary_label,
     gantt_work_order_code: label.gantt_work_order_code,
+    title: buildGanttNodeTooltip({
+      workOrderCode,
+      productName,
+      operationName: opName,
+      stationName,
+      equipmentName: op.assigned_equipment_name || undefined,
+      moldName: op.assigned_mold_name || undefined,
+      start,
+      end,
+      outsourceKind: op.outsource_kind,
+      supplierName: op.default_outsource_supplier_name,
+      leadTimeDays: op.outsource_lead_time_days,
+    }),
     start,
     end,
     duration,

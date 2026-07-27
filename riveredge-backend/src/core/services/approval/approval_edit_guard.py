@@ -12,6 +12,7 @@ from core.models.approval_task import ApprovalTask
 from core.schemas.approval_flow_schema import get_node_config, normalize_flow_graph
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from infra.exceptions.exceptions import BusinessLogicError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class ApprovalEditGuard:
@@ -112,7 +113,7 @@ class ApprovalEditGuard:
             approval_instance_id=edit_context["approval_instance_id"],
             action="document_edit",
             action_by=operator_id,
-            action_at=datetime.now(),
+            action_at=resolve_business_datetime(),
             comment=comment or "审核中修改单据",
             from_node=edit_context.get("node_id"),
             to_node=edit_context.get("node_id"),

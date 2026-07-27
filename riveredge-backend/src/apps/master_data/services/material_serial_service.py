@@ -22,6 +22,7 @@ from apps.master_data.schemas.material_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import now_utc
 
 
 class MaterialSerialService:
@@ -309,7 +310,7 @@ class MaterialSerialService:
             raise NotFoundError("物料序列号", serial_uuid)
         
         # 软删除
-        serial.deleted_at = datetime.utcnow()
+        serial.deleted_at = now_utc()
         await serial.save()
     
     @staticmethod

@@ -10,6 +10,7 @@ from typing import List, Optional, Sequence
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from infra.models.face_template import UserFaceTemplate
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 # 余弦相似度阈值（faceres 类描述子通常在 0.45~0.6 可区分）
 DEFAULT_MATCH_THRESHOLD = 0.48
@@ -62,7 +63,7 @@ class FaceTemplateService:
             oldest = existing[0]
             from datetime import datetime
 
-            oldest.deleted_at = datetime.now()
+            oldest.deleted_at = resolve_business_datetime()
             await oldest.save()
 
         return await UserFaceTemplate.create(
@@ -91,7 +92,7 @@ class FaceTemplateService:
         tpl = await q.first()
         if not tpl:
             raise NotFoundError("人脸模板不存在")
-        tpl.deleted_at = datetime.now()
+        tpl.deleted_at = resolve_business_datetime()
         await tpl.save()
 
     @staticmethod

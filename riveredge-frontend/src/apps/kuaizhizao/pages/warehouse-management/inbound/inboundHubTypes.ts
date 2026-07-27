@@ -28,7 +28,13 @@ export interface InboundHubOrder {
   registration_code?: string;
   status?: string;
   receipt_date?: string;
+  receipt_time?: string;
+  /** 委外收货业务收货时刻 */
+  received_at?: string;
+  registration_date?: string;
   return_time?: string;
+  /** 委外退料/退货业务时刻 */
+  returned_at?: string;
   supplier_id?: number;
   supplier_name?: string;
   customer_id?: number;
@@ -46,8 +52,16 @@ export interface InboundHubOrder {
   warehouse_name?: string;
   total_quantity?: number;
   total_items?: number;
-  received_by?: string;
+  /** 采购等：操作员姓名；委外收货：用户 ID（勿当姓名展示） */
+  received_by?: string | number;
+  received_by_name?: string;
+  receiver_name?: string;
   returner_name?: string;
+  returned_by_name?: string;
+  processed_by_name?: string;
+  registered_by_name?: string;
+  created_by_name?: string;
+  updated_by_name?: string;
   created_at?: string;
   updated_at?: string;
   capabilities?: {
@@ -149,4 +163,41 @@ export function inboundSourceDocNo(record: InboundHubOrder): string {
   pushUniqueRef(parts, record.picking_code);
   pushUniqueRef(parts, record.source_doc_no);
   return parts.join(' / ');
+}
+
+/** Hub 统一「日期」原始值：各入库类型字段名不一致（receipt_date / receipt_time / received_at / return_time 等） */
+export function resolveInboundHubDateRaw(record: InboundHubOrder): unknown {
+  return (
+    record.receipt_date ??
+    record.receipt_time ??
+    record.received_at ??
+    record.return_time ??
+    record.returned_at ??
+    record.registration_date ??
+    null
+  );
+}
+
+/** Hub 统一「操作员」：姓名字段优先；received_by 在委外收货上是用户 ID，不可当姓名 */
+export function resolveInboundHubOperator(record: InboundHubOrder): string {
+  const named = [
+    record.received_by_name,
+    record.receiver_name,
+    record.returner_name,
+    record.returned_by_name,
+    record.processed_by_name,
+    record.registered_by_name,
+    record.created_by_name,
+    record.updated_by_name,
+  ];
+  for (const candidate of named) {
+    const s = String(candidate ?? '').trim();
+    if (s) return s;
+  }
+  // 采购入库等：received_by 本身就是姓名字符串
+  if (typeof record.received_by === 'string') {
+    const s = record.received_by.trim();
+    if (s) return s;
+  }
+  return '';
 }

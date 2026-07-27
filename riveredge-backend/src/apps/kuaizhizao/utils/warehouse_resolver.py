@@ -62,7 +62,21 @@ async def resolve_line_side_warehouse_for_work_order(
     if work_order and getattr(work_order, "work_center_id", None):
         wh = await ql.filter(work_center_id=work_order.work_center_id).order_by("id").first()
     if not wh and work_order and getattr(work_order, "workshop_id", None):
-        wh = await ql.filter(workshop_id=work_order.workshop_id).order_by("id").first()
+        # 优先车间级（无工位/工作中心），避免历史工位级线边仓抢默认目标
+        wh = await ql.filter(
+            workshop_id=work_order.workshop_id,
+            workstation_id__isnull=True,
+            work_center_id__isnull=True,
+        ).order_by("id").first()
+        if not wh:
+            wh = await ql.filter(
+                workshop_id=work_order.workshop_id,
+                workstation_id__isnull=True,
+            ).order_by("id").first()
+        if not wh:
+            wh = await ql.filter(workshop_id=work_order.workshop_id).order_by("id").first()
+    if not wh:
+        wh = await ql.filter(workstation_id__isnull=True).order_by("id").first()
     if not wh:
         wh = await ql.order_by("id").first()
     if not wh:

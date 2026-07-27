@@ -19,6 +19,7 @@ from core.models.material_code_rule import (
     MaterialSequenceCounter,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
 class MaterialCodeRuleEngine:
@@ -264,16 +265,16 @@ class MaterialCodeRuleEngine:
             return sequence_str
         
         elif placeholder_type == "DATE":
-            return datetime.now().strftime("%Y%m%d")
+            return today_site_str()
         
         elif placeholder_type == "YEAR":
-            return datetime.now().strftime("%Y")
+            return resolve_business_datetime().strftime("%Y")
         
         elif placeholder_type == "MONTH":
-            return datetime.now().strftime("%m")
+            return resolve_business_datetime().strftime("%m")
         
         elif placeholder_type == "DAY":
-            return datetime.now().strftime("%d")
+            return resolve_business_datetime().strftime("%d")
         
         else:
             raise ValidationError(f"不支持的占位符类型: {placeholder_type}")
@@ -292,13 +293,13 @@ class MaterialCodeRuleEngine:
         elif placeholder_type == "TYPE":
             return material_type
         elif placeholder_type == "DATE":
-            return datetime.now().strftime("%Y%m%d")
+            return today_site_str()
         elif placeholder_type == "YEAR":
-            return datetime.now().strftime("%Y")
+            return resolve_business_datetime().strftime("%Y")
         elif placeholder_type == "MONTH":
-            return datetime.now().strftime("%m")
+            return resolve_business_datetime().strftime("%m")
         elif placeholder_type == "DAY":
-            return datetime.now().strftime("%d")
+            return resolve_business_datetime().strftime("%d")
         elif placeholder_type == "ORG":
              # TODO: 获取实际组织代码，目前暂不支持或传递空
             return ""
@@ -469,13 +470,13 @@ class MaterialCodeRuleEngine:
             elif placeholder_type == "SEQUENCE":
                 value = str(sample_sequence).rjust(4, "0")
             elif placeholder_type == "DATE":
-                value = datetime.now().strftime("%Y%m%d")
+                value = today_site_str()
             elif placeholder_type == "YEAR":
-                value = datetime.now().strftime("%Y")
+                value = resolve_business_datetime().strftime("%Y")
             elif placeholder_type == "MONTH":
-                value = datetime.now().strftime("%m")
+                value = resolve_business_datetime().strftime("%m")
             elif placeholder_type == "DAY":
-                value = datetime.now().strftime("%d")
+                value = resolve_business_datetime().strftime("%d")
             else:
                 value = f"{{{placeholder_type}}}"
             

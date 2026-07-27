@@ -33,6 +33,32 @@ def _entity_type(category: ChangeCategory) -> str:
     return audit_node_for_category(category)
 
 
+_BOM_CHANGE_TYPE_LABELS = {
+    "item_add": "新增子件",
+    "item_remove": "删除子件",
+    "item_modify": "修改子件",
+    "version_change": "版本变更",
+    "effective_change": "生效日期变更",
+    "other": "其他",
+}
+
+_ROUTE_CHANGE_TYPE_LABELS = {
+    "operation_change": "工序变更",
+    "time_change": "标准工时变更",
+    "sop_change": "SOP变更",
+    "other": "其他",
+}
+
+
+def _change_type_label(category: ChangeCategory, change_type: str) -> str:
+    code = (change_type or "").strip()
+    if not code:
+        return ""
+    if category == "bom":
+        return _BOM_CHANGE_TYPE_LABELS.get(code, code)
+    return _ROUTE_CHANGE_TYPE_LABELS.get(code, code)
+
+
 def _approval_title(category: ChangeCategory, change: Any) -> str:
     if category == "bom":
         material = getattr(change, "material", None)
@@ -50,9 +76,11 @@ def _approval_title(category: ChangeCategory, change: Any) -> str:
     return f"工艺路线变更: {code}"
 
 
-def _approval_content(change: Any) -> str:
+def _approval_content(category: ChangeCategory, change: Any) -> str:
     reason = (getattr(change, "change_reason", None) or "").strip()
-    change_type = getattr(change, "change_type", None) or ""
+    change_type = _change_type_label(
+        category, str(getattr(change, "change_type", None) or "")
+    )
     if reason and change_type:
         return f"{change_type} - {reason}"
     return reason or change_type or "工程变更自动提交审批"
@@ -77,7 +105,7 @@ async def start_change_approval_flow(
         entity_id=int(change.id),
         entity_uuid=str(change.uuid),
         title=_approval_title(category, change),
-        content=_approval_content(change),
+        content=_approval_content(category, change),
     )
     if not instance:
         from infra.exceptions.exceptions import ValidationError

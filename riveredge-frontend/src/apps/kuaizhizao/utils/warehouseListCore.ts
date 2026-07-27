@@ -578,9 +578,24 @@ function hubSortValue(row: Record<string, unknown>, field: string): unknown {
     case 'receipt_code':
       return row.receipt_code ?? row.return_code ?? row.inbound_code ?? row.registration_code;
     case 'receipt_date':
-      return row.receipt_date ?? row.return_time ?? row.created_at;
+      return (
+        row.receipt_date ??
+        row.receipt_time ??
+        row.return_time ??
+        row.registration_date ??
+        row.created_at
+      );
     case 'delivery_code':
       return row.delivery_code ?? row.picking_code ?? row.outbound_code ?? row.borrow_code;
+    case 'delivery_date':
+      return (
+        row.delivery_date ??
+        row.picking_time ??
+        row.delivery_time ??
+        row.borrow_time ??
+        row.issued_at ??
+        row.created_at
+      );
     default:
       return row[field];
   }

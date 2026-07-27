@@ -13,6 +13,7 @@ from tortoise.exceptions import IntegrityError
 from core.models.message_template import MessageTemplate
 from core.schemas.message_template import MessageTemplateCreate, MessageTemplateUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class MessageTemplateService:
@@ -202,7 +203,7 @@ class MessageTemplateService:
             NotFoundError: 当消息模板不存在时抛出
         """
         message_template = await MessageTemplateService.get_message_template_by_uuid(tenant_id, uuid)
-        message_template.deleted_at = datetime.now()
+        message_template.deleted_at = resolve_business_datetime()
         await message_template.save()
     
     @staticmethod

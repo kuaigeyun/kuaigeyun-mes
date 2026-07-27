@@ -91,6 +91,7 @@ from core.api.files.public import router as files_public_router
 from core.api.apis.apis import router as apis_router
 from core.api.data_sources.data_sources import router as data_sources_router
 from core.api.application_connections.application_connections import router as application_connections_router
+from core.api.mobile_jsapi.mobile_jsapi import router as mobile_jsapi_router
 from core.api.connector_definitions.connector_definitions import router as connector_definitions_router
 from core.api.datasets.datasets import router as datasets_router
 from core.api.messages.message_configs import router as message_configs_router
@@ -422,7 +423,9 @@ async def lifespan(app: FastAPI):
 
     logger.info("✅ 应用关闭中...")
 
-# 创建FastAPI应用
+from core.utils.json_site_timezone import SiteTimezoneJSONResponse
+
+# 创建FastAPI应用（datetime JSON 唯一出口：站点墙钟）
 app = FastAPI(
     title="RiverEdge SaaS Platform",
     description="RiverEdge SaaS 多组织框架 - 平台级后端服务",
@@ -430,6 +433,7 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url=None,  # 禁用默认docs，使用修复版本
     redoc_url=None,  # 使用下方自定义 /redoc（关闭 Google Fonts、可配置 JS CDN）
+    default_response_class=SiteTimezoneJSONResponse,
 )
 
 
@@ -892,6 +896,7 @@ app.include_router(files_router, prefix="/api/v1/core")
 app.include_router(apis_router, prefix="/api/v1/core")
 app.include_router(data_sources_router, prefix="/api/v1/core")
 app.include_router(application_connections_router, prefix="/api/v1/core")
+app.include_router(mobile_jsapi_router, prefix="/api/v1/core")
 app.include_router(connector_definitions_router, prefix="/api/v1/core")
 app.include_router(datasets_router, prefix="/api/v1/core")
 app.include_router(message_configs_router, prefix="/api/v1/core")

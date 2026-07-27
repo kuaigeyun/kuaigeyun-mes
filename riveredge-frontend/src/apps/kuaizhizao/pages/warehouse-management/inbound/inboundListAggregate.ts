@@ -10,6 +10,19 @@ import {
   sortInboundHubRows,
 } from '../../../utils/warehouseListCore';
 import type { InboundHubOrder, InboundReceiptType } from './inboundHubTypes';
+import { resolveInboundHubDateRaw, resolveInboundHubOperator } from './inboundHubTypes';
+
+function withInboundHubDisplayFields(row: InboundHubOrder): InboundHubOrder {
+  const dateRaw = resolveInboundHubDateRaw(row);
+  const operator = resolveInboundHubOperator(row);
+  return {
+    ...row,
+    ...(dateRaw != null && String(dateRaw).trim() !== ''
+      ? { receipt_date: String(dateRaw) }
+      : {}),
+    ...(operator ? { received_by: operator } : {}),
+  };
+}
 
 const emptyList = { items: [] as unknown[], total: 0 };
 
@@ -161,54 +174,85 @@ export async function fetchInboundHubList(
           (item as Record<string, unknown>).total_quantity ?? (item as Record<string, unknown>).total_return_quantity,
       }) as InboundHubOrder,
   );
-  const outsourceReceiptData = toList(outsourceReceiptRes).items.map(
-    (item) =>
-      ({
-        ...(item as Record<string, unknown>),
-        receipt_type: 'outsource_receipt' as const,
-        receipt_code: (item as Record<string, unknown>).code,
-        outsource_work_order_code: (item as Record<string, unknown>).outsource_work_order_code,
-        total_quantity: (item as Record<string, unknown>).quantity,
-        status:
-          (item as Record<string, unknown>).status === 'draft'
-            ? '草稿'
-            : (item as Record<string, unknown>).status === 'completed'
-              ? '已入库'
-              : (item as Record<string, unknown>).status,
-      }) as InboundHubOrder,
-  );
-  const outsourceMaterialReturnData = toList(outsourceMaterialReturnRes).items.map(
-    (item) =>
-      ({
-        ...(item as Record<string, unknown>),
-        receipt_type: 'outsource_material_return' as const,
-        receipt_code: (item as Record<string, unknown>).code,
-        outsource_work_order_code: (item as Record<string, unknown>).outsource_work_order_code,
-        total_quantity: (item as Record<string, unknown>).quantity,
-        status:
-          (item as Record<string, unknown>).status === 'draft'
-            ? '草稿'
-            : (item as Record<string, unknown>).status === 'completed'
-              ? '已入库'
-              : (item as Record<string, unknown>).status,
-      }) as InboundHubOrder,
-  );
-  const outsourceProductReturnData = toList(outsourceProductReturnRes).items.map(
-    (item) =>
-      ({
-        ...(item as Record<string, unknown>),
-        receipt_type: 'outsource_product_return' as const,
-        receipt_code: (item as Record<string, unknown>).code,
-        outsource_work_order_code: (item as Record<string, unknown>).outsource_work_order_code,
-        total_quantity: (item as Record<string, unknown>).quantity,
-        status:
-          (item as Record<string, unknown>).status === 'draft'
-            ? '草稿'
-            : (item as Record<string, unknown>).status === 'completed'
-              ? '已入库'
-              : (item as Record<string, unknown>).status,
-      }) as InboundHubOrder,
-  );
+  const outsourceReceiptData = toList(outsourceReceiptRes).items.map((item) => {
+    const row = item as Record<string, unknown>;
+    const receivedAt = row.received_at ?? row.receivedAt;
+    const operatorName =
+      row.received_by_name ||
+      row.receivedByName ||
+      row.created_by_name ||
+      row.createdByName;
+    return {
+      ...row,
+      receipt_type: 'outsource_receipt' as const,
+      receipt_code: row.code,
+      outsource_work_order_code: row.outsource_work_order_code ?? row.outsourceWorkOrderCode,
+      total_quantity: row.quantity,
+      // 委外收货：业务字段 received_at / received_by_name（received_by 为用户 ID）
+      received_at: receivedAt,
+      received_by_name: operatorName,
+      receipt_date: receivedAt ?? row.receipt_date,
+      received_by: operatorName,
+      status:
+        row.status === 'draft'
+          ? '草稿'
+          : row.status === 'completed'
+            ? '已入库'
+            : row.status,
+    } as InboundHubOrder;
+  });
+  const outsourceMaterialReturnData = toList(outsourceMaterialReturnRes).items.map((item) => {
+    const row = item as Record<string, unknown>;
+    const returnedAt = row.returned_at ?? row.returnedAt;
+    const operatorName =
+      row.returned_by_name ||
+      row.returnedByName ||
+      row.created_by_name ||
+      row.createdByName;
+    return {
+      ...row,
+      receipt_type: 'outsource_material_return' as const,
+      receipt_code: row.code,
+      outsource_work_order_code: row.outsource_work_order_code ?? row.outsourceWorkOrderCode,
+      total_quantity: row.quantity,
+      returned_at: returnedAt,
+      returned_by_name: operatorName,
+      receipt_date: returnedAt ?? row.receipt_date,
+      received_by: operatorName,
+      status:
+        row.status === 'draft'
+          ? '草稿'
+          : row.status === 'completed'
+            ? '已入库'
+            : row.status,
+    } as InboundHubOrder;
+  });
+  const outsourceProductReturnData = toList(outsourceProductReturnRes).items.map((item) => {
+    const row = item as Record<string, unknown>;
+    const returnedAt = row.returned_at ?? row.returnedAt;
+    const operatorName =
+      row.returned_by_name ||
+      row.returnedByName ||
+      row.created_by_name ||
+      row.createdByName;
+    return {
+      ...row,
+      receipt_type: 'outsource_product_return' as const,
+      receipt_code: row.code,
+      outsource_work_order_code: row.outsource_work_order_code ?? row.outsourceWorkOrderCode,
+      total_quantity: row.quantity,
+      returned_at: returnedAt,
+      returned_by_name: operatorName,
+      receipt_date: returnedAt ?? row.receipt_date,
+      received_by: operatorName,
+      status:
+        row.status === 'draft'
+          ? '草稿'
+          : row.status === 'completed'
+            ? '已入库'
+            : row.status,
+    } as InboundHubOrder;
+  });
   const otherInboundData = toList(otherInboundRes).items.map(
     (item) =>
       ({
@@ -241,7 +285,7 @@ export async function fetchInboundHubList(
     ...outsourceProductReturnData,
     ...otherInboundData,
     ...materialReturnData,
-  ];
+  ].map(withInboundHubDisplayFields);
 
   const statusFilter = params.status as string | undefined;
   if (statusFilter === 'pending') {

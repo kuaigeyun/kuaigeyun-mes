@@ -19,9 +19,10 @@ function getDateFormatFromSiteSetting(): string {
   return useConfigStore.getState().getConfig('date_format', 'YYYY-MM-DD');
 }
 
-/** 从站点设置获取时区 */
+/** 从站点设置获取时区（配置真源；未下发时用与后端一致的默认，禁止业务侧再写死） */
 function getTimezoneFromSiteSetting(): string {
-  return useConfigStore.getState().configs?.timezone || 'Asia/Shanghai';
+  const tz = useConfigStore.getState().configs?.timezone;
+  return (tz && String(tz).trim()) || 'Asia/Shanghai';
 }
 
 /** 从站点设置获取日期时间格式 */

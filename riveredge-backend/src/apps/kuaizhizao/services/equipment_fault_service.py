@@ -26,6 +26,65 @@ from apps.common.audit_actor import apply_create_audit
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
+
+# 故障/维修驱动设备状态时，下列主数据状态不被覆盖
+_EQUIPMENT_STATUS_PROTECTED = frozenset({"停用", "报废", "校验中"})
+_OPEN_FAULT_STATUSES = ("待处理", "处理中")
+
+
+async def sync_equipment_status_from_faults(
+    tenant_id: int,
+    equipment_id: int,
+) -> Optional[str]:
+    """
+    按未闭环故障 / 进行中维修同步设备主数据状态（唯一真源）。
+
+    规则：
+    - 当前状态为停用/报废/校验中 → 不动
+    - 存在进行中维修 → 维修中
+    - 否则存在待处理/处理中故障 → 故障
+    - 否则 → 正常
+    """
+    equipment = await Equipment.filter(
+        tenant_id=tenant_id,
+        id=equipment_id,
+        deleted_at__isnull=True,
+    ).first()
+    if not equipment:
+        return None
+    current = str(equipment.status or "")
+    if current in _EQUIPMENT_STATUS_PROTECTED:
+        return current
+
+    has_active_repair = await EquipmentRepair.filter(
+        tenant_id=tenant_id,
+        equipment_id=equipment_id,
+        status="进行中",
+        deleted_at__isnull=True,
+    ).exists()
+    if has_active_repair:
+        target = "维修中"
+    else:
+        has_open_fault = await EquipmentFault.filter(
+            tenant_id=tenant_id,
+            equipment_id=equipment_id,
+            status__in=list(_OPEN_FAULT_STATUSES),
+            deleted_at__isnull=True,
+        ).exists()
+        target = "故障" if has_open_fault else "正常"
+
+    if current != target:
+        equipment.status = target
+        await equipment.save()
+        logger.info(
+            "equipment_status_synced_from_faults tenant_id={} equipment_id={} {} -> {}",
+            tenant_id,
+            equipment_id,
+            current,
+            target,
+        )
+    return target
 
 
 class EquipmentFaultService:
@@ -76,7 +135,7 @@ class EquipmentFaultService:
                     )
                 except ValidationError:
                     # 如果编码规则不存在，使用默认编码格式
-                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                    timestamp = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
                     data.fault_no = f"FT{timestamp}"
             
             fault = EquipmentFault(
@@ -103,6 +162,7 @@ class EquipmentFaultService:
             except Exception as exc:
                 logger.warning("设备报修通知派发失败 tenant={}: {}", tenant_id, exc)
 
+            await sync_equipment_status_from_faults(tenant_id, equipment.id)
             return fault
         except IntegrityError:
             raise ValidationError(f"设备故障记录编号 {data.fault_no} 已存在")
@@ -245,6 +305,8 @@ class EquipmentFaultService:
             setattr(fault, key, value)
         
         await fault.save()
+        if "status" in update_data:
+            await sync_equipment_status_from_faults(tenant_id, fault.equipment_id)
         return fault
     
     @staticmethod
@@ -263,10 +325,12 @@ class EquipmentFaultService:
             NotFoundError: 当设备故障记录不存在时抛出
         """
         fault = await EquipmentFaultService.get_equipment_fault_by_uuid(tenant_id, uuid)
+        equipment_id = fault.equipment_id
         
         # 软删除
-        fault.deleted_at = datetime.now()
+        fault.deleted_at = resolve_business_datetime()
         await fault.save()
+        await sync_equipment_status_from_faults(tenant_id, equipment_id)
 
 
 class EquipmentRepairService:
@@ -369,7 +433,7 @@ class EquipmentRepairService:
                     )
                 except ValidationError:
                     # 如果编码规则不存在，使用默认编码格式
-                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                    timestamp = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
                     data.repair_no = f"RP{timestamp}"
             
             repair = EquipmentRepair(
@@ -390,6 +454,8 @@ class EquipmentRepairService:
                 equipment_fault=equipment_fault,
                 repair_status=repair.status,
             )
+            # 故障状态未变时 _sync 会提前返回；创建维修后仍需按进行中维修刷新设备状态
+            await sync_equipment_status_from_faults(tenant_id, equipment.id)
             if data.repair_parts:
                 await SparePartService().apply_parts_usage(
                     tenant_id,
@@ -542,17 +608,20 @@ class EquipmentRepairService:
         
         await repair.save()
 
-        if "status" in update_data and repair.equipment_fault_uuid:
-            linked_fault = await EquipmentFault.filter(
-                tenant_id=tenant_id,
-                uuid=repair.equipment_fault_uuid,
-                deleted_at__isnull=True,
-            ).first()
-            await EquipmentRepairService._sync_linked_fault_status(
-                tenant_id=tenant_id,
-                equipment_fault=linked_fault,
-                repair_status=repair.status,
-            )
+        if "status" in update_data:
+            if repair.equipment_fault_uuid:
+                linked_fault = await EquipmentFault.filter(
+                    tenant_id=tenant_id,
+                    uuid=repair.equipment_fault_uuid,
+                    deleted_at__isnull=True,
+                ).first()
+                await EquipmentRepairService._sync_linked_fault_status(
+                    tenant_id=tenant_id,
+                    equipment_fault=linked_fault,
+                    repair_status=repair.status,
+                )
+            # 已取消等不映射故障状态的路径也需刷新设备状态
+            await sync_equipment_status_from_faults(tenant_id, repair.equipment_id)
         return repair
     
     @staticmethod
@@ -571,8 +640,10 @@ class EquipmentRepairService:
             NotFoundError: 当设备维修记录不存在时抛出
         """
         repair = await EquipmentRepairService.get_equipment_repair_by_uuid(tenant_id, uuid)
+        equipment_id = repair.equipment_id
         
         # 软删除
-        repair.deleted_at = datetime.now()
+        repair.deleted_at = resolve_business_datetime()
         await repair.save()
+        await sync_equipment_status_from_faults(tenant_id, equipment_id)
 

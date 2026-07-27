@@ -18,7 +18,9 @@ from tortoise.transactions import in_transaction
 from core.utils.timezone_utils import (
     coerce_business_datetime_to_utc,
     now_utc,
+    resolve_business_datetime,
     to_api_isoformat,
+    today_site_str,
 )
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
@@ -273,7 +275,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
     ) -> Dict[int, float]:
         """
         批量计算工单完工进度（0-100）：
-        以最后一道工序（sequence 最大）的已完成数量 / 工单计划数量。
+        以最后一道工序的「有效合格 / 工单计划数量」。
+        方案质检用过程检验放行数，未检完不得显示 100%。
         """
         wo_by_id = {int(wo.id): wo for wo in work_orders if wo.id is not None}
         wo_ids = list(wo_by_id.keys())
@@ -284,19 +287,42 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             tenant_id=tenant_id,
             work_order_id__in=wo_ids,
             deleted_at__isnull=True,
-        ).values_list("work_order_id", "sequence", "completed_quantity")
+        ).all()
 
-        last_completed_by_wo: Dict[int, float] = {}
-        last_sequence_by_wo: Dict[int, int] = {}
-        for work_order_id, sequence, completed_quantity in op_rows:
-            if work_order_id is None:
+        last_op_by_wo: Dict[int, WorkOrderOperation] = {}
+        for op in op_rows:
+            if op.work_order_id is None:
                 continue
-            wo_id = int(work_order_id)
-            seq = int(sequence or 0)
-            prev_seq = last_sequence_by_wo.get(wo_id)
-            if prev_seq is None or seq > prev_seq:
-                last_sequence_by_wo[wo_id] = seq
-                last_completed_by_wo[wo_id] = float(completed_quantity or 0)
+            wo_id = int(op.work_order_id)
+            prev = last_op_by_wo.get(wo_id)
+            if prev is None or int(op.sequence or 0) > int(prev.sequence or 0):
+                last_op_by_wo[wo_id] = op
+
+        from apps.kuaizhizao.models.process_inspection import ProcessInspection
+        from apps.kuaizhizao.services.operation_transfer_service import (
+            build_operation_policy_cache,
+            resolve_operation_transfer_qualified,
+        )
+
+        master_op_ids = [
+            int(op.operation_id)
+            for op in last_op_by_wo.values()
+            if op.operation_id is not None
+        ]
+        policy_cache = await build_operation_policy_cache(tenant_id, master_op_ids)
+
+        insp_rows = await ProcessInspection.filter(
+            tenant_id=tenant_id,
+            work_order_id__in=wo_ids,
+            deleted_at__isnull=True,
+        ).all()
+        inspections_by_wo_master: Dict[int, Dict[int, list]] = {}
+        for row in insp_rows:
+            wid = getattr(row, "work_order_id", None)
+            oid = getattr(row, "operation_id", None)
+            if wid is None or oid is None:
+                continue
+            inspections_by_wo_master.setdefault(int(wid), {}).setdefault(int(oid), []).append(row)
 
         def _clamp(pct: float) -> float:
             if pct < 0:
@@ -311,8 +337,18 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if planned <= 0:
                 result[wo_id] = 0.0
                 continue
-            completed = last_completed_by_wo.get(wo_id, 0.0)
-            result[wo_id] = _clamp((completed / planned) * 100.0)
+            last_op = last_op_by_wo.get(wo_id)
+            if last_op is None:
+                result[wo_id] = 0.0
+                continue
+            effective = await resolve_operation_transfer_qualified(
+                tenant_id,
+                wo_id,
+                last_op,
+                policy_cache=policy_cache,
+                inspections_by_op=inspections_by_wo_master.get(wo_id),
+            )
+            result[wo_id] = _clamp((float(effective) / planned) * 100.0)
         return result
 
     @staticmethod
@@ -610,6 +646,18 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 is_node = extra_data.get("isNodeOperation")
             is_node = bool(is_node) if is_node is not None else False
 
+            from apps.kuaizhizao.utils.outsource_operation import parse_route_step_outsource
+
+            outsource_meta = parse_route_step_outsource(extra_data if isinstance(extra_data, dict) else {})
+            # 计划委外不占本厂工位：忽略默认工位派工
+            if outsource_meta["outsource_kind"] != "none":
+                assigned_station_id = None
+                assigned_station_name = None
+                assigned_worker_id = None
+                assigned_worker_name = None
+                assigned_equipment_id = None
+                assigned_equipment_name = None
+
             step_explicit = extra_has_over_report_keys(extra_data)
             step_t = parse_over_report_from_extra(extra_data)
             line_t = (OVER_REPORT_NONE, Decimal("0"))
@@ -651,12 +699,23 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 "total_hours": total_hours,
                 "standard_hours_per_unit": standard_hours_per_unit,
                 "setup_hours": setup_hours,
+                "outsource_kind": outsource_meta["outsource_kind"],
+                "outsource_lead_time_days": outsource_meta["outsource_lead_time_days"],
+                "default_outsource_supplier_id": outsource_meta["default_outsource_supplier_id"],
+                "default_outsource_supplier_name": outsource_meta["default_outsource_supplier_name"],
             })
 
+        from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
+        _anchor = work_order.planned_start_date or work_order.planned_end_date
+        _around = _anchor.date() if _anchor else None
+        _holidays, _work_hours, _overtime = await load_scheduling_work_context(tenant_id, around=_around)
         time_slots = build_operation_time_slots(
             [row["total_hours"] for row in prepared_ops],
             planned_start=work_order.planned_start_date,
             planned_end=work_order.planned_end_date,
+            holidays=_holidays,
+            work_hours=_work_hours,
+            overtime=_overtime,
         )
 
         work_order_operations = []
@@ -695,6 +754,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 is_node_operation=row["is_node"],
                 over_report_mode=row["orm"],
                 over_report_value=row["orv"],
+                outsource_kind=row.get("outsource_kind") or "none",
+                outsource_lead_time_days=row.get("outsource_lead_time_days"),
+                default_outsource_supplier_id=row.get("default_outsource_supplier_id"),
+                default_outsource_supplier_name=row.get("default_outsource_supplier_name"),
                 status='pending',
                 created_by=created_by,
                 created_by_name=user_info["name"],
@@ -740,10 +803,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             operation_total_hours(op.setup_time, op.standard_time, work_order.quantity)
             for op in sorted_ops
         ]
+        from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
+        _anchor = work_order.planned_start_date or work_order.planned_end_date
+        _around = _anchor.date() if _anchor else None
+        _holidays, _work_hours, _overtime = await load_scheduling_work_context(tenant_id, around=_around)
         time_slots = build_operation_time_slots(
             durations,
             planned_start=work_order.planned_start_date,
             planned_end=work_order.planned_end_date,
+            holidays=_holidays,
+            work_hours=_work_hours,
+            overtime=_overtime,
         )
 
         for idx, op in enumerate(sorted_ops):
@@ -807,7 +877,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             elif code_rule:
                 # 使用编码规则生成编码
                 # 构建上下文变量
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 context = {"prefix": f"WO{today}"}
                 
                 code = await CodeGenerationService.generate_code(
@@ -1058,7 +1128,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     work_order_operations = []
                     
                     # 计算计划时间
-                    planned_start = work_order.planned_start_date or datetime.now()
+                    planned_start = work_order.planned_start_date or resolve_business_datetime()
                     current_time = planned_start
                     
                     from apps.kuaizhizao.services.over_report_rules import (
@@ -1867,6 +1937,32 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     f"{so.order_code} - {so.customer_name}" if so.customer_name else so.order_code,
                 )
 
+        # 列表带工序步骤时：按有效合格回写误标「已完成」的工序/工单（已报未检等历史数据）
+        if include_operation_steps and work_orders:
+            from apps.kuaizhizao.services.reporting_service import (
+                sync_work_order_operations_completion,
+            )
+
+            reconcile_ids = [
+                int(wo.id)
+                for wo in work_orders
+                if wo.id is not None
+                and str(wo.status or "") in ("released", "in_progress", "completed")
+            ]
+            for wid in reconcile_ids:
+                await sync_work_order_operations_completion(tenant_id, wid)
+            if reconcile_ids:
+                refreshed = await WorkOrder.filter(
+                    tenant_id=tenant_id,
+                    id__in=reconcile_ids,
+                    deleted_at__isnull=True,
+                ).all()
+                by_id = {int(w.id): w for w in refreshed if w.id is not None}
+                work_orders = [
+                    by_id.get(int(wo.id), wo) if wo.id is not None and int(wo.id) in by_id else wo
+                    for wo in work_orders
+                ]
+
         # 批量预取工序（include_operations 时消除 N+1）
         operations_map: dict[int, list] = {}
         operation_steps_map: dict[int, list] = {}
@@ -2463,6 +2559,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     if int(wo.id) not in result["skipped_frozen"]:
                         result["skipped_frozen"].append(int(wo.id))
                     continue
+                from apps.kuaizhizao.utils.outsource_operation import occupies_factory_capacity
+
+                if not occupies_factory_capacity(op):
+                    result["failed"].append({"id": int(op_id), "reason": "委外工序不占本厂工位，不可改派"})
+                    continue
                 station = await Workstation.get_or_none(tenant_id=tenant_id, id=int(station_id), deleted_at__isnull=True)
                 station_name = station.name if station else f"工位{station_id}"
                 await WorkOrderOperation.filter(tenant_id=tenant_id, id=op_id).update(
@@ -2496,7 +2597,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             return result
 
         user_info = await self.get_user_info(updated_by)
-        now = datetime.now()
+        now = resolve_business_datetime()
 
         async with in_transaction():
             for item in updates[:50]:
@@ -2622,14 +2723,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             existing.status = status
             existing.handled_by = handled_by
             existing.handled_by_name = user_info["name"]
-            existing.handled_at = datetime.now()
+            existing.handled_at = resolve_business_datetime()
             await existing.save()
             return
         await DeliveryDelayException.create(
             tenant_id=tenant_id,
             work_order_id=work_order.id,
             work_order_code=work_order.code or str(work_order.id),
-            planned_end_date=work_order.planned_end_date or datetime.now(),
+            planned_end_date=work_order.planned_end_date or resolve_business_datetime(),
             actual_end_date=work_order.actual_end_date,
             delay_days=max(0, int(delay_days)),
             delay_reason=reason,
@@ -2646,7 +2747,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             suggested_action=suggested_action,
             handled_by=handled_by,
             handled_by_name=user_info["name"],
-            handled_at=datetime.now(),
+            handled_at=resolve_business_datetime(),
         )
 
     async def _move_work_order_out_of_freeze_window(
@@ -2692,7 +2793,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             operation_total_hours,
         )
 
-        now = datetime.now()
+        now = resolve_business_datetime()
         proposals: Dict[str, Any] = {
             "summary": None,
             "warnings": [],
@@ -2704,8 +2805,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             return proposals
 
         rolling_svc = RollingScheduleService()
+        from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
         next_day = await rolling_svc.get_next_workday(tenant_id, now.date())
-        anchor_start = datetime.combine(next_day, datetime.min.time().replace(hour=8))
+        _holidays, _work_hours, _overtime = await load_scheduling_work_context(tenant_id, around=next_day)
+        anchor_start = datetime.combine(next_day, _work_hours.start)
 
         wos = await WorkOrder.filter(
             tenant_id=tenant_id,
@@ -2743,7 +2846,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 operation_total_hours(op.setup_time, op.standard_time, wo.quantity)
                 for op in pending_ops
             ]
-            slots = build_operation_time_slots(durations, planned_start=anchor_start)
+            slots = build_operation_time_slots(
+                durations,
+                planned_start=anchor_start,
+                holidays=_holidays,
+                work_hours=_work_hours,
+                overtime=_overtime,
+            )
             for op, (start, end) in zip(pending_ops, slots):
                 proposals["operation_adjustments"].append(
                     {
@@ -2807,7 +2916,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             for fail in wo_result.get("failed") or []:
                 result["failed"].append(fail)
 
-        now = datetime.now()
+        now = resolve_business_datetime()
         wos = await WorkOrder.filter(tenant_id=tenant_id, id__in=list(wo_ids_touched)).all()
         for wo in wos:
             delay_days = (now - wo.planned_end_date).days if wo.planned_end_date and wo.planned_end_date < now else 0
@@ -2842,7 +2951,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             "skipped": [],
             "failed": [],
         }
-        now = datetime.now()
+        now = resolve_business_datetime()
         ids = [int(i) for i in body.work_order_ids[:50] if int(i) > 0]
         if not ids:
             return result
@@ -3048,8 +3157,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         shortage_items = []
 
         # 检查每个物料的需求和库存
-        # 与齐套分析同口径：服务/委外/虚拟件及发料方式 none 的 BOM 行不校验实物库存
-        # （服务类物料永远无库存，纳入缺料会导致工单永远无法下达）
+        # 下达缺料：服务/委外/虚拟件及发料 none 不校验厂内库存
+        # （服务无库存；委外由供应商供给，未入库不阻断下达）
         from apps.kuaizhizao.utils.issue_method_resolver import is_kitting_inventory_material
 
         for requirement in material_requirements:
@@ -3188,7 +3297,97 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 # 节点时间记录失败不影响主流程，记录日志
                 logger.warning(f"记录工单下达节点时间失败: {e}")
 
+            await self._ensure_planned_outsource_drafts(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                created_by=released_by,
+            )
+
             return await self.get_work_order_by_id(tenant_id, work_order_id)
+
+    async def _ensure_planned_outsource_drafts(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        created_by: int,
+    ) -> None:
+        """下达时：计划委外工序若尚无有效委外单则自动建草稿。"""
+        from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+        from apps.kuaizhizao.services.outsource_service import OutsourceService
+        from apps.kuaizhizao.utils.outsource_operation import OUTSOURCE_KIND_PLANNED
+        from apps.master_data.models.supplier import Supplier
+
+        ops = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+            outsource_kind=OUTSOURCE_KIND_PLANNED,
+        ).order_by("sequence").all()
+        if not ops:
+            return
+
+        existing_op_ids = set(
+            await OutsourceOrder.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                work_order_operation_id__in=[op.id for op in ops],
+                deleted_at__isnull=True,
+            )
+            .exclude(status="cancelled")
+            .values_list("work_order_operation_id", flat=True)
+        )
+
+        work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+        outsource_svc = OutsourceService()
+        pending_ops = [op for op in ops if op.id not in existing_op_ids]
+        missing_supplier: List[str] = []
+        ready: List[tuple] = []
+        for op in pending_ops:
+            supplier_id = op.default_outsource_supplier_id
+            if not supplier_id:
+                missing_supplier.append(op.operation_name or str(op.id))
+                continue
+            supplier = await Supplier.filter(
+                tenant_id=tenant_id,
+                id=int(supplier_id),
+                deleted_at__isnull=True,
+                is_active=True,
+            ).first()
+            if not supplier:
+                missing_supplier.append(op.operation_name or str(op.id))
+                continue
+            qty = Decimal(str(work_order.quantity or 0)) - Decimal(str(op.completed_quantity or 0))
+            if qty <= 0:
+                continue
+            ready.append((op, supplier, qty))
+        if missing_supplier:
+            raise ValidationError(
+                "计划委外工序缺少有效默认供应商，无法下达："
+                + "、".join(missing_supplier[:5])
+                + ("等" if len(missing_supplier) > 5 else "")
+            )
+        for op, supplier, qty in ready:
+            if not op.default_outsource_supplier_name:
+                op.default_outsource_supplier_name = supplier.name
+                await op.save(update_fields=["default_outsource_supplier_name", "updated_at"])
+            lead = int(op.outsource_lead_time_days or 1)
+            start = op.planned_start_date
+            end = op.planned_end_date
+            if start and not end:
+                from datetime import timedelta
+
+                end = start + timedelta(days=max(lead, 0))
+            await outsource_svc.create_outsource_order_from_work_order(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                work_order_operation_id=int(op.id),
+                supplier_id=int(supplier.id),
+                outsource_quantity=qty,
+                created_by=created_by,
+                planned_start_date=start,
+                planned_end_date=end,
+                remarks="计划工序委外（下达自动创建）",
+            )
 
     async def update_work_order_status(
         self,
@@ -3246,7 +3445,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             - delay_days: 延期天数
             - status: 工单状态
         """
-        now = datetime.now()
+        now = resolve_business_datetime()
         query = WorkOrder.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -3677,6 +3876,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 assigned_mold_name=op.assigned_mold_name,
                 assigned_tool_id=op.assigned_tool_id,
                 assigned_tool_name=op.assigned_tool_name,
+                outsource_kind=getattr(op, "outsource_kind", None) or "none",
+                outsource_lead_time_days=getattr(op, "outsource_lead_time_days", None),
+                default_outsource_supplier_id=getattr(op, "default_outsource_supplier_id", None),
+                default_outsource_supplier_name=getattr(op, "default_outsource_supplier_name", None),
                 status="pending",
                 completed_quantity=Decimal("0"),
                 qualified_quantity=Decimal("0"),
@@ -3850,29 +4053,27 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             deleted_at__isnull=True
         ).order_by('sequence').all()
 
-        from apps.kuaizhizao.services.reporting_service import _sync_operation_completion_status
+        from apps.kuaizhizao.services.reporting_service import sync_work_order_operations_completion
+        from apps.kuaizhizao.services.quality_automation_service import QualityAutomationService
 
-        op_status_changed = False
-        for op in operations:
-            if _sync_operation_completion_status(work_order, op):
-                await op.save()
-                op_status_changed = True
-        if op_status_changed:
-            all_done = operations and all(o.status == "completed" for o in operations)
-            if all_done and work_order.status != "completed":
-                from datetime import datetime
-
-                work_order.status = "completed"
-                work_order.actual_end_date = work_order.actual_end_date or datetime.now()
-                await work_order.save()
-            elif (
-                not all_done
-                and work_order.status == "completed"
-                and not work_order.manually_completed
-            ):
-                work_order.status = "in_progress"
-                work_order.actual_end_date = None
-                await work_order.save()
+        await sync_work_order_operations_completion(tenant_id, work_order_id)
+        # 补建仅在展开工序时执行，避免工单列表批量 sync 并发重复建单
+        try:
+            await QualityAutomationService().maybe_backfill_missing_ipqc_for_work_order(
+                tenant_id, work_order_id
+            )
+        except Exception as e:
+            logger.warning(f"工单 {work_order_id} 补建过程检验失败: {e}")
+        work_order = await WorkOrder.get_or_none(
+            tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True
+        )
+        if not work_order:
+            raise NotFoundError(f"工单不存在: {work_order_id}")
+        operations = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).order_by("sequence").all()
 
         if not operations and work_order.parent_work_order_id is not None:
             await self.backfill_split_child_operations(tenant_id, work_order)
@@ -4024,18 +4225,64 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             op_data["default_operators"] = default_snap_by_master.get(op.operation_id, [])
 
             outsource_order = outsource_by_op_id.get(op.id)
+            kind = getattr(op, "outsource_kind", None) or "none"
+            op_data["outsource_kind"] = kind
+            op_data["outsource_lead_time_days"] = getattr(op, "outsource_lead_time_days", None)
+            op_data["default_outsource_supplier_id"] = getattr(op, "default_outsource_supplier_id", None)
+            op_data["default_outsource_supplier_name"] = getattr(op, "default_outsource_supplier_name", None)
             if outsource_order:
                 op_data["is_outsourced"] = True
-                op_data["outsource_supplier_name"] = outsource_order.supplier_name
+                op_data["outsource_supplier_name"] = outsource_order.supplier_name or op_data.get(
+                    "default_outsource_supplier_name"
+                )
                 op_data["outsource_order_code"] = outsource_order.code
             else:
-                op_data["is_outsourced"] = False
+                op_data["is_outsourced"] = kind != "none"
+                if kind != "none":
+                    op_data["outsource_supplier_name"] = op_data.get("default_outsource_supplier_name")
+                else:
+                    op_data["outsource_supplier_name"] = None
+                op_data["outsource_order_code"] = None
 
             prev_transfer = transfer_qualified
             result.append(WorkOrderOperationResponse.model_validate(op_data))
         if include_meta:
             mm = await self._resolve_manufacturing_mode(tenant_id, work_order.product_id)
-            return {"manufacturing_mode": mm, "operations": result}
+            # sync 后回写列表行：状态 / 完工进度 / 工序步骤（避免列表仍显示已完成）
+            from apps.kuaizhizao.services.work_order_operation_steps import (
+                build_work_order_operation_steps,
+            )
+
+            step_raw = []
+            for op, op_resp in zip(operations, result):
+                transfer = getattr(op_resp, "transfer_qualified_quantity", None)
+                step_raw.append(
+                    {
+                        "operation_name": op.operation_name,
+                        "sequence": op.sequence,
+                        "status": op.status,
+                        "qualified_quantity": float(op.qualified_quantity or 0),
+                        "transfer_qualified_quantity": (
+                            float(transfer) if transfer is not None else None
+                        ),
+                    }
+                )
+            planned = float(work_order.quantity or 0)
+            last_transfer = 0.0
+            if result:
+                t = getattr(result[-1], "transfer_qualified_quantity", None)
+                last_transfer = float(t or 0)
+            push_progress = 0.0
+            if planned > 0:
+                pct = (last_transfer / planned) * 100.0
+                push_progress = max(0.0, min(100.0, round(pct, 1)))
+            return {
+                "manufacturing_mode": mm,
+                "operations": result,
+                "status": work_order.status,
+                "downstream_push_progress": push_progress,
+                "operation_steps": build_work_order_operation_steps(step_raw, planned),
+            }
         return result
 
     async def refresh_work_order_operation_transfer_state(
@@ -4043,8 +4290,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         tenant_id: int,
         work_order_id: int,
     ) -> None:
-        """过程检验放行后触发；转下道数量为查询时计算，此处保留扩展点。"""
-        _ = (tenant_id, work_order_id)
+        """过程检验放行/变更后：按检验有效合格重算工序与工单完成态。"""
+        from apps.kuaizhizao.services.reporting_service import sync_work_order_operations_completion
+
+        await sync_work_order_operations_completion(tenant_id, work_order_id)
 
     async def update_work_order_operations(
         self,
@@ -4343,7 +4592,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             work_order_operation.assigned_mold_name = dispatch_data.assigned_mold_name
             work_order_operation.assigned_tool_id = dispatch_data.assigned_tool_id
             work_order_operation.assigned_tool_name = dispatch_data.assigned_tool_name
-            work_order_operation.assigned_at = datetime.now()
+            work_order_operation.assigned_at = resolve_business_datetime()
             work_order_operation.assigned_by = dispatched_by
             work_order_operation.assigned_by_name = user_info["name"]
             
@@ -4509,7 +4758,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             # 更新工序状态
             work_order_operation.status = 'in_progress'
-            work_order_operation.actual_start_date = datetime.now()
+            work_order_operation.actual_start_date = resolve_business_datetime()
             work_order_operation.updated_by = started_by
             work_order_operation.updated_by_name = user_info["name"]
             await work_order_operation.save()
@@ -4517,7 +4766,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             # 如果工单状态是 released，更新为 in_progress
             if work_order.status == 'released':
                 work_order.status = 'in_progress'
-                work_order.actual_start_date = work_order.actual_start_date or datetime.now()
+                work_order.actual_start_date = work_order.actual_start_date or resolve_business_datetime()
                 work_order.updated_by = started_by
                 work_order.updated_by_name = user_info["name"]
                 await work_order.save()
@@ -4571,7 +4820,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             # 更新冻结信息
             work_order.is_frozen = True
             work_order.freeze_reason = freeze_data.freeze_reason
-            work_order.frozen_at = datetime.now()
+            work_order.frozen_at = resolve_business_datetime()
             work_order.frozen_by = frozen_by
             work_order.frozen_by_name = user_info["name"]
             work_order.updated_by = frozen_by
@@ -4737,21 +4986,58 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             return updated_work_orders
 
     @staticmethod
-    def _work_order_progress_percent(wo: WorkOrder) -> float:
-        qty = float(wo.quantity or 0)
+    def _work_order_progress_percent(planned: Decimal, effective_completed: Decimal) -> float:
+        qty = float(planned or 0)
         if qty <= 0:
             return 0.0
-        return round(float(wo.completed_quantity or 0) / qty * 100, 2)
+        return round(float(effective_completed or 0) / qty * 100, 2)
 
     @staticmethod
-    def _build_kitting_related_work_order_summary(wo: WorkOrder) -> KittingRelatedWorkOrderSummary:
+    async def _resolve_work_order_effective_completed_quantity(
+        tenant_id: int,
+        wo: WorkOrder,
+    ) -> Decimal:
+        """
+        工单作为半成品供给时的有效完工量：末道工序可转下道/可入库合格。
+        方案质检未放行前为 0，不得按报工完成数计入上游齐套。
+        """
+        operations = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=int(wo.id),
+            deleted_at__isnull=True,
+        ).all()
+        if not operations:
+            return Decimal("0")
+        last_op = max(operations, key=lambda op: (op.sequence or 0, op.id or 0))
+        from apps.kuaizhizao.services.operation_transfer_service import (
+            resolve_operation_transfer_qualified,
+        )
+
+        return await resolve_operation_transfer_qualified(
+            tenant_id, int(wo.id), last_op
+        )
+
+    async def _build_kitting_related_work_order_summary(
+        self,
+        tenant_id: int,
+        wo: WorkOrder,
+        *,
+        effective_completed: Optional[Decimal] = None,
+    ) -> KittingRelatedWorkOrderSummary:
+        planned = Decimal(str(wo.quantity or 0))
+        completed = (
+            effective_completed
+            if effective_completed is not None
+            else await self._resolve_work_order_effective_completed_quantity(tenant_id, wo)
+        )
         return KittingRelatedWorkOrderSummary(
             work_order_id=int(wo.id),
             work_order_code=wo.code or str(wo.id),
             status=str(wo.status or ""),
-            quantity=Decimal(str(wo.quantity or 0)),
-            completed_quantity=Decimal(str(wo.completed_quantity or 0)),
-            progress_percent=WorkOrderService._work_order_progress_percent(wo),
+            quantity=planned,
+            completed_quantity=completed,
+            progress_percent=self._work_order_progress_percent(planned, completed),
+            planned_end_date=wo.planned_end_date,
         )
 
     @staticmethod
@@ -4773,6 +5059,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             received_quantity=Decimal(str(owo.received_quantity or 0)),
             progress_percent=WorkOrderService._outsource_work_order_progress_percent(owo),
             supplier_name=owo.supplier_name,
+            planned_end_date=owo.planned_end_date,
         )
 
     _KITTING_PO_TERMINAL_STATUSES = frozenset(
@@ -4860,12 +5147,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             # 优先展示未到货量更大的行；同等则取较新订单
             if prev and Decimal(str(prev["outstanding_quantity"])) >= outstanding:
                 continue
+            item_due = getattr(item, "required_date", None)
+            order_due = getattr(order, "delivery_date", None)
             bucket["po"] = {
                 "document_id": int(order.id),
                 "document_code": str(order.order_code or order.id),
                 "ordered_quantity": ordered,
                 "received_quantity": received,
                 "outstanding_quantity": outstanding,
+                "expected_date": item_due or order_due,
             }
 
         pr_items = await PurchaseRequisitionItem.filter(
@@ -4900,15 +5190,29 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 prev = bucket.get("pr")
                 if prev and Decimal(str(prev["outstanding_quantity"])) >= qty:
                     continue
+                item_due = getattr(item, "required_date", None)
+                req_due = getattr(req, "required_date", None)
                 bucket["pr"] = {
                     "document_id": int(req.id),
                     "document_code": str(req.requisition_code or req.id),
                     "ordered_quantity": qty,
                     "received_quantity": Decimal("0"),
                     "outstanding_quantity": qty,
+                    "expected_date": item_due or req_due,
                 }
 
         return result
+
+    @classmethod
+    def _coerce_kitting_expected_datetime(cls, value: Any) -> Optional[datetime]:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if hasattr(value, "year") and hasattr(value, "month") and hasattr(value, "day"):
+            # date → datetime（本地日历日，无时区）
+            return datetime(value.year, value.month, value.day)
+        return None
 
     @classmethod
     def _resolve_kitting_supply_progress(
@@ -4946,6 +5250,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 document_type="purchase_order",
                 document_id=int(po["document_id"]),
                 document_code=str(po["document_code"]),
+                expected_date=cls._coerce_kitting_expected_datetime(po.get("expected_date")),
             )
 
         pr = open_purchase.get("pr")
@@ -4960,6 +5265,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 document_type="purchase_requisition",
                 document_id=int(pr["document_id"]),
                 document_code=str(pr["document_code"]),
+                expected_date=cls._coerce_kitting_expected_datetime(pr.get("expected_date")),
             )
 
         if source_type == SOURCE_TYPE_BUY and required_qty > total_available:
@@ -5150,11 +5456,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         applicable_count = 0
         fully_kitted_count = 0
 
-        from apps.kuaizhizao.utils.issue_method_resolver import is_kitting_inventory_material
+        from apps.kuaizhizao.utils.issue_method_resolver import (
+            is_kitting_rate_material,
+            resolve_issue_method,
+        )
 
         # 正式发料领料单 ID（排除历史叫料「主仓→线边」备料转移型，避免与线边库存双计）
         from apps.kuaizhizao.utils.picking_posting import filter_gi_picking_ids
-        from apps.kuaizhizao.utils.issue_method_resolver import resolve_issue_method
 
         all_pickings = await ProductionPicking.filter(
             tenant_id=tenant_id,
@@ -5181,6 +5489,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             ).all()
             component_owos = {int(r.product_id): r for r in outsource_rows if r.product_id}
 
+        # 半成品供给：按末道检验放行量预计算（未检完不得计入上游齐套）
+        component_wo_effective: Dict[int, Decimal] = {}
+        for child_wo in component_wos.values():
+            component_wo_effective[int(child_wo.id)] = (
+                await self._resolve_work_order_effective_completed_quantity(
+                    tenant_id, child_wo
+                )
+            )
+
         buy_or_open_ids = [
             int(req.component_id)
             for req in requirements
@@ -5189,6 +5506,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 getattr(req, "component_type", None) == SOURCE_TYPE_BUY
                 or int(req.component_id) not in component_wos
             )
+            and getattr(req, "component_type", None) != SOURCE_TYPE_OUTSOURCE
         ]
         open_purchase_map = await self._load_material_open_purchase_map(
             tenant_id, buy_or_open_ids
@@ -5200,26 +5518,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 getattr(req, "issue_method", None),
                 source_type,
             )
-            kitting_applicable = is_kitting_inventory_material(
+            kitting_applicable = is_kitting_rate_material(
                 getattr(req, "issue_method", None),
                 source_type,
             )
             required_qty = Decimal(str(req.gross_requirement))
 
             if not kitting_applicable:
-                related_outsource: Optional[KittingRelatedOutsourceWorkOrderSummary] = None
-                if source_type == SOURCE_TYPE_OUTSOURCE:
-                    child_owo = component_owos.get(int(req.component_id))
-                    if child_owo:
-                        related_outsource = self._build_kitting_related_outsource_work_order_summary(
-                            child_owo
-                        )
                 mid = int(req.component_id)
                 supply_progress = self._resolve_kitting_supply_progress(
                     source_type=source_type,
                     required_qty=required_qty,
                     total_available=Decimal("0"),
-                    has_related_production=related_outsource is not None,
+                    has_related_production=False,
                     open_purchase=open_purchase_map.get(mid),
                 )
                 analysis_items.append(MaterialKittingItem(
@@ -5237,7 +5548,6 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     line_side_available=Decimal("0"),
                     status="not_applicable",
                     locations=[],
-                    related_outsource_work_order=related_outsource,
                     supply_progress=supply_progress,
                 ))
                 continue
@@ -5299,12 +5609,33 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if source_type in (SOURCE_TYPE_MAKE, SOURCE_TYPE_CONFIGURE):
                 child_wo = component_wos.get(int(req.component_id))
                 if child_wo:
-                    related_summary = self._build_kitting_related_work_order_summary(child_wo)
-                    wo_supply = Decimal(str(child_wo.completed_quantity or 0))
+                    effective = component_wo_effective.get(
+                        int(child_wo.id), Decimal("0")
+                    )
+                    related_summary = await self._build_kitting_related_work_order_summary(
+                        tenant_id,
+                        child_wo,
+                        effective_completed=effective,
+                    )
+                    wo_supply = effective
 
-            # 3.4 需求覆盖：正式发料 + 线边备料 + 主仓实物 + 关联半成品完工
-            # （备料转移不再计入 picked，故不会与 line_side 双计）
-            total_available = picked_qty + line_side_qty + main_warehouse_qty + wo_supply
+            related_outsource: Optional[KittingRelatedOutsourceWorkOrderSummary] = None
+            owo_supply = Decimal("0")
+            if source_type == SOURCE_TYPE_OUTSOURCE:
+                child_owo = component_owos.get(int(req.component_id))
+                if child_owo:
+                    related_outsource = self._build_kitting_related_outsource_work_order_summary(
+                        child_owo
+                    )
+                    # 委外已收货量计入齐套（草稿/未收货为 0，不得虚高齐套率）
+                    owo_supply = Decimal(str(child_owo.received_quantity or 0))
+
+            # 3.4 齐套可用：正式发料 + 线边 + 主仓 + 半成品有效完工 + 委外已收货
+            # work_order_supply_quantity 仅自制/可配置有效完工：委外已收货在主仓，须走线边备料，
+            # 不得计入「线边就绪」否则收货后永远不下推配料。
+            total_available = (
+                picked_qty + line_side_qty + main_warehouse_qty + wo_supply + owo_supply
+            )
             shortage_qty = required_qty - total_available
             if shortage_qty < 0:
                 shortage_qty = Decimal("0")
@@ -5322,7 +5653,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 source_type=source_type,
                 required_qty=required_qty,
                 total_available=total_available,
-                has_related_production=related_summary is not None,
+                has_related_production=(
+                    related_summary is not None or related_outsource is not None
+                ),
                 open_purchase=open_purchase_map.get(mid),
             )
 
@@ -5343,10 +5676,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 locations=locations,
                 related_work_order=related_summary,
                 work_order_supply_quantity=wo_supply,
+                related_outsource_work_order=related_outsource,
                 supply_progress=supply_progress,
             ))
 
-        # 4. 汇总（仅统计需库存齐套的物料）
+        # 4. 汇总（服务/虚拟不计；库存件 + 委外子件计入齐套率）
         if applicable_count <= 0:
             kitting_rate = Decimal("100")
             overall_status = "fully_kitted"
@@ -5448,7 +5782,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             total_quantity = sum(work_order.quantity for work_order in work_orders)
 
             # 生成合并后工单编码
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             merged_code = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="WORK_ORDER_CODE",
@@ -5714,7 +6048,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 updated_by=completed_by,
                 status='completed',
                 manually_completed=True,
-                actual_end_date=datetime.now()  # 设置实际结束时间
+                actual_end_date=resolve_business_datetime()  # 设置实际结束时间
             )
 
             # 记录节点时间

@@ -40,6 +40,7 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_purchase_requisition_capabilities_on_response,
     enrich_purchase_requisition_list_capabilities,
 )
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 from apps.kuaizhizao.services.document_action_policy.purchase_requisition import (
     assert_purchase_requisition_capability,
 )
@@ -73,7 +74,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             return await self.generate_code(tenant_id, "PURCHASE_REQUISITION_CODE", prefix="CGSQ")
         except Exception:
             import uuid
-            return f"CGSQ{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+            return f"CGSQ{today_site_str()}{uuid.uuid4().hex[:6].upper()}"
 
     async def create_requisition(
         self,
@@ -110,7 +111,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                         logger.warning("采购申请编码规则生成失败: %s", e)
                 if not data.requisition_code:
                     import uuid
-                    data.requisition_code = f"CGSQ{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+                    data.requisition_code = f"CGSQ{today_site_str()}{uuid.uuid4().hex[:6].upper()}"
 
             req_date = data.requisition_date or date.today()
             user_info = await self.get_user_info(created_by)
@@ -687,7 +688,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         logger.info("kuaizhizao_purchase_requisition_delete attempt: tenant_id={} req_id={} status={}", tenant_id, requisition_id, req.status)
         assert_purchase_requisition_capability(req, "delete")
         await PurchaseRequisition.filter(tenant_id=tenant_id, id=requisition_id).update(
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )
         return True
 
@@ -828,7 +829,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
         req.reviewer_id = approved_by
         req.reviewer_name = reviewer_name
-        req.review_time = datetime.now()
+        req.review_time = resolve_business_datetime()
         req.review_remarks = review_remarks
         if approved_by:
             req.updated_by = approved_by

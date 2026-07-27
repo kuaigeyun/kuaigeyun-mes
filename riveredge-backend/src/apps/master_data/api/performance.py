@@ -36,6 +36,18 @@ from apps.master_data.schemas.shift_scheduling_schemas import (
     ShiftRosterResponse,
     ShiftAssignmentsBulkUpdate,
 )
+from apps.master_data.services.work_calendar_service import WorkCalendarService
+from apps.master_data.schemas.work_calendar_schemas import (
+    WorkCalendarConfigUpdate,
+    WorkCalendarConfigResponse,
+    OvertimePlanCreate,
+    OvertimePlanUpdate,
+    OvertimePlanResponse,
+    EffectiveCalendarResponse,
+    StationUnavailableWindowCreate,
+    StationUnavailableWindowUpdate,
+    StationUnavailableWindowResponse,
+)
 from apps.master_data.schemas.employee_performance_schemas import (
     EmployeePerformanceConfigCreate,
     EmployeePerformanceConfigUpdate,
@@ -1050,4 +1062,212 @@ async def copy_shift_roster_from_previous_week(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# ==================== 工作日历（工作时段 + 加班） ====================
+
+
+@router.get(
+    "/work-calendar",
+    response_model=WorkCalendarConfigResponse,
+    summary="Get plant work calendar config",
+)
+async def get_work_calendar(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await WorkCalendarService.get_or_create_config(tenant_id, operator=current_user)
+
+
+@router.put(
+    "/work-calendar",
+    response_model=WorkCalendarConfigResponse,
+    summary="Update plant work calendar config",
+)
+async def update_work_calendar(
+    data: WorkCalendarConfigUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WorkCalendarService.update_config(tenant_id, data, operator=current_user)
+    except ValidationError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/work-calendar/effective",
+    response_model=EffectiveCalendarResponse,
+    summary="Get effective calendar for APS",
+)
+async def get_effective_work_calendar(
+    date_from: date = Query(..., alias="dateFrom"),
+    date_to: date = Query(..., alias="dateTo"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await WorkCalendarService.get_effective_calendar_response(
+        tenant_id, date_from, date_to
+    )
+
+
+@router.get("/overtimes", summary="List overtime plans")
+async def list_overtimes(
+    date_from: Optional[date] = Query(None, alias="dateFrom"),
+    date_to: Optional[date] = Query(None, alias="dateTo"),
+    is_active: Optional[bool] = Query(None, alias="isActive"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await WorkCalendarService.list_overtimes(
+        tenant_id,
+        date_from=date_from,
+        date_to=date_to,
+        is_active=is_active,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.post(
+    "/overtimes",
+    response_model=OvertimePlanResponse,
+    summary="Create overtime plan",
+)
+async def create_overtime(
+    data: OvertimePlanCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WorkCalendarService.create_overtime(tenant_id, data, operator=current_user)
+    except ValidationError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/overtimes/{overtime_uuid}",
+    response_model=OvertimePlanResponse,
+    summary="Get overtime plan",
+)
+async def get_overtime(
+    overtime_uuid: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WorkCalendarService.get_overtime(tenant_id, overtime_uuid)
+    except NotFoundError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put(
+    "/overtimes/{overtime_uuid}",
+    response_model=OvertimePlanResponse,
+    summary="Update overtime plan",
+)
+async def update_overtime(
+    overtime_uuid: str,
+    data: OvertimePlanUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WorkCalendarService.update_overtime(
+            tenant_id, overtime_uuid, data, operator=current_user
+        )
+    except NotFoundError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/overtimes/{overtime_uuid}", summary="Delete overtime plan")
+async def delete_overtime(
+    overtime_uuid: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        await WorkCalendarService.delete_overtime(tenant_id, overtime_uuid)
+        return {"success": True}
+    except NotFoundError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/work-calendar/station-unavailable", summary="List station unavailable windows")
+async def list_station_unavailable(
+    station_id: Optional[int] = Query(None, alias="stationId"),
+    date_from: Optional[date] = Query(None, alias="dateFrom"),
+    date_to: Optional[date] = Query(None, alias="dateTo"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await WorkCalendarService.list_station_unavailable(
+        tenant_id,
+        station_id=station_id,
+        date_from=date_from,
+        date_to=date_to,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.post(
+    "/work-calendar/station-unavailable",
+    response_model=StationUnavailableWindowResponse,
+    summary="Create station unavailable window",
+)
+async def create_station_unavailable(
+    data: StationUnavailableWindowCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WorkCalendarService.create_station_unavailable(
+            tenant_id, data, operator=current_user
+        )
+    except ValidationError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.put(
+    "/work-calendar/station-unavailable/{window_uuid}",
+    response_model=StationUnavailableWindowResponse,
+    summary="Update station unavailable window",
+)
+async def update_station_unavailable(
+    window_uuid: str,
+    data: StationUnavailableWindowUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WorkCalendarService.update_station_unavailable(
+            tenant_id, window_uuid, data, operator=current_user
+        )
+    except NotFoundError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete(
+    "/work-calendar/station-unavailable/{window_uuid}",
+    summary="Delete station unavailable window",
+)
+async def delete_station_unavailable(
+    window_uuid: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        await WorkCalendarService.delete_station_unavailable(tenant_id, window_uuid)
+        return {"success": True}
+    except NotFoundError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

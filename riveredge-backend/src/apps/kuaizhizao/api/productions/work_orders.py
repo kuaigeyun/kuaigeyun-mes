@@ -68,6 +68,9 @@ from apps.kuaizhizao.schemas.work_order_score import (
     WorkOrderScoreConfigResponse,
     WorkOrderBatchScoreRefreshRequest,
 )
+from apps.kuaizhizao.schemas.material_stock_movement import (
+    WorkOrderMaterialMovementListResponse,
+)
 from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
 from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderCreate,
@@ -1708,6 +1711,7 @@ async def remind_work_order_batching(
 
 @router.get(
     "/work-orders/{work_order_id}/material-movements",
+    response_model=WorkOrderMaterialMovementListResponse,
     summary="Work order material stock movements",
     dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:read"))],
 )
@@ -1724,6 +1728,32 @@ async def list_work_order_material_movements(
 
     try:
         return await MaterialStockMovementService().list_for_work_order(
+            tenant_id, work_order_id, limit=limit
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get(
+    "/work-orders/{work_order_id}/material-history",
+    response_model=WorkOrderMaterialMovementListResponse,
+    summary="Work order material history timeline",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:read"))],
+)
+async def list_work_order_material_history(
+    work_order_id: int,
+    limit: int = Query(200, ge=1, le=500),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """工单物料履历：采购申请→订单→收货通知→来料检验→采购入库，合并库存移动，时间正序。"""
+    from apps.kuaizhizao.services.material_stock_movement_service import (
+        MaterialStockMovementService,
+    )
+
+    try:
+        # response_model=BaseSchema 子类：UTC → 站点墙钟字符串，禁止前端再 +8
+        return await MaterialStockMovementService().list_history_for_work_order(
             tenant_id, work_order_id, limit=limit
         )
     except NotFoundError as e:

@@ -12,6 +12,7 @@ from tortoise import fields
 from passlib.context import CryptContext
 
 from infra.models.base import BaseModel
+from core.utils.timezone_utils import now_utc
 
 
 # 密码加密上下文（使用 pbkdf2_sha256，与 security.py 保持一致）
@@ -172,5 +173,5 @@ class InfraSuperAdmin(BaseModel):
         将最后登录时间更新为当前时间（带时区）。
         注意：此方法只更新字段值，需要调用 save() 保存到数据库。
         """
-        self.last_login = datetime.now(timezone.utc)
+        self.last_login = now_utc()
 

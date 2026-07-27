@@ -240,6 +240,8 @@ TORTOISE_ORM = {
                 "apps.master_data.models.supplier",  # 供应链数据模型（供应商）
                 "apps.master_data.models.partner_price_book",  # 客户供应商价格本
                 "apps.master_data.models.performance",  # 绩效数据模型（假期、技能）
+                "apps.master_data.models.shift_scheduling",  # 班次/排班
+                "apps.master_data.models.work_calendar",  # 工作日历（工作时段 + 加班）
                 "apps.master_data.models.employee_performance",  # 员工绩效模型（配置、计件单价、工时单价、KPI、汇总）
                 "apps.master_data.models.product",  # 产品模型
                 "apps.master_data.models.bom_change",  # BOM变更记录
@@ -420,6 +422,11 @@ async def init_tortoise_dynamic() -> None:
     """
     if Tortoise._inited:
         return
+
+    # Tortoise get_use_tz/get_timezone 读环境变量；须与 settings 同步后再 init
+    from infra.config.infra_config import setup_tortoise_timezone_env
+
+    setup_tortoise_timezone_env()
 
     # 使用动态配置生成器获取配置
     config = await get_dynamic_tortoise_config()

@@ -26,19 +26,26 @@ function resolveTime(record: Dict, key: 'created' | 'updated'): string {
   return formatDateTime(value as string, 'YYYY-MM-DD HH:mm');
 }
 
-/** 列表「更新时间」堆叠列：优先更新人+更新时间；无更新时间则创建人+创建时间。 */
+/** 列表「更新时间」堆叠列：有更新人则用更新人+更新时间；否则回落创建人+创建时间。 */
 export function resolveDocumentPreferredAudit(record: Dict): { operator: string; time: string } {
+  const updatedOperator = resolveOperatorName(record, 'updated');
   const updatedTime = resolveTime(record, 'updated');
-  if (updatedTime !== '-') {
-    return {
-      operator: resolveOperatorName(record, 'updated'),
-      time: updatedTime,
-    };
+  if (updatedOperator !== '-' && updatedTime !== '-') {
+    return { operator: updatedOperator, time: updatedTime };
   }
-  return {
-    operator: resolveOperatorName(record, 'created'),
-    time: resolveTime(record, 'created'),
-  };
+  const createdOperator = resolveOperatorName(record, 'created');
+  const createdTime = resolveTime(record, 'created');
+  if (createdOperator !== '-' && createdTime !== '-') {
+    return { operator: createdOperator, time: createdTime };
+  }
+  // 有更新时间但无更新人：用创建人配更新时间，避免出现「- / 时间」
+  if (updatedTime !== '-' && createdOperator !== '-') {
+    return { operator: createdOperator, time: updatedTime };
+  }
+  if (updatedTime !== '-') {
+    return { operator: updatedOperator, time: updatedTime };
+  }
+  return { operator: createdOperator, time: createdTime };
 }
 
 export function buildDocumentAuditColumns<T extends Dict>(

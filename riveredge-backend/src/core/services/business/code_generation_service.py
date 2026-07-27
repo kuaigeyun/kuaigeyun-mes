@@ -24,6 +24,7 @@ from core.services.business.code_rule_service import CodeRuleService
 from core.services.code_rule.code_rule_component_service import CodeRuleComponentService
 from core.config.code_rule_pages import RULE_CODE_ENTITY_FOR_SEQ_SYNC
 from infra.exceptions.exceptions import ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 # snake_case <-> camelCase 映射（用于 scope_fields 与 context 的兼容）
 _SCOPE_FIELD_ALIASES = {
@@ -179,7 +180,7 @@ def _render_prefix_before_auto_counter(
             parts.append(str(val).strip())
         elif ct == "date":
             format_type = comp.get("format_type", "preset")
-            now = datetime.now()
+            now = resolve_business_datetime()
             if format_type == "preset":
                 preset_format = comp.get("preset_format", "YYYYMMDD")
                 format_map = {

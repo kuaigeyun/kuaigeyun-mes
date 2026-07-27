@@ -26,6 +26,7 @@ import {
   type MaterialGroupTreeNode,
 } from './utils';
 import { getMaterialSourceTypeLabel } from '../../apps/master-data/utils/materialSourceType';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
 
 export type { UniMaterialBatchPickerProps } from './types';
 
@@ -444,6 +445,8 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       destroyOnHidden
       okText={t('common.confirm')}
       cancelText={t('common.cancel')}
+      maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+      wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
     >
       {filterBar}
       <Table<Material>

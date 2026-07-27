@@ -52,6 +52,21 @@ def test_approve_when_pending_review():
     assert caps.approve.allowed
 
 
+def test_revoke_when_approved():
+    caps = derive_quality_inspection_capabilities(
+        _inspection(status="已审核", review_status="通过", inspection_result="已检验"),
+    )
+    assert caps.revoke_approval.allowed
+    assert not caps.approve.allowed
+
+
+def test_revoke_denied_when_inspected_pending():
+    caps = derive_quality_inspection_capabilities(
+        _inspection(status="已检验", review_status="待审核", inspection_result="已检验"),
+    )
+    assert not caps.revoke_approval.allowed
+
+
 def test_assert_conduct_raises():
     with pytest.raises(BusinessLogicError):
         assert_quality_inspection_capability(

@@ -30,6 +30,7 @@ from core.schemas.dataset import (
     OUTPUT_TYPE_MULTI_METRIC,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 # 应用连接器类型（与 application_connections API 一致）
 APPLICATION_CONNECTOR_TYPES = (
@@ -344,7 +345,7 @@ class DatasetService:
         dataset_code = dataset.code
         
         # 软删除
-        dataset.deleted_at = datetime.now()
+        dataset.deleted_at = resolve_business_datetime()
         await dataset.save()
         
         # 异步通知业务模块数据集已被删除
@@ -447,7 +448,7 @@ class DatasetService:
             elapsed_time = time.time() - start_time
 
             # 更新执行状态
-            dataset.last_executed_at = datetime.now()
+            dataset.last_executed_at = resolve_business_datetime()
             if not result['success']:
                 dataset.last_error = result.get('error', '查询执行失败')
             else:
@@ -477,7 +478,7 @@ class DatasetService:
             elapsed_time = time.time() - start_time
             
             # 更新执行状态
-            dataset.last_executed_at = datetime.now()
+            dataset.last_executed_at = resolve_business_datetime()
             dataset.last_error = str(e)
             await dataset.save()
             
@@ -1530,7 +1531,7 @@ class DatasetService:
             deleted_at__isnull=True,
         ).first()
         if config:
-            config.deleted_at = datetime.now()
+            config.deleted_at = resolve_business_datetime()
             await config.save()
 
     async def init_sales_order_metrics(self, tenant_id: int) -> Dict[str, Any]:

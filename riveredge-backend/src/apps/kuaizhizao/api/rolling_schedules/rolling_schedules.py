@@ -15,6 +15,7 @@ from apps.kuaizhizao.schemas.rolling_schedule import (
     RollingScheduleNextWorkdayResponse,
     RollingSchedulePlanResponse,
     RollingSchedulePublishResult,
+    RollingScheduleSyncFromApsRequest,
     RollingScheduleUpdateLinesRequest,
 )
 from apps.kuaizhizao.services.rolling_schedule_service import RollingScheduleService
@@ -87,6 +88,28 @@ async def generate_plan(
             base_date=body.base_date,
             backlog_readiness_threshold=body.backlog_readiness_threshold,
             created_by=current_user.id,
+        )
+    except ValidationError:
+        raise
+
+
+@router.post(
+    "/sync-from-aps",
+    response_model=RollingSchedulePlanResponse,
+    summary="Sync APS confirmed work orders into rolling day plan lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:update"))],
+)
+async def sync_from_aps(
+    body: RollingScheduleSyncFromApsRequest,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+) -> RollingSchedulePlanResponse:
+    try:
+        return await _service.sync_from_aps_confirm(
+            tenant_id,
+            body.plan_date,
+            body.work_order_ids,
+            int(current_user.id),
         )
     except ValidationError:
         raise

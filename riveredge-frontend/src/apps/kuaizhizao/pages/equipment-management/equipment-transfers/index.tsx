@@ -57,7 +57,7 @@ const STATUS_COLORS: Record<string, string> = {
   已驳回: 'error',
 };
 
-const EQUIPMENT_STATUS_OPTIONS = ['正常', '维修中', '停用', '校验中'].map((s) => ({ label: s, value: s }));
+const EQUIPMENT_STATUS_OPTIONS = ['正常', '故障', '维修中', '停用', '校验中'].map((s) => ({ label: s, value: s }));
 
 const EquipmentTransfersPage: React.FC = () => {
   const { t } = useTranslation();

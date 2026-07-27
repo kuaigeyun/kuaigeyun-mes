@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from apps.kuaizhizao.schemas.traceability_schemas import TraceDirection, TraceProfileResponse
 from apps.kuaizhizao.services.print_service import _html_to_pdf_bytes
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
 _BIZ_STEP_ZH = {
@@ -59,8 +60,8 @@ class TraceReportService:
         generated_by: Optional[str] = None,
     ) -> str:
         anchor = profile.anchor
-        report_no = f"TR-{datetime.now().strftime('%Y%m%d')}-{uuid4().hex[:8].upper()}"
-        generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        report_no = f"TR-{today_site_str()}-{uuid4().hex[:8].upper()}"
+        generated_at = resolve_business_datetime().strftime("%Y-%m-%d %H:%M:%S")
         direction_zh = {"forward": "正向", "backward": "反向", "both": "双向"}.get(
             profile.summary.direction, profile.summary.direction
         )
@@ -221,5 +222,5 @@ class TraceReportService:
         )
         pdf_bytes, _ = await _html_to_pdf_bytes(html_content, tenant_id=tenant_id)
         safe_code = profile.anchor.code.replace("/", "-").replace("\\", "-")[:80]
-        filename = f"追溯报告_{safe_code}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        filename = f"追溯报告_{safe_code}_{today_site_str()}.pdf"
         return pdf_bytes, filename

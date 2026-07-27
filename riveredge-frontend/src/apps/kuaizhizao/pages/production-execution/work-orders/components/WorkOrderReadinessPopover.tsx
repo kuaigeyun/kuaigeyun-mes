@@ -19,10 +19,66 @@ import UniMaterialSelect from '../../../../../../components/uni-material-select'
 import { UniUserSelect } from '../../../../../../components/uni-user-select'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../../services/dataDictionary'
 import { useInvalidateMenuBadgeCounts } from '../../../../../../hooks/useInvalidateMenuBadgeCounts'
+import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions'
 import { translateWorkOrderLifecycleStatus } from '../../../../utils/workOrderLifecycle'
 import { translateOutsourceWorkOrderLifecycleStatus } from '../../../../utils/outsourceWorkOrderLifecycle'
 import { UniTableStackedPrimaryCell } from '../../../../../../components/uni-table/stackedPrimaryColumn'
 import { formatQuantity } from '../../../../../../utils/format'
+import { WorkOrderMaterialMovementsPanel } from './WorkOrderMaterialMovementsPanel'
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../../../../../utils/modalEventIsolation'
+
+/** 与后端 issue_method_resolver.resolve_issue_method / is_pick_list_material 一致 */
+function resolveIssueMethod(issueMethod: unknown, sourceType: unknown): string {
+  const im = String(issueMethod ?? '')
+    .trim()
+    .toLowerCase()
+  if (im === 'pick' || im === 'backflush' || im === 'none') return im
+  const st = String(sourceType ?? '').trim()
+  const defaults: Record<string, string> = {
+    Phantom: 'none',
+    Service: 'none',
+    Buy: 'backflush',
+    Make: 'pick',
+    Outsource: 'pick',
+    Configure: 'pick',
+  }
+  return defaults[st] ?? 'pick'
+}
+
+/** 事前领料件进生产领料单（含委外 pick；倒冲由报工扣线边） */
+function isPickListMaterial(issueMethod: unknown, sourceType: unknown): boolean {
+  const st = String(sourceType ?? '').trim()
+  if (st === 'Service' || st === 'Phantom') return false
+  return resolveIssueMethod(issueMethod, sourceType) === 'pick'
+}
+
+function resolvePickingWarehouseFromKittingItems(
+  items: Record<string, unknown>[],
+): { warehouseId: number; warehouseName: string } | null {
+  const totals = new Map<number, { name: string; qty: number }>()
+  for (const it of items) {
+    if (!isPickListMaterial(it.issue_method ?? it.issueMethod, it.source_type ?? it.sourceType)) {
+      continue
+    }
+    const locs = (it.locations as Record<string, unknown>[] | undefined) ?? []
+    for (const loc of locs) {
+      const wid = Number(loc.warehouse_id ?? loc.warehouseId ?? 0)
+      if (!(wid > 0)) continue
+      const qty = Number(loc.quantity ?? 0)
+      if (!Number.isFinite(qty) || qty <= 0) continue
+      const name = String(loc.warehouse_name ?? loc.warehouseName ?? '').trim() || `仓库(${wid})`
+      const prev = totals.get(wid)
+      totals.set(wid, { name: prev?.name || name, qty: (prev?.qty ?? 0) + qty })
+    }
+  }
+  let best: { warehouseId: number; warehouseName: string; qty: number } | null = null
+  for (const [warehouseId, v] of totals) {
+    if (!best || v.qty > best.qty) {
+      best = { warehouseId, warehouseName: v.name, qty: v.qty }
+    }
+  }
+  return best ? { warehouseId: best.warehouseId, warehouseName: best.warehouseName } : null
+}
 
 function useFallbackCallTypeOptions() {
   const { t } = useTranslation()
@@ -65,7 +121,7 @@ const READINESS_MAIN_MODAL_BODY_STYLE = {
 } satisfies React.CSSProperties
 
 /** 阻止事件冒泡到 rc-table 行（expandRowByClick 时否则会触发展开/收起） */
-function stopRowToggle(e: React.MouseEvent) {
+function stopRowToggle(e: React.SyntheticEvent) {
   e.stopPropagation()
 }
 
@@ -107,6 +163,67 @@ const CALL_TABLE_CELL_NOWRAP: React.HTMLAttributes<HTMLTableCellElement> = {
   style: { whiteSpace: 'nowrap' },
 }
 
+/** 与工单列表 valueEnum / 委外 getOwoStatusTag 一致 */
+function resolveWorkOrderStatusTagColor(status?: string | null): string {
+  const s = String(status ?? '').trim()
+  const byKey: Record<string, string> = {
+    draft: 'default',
+    released: 'processing',
+    in_progress: 'processing',
+    completed: 'success',
+    cancelled: 'error',
+    split: 'warning',
+  }
+  if (byKey[s.toLowerCase()]) return byKey[s.toLowerCase()]
+  const byLabel: Record<string, string> = {
+    草稿: 'default',
+    已下达: 'processing',
+    执行中: 'processing',
+    生产中: 'processing',
+    已完成: 'success',
+    已取消: 'error',
+    已拆分: 'warning',
+  }
+  return byLabel[s] ?? 'default'
+}
+
+function resolveOutsourceWorkOrderStatusTagColor(status?: string | null): string {
+  const s = String(status ?? '').trim()
+  const byKey: Record<string, string> = {
+    draft: 'default',
+    released: 'processing',
+    in_progress: 'processing',
+    completed: 'success',
+    cancelled: 'error',
+  }
+  if (byKey[s.toLowerCase()]) return byKey[s.toLowerCase()]
+  const byLabel: Record<string, string> = {
+    草稿: 'default',
+    已下达: 'processing',
+    执行中: 'processing',
+    已完成: 'success',
+    已取消: 'error',
+  }
+  return byLabel[s] ?? 'default'
+}
+
+function resolveSupplyProgressTagColor(status: string): string {
+  switch (status) {
+    case 'stock_covered':
+      return 'success'
+    case 'receiving':
+      return 'cyan'
+    case 'purchasing':
+      return 'processing'
+    case 'purchase_requisition':
+      return 'orange'
+    case 'awaiting_purchase':
+      return 'warning'
+    default:
+      return 'default'
+  }
+}
+
 /** 下拉层挂在 Modal 内容区内，避免默认挂 body 时与页面滚动条锁竞争导致背后列表横向抖动 */
 function getPopupContainerInModal(trigger: HTMLElement): HTMLElement {
   const el = trigger.closest('.ant-modal-content') ?? trigger.closest('.ant-modal-wrap')
@@ -125,6 +242,8 @@ export type WorkOrderReadinessPopoverProps = {
   workOrderId: number
   /** 列表行工单编号，用于叫料创建；未传时尝试用齐套分析返回的 work_order_code */
   workOrderCode?: string
+  /** 齐套分析已写回持久化后回调，供列表刷新圆环 */
+  onReadinessSynced?: () => void
   children: React.ReactNode
 }
 
@@ -302,6 +421,8 @@ const WorkOrderMaterialCallModal: React.FC<{
       styles={{ body: { paddingBottom: 12 } }}
       maskClosable={false}
       centered
+      maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+      wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
     >
       <Form form={form} layout="vertical" preserve={false} initialValues={{ call_type: 'CUSTOM_SELECTION', items: [{}] }}>
         <Form.Item
@@ -425,7 +546,8 @@ const WorkOrderReadinessPopoverContent: React.FC<{
   workOrderId: number
   setCallModalOpen: (v: boolean) => void
   onCloseMain?: () => void
-}> = ({ workOrderId, setCallModalOpen, onCloseMain }) => {
+  onReadinessSynced?: () => void
+}> = ({ workOrderId, setCallModalOpen, onCloseMain, onReadinessSynced }) => {
   const { t } = useTranslation()
   const fallbackCallTypeOptions = useFallbackCallTypeOptions()
   const materialCallTypeLabels = useMemo(
@@ -435,13 +557,21 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     }),
     [fallbackCallTypeOptions, t]
   )
-  const { message: messageApi } = App.useApp()
+  const { message: messageApi, modal: modalApi } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts()
+  const outboundPerms = useResourcePermissions('kuaizhizao:outbound')
   const [remindModalOpen, setRemindModalOpen] = useState(false)
   const [remindSubmitting, setRemindSubmitting] = useState(false)
+  const [confirmPickingSubmitting, setConfirmPickingSubmitting] = useState(false)
+  const [readinessTabKey, setReadinessTabKey] = useState('warehouse')
   const [remindForm] = Form.useForm<{ recipient_user_uuids: string[]; remarks?: string }>()
+  const { data: executionConfig } = useQuery({
+    queryKey: ['workOrderExecutionConfig'],
+    queryFn: () => workOrderApi.getExecutionConfig(),
+    staleTime: 0,
+  })
   const {
     data: kittingData,
     isLoading: kittingLoading,
@@ -454,10 +584,14 @@ const WorkOrderReadinessPopoverContent: React.FC<{
   })
 
   useEffect(() => {
-    if (kittingData) {
-      void queryClient.invalidateQueries({ queryKey: ['kuaizhizao', 'work-orders', 'list'] })
-    }
-  }, [kittingData, queryClient])
+    if (!kittingData) return
+    // UniTable 缓存键以 uniTable 开头；仅 invalidate 不够，须由列表页 reload
+    void queryClient.invalidateQueries({
+      queryKey: ['uniTable', 'kuaizhizao', 'work-orders', 'list'],
+      exact: false,
+    })
+    onReadinessSynced?.()
+  }, [kittingData, queryClient, onReadinessSynced])
 
   const { data: calls, isLoading: callsLoading } = useQuery({
     queryKey: ['materialCallsByWorkOrder', workOrderId],
@@ -470,6 +604,40 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     staleTime: 0,
   })
 
+  const items = (kittingData as { items?: unknown[] } | undefined)?.items ?? []
+
+  /** 线边已齐后仍待正式发料的领料件（需求 − 已领）；须在任何 early return 之前调用 hooks */
+  const formalPickingLines = useMemo(() => {
+    const lines: Array<{
+      material_id: number
+      material_code: string
+      material_name: string
+      material_unit: string
+      issue_quantity: number
+    }> = []
+    for (const raw of items) {
+      const it = raw as Record<string, unknown>
+      if (it.kitting_applicable === false) continue
+      if (!isPickListMaterial(it.issue_method ?? it.issueMethod, it.source_type ?? it.sourceType)) {
+        continue
+      }
+      const materialId = Number(it.material_id ?? it.materialId ?? 0)
+      const required = Number(it.required_quantity ?? it.requiredQuantity ?? 0)
+      const picked = Number(it.picked_quantity ?? it.pickedQuantity ?? 0)
+      if (!(materialId > 0) || !Number.isFinite(required) || required <= 0) continue
+      const remaining = required - (Number.isFinite(picked) ? picked : 0)
+      if (!(remaining > QTY_CMP_EPS)) continue
+      lines.push({
+        material_id: materialId,
+        material_code: String(it.material_code ?? it.materialCode ?? ''),
+        material_name: String(it.material_name ?? it.materialName ?? ''),
+        material_unit: String(it.material_unit ?? it.materialUnit ?? '') || '个',
+        issue_quantity: remaining,
+      })
+    }
+    return lines
+  }, [items])
+
   const loading = kittingLoading || callsLoading
 
   if (loading) {
@@ -480,8 +648,6 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     )
   }
 
-  const items = (kittingData as { items?: unknown[] } | undefined)?.items ?? []
-
   type RelatedWorkOrderRow = {
     id: number
     code: string
@@ -489,6 +655,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     quantity: number
     completedQuantity: number
     progressPercent: number
+    plannedEndDate?: string
   }
 
   type RelatedOutsourceWorkOrderRow = {
@@ -499,6 +666,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     receivedQuantity: number
     progressPercent: number
     supplierName?: string
+    plannedEndDate?: string
   }
 
   type SupplyProgressProp = {
@@ -510,6 +678,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     documentType?: string
     documentId?: number
     documentCode?: string
+    expectedDate?: string
   }
 
   type WhRow = {
@@ -522,6 +691,10 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     /** 数量相对需求：够=绿，不够=红，无法比较=默认色 */
     qtyVsRequired: 'ok' | 'short' | 'neutral'
     kittingApplicable: boolean
+    /** 已有正式生产领料确认数量（picked_quantity > 0） */
+    pickingConfirmed: boolean
+    /** 解析后发料方式 pick / backflush / none */
+    issueMethod: string
     relatedWorkOrder?: RelatedWorkOrderRow
     relatedOutsourceWorkOrder?: RelatedOutsourceWorkOrderRow
     supplyProgress?: SupplyProgressProp
@@ -536,6 +709,13 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     return `${wh} / ${locCode}`
   }
 
+  function formatExpectedDate(raw: unknown): string | undefined {
+    if (raw == null || raw === '') return undefined
+    const s = String(raw).trim()
+    if (!s) return undefined
+    return s.slice(0, 10)
+  }
+
   function parseRelatedWorkOrder(raw: Record<string, unknown>): RelatedWorkOrderRow | undefined {
     const nested = raw.related_work_order as Record<string, unknown> | undefined
     if (!nested?.work_order_id) return undefined
@@ -546,6 +726,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
       quantity: Number(nested.quantity ?? 0),
       completedQuantity: Number(nested.completed_quantity ?? 0),
       progressPercent: Number(nested.progress_percent ?? 0),
+      plannedEndDate: formatExpectedDate(nested.planned_end_date ?? nested.plannedEndDate),
     }
   }
 
@@ -560,6 +741,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
       receivedQuantity: Number(nested.received_quantity ?? 0),
       progressPercent: Number(nested.progress_percent ?? 0),
       supplierName: nested.supplier_name ? String(nested.supplier_name) : undefined,
+      plannedEndDate: formatExpectedDate(nested.planned_end_date ?? nested.plannedEndDate),
     }
   }
 
@@ -586,6 +768,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
         : nested.documentCode
           ? String(nested.documentCode)
           : undefined,
+      expectedDate: formatExpectedDate(nested.expected_date ?? nested.expectedDate),
     }
   }
 
@@ -623,69 +806,100 @@ const WorkOrderReadinessPopoverContent: React.FC<{
       const requiredNum = parseRequiredNumber(it.required_quantity ?? it.requiredQuantity)
       const kittingApplicable = it.kitting_applicable !== false
       const sourceType = it.source_type ?? it.sourceType
+      const issueMethod = resolveIssueMethod(it.issue_method ?? it.issueMethod, sourceType)
       const relatedWorkOrder = parseRelatedWorkOrder(it)
       const relatedOutsourceWorkOrder = parseRelatedOutsourceWorkOrder(it)
       const supplyProgress = parseSupplyProgress(it)
+      const pickedNum = Number(it.picked_quantity ?? it.pickedQuantity ?? 0)
+      const pickingConfirmed = Number.isFinite(pickedNum) && pickedNum > QTY_CMP_EPS
       const woSupply = Number(it.work_order_supply_quantity ?? 0)
       const woSupplySafe = Number.isFinite(woSupply) ? woSupply : 0
 
       if (!kittingApplicable) {
-        const st = String(sourceType ?? '').trim()
-        if (st === 'Outsource') {
-          const received = relatedOutsourceWorkOrder?.receivedQuantity ?? 0
-          const meets = isAvailableMeetsRequirement(received, requiredNum)
-          warehouseRows.push({
-            key: `${materialId}-outsource`,
-            materialCode: code,
-            materialName: name,
-            requiredQty,
-            qty: formatQuantity(received),
-            warehouseLocation: '—',
-            qtyVsRequired: meets === null ? 'neutral' : meets ? 'ok' : 'short',
-            kittingApplicable: false,
-            relatedOutsourceWorkOrder,
-            supplyProgress,
-          })
-        } else {
-          warehouseRows.push({
-            key: `${materialId}-non-inventory`,
-            materialCode: code,
-            materialName: name,
-            requiredQty,
-            qty: nonInventoryKittingHint(sourceType),
-            warehouseLocation: '—',
-            qtyVsRequired: 'neutral',
-            kittingApplicable: false,
-            supplyProgress,
-          })
-        }
+        warehouseRows.push({
+          key: `${materialId}-non-inventory`,
+          materialCode: code,
+          materialName: name,
+          requiredQty,
+          qty: nonInventoryKittingHint(sourceType),
+          warehouseLocation: '—',
+          qtyVsRequired: 'neutral',
+          kittingApplicable: false,
+          pickingConfirmed,
+          issueMethod,
+          supplyProgress,
+        })
         continue
       }
 
       const locs = (it.locations as Record<string, unknown>[] | undefined) ?? []
-      const inventoryAvail = locs.reduce((sum, loc) => {
+      const locSum = locs.reduce((sum, loc) => {
         const qn = Number(loc.quantity ?? 0)
         return sum + (Number.isFinite(qn) ? qn : 0)
       }, 0)
+      const mainAvail = Number(it.main_warehouse_available ?? it.mainWarehouseAvailable ?? 0)
+      const lineAvail = Number(it.line_side_available ?? it.lineSideAvailable ?? 0)
+      const fieldAvail =
+        (Number.isFinite(mainAvail) ? mainAvail : 0) + (Number.isFinite(lineAvail) ? lineAvail : 0)
+      // 库位明细异常为空/全 0 时，回退主仓+线边汇总量（半成品入线边后齐套可见）
+      const inventoryAvail = locSum > QTY_CMP_EPS ? locSum : fieldAvail
+      // work_order_supply_quantity 已含自制有效完工与委外已收货
       const totalAvail = inventoryAvail + woSupplySafe
       const materialCmp = isAvailableMeetsRequirement(totalAvail, requiredNum)
+      const positiveLocs = locs.filter((loc) => {
+        const qn = Number(loc.quantity ?? 0)
+        return Number.isFinite(qn) && qn > QTY_CMP_EPS
+      })
+      const locsToShow =
+        positiveLocs.length > 0
+          ? positiveLocs
+          : locSum <= QTY_CMP_EPS && fieldAvail > QTY_CMP_EPS
+            ? [
+                ...(Number.isFinite(lineAvail) && lineAvail > QTY_CMP_EPS
+                  ? [
+                      {
+                        warehouse_id: 'line_side',
+                        warehouse_name: t('app.kuaizhizao.workOrder.readinessLineSidePrefix'),
+                        warehouse_type: 'line_side',
+                        quantity: lineAvail,
+                      },
+                    ]
+                  : []),
+                ...(Number.isFinite(mainAvail) && mainAvail > QTY_CMP_EPS
+                  ? [
+                      {
+                        warehouse_id: 'main',
+                        warehouse_name: t('app.kuaizhizao.workOrder.readinessMainWarehousePrefix'),
+                        warehouse_type: 'normal',
+                        quantity: mainAvail,
+                      },
+                    ]
+                  : []),
+              ]
+            : locs
 
-      if (locs.length === 0) {
+      if (locsToShow.length === 0) {
+        const isOutsource = String(sourceType ?? '').trim() === 'Outsource'
         warehouseRows.push({
           key: `${materialId}-empty`,
           materialCode: code,
           materialName: name,
           requiredQty,
           qty: formatQuantity(inventoryAvail),
-          warehouseLocation: t('app.kuaizhizao.workOrder.readinessNoWarehouseConfigured'),
+          warehouseLocation: isOutsource
+            ? '—'
+            : t('app.kuaizhizao.workOrder.readinessNoWarehouseConfigured'),
           qtyVsRequired:
             materialCmp === null ? 'neutral' : materialCmp ? 'ok' : 'short',
           kittingApplicable: true,
+          pickingConfirmed,
+          issueMethod,
           relatedWorkOrder,
+          relatedOutsourceWorkOrder,
           supplyProgress,
         })
       } else {
-        for (const loc of locs) {
+        for (const loc of locsToShow) {
           const whId = loc.warehouse_id ?? loc.warehouseId ?? '0'
           const locCode = loc.storage_location_code ?? loc.storageLocationCode ?? ''
           const qty = loc.quantity ?? 0
@@ -699,7 +913,10 @@ const WorkOrderReadinessPopoverContent: React.FC<{
             qtyVsRequired:
               materialCmp === null ? 'neutral' : materialCmp ? 'ok' : 'short',
             kittingApplicable: true,
+            pickingConfirmed,
+            issueMethod,
             relatedWorkOrder,
+            relatedOutsourceWorkOrder,
             supplyProgress,
           })
         }
@@ -709,16 +926,21 @@ const WorkOrderReadinessPopoverContent: React.FC<{
 
   const callList = Array.isArray(calls) ? calls : []
 
-  /** 配料启用：线边就绪不足（正式发料+线边备料+工单供给 < 需求）；主仓有货不计入 */
+  /** 配料启用：线边就绪不足（正式发料+线边+自制工单供给 < 需求）；主仓有货不计入。委外收货在主仓，线边不足须备料。 */
   const hasBatchingShortage = items.some((raw) => {
     const it = raw as Record<string, unknown>
     if (it.kitting_applicable === false) return false
-    // 倒冲件由配料进线边、报工扣料；领料件与倒冲件均可去配料
+    const st = String(it.source_type ?? it.sourceType ?? '').trim()
+    if (st === 'Service' || st === 'Phantom') return false
+    // 倒冲件由配料进线边、报工扣料；领料件、倒冲件、委外子件均可去配料
     const required = Number(it.required_quantity ?? it.requiredQuantity ?? 0)
     if (!Number.isFinite(required) || required <= 0) return false
     const picked = Number(it.picked_quantity ?? it.pickedQuantity ?? 0)
     const lineSide = Number(it.line_side_available ?? it.lineSideAvailable ?? 0)
-    const woSupply = Number(it.work_order_supply_quantity ?? it.workOrderSupplyQuantity ?? 0)
+    const woSupply =
+      st === 'Outsource'
+        ? 0
+        : Number(it.work_order_supply_quantity ?? it.workOrderSupplyQuantity ?? 0)
     const lineReady =
       (Number.isFinite(picked) ? picked : 0) +
       (Number.isFinite(lineSide) ? lineSide : 0) +
@@ -726,9 +948,61 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     return lineReady < required
   })
 
+  const canConfirmPickingByPolicy = executionConfig?.current_user_can_confirm_picking !== false
+  const canConfirmFormalPicking =
+    !hasBatchingShortage &&
+    formalPickingLines.length > 0 &&
+    outboundPerms.canCreate &&
+    canConfirmPickingByPolicy
+
   const handleOpenRemindBatching = () => {
     remindForm.resetFields()
     setRemindModalOpen(true)
+  }
+
+  const handleConfirmFormalPicking = () => {
+    if (!canConfirmFormalPicking || confirmPickingSubmitting) return
+    const typedItems = items as Record<string, unknown>[]
+    const warehouse = resolvePickingWarehouseFromKittingItems(typedItems)
+    if (!warehouse) {
+      messageApi.warning(t('app.kuaizhizao.workOrder.readinessConfirmPickingNoWarehouse'))
+      return
+    }
+    modalApi.confirm({
+      title: t('app.kuaizhizao.workOrder.readinessConfirmPickingTitle'),
+      content: t('app.kuaizhizao.workOrder.readinessConfirmPickingContent', {
+        count: formalPickingLines.length,
+        warehouse: warehouse.warehouseName,
+      }),
+      okText: t('app.kuaizhizao.workOrder.actionConfirmPicking'),
+      onOk: async () => {
+        setConfirmPickingSubmitting(true)
+        try {
+          const created = (await warehouseApi.productionPicking.pullFromWorkOrder({
+            work_order_id: workOrderId,
+            warehouse_id: warehouse.warehouseId,
+            warehouse_name: warehouse.warehouseName,
+            lines: formalPickingLines,
+          })) as { id?: number }
+          const pickingId = Number(created?.id)
+          if (!(pickingId > 0)) {
+            throw new Error(t('app.kuaizhizao.workOrder.readinessConfirmPickingCreateFailed'))
+          }
+          await warehouseApi.productionPicking.confirm(String(pickingId))
+          messageApi.success(t('app.kuaizhizao.workOrder.readinessConfirmPickingSuccess'))
+          await queryClient.invalidateQueries({ queryKey: ['workOrderKittingAnalysis', workOrderId] })
+          invalidateMenuBadgeCounts()
+          onReadinessSynced?.()
+        } catch (e: unknown) {
+          messageApi.error(
+            (e as Error)?.message ?? t('app.kuaizhizao.workOrder.readinessConfirmPickingFailed'),
+          )
+          throw e
+        } finally {
+          setConfirmPickingSubmitting(false)
+        }
+      },
+    })
   }
 
   const handleRemindBatchingSubmit = async () => {
@@ -771,9 +1045,30 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                 {t('app.kuaizhizao.workOrder.actionRemindBatching')}
               </Button>
               {!hasBatchingShortage ? (
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {t('app.kuaizhizao.workOrder.readinessNoShortageHint')}
-                </Typography.Text>
+                <>
+                  <Button
+                    type="primary"
+                    size="small"
+                    disabled={!canConfirmFormalPicking || confirmPickingSubmitting}
+                    loading={confirmPickingSubmitting}
+                    onClick={handleConfirmFormalPicking}
+                  >
+                    {t('app.kuaizhizao.workOrder.actionConfirmPicking')}
+                  </Button>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {formalPickingLines.length > 0
+                      ? t('app.kuaizhizao.workOrder.readinessNoShortageHint')
+                      : t('app.kuaizhizao.workOrder.readinessNoFormalPickingHint')}
+                    {formalPickingLines.length > 0 && !outboundPerms.canCreate
+                      ? ` ${t('app.kuaizhizao.workOrder.readinessConfirmPickingNoPerm')}`
+                      : ''}
+                    {formalPickingLines.length > 0 &&
+                    outboundPerms.canCreate &&
+                    !canConfirmPickingByPolicy
+                      ? ` ${t('app.kuaizhizao.warehouseOutbound.msg.noConfirmPickingPermission')}`
+                      : ''}
+                  </Typography.Text>
+                </>
               ) : null}
             </Space>
           </Space>
@@ -829,7 +1124,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                 {
                   title: t('app.kuaizhizao.workOrder.colRelatedWorkOrder'),
                   key: 'relatedWorkOrder',
-                  width: 128,
+                  width: 140,
                   ellipsis: true,
                   render: (_: unknown, row: WhRow) => {
                     const owo = row.relatedOutsourceWorkOrder
@@ -851,43 +1146,122 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                       )
                     }
                     const wo = row.relatedWorkOrder
-                    if (!wo?.code) return '—'
-                    return (
-                      <Button
-                        type="link"
-                        size="small"
-                        style={{ padding: 0, height: 'auto' }}
-                        onClick={(e) => {
-                          stopRowToggle(e)
-                          navigate(`/apps/kuaizhizao/production-execution/work-orders?highlight=${wo.id}`)
-                        }}
-                      >
-                        {wo.code}
-                      </Button>
-                    )
+                    if (wo?.code) {
+                      return (
+                        <Button
+                          type="link"
+                          size="small"
+                          style={{ padding: 0, height: 'auto' }}
+                          onClick={(e) => {
+                            stopRowToggle(e)
+                            navigate(`/apps/kuaizhizao/production-execution/work-orders?highlight=${wo.id}`)
+                          }}
+                        >
+                          {wo.code}
+                        </Button>
+                      )
+                    }
+                    const sp = row.supplyProgress
+                    if (sp?.documentCode && sp.documentId) {
+                      return (
+                        <Button
+                          type="link"
+                          size="small"
+                          style={{ padding: 0, height: 'auto' }}
+                          onClick={(e) => {
+                            stopRowToggle(e)
+                            openSupplyDocument(sp)
+                          }}
+                        >
+                          {sp.documentCode}
+                        </Button>
+                      )
+                    }
+                    return '—'
                   },
                 },
                 {
                   title: t('app.kuaizhizao.workOrder.colMaterialProgress'),
                   key: 'workOrderProgress',
-                  width: 176,
+                  width: 200,
                   render: (_: unknown, row: WhRow) => {
+                    const pickingConfirmedTag = row.pickingConfirmed ? (
+                      <Tag style={{ margin: 0 }} color="blue">
+                        {t('app.kuaizhizao.workOrder.tagPickingConfirmed')}
+                      </Tag>
+                    ) : null
+                    const backflushTag =
+                      row.issueMethod === 'backflush' ? (
+                        <Tag style={{ margin: 0 }} color="purple">
+                          {t('app.kuaizhizao.workOrder.tagBackflush')}
+                        </Tag>
+                      ) : null
+
+                    const statusWithEta = (tag: React.ReactNode, eta?: string) => (
+                      <Space size={6} wrap style={{ width: '100%' }}>
+                        {tag}
+                        {backflushTag}
+                        {pickingConfirmedTag}
+                        {eta ? (
+                          <Typography.Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                            {t('app.kuaizhizao.workOrder.expectedCompletion', { date: eta })}
+                          </Typography.Text>
+                        ) : null}
+                      </Space>
+                    )
+
+                    const qtyAndProgressRow = (qtyText: string | null, percent: number | null) => {
+                      if (!qtyText && percent == null) return null
+                      return (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            width: '100%',
+                            minWidth: 0,
+                          }}
+                        >
+                          {qtyText ? (
+                            <Typography.Text
+                              type="secondary"
+                              style={{ fontSize: 12, flex: '0 0 auto', whiteSpace: 'nowrap' }}
+                            >
+                              {qtyText}
+                            </Typography.Text>
+                          ) : null}
+                          {percent != null ? (
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <Progress
+                                percent={Math.min(100, Math.max(0, percent))}
+                                size="small"
+                                showInfo
+                                style={{ margin: 0 }}
+                              />
+                            </div>
+                          ) : null}
+                        </div>
+                      )
+                    }
+
                     const owo = row.relatedOutsourceWorkOrder
                     if (owo?.id) {
                       const statusLabel = translateOutsourceWorkOrderLifecycleStatus(t, owo.status)
                       return (
                         <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                          <Space size={4} wrap>
-                            <Tag style={{ margin: 0 }}>{statusLabel}</Tag>
-                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                              {formatQuantity(owo.receivedQuantity)}/{formatQuantity(owo.quantity)}
-                            </Typography.Text>
-                          </Space>
-                          <Progress
-                            percent={Math.min(100, Math.max(0, owo.progressPercent))}
-                            size="small"
-                            showInfo
-                          />
+                          {statusWithEta(
+                            <Tag
+                              style={{ margin: 0 }}
+                              color={resolveOutsourceWorkOrderStatusTagColor(owo.status)}
+                            >
+                              {statusLabel}
+                            </Tag>,
+                            owo.plannedEndDate,
+                          )}
+                          {qtyAndProgressRow(
+                            `${formatQuantity(owo.receivedQuantity)}/${formatQuantity(owo.quantity)}`,
+                            owo.progressPercent,
+                          )}
                         </Space>
                       )
                     }
@@ -896,69 +1270,48 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                       const statusLabel = translateWorkOrderLifecycleStatus(t, wo.status)
                       return (
                         <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                          <Space size={4} wrap>
-                            <Tag style={{ margin: 0 }}>{statusLabel}</Tag>
-                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                              {formatQuantity(wo.completedQuantity)}/{formatQuantity(wo.quantity)}
-                            </Typography.Text>
-                          </Space>
-                          <Progress
-                            percent={Math.min(100, Math.max(0, wo.progressPercent))}
-                            size="small"
-                            showInfo
-                          />
+                          {statusWithEta(
+                            <Tag style={{ margin: 0 }} color={resolveWorkOrderStatusTagColor(wo.status)}>
+                              {statusLabel}
+                            </Tag>,
+                            wo.plannedEndDate,
+                          )}
+                          {qtyAndProgressRow(
+                            `${formatQuantity(wo.completedQuantity)}/${formatQuantity(wo.quantity)}`,
+                            wo.progressPercent,
+                          )}
                         </Space>
                       )
                     }
                     const sp = row.supplyProgress
-                    if (!sp?.status) return '—'
+                    if (!sp?.status) {
+                      if (!pickingConfirmedTag && !backflushTag) return '—'
+                      return (
+                        <Space size={6} wrap style={{ width: '100%' }}>
+                          {backflushTag}
+                          {pickingConfirmedTag}
+                        </Space>
+                      )
+                    }
                     const showQty =
                       sp.status === 'purchasing' ||
                       sp.status === 'receiving' ||
                       sp.status === 'purchase_requisition'
+                    const showProgress = sp.status === 'purchasing' || sp.status === 'receiving'
+                    const qtyText = showQty
+                      ? sp.status === 'purchase_requisition'
+                        ? formatQuantity(sp.orderedQuantity)
+                        : `${formatQuantity(sp.receivedQuantity)}/${formatQuantity(sp.orderedQuantity)}`
+                      : null
                     return (
                       <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                        <Space size={4} wrap>
-                          <Tag
-                            style={{ margin: 0 }}
-                            color={
-                              sp.status === 'stock_covered'
-                                ? 'success'
-                                : sp.status === 'awaiting_purchase'
-                                  ? 'warning'
-                                  : 'processing'
-                            }
-                          >
+                        {statusWithEta(
+                          <Tag style={{ margin: 0 }} color={resolveSupplyProgressTagColor(sp.status)}>
                             {supplyProgressLabel(sp.status)}
-                          </Tag>
-                          {showQty ? (
-                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                              {sp.status === 'purchase_requisition'
-                                ? formatQuantity(sp.orderedQuantity)
-                                : `${formatQuantity(sp.receivedQuantity)}/${formatQuantity(sp.orderedQuantity)}`}
-                            </Typography.Text>
-                          ) : null}
-                        </Space>
-                        {sp.documentCode && sp.documentId ? (
-                          <Button
-                            type="link"
-                            size="small"
-                            style={{ padding: 0, height: 'auto', fontSize: 12 }}
-                            onClick={(e) => {
-                              stopRowToggle(e)
-                              openSupplyDocument(sp)
-                            }}
-                          >
-                            {sp.documentCode}
-                          </Button>
-                        ) : null}
-                        {sp.status === 'purchasing' || sp.status === 'receiving' ? (
-                          <Progress
-                            percent={Math.min(100, Math.max(0, sp.progressPercent))}
-                            size="small"
-                            showInfo
-                          />
-                        ) : null}
+                          </Tag>,
+                          sp.expectedDate,
+                        )}
+                        {qtyAndProgressRow(qtyText, showProgress ? sp.progressPercent : null)}
                       </Space>
                     )
                   },
@@ -1150,11 +1503,26 @@ const WorkOrderReadinessPopoverContent: React.FC<{
         </Space>
       ),
     },
+    {
+      key: 'movements',
+      label: t('app.kuaizhizao.workOrder.materialMovementsTitle'),
+      children: (
+        <WorkOrderMaterialMovementsPanel
+          workOrderId={workOrderId}
+          enabled={readinessTabKey === 'movements'}
+        />
+      ),
+    },
   ]
 
   return (
     <>
-      <Tabs size="small" items={tabItems} />
+      <Tabs
+        size="small"
+        activeKey={readinessTabKey}
+        onChange={setReadinessTabKey}
+        items={tabItems}
+      />
       <Modal
         title={t('app.kuaizhizao.workOrder.remindBatchingModalTitle')}
         open={remindModalOpen}
@@ -1165,6 +1533,9 @@ const WorkOrderReadinessPopoverContent: React.FC<{
         confirmLoading={remindSubmitting}
         destroyOnHidden
         zIndex={1200}
+        getContainer={() => document.body}
+        maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+        wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
       >
         <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 12 }}>
           {t('app.kuaizhizao.workOrder.remindBatchingHint')}
@@ -1197,6 +1568,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
 export const WorkOrderReadinessPopover: React.FC<WorkOrderReadinessPopoverProps> = ({
   workOrderId,
   workOrderCode,
+  onReadinessSynced,
   children,
 }) => {
   const { t } = useTranslation()
@@ -1212,7 +1584,7 @@ export const WorkOrderReadinessPopover: React.FC<WorkOrderReadinessPopoverProps>
       <span
         role="button"
         tabIndex={0}
-        style={{ display: 'inline-block', width: '100%', cursor: 'pointer' }}
+        className="wo-readiness-trigger"
         onClick={(e) => {
           stopRowToggle(e)
           setMainModalOpen(true)
@@ -1241,12 +1613,16 @@ export const WorkOrderReadinessPopover: React.FC<WorkOrderReadinessPopoverProps>
         zIndex={1100}
         styles={{ body: { ...READINESS_MAIN_MODAL_BODY_STYLE } }}
         getContainer={() => document.body}
+        maskClosable
+        maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+        wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
       >
         {mainModalOpen ? (
           <WorkOrderReadinessPopoverContent
             workOrderId={workOrderId}
             setCallModalOpen={setCallModalOpen}
             onCloseMain={() => setMainModalOpen(false)}
+            onReadinessSynced={onReadinessSynced}
           />
         ) : null}
       </Modal>

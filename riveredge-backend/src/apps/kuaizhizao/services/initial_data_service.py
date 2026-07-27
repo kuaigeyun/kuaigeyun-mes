@@ -34,6 +34,7 @@ from apps.master_data.services.material_code_mapping_service import MaterialCode
 from apps.master_data.schemas.material_schemas import MaterialCodeConvertRequest
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
 class InitialDataService:
@@ -277,7 +278,7 @@ class InitialDataService:
                 
                 try:
                     # 生成入库单编码
-                    today = datetime.now().strftime("%Y%m%d")
+                    today = today_site_str()
                     from apps.common.base_service import AppBaseService
                     base_service = AppBaseService(PurchaseReceipt)
                     receipt_code = await base_service.generate_code(
@@ -301,7 +302,7 @@ class InitialDataService:
                         supplier_name="期初库存导入",
                         warehouse_id=warehouse.id,
                         warehouse_name=warehouse.name,
-                        receipt_time=snapshot_time or datetime.now(),
+                        receipt_time=snapshot_time or resolve_business_datetime(),
                         status="已入库",  # 期初库存直接标记为已入库
                         review_status="已审核",  # 期初库存直接标记为已审核
                         total_quantity=float(total_quantity),
@@ -573,7 +574,7 @@ class InitialDataService:
                     # 生成工单编码（如果未提供）
                     work_order_code = row_data.get('work_order_code')
                     if not work_order_code:
-                        today = datetime.now().strftime("%Y%m%d")
+                        today = today_site_str()
                         base_service = AppBaseService(WorkOrder)
                         work_order_code = await base_service.generate_code(
                             tenant_id,
@@ -611,7 +612,7 @@ class InitialDataService:
                         workshop_name=workshop.name if workshop else None,
                         status="进行中",  # 期初在制品直接标记为进行中
                         priority="normal",
-                        actual_start_date=snapshot_time or datetime.now(),
+                        actual_start_date=snapshot_time or resolve_business_datetime(),
                         completed_quantity=Decimal('0'),
                         qualified_quantity=Decimal('0'),
                         unqualified_quantity=Decimal('0'),
@@ -632,7 +633,7 @@ class InitialDataService:
                         sequence=1,  # 期初在制品只有一个当前工序
                         workshop_id=workshop.id if workshop else None,
                         workshop_name=workshop.name if workshop else None,
-                        actual_start_date=snapshot_time or datetime.now(),
+                        actual_start_date=snapshot_time or resolve_business_datetime(),
                         completed_quantity=Decimal('0'),  # 当前工序未完成
                         qualified_quantity=Decimal('0'),
                         unqualified_quantity=Decimal('0'),
@@ -875,7 +876,7 @@ class InitialDataService:
                                 continue
                             
                             # 生成应收单编码
-                            today = datetime.now().strftime("%Y%m%d")
+                            today = today_site_str()
                             base_service = AppBaseService(Receivable)
                             receivable_code = await base_service.generate_code(
                                 tenant_id, "RECEIVABLE_CODE", prefix=f"INIT-AR{today}"
@@ -918,7 +919,7 @@ class InitialDataService:
                                 continue
                             
                             # 生成应付单编码
-                            today = datetime.now().strftime("%Y%m%d")
+                            today = today_site_str()
                             base_service = AppBaseService(Payable)
                             payable_code = await base_service.generate_code(
                                 tenant_id, "PAYABLE_CODE", prefix=f"INIT-AP{today}"

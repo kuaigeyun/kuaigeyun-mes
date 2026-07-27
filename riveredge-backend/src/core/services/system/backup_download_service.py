@@ -19,6 +19,7 @@ from core.services.system.backup_storage import (
     resolve_data_backup_dir,
 )
 from infra.config.infra_config import infra_settings as settings
+from core.utils.timezone_utils import now_utc
 
 
 class BackupDownloadService:
@@ -40,7 +41,7 @@ class BackupDownloadService:
 
     @staticmethod
     def generate_download_token(backup_uuid: str, tenant_id: int) -> str:
-        now = datetime.utcnow()
+        now = now_utc()
         payload = {
             "backup_uuid": backup_uuid,
             "tenant_id": tenant_id,

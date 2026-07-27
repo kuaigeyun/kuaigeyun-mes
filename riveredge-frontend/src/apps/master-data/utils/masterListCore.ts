@@ -32,6 +32,60 @@ export function normalizeMasterListResponse<T>(
   return { data: [], total: 0 };
 }
 
+export type MasterBatchDeletePayload = {
+  success_count: number;
+  failed_count: number;
+  success_records: Array<{ uuid: string; code?: string; name?: string }>;
+  failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
+};
+
+export type MasterBatchDeleteResult = {
+  success: boolean;
+  message: string;
+  data: MasterBatchDeletePayload;
+};
+
+/**
+ * 归一化批量删除响应。
+ * apiRequest 在 `{ success: true, data }` 时会解包成内层 data，丢失顶层 success，
+ * 页面若仍读 result.success 会误判为「部分删除失败」。
+ */
+export function normalizeMasterBatchDeleteResponse(raw: unknown): MasterBatchDeleteResult {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const nested =
+    obj.data && typeof obj.data === 'object' && !Array.isArray(obj.data)
+      ? (obj.data as Record<string, unknown>)
+      : null;
+  const payload =
+    nested && ('failed_count' in nested || 'success_count' in nested) ? nested : obj;
+
+  const success_count = Number(payload.success_count ?? 0);
+  const failed_count = Number(payload.failed_count ?? 0);
+  const success_records = Array.isArray(payload.success_records)
+    ? (payload.success_records as MasterBatchDeletePayload['success_records'])
+    : [];
+  const failed_records = Array.isArray(payload.failed_records)
+    ? (payload.failed_records as MasterBatchDeletePayload['failed_records'])
+    : [];
+  const message =
+    typeof obj.message === 'string' && obj.message.trim()
+      ? obj.message
+      : failed_count === 0
+        ? ''
+        : '';
+
+  return {
+    success: failed_count === 0,
+    message,
+    data: {
+      success_count,
+      failed_count,
+      success_records,
+      failed_records,
+    },
+  };
+}
+
 function pickString(searchFormValues: Record<string, unknown> | null | undefined, key: string) {
   const v = searchFormValues?.[key];
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;

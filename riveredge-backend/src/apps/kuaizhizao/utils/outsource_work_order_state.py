@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 def _dec(value: Any) -> Decimal:
@@ -24,7 +25,7 @@ def apply_outsource_work_order_execution_start(record: Any, *, now: datetime | N
         return False
     record.status = "in_progress"
     if not getattr(record, "actual_start_date", None):
-        record.actual_start_date = now or datetime.now()
+        record.actual_start_date = now or resolve_business_datetime()
     return True
 
 
@@ -40,7 +41,7 @@ def apply_outsource_work_order_receipt_completion(record: Any, *, now: datetime 
     if qty <= 0 or received < qty:
         return False
     record.status = "completed"
-    record.actual_end_date = now or datetime.now()
+    record.actual_end_date = now or resolve_business_datetime()
     return True
 
 

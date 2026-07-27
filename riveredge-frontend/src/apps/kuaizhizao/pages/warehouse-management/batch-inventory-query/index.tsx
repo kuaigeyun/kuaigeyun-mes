@@ -135,18 +135,15 @@ const BatchInventoryQuery: React.FC = () => {
   const [includeZeroStock, setIncludeZeroStock] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | 'in_stock' | 'zero' | 'expired'>('all');
   const [agingBucket, setAgingBucket] = useState<'all' | 'expired' | '0-30' | '31-90' | '90+'>('all');
-  const [groupBy, setGroupBy] = useState<'warehouse' | 'material' | 'status' | 'aging_bucket'>('aging_bucket');
   // setState 后立刻 reload 时闭包仍是旧值；用 ref 保证请求参数与开关一致
   const includeExpiredRef = useRef(false);
   const includeZeroStockRef = useRef(true);
   const statusFilterRef = useRef(statusFilter);
   const agingBucketRef = useRef(agingBucket);
-  const groupByRef = useRef(groupBy);
   includeExpiredRef.current = includeExpired;
   includeZeroStockRef.current = includeZeroStock;
   statusFilterRef.current = statusFilter;
   agingBucketRef.current = agingBucket;
-  groupByRef.current = groupBy;
   const lastQueryRef = useRef<Record<string, any>>({});
   const actionRef = useRef<any>(null);
   const [summary, setSummary] = useState({
@@ -157,7 +154,6 @@ const BatchInventoryQuery: React.FC = () => {
     expired_count: 0,
     near_expiry_count: 0,
   });
-  const [groups, setGroups] = useState<Array<{ group_key: string; record_count: number; total_quantity: number }>>([]);
 
   const escapeCsv = (v: unknown) => {
     const s = String(v ?? '');
@@ -171,8 +167,6 @@ const BatchInventoryQuery: React.FC = () => {
     const s = String(v ?? '').trim();
     return s || '—';
   };
-
-  const groupTags = useMemo(() => groups.slice(0, 8), [groups]);
 
   const tableHeaderActions = useMemo(
     () => (
@@ -236,24 +230,9 @@ const BatchInventoryQuery: React.FC = () => {
             actionRef.current?.reload();
           }}
         />
-        <Select
-          value={groupBy}
-          style={{ width: 160 }}
-          options={[
-            { label: t('app.kuaizhizao.batchInventoryQuery.groupByAgingBucket'), value: 'aging_bucket' },
-            { label: t('app.kuaizhizao.warehouseCommon.groupByWarehouse'), value: 'warehouse' },
-            { label: t('app.kuaizhizao.warehouseCommon.groupByMaterial'), value: 'material' },
-            { label: t('app.kuaizhizao.warehouseCommon.groupByStatus'), value: 'status' },
-          ]}
-          onChange={(v) => {
-            groupByRef.current = v;
-            setGroupBy(v);
-            actionRef.current?.reload();
-          }}
-        />
       </Space>
     ),
-    [t, includeExpired, includeZeroStock, statusFilter, agingBucket, groupBy]
+    [t, includeExpired, includeZeroStock, statusFilter, agingBucket]
   );
 
   const columns: ProColumns<BatchInventoryItem>[] = useMemo(
@@ -431,16 +410,15 @@ const BatchInventoryQuery: React.FC = () => {
             },
           }
         ),
-        apiRequest<{ summary: typeof summary; groups: Array<{ group_key: string; record_count: number; total_quantity: number }> }>(
+        apiRequest<{ summary: typeof summary }>(
           '/apps/kuaizhizao/reports/inventory/batch-lines/summary',
           {
             method: 'GET',
-            params: { ...apiParams, group_by: groupByRef.current },
+            params: apiParams,
           }
         ),
       ]);
       setSummary(summaryRes.summary);
-      setGroups(summaryRes.groups || []);
       return {
         data: listRes.items || [],
         total: listRes.total || 0,
@@ -547,17 +525,6 @@ const BatchInventoryQuery: React.FC = () => {
           <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statNearExpiry')} value={summary.near_expiry_count} /></Col>
           <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statExpired')} value={summary.expired_count} /></Col>
         </Row>
-        <Space style={{ marginTop: 8, flexWrap: 'wrap' }}>
-          {groupTags.map((g) => (
-            <Tag key={g.group_key}>
-              {t('app.kuaizhizao.warehouseCommon.groupTag', {
-                key: g.group_key,
-                count: g.record_count,
-                qty: formatQuantity(g.total_quantity),
-              })}
-            </Tag>
-          ))}
-        </Space>
       </Card>
 
       <UniTable<BatchInventoryItem>

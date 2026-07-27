@@ -4,6 +4,9 @@
  *
  * 重建条件仅绑定「表格种子」内容（暗色/上传行/表头/示例行），下拉选项变更只重打 Data Validation，
  * 避免 columnOptions 异步到位时 dispose+重建竞态触发 getSheetBySheetId on null。
+ *
+ * 超宽横滚只走 Univer 视口自带滚动条：宿主 width/max-width:100% + min-width:0 + overflow:hidden，
+ * 尺寸变化时用 clientWidth 驱动 engine.resizeBySize（见 relayoutUniverSheet）。
  */
 import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import { Spin, theme } from 'antd';
@@ -142,7 +145,10 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
     safeClearContainer(containerEl);
     const mountEl = document.createElement('div');
     mountEl.style.width = '100%';
+    mountEl.style.maxWidth = '100%';
+    mountEl.style.minWidth = '0';
     mountEl.style.height = '100%';
+    mountEl.style.boxSizing = 'border-box';
     const containerId = `univer-sheet-import-${Date.now()}-${mountSeqRef.current++}`;
     mountEl.id = containerId;
     containerEl.appendChild(mountEl);
@@ -242,7 +248,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
         }
 
         instanceRef.current = instance;
-        relayoutUniverSheet(instance);
+        relayoutUniverSheet(instance, containerRef.current);
 
         const seedRows = buildImportStringRows({
           headers,
@@ -281,7 +287,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
           const observer = new ResizeObserver(() => {
             const current = instanceRef.current;
             if (current) {
-              relayoutUniverSheet(current);
+              relayoutUniverSheet(current, containerRef.current);
             }
           });
           observer.observe(containerForResize);
@@ -420,7 +426,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
   }, [columnOptionsKey, columnOptions, loading, instanceRef]);
 
   return (
-    <div style={{ position: 'relative', height: '100%' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', minWidth: 0, minHeight: 0 }}>
       <div
         className="uni-import-sheet-host"
         ref={containerRef}
@@ -433,8 +439,10 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
         style={{
           outline: 'none',
           width: '100%',
-          height: `${height - 32}px`,
-          minHeight: `${height - 32}px`,
+          maxWidth: '100%',
+          minWidth: 0,
+          height: '100%',
+          minHeight: height > 0 ? undefined : 480,
           border: `1px solid ${token.colorBorder}`,
           boxSizing: 'border-box',
           overflow: 'hidden',

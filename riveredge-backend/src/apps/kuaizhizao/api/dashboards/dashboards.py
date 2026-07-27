@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 
 from core.api.deps import get_current_user, get_current_tenant
 from core.utils.api_cache import cache_by_kwargs
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.models.user import User
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.menu_badge_counts_service import fetch_menu_badge_counts
@@ -1740,7 +1740,7 @@ async def get_plan_reliability_metrics(
     from apps.kuaizhizao.models.work_order import WorkOrder
     from datetime import datetime, timedelta
 
-    now = datetime.now()
+    now = resolve_business_datetime()
     changed_since = now - timedelta(hours=24)
     freeze_horizon_days = 2
 
@@ -1841,7 +1841,7 @@ async def get_production_broadcast(
     
     try:
         # 查询最近的报工记录（最近7天）
-        date_threshold = datetime.now() - timedelta(days=7)
+        date_threshold = resolve_business_datetime() - timedelta(days=7)
         
         reporting_records = await ReportingRecord.filter(
             tenant_id=tenant_id,
@@ -1873,13 +1873,13 @@ async def get_production_broadcast(
                 operator_name=record.worker_name or "未知操作员",
                 operator_avatar=avatar_by_worker_id.get(record.worker_id),
                 process_name=record.operation_name or "未知工序",
-                date=record.reported_at.strftime("%Y-%m-%d") if record.reported_at else datetime.now().strftime("%Y-%m-%d"),
+                date=record.reported_at.strftime("%Y-%m-%d") if record.reported_at else resolve_business_datetime().strftime("%Y-%m-%d"),
                 work_order_no=record.work_order_code or (work_order.code if work_order else "未知工单"),
                 product_code=work_order.product_code if work_order else "未知产品",
                 product_name=work_order.product_name if work_order else "未知产品",
                 qualified_quantity=float(record.qualified_quantity or 0),
                 unqualified_quantity=float(record.unqualified_quantity or 0),
-                created_at=to_api_isoformat(record.reported_at) if record.reported_at else to_api_isoformat(datetime.now()),
+                created_at=to_api_isoformat(record.reported_at) if record.reported_at else to_api_isoformat(resolve_business_datetime()),
             ))
         
         return ProductionBroadcastResponse(items=items)
@@ -2069,7 +2069,7 @@ async def get_sales_summary(
     from decimal import Decimal
     import asyncio
 
-    now = datetime.now()
+    now = resolve_business_datetime()
     range_start_dt, range_end_dt, range_start_date, range_end_date = _resolve_month_range(date_start, date_end)
     month_start = range_start_dt
 
@@ -2158,7 +2158,7 @@ async def get_purchase_summary(
     from tortoise.functions import Sum
     import asyncio
 
-    now = datetime.now()
+    now = resolve_business_datetime()
     now_date = now.date()
     range_start_dt, range_end_dt, range_start_date, range_end_date = _resolve_month_range(date_start, date_end)
 
@@ -2223,7 +2223,7 @@ async def get_manufacturing_summary(
     from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
     import asyncio
 
-    now = datetime.now()
+    now = resolve_business_datetime()
     if date_start:
         range_start_dt = datetime.strptime(date_start, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
     else:
@@ -2297,7 +2297,7 @@ async def get_equipment_summary(
     from apps.kuaizhizao.models.maintenance_plan import MaintenanceExecution
     import asyncio
 
-    now = datetime.now()
+    now = resolve_business_datetime()
     now_date = now.date()
     if date_start:
         range_start_dt = datetime.strptime(date_start, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
@@ -2370,7 +2370,7 @@ def _resolve_month_range(
     解析查询区间；缺省为"当月 1 号 00:00:00 ~ 当月最后一天 23:59:59"。
     返回 (start_dt, end_dt, start_date, end_date)。
     """
-    now = datetime.now()
+    now = resolve_business_datetime()
     if date_start:
         start_dt = datetime.strptime(date_start, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
     else:
@@ -2638,7 +2638,7 @@ async def get_warehouse_trend(
     from apps.kuaizhizao.models.other_outbound import OtherOutbound
     import asyncio
 
-    now = datetime.now()
+    now = resolve_business_datetime()
     start_dt = (
         datetime.strptime(date_start, "%Y-%m-%d")
         if date_start else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -2756,7 +2756,7 @@ async def get_manufacturing_trend(
     from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
     from apps.kuaizhizao.models.reporting_record import ReportingRecord
 
-    now = datetime.now()
+    now = resolve_business_datetime()
     start_dt = (
         datetime.strptime(date_start, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
         if date_start else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -2813,7 +2813,7 @@ async def get_equipment_trend(
     """设备故障报修按日计数趋势。"""
     from apps.kuaizhizao.models.equipment_fault import EquipmentFault
 
-    now = datetime.now()
+    now = resolve_business_datetime()
     start_dt = (
         datetime.strptime(date_start, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
         if date_start else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)

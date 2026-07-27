@@ -30,6 +30,7 @@ import {
   parseVariantComboImportRows,
 } from '../utils/variantComboImport';
 import { DEFAULT_MATERIAL_BASE_UNIT } from '../constants/materialDefaults';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../../utils/modalEventIsolation';
 
 const LazyUniImport = lazy(() =>
   import('../../../components/uni-import').then((m) => ({ default: m.UniImport })),
@@ -875,6 +876,8 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
         onOk={() => void handleAddSubmit()}
         destroyOnHidden
         width={560}
+        maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+        wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
       >
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
           {t('app.master-data.materials.addComboRowHint', '每列选择一个属性值，保存后为一条独立组合行（与 Excel 每行一致）')}

@@ -32,6 +32,7 @@ from apps.master_data.services.master_data_list_core import (
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class PartnerPriceBookService:
@@ -646,7 +647,7 @@ class PartnerPriceBookService:
         ).first()
         if not row:
             raise NotFoundError("价格本记录不存在")
-        row.deleted_at = datetime.now()
+        row.deleted_at = resolve_business_datetime()
         await row.save()
 
     @classmethod

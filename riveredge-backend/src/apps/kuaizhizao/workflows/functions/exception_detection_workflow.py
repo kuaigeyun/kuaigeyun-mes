@@ -12,7 +12,7 @@ from apps.kuaizhizao.services.exception_service import ExceptionService
 from apps.kuaizhizao.services.work_order_service import WORK_ORDER_IN_PROGRESS_STATUS
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 from core.tasks.event_compat import Event, TriggerEvent
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from core.utils.workflow_tenant_isolation import with_tenant_isolation
 from core.workflows.client import workflow_client
 from infra.domain.tenant_context import get_current_tenant_id
@@ -77,7 +77,7 @@ async def run_exception_detection_for_tenant(
 
 
 async def run_exception_detection_scheduler() -> Dict[str, Any]:
-    now = datetime.now()
+    now = resolve_business_datetime()
     try:
         await dispatch_event(TaskEvent(name="exception/detect-all", data={"timestamp": to_api_isoformat(now)}))
         logger.info(f"已发送异常检测事件: {to_api_isoformat(now)}")
@@ -97,7 +97,7 @@ async def run_exception_detection_scheduler() -> Dict[str, Any]:
 async def exception_detection_worker_function(event: Event) -> Dict[str, Any]:
     tenant_id = get_current_tenant_id()
     data = event.data or {}
-    timestamp = data.get("timestamp", to_api_isoformat(datetime.now()))
+    timestamp = data.get("timestamp", to_api_isoformat(resolve_business_datetime()))
     exception_service = ExceptionService()
     results = {
         "tenant_id": tenant_id,

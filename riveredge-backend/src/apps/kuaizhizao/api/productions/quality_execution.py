@@ -333,7 +333,7 @@ async def get_incoming_inspection_statistics(
     """返回来料检验各维度数量，用于列表页指标卡片。"""
     from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
 
-    base = IncomingInspection.filter(tenant_id=tenant_id)
+    base = IncomingInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
     try:
         pending_count = await base.filter(status__in=["待检验", "pending"]).count()
     except Exception as e:
@@ -434,6 +434,32 @@ async def get_incoming_inspection(
         tenant_id=tenant_id,
         inspection_id=inspection_id
     )
+
+
+@router.delete(
+    "/incoming-inspections/{inspection_id}",
+    summary="Delete incoming inspection",
+    dependencies=[
+        Depends(require_permission_codes("kuaizhizao:quality-management-incoming-inspection:delete"))
+    ],
+)
+async def delete_incoming_inspection(
+    inspection_id: int = Path(..., description="来料检验单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """软删除来料检验单（仅待检验）。"""
+    await _assert_incoming_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    await IncomingInspectionService().delete_incoming_inspection(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        deleted_by=current_user.id,
+    )
+    return {"success": True}
 
 
 @router.post("/incoming-inspections/{inspection_id}/conduct", response_model=IncomingInspectionResponse, summary="Run incoming inspection")
@@ -878,7 +904,7 @@ async def get_process_inspection_statistics(
     """返回过程检验各维度数量，用于列表页指标卡片。"""
     from apps.kuaizhizao.models.process_inspection import ProcessInspection
 
-    base = ProcessInspection.filter(tenant_id=tenant_id)
+    base = ProcessInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
     try:
         pending_count = await base.filter(status__in=["待检验", "pending"]).count()
     except Exception as e:
@@ -999,6 +1025,27 @@ async def approve_process_inspection(
         approved_by=current_user.id,
         rejection_reason=rejection_reason
     )
+
+
+@router.delete(
+    "/process-inspections/{inspection_id}",
+    summary="Delete in-process inspection",
+    dependencies=[
+        Depends(require_permission_codes("kuaizhizao:quality-management-process-inspection:delete"))
+    ],
+)
+async def delete_process_inspection(
+    inspection_id: int = Path(..., description="过程检验单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """软删除过程检验单（仅待检验）。"""
+    await ProcessInspectionService().delete_process_inspection(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        deleted_by=current_user.id,
+    )
+    return {"success": True}
 
 
 @router.post("/process-inspections/{inspection_id}/conduct", response_model=ProcessInspectionResponse, summary="Run in-process inspection")
@@ -1212,7 +1259,7 @@ async def get_finished_goods_inspection_statistics(
     """返回成品检验各维度数量，用于列表页指标卡片。"""
     from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
 
-    base = FinishedGoodsInspection.filter(tenant_id=tenant_id)
+    base = FinishedGoodsInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
     try:
         pending_count = await base.filter(status__in=["待检验", "pending"]).count()
     except Exception as e:
@@ -1335,6 +1382,29 @@ async def approve_finished_goods_inspection(
         approved_by=current_user.id,
         rejection_reason=rejection_reason
     )
+
+
+@router.delete(
+    "/finished-goods-inspections/{inspection_id}",
+    summary="Delete finished goods inspection",
+    dependencies=[
+        Depends(
+            require_permission_codes("kuaizhizao:quality-management-finished-goods-inspection:delete")
+        )
+    ],
+)
+async def delete_finished_goods_inspection(
+    inspection_id: int = Path(..., description="成品检验单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """软删除成品检验单（仅待检验）。"""
+    await FinishedGoodsInspectionService().delete_finished_goods_inspection(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        deleted_by=current_user.id,
+    )
+    return {"success": True}
 
 
 @router.post("/finished-goods-inspections/{inspection_id}/conduct", response_model=FinishedGoodsInspectionResponse, summary="Run finished goods inspection")

@@ -19,10 +19,11 @@ export interface SchedulingConstraints {
   consider_equipment: boolean;
   consider_material: boolean;
   consider_mold_tool: boolean;
-  daily_capacity_hours?: number;
   freeze_horizon_days?: number;
   rolling_horizon_days?: number;
   setup_changeover_hours?: number;
+  schedule_mode?: 'forward' | 'backward';
+  material_hard_constraint?: boolean;
   bottleneck_work_center_ids?: number[];
 }
 

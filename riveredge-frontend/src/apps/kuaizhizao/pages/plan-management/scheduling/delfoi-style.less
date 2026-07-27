@@ -39,6 +39,16 @@
     font-size: 12px;
   }
 
+  .aps-header-band-missing-tag {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .aps-header-band-missing-tag-disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
+
   .ant-typography {
     font-size: 12px;
     margin-bottom: 0;
@@ -219,6 +229,23 @@
     padding-left: 8px !important;
   }
 
+
+  .gantt-nonwork-band {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.06);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .gantt-station-downtime-band {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: rgba(180, 80, 60, 0.18);
+    pointer-events: none;
+    z-index: 2;
+  }
   .gantt-freeze-band {
     position: absolute;
     top: 0;
@@ -341,6 +368,19 @@
   }
 
   /* 状态色（与 Delfoi 多色块一致） */
+  .gantt-delfoi-segment.gantt-task-outsource,
+  .wx-bar.wx-split .wx-segment.gantt-task-outsource {
+    background: linear-gradient(180deg, #9254de 0%, #722ed1 100%) !important;
+    border-color: #531dab !important;
+  }
+
+  .gantt-delfoi-segment.gantt-task-outsource .gantt-task-label-primary,
+  .gantt-delfoi-segment.gantt-task-outsource .gantt-task-label-code,
+  .wx-bar.wx-split .wx-segment.gantt-task-outsource .gantt-task-label-primary,
+  .wx-bar.wx-split .wx-segment.gantt-task-outsource .gantt-task-label-code {
+    color: #fff !important;
+  }
+
   .gantt-delfoi-segment.gantt-task-blue,
   .wx-bar.wx-split .wx-segment.gantt-task-blue {
     background: #1677ff !important;
@@ -395,6 +435,17 @@
     z-index: 2;
   }
 
+  /* 同工单流程高亮中的「当前点击」节点：橙色区分（需压过 selected 蓝环） */
+  .gantt-delfoi-segment.gantt-wo-flow-selected.gantt-wo-flow-primary,
+  .gantt-delfoi-segment.gantt-wo-flow-primary,
+  .wx-bar.wx-split .wx-segment.gantt-wo-flow-primary,
+  .river-gantt-bar.gantt-wo-flow-primary {
+    border-color: #fa8c16 !important;
+    box-shadow: 0 0 0 2px #fa8c16 !important;
+    outline: 1px solid rgba(250, 140, 22, 0.65);
+    z-index: 3;
+  }
+
   .gantt-delfoi-segment.gantt-drag-conflict,
   .wx-bar.wx-split .wx-segment.gantt-drag-conflict {
     box-shadow: 0 0 0 2px #ff4d4f;
@@ -426,6 +477,15 @@
   .gantt-wo-flow-selected .wx-task-bar {
     box-shadow: 0 0 0 2px #1677ff;
     outline: 1px solid rgba(22, 119, 255, 0.45);
+  }
+
+  .wx-task.gantt-wo-flow-primary .wx-task-bar,
+  .gantt-wo-flow-selected.gantt-wo-flow-primary .wx-task-bar,
+  .gantt-wo-flow-primary .wx-task-bar,
+  .river-gantt-bar.gantt-wo-flow-primary {
+    border-color: #fa8c16 !important;
+    box-shadow: 0 0 0 2px #fa8c16 !important;
+    outline: 1px solid rgba(250, 140, 22, 0.65);
   }
 
   .wx-task.gantt-drag-conflict .wx-task-bar,

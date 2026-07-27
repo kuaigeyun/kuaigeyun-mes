@@ -25,6 +25,7 @@ import {
 } from 'antd';
 import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../utils/globalSubmitShortcut';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../../utils/modalEventIsolation';
 import { PlusOutlined, HolderOutlined } from '@ant-design/icons';
 import { SequenceIndexCell, StepDragHandleContext } from '../../../components/sequence-index-cell';
 import {
@@ -44,6 +45,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { operationApi } from '../services/process';
 import type { Operation } from '../types/process';
 import { OperationFormModal } from './OperationFormModal';
+import { supplierApi, unwrapSupplyPagedList } from '../services/supply-chain';
 import {
   MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET,
   MODAL_NESTED_ABOVE_PARENT_OFFSET,
@@ -325,6 +327,11 @@ export interface OperationItem {
   standardTime?: number;
   /** 准备时间（小时） */
   setupTime?: number;
+  /** 计划工序委外（写入路线 operation_sequence） */
+  isOutsourced?: boolean;
+  outsourceLeadTimeDays?: number;
+  outsourceSupplierId?: number;
+  outsourceSupplierName?: string;
 }
 
 export interface OperationSequenceEditorProps {
@@ -362,6 +369,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     [onChange],
   );
   const [allOperations, setAllOperations] = useState<Operation[]>([]);
+  const [supplierOptions, setSupplierOptions] = useState<Array<{ value: number; label: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [selectedOperationUuids, setSelectedOperationUuids] = useState<string[]>([]);
@@ -396,6 +404,34 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   useEffect(() => {
     void loadAllOperations();
   }, [loadAllOperations]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await supplierApi.list({ limit: 1000, isActive: true });
+        const items = unwrapSupplyPagedList(result);
+        if (cancelled) return;
+        setSupplierOptions(
+          items.map((s: { id?: number; code?: string; name?: string }) => ({
+            value: Number(s.id),
+            label: s.code ? `${s.code} ${s.name ?? ''}` : String(s.name ?? s.id),
+          })).filter((o) => Number.isFinite(o.value) && o.value > 0),
+        );
+      } catch {
+        if (!cancelled) setSupplierOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const patchOutsource = (uuid: string, patch: Partial<OperationItem>) => {
+    commitOperations(
+      operations.map((op) => (op.uuid === uuid ? { ...op, ...patch } : op)),
+    );
+  };
 
   const handleOperationQuickCreateSuccess = useCallback(
     (created: Operation) => {
@@ -539,7 +575,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   };
 
   const tableColSpan =
-    4 + (showNodeOperationColumn ? 1 : 0) + (showTimeColumns ? 2 : 0);
+    4 + (showNodeOperationColumn ? 1 : 0) + (showTimeColumns ? 2 : 0) + 3;
   const sortableRowIds = useMemo(() => operations.map((op) => op.uuid), [operations]);
 
   const columns = [
@@ -632,6 +668,72 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         ]
       : []),
     {
+      title: t('app.master-data.operationSequence.plannedOutsource'),
+      key: 'isOutsourced',
+      width: 88,
+      render: (_: unknown, record: OperationItem) => (
+        <Switch
+          size="small"
+          checked={!!record.isOutsourced}
+          onChange={(c) =>
+            patchOutsource(record.uuid, {
+              isOutsourced: c,
+              outsourceLeadTimeDays: c ? record.outsourceLeadTimeDays ?? 1 : undefined,
+              outsourceSupplierId: c ? record.outsourceSupplierId : undefined,
+              outsourceSupplierName: c ? record.outsourceSupplierName : undefined,
+            })
+          }
+        />
+      ),
+    },
+    {
+      title: t('app.master-data.operationSequence.outsourceLeadDays'),
+      key: 'outsourceLeadTimeDays',
+      width: 100,
+      render: (_: unknown, record: OperationItem) => (
+        <InputNumber
+          size="small"
+          min={0}
+          precision={0}
+          style={{ width: '100%' }}
+          disabled={!record.isOutsourced}
+          value={record.isOutsourced ? record.outsourceLeadTimeDays ?? 1 : undefined}
+          onChange={(v) =>
+            patchOutsource(record.uuid, {
+              outsourceLeadTimeDays: v == null ? 1 : Number(v),
+            })
+          }
+        />
+      ),
+    },
+    {
+      title: t('app.master-data.operationSequence.outsourceSupplier'),
+      key: 'outsourceSupplierId',
+      width: 180,
+      render: (_: unknown, record: OperationItem) => (
+        <Select
+          size="small"
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          style={{ width: '100%' }}
+          disabled={!record.isOutsourced}
+          options={supplierOptions}
+          value={record.outsourceSupplierId}
+          placeholder={t('app.master-data.operationSequence.selectOutsourceSupplier')}
+          onChange={(v, opt) => {
+            const label = Array.isArray(opt)
+              ? undefined
+              : (opt as { label?: string } | undefined)?.label;
+            patchOutsource(record.uuid, {
+              outsourceSupplierId: v == null ? undefined : Number(v),
+              outsourceSupplierName: v == null ? undefined : String(label || ''),
+            });
+          }}
+        />
+      ),
+    },
+    {
       title: t('app.master-data.operationSequence.overReportAction'),
       key: 'action',
       width: 320,
@@ -719,6 +821,8 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         getContainer={() => document.body}
         destroyOnHidden
         styles={operationPickModalStyles}
+        maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+        wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
         onOk={handleAddOperation}
         onCancel={() => {
           setAddModalVisible(false);
@@ -754,6 +858,8 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         getContainer={() => document.body}
         destroyOnHidden
         styles={operationPickModalStyles}
+        maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+        wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
         onOk={handleReplaceOperation}
         onCancel={() => {
           setReplaceModalVisible(false);

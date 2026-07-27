@@ -28,6 +28,7 @@ from apps.master_data.models.customer import Customer
 from core.services.authorization.data_scope_service import DataScopeService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 CUSTOMER_FOLLOW_UP_SORTABLE_FIELDS = frozenset({
     "customer_name",
@@ -355,7 +356,7 @@ class CustomerFollowUpService:
         delete_audit: dict = {}
         apply_update_audit(delete_audit, current_user)
         await CustomerFollowUp.filter(id=follow_id, tenant_id=tenant_id).update(
-            deleted_at=datetime.now(),
+            deleted_at=resolve_business_datetime(),
             **delete_audit,
         )
         return True
@@ -411,7 +412,7 @@ class CustomerFollowUpService:
         if occurred_to is not None:
             query = query.filter(occurred_at__lte=occurred_to)
         if pending_only:
-            now = datetime.now()
+            now = resolve_business_datetime()
             query = query.filter(next_follow_up_at__isnull=False).filter(next_follow_up_at__lte=now)
         if keyword:
             kw = keyword.strip()

@@ -9,11 +9,11 @@ import { App } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { warehouseApi } from '../services/warehouse';
-import { workshopApi, workCenterApi, workstationApi, factoryListItems } from '../services/factory';
+import { workshopApi, workCenterApi, factoryListItems } from '../services/factory';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import type { Warehouse, WarehouseCreate, WarehouseUpdate } from '../types/warehouse';
-import type { Workshop, WorkCenter, Workstation } from '../types/factory';
+import type { Workshop, WorkCenter } from '../types/factory';
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import { warehouseFormSchemaBasic, warehouseFormSchemaRest } from '../schemas/warehouse';
 import { useCustomFields } from '../../../hooks/useCustomFields';
@@ -44,7 +44,6 @@ export const WarehouseFormModal: React.FC<WarehouseFormModalProps> = ({
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
-  const [workstations, setWorkstations] = useState<Workstation[]>([]);
   const [workCenters, setWorkCenters] = useState<WorkCenter[]>([]);
 
   const {
@@ -61,16 +60,14 @@ export const WarehouseFormModal: React.FC<WarehouseFormModalProps> = ({
   useEffect(() => {
     const loadOptions = async () => {
       try {
-        const [wsList, wstList, wcList] = await Promise.all([
+        const [wsList, wcList] = await Promise.all([
           workshopApi.list({ limit: 1000, is_active: true }),
-          workstationApi.list({ limit: 1000, is_active: true }),
           workCenterApi.list({ limit: 1000, is_active: true }),
         ]);
         setWorkshops(factoryListItems(wsList));
-        setWorkstations(factoryListItems(wstList));
         setWorkCenters(factoryListItems(wcList));
       } catch (e) {
-        console.error('加载车间/工位/工作中心列表失败:', e);
+        console.error('加载车间/工作中心列表失败:', e);
       }
     };
     loadOptions();
@@ -123,7 +120,6 @@ export const WarehouseFormModal: React.FC<WarehouseFormModalProps> = ({
           isActive: detail.isActive ?? true,
           warehouseType: detail.warehouseType ?? 'normal',
           workshopId: detail.workshopId,
-          workstationId: detail.workstationId,
           workCenterId: detail.workCenterId,
         });
         const fieldFormValues = await loadFieldValues(detail.id);
@@ -138,6 +134,8 @@ export const WarehouseFormModal: React.FC<WarehouseFormModalProps> = ({
     try {
       setFormLoading(true);
       const { customData, standardValues } = extractFormValues(values);
+      // 线边仓主路径为车间/工作中心；工位级在制走 WIP/报工，不再按工位建仓
+      delete standardValues.workstationId;
 
       if (isEdit && editUuid) {
         await warehouseApi.update(editUuid, standardValues as WarehouseUpdate);
@@ -218,14 +216,6 @@ export const WarehouseFormModal: React.FC<WarehouseFormModalProps> = ({
                 placeholder={t('field.warehouse.workshopIdPlaceholder')}
                 rules={[{ required: true, message: t('field.warehouse.workshopIdRequired') }]}
                 options={workshops.map((w) => ({ label: `${w.code} - ${w.name}`, value: w.id }))}
-                fieldProps={{ showSearch: true, allowClear: true }}
-                colProps={{ span: 12 }}
-              />
-              <ProFormSelect
-                name="workstationId"
-                label={t('field.warehouse.workstationId')}
-                placeholder={t('field.warehouse.workstationIdPlaceholder')}
-                options={workstations.map((w) => ({ label: `${w.code} - ${w.name}`, value: w.id }))}
                 fieldProps={{ showSearch: true, allowClear: true }}
                 colProps={{ span: 12 }}
               />

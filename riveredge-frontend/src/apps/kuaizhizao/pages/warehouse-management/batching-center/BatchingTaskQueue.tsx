@@ -66,6 +66,7 @@ export type BatchingTaskRow = {
   material_name?: string;
   material_code?: string;
   requested_quantity?: number;
+  total_items?: number;
   delivered_quantity?: number;
   material_unit?: string;
   caller_name?: string;
@@ -89,7 +90,13 @@ function formatTaskStatusLabel(r: BatchingTaskRow, t: (key: string) => string): 
   if (!st) return '-';
   switch (r.task_type) {
     case 'proactive_prep':
-      return st === 'pending_prep' ? t('app.kuaizhizao.warehouseCommon.statusPendingPrep') : st;
+      if (st === 'ready_to_prep') {
+        return t('app.kuaizhizao.warehouseCommon.statusReadyToPrep');
+      }
+      if (st === 'pending_prep') {
+        return t('app.kuaizhizao.warehouseCommon.statusPendingPrep');
+      }
+      return st;
     case 'material_call': {
       const map: Record<string, string> = {
         pending: t('app.kuaizhizao.warehouseCommon.statusPending'),
@@ -132,7 +139,14 @@ function resolveTaskStatusTagColor(taskType: string, status?: string): string {
   }
   if (normalized === 'completed' || normalized === '已完成') return 'success';
   if (normalized === 'processing' || normalized === 'partial' || normalized === 'picking') return 'processing';
-  if (normalized === 'pending' || normalized === 'draft' || normalized === 'pending_prep') return 'warning';
+  if (
+    normalized === 'pending' ||
+    normalized === 'draft' ||
+    normalized === 'pending_prep' ||
+    normalized === 'ready_to_prep'
+  ) {
+    return 'warning';
+  }
   if (normalized === 'cancelled' || normalized === '已取消') return 'default';
   return 'default';
 }
@@ -142,9 +156,23 @@ type Props = {
   onCreate?: () => void;
   onOpenBatchingDetail?: (orderId: number) => void;
   onRefreshBatchingList?: () => void;
+  /** 分栏场景：外部变更后递增以触发本表 reload */
+  listReloadKey?: number;
+  /** 本表任务变更后通知（如左栏生成备料单后刷新右栏） */
+  onTasksChanged?: () => void;
+  /** 仅展示指定工单的备料单（右栏主从联动） */
+  workOrderCodeFilter?: string;
 };
 
-const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatchingDetail, onRefreshBatchingList }) => {
+const BatchingTaskQueue: React.FC<Props> = ({
+  taskType,
+  onCreate,
+  onOpenBatchingDetail,
+  onRefreshBatchingList,
+  listReloadKey,
+  onTasksChanged,
+  workOrderCodeFilter,
+}) => {
   const { t } = useTranslation();
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'batching_order.pull_from_work_order');
   const { message: messageApi } = App.useApp();
@@ -155,8 +183,12 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       material_call: { text: taskTypeLabel.material_call, color: 'orange' },
       proactive_prep: { text: taskTypeLabel.proactive_prep, color: 'blue' },
       backflush_alert: { text: taskTypeLabel.backflush_alert, color: 'red' },
+      line_side_prep: {
+        text: t('app.kuaizhizao.batchingCenter.tab.lineSidePrep'),
+        color: 'green',
+      },
     }),
-    [taskTypeLabel],
+    [taskTypeLabel, t],
   );
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -175,7 +207,13 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
     actionRef.current?.reload();
     invalidateMenuBadgeCounts();
     onRefreshBatchingList?.();
+    onTasksChanged?.();
   };
+
+  useEffect(() => {
+    if (listReloadKey == null || listReloadKey <= 0) return;
+    actionRef.current?.reload();
+  }, [listReloadKey]);
 
   const handleMaterialCallUpdate = async (
     id: number,
@@ -403,7 +441,8 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       title: t('app.kuaizhizao.warehouseCommon.colTaskType'),
       dataIndex: 'task_type',
       width: 110,
-      hideInTable: true,
+      // 合并「线边备料」列表含建议+备料单，需展示行来源
+      hideInTable: taskType !== 'line_side_prep',
       hideInSearch: true,
       valueType: 'select',
       valueEnum: {
@@ -465,10 +504,20 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       dataIndex: 'kitting_rate',
       width: 90,
       hideInSearch: true,
-      // 齐套率仅对线边备料执行/主动备料有意义；产线补料是局部需求，后端不计算齐套率
+      // 齐套率仅对线边备料（建议+执行）有意义；产线补料是局部需求，后端不计算齐套率
       hideInTable: taskType === 'material_call' || taskType === 'backflush_alert',
       render: (_, r) =>
         r.kitting_rate != null ? <Tag color="green">{Math.round(r.kitting_rate)}%</Tag> : '-',
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colSkuCount'),
+      dataIndex: 'total_items',
+      width: 72,
+      hideInSearch: true,
+      align: 'right',
+      // 品种：线边备料（建议/备料单）与产线补料有意义；倒冲异常为单物料行
+      hideInTable: taskType === 'backflush_alert',
+      render: (_, r) => (r.total_items != null ? r.total_items : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
@@ -476,6 +525,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       width: 90,
       hideInSearch: true,
       align: 'right',
+      // 数量：工单计划产量（线边备料）或补料需求量
       render: (_, r) =>
         r.requested_quantity != null
           ? `${r.requested_quantity}${r.material_unit ? ` ${r.material_unit}` : ''}`
@@ -985,6 +1035,9 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
               limit: params.pageSize ?? 20,
               task_type: taskType,
               ...listParams,
+              ...(workOrderCodeFilter
+                ? { work_order_code: workOrderCodeFilter }
+                : {}),
             });
             const { data, total } = normalizeWarehouseListResponse(res);
             return { data, total, success: true };
@@ -992,6 +1045,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
             return { data: [], total: 0, success: false };
           }
         }}
+        params={{ workOrderCodeFilter: workOrderCodeFilter || '' }}
         skipFuzzyPinyinClientFilter
       />
     </>

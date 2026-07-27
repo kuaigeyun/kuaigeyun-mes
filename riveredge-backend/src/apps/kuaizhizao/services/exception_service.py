@@ -41,6 +41,7 @@ from apps.kuaizhizao.services.work_order_service import WorkOrderService, WORK_O
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 from loguru import logger
+from core.utils.timezone_utils import resolve_business_datetime
 
 # 待处理异常状态（与模型字段一致；勿使用 open）
 ACTIVE_EXCEPTION_STATUSES = ("pending", "processing")
@@ -253,7 +254,7 @@ class ExceptionService:
         if data.delay_days is not None:
             delay_days = int(data.delay_days)
         else:
-            now = datetime.now(planned_end.tzinfo) if planned_end and planned_end.tzinfo else datetime.now()
+            now = resolve_business_datetime()
             delay_days = max(0, (now.date() - planned_end.date()).days)
 
         if data.alert_level:
@@ -275,7 +276,7 @@ class ExceptionService:
             suggested_action = "adjust_plan"
 
         if planned_end is None:
-            planned_end = datetime.now()
+            planned_end = resolve_business_datetime()
 
         kwargs: dict = dict(
             tenant_id=tenant_id,
@@ -628,7 +629,7 @@ class ExceptionService:
 
         exception.handled_by = handled_by
         exception.handled_by_name = user_info["name"]
-        exception.handled_at = datetime.now()
+        exception.handled_at = resolve_business_datetime()
         if remarks:
             exception.remarks = remarks
 
@@ -849,7 +850,7 @@ class ExceptionService:
 
         exception.handled_by = handled_by
         exception.handled_by_name = user_info["name"]
-        exception.handled_at = datetime.now()
+        exception.handled_at = resolve_business_datetime()
         if remarks:
             exception.remarks = remarks
 
@@ -1173,7 +1174,7 @@ class ExceptionService:
                 exception.planned_completion_date = planned_completion_date
         elif action == "close":
             exception.status = "closed"
-            exception.actual_completion_date = datetime.now()
+            exception.actual_completion_date = resolve_business_datetime()
             if verification_result:
                 exception.verification_result = verification_result
         elif action == "cancel":
@@ -1181,7 +1182,7 @@ class ExceptionService:
 
         exception.handled_by = handled_by
         exception.handled_by_name = user_info["name"]
-        exception.handled_at = datetime.now()
+        exception.handled_at = resolve_business_datetime()
         if remarks:
             exception.remarks = remarks
 

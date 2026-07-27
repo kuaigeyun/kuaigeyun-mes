@@ -29,6 +29,7 @@ from apps.kuaizhizao.schemas.inspection_plan import (
 
 from apps.kuaizhizao.services.inspection_step_spec import prepare_plan_step_dict, validate_plan_steps_relations
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class InspectionPlanService(AppBaseService[InspectionPlan]):
@@ -256,7 +257,7 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
             if not plan:
                 raise NotFoundError(f"质检方案 ID {plan_id} 不存在")
 
-            plan.deleted_at = datetime.now()
+            plan.deleted_at = resolve_business_datetime()
             await plan.save()
 
     async def get_plans_by_material(

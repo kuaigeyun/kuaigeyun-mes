@@ -36,6 +36,7 @@ from apps.kuaizhizao.services.spc_list_core import apply_spc_sample_list_filters
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from tortoise.transactions import in_transaction
 from datetime import timezone
+from core.utils.timezone_utils import resolve_business_datetime
 
 VALID_8D_STATUS_FLOW = [
     "d1_team",
@@ -72,7 +73,8 @@ _8D_STAGE_REQUIRED_FIELD: Dict[str, str] = {
 _HISTORY_LINE_PATTERN = re.compile(r"^\[(?P<ts>[^\]]+)\]\s*(?P<status>[a-z0-9_]+)\s*:\s*(?P<remarks>.+)$")
 
 def _build_quick_code(prefix: str) -> str:
-    now = datetime.now()
+    """仅用于无编码规则上下文的临时单号（如 8D）；OQC 须走 OQC_INSPECTION_CODE。"""
+    now = resolve_business_datetime()
     return f"{prefix}{now.strftime('%Y%m%d%H%M%S%f')[-12:]}"
 
 
@@ -164,7 +166,7 @@ class Quality8DService(AppBaseService[Quality8DReport]):
     def _append_transition_history_line(self, row: Quality8DReport, payload: Quality8DTransition) -> None:
         if not payload.remarks:
             return
-        history = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {payload.to_status}: {payload.remarks}"
+        history = f"[{resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {payload.to_status}: {payload.remarks}"
         row.remarks = f"{row.remarks}\n{history}".strip() if row.remarks else history
 
     def _parse_history_from_remarks(self, row: Quality8DReport) -> List[Quality8DHistoryEntry]:
@@ -278,7 +280,7 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         if owner_id:
             query = query.filter(owner_id=owner_id)
         if overdue_only:
-            query = query.filter(due_date__lt=datetime.now()).exclude(status="closed")
+            query = query.filter(due_date__lt=resolve_business_datetime()).exclude(status="closed")
         query = _apply_quality_inspection_list_filters(
             query,
             {
@@ -344,7 +346,7 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         old_status = row.status
         row.status = payload.to_status
         if payload.to_status == "closed":
-            row.closed_at = datetime.now()
+            row.closed_at = resolve_business_datetime()
             row.verification_result = self._normalize_text(payload.verification_result) or row.verification_result
         self._append_transition_history_line(row, payload)
         user_info = await self.get_user_info(user_id)
@@ -371,7 +373,7 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         if not row:
             raise NotFoundError("8D 报告不存在")
         assert_eight_d_report_capability(row, "delete")
-        row.deleted_at = datetime.now()
+        row.deleted_at = resolve_business_datetime()
         await row.save(update_fields=["deleted_at"])
 
     async def get_history(self, tenant_id: int, report_id: int) -> List[Quality8DHistoryEntry]:
@@ -385,12 +387,143 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
     def __init__(self) -> None:
         super().__init__(OQCInspection)
 
+    async def _allocate_oqc_inspection_code(self, tenant_id: int) -> str:
+        """按单据编号模板 OQC_INSPECTION_CODE 生成出货检验单号。"""
+        from core.utils.timezone_utils import today_site_str
+
+        today = today_site_str()
+        return await self.generate_code(tenant_id, "OQC_INSPECTION_CODE", prefix=f"OQC{today}")
+
+    @staticmethod
+    def _collect_related_sales_delivery_ids(notice: Any) -> List[int]:
+        delivery_ids: List[int] = []
+        primary = getattr(notice, "sales_delivery_id", None)
+        if primary is not None:
+            delivery_ids.append(int(primary))
+        related_raw = getattr(notice, "related_sales_delivery_ids", None) or []
+        if isinstance(related_raw, list):
+            for entry in related_raw:
+                eid = entry.get("id") if isinstance(entry, dict) else None
+                if eid is not None:
+                    delivery_ids.append(int(eid))
+        return sorted({d for d in delivery_ids if d > 0})
+
+    async def _load_existing_oqc_by_material_for_outbound(
+        self,
+        tenant_id: int,
+        material_ids: List[int],
+        *,
+        shipment_notice_id: Optional[int] = None,
+        sales_delivery_id: Optional[int] = None,
+        related_notice_ids: Optional[List[int]] = None,
+        related_delivery_ids: Optional[List[int]] = None,
+    ) -> Dict[int, OQCInspection]:
+        """
+        同一出货链路（发货通知 / 销售出库）下按物料取最早一张未删除 OQC。
+        竞争源：通知仓库时 notice 自动建单 + 销售出库自动建单 / ensure 补建 / 人工双路径上拉。
+        """
+        mids = sorted({int(m) for m in material_ids if m})
+        if not mids:
+            return {}
+
+        notice_ids: List[int] = []
+        for nid in list(related_notice_ids or []):
+            if nid is not None:
+                notice_ids.append(int(nid))
+        if shipment_notice_id is not None:
+            notice_ids.append(int(shipment_notice_id))
+        notice_ids = sorted({n for n in notice_ids if n > 0})
+
+        delivery_ids: List[int] = []
+        for did in list(related_delivery_ids or []):
+            if did is not None:
+                delivery_ids.append(int(did))
+        if sales_delivery_id is not None:
+            delivery_ids.append(int(sales_delivery_id))
+        delivery_ids = sorted({d for d in delivery_ids if d > 0})
+
+        doc_q = Q()
+        has_anchor = False
+        if notice_ids:
+            doc_q |= Q(shipment_notice_id__in=notice_ids)
+            has_anchor = True
+        if delivery_ids:
+            doc_q |= Q(source_type="sales_delivery", source_id__in=delivery_ids)
+            has_anchor = True
+        if not has_anchor:
+            return {}
+
+        rows = (
+            await OQCInspection.filter(
+                tenant_id=tenant_id,
+                material_id__in=mids,
+                deleted_at__isnull=True,
+            )
+            .filter(doc_q)
+            .order_by("id")
+            .all()
+        )
+        by_material: Dict[int, OQCInspection] = {}
+        for row in rows:
+            mid = getattr(row, "material_id", None)
+            if mid is None:
+                continue
+            mid_int = int(mid)
+            if mid_int not in by_material:
+                by_material[mid_int] = row
+        return by_material
+
+    async def _find_existing_oqc_for_outbound_material(
+        self,
+        tenant_id: int,
+        *,
+        material_id: int,
+        shipment_notice_id: Optional[int] = None,
+        sales_delivery_id: Optional[int] = None,
+        related_notice_ids: Optional[List[int]] = None,
+        related_delivery_ids: Optional[List[int]] = None,
+    ) -> Optional[OQCInspection]:
+        by_material = await self._load_existing_oqc_by_material_for_outbound(
+            tenant_id,
+            [int(material_id)],
+            shipment_notice_id=shipment_notice_id,
+            sales_delivery_id=sales_delivery_id,
+            related_notice_ids=related_notice_ids,
+            related_delivery_ids=related_delivery_ids,
+        )
+        return by_material.get(int(material_id))
+
+    async def _backfill_oqc_outbound_links(
+        self,
+        existing: OQCInspection,
+        *,
+        shipment_notice_id: Optional[int] = None,
+        shipment_notice_code: Optional[str] = None,
+        user_id: Optional[int] = None,
+        user_name: Optional[str] = None,
+    ) -> OQCInspection:
+        """复用已有单时补齐发货通知关联，避免跨源查找再次 miss。不改写 source_*。"""
+        updates: Dict[str, Any] = {}
+        if shipment_notice_id and not getattr(existing, "shipment_notice_id", None):
+            updates["shipment_notice_id"] = int(shipment_notice_id)
+            if shipment_notice_code:
+                updates["shipment_notice_code"] = shipment_notice_code
+        if not updates:
+            return existing
+        if user_id is not None:
+            updates["updated_by"] = user_id
+        if user_name:
+            updates["updated_by_name"] = user_name
+        await OQCInspection.filter(id=int(existing.id)).update(**updates)
+        await existing.refresh_from_db()
+        return existing
+
     async def create(self, tenant_id: int, user_id: int, payload: OQCInspectionCreate) -> OQCInspectionResponse:
         from apps.kuaizhizao.services.quality_service import _quality_inspection_initial_review_fields
 
         inspection_code = payload.inspection_code
         if not inspection_code:
-            inspection_code = _build_quick_code("OQC")
+            inspection_code = await self._allocate_oqc_inspection_code(tenant_id)
         create_fields = payload.model_dump(exclude={"inspection_code"})
         create_fields.update(
             await _quality_inspection_initial_review_fields(tenant_id, "oqc_inspection")
@@ -450,7 +583,17 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         if shipment_notice_id:
             query = query.filter(shipment_notice_id=shipment_notice_id)
         if sales_delivery_id:
-            query = query.filter(source_type="sales_delivery", source_id=sales_delivery_id)
+            from apps.kuaizhizao.services.inspection_policy_service import (
+                _shipment_notice_ids_for_sales_delivery,
+            )
+
+            notice_ids = await _shipment_notice_ids_for_sales_delivery(
+                tenant_id, int(sales_delivery_id)
+            )
+            delivery_q = Q(source_type="sales_delivery", source_id=int(sales_delivery_id))
+            if notice_ids:
+                delivery_q |= Q(shipment_notice_id__in=notice_ids)
+            query = query.filter(delivery_q)
         query = _apply_quality_inspection_list_filters(
             query,
             {
@@ -539,7 +682,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             row.review_time = finalize_fields["review_time"]
         row.inspector_id = user_id
         row.inspector_name = user_info["name"]
-        row.inspection_time = datetime.now()
+        row.inspection_time = resolve_business_datetime()
         row.updated_by = user_id
         row.updated_by_name = user_info["name"]
         await row.save()
@@ -574,7 +717,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         row.status = "已审核" if approve else "已驳回"
         row.reviewer_id = user_id
         row.reviewer_name = user_info["name"]
-        row.review_time = datetime.now()
+        row.review_time = resolve_business_datetime()
         row.updated_by = user_id
         row.updated_by_name = user_info["name"]
         await row.save()
@@ -598,7 +741,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         if not row:
             raise NotFoundError("OQC 检验单不存在")
         assert_oqc_inspection_capability(row, "delete")
-        row.deleted_at = datetime.now()
+        row.deleted_at = resolve_business_datetime()
         await row.save(update_fields=["deleted_at"])
 
     async def revoke_approval(
@@ -675,15 +818,12 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
 
         if existing_by_material is None:
             mids = [int(i.material_id) for i in items if i.material_id]
-            existing_rows = await OQCInspection.filter(
-                tenant_id=tenant_id,
+            existing_by_material = await self._load_existing_oqc_by_material_for_outbound(
+                tenant_id,
+                mids,
                 shipment_notice_id=int(notice.id),
-                material_id__in=mids,
-                deleted_at__isnull=True,
-            ).all()
-            existing_by_material = {
-                int(row.material_id): row for row in existing_rows if row.material_id is not None
-            }
+                related_delivery_ids=self._collect_related_sales_delivery_ids(notice),
+            )
 
         cache: Dict[int, str] = policy_cache if policy_cache is not None else {}
         preview_items: List[Dict[str, Any]] = []
@@ -725,21 +865,33 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         existing_by_material: Optional[Dict[int, Any]] = None,
         policy_cache: Optional[Dict[int, str]] = None,
     ) -> List[Dict[str, Any]]:
-        from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
+        from apps.kuaizhizao.services.inspection_policy_service import (
+            _shipment_notice_ids_for_sales_delivery,
+            resolve_inspection_policy,
+        )
 
         delivery_id = int(delivery.id)
         if existing_by_material is None:
             mids = [int(i.material_id) for i in items if i.material_id]
-            existing_rows = await OQCInspection.filter(
-                tenant_id=tenant_id,
-                source_type="sales_delivery",
-                source_id=delivery_id,
-                material_id__in=mids,
-                deleted_at__isnull=True,
-            ).all()
-            existing_by_material = {
-                int(row.material_id): row for row in existing_rows if row.material_id is not None
-            }
+            notice_ids = await _shipment_notice_ids_for_sales_delivery(tenant_id, delivery_id)
+            if not notice_ids and getattr(delivery, "sales_order_id", None):
+                from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+
+                notice_ids = [
+                    int(nid)
+                    for nid in await ShipmentNotice.filter(
+                        tenant_id=tenant_id,
+                        sales_order_id=int(delivery.sales_order_id),
+                        deleted_at__isnull=True,
+                        status__in=["待发货", "已通知"],
+                    ).values_list("id", flat=True)
+                ]
+            existing_by_material = await self._load_existing_oqc_by_material_for_outbound(
+                tenant_id,
+                mids,
+                sales_delivery_id=delivery_id,
+                related_notice_ids=notice_ids,
+            )
 
         cache: Dict[int, str] = policy_cache if policy_cache is not None else {}
         preview_items: List[Dict[str, Any]] = []
@@ -1060,7 +1212,6 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             _resolve_inspection_template_fields,
             _quality_inspection_initial_review_fields,
         )
-        from apps.master_data.models.material import Material
 
         notice = await ShipmentNotice.get_or_none(
             tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
@@ -1075,32 +1226,44 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         if not items:
             raise BusinessLogicError("发货通知单没有可创建 OQC 的明细")
 
-        mids = [it.material_id for it in items if it.material_id]
-        mat_rows = await Material.filter(
-            tenant_id=tenant_id, id__in=mids, deleted_at__isnull=True
-        ).all()
-        mat_by_id = {m.id: m for m in mat_rows}
-
         created: List[OQCInspectionResponse] = []
         initial_review_fields = await _quality_inspection_initial_review_fields(
             tenant_id, "oqc_inspection"
         )
         user_info = await self.get_user_info(user_id)
+        related_delivery_ids = self._collect_related_sales_delivery_ids(notice)
+        mids_for_existing = [int(it.material_id) for it in items if it.material_id]
+        existing_by_material = await self._load_existing_oqc_by_material_for_outbound(
+            tenant_id,
+            mids_for_existing,
+            shipment_notice_id=int(notice.id),
+            related_delivery_ids=related_delivery_ids,
+        )
+
         async with in_transaction():
             for item in items:
                 if not item.material_id:
                     continue
-                existing = await OQCInspection.filter(
-                    tenant_id=tenant_id,
-                    shipment_notice_id=notice.id,
-                    material_id=item.material_id,
-                    deleted_at__isnull=True,
-                ).first()
+                mid_int = int(item.material_id)
+                existing = existing_by_material.get(mid_int)
+                if not existing:
+                    existing = await self._find_existing_oqc_for_outbound_material(
+                        tenant_id,
+                        material_id=mid_int,
+                        shipment_notice_id=int(notice.id),
+                        related_delivery_ids=related_delivery_ids,
+                    )
                 if existing:
-                    created.append(OQCInspectionResponse.model_validate(existing))
+                    await self._backfill_oqc_outbound_links(
+                        existing,
+                        shipment_notice_id=int(notice.id),
+                        shipment_notice_code=notice.notice_code,
+                        user_id=user_id,
+                        user_name=user_info["name"],
+                    )
+                    existing_by_material[mid_int] = existing
                     continue
 
-                mat = mat_by_id.get(item.material_id)
                 eff, _, _ = await resolve_inspection_policy(
                     tenant_id,
                     "oqc",
@@ -1109,7 +1272,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                 if eff == "none":
                     continue
 
-                inspection_code = _build_quick_code("OQC")
+                inspection_code = await self._allocate_oqc_inspection_code(tenant_id)
                 template = await _resolve_inspection_template_fields(
                     tenant_id,
                     item.material_id,
@@ -1140,6 +1303,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     updated_by_name=user_info["name"],
                     **initial_review_fields,
                 )
+                existing_by_material[mid_int] = row
                 created.append(OQCInspectionResponse.model_validate(row))
         if not created:
             raise BusinessLogicError("没有需要 OQC 的物料行，或均已存在检验单")
@@ -1160,7 +1324,6 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             _resolve_inspection_template_fields,
             _quality_inspection_initial_review_fields,
         )
-        from apps.master_data.models.material import Material
 
         delivery = await SalesDelivery.get_or_none(
             tenant_id=tenant_id, id=delivery_id, deleted_at__isnull=True
@@ -1175,33 +1338,69 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         if not items:
             raise BusinessLogicError("销售出库单没有可创建 OQC 的明细")
 
-        mids = [it.material_id for it in items if it.material_id]
-        mat_rows = await Material.filter(
-            tenant_id=tenant_id, id__in=mids, deleted_at__isnull=True
-        ).all()
-        mat_by_id = {m.id: m for m in mat_rows}
+        from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+        from apps.kuaizhizao.services.inspection_policy_service import (
+            _shipment_notice_ids_for_sales_delivery,
+        )
 
         created: List[OQCInspectionResponse] = []
         initial_review_fields = await _quality_inspection_initial_review_fields(
             tenant_id, "oqc_inspection"
         )
         user_info = await self.get_user_info(user_id)
+        notice_ids = await _shipment_notice_ids_for_sales_delivery(tenant_id, int(delivery_id))
+        # 通知仓库：出库单先创建、notice 尚未回写 sales_delivery_id 时，
+        # 按同销售订单下待发货/已通知的发货通知识别已有 OQC，避免双建。
+        if not notice_ids and getattr(delivery, "sales_order_id", None):
+            notice_ids = [
+                int(nid)
+                for nid in await ShipmentNotice.filter(
+                    tenant_id=tenant_id,
+                    sales_order_id=int(delivery.sales_order_id),
+                    deleted_at__isnull=True,
+                    status__in=["待发货", "已通知"],
+                ).values_list("id", flat=True)
+            ]
+        primary_notice_id = notice_ids[0] if notice_ids else None
+        primary_notice_code: Optional[str] = None
+        if primary_notice_id:
+            notice_row = await ShipmentNotice.get_or_none(
+                tenant_id=tenant_id, id=primary_notice_id, deleted_at__isnull=True
+            )
+            primary_notice_code = getattr(notice_row, "notice_code", None) if notice_row else None
+
+        mids_for_existing = [int(it.material_id) for it in items if it.material_id]
+        existing_by_material = await self._load_existing_oqc_by_material_for_outbound(
+            tenant_id,
+            mids_for_existing,
+            sales_delivery_id=int(delivery.id),
+            related_notice_ids=notice_ids,
+        )
+
         async with in_transaction():
             for item in items:
                 if not item.material_id:
                     continue
-                existing = await OQCInspection.filter(
-                    tenant_id=tenant_id,
-                    source_type="sales_delivery",
-                    source_id=delivery.id,
-                    material_id=item.material_id,
-                    deleted_at__isnull=True,
-                ).first()
+                mid_int = int(item.material_id)
+                existing = existing_by_material.get(mid_int)
+                if not existing:
+                    existing = await self._find_existing_oqc_for_outbound_material(
+                        tenant_id,
+                        material_id=mid_int,
+                        sales_delivery_id=int(delivery.id),
+                        related_notice_ids=notice_ids,
+                    )
                 if existing:
-                    created.append(OQCInspectionResponse.model_validate(existing))
+                    await self._backfill_oqc_outbound_links(
+                        existing,
+                        shipment_notice_id=primary_notice_id,
+                        shipment_notice_code=primary_notice_code,
+                        user_id=user_id,
+                        user_name=user_info["name"],
+                    )
+                    existing_by_material[mid_int] = existing
                     continue
 
-                mat = mat_by_id.get(item.material_id)
                 eff, _, _ = await resolve_inspection_policy(
                     tenant_id,
                     "oqc",
@@ -1210,7 +1409,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                 if eff == "none":
                     continue
 
-                inspection_code = _build_quick_code("OQC")
+                inspection_code = await self._allocate_oqc_inspection_code(tenant_id)
                 template = await _resolve_inspection_template_fields(
                     tenant_id,
                     item.material_id,
@@ -1222,6 +1421,8 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     source_type="sales_delivery",
                     source_id=delivery.id,
                     source_code=delivery.delivery_code,
+                    shipment_notice_id=primary_notice_id,
+                    shipment_notice_code=primary_notice_code,
                     sales_order_id=delivery.sales_order_id,
                     sales_order_code=delivery.sales_order_code,
                     customer_id=delivery.customer_id,
@@ -1240,10 +1441,197 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     updated_by_name=user_info["name"],
                     **initial_review_fields,
                 )
+                existing_by_material[mid_int] = row
                 created.append(OQCInspectionResponse.model_validate(row))
         if not created:
             raise BusinessLogicError("没有需要 OQC 的物料行，或均已存在检验单")
         return created
+
+    async def ensure_oqc_for_sales_delivery(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        created_by: int,
+    ):
+        """
+        确认出库前：按物料 OQC 策略补齐缺失检验单，并评估是否允许确认出库。
+        关联范围：本销售出库单来源的 OQC，或关联发货通知上的 OQC。
+        """
+        from tortoise.expressions import Q
+
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+        from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+        from apps.kuaizhizao.schemas.quality_improvement import (
+            EnsureOqcForSalesDeliveryLineSummary,
+            EnsureOqcForSalesDeliveryResponse,
+        )
+        from apps.kuaizhizao.services.inspection_policy_service import (
+            _shipment_notice_ids_for_sales_delivery,
+            get_quality_effective_config,
+            oqc_inspection_passed_for_outbound,
+            resolve_inspection_policy,
+            resolve_oqc_plan_label_for_material,
+        )
+
+        cfg = await get_quality_effective_config(tenant_id)
+        gate_enabled = bool(cfg["gate"]["require_oqc_before_outbound"])
+        oqc_can_create = bool(cfg["stage_enabled"]["oqc"])
+
+        delivery = await SalesDelivery.get_or_none(
+            tenant_id=tenant_id, id=delivery_id, deleted_at__isnull=True
+        )
+        if not delivery:
+            raise NotFoundError(f"销售出库单不存在: {delivery_id}")
+
+        delivery_items = await SalesDeliveryItem.filter(
+            tenant_id=tenant_id, delivery_id=delivery_id
+        ).all()
+        if not delivery_items:
+            raise BusinessLogicError("销售出库单没有明细项")
+
+        needs_qc_mids: List[int] = []
+        active_items: List[Any] = []
+        for item in delivery_items:
+            mid = getattr(item, "material_id", None)
+            if not mid:
+                continue
+            try:
+                qty_f = float(getattr(item, "delivery_quantity", None) or 0)
+            except (TypeError, ValueError):
+                qty_f = 0.0
+            if qty_f <= 0:
+                continue
+            active_items.append(item)
+            eff, _, _ = await resolve_inspection_policy(tenant_id, "oqc", material_id=int(mid))
+            if eff != "none":
+                needs_qc_mids.append(int(mid))
+        needs_qc_mids = sorted(set(needs_qc_mids))
+        requires_oqc = bool(needs_qc_mids)
+
+        notice_ids = await _shipment_notice_ids_for_sales_delivery(tenant_id, int(delivery_id))
+
+        async def _load_linked_inspections() -> List[OQCInspection]:
+            q = Q(source_type="sales_delivery", source_id=int(delivery_id))
+            if notice_ids:
+                q |= Q(shipment_notice_id__in=notice_ids)
+            return await OQCInspection.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).filter(q).all()
+
+        inspections = await _load_linked_inspections()
+        covered_mids = {
+            int(i.material_id)
+            for i in inspections
+            if getattr(i, "material_id", None)
+        }
+        missing_line_ids = [
+            int(it.id)
+            for it in active_items
+            if int(it.material_id) in needs_qc_mids and int(it.material_id) not in covered_mids
+        ]
+
+        created: List[OQCInspectionResponse] = []
+        if missing_line_ids and oqc_can_create:
+            try:
+                created = await self.create_from_sales_delivery(
+                    tenant_id=tenant_id,
+                    delivery_id=delivery_id,
+                    user_id=created_by,
+                    line_ids=missing_line_ids,
+                )
+            except BusinessLogicError:
+                created = []
+            inspections = await _load_linked_inspections()
+
+        needs_qc_set = set(needs_qc_mids)
+        passed_by_material: Dict[int, bool] = {}
+        for inspection in inspections:
+            mid = getattr(inspection, "material_id", None)
+            if mid and await oqc_inspection_passed_for_outbound(tenant_id, inspection):
+                passed_by_material[int(mid)] = True
+
+        pending_inspections: List[OQCInspectionResponse] = []
+        for i in inspections:
+            if not i.material_id or int(i.material_id) not in needs_qc_set:
+                continue
+            if await oqc_inspection_passed_for_outbound(tenant_id, i):
+                continue
+            pending_inspections.append(OQCInspectionResponse.model_validate(i))
+
+        all_oqc_passed = (not requires_oqc) or all(passed_by_material.get(mid) for mid in needs_qc_mids)
+        can_confirm_outbound = (not gate_enabled) or all_oqc_passed
+        message: Optional[str] = None
+        if gate_enabled and requires_oqc and not all_oqc_passed:
+            if not inspections:
+                message = "已启用出货检门禁，请先创建并完成出货检验，合格放行后再确认出库"
+            else:
+                message = "已启用出货检门禁，相关物料须出货检验合格并放行后方可确认出库"
+
+        inspection_by_material: Dict[int, OQCInspection] = {}
+        for inspection in inspections:
+            mid = getattr(inspection, "material_id", None)
+            if mid and int(mid) not in inspection_by_material:
+                inspection_by_material[int(mid)] = inspection
+
+        plan_label_cache: Dict[int, Optional[str]] = {}
+        line_summaries: List[EnsureOqcForSalesDeliveryLineSummary] = []
+        for item in active_items:
+            mid_int = int(item.material_id)
+            try:
+                qty_f = float(getattr(item, "delivery_quantity", None) or 0)
+            except (TypeError, ValueError):
+                qty_f = 0.0
+            eff_mode, _, _ = await resolve_inspection_policy(tenant_id, "oqc", material_id=mid_int)
+            oqc_required = eff_mode != "none"
+            plan_label: Optional[str] = None
+            if oqc_required:
+                if mid_int not in plan_label_cache:
+                    plan_label_cache[mid_int] = await resolve_oqc_plan_label_for_material(
+                        tenant_id, mid_int
+                    )
+                plan_label = plan_label_cache[mid_int]
+
+            linked = inspection_by_material.get(mid_int)
+            if not oqc_required:
+                passed = True
+            elif linked:
+                passed = await oqc_inspection_passed_for_outbound(tenant_id, linked)
+            else:
+                passed = False
+
+            line_summaries.append(
+                EnsureOqcForSalesDeliveryLineSummary(
+                    delivery_item_id=int(item.id),
+                    material_id=mid_int,
+                    material_code=str(getattr(item, "material_code", "") or ""),
+                    material_name=str(getattr(item, "material_name", "") or ""),
+                    delivery_quantity=qty_f,
+                    oqc_required=oqc_required,
+                    oqc_mode=eff_mode if oqc_required else "none",
+                    plan_label=plan_label,
+                    inspection_id=int(linked.id) if linked else None,
+                    inspection_code=getattr(linked, "inspection_code", None) if linked else None,
+                    inspection_status=getattr(linked, "status", None) if linked else None,
+                    quality_status=getattr(linked, "quality_status", None) if linked else None,
+                    review_status=getattr(linked, "review_status", None) if linked else None,
+                    release_decision=getattr(linked, "release_decision", None) if linked else None,
+                    passed=passed,
+                    can_outbound=passed if gate_enabled else True,
+                )
+            )
+
+        return EnsureOqcForSalesDeliveryResponse(
+            can_confirm_outbound=can_confirm_outbound,
+            requires_oqc=requires_oqc,
+            gate_enabled=gate_enabled,
+            oqc_stage_enabled=bool(cfg["stage_enabled"]["oqc"]),
+            created_count=len(created),
+            created_inspections=created,
+            pending_inspections=pending_inspections,
+            line_summaries=line_summaries,
+            message=message,
+        )
 
 
 class SPCService(AppBaseService[SPCSample]):

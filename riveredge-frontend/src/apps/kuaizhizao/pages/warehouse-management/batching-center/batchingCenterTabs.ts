@@ -9,7 +9,9 @@ export {
   BATCHING_TASK_TYPE_LABEL,
   DEFAULT_MATERIAL_CENTER_TAB,
   DEFAULT_BATCHING_CENTER_TAB,
+  LEGACY_MATERIAL_CENTER_TAB_ALIAS,
   isBatchingTaskTab,
   getMaterialCenterTabs,
   getBatchingTaskTypeLabel,
+  resolveMaterialCenterTabKey,
 } from './materialCenterTabs';

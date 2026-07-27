@@ -19,7 +19,7 @@ from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
 from loguru import logger
 
-from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 from apps.common.audit_actor import audit_response_fields
 
 
@@ -305,6 +305,36 @@ def _to_base_quantity(
     if factor <= 0:
         factor = Decimal("1")
     return qty * factor
+
+
+def _aggregate_warehouse_from_picking_item_rows(
+    rows: List[Dict[str, Any]],
+) -> Tuple[Optional[int], Optional[str]]:
+    """从生产领料明细汇总出库仓库：单仓取该仓；多仓名称用「 / 」拼接，id 置空。"""
+    ordered: List[Tuple[Optional[int], str]] = []
+    seen: set[Tuple[Optional[int], str]] = set()
+    for row in rows:
+        wid_raw = row.get("warehouse_id")
+        wid: Optional[int] = None
+        if wid_raw is not None and str(wid_raw).strip() != "":
+            try:
+                wid = int(wid_raw)
+            except (TypeError, ValueError):
+                wid = None
+        name = str(row.get("warehouse_name") or "").strip()
+        if wid is None and not name:
+            continue
+        key = (wid, name)
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(key)
+    if not ordered:
+        return None, None
+    if len(ordered) == 1:
+        return ordered[0][0], ordered[0][1] or None
+    names = [n for _, n in ordered if n]
+    return None, " / ".join(names) if names else None
 
 
 async def _resolve_warehouse_name_by_id(
@@ -816,26 +846,43 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 role_codes.add(str(code).strip().upper())
         return role_codes
 
+    def _picking_confirm_allowed_by_role_policy(
+        self,
+        policy: Dict[str, Any],
+        user_role_codes: set[str],
+    ) -> bool:
+        """角色码门禁：仅仓库开启时校验仓储角色；关闭且无额外名单时不限制角色码。"""
+        warehouse_only = bool(policy.get("picking_confirm_warehouse_only", True))
+        extra_codes = policy.get("picking_confirm_allowed_role_codes") or []
+        if not warehouse_only and not extra_codes:
+            return True
+        allowed_role_codes = set(policy.get("effective_allowed_role_codes", []))
+        if not allowed_role_codes:
+            return not warehouse_only
+        return bool(user_role_codes & allowed_role_codes)
+
     async def _assert_can_confirm_picking(self, tenant_id: int, user_id: int) -> None:
         policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
-        allowed_role_codes = set(policy.get("effective_allowed_role_codes", []))
         user_role_codes = await self._get_user_role_codes(user_id)
 
-        if not user_role_codes & allowed_role_codes:
-            mode_text = "仅仓库角色可确认" if policy.get("picking_confirm_warehouse_only", True) else "角色未在允许名单"
+        if not self._picking_confirm_allowed_by_role_policy(policy, user_role_codes):
+            mode_text = (
+                "仅仓库角色可确认"
+                if policy.get("picking_confirm_warehouse_only", True)
+                else "角色未在允许名单"
+            )
             raise BusinessLogicError(f"无权限确认领料：{mode_text}")
 
     async def can_user_confirm_picking(self, tenant_id: int, user_id: int) -> tuple[bool, set[str]]:
         policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
-        allowed_role_codes = set(policy.get("effective_allowed_role_codes", []))
         user_role_codes = await self._get_user_role_codes(user_id)
-        return bool(user_role_codes & allowed_role_codes), user_role_codes
+        return self._picking_confirm_allowed_by_role_policy(policy, user_role_codes), user_role_codes
 
     async def create_production_picking(self, tenant_id: int, picking_data: ProductionPickingCreate, created_by: int) -> ProductionPickingResponse:
         """创建生产领料单"""
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "PRODUCTION_PICKING_CODE", prefix=f"PP{today}")
 
             picking = await ProductionPicking.create(
@@ -892,6 +939,17 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         resp = ProductionPickingWithItemsResponse.model_validate(picking)
         resp.lifecycle = get_production_picking_lifecycle(picking)
         resp.items = [ProductionPickingItemResponse.model_validate(i) for i in items]
+        wh_id, wh_name = _aggregate_warehouse_from_picking_item_rows(
+            [
+                {
+                    "warehouse_id": getattr(i, "warehouse_id", None),
+                    "warehouse_name": getattr(i, "warehouse_name", None),
+                }
+                for i in items
+            ]
+        )
+        resp.warehouse_id = wh_id
+        resp.warehouse_name = wh_name
         return resp
 
     async def list_production_pickings(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[ProductionPickingListResponse]:
@@ -911,6 +969,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
         picking_ids = [int(p.id) for p in pickings]
         qty_by_id: Dict[int, Dict[str, float]] = {}
+        warehouse_by_id: Dict[int, Dict[str, Any]] = {}
         if picking_ids:
             agg_rows = await (
                 ProductionPickingItem.filter(tenant_id=tenant_id, picking_id__in=picking_ids)
@@ -933,6 +992,20 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     # 列表总数量取应领合计；上拉创建时 issue_quantity 写入 required_quantity
                     "total_quantity": req_total,
                 }
+            wh_rows = await ProductionPickingItem.filter(
+                tenant_id=tenant_id,
+                picking_id__in=picking_ids,
+            ).values("picking_id", "warehouse_id", "warehouse_name")
+            wh_grouped: Dict[int, List[Dict[str, Any]]] = {}
+            for wh_row in wh_rows:
+                pid = int(wh_row["picking_id"])
+                wh_grouped.setdefault(pid, []).append(wh_row)
+            for pid, rows_for_pid in wh_grouped.items():
+                wh_id, wh_name = _aggregate_warehouse_from_picking_item_rows(rows_for_pid)
+                warehouse_by_id[pid] = {
+                    "warehouse_id": wh_id,
+                    "warehouse_name": wh_name,
+                }
 
         list_rows: List[ProductionPickingListResponse] = []
         for picking in pickings:
@@ -948,13 +1021,15 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         )
         enriched_qty: List[ProductionPickingListResponse] = []
         for picking, row in zip(pickings, rows):
-            stats = qty_by_id.get(int(picking.id), {
+            pid = int(picking.id)
+            stats = qty_by_id.get(pid, {
                 "total_items": 0,
                 "required_quantity_total": 0.0,
                 "picked_quantity_total": 0.0,
                 "total_quantity": 0.0,
             })
-            enriched_qty.append(row.model_copy(update=stats))
+            wh = warehouse_by_id.get(pid, {"warehouse_id": None, "warehouse_name": None})
+            enriched_qty.append(row.model_copy(update={**stats, **wh}))
         rows = enriched_qty
 
         if rows:
@@ -1086,7 +1161,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
         await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
             is_active=False,
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )
         return True
 
@@ -1485,7 +1560,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 raise ValidationError("BOM中没有需事前领料的物料明细（倒冲/不发料不进领料单），无法生成领料单")
 
             # 4. 生成领料单编码
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             picking_code = await self.generate_code(tenant_id, "PRODUCTION_PICKING_CODE", prefix=f"PP{today}")
             user_info = await self.get_user_info(created_by)
             
@@ -1593,8 +1668,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         kitting = await WorkOrderService().get_work_order_kitting_analysis(tenant_id, work_order_id)
         preview_items: List[Dict[str, Any]] = []
         for item in kitting.items or []:
-            if not getattr(item, "kitting_applicable", True):
-                continue
+            # 可领范围只看发料方式（pick），与齐套率分母 kitting_applicable 解耦
             if not is_pick_list_material(
                 getattr(item, "issue_method", None),
                 getattr(item, "source_type", None),
@@ -1604,7 +1678,8 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             if required_qty <= 0:
                 continue
             picked_qty = Decimal(str(getattr(item, "picked_quantity", 0) or 0))
-            max_push_qty = Decimal(str(getattr(item, "shortage_quantity", 0) or 0))
+            # 正式领料可领量 = 需求 − 已正式发料；与厂库 shortage 无关（线边已备仍可领）
+            max_push_qty = required_qty - picked_qty
             if max_push_qty < 0:
                 max_push_qty = Decimal("0")
             preview_items.append(
@@ -1626,7 +1701,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             )
         elif not preview_items:
             blocking_reason = "BOM 中无可领料明细，无法下推生产领料"
-        elif str(getattr(kitting, "status", "") or "") == "fully_picked":
+        elif all(float(row.get("max_push_quantity") or 0) <= 0 for row in preview_items):
             blocking_reason = "工单物料已全部领齐，无需再下推生产领料"
 
         pushable_count = sum(
@@ -1694,8 +1769,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         max_by_material: Dict[int, Decimal] = {}
         meta_by_material: Dict[int, Dict[str, str]] = {}
         for item in kitting.items or []:
-            if not getattr(item, "kitting_applicable", True):
-                continue
+            # 可领范围只看发料方式（pick），与齐套率分母 kitting_applicable 解耦（委外 pick 须可领）
             if not is_pick_list_material(
                 getattr(item, "issue_method", None),
                 getattr(item, "source_type", None),
@@ -1704,10 +1778,13 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             material_id = int(getattr(item, "material_id", 0) or 0)
             if material_id <= 0:
                 continue
-            shortage = Decimal(str(getattr(item, "shortage_quantity", 0) or 0))
-            if shortage < 0:
-                shortage = Decimal("0")
-            max_by_material[material_id] = shortage
+            required_qty = Decimal(str(getattr(item, "required_quantity", 0) or 0))
+            picked_qty = Decimal(str(getattr(item, "picked_quantity", 0) or 0))
+            remaining = required_qty - picked_qty
+            if remaining < 0:
+                remaining = Decimal("0")
+            # 正式领料可领量 = 需求 − 已正式发料（线边已备齐时 shortage 为 0，仍应可领）
+            max_by_material[material_id] = remaining
             meta_by_material[material_id] = {
                 "material_code": str(getattr(item, "material_code", "") or ""),
                 "material_name": str(getattr(item, "material_name", "") or ""),
@@ -1715,7 +1792,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             }
 
         async with in_transaction():
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             picking_code = await self.generate_code(tenant_id, "PRODUCTION_PICKING_CODE", prefix=f"PP{today}")
             user_info = await self.get_user_info(created_by)
             picking = await ProductionPicking.create(
@@ -1741,7 +1818,22 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     raise ValidationError("领料明细物料或数量无效")
                 max_qty = max_by_material.get(material_id)
                 if max_qty is None:
-                    raise BusinessLogicError(f"物料 {material_id} 不在工单可领料范围内")
+                    code = str(
+                        getattr(line, "material_code", "")
+                        or (line.get("material_code") if isinstance(line, dict) else "")
+                        or material_id
+                    )
+                    name = str(
+                        getattr(line, "material_name", "")
+                        or (line.get("material_name") if isinstance(line, dict) else "")
+                        or ""
+                    )
+                    label = f"{code} {name}".strip() if name else str(code)
+                    raise BusinessLogicError(
+                        f"物料 {label}（ID {material_id}）不在工单可领料范围内："
+                        f"仅 BOM 中发料方式为「事前领料(pick)」的物料可领；"
+                        f"倒冲/不发料不进领料单。请确认该物料来源与发料方式后重试"
+                    )
                 if issue_qty > max_qty:
                     code = str(getattr(line, "material_code", "") or line.get("material_code", "") or material_id)
                     raise BusinessLogicError(f"领料数量超过可领数量：{code}（可领 {float(max_qty)}）")
@@ -2021,7 +2113,7 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
 
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "PRODUCTION_RETURN_CODE", prefix=f"PR{today}")
 
             dump = return_data.model_dump(exclude_unset=True, exclude={"created_by", "items", "return_code"})
@@ -2182,7 +2274,7 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
 
         await ProductionReturn.filter(tenant_id=tenant_id, id=return_id).update(
             is_active=False,
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )
         return True
 
@@ -2439,7 +2531,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             if receipt_data.receipt_code:
                 code = receipt_data.receipt_code
             else:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 code = await self.generate_code(tenant_id, "FINISHED_GOODS_RECEIPT_CODE", prefix=f"FGR{today}")
             
             # 从参数或receipt_data中提取items（如果存在）
@@ -2868,7 +2960,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             ).delete()
 
             await FinishedGoodsReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).delete()
-            now = datetime.now()
+            now = resolve_business_datetime()
             await FinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 deleted_at=now,
                 is_active=False,
@@ -3327,7 +3419,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             if receipt_code:
                 code = receipt_code
             else:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 code = await self.generate_code(tenant_id, "FINISHED_GOODS_RECEIPT_CODE", prefix=f"FG{today}")
             
             # 5. 创建成品入库单
@@ -3525,7 +3617,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             if delivery_data.delivery_code:
                 code = delivery_data.delivery_code
             else:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 code = await self.generate_code(tenant_id, "SALES_DELIVERY_CODE", prefix=f"SD{today}")
 
             # 从delivery_data中提取items（如果存在）
@@ -3883,7 +3975,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             raise BusinessLogicError("存在已确认的销售退货单，无法删除销售出库单")
 
         async with in_transaction():
-            now = datetime.now()
+            now = resolve_business_datetime()
             await ShipmentNotice.filter(
                 tenant_id=tenant_id,
                 sales_delivery_id=delivery_id,
@@ -3936,7 +4028,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 review_status="已通过",
                 reviewer_id=submitted_by,
                 reviewer_name=submitter_name,
-                review_time=datetime.now(),
+                review_time=resolve_business_datetime(),
                 updated_by=submitted_by,
             )
             return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
@@ -3989,7 +4081,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             review_status="已通过",
             reviewer_id=approver_id,
             reviewer_name=approver_name,
-            review_time=datetime.now(),
+            review_time=resolve_business_datetime(),
             updated_by=approver_id,
         )
         return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
@@ -4946,7 +5038,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             total_amount = Decimal(str(delivery_row.total_amount))
             from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
 
-            biz_date = datetime.now().date()
+            biz_date = to_site_date(resolve_business_datetime())
             due_date = await resolve_partner_due_date(
                 tenant_id, "customer", int(delivery_row.customer_id), biz_date
             )
@@ -5261,7 +5353,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         os.makedirs(export_dir, exist_ok=True)
         
         # 生成文件名
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = resolve_business_datetime().strftime('%Y%m%d_%H%M%S')
         filename = f"sales_deliveries_{timestamp}.csv"
         file_path = os.path.join(export_dir, filename)
         
@@ -5310,7 +5402,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         response: Optional[PurchaseReceiptResponse] = None
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "PURCHASE_RECEIPT_CODE", prefix=f"PR{today}")
 
             # 创建入库单头
@@ -5320,6 +5412,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 'receipt_code': code,  # 使用生成的编码
                 'created_by': created_by,
                 'created_by_name': user_info.get("name", ""),
+                'updated_by': created_by,
+                'updated_by_name': user_info.get("name", ""),
             })
             
             receipt = await PurchaseReceipt.create(**receipt_dict)
@@ -5535,8 +5629,10 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 raise BusinessLogicError("只有草稿或待入库状态的采购入库单可修改")
 
             # 更新入库单头
+            user_info = await self.get_user_info(updated_by)
             receipt_dict = receipt_data.model_dump(exclude_unset=True, exclude={"items", "receipt_code"})
             receipt_dict["updated_by"] = updated_by
+            receipt_dict["updated_by_name"] = user_info.get("name", "")
             await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(**receipt_dict)
 
             # 全量替换明细（前端会传完整明细）
@@ -5943,7 +6039,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 receiver_id=confirmed_by,
                 receiver_name=confirmer_name,
                 receipt_time=receipt_time,
-                updated_by=confirmed_by
+                updated_by=confirmed_by,
+                updated_by_name=confirmer_name,
             )
             _it_upd_rows = await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).update(
                 status='已入库',
@@ -5984,7 +6081,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 if total_amount > 0:
                     from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
 
-                    biz_date = datetime.now().date()
+                    biz_date = to_site_date(resolve_business_datetime())
                     due_date = await resolve_partner_due_date(
                         tenant_id, "supplier", int(receipt_for_payable.supplier_id), biz_date
                     )
@@ -6118,12 +6215,14 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         source_doc_code=receipt_obj.receipt_code,
                     )
 
+                user_info = await self.get_user_info(updated_by)
                 await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                     status="待入库",
                     receiver_id=None,
                     receiver_name=None,
                     receipt_time=None,
                     updated_by=updated_by,
+                    updated_by_name=user_info.get("name", ""),
                 )
                 await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).update(
                     status="待入库",
@@ -6182,7 +6281,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             ).delete()
 
             await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).delete()
-            now = datetime.now()
+            now = resolve_business_datetime()
             await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 deleted_at=now,
                 is_active=False,
@@ -6431,7 +6530,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         os.makedirs(export_dir, exist_ok=True)
         
         # 生成文件名
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = resolve_business_datetime().strftime('%Y%m%d_%H%M%S')
         filename = f"purchase_receipts_{timestamp}.csv"
         file_path = os.path.join(export_dir, filename)
         
@@ -6541,7 +6640,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             if return_data.return_code:
                 code = return_data.return_code
             else:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 code = await self.generate_code(tenant_id, "SALES_RETURN_CODE", prefix=f"SR{today}")
 
             # 从return_data中提取items（如果存在）
@@ -6946,7 +7045,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 review_status="审核通过",
                 reviewer_id=submitted_by,
                 reviewer_name=submitter_name,
-                review_time=datetime.now(),
+                review_time=resolve_business_datetime(),
                 updated_by=submitted_by,
             )
             return await self.get_sales_return_by_id(tenant_id, return_id)
@@ -6997,7 +7096,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             review_status="审核通过",
             reviewer_id=approver_id,
             reviewer_name=approver_name,
-            review_time=datetime.now(),
+            review_time=resolve_business_datetime(),
             updated_by=approver_id,
         )
         return await self.get_sales_return_by_id(tenant_id, return_id)
@@ -7027,7 +7126,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             review_status="审核驳回",
             review_remarks=rejection_reason,
             reviewer_id=approver_id,
-            review_time=datetime.now(),
+            review_time=resolve_business_datetime(),
             updated_by=approver_id,
         )
         return await self.get_sales_return_by_id(tenant_id, return_id)
@@ -7379,7 +7478,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
 
                     receivable_service = ReceivableService()
-                    biz_date = datetime.now().date()
+                    biz_date = to_site_date(resolve_business_datetime())
                     due_date = await resolve_partner_due_date(
                         tenant_id, "customer", int(ret_obj.customer_id), biz_date
                     )
@@ -7563,7 +7662,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
 
         assert_sales_return_capability(return_obj, "delete")
         await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )
         return True
 
@@ -7662,7 +7761,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             if return_data.return_code:
                 code = return_data.return_code
             else:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 code = await self.generate_code(tenant_id, "PURCHASE_RETURN_CODE", prefix=f"PRT{today}")
 
             # 从return_data中提取items（如果存在）
@@ -8148,7 +8247,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
 
                     payable_service = PayableService()
-                    biz_date = datetime.now().date()
+                    biz_date = to_site_date(resolve_business_datetime())
                     due_date = await resolve_partner_due_date(
                         tenant_id, "supplier", int(ret_obj.supplier_id), biz_date
                     )
@@ -8359,7 +8458,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         if return_obj.status != "待退货":
             raise BusinessLogicError("只有待退货状态的采购退货单才能删除")
         await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )
         return True
 
@@ -8383,7 +8482,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             raise BusinessLogicError("入库管理节点未启用，无法创建其他入库单")
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "OTHER_INBOUND_CODE", prefix=f"OI{today}")
 
             dump = inbound_data.model_dump(exclude_unset=True, exclude={"created_by", "items", "inbound_code"})
@@ -8561,7 +8660,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
 
         await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(
             is_active=False,
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )
         return True
 
@@ -8860,7 +8959,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         created_outbound_id: Optional[int] = None
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "OTHER_OUTBOUND_CODE", prefix=f"OO{today}")
 
             dump = outbound_data.model_dump(exclude_unset=True, exclude={"created_by", "items", "outbound_code"})
@@ -9048,7 +9147,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
 
         await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(
             is_active=False,
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )
         return True
 
@@ -9251,7 +9350,7 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
         created_borrow_id: Optional[int] = None
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "MATERIAL_BORROW_CODE", prefix=f"MB{today}")
 
             dump = borrow_data.model_dump(exclude_unset=True, exclude={"items", "borrow_code"})
@@ -9411,7 +9510,7 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
             raise BusinessLogicError("只能删除待借出状态的借料单")
 
         await MaterialBorrow.filter(tenant_id=tenant_id, id=borrow_id).update(
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )
         return True
 
@@ -9611,7 +9710,7 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
             if not borrow:
                 raise NotFoundError(f"借料单不存在: {return_data.borrow_id}")
 
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "MATERIAL_RETURN_CODE", prefix=f"MR{today}")
 
             dump = return_data.model_dump(exclude_unset=True, exclude={"items", "return_code", "borrow_code"})
@@ -9756,7 +9855,7 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
             raise BusinessLogicError("只能删除待归还状态的还料单")
 
         await MaterialReturn.filter(tenant_id=tenant_id, id=return_id).update(
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )
         return True
 

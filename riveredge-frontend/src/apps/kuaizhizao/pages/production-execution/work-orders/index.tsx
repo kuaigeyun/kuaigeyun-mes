@@ -105,7 +105,9 @@ import {
   resolveMergeableWorkOrderIdsFromRowKeys,
   resolveWorkOrderGroupIdFromListRow,
   resolveWorkOrderIdsFromListRowKeys,
+  WORK_ORDER_LIST_LIVE_REFRESH_MS,
   WORK_ORDER_LIST_STALE_MS,
+  WORK_ORDER_LIST_UNITABLE_QUERY_KEY,
 } from './workOrderListTable'
 import {
   collectDefaultExpandedWorkOrderTreeKeys,
@@ -232,6 +234,7 @@ const LazyWorkOrderReadinessPopover = lazy(() =>
   import('./components/WorkOrderReadinessPopover').then((m) => ({ default: m.WorkOrderReadinessPopover })),
 )
 import { WorkOrderOperationStepsStrip } from './components/WorkOrderOperationStepsStrip'
+import { WorkOrderMaterialMovementsPanel } from './components/WorkOrderMaterialMovementsPanel'
 import WorkOrderTrackingFields from './components/WorkOrderTrackingFields'
 import WorkOrderTrackingEditFields from './components/WorkOrderTrackingEditFields'
 import WorkOrderCompleteTrackingModal, {
@@ -280,7 +283,6 @@ import { UniUserSelect } from '../../../../../components/uni-user-select'
 
 /** 列表行展开工序：TanStack 缓存键前缀（与派工/开工后 invalidate 一致） */
 const WORK_ORDER_ROW_EXPAND_QK = 'workOrderRowExpand' as const
-const WORK_ORDER_ROW_EXPAND_STALE_MS = 45_000
 const WORK_ORDER_STATISTICS_STALE_MS = 60_000
 const WORK_ORDER_EXECUTION_CONFIG_STALE_MS = 5 * 60_000
 
@@ -816,15 +818,19 @@ function getWorkOrderReadinessStrokeColor(percent: number): string {
 function renderWorkOrderReadinessRing(rate: number): React.ReactNode {
   const percent = Math.min(100, Math.max(0, Math.round(Number(rate))))
   return (
-    <div style={{ display: 'inline-flex', justifyContent: 'center', lineHeight: 0 }}>
+    <div className="wo-readiness-ring-wrap">
       <Progress
+        className="wo-readiness-ring"
         type="circle"
         percent={percent}
-        size={28}
-        strokeWidth={7}
+        size={42}
+        strokeWidth={10}
         strokeColor={getWorkOrderReadinessStrokeColor(percent)}
         status={percent === 100 ? 'success' : percent > 0 ? 'active' : 'normal'}
         format={(value) => `${value}%`}
+        styles={{
+          text: { fontSize: 10, lineHeight: 1 },
+        }}
       />
     </div>
   )
@@ -1056,37 +1062,9 @@ function getWorkOrderListRowKey(record: WorkOrder): string {
   return `${kind}-${record.id ?? record.code ?? 'row'}`
 }
 
-/** 与 Ant Design Table 勾选列 / 首列内边距 / 树形缩进一致，供工序卡行 left inset */
-const WO_TABLE_SELECTION_COL_WIDTH = 48
-const WO_TABLE_CELL_PADDING_INLINE = 16
-const WO_TABLE_TREE_INDENT = 16
-const WO_TABLE_TREE_EXPAND_ICON = 17
-const WO_TABLE_TREE_EXPAND_GAP = 8
+/** 工序卡行左右内边距：全表统一，不随树深度 / 展开图标变化 */
+const WO_TABLE_OPERATION_PANEL_INSET_LEFT = 64 // 勾选列 48 + 首列 padding 16
 const WO_TABLE_OPERATION_PANEL_INSET_RIGHT = 16
-
-function getWorkOrderTreeRowDepth(record: WorkOrder): number {
-  if (record.list_tree_depth != null) {
-    return record.list_tree_depth
-  }
-  if (record.parent_work_order_id != null) {
-    return 1
-  }
-  const kind = record.row_kind || 'work_order'
-  return kind === 'split' || kind === 'rework' || kind === 'outsource' ? 1 : 0
-}
-
-/** 工序卡容器左缘与上方「产品/工单编号」列正文起始对齐 */
-function getWorkOrderOperationPanelInsetLeft(record: WorkOrder): number {
-  const depth = getWorkOrderTreeRowDepth(record)
-  const hasTreeChildren = Array.isArray(record.children) && record.children.length > 0
-  const expandIcon = hasTreeChildren ? WO_TABLE_TREE_EXPAND_ICON + WO_TABLE_TREE_EXPAND_GAP : 0
-  return (
-    WO_TABLE_SELECTION_COL_WIDTH +
-    WO_TABLE_CELL_PADDING_INLINE +
-    depth * WO_TABLE_TREE_INDENT +
-    expandIcon
-  )
-}
 
 /** 工序/报工 API 使用的工单 ID（拆分工单用自身 ID，独立报工） */
 function getWorkOrderOperationSourceId(record: WorkOrder): number | undefined {
@@ -1124,35 +1102,17 @@ function indexWorkOrderListRows(rows: WorkOrder[], map: Map<string, WorkOrder>) 
   }
 }
 
-/** 工序卡插入位置：无子行或在子行之上时为自身；子树展开时落在最后一个可见子行之后 */
-function getLastVisibleTreeDescendant(
-  record: WorkOrder,
-  treeExpandedKeys: ReadonlySet<React.Key>,
-): WorkOrder {
-  const rowKey = getWorkOrderListRowKey(record)
-  if (!record.children?.length || !treeExpandedKeys.has(rowKey)) {
-    return record
-  }
-  return getLastVisibleTreeDescendant(record.children[record.children.length - 1], treeExpandedKeys)
-}
-
+/**
+ * 工序卡插入锚点 → 面板根行。
+ * 始终紧跟被展开的工单行本身（不挪到 BOM/拆分子树末尾），避免树形组下归属错位。
+ */
 function buildWorkOrderOperationPanelAnchorToRoot(
   panelRootKeys: readonly React.Key[],
-  rowByKey: Map<string, WorkOrder>,
-  treeExpandedKeys: readonly React.Key[],
-  panelRecordByKey?: Map<string, WorkOrder>,
 ): Map<string, string> {
-  const treeSet = new Set(treeExpandedKeys)
   const anchorToRoot = new Map<string, string>()
   for (const rootKey of panelRootKeys) {
     const rootStr = String(rootKey)
-    const record = rowByKey.get(rootStr) ?? panelRecordByKey?.get(rootStr)
-    if (!record) {
-      anchorToRoot.set(rootStr, rootStr)
-      continue
-    }
-    const anchor = getWorkOrderListRowKey(getLastVisibleTreeDescendant(record, treeSet))
-    anchorToRoot.set(anchor, rootStr)
+    anchorToRoot.set(rootStr, rootStr)
   }
   return anchorToRoot
 }
@@ -1164,17 +1124,32 @@ function isWorkOrderOperationExpandTriggerRow(record: WorkOrder): boolean {
 function parseWorkOrderOperationsBundle(
   res: unknown,
   fallbackManufacturingMode = 'fabrication',
-): { manufacturing_mode: string; operations: any[] } {
+): {
+  manufacturing_mode: string
+  operations: any[]
+  status?: string
+  downstream_push_progress?: number
+  operation_steps?: WorkOrderOperationStep[]
+} {
   if (
     res &&
     typeof res === 'object' &&
     !Array.isArray(res) &&
     Array.isArray((res as { operations?: unknown }).operations)
   ) {
-    const r = res as { manufacturing_mode?: string; operations: any[] }
+    const r = res as {
+      manufacturing_mode?: string
+      operations: any[]
+      status?: string
+      downstream_push_progress?: number
+      operation_steps?: WorkOrderOperationStep[]
+    }
     return {
       manufacturing_mode: r.manufacturing_mode || fallbackManufacturingMode,
       operations: r.operations || [],
+      status: r.status,
+      downstream_push_progress: r.downstream_push_progress,
+      operation_steps: r.operation_steps,
     }
   }
   return {
@@ -1491,10 +1466,20 @@ const WorkOrdersPage: React.FC = () => {
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['workOrderStatistics'] })
     queryClient.invalidateQueries({
-      queryKey: ['uniTable', 'kuaizhizao', 'work-orders', 'list'],
+      queryKey: [...WORK_ORDER_LIST_UNITABLE_QUERY_KEY],
       exact: false,
     })
   }
+
+  /** 静默刷新列表：拉持久化/重算后的齐套率与下推进度（UniTable 无 useQuery 观察者，须 reload） */
+  const softReloadWorkOrderList = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: [...WORK_ORDER_LIST_UNITABLE_QUERY_KEY],
+      exact: false,
+    })
+    actionRef.current?.reload?.()
+  }, [queryClient])
+
   const { data: statistics } = useQuery({
     queryKey: ['workOrderStatistics'],
     queryFn: getWorkOrderStatistics,
@@ -1514,6 +1499,24 @@ const WorkOrdersPage: React.FC = () => {
     )
     prefetchDefaultWorkOrderList(queryClient, workOrderListDefaultPageSize)
   }, [queryClient, workOrderListDefaultPageSize])
+
+  // 页内可见时定时/聚焦刷新，物料齐套后圆环与下推进度同步更新
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') {
+        softReloadWorkOrderList()
+      }
+    }
+    const onWindowFocus = () => softReloadWorkOrderList()
+    window.addEventListener('focus', onWindowFocus)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+    const timer = window.setInterval(refreshIfVisible, WORK_ORDER_LIST_LIVE_REFRESH_MS)
+    return () => {
+      window.removeEventListener('focus', onWindowFocus)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+      window.clearInterval(timer)
+    }
+  }, [softReloadWorkOrderList])
 
   const workOrderRowByKeyRef = useRef<Map<string, WorkOrder>>(new Map())
   const [workOrderListRowIndexVersion, setWorkOrderListRowIndexVersion] = useState(0)
@@ -2012,11 +2015,6 @@ const WorkOrdersPage: React.FC = () => {
   const [workOrderDetail, setWorkOrderDetail] = useState<WorkOrder | null>(null)
   /** 详情抽屉：单据跟踪 refresh（生命周期时间线共用） */
   const [woTrackingRefreshKey, setWoTrackingRefreshKey] = useState(0)
-  const materialMovementsQuery = useQuery({
-    queryKey: ['work-order-material-movements', workOrderDetail?.id],
-    queryFn: () => workOrderApi.getMaterialMovements(String(workOrderDetail!.id)),
-    enabled: Boolean(drawerVisible && workOrderDetail?.id),
-  })
 
   const workOrderTracking = useDocumentTracking(
     drawerVisible && workOrderDetail ? 'work_order' : undefined,
@@ -2963,37 +2961,49 @@ const WorkOrdersPage: React.FC = () => {
     if (expanded && record.id) {
       const panelWorkOrderId = record.id
       const operationSourceId = getWorkOrderOperationSourceId(record) ?? panelWorkOrderId
-      // 展开：优先单次 GET operations?include_meta（含 manufacturing_mode），后端并对不良类型批量查询；TanStack 去重
-      if (!expandedOperationsMap[panelWorkOrderId]) {
-        setLoadingOperationsMap(prev => ({ ...prev, [panelWorkOrderId]: true }))
-        try {
-          const bundle = await queryClient.fetchQuery({
-            queryKey: [WORK_ORDER_ROW_EXPAND_QK, panelWorkOrderId, operationSourceId],
-            staleTime: WORK_ORDER_ROW_EXPAND_STALE_MS,
-            queryFn: async () => {
-              const res = await workOrderApi.getOperations(String(operationSourceId), { includeMeta: true })
-              const parsed = parseWorkOrderOperationsBundle(res)
-              if (parsed.operations.length > 0 || (res && typeof res === 'object' && !Array.isArray(res))) {
-                return parsed
-              }
-              const detail = await workOrderApi.get(String(operationSourceId))
-              return {
-                manufacturing_mode: (detail as WorkOrder)?.manufacturing_mode || 'fabrication',
-                operations: parsed.operations,
-              }
-            },
-          })
-          setExpandedWorkOrderDetailMap(prev => ({
-            ...prev,
-            [panelWorkOrderId]: { manufacturing_mode: bundle.manufacturing_mode } as WorkOrder,
-          }))
-          setExpandedOperationsMap(prev => ({ ...prev, [panelWorkOrderId]: bundle.operations || [] }))
-        } catch (error) {
-          console.error('获取工单工序列表失败:', error)
-          setExpandedOperationsMap(prev => ({ ...prev, [panelWorkOrderId]: [] }))
-        } finally {
-          setLoadingOperationsMap(prev => ({ ...prev, [panelWorkOrderId]: false }))
+      // 展开：始终拉取 include_meta（后端会按检验放行回写完成态），避免缓存仍显示已完成
+      setLoadingOperationsMap(prev => ({ ...prev, [panelWorkOrderId]: true }))
+      try {
+        await queryClient.invalidateQueries({
+          queryKey: [WORK_ORDER_ROW_EXPAND_QK, panelWorkOrderId, operationSourceId],
+        })
+        const bundle = await queryClient.fetchQuery({
+          queryKey: [WORK_ORDER_ROW_EXPAND_QK, panelWorkOrderId, operationSourceId],
+          staleTime: 0,
+          queryFn: async () => {
+            const res = await workOrderApi.getOperations(String(operationSourceId), { includeMeta: true })
+            const parsed = parseWorkOrderOperationsBundle(res)
+            if (parsed.operations.length > 0 || (res && typeof res === 'object' && !Array.isArray(res))) {
+              return parsed
+            }
+            const detail = await workOrderApi.get(String(operationSourceId))
+            return {
+              manufacturing_mode: (detail as WorkOrder)?.manufacturing_mode || 'fabrication',
+              operations: parsed.operations,
+            }
+          },
+        })
+        setExpandedWorkOrderDetailMap(prev => ({
+          ...prev,
+          [panelWorkOrderId]: { manufacturing_mode: bundle.manufacturing_mode } as WorkOrder,
+        }))
+        setExpandedOperationsMap(prev => ({ ...prev, [panelWorkOrderId]: bundle.operations || [] }))
+        // 列表行若仍是「已完成 / 100%」，用 meta 回写后的状态刷新
+        const listStatus = String(record.status || '')
+        const syncedStatus = String(bundle.status || '')
+        const listProgress = Number(record.downstream_push_progress ?? 0)
+        const syncedProgress = Number(bundle.downstream_push_progress ?? listProgress)
+        if (
+          (syncedStatus && syncedStatus !== listStatus) ||
+          Math.abs(syncedProgress - listProgress) > 0.05
+        ) {
+          actionRef.current?.reload?.()
         }
+      } catch (error) {
+        console.error('获取工单工序列表失败:', error)
+        setExpandedOperationsMap(prev => ({ ...prev, [panelWorkOrderId]: [] }))
+      } finally {
+        setLoadingOperationsMap(prev => ({ ...prev, [panelWorkOrderId]: false }))
       }
     }
   }
@@ -3344,9 +3354,19 @@ const WorkOrdersPage: React.FC = () => {
       setQuickReportingWorkOrder(null)
       setQuickReportingOperation(null)
       quickReportingFormRef.current?.resetFields()
-      const operations = await workOrderApi.getOperations(wid!.toString())
-      setExpandedOperationsMap(prev => ({ ...prev, [wid!]: operations || [] }))
-      queryClient.invalidateQueries({ queryKey: [WORK_ORDER_ROW_EXPAND_QK, wid] })
+      const res = await workOrderApi.getOperations(String(wid), { includeMeta: true })
+      const bundle = parseWorkOrderOperationsBundle(res)
+      setExpandedOperationsMap((prev) => ({ ...prev, [wid!]: bundle.operations }))
+      if (bundle.manufacturing_mode) {
+        setExpandedWorkOrderDetailMap((prev) => ({
+          ...prev,
+          [wid!]: {
+            ...(prev[wid!] || {}),
+            manufacturing_mode: bundle.manufacturing_mode,
+          } as WorkOrder,
+        }))
+      }
+      await queryClient.invalidateQueries({ queryKey: [WORK_ORDER_ROW_EXPAND_QK, wid] })
       invalidateStatistics()
       actionRef.current?.reload()
     } catch (error: any) {
@@ -3395,12 +3415,23 @@ const WorkOrdersPage: React.FC = () => {
     const phase = getOperationCardPhase(operation, plannedQty)
     const isCompleted = phase === 'completed'
     const isInProgress = phase === 'in_progress'
+    const outsourceKind = String(
+      operation.outsource_kind || operation.outsourceKind || 'none',
+    ).toLowerCase()
     const isOutsourced = Boolean(
-      operation.is_outsourced ||
+      outsourceKind === 'planned' ||
+        outsourceKind === 'ad_hoc' ||
+        operation.is_outsourced ||
         operation.isOutsourced ||
         operation.outsource_supplier_name ||
         operation.outsource_order_code,
     )
+    const outsourceBadgeLabel =
+      outsourceKind === 'planned'
+        ? '计划委外'
+        : outsourceKind === 'ad_hoc'
+          ? '临时委外'
+          : '委外'
     const outsourceTheme = getOutsourceOperationCardTheme(token)
     const progressColor =
       isOutsourced && !isCompleted
@@ -3500,7 +3531,7 @@ const WorkOrdersPage: React.FC = () => {
               </div>
               {isOutsourced ? (
                 <Tag color="purple" variant="solid" style={{ margin: 0, flexShrink: 0 }}>
-                  委外
+                  {outsourceBadgeLabel}
                 </Tag>
               ) : null}
             </div>
@@ -3549,7 +3580,12 @@ const WorkOrdersPage: React.FC = () => {
                 ) : (
                   <>
                     <div style={{ whiteSpace: 'nowrap' }}>
-                      完成: {qualityMetrics.fromInspection ? qualityMetrics.qualified : Number(operation.completed_quantity || 0)} / {Number(workOrder.quantity || 0)}
+                      完成:{' '}
+                      {qualityMetrics.fromInspection &&
+                      qualityMetrics.qualified + qualityMetrics.unqualified > 0
+                        ? qualityMetrics.qualified
+                        : Number(operation.completed_quantity || 0)}{' '}
+                      / {Number(workOrder.quantity || 0)}
                     </div>
                     <div style={{ whiteSpace: 'nowrap' }}>
                       合格: {qualityMetrics.qualified} / 不合格: {qualityMetrics.unqualified}
@@ -3761,7 +3797,7 @@ const WorkOrdersPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 底部：派工 / 开始（淡色主题 footer） */}
+          {/* 底部：派工 / 开始→报工（淡色主题 footer） */}
           <div
             style={{
               display: 'flex',
@@ -3800,9 +3836,15 @@ const WorkOrdersPage: React.FC = () => {
               派工
             </div>
             ) : null}
+            {(() => {
+              const canStart =
+                operation.status === 'pending' && !isSplitParentWorkOrder(workOrder)
+              const canReport = isInProgress && !isCompleted
+              const footerActionClickable = canStart || canReport
+              return (
             <div
               onClick={
-                operation.status === 'pending' && !isSplitParentWorkOrder(workOrder)
+                canStart
                   ? async () => {
                       if (!isWorkOrderReleasedForStart(workOrder.status)) {
                         messageApi.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'))
@@ -3845,7 +3887,9 @@ const WorkOrdersPage: React.FC = () => {
                         }
                       }
                     }
-                  : undefined
+                  : canReport
+                    ? () => openQuickReportingFromOperationCard(operation, workOrder)
+                    : undefined
               }
               style={{
                 flex: 1,
@@ -3854,20 +3898,18 @@ const WorkOrdersPage: React.FC = () => {
                 justifyContent: 'center',
                 padding: '8px 4px',
                 fontSize: 13,
-                fontWeight: isInProgress || operation.status === 'pending' ? 600 : 500,
+                fontWeight: footerActionClickable ? 600 : 500,
                 color: isCompleted
                   ? token.colorSuccess
-                  : isInProgress
+                  : footerActionClickable
                     ? footerAccent
-                    : operation.status === 'pending'
-                      ? footerAccent
-                      : token.colorTextSecondary,
+                    : token.colorTextSecondary,
                 backgroundColor: 'transparent',
-                cursor: operation.status === 'pending' ? 'pointer' : 'default',
+                cursor: footerActionClickable ? 'pointer' : 'default',
                 transition: 'background-color 0.2s',
               }}
               onMouseEnter={(e) => {
-                if (operation.status === 'pending') {
+                if (footerActionClickable) {
                   e.currentTarget.style.backgroundColor = footerHoverBg
                 }
               }}
@@ -3875,9 +3917,18 @@ const WorkOrdersPage: React.FC = () => {
                 e.currentTarget.style.backgroundColor = 'transparent'
               }}
             >
-              {operation.status === 'pending' && <PlayCircleOutlined style={{ marginRight: 4, fontSize: 13 }} />}
-              {isCompleted ? '已完成' : isInProgress ? '进行中' : operation.status === 'pending' ? '开始' : '待开始'}
+              {canStart ? <PlayCircleOutlined style={{ marginRight: 4, fontSize: 13 }} /> : null}
+              {canReport ? <FileTextOutlined style={{ marginRight: 4, fontSize: 13 }} /> : null}
+              {isCompleted
+                ? '已完成'
+                : canReport
+                  ? t('app.kuaizhizao.workOrder.actionReport')
+                  : canStart
+                    ? '开始'
+                    : '待开始'}
             </div>
+              )
+            })()}
           </div>
         </div>
         {/* 箭头连接（不是最后一个） */}
@@ -3901,7 +3952,7 @@ const WorkOrdersPage: React.FC = () => {
   }
 
   /**
-   * 展开行：原有人机料法工序卡（派工 / 开始 / 环形报工）
+   * 展开行：原有人机料法工序卡（派工 / 开始→报工 / 环形报工）
    */
   const renderWorkOrderOperationCardsPanel = useCallback(
     (record: WorkOrder) => {
@@ -6464,10 +6515,12 @@ const WorkOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.workOrder.colReadiness'),
       dataIndex: 'readiness_rate',
-      width: 64,
+      width: 72,
       align: 'center',
       uniTableKeepWidth: true,
       valueType: 'digit',
+      className: 'wo-readiness-cell',
+      onCell: () => ({ className: 'wo-readiness-cell' }),
       render: (_text, record) => {
         if (isWorkOrderGroupListRow(record)) {
           return null
@@ -6490,7 +6543,11 @@ const WorkOrdersPage: React.FC = () => {
         if (wid == null) return inner
         return (
           <Suspense fallback={inner}>
-            <LazyWorkOrderReadinessPopover workOrderId={wid} workOrderCode={record.code}>
+            <LazyWorkOrderReadinessPopover
+              workOrderId={wid}
+              workOrderCode={record.code}
+              onReadinessSynced={softReloadWorkOrderList}
+            >
               {inner}
             </LazyWorkOrderReadinessPopover>
           </Suspense>
@@ -6885,7 +6942,7 @@ const WorkOrdersPage: React.FC = () => {
         )
       },
     },
-  ], [t, dissolveGroupLoading, workOrderCustomFieldColumns, workOrderLifecycleValueEnum, WORK_ORDER_LIST_COLUMNS_REV])
+  ], [t, dissolveGroupLoading, workOrderCustomFieldColumns, workOrderLifecycleValueEnum, WORK_ORDER_LIST_COLUMNS_REV, softReloadWorkOrderList])
 
   const workOrderTableBodyColSpan = useMemo(() => {
     const visibleDataCols = columns.filter((col) => !col.hideInTable).length
@@ -6893,12 +6950,7 @@ const WorkOrdersPage: React.FC = () => {
   }, [columns])
 
   const workOrderTableComponents = useMemo(() => {
-    const anchorToRoot = buildWorkOrderOperationPanelAnchorToRoot(
-      operationExpandedRowKeys,
-      workOrderRowByKeyRef.current,
-      workOrderTreeExpandedRowKeys,
-      operationPanelRecordByKeyRef.current,
-    )
+    const anchorToRoot = buildWorkOrderOperationPanelAnchorToRoot(operationExpandedRowKeys)
     const Wrapper = React.forwardRef<
       HTMLTableSectionElement,
       React.HTMLAttributes<HTMLTableSectionElement>
@@ -6918,7 +6970,6 @@ const WorkOrdersPage: React.FC = () => {
           workOrderRowByKeyRef.current.get(panelRootKey) ??
           operationPanelRecordByKeyRef.current.get(panelRootKey)
         if (!panelRecord) return
-        const panelInsetLeft = getWorkOrderOperationPanelInsetLeft(panelRecord)
         rows.push(
           <tr
             key={`${panelRootKey}__operation-cards`}
@@ -6930,7 +6981,7 @@ const WorkOrdersPage: React.FC = () => {
               className="wo-operation-cards-expand-cell"
               style={
                 {
-                  '--wo-op-panel-inset-left': `${panelInsetLeft}px`,
+                  '--wo-op-panel-inset-left': `${WO_TABLE_OPERATION_PANEL_INSET_LEFT}px`,
                   '--wo-op-panel-inset-right': `${WO_TABLE_OPERATION_PANEL_INSET_RIGHT}px`,
                 } as React.CSSProperties
               }
@@ -6951,7 +7002,6 @@ const WorkOrdersPage: React.FC = () => {
     return { body: { wrapper: Wrapper } }
   }, [
     operationExpandedRowKeys,
-    workOrderTreeExpandedRowKeys,
     workOrderTableBodyColSpan,
     renderWorkOrderOperationCardsPanel,
   ])
@@ -6959,12 +7009,7 @@ const WorkOrdersPage: React.FC = () => {
   const workOrderTableRowClassName = useCallback(
     (record: WorkOrder) => {
       const key = getWorkOrderListRowKey(record)
-      const anchorToRoot = buildWorkOrderOperationPanelAnchorToRoot(
-        operationExpandedRowKeys,
-        workOrderRowByKeyRef.current,
-        workOrderTreeExpandedRowKeys,
-        operationPanelRecordByKeyRef.current,
-      )
+      const anchorToRoot = buildWorkOrderOperationPanelAnchorToRoot(operationExpandedRowKeys)
       if (anchorToRoot.has(key)) {
         return 'wo-operation-panel-anchor-row'
       }
@@ -6973,7 +7018,7 @@ const WorkOrdersPage: React.FC = () => {
       }
       return ''
     },
-    [operationExpandedRowKeys, workOrderTreeExpandedRowKeys, highlightPlannedEndOverdue],
+    [operationExpandedRowKeys, highlightPlannedEndOverdue],
   )
 
   const workOrderHighlightOverdueToolbar = useMemo(
@@ -9036,80 +9081,10 @@ const WorkOrdersPage: React.FC = () => {
                 {/* 4. 物料移动 */}
                 {workOrderDetail?.id ? (
                   <DetailDrawerSection title={t('app.kuaizhizao.workOrder.materialMovementsTitle')}>
-                    {materialMovementsQuery.isLoading && (
-                      <div style={{ textAlign: 'center', padding: 24 }}>
-                        <Spin />
-                      </div>
-                    )}
-                    {materialMovementsQuery.isError && !materialMovementsQuery.isLoading && (
-                      <Typography.Text type="danger">
-                        {(materialMovementsQuery.error as Error)?.message ||
-                          t('app.kuaizhizao.workOrder.materialMovementsLoadFailed')}
-                      </Typography.Text>
-                    )}
-                    {!materialMovementsQuery.isLoading && !materialMovementsQuery.isError && (
-                      <>
-                        {materialMovementsQuery.data?.source_mode === 'document' ? (
-                          <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-                            {t('app.kuaizhizao.workOrder.materialMovementsDocumentHint')}
-                          </Typography.Paragraph>
-                        ) : null}
-                        <Table
-                          size="small"
-                          rowKey={(r, i) => String(r.id ?? `${r.source_doc_type}-${r.source_doc_code}-${i}`)}
-                          pagination={{ pageSize: 10, hideOnSinglePage: true }}
-                          dataSource={materialMovementsQuery.data?.items || []}
-                          locale={{ emptyText: t('app.kuaizhizao.workOrder.materialMovementsEmpty') }}
-                          columns={[
-                            {
-                              title: t('app.kuaizhizao.workOrder.materialMovementType'),
-                              dataIndex: 'movement_type',
-                              width: 120,
-                              render: (v: string) =>
-                                t(`app.kuaizhizao.workOrder.movementType.${v}`, {
-                                  defaultValue: v,
-                                }),
-                            },
-                            {
-                              title: t('app.kuaizhizao.workOrder.materialMovementMaterial'),
-                              key: 'material',
-                              ellipsis: true,
-                              render: (_, r) =>
-                                [r.material_code, r.material_name].filter(Boolean).join(' ') || '-',
-                            },
-                            {
-                              title: t('app.kuaizhizao.workOrder.materialMovementQty'),
-                              dataIndex: 'quantity',
-                              width: 90,
-                              align: 'right',
-                            },
-                            {
-                              title: t('app.kuaizhizao.workOrder.materialMovementFromTo'),
-                              key: 'wh',
-                              ellipsis: true,
-                              render: (_, r) => {
-                                const from = r.from_warehouse_name || '-'
-                                const to = r.to_warehouse_name || '-'
-                                return `${from} → ${to}`
-                              },
-                            },
-                            {
-                              title: t('app.kuaizhizao.workOrder.materialMovementDoc'),
-                              dataIndex: 'source_doc_code',
-                              width: 140,
-                              ellipsis: true,
-                              render: (v: string) => v || '-',
-                            },
-                            {
-                              title: t('app.kuaizhizao.workOrder.materialMovementTime'),
-                              dataIndex: 'occurred_at',
-                              width: 160,
-                              render: (v: string) => (v ? String(v).replace('T', ' ').slice(0, 19) : '-'),
-                            },
-                          ]}
-                        />
-                      </>
-                    )}
+                    <WorkOrderMaterialMovementsPanel
+                      workOrderId={workOrderDetail.id}
+                      enabled={drawerVisible}
+                    />
                   </DetailDrawerSection>
                 ) : null}
 

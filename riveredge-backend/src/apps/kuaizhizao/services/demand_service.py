@@ -32,7 +32,7 @@ from apps.kuaizhizao.schemas.demand import (
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_AUDITED_VALUES
 
 from apps.common.base_service import AppBaseService
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat, today_site_str
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 DEMAND_SORTABLE_FIELDS = frozenset({
@@ -73,7 +73,7 @@ class DemandService(AppBaseService[Demand]):
         computation_code: str,
     ) -> None:
         """下推需求计算成功后，与销售订单/销售预测的计划维度字段同进（不改主状态）。"""
-        now = datetime.now()
+        now = resolve_business_datetime()
         st = (getattr(demand, "source_type", None) or "").strip()
         sid = getattr(demand, "source_id", None)
         if st == "sales_order" and sid:
@@ -99,7 +99,7 @@ class DemandService(AppBaseService[Demand]):
 
     async def sync_upstream_planning_on_withdraw(self, tenant_id: int, demand: Demand) -> None:
         """撤回需求计算后，清除上游计划维度下推标记（与 Demand 同退）。"""
-        now = datetime.now()
+        now = resolve_business_datetime()
         st = (getattr(demand, "source_type", None) or "").strip()
         sid = getattr(demand, "source_id", None)
         if st == "sales_order" and sid:
@@ -564,7 +564,7 @@ class DemandService(AppBaseService[Demand]):
             await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
                 status=DemandStatus.PENDING_REVIEW,
                 review_status=ReviewStatus.PENDING,
-                submit_time=datetime.now(),
+                submit_time=resolve_business_datetime(),
                 updated_by=submitted_by,
                 updated_by_name=submitter_name,
             )
@@ -707,7 +707,7 @@ class DemandService(AppBaseService[Demand]):
             await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
                 reviewer_id=approved_by,
                 reviewer_name=approver_name,
-                review_time=datetime.now(),
+                review_time=resolve_business_datetime(),
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 status=status,
@@ -782,7 +782,7 @@ class DemandService(AppBaseService[Demand]):
             tt, tid = rel.target_type, rel.target_id
             if tt == "work_order":
                 wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
-                update_data = {"deleted_at": datetime.now(), "updated_at": datetime.now()}
+                update_data = {"deleted_at": resolve_business_datetime(), "updated_at": resolve_business_datetime()}
                 if wo and wo.status in ("released", "completed"):
                     update_data["status"] = "draft"
                     update_data["manually_completed"] = False
@@ -791,7 +791,7 @@ class DemandService(AppBaseService[Demand]):
                 await PurchaseOrder.filter(tenant_id=tenant_id, id=tid).delete()
             elif tt == "purchase_requisition":
                 await PurchaseRequisition.filter(tenant_id=tenant_id, id=tid).update(
-                    deleted_at=datetime.now(), updated_at=datetime.now()
+                    deleted_at=resolve_business_datetime(), updated_at=resolve_business_datetime()
                 )
             await DocumentRelation.filter(
                 tenant_id=tenant_id,
@@ -901,7 +901,7 @@ class DemandService(AppBaseService[Demand]):
                         pushed_to_computation=False,
                         computation_id=None,
                         computation_code=None,
-                        updated_at=datetime.now()
+                        updated_at=resolve_business_datetime()
                     )
                     d_clear = await Demand.get_or_none(
                         tenant_id=tenant_id, id=rel_demand_id, deleted_at__isnull=True
@@ -913,7 +913,7 @@ class DemandService(AppBaseService[Demand]):
                     pushed_to_computation=False,
                     computation_id=None,
                     computation_code=None,
-                    updated_at=datetime.now()
+                    updated_at=resolve_business_datetime()
                 )
                 d_one = await Demand.get_or_none(
                     tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True
@@ -1005,7 +1005,7 @@ class DemandService(AppBaseService[Demand]):
                 review_remarks=None,
                 updated_by=unapproved_by,
                 updated_by_name=operator_name,
-                updated_at=datetime.now()
+                updated_at=resolve_business_datetime()
             )
             
             return await self.get_demand_by_id(tenant_id, demand_id)
@@ -1030,7 +1030,7 @@ class DemandService(AppBaseService[Demand]):
         Returns:
             str: 生成的需求编码
         """
-        today = datetime.now().strftime("%Y%m%d")
+        today = today_site_str()
         
         if demand_type == "sales_forecast":
             prefix = f"SF-{today}"
@@ -1506,7 +1506,7 @@ class DemandService(AppBaseService[Demand]):
                     tenant_id=tenant_id,
                     demand_id=demand.id,
                     snapshot_type="before_recalc",
-                    snapshot_at=datetime.now(),
+                    snapshot_at=resolve_business_datetime(),
                     demand_snapshot=demand_snapshot_json,
                     demand_items_snapshot=items_snapshot_json,
                     trigger_reason=trigger_reason,
@@ -1639,7 +1639,7 @@ class DemandService(AppBaseService[Demand]):
                 await DemandRecalcHistory.create(
                     tenant_id=tenant_id,
                     demand_id=demand.id,
-                    recalc_at=datetime.now(),
+                    recalc_at=resolve_business_datetime(),
                     trigger_type="upstream_change",
                     source_type=source_type,
                     source_id=source_id,
@@ -1670,7 +1670,7 @@ class DemandService(AppBaseService[Demand]):
             await DemandRecalcHistory.create(
                 tenant_id=tenant_id,
                 demand_id=demand.id,
-                recalc_at=datetime.now(),
+                recalc_at=resolve_business_datetime(),
                 trigger_type="upstream_change",
                 source_type=source_type,
                 source_id=source_id,
@@ -2065,7 +2065,7 @@ class DemandService(AppBaseService[Demand]):
                 review_status=ReviewStatus.PENDING, # 这里保持待审核可能不太对，应该重置为初始状态，但 DemandResponse 中默认为待审核
                 updated_by=withdrawn_by,
                 updated_by_name=operator_name,
-                updated_at=datetime.now()
+                updated_at=resolve_business_datetime()
             )
             
             return await self.get_demand_by_id(tenant_id, demand_id)

@@ -54,6 +54,11 @@ def derive_quality_inspection_capabilities(
     )
     reject_cap = approve_cap
 
+    revoke_cap = _cap(
+        status == "已审核",
+        "quality_inspection.revoke_approval.not_approved" if status != "已审核" else None,
+    )
+
     defect_allowed = (
         quality_status == "不合格"
         and unqualified_qty > 0
@@ -82,6 +87,12 @@ def derive_quality_inspection_capabilities(
         "quality_inspection.update.not_pending" if status != "待检验" else None,
     )
 
+    delete_allowed = status == "待检验" or inspection_result == "待检验"
+    delete_cap = _cap(
+        delete_allowed,
+        "quality_inspection.delete.not_pending" if not delete_allowed else None,
+    )
+
     print_cap = _cap(True)
 
     push_rework_cap = _cap(False, "finished_goods_inspection.push_rework.not_allowed")
@@ -101,10 +112,12 @@ def derive_quality_inspection_capabilities(
         conduct=conduct_cap,
         approve=approve_cap,
         reject=reject_cap,
+        revoke_approval=revoke_cap,
         create_defect=create_defect_cap,
         push_purchase_return=push_return_cap,
         push_rework=push_rework_cap,
         update=update_cap,
+        delete=delete_cap,
         print=print_cap,
     )
 
@@ -129,10 +142,12 @@ def assert_quality_inspection_capability(
         "conduct": caps.conduct,
         "approve": caps.approve,
         "reject": caps.reject,
+        "revoke_approval": caps.revoke_approval,
         "create_defect": caps.create_defect,
         "push_purchase_return": caps.push_purchase_return,
         "push_rework": caps.push_rework,
         "update": caps.update,
+        "delete": caps.delete,
         "print": caps.print,
     }
     cap = cap_map.get(action)

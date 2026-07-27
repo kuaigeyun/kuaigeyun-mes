@@ -36,6 +36,7 @@ from core.services.system.data_backup_jobs import (
     run_tenant_id_replacement,
 )
 from core.tasks.dispatcher import TaskContext, TaskStep, register_event_handler
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 async def _mark_restore_status(
@@ -52,11 +53,11 @@ async def _mark_restore_status(
         backup = await DataBackup.get(uuid=backup_uuid)
         backup.restore_status = status
         if mark_started:
-            backup.restore_started_at = datetime.now()
+            backup.restore_started_at = resolve_business_datetime()
             backup.restore_error_message = None
             backup.restore_completed_at = None
         if mark_completed:
-            backup.restore_completed_at = datetime.now()
+            backup.restore_completed_at = resolve_business_datetime()
         if error_message is not None:
             backup.restore_error_message = error_message
         await backup.save()
@@ -88,7 +89,7 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
 
     try:
         backup.status = "running"
-        backup.started_at = datetime.now()
+        backup.started_at = resolve_business_datetime()
         backup.inngest_run_id = ctx.run_id
         await backup.save()
     except Exception as e:
@@ -111,7 +112,7 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
         final_zip_path = await step.run("dump_and_create_zip", dump_and_create_zip)
 
         backup.status = "success"
-        backup.completed_at = datetime.now()
+        backup.completed_at = resolve_business_datetime()
         backup.file_path = store_backup_file_path(final_zip_path)
         backup.file_size = os.path.getsize(final_zip_path)
         await backup.save()
@@ -121,7 +122,7 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
         if backup is not None:
             backup.status = "failed"
             backup.error_message = str(e)
-            backup.completed_at = datetime.now()
+            backup.completed_at = resolve_business_datetime()
             try:
                 await backup.save()
             except Exception as save_e:
@@ -193,8 +194,8 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
                 source_type="generated",
                 file_path=store_backup_file_path(final_zip_path),
                 file_size=os.path.getsize(final_zip_path),
-                started_at=datetime.now(),
-                completed_at=datetime.now(),
+                started_at=resolve_business_datetime(),
+                completed_at=resolve_business_datetime(),
             )
             logger.info(f"已创建恢复前备份: {pre_backup.uuid} -> {final_zip_path}")
         except Exception as e:

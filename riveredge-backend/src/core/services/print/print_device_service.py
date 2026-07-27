@@ -20,6 +20,7 @@ from core.schemas.print_device import (
     PrintDevicePrintRequest,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class PrintDeviceService:
@@ -183,7 +184,7 @@ class PrintDeviceService:
             NotFoundError: 当打印设备不存在时抛出
         """
         print_device = await PrintDeviceService.get_print_device_by_uuid(tenant_id, uuid)
-        print_device.deleted_at = datetime.now()
+        print_device.deleted_at = resolve_business_datetime()
         await print_device.save()
         
         # 异步通知关联的打印模板，清除设备关联
@@ -246,7 +247,7 @@ class PrintDeviceService:
                     success = True
                     message = "网络打印机连接成功"
                     print_device.is_online = True
-                    print_device.last_connected_at = datetime.now()
+                    print_device.last_connected_at = resolve_business_datetime()
                 else:
                     error = "网络打印机连接失败"
                     print_device.is_online = False
@@ -256,7 +257,7 @@ class PrintDeviceService:
                 success = True
                 message = "本地打印机测试通过（需要系统支持）"
                 print_device.is_online = True
-                print_device.last_connected_at = datetime.now()
+                print_device.last_connected_at = resolve_business_datetime()
             else:
                 raise ValidationError(f"不支持的设备类型: {print_device.type}")
         except Exception as e:
@@ -351,7 +352,7 @@ class PrintDeviceService:
         
         # 更新使用统计
         print_device.usage_count += 1
-        print_device.last_used_at = datetime.now()
+        print_device.last_used_at = resolve_business_datetime()
         await print_device.save()
         
         return {

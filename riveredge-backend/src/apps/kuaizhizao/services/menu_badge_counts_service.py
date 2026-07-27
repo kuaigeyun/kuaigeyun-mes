@@ -14,6 +14,7 @@ from typing import Any, Awaitable, Callable, Dict
 from loguru import logger
 from tortoise.functions import Sum
 
+from core.utils.timezone_utils import resolve_business_datetime
 from apps.kuaizhizao.services.exception_service import (
     ACTIVE_EXCEPTION_STATUSES,
     ACTIVE_QUALITY_EXCEPTION_STATUSES,
@@ -432,7 +433,7 @@ async def _section_finance(tenant_id: int, now_date) -> BadgeFragment:
 
 
 async def fetch_menu_badge_counts(tenant_id: int) -> dict:
-    now = datetime.now()
+    now = resolve_business_datetime()
     now_date = now.date()
 
     sections = await asyncio.gather(

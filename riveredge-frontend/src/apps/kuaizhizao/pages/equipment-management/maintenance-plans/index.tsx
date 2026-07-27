@@ -27,6 +27,7 @@ import { App, Button, Tag, Modal, Row, Col, Descriptions, Typography, Empty, Spi
 import { PlusOutlined } from '@ant-design/icons';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -45,7 +46,7 @@ import { maintenanceSchemesApi } from '../../../services/equipmentOps';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString, coerceFormDate } from '../../../../../utils/formDate';
@@ -198,7 +199,14 @@ const MaintenancePlansPage: React.FC = () => {
   const [executeSubmitting, setExecuteSubmitting] = useState(false);
   const executeFormRef = useRef<any>(null);
   const [schemeOptions, setSchemeOptions] = useState<{ label: string; value: number }[]>([]);
-  const [executedItems, setExecutedItems] = useState<Array<{ item_id?: number; item_name?: string; done?: boolean }>>([]);
+  const [executedItems, setExecutedItems] = useState<
+    Array<{
+      item_id?: number;
+      item_name?: string;
+      done?: boolean;
+      attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
+    }>
+  >([]);
   const [sparePartLines, setSparePartLines] = useState<Array<{ spare_part_id?: number; quantity?: number; warehouse_location?: string }>>([]);
   const [sparePartOptions, setSparePartOptions] = useState<{ label: string; value: number }[]>([]);
 
@@ -403,7 +411,7 @@ const MaintenancePlansPage: React.FC = () => {
         executed_items: executedItems.filter((i) => i.done),
         execution_date:
           toApiDateTimeString(values.execution_date) ??
-          new Date().toISOString().slice(0, 19).replace('T', ' '),
+          formatDateTimeBySiteSetting(new Date()),
         execution_content: values.execution_content,
         execution_result: values.execution_result ?? '正常',
         status: '已确认',
@@ -943,19 +951,38 @@ const MaintenancePlansPage: React.FC = () => {
           <Row gutter={16}>
             <Col span={24}>
               <Typography.Text strong>{t(`${P}.form.executedItems`)}</Typography.Text>
-              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {executedItems.map((item, index) => (
-                  <Checkbox
+                  <div
                     key={item.item_id ?? index}
-                    checked={item.done}
-                    onChange={(e) => {
-                      const next = [...executedItems];
-                      next[index] = { ...next[index], done: e.target.checked };
-                      setExecutedItems(next);
+                    style={{
+                      border: '1px solid var(--ant-color-border-secondary, #f0f0f0)',
+                      borderRadius: 8,
+                      padding: 12,
                     }}
                   >
-                    {item.item_name ?? `#${item.item_id}`}
-                  </Checkbox>
+                    <Checkbox
+                      checked={item.done}
+                      onChange={(e) => {
+                        const next = [...executedItems];
+                        next[index] = { ...next[index], done: e.target.checked };
+                        setExecutedItems(next);
+                      }}
+                    >
+                      {item.item_name ?? `#${item.item_id}`}
+                    </Checkbox>
+                    <div style={{ marginTop: 8 }}>
+                      <LineAttachmentsUpload
+                        category="maintenance_execution_item"
+                        value={item.attachments}
+                        onChange={(next) => {
+                          const copy = [...executedItems];
+                          copy[index] = { ...copy[index], attachments: next };
+                          setExecutedItems(copy);
+                        }}
+                      />
+                    </div>
+                  </div>
                 ))}
               </div>
             </Col>

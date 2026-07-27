@@ -30,6 +30,7 @@ from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingS
 from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
 from apps.master_data.models.factory import Workstation
 from infra.exceptions.exceptions import ValidationError
+from core.utils.timezone_utils import now_utc
 
 _EXPLAIN_SYSTEM = (
     "你是制造 ERP 可视排产助手。"
@@ -172,7 +173,7 @@ class SchedulingAiService:
             include_kitting=False,
         )
 
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         wo_briefs: List[Dict[str, Any]] = []
         for wo in work_orders[:80]:
             cached = score_map.get(wo.id)

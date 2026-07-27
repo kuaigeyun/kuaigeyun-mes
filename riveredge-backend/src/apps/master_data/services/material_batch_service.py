@@ -23,6 +23,7 @@ from apps.master_data.schemas.material_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import now_utc
 
 
 class MaterialBatchService:
@@ -318,7 +319,7 @@ class MaterialBatchService:
             raise NotFoundError("物料批号", batch_uuid)
         
         # 软删除
-        batch.deleted_at = datetime.utcnow()
+        batch.deleted_at = now_utc()
         await batch.save()
     
     @staticmethod

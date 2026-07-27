@@ -6,6 +6,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Checkbox, Empty, Input, Modal, Space, Spin, Typography } from 'antd';
 import type { InventoryPickOption } from './outboundConfirmInventoryOptions';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../../../../utils/modalEventIsolation';
 
 export type OutboundSerialPickerFieldProps = {
   value?: string[];
@@ -109,6 +110,8 @@ const OutboundSerialPickerField: React.FC<OutboundSerialPickerFieldProps> = ({
         cancelText={t('app.kuaizhizao.warehouseOutbound.action.cancel')}
         onCancel={closePicker}
         onOk={applyDraft}
+        maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+        wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
       >
         {materialLabel ? (
           <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>

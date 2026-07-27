@@ -1632,39 +1632,45 @@
                         "sort_order": 3
                     },
                     {
+                        "title": "app.kuaizhizao.menu.performance-management.work-calendar",
+                        "path": "/apps/kuaizhizao/performance/work-calendar",
+                        "permission": "kuaizhizao:performance-work-calendar:read",
+                        "sort_order": 4
+                    },
+                    {
                         "title": "app.kuaizhizao.menu.performance-management.skills",
                         "path": "/apps/kuaizhizao/performance/skills",
                         "permission": "kuaizhizao:performance-skills:read",
-                        "sort_order": 4
+                        "sort_order": 5
                     },
                     {
                         "title": "app.kuaizhizao.menu.performance-management.hourly-rates",
                         "path": "/apps/kuaizhizao/performance/hourly-rates",
                         "permission": "kuaizhizao:performance-hourly-rates:read",
-                        "sort_order": 5
+                        "sort_order": 6
                     },
                     {
                         "title": "app.kuaizhizao.menu.performance-management.kpi-definitions",
                         "path": "/apps/kuaizhizao/performance/kpi-definitions",
                         "permission": "kuaizhizao:performance-kpi-definitions:read",
-                        "sort_order": 6
+                        "sort_order": 7
                     },
                     {
                         "title": "app.kuaizhizao.menu.performance-management.employee-configs",
                         "path": "/apps/kuaizhizao/performance/employee-configs",
                         "permission": "kuaizhizao:performance-employee-configs:read",
-                        "sort_order": 7
+                        "sort_order": 8
                     },
                     {
                         "title": "app.kuaizhizao.menu.performance-management.summaries",
                         "path": "/apps/kuaizhizao/performance/summaries",
                         "permission": "kuaizhizao:performance-summaries:read",
-                        "sort_order": 8
+                        "sort_order": 9
                     },
                     {
                         "title": "app.kuaizhizao.menu.performance-management.reports",
                         "icon": "fileText",
-                        "sort_order": 9,
+                        "sort_order": 10,
                         "children": [
                             {
                                 "title": "app.kuaizhizao.menu.reports.employee-efficiency-ranking",
@@ -2594,6 +2600,12 @@
         "kuaizhizao:performance-shift-rosters:revoke",
         "kuaizhizao:performance-shift-rosters:submit",
         "kuaizhizao:performance-shift-rosters:update",
+        "kuaizhizao:performance-overtimes:create",
+        "kuaizhizao:performance-overtimes:delete",
+        "kuaizhizao:performance-overtimes:read",
+        "kuaizhizao:performance-overtimes:update",
+        "kuaizhizao:performance-work-calendar:read",
+        "kuaizhizao:performance-work-calendar:update",
         "kuaizhizao:performance-shifts:approve",
         "kuaizhizao:performance-shifts:audit",
         "kuaizhizao:performance-shifts:create",
@@ -5006,15 +5018,8 @@
                                 "permission": "kuaizhizao:equipment-management-equipment:read"
                             },
                             {
-                                "key": "spot-check-conduct",
-                                "label": "执行点检",
-                                "icon": "audit",
-                                "route": "/equipment/spot-check-conduct",
-                                "permission": "kuaizhizao:equipment-spot-check:create"
-                            },
-                            {
                                 "key": "spot-checks",
-                                "label": "点检记录",
+                                "label": "设备点检",
                                 "icon": "check",
                                 "route": "/equipment/spot-checks",
                                 "permission": "kuaizhizao:equipment-spot-check:read"
@@ -5028,28 +5033,28 @@
                             },
                             {
                                 "key": "faults",
-                                "label": "故障报修",
+                                "label": "报修维修",
                                 "icon": "warning",
                                 "route": "/equipment/faults",
                                 "permission": "kuaizhizao:equipment-fault:read"
                             },
                             {
                                 "key": "repairs",
-                                "label": "设备维修",
+                                "label": "维修台账",
                                 "icon": "tool",
                                 "route": "/equipment/repairs",
                                 "permission": "kuaizhizao:equipment-fault:read"
                             },
                             {
                                 "key": "maintenance-executions",
-                                "label": "保养执行",
+                                "label": "保养执行记录",
                                 "icon": "maintain",
                                 "route": "/equipment/maintenance-executions",
                                 "permission": "kuaizhizao:maintenance-plan:read"
                             },
                             {
                                 "key": "maintenance-reminders",
-                                "label": "保养提醒",
+                                "label": "维护提醒",
                                 "icon": "bell",
                                 "route": "/equipment/maintenance-reminders",
                                 "permission": "kuaizhizao:maintenance-reminder:read"
@@ -5110,6 +5115,30 @@
                     }
                 ]
             }
+        }
+    },
+    "resources": {
+        "performance-work-calendar": {
+            "permission_prefix": "kuaizhizao:performance-work-calendar",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": null
+        },
+        "performance-overtimes": {
+            "permission_prefix": "kuaizhizao:performance-overtimes",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": null
         }
     }
 }

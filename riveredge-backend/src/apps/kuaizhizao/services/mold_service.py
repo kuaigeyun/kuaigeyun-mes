@@ -24,6 +24,7 @@ from apps.common.audit_actor import apply_create_audit
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class MoldService:
@@ -64,7 +65,7 @@ class MoldService:
                     )
                 except ValidationError:
                     # 如果编码规则不存在，使用默认编码格式
-                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                    timestamp = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
                     data.code = f"MD{timestamp}"
             
             mold = Mold(
@@ -228,7 +229,7 @@ class MoldService:
         mold = await MoldService.get_mold_by_uuid(tenant_id, uuid)
         
         # 软删除
-        mold.deleted_at = datetime.now()
+        mold.deleted_at = resolve_business_datetime()
         await mold.save()
 
 

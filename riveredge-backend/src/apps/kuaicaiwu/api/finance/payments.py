@@ -21,6 +21,7 @@ from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import BusinessLogicError
+from core.utils.timezone_utils import today_site_str
 
 router = APIRouter(prefix="/payments", tags=["App - Kuaicaiwu - Finance"])
 payment_pull_service = PaymentPullService()
@@ -76,7 +77,7 @@ async def create_payment(
                 total_amount=Decimal(data.total_amount),
             )
 
-        today = datetime.now().strftime("%Y%m%d")
+        today = today_site_str()
         count = await Payment.filter(tenant_id=tenant_id).count()
         code = f"PK{today}{count + 1:04d}"
         supplier_id = data.supplier_id

@@ -29,7 +29,7 @@ from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreServ
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.master_data.models.factory import Workstation
 from apps.master_data.models.performance import Holiday
-from core.utils.timezone_utils import make_aware, to_api_isoformat
+from core.utils.timezone_utils import make_aware, resolve_business_datetime, to_api_isoformat
 from infra.config.infra_config import infra_settings
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -257,7 +257,7 @@ class RollingScheduleService:
 
         summary = self._build_close_summary(plan_date, lines, wo_map)
         plan.status = "closed"
-        plan.closed_at = datetime.now()
+        plan.closed_at = resolve_business_datetime()
         plan.close_summary = summary
         plan.updated_by = closed_by
         await plan.save()
@@ -512,17 +512,22 @@ class RollingScheduleService:
         plan_date: date,
         candidates: List[Dict[str, Any]],
     ) -> RollingScheduleCapacityAdvisory:
-        from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingService
+        from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
 
-        constraints = await VisualSchedulingService()._load_constraints(tenant_id)
-        daily_capacity = float(constraints.get("daily_capacity_hours", 24.0))
-        station_count = await Workstation.filter(
+        _holidays, work_hours, _overtime = await load_scheduling_work_context(
+            tenant_id, around=plan_date, span_days=7
+        )
+        daily_capacity = max(1.0, work_hours.daily_net_hours())
+        station_rows = await Workstation.filter(
             tenant_id=tenant_id,
             is_active=True,
             deleted_at__isnull=True,
-        ).count()
+        ).values("max_parallel")
+        station_count = len(station_rows)
+        parallel_sum = sum(max(1, int(r.get("max_parallel") or 1)) for r in station_rows)
         station_count = max(1, station_count)
-        available_hours = daily_capacity * station_count
+        parallel_sum = max(1, parallel_sum)
+        available_hours = daily_capacity * parallel_sum
 
         wo_ids = [c["work_order_id"] for c in candidates]
         required_hours = 0.0
@@ -557,6 +562,79 @@ class RollingScheduleService:
             overloaded=overloaded,
             message=msg,
         )
+
+    async def sync_from_aps_confirm(
+        self,
+        tenant_id: int,
+        plan_date: date,
+        work_order_ids: List[int],
+        updated_by: int,
+    ) -> RollingSchedulePlanResponse:
+        """APS 确认落库后，将涉及工单同步写入/更新当日滚动计划行（以 APS 确认时刻为准）。"""
+        ids = [int(i) for i in work_order_ids if int(i) > 0]
+        if not ids:
+            raise ValidationError("work_order_ids 不能为空")
+        ids = list(dict.fromkeys(ids))
+
+        plan = await RollingSchedulePlan.get_or_none(
+            tenant_id=tenant_id,
+            plan_date=plan_date,
+            deleted_at__isnull=True,
+        )
+        async with in_transaction():
+            if not plan:
+                plan_code = await self._generate_plan_code(tenant_id, plan_date)
+                plan = await RollingSchedulePlan.create(
+                    tenant_id=tenant_id,
+                    plan_code=plan_code,
+                    plan_date=plan_date,
+                    status="draft",
+                    created_by=updated_by,
+                    updated_by=updated_by,
+                )
+            elif plan.status == "closed":
+                plan.status = "draft"
+                plan.closed_at = None
+                plan.close_summary = None
+                plan.updated_by = updated_by
+                await plan.save()
+
+            existing = await RollingSchedulePlanLine.filter(
+                tenant_id=tenant_id, plan_id=plan.id
+            ).all()
+            by_wo = {int(ln.work_order_id): ln for ln in existing}
+            max_seq = max((int(ln.sequence) for ln in existing), default=-1)
+
+            for wo_id in ids:
+                wo = await WorkOrder.get_or_none(
+                    tenant_id=tenant_id, id=wo_id, deleted_at__isnull=True
+                )
+                if not wo:
+                    continue
+                readiness = (
+                    float(wo.readiness_rate) if wo.readiness_rate is not None else None
+                )
+                if wo_id in by_wo:
+                    ln = by_wo[wo_id]
+                    ln.source_type = "aps"
+                    ln.readiness_rate_snapshot = readiness
+                    ln.planned_quantity = wo.quantity
+                    await ln.save()
+                else:
+                    max_seq += 1
+                    await RollingSchedulePlanLine.create(
+                        tenant_id=tenant_id,
+                        plan_id=plan.id,
+                        work_order_id=wo_id,
+                        sequence=max_seq,
+                        planned_quantity=wo.quantity,
+                        source_type="aps",
+                        readiness_rate_snapshot=readiness,
+                    )
+            plan.updated_by = updated_by
+            await plan.save()
+
+        return await self._build_plan_response(tenant_id, plan)
 
     async def update_lines(
         self,
@@ -675,7 +753,7 @@ class RollingScheduleService:
             )
 
         plan.status = "published"
-        plan.published_at = datetime.now()
+        plan.published_at = resolve_business_datetime()
         plan.published_by = published_by
         plan.updated_by = published_by
         await plan.save()

@@ -37,6 +37,7 @@ from apps.common.base_service import AppBaseService
 from core.services.logging.operation_log_service import OperationLogService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 
 
 def _serialize_aging_analysis(analysis: Dict[str, Any]) -> Dict[str, Any]:
@@ -116,7 +117,7 @@ class PayableService(AppBaseService[Payable]):
             try:
                 created_id: Optional[int] = None
                 async with in_transaction():
-                    today = datetime.now().strftime("%Y%m%d")
+                    today = today_site_str()
                     code = await self.generate_code(tenant_id, "PAYABLE_CODE", prefix=f"PY{today}")
                     payable = await Payable.create(
                         tenant_id=tenant_id,
@@ -247,7 +248,7 @@ class PayableService(AppBaseService[Payable]):
         if payment_amount > payable.remaining_amount:
             raise ValidationError("付款金额不能超过剩余金额")
 
-        today = datetime.now().strftime("%Y%m%d")
+        today = today_site_str()
         count = await Payment.filter(tenant_id=tenant_id).count()
         code = f"PK{today}{count + 1:04d}"
 
@@ -305,7 +306,7 @@ class PayableService(AppBaseService[Payable]):
             await Payable.filter(tenant_id=tenant_id, id=payable_id).update(
                 reviewer_id=approved_by,
                 reviewer_name=approver_name,
-                review_time=datetime.now(),
+                review_time=resolve_business_datetime(),
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 updated_by=approved_by,
@@ -357,7 +358,7 @@ class PayableService(AppBaseService[Payable]):
     async def get_payable_aging_analysis(self, tenant_id: int) -> Dict[str, Any]:
         """获取应付账龄分析"""
         payables = await Payable.filter(tenant_id=tenant_id, remaining_amount__gt=0, deleted_at__isnull=True).all()
-        now = datetime.now().date()
+        now = to_site_date(resolve_business_datetime())
         
         analysis = {
             "within_30": {"count": 0, "amount": Decimal("0.00")},
@@ -477,7 +478,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             if not skip_legacy_amount_gate:
                 await self._validate_purchase_invoice_amount_gate(tenant_id=tenant_id, invoice_data=invoice_data)
             user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today}")
 
             from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
@@ -683,7 +684,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice_id).update(
                 reviewer_id=approved_by,
                 reviewer_name=approver_name,
-                review_time=datetime.now(),
+                review_time=resolve_business_datetime(),
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 status=status,
@@ -810,7 +811,7 @@ class ReceivableService(AppBaseService[Receivable]):
             try:
                 created_id: Optional[int] = None
                 async with in_transaction():
-                    today = datetime.now().strftime("%Y%m%d")
+                    today = today_site_str()
                     code = await self.generate_code(tenant_id, "RECEIVABLE_CODE", prefix=f"YS{today}")
                     receivable = await Receivable.create(
                         tenant_id=tenant_id,
@@ -929,7 +930,7 @@ class ReceivableService(AppBaseService[Receivable]):
         if receipt_amount > receivable.remaining_amount:
             raise ValidationError("收款金额不能超过剩余金额")
 
-        today = datetime.now().strftime("%Y%m%d")
+        today = today_site_str()
         count = await Receipt.filter(tenant_id=tenant_id).count()
         code = f"SK{today}{count + 1:04d}"
 
@@ -987,7 +988,7 @@ class ReceivableService(AppBaseService[Receivable]):
             await Receivable.filter(tenant_id=tenant_id, id=receivable_id).update(
                 reviewer_id=approved_by,
                 reviewer_name=approver_name,
-                review_time=datetime.now(),
+                review_time=resolve_business_datetime(),
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 updated_by=approved_by,
@@ -1039,7 +1040,7 @@ class ReceivableService(AppBaseService[Receivable]):
     async def get_receivable_aging_analysis(self, tenant_id: int) -> Dict[str, Any]:
         """获取应收账龄分析"""
         receivables = await Receivable.filter(tenant_id=tenant_id, remaining_amount__gt=0, deleted_at__isnull=True).all()
-        now = datetime.now().date()
+        now = to_site_date(resolve_business_datetime())
         
         analysis = {
             "within_30": {"count": 0, "amount": Decimal("0.00")},
@@ -1379,7 +1380,7 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
         if received <= Decimal("0.00"):
             raise ValidationError("应收已收金额无效，无法补录收款单")
 
-        today = datetime.now()
+        today = resolve_business_datetime()
         day_key = today.strftime("%Y%m%d")
         receipt_count = await Receipt.filter(tenant_id=tenant_id).count()
         receipt_code = f"SK{day_key}{receipt_count + 1:04d}"
@@ -1443,7 +1444,7 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
         执行核销：将收款单金额分配到应收单。
         编码在事务外生成，避免嵌套事务占用连接。
         """
-        today = datetime.now()
+        today = resolve_business_datetime()
         settlement_code = await self.generate_code(
             tenant_id, "SETTLEMENT_CODE", prefix=f"HX{today.strftime('%Y%m%d')}"
         )
@@ -1484,7 +1485,7 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
             raise ValidationError("核销金额超过单据剩余金额")
 
         user_name = await self.get_user_name(operator_id)
-        today = datetime.now()
+        today = resolve_business_datetime()
         fx_snapshot = self._build_fx_snapshot(
             amount=amount,
             invoice_exchange_rate=invoice_exchange_rate,
@@ -1626,7 +1627,7 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
         执行核销：将付款单金额分配到应付单。
         编码在事务外生成，避免嵌套事务占用连接。
         """
-        today = datetime.now()
+        today = resolve_business_datetime()
         settlement_code = await self.generate_code(
             tenant_id, "SETTLEMENT_CODE", prefix=f"HX{today.strftime('%Y%m%d')}"
         )
@@ -1667,7 +1668,7 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
             raise ValidationError("核销金额超过单据剩余金额")
 
         user_name = await self.get_user_name(operator_id)
-        today = datetime.now()
+        today = resolve_business_datetime()
         fx_snapshot = self._build_fx_snapshot(
             amount=amount,
             invoice_exchange_rate=invoice_exchange_rate,

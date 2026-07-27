@@ -21,6 +21,7 @@ from core.schemas.script import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.config.infra_config import infra_settings as settings
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class ScriptService:
@@ -169,7 +170,7 @@ class ScriptService:
             NotFoundError: 当脚本不存在时抛出
         """
         script = await ScriptService.get_script_by_uuid(tenant_id, uuid)
-        script.deleted_at = datetime.now()
+        script.deleted_at = resolve_business_datetime()
         await script.save()
     
     @staticmethod
@@ -262,7 +263,7 @@ class ScriptService:
             
             # 更新脚本执行信息
             script.is_running = False
-            script.last_run_at = datetime.now()
+            script.last_run_at = resolve_business_datetime()
             script.last_run_status = "success" if success else "failed"
             script.last_error = error
             await script.save()

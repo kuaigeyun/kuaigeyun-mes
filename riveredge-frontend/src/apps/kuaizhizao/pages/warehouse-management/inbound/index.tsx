@@ -61,6 +61,11 @@ import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentA
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
 import {formatDateBySiteSetting, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import {
+  DocumentPushProgressBar,
+  DOCUMENT_PROGRESS_COLUMN_WIDTH,
+  ratioToPushProgressPercent,
+} from '../../sales-management/shared/DocumentPushProgressBar';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import InboundQuickPullModals, {
@@ -95,6 +100,7 @@ import {
   isInboundConfirmable,
   inboundConfirmCapabilityReasonMessage,
   inboundSourceDocNo,
+  resolveInboundHubOperator,
 } from './inboundHubTypes';
 import { uploadMultipleFiles } from '../../../../../services/file';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -166,10 +172,21 @@ function renderInboundDetailUnitCell(row: InboundOrderItem): React.ReactNode {
 }
 
 function formatInboundDateDisplay(record: InboundOrder): string {
-  const dateValue = record.receipt_date;
-  if (dateValue) return formatDateBySiteSetting(dateValue);
-  const timeValue = record.return_time;
+  const dateOnly = record.receipt_date ?? record.registration_date;
+  if (dateOnly) return formatDateBySiteSetting(dateOnly);
+  const timeValue =
+    record.receipt_time ?? record.return_time ?? record.received_at ?? record.returned_at;
   if (timeValue) return formatDateTimeBySiteSetting(timeValue);
+  return '-';
+}
+
+/** 列表「时间」列：优先完整业务时刻，无时刻再回落业务日 */
+function formatInboundDateTimeDisplay(record: InboundOrder): string {
+  const timeValue =
+    record.receipt_time ?? record.return_time ?? record.received_at ?? record.returned_at;
+  if (timeValue) return formatDateTimeBySiteSetting(timeValue);
+  const dateOnly = record.receipt_date ?? record.registration_date;
+  if (dateOnly) return formatDateBySiteSetting(dateOnly);
   return '-';
 }
 
@@ -1619,7 +1636,8 @@ const InboundPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.sourceDocNo'),
-      dataIndex: ['purchase_order_code', 'sales_order_code', 'work_order_code', 'picking_code', 'source_doc_no'],
+      key: 'sourceDocNo',
+      dataIndex: 'source_doc_no',
       width: 160,
       ellipsis: true,
       hideInSearch: true,
@@ -1648,6 +1666,34 @@ const InboundPage: React.FC = () => {
       render: (v: number | null | undefined) => (v != null ? v : '-'),
     },
     {
+      title: t('app.kuaizhizao.warehouseInbound.col.receiptProgress'),
+      dataIndex: 'receipt_progress',
+      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+      uniTableKeepWidth: true,
+      hideInSearch: true,
+      render: (_, record) => {
+        let required = Number(record.total_quantity ?? 0);
+        const posted = isInboundStockPosted(record);
+        let done = posted ? required : 0;
+        if (!(required > 0) && posted) {
+          required = 1;
+          done = 1;
+        }
+        if (!(required > 0) && !(done > 0)) return '-';
+        const percent = ratioToPushProgressPercent(done, required);
+        return (
+          <DocumentPushProgressBar
+            percent={percent}
+            tooltip={t('app.kuaizhizao.warehouseInbound.col.receiptProgressTip', {
+              done: formatQuantity(done),
+              required: formatQuantity(required),
+              percent,
+            })}
+          />
+        );
+      },
+    },
+    {
       title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
@@ -1655,19 +1701,21 @@ const InboundPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('app.kuaizhizao.warehouseInbound.col.operator'),
-      dataIndex: ['received_by', 'returner_name'],
-      width: 100,
-      ellipsis: true,
-      render: (_, record) => record.received_by || record.returner_name || '-',
-    },
-    {
-      title: t('app.kuaizhizao.warehouseInbound.col.date'),
-      dataIndex: ['receipt_date', 'return_time'],
-      width: 132,
+      title: t('app.kuaizhizao.warehouseInbound.col.time'),
+      key: 'biz_time_operator',
+      dataIndex: 'biz_time_operator',
+      width: 148,
       uniTableKeepWidth: true,
+      hideInSearch: true,
       sorter: true,
-      render: (_, record) => formatInboundDateDisplay(record),
+      render: (_, record) => (
+        <UniTableStackedPrimaryCell
+          primary={resolveInboundHubOperator(record) || '-'}
+          secondary={formatInboundDateTimeDisplay(record)}
+          secondaryCopyable={false}
+          primaryBold={false}
+        />
+      ),
     },
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
@@ -1785,7 +1833,7 @@ const InboundPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle={t('app.kuaizhizao.warehouseInbound.title')}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound.v2"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound.v3"
         actionRef={actionRef}
         formRef={searchFormRef}
         rowKey={inboundRowKey}
@@ -1918,6 +1966,7 @@ const InboundPage: React.FC = () => {
         onOk={submitConfirmPreview}
         confirmLoading={purchaseConfirmPreviewSubmitting}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        style={{ maxWidth: 'min(1400px, calc(100vw - 48px))' }}
         okText={
           purchaseConfirmPreviewDetail?.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn') : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')
         }
@@ -2137,7 +2186,8 @@ const InboundPage: React.FC = () => {
         }}
         onOk={() => void submitSimpleConfirmPreview()}
         confirmLoading={simpleConfirmPreviewSubmitting}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        style={{ maxWidth: 'min(1400px, calc(100vw - 48px))' }}
         okText={
           simpleConfirmPreviewTarget?.receipt_type === 'production_return'
             ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn')
@@ -2372,7 +2422,7 @@ const InboundPage: React.FC = () => {
                     {
                       key: 'op',
                       label: t('app.kuaizhizao.warehouseInbound.field.operator'),
-                      children: currentOrder.received_by || currentOrder.returner_name || '-',
+                      children: resolveInboundHubOperator(currentOrder) || '-',
                     },
                   ]}
                 />

@@ -39,7 +39,7 @@ from apps.kuaizhizao.services.document_action_policy import (
     enrich_quotation_list_capabilities,
 )
 from core.services.authorization.data_scope_service import DataScopeService
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat, today_site_str
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
@@ -237,7 +237,7 @@ class QuotationService:
                 transition_comment=comment,
                 operator_id=operator_id,
                 operator_name=(operator_name or str(operator_id))[:100],
-                transition_time=datetime.now(),
+                transition_time=resolve_business_datetime(),
             )
         except Exception as e:
             logger.warning("报价单状态流转日志写入失败，跳过: %s", e)
@@ -469,7 +469,7 @@ class QuotationService:
                 else:
                     logger.warning("报价单编码规则生成失败，使用备用格式: %s", e)
         if generated is None:
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             import uuid
             generated = f"QT-{today}-{uuid.uuid4().hex[:6].upper()}"
         return generated
@@ -489,7 +489,7 @@ class QuotationService:
         """
         from apps.common.base_service import AppBaseService
 
-        now = datetime.now()
+        now = resolve_business_datetime()
         op_name = await AppBaseService().get_user_name(operator_id)
         if auto_approved:
             await Quotation.filter(id=quotation_id, tenant_id=tenant_id).update(
@@ -777,7 +777,7 @@ class QuotationService:
         from core.services.approval.uni_audit_service import UniAuditService
 
         async def _do_approve() -> QuotationResponse:
-            now = datetime.now()
+            now = resolve_business_datetime()
             op_name = await AppBaseService().get_user_name(operator_id)
             async with in_transaction():
                 await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
@@ -836,7 +836,7 @@ class QuotationService:
         from core.services.approval.uni_audit_service import UniAuditService
 
         async def _do_reject(reason: Optional[str]) -> QuotationResponse:
-            now = datetime.now()
+            now = resolve_business_datetime()
             op_name = await AppBaseService().get_user_name(operator_id)
             reject_remarks = reason or review_remarks
             async with in_transaction():
@@ -1769,7 +1769,7 @@ class QuotationService:
             conversion_downstream_missing=conv_missing,
             contract_downstream_missing=contract_missing,
         )
-        now = datetime.now()
+        now = resolve_business_datetime()
         await Quotation.filter(
             id=quotation_id, tenant_id=tenant_id
         ).update(deleted_at=now)

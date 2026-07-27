@@ -27,6 +27,7 @@ from apps.kuaizhizao.schemas.work_order import WorkOrderCreate
 from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
 from infra.services.business_config_service import BusinessConfigService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 
 
 class DocumentPushPullService:
@@ -661,7 +662,7 @@ class DocumentPushPullService:
                 unit=item.material_unit or "件",
                 unit_price=unit_price,
                 total_price=total_price,
-                required_date=item.procurement_completion_date or datetime.now().date(),
+                required_date=item.procurement_completion_date or to_site_date(resolve_business_datetime()),
                 source_type="demand_computation",
                 source_id=computation_id,
                 notes=f"由需求计算{computation.computation_code}下推生成",
@@ -671,8 +672,8 @@ class DocumentPushPullService:
             purchase_order_data = PurchaseOrderCreate(
                 supplier_id=supplier_id,
                 supplier_name=supplier_name or "",
-                order_date=datetime.now().date(),
-                delivery_date=item.procurement_completion_date or datetime.now().date(),
+                order_date=to_site_date(resolve_business_datetime()),
+                delivery_date=item.procurement_completion_date or to_site_date(resolve_business_datetime()),
                 status="草稿",
                 remarks=f"由需求计算{computation.computation_code}下推生成",
                 items=[purchase_item],

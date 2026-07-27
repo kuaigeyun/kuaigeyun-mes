@@ -32,7 +32,6 @@ def _assert_pre_effective(lc: dict) -> None:
         lambda: get_demand_lifecycle(SimpleNamespace(status="草稿", review_status="PENDING", pushed_to_computation=False)),
         lambda: get_purchase_order_lifecycle(SimpleNamespace(status="待审核", review_status="PENDING")),
         lambda: get_sales_order_change_lifecycle("待审核", "PENDING"),
-        lambda: get_incoming_inspection_lifecycle(SimpleNamespace(status="已检验", review_status="PENDING")),
         lambda: get_reporting_record_lifecycle(SimpleNamespace(status="pending")),
         lambda: get_shipment_notice_lifecycle(SimpleNamespace(status="待审核")),
         lambda: get_sales_delivery_lifecycle(SimpleNamespace(status="待审核")),
@@ -40,6 +39,31 @@ def _assert_pre_effective(lc: dict) -> None:
 )
 def test_mode_a_pre_effective_shows_dash(factory):
     _assert_pre_effective(factory())
+
+
+def test_incoming_inspection_pending_ignores_preset_approved_review():
+    """未开人工审核时创建预置 APPROVED，阶段仍应为待检验。"""
+    lc = get_incoming_inspection_lifecycle(
+        SimpleNamespace(status="待检验", review_status="APPROVED", inspection_result="待检验"),
+    )
+    assert lc["current_stage_key"] == "pending_inspection"
+    assert lc["current_stage_name"] == "待检验"
+
+
+def test_incoming_inspection_inspected_before_manual_audit():
+    lc = get_incoming_inspection_lifecycle(
+        SimpleNamespace(status="已检验", review_status="PENDING", inspection_result="已检验"),
+    )
+    assert lc["current_stage_key"] == "inspected"
+    assert lc["current_stage_name"] == "已检验"
+
+
+def test_incoming_inspection_audited_shows_inspected_stage():
+    lc = get_incoming_inspection_lifecycle(
+        SimpleNamespace(status="已审核", review_status="APPROVED", inspection_result="已检验"),
+    )
+    assert lc["current_stage_key"] == "inspected"
+    assert lc["current_stage_name"] == "已检验"
 
 
 def test_sales_order_effective_shows_business_stage():

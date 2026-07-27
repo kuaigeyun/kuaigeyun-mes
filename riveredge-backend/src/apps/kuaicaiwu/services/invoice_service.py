@@ -22,6 +22,7 @@ from apps.master_data.services.master_data_list_core import (
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
 class InvoiceService(AppBaseService[Invoice]):
@@ -40,7 +41,7 @@ class InvoiceService(AppBaseService[Invoice]):
         async with in_transaction():
             category = (data.category or "IN").strip().upper()
             if category == "OUT":
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 code = await self.generate_code(tenant_id, "SALES_INVOICE_CODE", prefix=f"SI{today}")
             else:
                 code = str(uuid.uuid4())
@@ -180,5 +181,5 @@ class InvoiceService(AppBaseService[Invoice]):
         if not invoice:
             raise NotFoundError(f"发票不存在: {code}")
         await Invoice.filter(tenant_id=tenant_id, id=invoice.id).update(
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )

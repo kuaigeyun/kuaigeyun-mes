@@ -33,6 +33,7 @@ from apps.kuaizhizao.schemas.inventory_transfer import (
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
 class InventoryTransferService(AppBaseService[InventoryTransfer]):
@@ -153,7 +154,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
                 raise ValidationError("调出仓库和调入仓库不能相同")
 
             # 生成调拨单号
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="INVENTORY_TRANSFER_CODE",
@@ -254,7 +255,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         if transfer.status != "draft":
             raise BusinessLogicError("只有草稿状态的调拨单才能删除")
         await InventoryTransfer.filter(id=transfer_id, tenant_id=tenant_id).update(
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )
         return True
 
@@ -649,7 +650,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
             transfer.status = "completed"
             transfer.executed_by = executed_by
             transfer.executed_by_name = user_info["name"]
-            transfer.executed_at = datetime.now()
+            transfer.executed_at = resolve_business_datetime()
             transfer.updated_by = executed_by
             transfer.updated_by_name = user_info["name"]
 

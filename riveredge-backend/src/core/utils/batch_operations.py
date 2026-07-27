@@ -13,6 +13,7 @@ from typing import List, Dict, Any, Optional, Callable, Awaitable, TypeVar, Gene
 from datetime import datetime
 from pathlib import Path
 from loguru import logger
+from core.utils.timezone_utils import resolve_business_datetime
 
 T = TypeVar('T')
 
@@ -172,7 +173,7 @@ class BatchOperationService:
         export_dir.mkdir(exist_ok=True)
         
         # 生成文件名
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = resolve_business_datetime().strftime("%Y%m%d_%H%M%S")
         filename = f"{filename_prefix}_{timestamp}.csv"
         file_path = export_dir / filename
         
@@ -227,7 +228,7 @@ class BatchOperationService:
         export_dir.mkdir(exist_ok=True)
         
         # 生成文件名
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = resolve_business_datetime().strftime("%Y%m%d_%H%M%S")
         filename = f"{filename_prefix}_{timestamp}.csv"
         file_path = export_dir / filename
         

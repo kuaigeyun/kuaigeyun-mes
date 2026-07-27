@@ -928,9 +928,15 @@ class BusinessConfigService:
             if str(code).strip()
         })
 
+        # 「仅仓库可确认领料」开启：仅仓储角色码可确认。
+        # 关闭且未配置额外角色名单：不卡角色码（由出库 RBAC 门控），避免管理员/自定义角色码永远对不上默认英文生产角色。
+        # 关闭且配置了额外名单：仓储角色 + 额外名单。
         allowed_codes = set(DEFAULT_WAREHOUSE_ROLE_CODES)
         if not warehouse_only:
-            allowed_codes.update(normalized_extra_codes or DEFAULT_PRODUCTION_PICKING_CONFIRM_ROLE_CODES)
+            if normalized_extra_codes:
+                allowed_codes.update(normalized_extra_codes)
+            else:
+                allowed_codes = set()
 
         return {
             "picking_issue_strategy": issue_strategy,
@@ -939,6 +945,9 @@ class BusinessConfigService:
             "require_confirmed_picking_before_operation_start": require_before_start,
             "require_confirmed_picking_before_reporting": require_before_reporting,
             "default_warehouse_role_codes": sorted(DEFAULT_WAREHOUSE_ROLE_CODES),
+            "default_production_picking_confirm_role_codes": sorted(
+                DEFAULT_PRODUCTION_PICKING_CONFIRM_ROLE_CODES
+            ),
             "effective_allowed_role_codes": sorted(allowed_codes),
         }
 

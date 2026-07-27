@@ -22,6 +22,7 @@ from apps.common.base_service import AppBaseService
 from apps.common.audit_actor import apply_create_audit, apply_update_audit, operator_name_from_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from core.utils.timezone_utils import now_utc
 
 
 class BackflushService(AppBaseService[BackflushRecord]):
@@ -117,12 +118,21 @@ class BackflushService(AppBaseService[BackflushRecord]):
             ).all()
             if line_side_whs:
                 return line_side_whs
-        # 其次匹配车间
+        # 其次匹配车间：优先非工位级，避免历史 LBX-GW-* 扩大倒冲范围
         if work_order.workshop_id:
+            preferred = await query.filter(
+                workshop_id=work_order.workshop_id,
+                workstation_id__isnull=True,
+            ).all()
+            if preferred:
+                return preferred
             return await query.filter(
                 workshop_id=work_order.workshop_id
             ).all()
-        # 无关联时返回所有线边仓
+        # 无关联时返回所有线边仓（同样优先非工位级）
+        preferred_all = await query.filter(workstation_id__isnull=True).all()
+        if preferred_all:
+            return preferred_all
         return await query.all()
 
     async def auto_pick_batches(
@@ -352,7 +362,7 @@ class BackflushService(AppBaseService[BackflushRecord]):
                         backflush_quantity=required,
                         status="failed",
                         error_message=f"线边仓库存不足，需 {required}，可用 {total_picked}",
-                        processed_at=datetime.utcnow(),
+                        processed_at=now_utc(),
                         **audit_kwargs,
                     )
                     records.append(record)
@@ -411,7 +421,7 @@ class BackflushService(AppBaseService[BackflushRecord]):
                         bom_quantity=Decimal(str(cons["bom_quantity"])),
                         backflush_quantity=pick["pick_quantity"],
                         status="completed",
-                        processed_at=datetime.utcnow(),
+                        processed_at=now_utc(),
                         **audit_kwargs,
                     )
                     records.append(record)
@@ -531,7 +541,7 @@ class BackflushService(AppBaseService[BackflushRecord]):
                     bom_quantity=failed.bom_quantity,
                     backflush_quantity=pick["pick_quantity"],
                     status="completed",
-                    processed_at=datetime.utcnow(),
+                    processed_at=now_utc(),
                     **audit_kwargs,
                 )
                 if record is None:

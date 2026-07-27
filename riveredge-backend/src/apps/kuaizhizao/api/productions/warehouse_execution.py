@@ -3426,6 +3426,30 @@ async def update_sales_delivery(
     )
 
 
+@router.post(
+    "/sales-deliveries/{delivery_id}/ensure-oqc",
+    summary="Ensure OQC before sales delivery confirm",
+)
+async def ensure_oqc_for_sales_delivery(
+    delivery_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """确认出库前：按物料 OQC 策略补齐缺失出货检验单，并返回是否允许确认出库。"""
+    from apps.kuaizhizao.services.quality_improvement_service import OQCInspectionService
+
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
+    return await OQCInspectionService().ensure_oqc_for_sales_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
+        created_by=current_user.id,
+    )
+
+
 @router.post("/sales-deliveries/{delivery_id}/confirm", response_model=SalesDeliveryResponse, summary="Confirm sales delivery")
 async def confirm_sales_delivery(
     delivery_id: int,
@@ -4755,7 +4779,10 @@ async def process_replenishment_suggestion(
 async def list_batching_center_tasks(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
-    task_type: Optional[str] = Query(None, description="proactive_prep|material_call|batching_draft|backflush_alert"),
+    task_type: Optional[str] = Query(
+        None,
+        description="line_side_prep|proactive_prep|material_call|batching_draft|backflush_alert",
+    ),
     status: Optional[str] = Query(None),
     work_order_code: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None, description="关键词（工单/单据/物料）"),

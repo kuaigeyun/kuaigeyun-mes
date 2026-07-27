@@ -12,7 +12,7 @@ from datetime import datetime, date, time
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
-from core.utils.timezone_utils import is_future_datetime
+from core.utils.timezone_utils import is_future_datetime, resolve_business_datetime, today_site_str
 
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
@@ -277,7 +277,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
 
         # 编码生成、校验、用户信息查询均放在事务外，避免长事务与嵌套事务
         if not rework_order_data.code:
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="REWORK_ORDER_CODE",
@@ -663,11 +663,11 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
 
             # 如果状态变更为in_progress，记录实际开始时间
             if "status" in update_data and update_data["status"] == "in_progress" and not rework_order.actual_start_date:
-                update_data["actual_start_date"] = datetime.now()
+                update_data["actual_start_date"] = resolve_business_datetime()
 
             # 如果状态变更为completed，记录实际结束时间
             if "status" in update_data and update_data["status"] == "completed" and not rework_order.actual_end_date:
-                update_data["actual_end_date"] = datetime.now()
+                update_data["actual_end_date"] = resolve_business_datetime()
 
             await ReworkOrder.filter(
                 tenant_id=tenant_id,
@@ -719,7 +719,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             await ReworkOrder.filter(
                 tenant_id=tenant_id,
                 id=rework_order_id
-            ).update(deleted_at=datetime.now())
+            ).update(deleted_at=resolve_business_datetime())
 
             return True
 
@@ -887,7 +887,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         approved_by_name = None
         if should_auto_approve:
             status = "approved"
-            approved_at = datetime.now()
+            approved_at = resolve_business_datetime()
             approved_by = reported_by
             approved_by_name = recorder_name or reporting_data.worker_name
 
@@ -920,13 +920,13 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
 
             if rework_order.status == "released":
                 rework_order.status = "in_progress"
-                rework_order.actual_start_date = rework_order.actual_start_date or datetime.now()
+                rework_order.actual_start_date = rework_order.actual_start_date or resolve_business_datetime()
             new_total_qualified = total_qualified + (
                 qualified_qty if status == "approved" else Decimal("0")
             )
             if new_total_qualified >= Decimal(str(rework_order.quantity or 0)):
                 rework_order.status = "completed"
-                rework_order.actual_end_date = rework_order.actual_end_date or datetime.now()
+                rework_order.actual_end_date = rework_order.actual_end_date or resolve_business_datetime()
             rework_order.updated_by = reported_by
             rework_order.updated_by_name = recorder_name
             await rework_order.save()

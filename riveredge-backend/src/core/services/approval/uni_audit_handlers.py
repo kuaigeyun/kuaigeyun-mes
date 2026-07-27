@@ -447,7 +447,9 @@ async def _dispatch_incoming_inspection(
         return await svc.approve_inspection(
             tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
         )
-    if action in ("submit", "withdraw", "revoke"):
+    if action == "revoke":
+        return await svc.revoke_approval(tenant_id, entity_id, user_id)
+    if action in ("submit", "withdraw"):
         _unsupported("incoming_inspection", action)
     _unsupported("incoming_inspection", action)
 
@@ -469,7 +471,9 @@ async def _dispatch_process_inspection(
         return await svc.approve_inspection(
             tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
         )
-    if action in ("submit", "withdraw", "revoke"):
+    if action == "revoke":
+        return await svc.revoke_approval(tenant_id, entity_id, user_id)
+    if action in ("submit", "withdraw"):
         _unsupported("process_inspection", action)
     _unsupported("process_inspection", action)
 
@@ -491,7 +495,9 @@ async def _dispatch_finished_goods_inspection(
         return await svc.approve_inspection(
             tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
         )
-    if action in ("submit", "withdraw", "revoke"):
+    if action == "revoke":
+        return await svc.revoke_approval(tenant_id, entity_id, user_id)
+    if action in ("submit", "withdraw"):
         _unsupported("finished_goods_inspection", action)
     _unsupported("finished_goods_inspection", action)
 

@@ -139,6 +139,14 @@ def derive_work_order_capabilities(
     push_picking_reason = None
     if is_frozen:
         push_picking_reason = "work_order.push_production_picking.frozen"
+    elif is_draft:
+        push_picking_reason = "work_order.push_production_picking.draft"
+    elif is_completed:
+        push_picking_reason = "work_order.push_production_picking.completed"
+    elif is_cancelled:
+        push_picking_reason = "work_order.push_production_picking.cancelled"
+    elif is_split:
+        push_picking_reason = "work_order.push_production_picking.split"
     elif not push_picking_allowed:
         push_picking_reason = "work_order.push_production_picking.not_allowed"
     push_picking_cap = _cap(push_picking_allowed, push_picking_reason)

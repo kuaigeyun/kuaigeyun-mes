@@ -25,6 +25,10 @@ export type ProductProcessLine = {
   isNodeOperation?: boolean;
   overReportMode?: string;
   overReportValue?: number;
+  isOutsourced?: boolean;
+  outsourceLeadTimeDays?: number;
+  outsourceSupplierId?: number;
+  outsourceSupplierName?: string;
 };
 
 export type MaterialProductProcess = {

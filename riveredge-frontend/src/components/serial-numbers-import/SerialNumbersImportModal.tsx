@@ -10,6 +10,7 @@ import {
   parseSerialNumbersFromText,
   validateSerialNumbersCount,
 } from './parseSerialNumbersImport';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
 
 const { Dragger } = Upload;
 const { TextArea } = Input;
@@ -167,6 +168,8 @@ const SerialNumbersImportModal: React.FC<SerialNumbersImportModalProps> = ({
       width={640}
       destroyOnHidden
       okText="确定"
+      maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+      wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
     >
       {expectedHint && (
         <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>

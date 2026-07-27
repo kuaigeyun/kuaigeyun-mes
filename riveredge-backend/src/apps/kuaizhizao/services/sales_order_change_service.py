@@ -40,6 +40,7 @@ from apps.kuaizhizao.services.order_change.helpers import (
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
 from loguru import logger
+from core.utils.timezone_utils import resolve_business_datetime
 
 SALES_ORDER_CHANGE_SORTABLE_FIELDS = frozenset({
     "change_code",
@@ -586,7 +587,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
         assert_sales_order_change_capability(doc, "delete")
-        doc.deleted_at = datetime.now()
+        doc.deleted_at = resolve_business_datetime()
         await doc.save()
 
     async def submit(self, tenant_id: int, change_id: int, operator_id: int) -> SalesOrderChangeWithItemsResponse:
@@ -619,7 +620,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         assert_sales_order_change_capability(doc, "approve")
         doc.reviewer_id = operator_id
         doc.reviewer_name = await self.get_user_name(operator_id)
-        doc.review_time = datetime.now()
+        doc.review_time = resolve_business_datetime()
         doc.review_remarks = body.review_remarks
         if body.approved:
             doc.status = DocumentStatus.AUDITED.value
@@ -784,7 +785,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
                         )
 
             doc.status = OrderChangeApplyStatus.APPLIED.value
-            doc.applied_at = datetime.now()
+            doc.applied_at = resolve_business_datetime()
             doc.applied_by = operator_id
             doc.updated_by = operator_id
             doc.updated_by_name = user_info["name"]
@@ -809,7 +810,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
                 source_name=order.order_code,
                 changed_fields=["sales_order_change_applied"],
                 payload={"change_order_id": doc.id, "change_code": doc.change_code},
-                effective_at=datetime.now(),
+                effective_at=resolve_business_datetime(),
                 trigger_reason="sales_order_change_applied",
                 requested_by=operator_id,
                 correlation_id=f"sales_order_change:{doc.id}",

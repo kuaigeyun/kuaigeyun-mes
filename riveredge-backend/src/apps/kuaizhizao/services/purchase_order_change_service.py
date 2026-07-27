@@ -41,6 +41,7 @@ from apps.kuaizhizao.services.order_change.helpers import (
 )
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
+from core.utils.timezone_utils import resolve_business_datetime
 
 PURCHASE_ORDER_CHANGE_SORTABLE_FIELDS = frozenset({
     "change_code",
@@ -638,7 +639,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         if not doc:
             raise NotFoundError(f"采购变更单不存在: {change_id}")
         assert_purchase_order_change_capability(doc, "delete")
-        doc.deleted_at = datetime.now()
+        doc.deleted_at = resolve_business_datetime()
         await doc.save()
 
     async def submit(self, tenant_id: int, change_id: int, operator_id: int) -> PurchaseOrderChangeWithItemsResponse:
@@ -671,7 +672,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         assert_purchase_order_change_capability(doc, "approve")
         doc.reviewer_id = operator_id
         doc.reviewer_name = await self.get_user_name(operator_id)
-        doc.review_time = datetime.now()
+        doc.review_time = resolve_business_datetime()
         doc.review_remarks = body.review_remarks
         if body.approved:
             doc.status = DocumentStatus.AUDITED.value
@@ -840,7 +841,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             await order.save()
 
             doc.status = OrderChangeApplyStatus.APPLIED.value
-            doc.applied_at = datetime.now()
+            doc.applied_at = resolve_business_datetime()
             doc.applied_by = operator_id
             doc.updated_by = operator_id
             doc.updated_by_name = operator_name

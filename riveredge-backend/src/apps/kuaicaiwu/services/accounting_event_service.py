@@ -8,6 +8,7 @@ from typing import Any, Optional
 import uuid
 
 from apps.kuaicaiwu.models.accounting_event import AccountingEvent
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 
 
 class AccountingEventService:
@@ -46,7 +47,7 @@ class AccountingEventService:
             target_doc_code=target_doc_code,
             amount=amount,
             currency=currency,
-            event_date=datetime.now().date(),
+            event_date=to_site_date(resolve_business_datetime()),
             operator_id=operator_id,
             operator_name=operator_name,
             payload=payload,

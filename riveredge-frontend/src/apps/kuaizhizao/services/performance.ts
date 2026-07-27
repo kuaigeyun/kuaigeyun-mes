@@ -34,7 +34,78 @@ import type {
   PerformanceSummary,
   PerformanceDetail,
   PerformanceListResult,
+  WorkCalendarConfig,
+  WorkCalendarConfigUpdate,
+  EffectiveWorkCalendar,
+  OvertimePlan,
+  OvertimePlanCreate,
+  OvertimePlanUpdate,
 } from '../types/performance';
+
+const PERF_BASE = '/apps/master-data/performance';
+
+/**
+ * 工作日历 API
+ */
+export const workCalendarApi = {
+  get: async (): Promise<WorkCalendarConfig> => api.get(`${PERF_BASE}/work-calendar`),
+  update: async (data: WorkCalendarConfigUpdate): Promise<WorkCalendarConfig> =>
+    api.put(`${PERF_BASE}/work-calendar`, data),
+  getEffective: async (params: {
+    dateFrom: string;
+    dateTo: string;
+  }): Promise<EffectiveWorkCalendar> =>
+    api.get(`${PERF_BASE}/work-calendar/effective`, { params }),
+};
+
+export const stationUnavailableApi = {
+  list: async (params?: {
+    stationId?: number;
+    dateFrom?: string;
+    dateTo?: string;
+    skip?: number;
+    limit?: number;
+  }) => api.get(`${PERF_BASE}/work-calendar/station-unavailable`, { params }),
+  create: async (data: {
+    stationId: number;
+    startAt: string;
+    endAt: string;
+    reason?: string;
+    isActive?: boolean;
+  }) => api.post(`${PERF_BASE}/work-calendar/station-unavailable`, data),
+  update: async (
+    uuid: string,
+    data: Partial<{
+      stationId: number;
+      startAt: string;
+      endAt: string;
+      reason?: string | null;
+      isActive?: boolean;
+    }>,
+  ) => api.put(`${PERF_BASE}/work-calendar/station-unavailable/${uuid}`, data),
+  delete: async (uuid: string) =>
+    api.delete(`${PERF_BASE}/work-calendar/station-unavailable/${uuid}`),
+};
+
+/**
+ * 加班计划 API
+ */
+export const overtimeApi = {
+  list: async (params?: {
+    dateFrom?: string;
+    dateTo?: string;
+    isActive?: boolean;
+    skip?: number;
+    limit?: number;
+  }): Promise<PerformanceListResult<OvertimePlan>> =>
+    api.get(`${PERF_BASE}/overtimes`, { params }),
+  create: async (data: OvertimePlanCreate): Promise<OvertimePlan> =>
+    api.post(`${PERF_BASE}/overtimes`, data),
+  get: async (uuid: string): Promise<OvertimePlan> => api.get(`${PERF_BASE}/overtimes/${uuid}`),
+  update: async (uuid: string, data: OvertimePlanUpdate): Promise<OvertimePlan> =>
+    api.put(`${PERF_BASE}/overtimes/${uuid}`, data),
+  delete: async (uuid: string): Promise<void> => api.delete(`${PERF_BASE}/overtimes/${uuid}`),
+};
 
 /**
  * 假期 API 服务
@@ -128,8 +199,6 @@ export const skillApi = {
     return api.delete(`/apps/master-data/performance/skills/${uuid}`);
   },
 };
-
-const PERF_BASE = '/apps/master-data/performance';
 
 export interface EmployeeOption {
   id: number;

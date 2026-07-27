@@ -54,6 +54,7 @@ from core.services.business.code_generation_service import CodeGenerationService
 from core.config.code_rule_pages import CODE_RULE_PAGES
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
+from core.utils.timezone_utils import now_utc, resolve_business_datetime, today_site_str
 
 # source_type -> 编码回退用 type_code 映射（Buy->RAW, Make/Outsource->SEMI, Phantom->SEMI, Service->SVC，已移除 Configure）
 _SOURCE_TYPE_TO_TYPE_CODE = {
@@ -3714,7 +3715,7 @@ class MaterialService:
                 # 如果编码规则不存在或未启用，使用备用方案
                 logger.warning(f"BOM编码规则生成失败，使用备用方案: {e}")
                 from datetime import datetime
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                timestamp = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
                 material_code = material.main_code or material.code or "UNKNOWN"
                 data.bom_code = f"BOM-{material_code}-{timestamp}"
         
@@ -4386,7 +4387,7 @@ class MaterialService:
         new_bom_code = None
         try:
             context = {
-                "date": datetime.now().strftime("%Y%m%d"),
+                "date": today_site_str(),
                 "material_code": parent_material.main_code,
                 "version": new_version,
             }
@@ -4584,7 +4585,7 @@ class MaterialService:
             raise NotFoundError(f"未找到物料 {material_id} 版本 {version} 的 BOM")
         await qs.update(
             is_obsolete=True,
-            obsoleted_at=datetime.utcnow(),
+            obsoleted_at=now_utc(),
             obsolete_reason=reason or None,
             is_default=False
         )
@@ -4921,7 +4922,7 @@ class MaterialService:
                 try:
                     parent_material = await Material.get(id=parent_id)
                     context = {
-                        "date": datetime.now().strftime("%Y%m%d"),
+                        "date": today_site_str(),
                         "material_code": parent_material.main_code,
                         "version": target_version
                     }
@@ -4935,7 +4936,7 @@ class MaterialService:
                     logger.warning(f"BOM编码生成失败，使用降级方案: {e}")
                     # 重新获父物料信息（如果上面try块失败）
                     parent_material = await Material.get(id=parent_id)
-                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                    timestamp = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
                     bom_code = f"BOM-{parent_material.main_code}-{timestamp}"
 
             # 3. 全量替换 (Clean Replace)

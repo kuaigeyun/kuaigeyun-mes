@@ -192,7 +192,9 @@ class DrawingStepBomService:
 
         drawing.linked_bom_material_id = root_material.id
         drawing.linked_bom_version = data.version
-        drawing.last_step_bom_import_at = datetime.now(timezone.utc)
+        from core.utils.timezone_utils import now_utc
+
+        drawing.last_step_bom_import_at = now_utc()
         await drawing.save()
 
         drawing_resp = await _to_response(tenant_id, drawing)

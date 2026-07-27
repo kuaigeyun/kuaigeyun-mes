@@ -4,10 +4,14 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
-import { App, Form, Modal, Select, Table, Typography } from 'antd';
+import { Link, useNavigate } from 'react-router-dom';
+import { Alert, App, Button, Form, Modal, Select, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { warehouseApi } from '../../../services/warehouse-execution';
+import {
+  warehouseApi,
+  type EnsureOqcForSalesDeliveryLineSummary,
+  type EnsureOqcForSalesDeliveryResult,
+} from '../../../services/warehouse-execution';
 import { outsourceMaterialIssueApi } from '../../../services/production';
 import { fetchStorageLocationsForWarehouse } from '../inbound/inboundPoReceiptEntryUtils';
 import {
@@ -28,6 +32,23 @@ import {
 } from './outboundConfirmInventoryOptions';
 import OutboundSerialPickerField from './OutboundSerialPickerField';
 import { formatQuantity } from '../../../../../utils/format';
+
+const OQC_INSPECTION_PATH = '/apps/kuaizhizao/quality-management/oqc-inspection';
+
+function renderOqcOutboundTag(
+  t: (key: string) => string,
+  row: EnsureOqcForSalesDeliveryLineSummary | undefined,
+) {
+  if (!row) return '—';
+  if (!row.oqc_required) {
+    return <Tag>{t('app.kuaizhizao.warehouseOutbound.oqcReview.notRequired')}</Tag>;
+  }
+  return row.can_outbound ? (
+    <Tag color="success">{t('app.kuaizhizao.warehouseOutbound.oqcReview.canOutbound')}</Tag>
+  ) : (
+    <Tag color="warning">{t('app.kuaizhizao.warehouseOutbound.oqcReview.pendingOutbound')}</Tag>
+  );
+}
 
 async function fetchOutboundDetail(record: OutboundHubOrder): Promise<Record<string, unknown> | null> {
   const id = String(record.id);
@@ -76,6 +97,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   onSuccess,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -95,11 +117,26 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   const [locationOptionsByWh, setLocationOptionsByWh] = useState<
     Record<number, { value: number; label: string; code: string }[]>
   >({});
+  const [oqcEnsure, setOqcEnsure] = useState<EnsureOqcForSalesDeliveryResult | null>(null);
+  const [oqcEnsureLoading, setOqcEnsureLoading] = useState(false);
 
   const outboundType = record?.outbound_type;
   const recordId = record?.id;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+
+  const oqcByLineId = useMemo(() => {
+    const map: Record<number, EnsureOqcForSalesDeliveryLineSummary> = {};
+    for (const row of oqcEnsure?.line_summaries ?? []) {
+      map[row.delivery_item_id] = row;
+    }
+    return map;
+  }, [oqcEnsure]);
+
+  const oqcBlocksConfirm =
+    outboundType === 'sales_delivery' &&
+    oqcEnsure != null &&
+    oqcEnsure.can_confirm_outbound !== true;
 
   const activeLines: Record<string, unknown>[] = useMemo(() => {
     const items = Array.isArray(detail?.items) ? detail!.items as Record<string, unknown>[] : [];
@@ -134,6 +171,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   useEffect(() => {
     if (!open || recordId == null || !outboundType) {
       setDetail(null);
+      setOqcEnsure(null);
       form.resetFields();
       return;
     }
@@ -141,6 +179,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     let cancelled = false;
     void (async () => {
       setLoading(true);
+      setOqcEnsure(null);
       try {
         const detailData = await fetchOutboundDetail(hubRecord);
         if (cancelled) return;
@@ -182,6 +221,25 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
             }
           } catch {
             /* optional */
+          }
+        }
+
+        if (outboundType === 'sales_delivery') {
+          setOqcEnsureLoading(true);
+          try {
+            const ensure = await warehouseApi.salesDelivery.ensureOqc(String(recordId));
+            if (!cancelled) setOqcEnsure(ensure);
+          } catch (e: unknown) {
+            if (!cancelled) {
+              const err = e as { message?: string; response?: { data?: { detail?: string } } };
+              messageApi.error(
+                err?.message ||
+                  err?.response?.data?.detail ||
+                  t('app.kuaizhizao.warehouseOutbound.oqcReview.ensureFailed'),
+              );
+            }
+          } finally {
+            if (!cancelled) setOqcEnsureLoading(false);
           }
         }
       } catch {
@@ -482,6 +540,51 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
           );
         },
       },
+      ...(outboundType === 'sales_delivery'
+        ? ([
+            {
+              title: t('app.kuaizhizao.warehouseOutbound.oqcReview.colStatus'),
+              key: 'oqc',
+              width: 200,
+              render: (_: unknown, it: Record<string, unknown>) => {
+                const lineId = Number(it.id);
+                const row = oqcByLineId[lineId];
+                if (oqcEnsureLoading && !row) {
+                  return t('app.kuaizhizao.warehouseOutbound.oqcReview.loading');
+                }
+                if (!row?.oqc_required) {
+                  return renderOqcOutboundTag(t, row);
+                }
+                const statusText = !row.inspection_status
+                  ? t('app.kuaizhizao.warehouseOutbound.oqcReview.statusNotCreated')
+                  : [row.inspection_status, row.quality_status].filter(Boolean).join(' / ');
+                return (
+                  <Space size={4} wrap>
+                    {renderOqcOutboundTag(t, row)}
+                    {row.inspection_code ? (
+                      <Typography.Link
+                        onClick={() => {
+                          onClose();
+                          navigate(
+                            `${OQC_INSPECTION_PATH}?sales_delivery_id=${recordId}${
+                              row.inspection_id ? `&oqc_inspection_id=${row.inspection_id}` : ''
+                            }`,
+                          );
+                        }}
+                      >
+                        {row.inspection_code}
+                      </Typography.Link>
+                    ) : (
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {statusText}
+                      </Typography.Text>
+                    )}
+                  </Space>
+                );
+              },
+            },
+          ] as ColumnsType<Record<string, unknown>>)
+        : []),
     ],
     [
       batchOptionsByMaterialId,
@@ -489,7 +592,12 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       form,
       locOptions,
       materialMeta,
+      navigate,
+      oqcByLineId,
+      oqcEnsureLoading,
+      onClose,
       outboundType,
+      recordId,
       serialOptionsByLineId,
       serialOptionsLoading,
       stockQtyByMaterialId,
@@ -501,6 +609,12 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
 
   const handleSubmit = async () => {
     if (!record?.id || !record.outbound_type || !detail) return;
+    if (oqcBlocksConfirm) {
+      messageApi.warning(
+        oqcEnsure?.message || t('app.kuaizhizao.warehouseOutbound.oqcReview.blockedHint'),
+      );
+      return;
+    }
     const vals = form.getFieldsValue(true);
 
     for (const it of activeLines) {
@@ -621,18 +735,38 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     ? getOutboundIssueTypeLabel(t, record.outbound_type as OutboundIssueType)
     : t('app.kuaizhizao.warehouseOutbound.fallbackDoc');
 
+  const goInspectOqc = () => {
+    onClose();
+    navigate(`${OQC_INSPECTION_PATH}?sales_delivery_id=${recordId}`);
+  };
+
   return (
     <Modal
       title={`${t('app.kuaizhizao.warehouseOutbound.confirm.title')} — ${typeLabel}`}
       open={open}
-      okText={t('app.kuaizhizao.warehouseOutbound.action.confirmAndPost')}
-      cancelText={t('app.kuaizhizao.warehouseOutbound.action.cancel')}
       confirmLoading={submitting}
       destroyOnHidden
-      width={1200}
+      width={outboundType === 'sales_delivery' ? 1320 : 1200}
       styles={{ body: { paddingTop: 12, maxHeight: '78vh', overflowY: 'auto' } }}
       onCancel={onClose}
-      onOk={() => void handleSubmit()}
+      footer={
+        <Space>
+          <Button onClick={onClose}>{t('app.kuaizhizao.warehouseOutbound.action.cancel')}</Button>
+          {outboundType === 'sales_delivery' && oqcEnsure?.requires_oqc && oqcBlocksConfirm ? (
+            <Button type="primary" onClick={goInspectOqc}>
+              {t('app.kuaizhizao.warehouseOutbound.oqcReview.goInspect')}
+            </Button>
+          ) : null}
+          <Button
+            type="primary"
+            loading={submitting}
+            disabled={oqcBlocksConfirm || oqcEnsureLoading}
+            onClick={() => void handleSubmit()}
+          >
+            {t('app.kuaizhizao.warehouseOutbound.action.confirmAndPost')}
+          </Button>
+        </Space>
+      }
     >
       <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
         {t('app.kuaizhizao.warehouseOutbound.confirm.hint')}
@@ -643,6 +777,19 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
           <Link to="/system/config-center">{t('app.kuaizhizao.warehouseOutbound.confirm.fifoLink')}</Link>。
         </Typography.Paragraph>
       ) : null}
+      {outboundType === 'sales_delivery' && oqcEnsure?.created_count ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={t('app.kuaizhizao.warehouseOutbound.oqcReview.autoCreated', {
+            count: oqcEnsure.created_count,
+          })}
+        />
+      ) : null}
+      {outboundType === 'sales_delivery' && oqcBlocksConfirm && oqcEnsure?.message ? (
+        <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={oqcEnsure.message} />
+      ) : null}
       {record ? (
         <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
           {t('app.kuaizhizao.warehouseOutbound.detail.docNo')}：
@@ -652,13 +799,13 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       <Form form={form} component={false}>
         <Table
           size="small"
-          loading={loading}
+          loading={loading || oqcEnsureLoading}
           rowKey={(it) => String(it.id ?? `${it.material_id}-${it.material_code}`)}
           columns={columns}
           dataSource={activeLines}
           pagination={false}
           scroll={{
-            x: 1180,
+            x: outboundType === 'sales_delivery' ? 1380 : 1180,
             y: Math.min(Math.max(activeLines.length * 52 + 40, 360), 560),
           }}
         />

@@ -24,6 +24,7 @@ from apps.master_data.schemas.material_product_process_schemas import (
     ProductProcessLineSchema,
 )
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 SECONDS_PER_HOUR = 3600.0
 
@@ -121,6 +122,18 @@ def _line_to_operation_payload(line: ProductProcessLineSchema, allow_jump: bool)
     if eqs:
         row["equipment_ids"] = eqs
         row["assigned_equipment_id"] = eqs[0]
+    if line.is_outsourced:
+        row["is_outsourced"] = True
+        row["isOutsourced"] = True
+        lead = line.outsource_lead_time_days
+        row["outsource_lead_time_days"] = int(lead) if lead is not None else 1
+        row["outsourceLeadTimeDays"] = row["outsource_lead_time_days"]
+        if line.outsource_supplier_id:
+            row["outsource_supplier_id"] = int(line.outsource_supplier_id)
+            row["outsourceSupplierId"] = int(line.outsource_supplier_id)
+        if line.outsource_supplier_name:
+            row["outsource_supplier_name"] = line.outsource_supplier_name
+            row["outsourceSupplierName"] = line.outsource_supplier_name
     return row
 
 
@@ -250,9 +263,13 @@ def _merge_stored_lines_with_route(
             continue
         if uid in stored_by_uuid:
             stored = stored_by_uuid[uid]
-            merged.append({**d, **stored, "uuid": uid, "operation_uuid": uid})
+            merged.append(
+                _normalize_line_time_fields(
+                    {**d, **stored, "uuid": uid, "operation_uuid": uid}
+                )
+            )
         else:
-            merged.append(dict(d))
+            merged.append(_normalize_line_time_fields(dict(d)))
     return merged
 
 
@@ -278,10 +295,10 @@ def _row_dict_to_line_schema(
         ),
         code=row.get("code") or (op.code if op else None),
         name=row.get("name") or (op.name if op else None),
-        standard_time=_float_or_none(row.get("standard_time") or row.get("standardTime")),
+        standard_time=_seconds_field_from_row(row, "standardTime", "standard_time"),
         standard_time_qty=qty if qty is not None else 1,
         standard_time_unit=std_unit,
-        setup_time=_float_or_none(row.get("setup_time") or row.get("setupTime")),
+        setup_time=_seconds_field_from_row(row, "setupTime", "setup_time"),
         setup_time_unit=setup_unit,
         workshop_ids=_ids_from_row(row, "workshop"),
         operator_ids=_operator_ids_from_row(row),
@@ -294,7 +311,35 @@ def _row_dict_to_line_schema(
         is_node_operation=bool(row.get("is_node_operation") or row.get("isNodeOperation") or False),
         over_report_mode=str(row.get("over_report_mode") or row.get("overReportMode") or "none"),
         over_report_value=float(row.get("over_report_value") or row.get("overReportValue") or 0),
+        is_outsourced=bool(
+            row.get("is_outsourced")
+            if row.get("is_outsourced") is not None
+            else row.get("isOutsourced") or False
+        ),
+        outsource_lead_time_days=_int_or_none(
+            row.get("outsource_lead_time_days")
+            if row.get("outsource_lead_time_days") is not None
+            else row.get("outsourceLeadTimeDays")
+        ),
+        outsource_supplier_id=_int_or_none(
+            row.get("outsource_supplier_id") or row.get("outsourceSupplierId"),
+            min_value=1,
+        ),
+        outsource_supplier_name=(
+            str(row.get("outsource_supplier_name") or row.get("outsourceSupplierName") or "").strip()
+            or None
+        ),
     )
+
+
+def _int_or_none(v: Any, *, min_value: int = 0) -> Optional[int]:
+    if v is None or v == "":
+        return None
+    try:
+        n = int(v)
+        return n if n >= min_value else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _float_or_none(v: Any) -> Optional[float]:
@@ -304,6 +349,45 @@ def _float_or_none(v: Any) -> Optional[float]:
         return float(v)
     except (TypeError, ValueError):
         return None
+
+
+def _seconds_field_from_row(row: Dict[str, Any], camel: str, snake: str) -> Optional[float]:
+    """
+    读取产品工艺时间字段（单位：秒）。
+
+    保存路径 model_dump(by_alias=True) 写入 camelCase；路线合并可能残留 snake_case 小时值。
+    优先 camelCase；仅当 camel 缺失时才用 snake。两者都在且明显冲突时（camel 为秒、snake 为小时残留）取 camel。
+    """
+    camel_v = _float_or_none(row.get(camel))
+    snake_v = _float_or_none(row.get(snake))
+    if camel_v is not None and snake_v is not None and abs(camel_v - snake_v) > 1e-6:
+        # 典型污染：standardTime=1800（秒）与 standard_time=0.5（路线小时残留）
+        if camel_v >= 60 and 0 < snake_v < 60:
+            return camel_v
+        return camel_v
+    if camel_v is not None:
+        return camel_v
+    return snake_v
+
+
+def _normalize_line_time_fields(row: Dict[str, Any]) -> Dict[str, Any]:
+    """合并后统一时间字段为秒，并去掉互相冲突的双写键。"""
+    out = dict(row)
+    std = _seconds_field_from_row(out, "standardTime", "standard_time")
+    setup = _seconds_field_from_row(out, "setupTime", "setup_time")
+    if std is not None:
+        out["standardTime"] = std
+        out["standard_time"] = std
+    else:
+        out.pop("standardTime", None)
+        out.pop("standard_time", None)
+    if setup is not None:
+        out["setupTime"] = setup
+        out["setup_time"] = setup
+    else:
+        out.pop("setupTime", None)
+        out.pop("setup_time", None)
+    return out
 
 
 def _ids_from_row(row: Dict[str, Any], prefix: str) -> Optional[List[int]]:
@@ -385,9 +469,13 @@ async def _compose_lines(
     if stored_lines and route_row_dicts:
         row_dicts = _merge_stored_lines_with_route(stored_lines, route_row_dicts)
     elif stored_lines:
-        row_dicts = [ln if isinstance(ln, dict) else ln for ln in stored_lines]
+        row_dicts = [
+            _normalize_line_time_fields(ln)
+            for ln in stored_lines
+            if isinstance(ln, dict)
+        ]
     elif route_row_dicts:
-        row_dicts = route_row_dicts
+        row_dicts = [_normalize_line_time_fields(d) for d in route_row_dicts]
     else:
         return []
 
@@ -782,7 +870,7 @@ class MaterialProductProcessService:
             deleted_at__isnull=True,
         ).all()
 
-        now = datetime.now()
+        now = resolve_business_datetime()
         for rate in existing:
             op_id = int(rate.operation_id)
             if op_id not in wanted:

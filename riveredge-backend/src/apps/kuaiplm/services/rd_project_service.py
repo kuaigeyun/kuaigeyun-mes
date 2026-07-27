@@ -68,6 +68,7 @@ from apps.kuaiplm.utils.gate_template_seed import load_template_gate_defs
 from apps.kuaiplm.utils.rd_project_progress import compute_project_progress
 from apps.master_data.models.material import Material
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 
 
 class RdProjectService(AppBaseService[RdProject]):
@@ -82,7 +83,7 @@ class RdProjectService(AppBaseService[RdProject]):
         except Exception:
             import uuid
 
-            return f"YFXM{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+            return f"YFXM{today_site_str()}{uuid.uuid4().hex[:6].upper()}"
 
     async def _generate_delivery_project_code(self, tenant_id: int) -> str:
         try:
@@ -90,7 +91,7 @@ class RdProjectService(AppBaseService[RdProject]):
         except Exception:
             import uuid
 
-            return f"JFXM{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+            return f"JFXM{today_site_str()}{uuid.uuid4().hex[:6].upper()}"
 
     async def _get_project_or_404(self, tenant_id: int, project_id: int) -> RdProject:
         project = await RdProject.get_or_none(
@@ -562,7 +563,7 @@ class RdProjectService(AppBaseService[RdProject]):
             raise BusinessLogicError("仅草稿或已取消项目可删除")
         user_info = await self.get_user_info(deleted_by)
         await project.update_from_dict({
-            "deleted_at": datetime.now(),
+            "deleted_at": resolve_business_datetime(),
             "updated_by": deleted_by,
             "updated_by_name": user_info["name"],
         }).save()
@@ -587,7 +588,7 @@ class RdProjectService(AppBaseService[RdProject]):
             if val is not None:
                 update_fields[field] = val
         if data.status == RdGateStatus.PASSED.value and "actual_date" not in update_fields:
-            update_fields["actual_date"] = datetime.now().date()
+            update_fields["actual_date"] = to_site_date(resolve_business_datetime())
         if update_fields:
             await gate.update_from_dict(update_fields).save()
         if data.status == RdGateStatus.PASSED.value:
@@ -659,7 +660,7 @@ class RdProjectService(AppBaseService[RdProject]):
             if val is not None:
                 update_fields[field] = val
         if data.status == RdTaskStatus.DONE.value:
-            update_fields["completed_at"] = datetime.now()
+            update_fields["completed_at"] = resolve_business_datetime()
         await task.update_from_dict(update_fields).save()
         return RdProjectTaskResponse.model_validate(task)
 
@@ -671,7 +672,7 @@ class RdProjectService(AppBaseService[RdProject]):
             raise NotFoundError(f"任务不存在: {task_id}")
         user_info = await self.get_user_info(deleted_by)
         await task.update_from_dict({
-            "deleted_at": datetime.now(),
+            "deleted_at": resolve_business_datetime(),
             "updated_by": deleted_by,
             "updated_by_name": user_info["name"],
         }).save()
@@ -719,9 +720,9 @@ class RdProjectService(AppBaseService[RdProject]):
             if val is not None:
                 update_fields[field] = val
         if data.status == RdDeliverableStatus.SUBMITTED.value:
-            update_fields["submitted_at"] = datetime.now()
+            update_fields["submitted_at"] = resolve_business_datetime()
         if data.status == RdDeliverableStatus.APPROVED.value:
-            update_fields["approved_at"] = datetime.now()
+            update_fields["approved_at"] = resolve_business_datetime()
         await row.update_from_dict(update_fields).save()
         return RdProjectDeliverableResponse.model_validate(row)
 
@@ -735,7 +736,7 @@ class RdProjectService(AppBaseService[RdProject]):
             raise NotFoundError(f"交付物不存在: {deliverable_id}")
         user_info = await self.get_user_info(deleted_by)
         await row.update_from_dict({
-            "deleted_at": datetime.now(),
+            "deleted_at": resolve_business_datetime(),
             "updated_by": deleted_by,
             "updated_by_name": user_info["name"],
         }).save()

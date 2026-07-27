@@ -16,6 +16,7 @@ from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.models.production_picking import ProductionPicking
 from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
+from core.utils.timezone_utils import resolve_business_datetime
 
 class WavePickingService:
     @staticmethod
@@ -83,7 +84,7 @@ class WavePickingService:
         
         # 4. 生成统一波次返回对象
         import datetime
-        now_str = datetime.datetime.now().strftime("%Y%m%d-%H%M")
+        now_str = datetime.resolve_business_datetime().strftime("%Y%m%d-%H%M")
         wave_code = f"WAVE-{now_str}"
         
         return {

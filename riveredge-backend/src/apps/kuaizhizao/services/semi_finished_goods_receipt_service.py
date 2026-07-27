@@ -13,7 +13,7 @@ from typing import List, Optional, Tuple
 from loguru import logger
 from tortoise.transactions import in_transaction
 
-from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
@@ -65,7 +65,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
             if receipt_data.receipt_code:
                 code = receipt_data.receipt_code
             else:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 code = await self.generate_code(
                     tenant_id, "SEMI_FINISHED_GOODS_RECEIPT_CODE", prefix=f"SFR{today}"
                 )
@@ -445,7 +445,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                 source_id=receipt_id,
             ).delete()
             await SemiFinishedGoodsReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).delete()
-            now = datetime.now()
+            now = resolve_business_datetime()
             await SemiFinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 deleted_at=now,
                 is_active=False,
@@ -694,7 +694,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
             if receipt_code:
                 code = receipt_code
             else:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 code = await self.generate_code(
                     tenant_id, "SEMI_FINISHED_GOODS_RECEIPT_CODE", prefix=f"SF{today}"
                 )

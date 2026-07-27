@@ -59,7 +59,7 @@ const customFieldPagejaJP = {
   'customFieldPage.master-data-holiday.pageName': '休日の設定',
   'customFieldPage.master-data-holiday.tableNameLabel': '休日',
   'customFieldPage.master-data-manufacturing-bom.pageName': '標準運用SOP',
-  'customFieldPage.master-data-manufacturing-bom.tableNameLabel': '標準操作SOP',
+  'customFieldPage.master-data-manufacturing-bom.tableNameLabel': '標準操作 (SOP)',
   'customFieldPage.master-data-material-group.pageName': '材料グループ',
   'customFieldPage.master-data-material-group.tableNameLabel': '材料グループ',
   'customFieldPage.master-data-material.pageName': '材料',

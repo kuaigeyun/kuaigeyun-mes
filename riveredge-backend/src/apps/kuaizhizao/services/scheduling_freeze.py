@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import Any, Optional, Union
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 def freeze_anchor_datetime(
@@ -12,7 +13,7 @@ def freeze_anchor_datetime(
     now: Optional[datetime] = None,
 ) -> datetime:
     """与前端 dayjs().add(days).endOf('day') 对齐。"""
-    base = now or datetime.now()
+    base = now or resolve_business_datetime()
     days = max(0, int(freeze_horizon_days or 0))
     anchor_day = (base + timedelta(days=days)).replace(
         hour=23, minute=59, second=59, microsecond=999999

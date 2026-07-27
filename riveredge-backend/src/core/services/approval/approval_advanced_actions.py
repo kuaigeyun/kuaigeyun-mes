@@ -14,6 +14,7 @@ from core.schemas.approval_flow_schema import get_node_config, normalize_flow_gr
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class ApprovalAdvancedActions:
@@ -100,7 +101,7 @@ class ApprovalAdvancedActions:
             approval_instance_id=instance.id,
             action=action,
             action_by=operator_id,
-            action_at=datetime.now(),
+            action_at=resolve_business_datetime(),
             comment=comment,
             from_node=instance.current_node,
             to_node=instance.current_node,
@@ -126,7 +127,7 @@ class ApprovalAdvancedActions:
             raise ValidationError("不能转交给自己")
 
         task.status = "transferred"
-        task.action_at = datetime.now()
+        task.action_at = resolve_business_datetime()
         task.comment = comment
         await task.save()
 
@@ -228,7 +229,7 @@ class ApprovalAdvancedActions:
                 )
         else:
             task.status = "approved"
-            task.action_at = datetime.now()
+            task.action_at = resolve_business_datetime()
             task.comment = comment
             await task.save()
             for uid in resolved:
@@ -309,7 +310,7 @@ class ApprovalAdvancedActions:
         try:
             h = float(hours)
             if h > 0:
-                task.due_at = datetime.now() + timedelta(hours=h)
+                task.due_at = resolve_business_datetime() + timedelta(hours=h)
                 await task.save(update_fields=["due_at", "updated_at"])
         except (TypeError, ValueError):
             pass

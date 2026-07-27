@@ -45,6 +45,7 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_purchase_order_detail_capabilities,
     enrich_purchase_order_list_capabilities,
 )
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 from apps.kuaizhizao.services.document_action_policy.purchase_order import (
     assert_purchase_order_capability,
 )
@@ -149,7 +150,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         async with in_transaction():
             # 生成订单编码
             if not order_data.order_code:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 order_data.order_code = await self.generate_code(tenant_id, "PURCHASE_ORDER_CODE", prefix=f"PO{today}")
 
             # 验证供应商（允许草稿订单临时无供应商：supplier_id<=0）
@@ -1022,7 +1023,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 update_dict = {
                     'reviewer_id': approved_by,
                     'reviewer_name': approver_name,
-                    'review_time': datetime.now(),
+                    'review_time': resolve_business_datetime(),
                     'review_status': ReviewStatus.REJECTED.value,
                     'review_remarks': approve_data.review_remarks,
                     'status': DocumentStatus.REJECTED.value,
@@ -1032,7 +1033,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 update_dict = {
                     'reviewer_id': approved_by,
                     'reviewer_name': approver_name,
-                    'review_time': datetime.now(),
+                    'review_time': resolve_business_datetime(),
                     'review_status': ReviewStatus.APPROVED.value,
                     'review_remarks': approve_data.review_remarks,
                     'status': DocumentStatus.CONFIRMED.value,
@@ -1042,7 +1043,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 update_dict = {
                     'reviewer_id': approved_by,
                     'reviewer_name': approver_name,
-                    'review_time': datetime.now(),
+                    'review_time': resolve_business_datetime(),
                     'review_status': "审核中" if approve_data.approved else ReviewStatus.REJECTED.value,
                     'review_remarks': approve_data.review_remarks,
                     'updated_by': approved_by
@@ -1059,7 +1060,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             update_dict = {
                 'reviewer_id': approved_by,
                 'reviewer_name': approver_name,
-                'review_time': datetime.now(),
+                'review_time': resolve_business_datetime(),
                 'review_status': ReviewStatus.APPROVED.value if approve_data.approved else ReviewStatus.REJECTED.value,
                 'review_remarks': approve_data.review_remarks,
                 'updated_by': approved_by
@@ -1207,7 +1208,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         # 明细硬删；订单头软删（与销售订单一致，兼容 tenant+code 部分唯一索引）
         await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).delete()
         await PurchaseOrder.filter(tenant_id=tenant_id, id=order_id).update(
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )
 
         return True
@@ -1287,7 +1288,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     transition_comment=comment,
                     operator_id=operator_id,
                     operator_name=operator_name,
-                    transition_time=datetime.now(),
+                    transition_time=resolve_business_datetime(),
                     related_entity_type="purchase_order",
                     related_entity_id=order_id,
                 )
@@ -2443,7 +2444,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             has_invoice=has_invoice,
         )
 
-        today = datetime.now().strftime("%Y%m%d")
+        today = today_site_str()
         invoice_code = await self.generate_code(tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today}")
 
         total_amount = float(order.total_amount or 0)
@@ -2459,7 +2460,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             supplier_id=order.supplier_id,
             supplier_name=order.supplier_name,
             invoice_number="待补全",
-            invoice_date=datetime.now().date(),
+            invoice_date=to_site_date(resolve_business_datetime()),
             invoice_type="增值税专用发票",
             tax_rate=tax_rate,
             invoice_amount=invoice_amount,

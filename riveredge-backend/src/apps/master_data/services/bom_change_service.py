@@ -24,6 +24,7 @@ from apps.master_data.schemas.bom_change_schemas import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.services.user_service import UserService
 from loguru import logger
+from core.utils.timezone_utils import now_utc
 
 
 def _to_bom_change_response(change: BOMChange) -> BOMChangeResponse:
@@ -446,7 +447,7 @@ class BOMChangeService:
 
         # 变更执行：实际 BOM 修改已在 BOM 升版/编辑时完成，此处仅更新状态
         change.status = "executed"
-        change.applied_at = datetime.utcnow()
+        change.applied_at = now_utc()
         await change.save()
         try:
             from apps.kuaizhizao.services.demand_change_event_service import DemandChangeEventService
@@ -490,5 +491,5 @@ class BOMChangeService:
         if not change:
             raise NotFoundError("BOM 工程变更记录", change_uuid)
 
-        change.deleted_at = datetime.utcnow()
+        change.deleted_at = now_utc()
         await change.save()

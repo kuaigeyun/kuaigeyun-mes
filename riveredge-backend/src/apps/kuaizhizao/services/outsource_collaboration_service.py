@@ -15,7 +15,7 @@ from loguru import logger
 from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
 from apps.master_data.models.supplier import Supplier
 from core.services.base import BaseService
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
@@ -76,7 +76,7 @@ class OutsourceCollaborationService(BaseService):
             # 更新委外工单状态为已下发
             outsource_work_order.status = 'in_progress'
             if not outsource_work_order.actual_start_date:
-                outsource_work_order.actual_start_date = datetime.now()
+                outsource_work_order.actual_start_date = resolve_business_datetime()
             await outsource_work_order.save()
             
             # TODO: 发送通知给供应商（通过消息系统或邮件）
@@ -88,7 +88,7 @@ class OutsourceCollaborationService(BaseService):
                 "outsource_work_order_code": outsource_work_order.code,
                 "supplier_id": supplier.id,
                 "supplier_name": supplier.name,
-                "sent_at": to_api_isoformat(datetime.now()),
+                "sent_at": to_api_isoformat(resolve_business_datetime()),
             }
     
     async def update_outsource_progress(
@@ -139,9 +139,9 @@ class OutsourceCollaborationService(BaseService):
             # 更新备注
             if progress_data.get('remarks'):
                 if outsource_work_order.remarks:
-                    outsource_work_order.remarks += f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {progress_data['remarks']}"
+                    outsource_work_order.remarks += f"\n[{resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {progress_data['remarks']}"
                 else:
-                    outsource_work_order.remarks = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {progress_data['remarks']}"
+                    outsource_work_order.remarks = f"[{resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {progress_data['remarks']}"
             
             await outsource_work_order.save()
             
@@ -151,7 +151,7 @@ class OutsourceCollaborationService(BaseService):
                 "success": True,
                 "outsource_work_order_id": outsource_work_order_id,
                 "progress_percentage": progress_percentage,
-                "updated_at": to_api_isoformat(datetime.now()),
+                "updated_at": to_api_isoformat(resolve_business_datetime()),
             }
     
     async def submit_outsource_completion(
@@ -210,9 +210,9 @@ class OutsourceCollaborationService(BaseService):
             
             if completion_data.get('remarks'):
                 if outsource_work_order.remarks:
-                    outsource_work_order.remarks += f"\n[完工申请 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {completion_data['remarks']}"
+                    outsource_work_order.remarks += f"\n[完工申请 {resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {completion_data['remarks']}"
                 else:
-                    outsource_work_order.remarks = f"[完工申请 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {completion_data['remarks']}"
+                    outsource_work_order.remarks = f"[完工申请 {resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {completion_data['remarks']}"
             
             await outsource_work_order.save()
             
@@ -225,7 +225,7 @@ class OutsourceCollaborationService(BaseService):
                 "completed_quantity": completed_quantity,
                 "qualified_quantity": qualified_quantity,
                 "unqualified_quantity": unqualified_quantity,
-                "submitted_at": to_api_isoformat(datetime.now()),
+                "submitted_at": to_api_isoformat(resolve_business_datetime()),
             }
     
     async def get_supplier_outsource_orders(

@@ -11,7 +11,7 @@ Date: 2025-01-14
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from loguru import logger
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 from apps.kuaizhizao.models.state_transition import StateTransitionRule, StateTransitionLog
 from apps.kuaizhizao.constants import STATE_ALIASES, DocumentStatus
@@ -198,7 +198,7 @@ class StateTransitionService:
                 transition_comment=transition_comment,
                 operator_id=operator_id,
                 operator_name=operator_name,
-                transition_time=datetime.now(),
+                transition_time=resolve_business_datetime(),
                 related_entity_type=related_entity_type,
                 related_entity_id=related_entity_id,
             )

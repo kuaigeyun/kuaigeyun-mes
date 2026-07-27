@@ -200,7 +200,10 @@ class BatchingOrderConfirmRequest(BaseModel):
 
 
 class BatchingCenterTaskItem(BaseModel):
-    task_type: str = Field(..., description="proactive_prep|material_call|batching_draft|backflush_alert")
+    task_type: str = Field(
+        ...,
+        description="proactive_prep|material_call|batching_draft|backflush_alert（查询可用 line_side_prep 合并建议+草稿）",
+    )
     task_id: int = Field(..., description="业务主键")
     doc_code: Optional[str] = None
     work_order_id: Optional[int] = None
@@ -216,6 +219,7 @@ class BatchingCenterTaskItem(BaseModel):
     material_name: Optional[str] = None
     material_code: Optional[str] = None
     requested_quantity: Optional[float] = None
+    total_items: Optional[int] = Field(None, description="物料品种数（备料建议缺料项数 / 备料单明细行数）")
     delivered_quantity: Optional[float] = Field(None, description="已送达数量合计")
     material_unit: Optional[str] = None
     caller_name: Optional[str] = None

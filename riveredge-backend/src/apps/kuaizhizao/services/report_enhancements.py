@@ -11,7 +11,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 
 async def customer_received_by_customer_id(
@@ -234,9 +234,9 @@ async def build_inventory_ledger(
 ) -> Dict[str, Any]:
     """库存收发明细：按物料+仓库滚动结存（非跨物料合计）。"""
     if not date_start:
-        date_start = datetime.now() - timedelta(days=90)
+        date_start = resolve_business_datetime() - timedelta(days=90)
     if not date_end:
-        date_end = datetime.now()
+        date_end = resolve_business_datetime()
     # 日期筛选若只到日，补齐当天结束，避免漏掉当日流水
     if date_end.hour == 0 and date_end.minute == 0 and date_end.second == 0 and date_end.microsecond == 0:
         date_end = date_end.replace(hour=23, minute=59, second=59, microsecond=999999)
@@ -451,7 +451,7 @@ async def build_slow_moving_inventory(
     """呆滞料：MaterialBatch 在库 + 库龄（updated_at）。"""
     from apps.master_data.models.material_batch import MaterialBatch
 
-    cutoff = datetime.now() - timedelta(days=stale_days)
+    cutoff = resolve_business_datetime() - timedelta(days=stale_days)
     q = MaterialBatch.filter(
         tenant_id=tenant_id,
         deleted_at__isnull=True,

@@ -373,7 +373,11 @@ class InventoryService:
             wh = None
             if warehouse_id is not None:
                 from apps.master_data.models.warehouse import Warehouse
-                wh = await Warehouse.get_or_none(id=warehouse_id, deleted_at__isnull=True)
+                wh = await Warehouse.get_or_none(
+                    id=warehouse_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                )
                 if wh and wh.warehouse_type == "line_side":
                     use_line_side = True
 
@@ -666,7 +670,11 @@ class InventoryService:
             use_line_side = False
             if warehouse_id is not None:
                 from apps.master_data.models.warehouse import Warehouse
-                wh = await Warehouse.get_or_none(id=warehouse_id, deleted_at__isnull=True)
+                wh = await Warehouse.get_or_none(
+                    id=warehouse_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                )
                 if wh and wh.warehouse_type == "line_side":
                     use_line_side = True
 
@@ -1039,7 +1047,11 @@ class InventoryService:
             use_line_side = False
             if warehouse_id is not None:
                 from apps.master_data.models.warehouse import Warehouse
-                wh = await Warehouse.get_or_none(id=warehouse_id, deleted_at__isnull=True)
+                wh = await Warehouse.get_or_none(
+                    id=warehouse_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                )
                 if wh and wh.warehouse_type == "line_side":
                     use_line_side = True
 

@@ -1516,6 +1516,28 @@ code {
 .kuaizhizao-work-orders-table .ant-table-tbody > tr > td {
   vertical-align: middle !important;
 }
+/* 齐套率圆环：行增高时在单元格内垂直居中 */
+.kuaizhizao-work-orders-table .ant-table-tbody > tr > td.wo-readiness-cell {
+  vertical-align: middle !important;
+}
+.kuaizhizao-work-orders-table .wo-readiness-trigger {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 100%;
+  cursor: pointer;
+}
+.kuaizhizao-work-orders-table .wo-readiness-ring-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+.kuaizhizao-work-orders-table .wo-readiness-ring.ant-progress {
+  margin-inline-end: 0 !important;
+  line-height: 0;
+}
 .kuaizhizao-work-orders-table .wo-operation-cards-panel {
   width: 100%;
   min-width: 0;

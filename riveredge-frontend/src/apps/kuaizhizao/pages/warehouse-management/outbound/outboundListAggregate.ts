@@ -5,7 +5,23 @@ import {
   sortOutboundHubRows,
 } from '../../../utils/warehouseListCore';
 import type { OutboundHubOrder } from './outboundHubTypes';
-import { mapOutsourceIssueToOutbound } from './outboundHubTypes';
+import {
+  mapOutsourceIssueToOutbound,
+  resolveOutboundHubDateRaw,
+  resolveOutboundHubOperator,
+} from './outboundHubTypes';
+
+function withOutboundHubDisplayFields(row: OutboundHubOrder): OutboundHubOrder {
+  const dateRaw = resolveOutboundHubDateRaw(row);
+  const operator = resolveOutboundHubOperator(row);
+  return {
+    ...row,
+    ...(dateRaw != null && String(dateRaw).trim() !== ''
+      ? { delivery_date: String(dateRaw) }
+      : {}),
+    ...(operator ? { delivered_by: operator } : {}),
+  };
+}
 
 const emptyList = { items: [] as unknown[], total: 0 };
 
@@ -117,7 +133,7 @@ export async function fetchOutboundHubList(
     ...outsourceData,
     ...otherData,
     ...borrowData,
-  ];
+  ].map(withOutboundHubDisplayFields);
 
   const statusFilter = params.status as string | undefined;
   if (statusFilter === 'pending') {

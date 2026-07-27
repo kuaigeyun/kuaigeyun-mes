@@ -23,10 +23,12 @@ import {
   VisualSchedulingMissingSetting,
 } from '../../../services/production';
 import { mesDashboardService } from '../../../services/dashboard';
+import { rollingSchedulingApi } from '../../../services/rolling-scheduling';
 import type { ViewMode, WorkOrderForGantt, WorkstationResource } from '../../../components/GanttSchedulingChart/types';
 import { stationResourceId } from '../../../components/GanttSchedulingChart/stationResourceUtils';
 import { factoryListItems, workstationApi, workCenterApi } from '../../../../master-data/services/factory';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { ROUTES } from '../../../constants/routes';
 import dayjs from 'dayjs';
 import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import SchedulingHeaderBand from './components/SchedulingHeaderBand';
@@ -130,6 +132,9 @@ const DEFAULT_SCHEDULING_CONSTRAINTS: SchedulingConstraints = {
   consider_mold_tool: true,
   freeze_horizon_days: 2,
   rolling_horizon_days: 14,
+  setup_changeover_hours: 1,
+  schedule_mode: 'forward',
+  material_hard_constraint: false,
 };
 
 function pickVisualSchedulingConstraints(constraints: SchedulingConstraints): SchedulingConstraints {
@@ -140,6 +145,9 @@ function pickVisualSchedulingConstraints(constraints: SchedulingConstraints): Sc
     consider_mold_tool: constraints.consider_mold_tool,
     freeze_horizon_days: constraints.freeze_horizon_days ?? 2,
     rolling_horizon_days: constraints.rolling_horizon_days ?? 14,
+    setup_changeover_hours: constraints.setup_changeover_hours ?? 1,
+    schedule_mode: constraints.schedule_mode === 'backward' ? 'backward' : 'forward',
+    material_hard_constraint: Boolean(constraints.material_hard_constraint),
   };
 }
 
@@ -734,6 +742,23 @@ const SchedulingPage: React.FC = () => {
           reportBatchUpdateResult(messageApi, opLabel, opResult, t);
           mutateGanttWorkOrders((prev) => applyOperationDateUpdates(prev ?? [], opUpdates));
         }
+        if (filterPlanDate) {
+          const woIds = new Set<number>(woUpdates.map((u) => u.work_order_id));
+          if (opUpdates.length > 0) {
+            (ganttWorkOrders || []).forEach((wo) => {
+              const opIds = new Set((wo.operations || []).map((o) => o.id));
+              if (opUpdates.some((u) => opIds.has(u.operation_id))) {
+                woIds.add(wo.id);
+              }
+            });
+          }
+          if (woIds.size > 0) {
+            await rollingSchedulingApi.syncFromAps({
+              plan_date: filterPlanDate,
+              work_order_ids: [...woIds],
+            });
+          }
+        }
         actionRef.current?.reload();
         refreshBoardScan();
         refreshPlanReliability();
@@ -766,7 +791,16 @@ const SchedulingPage: React.FC = () => {
         });
       });
     },
-    [messageApi, modal, mutateGanttWorkOrders, refreshBoardScan, refreshPlanReliability, t]
+    [
+      filterPlanDate,
+      ganttWorkOrders,
+      messageApi,
+      modal,
+      mutateGanttWorkOrders,
+      refreshBoardScan,
+      refreshPlanReliability,
+      t,
+    ]
   );
 
   const handleApplyDraft = useCallback(async () => {
@@ -802,6 +836,26 @@ const SchedulingPage: React.FC = () => {
           failed: result.failed,
         }, t);
         mutateGanttWorkOrders((prev) => applyOperationStationUpdates(prev ?? [], stationUpdates));
+      }
+      if (filterPlanDate) {
+        const woIds = new Set<number>(woUpdates.map((u) => u.work_order_id));
+        if (opUpdates.length > 0 || stationUpdates.length > 0) {
+          const opIdSet = new Set([
+            ...opUpdates.map((u) => u.operation_id),
+            ...stationUpdates.map((u) => u.operation_id),
+          ]);
+          (ganttWorkOrders || []).forEach((wo) => {
+            if ((wo.operations || []).some((o) => o.id != null && opIdSet.has(o.id))) {
+              woIds.add(wo.id);
+            }
+          });
+        }
+        if (woIds.size > 0) {
+          await rollingSchedulingApi.syncFromAps({
+            plan_date: filterPlanDate,
+            work_order_ids: [...woIds],
+          });
+        }
       }
       actionRef.current?.reload();
       refreshBoardScan();
@@ -853,6 +907,8 @@ const SchedulingPage: React.FC = () => {
       }
     }
   }, [
+    filterPlanDate,
+    ganttWorkOrders,
     messageApi,
     modal,
     mutateGanttWorkOrders,
@@ -1285,6 +1341,18 @@ const SchedulingPage: React.FC = () => {
       setOperationEditContext({ workOrder: wo, operationId });
     },
     [ganttWorkOrders]
+  );
+
+  const handleGanttOperationDoubleClick = useCallback(
+    (operationId: number, workOrderId: number | null) => {
+      if (!workOrderId) return;
+      const wo = ganttBoardWorkOrders.find((item) => item.id === workOrderId)
+        ?? ganttWorkOrders.find((item) => item.id === workOrderId);
+      if (!wo) return;
+      setOperationEditContext({ workOrder: wo, operationId });
+      setOperationEditOpen(true);
+    },
+    [ganttBoardWorkOrders, ganttWorkOrders]
   );
 
   const persistOperationScheduling = useCallback(
@@ -1840,11 +1908,17 @@ const SchedulingPage: React.FC = () => {
     onBatchUnfreeze: handleBatchUnfreeze,
     onBatchShift: handleBatchShift,
     onShiftDaysChange: setShiftDays,
-    onViewModeChange: setGanttViewMode,
+    onViewModeChange: (mode) => {
+      setGanttViewMode(mode);
+      setScrollToTodayToken((n) => n + 1);
+    },
     onScrollToToday: () => setScrollToTodayToken((n) => n + 1),
     aiTrigger: <SchedulingAiAssistantTrigger onOpen={() => setAiDrawerOpen(true)} />,
     onAutoReschedule: handleAutoReschedule,
-    onEditOperation: () => setOperationEditOpen(true),
+    onEditOperation: () => {
+      if (!operationEditContext) return;
+      setOperationEditOpen(true);
+    },
     autoRescheduleLoading,
     canEditOperation: operationEditContext != null,
   });
@@ -1878,27 +1952,12 @@ const SchedulingPage: React.FC = () => {
         legendMetrics={topLegendMetrics}
         planReliabilityLoading={planReliabilityLoading}
         planReliability={planReliability}
+        missingSettingsCount={
+          boardScan?.missing_settings_count ?? boardScan?.missing_settings?.length ?? 0
+        }
+        missingSettingsActionDisabled={!canScheduleUpdate}
+        onMissingSettingsClick={() => openMissingSettingsModal(boardScan?.missing_settings ?? [])}
       />
-      {(boardScan?.missing_settings?.length ?? 0) > 0 ? (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 12 }}
-          title={t('app.kuaizhizao.scheduling.alert.missingSettings', {
-            count: boardScan?.missing_settings_count ?? boardScan?.missing_settings?.length ?? 0,
-          })}
-          action={
-            <Button
-              size="small"
-              type="primary"
-              disabled={!canScheduleUpdate}
-              onClick={() => openMissingSettingsModal(boardScan?.missing_settings ?? [])}
-            >
-              {t('app.kuaizhizao.scheduling.alert.missingSettingsAction')}
-            </Button>
-          }
-        />
-      ) : null}
       {filterWorkOrderIds?.length ? (
         <Alert
           type="info"
@@ -1960,7 +2019,10 @@ const SchedulingPage: React.FC = () => {
                   focusTaskId={focusTaskId}
                   onFocusTaskConsumed={handleFocusTaskConsumed}
                   scrollToTodayToken={scrollToTodayToken}
-                  onViewModeChange={setGanttViewMode}
+                  onViewModeChange={(mode) => {
+                    setGanttViewMode(mode);
+                    setScrollToTodayToken((n) => n + 1);
+                  }}
                   onBatchUpdate={canScheduleUpdate ? handleGanttBatchUpdate : undefined}
                   onBatchUpdateOperations={canScheduleUpdate ? handleGanttBatchUpdateOperations : undefined}
                   onBatchUpdateOperationStations={
@@ -1968,6 +2030,7 @@ const SchedulingPage: React.FC = () => {
                   }
                   onWorkOrderSelect={handleGanttWorkOrderSelect}
                   onOperationSelect={handleGanttOperationSelect}
+                  onOperationDoubleClick={handleGanttOperationDoubleClick}
                   onRefresh={refreshGantt}
                   canUpdate={canScheduleUpdate}
                   nonDraggableTaskIds={nonDraggableTaskIds}
@@ -2265,7 +2328,7 @@ const SchedulingPage: React.FC = () => {
 
       <Modal
         title={t('app.kuaizhizao.scheduling.config.title')}
-        width={400}
+        width={560}
         open={configDrawerOpen}
         onCancel={() => setConfigDrawerOpen(false)}
         footer={
@@ -2329,6 +2392,68 @@ const SchedulingPage: React.FC = () => {
                 }
               />
             </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{t('app.kuaizhizao.scheduling.config.changeoverHours')}</span>
+              <InputNumber
+                size="small"
+                min={0}
+                max={12}
+                step={0.5}
+                value={schedulingConstraints.setup_changeover_hours}
+                onChange={(v) =>
+                  setSchedulingConstraints((c) => ({
+                    ...c,
+                    setup_changeover_hours: Number(v ?? 0),
+                  }))
+                }
+              />
+            </div>
+            <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: -8 }}>
+              {t('app.kuaizhizao.scheduling.config.changeoverHoursHint')}
+            </Typography.Text>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{t('app.kuaizhizao.scheduling.config.scheduleMode')}</span>
+              <Select
+                size="small"
+                style={{ width: 140 }}
+                value={schedulingConstraints.schedule_mode || 'forward'}
+                options={[
+                  { value: 'forward', label: t('app.kuaizhizao.scheduling.config.scheduleModeForward') },
+                  { value: 'backward', label: t('app.kuaizhizao.scheduling.config.scheduleModeBackward') },
+                ]}
+                onChange={(v) =>
+                  setSchedulingConstraints((c) => ({
+                    ...c,
+                    schedule_mode: v === 'backward' ? 'backward' : 'forward',
+                  }))
+                }
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{t('app.kuaizhizao.scheduling.config.materialHardConstraint')}</span>
+              <Switch
+                checked={Boolean(schedulingConstraints.material_hard_constraint)}
+                onChange={(v) =>
+                  setSchedulingConstraints((c) => ({ ...c, material_hard_constraint: v }))
+                }
+              />
+            </div>
+            <Divider style={{ margin: '4px 0' }} />
+            <div style={{ fontWeight: 500 }}>{t('app.kuaizhizao.scheduling.config.workHoursTitle')}</div>
+            <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: -8 }}>
+              {t('app.kuaizhizao.scheduling.config.workHoursHint')}
+            </Typography.Text>
+            <Button
+              type="link"
+              size="small"
+              style={{ padding: 0, alignSelf: 'flex-start' }}
+              onClick={() => {
+                setConfigDrawerOpen(false);
+                navigate(ROUTES.PERF_WORK_CALENDAR);
+              }}
+            >
+              {t('app.kuaizhizao.scheduling.config.workHoursLink')}
+            </Button>
             <Divider style={{ margin: '4px 0' }} />
             <div style={{ fontWeight: 500 }}>{t('app.kuaizhizao.scheduling.config.dragValidationTitle')}</div>
             {(['consider_human', 'consider_equipment', 'consider_material', 'consider_mold_tool'] as const).map((key) => (

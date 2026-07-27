@@ -1,8 +1,9 @@
 import React, { useRef, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Tag, Typography } from 'antd';
-import { DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -18,6 +19,8 @@ import {
   normalizeEquipmentListResponse,
   resolveMaintenanceExecutionListParams,
 } from '../../../utils/equipmentListCore';
+import { ROUTES } from '../../../constants/routes';
+import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 
 const P = 'app.kuaizhizao.maintenanceExecution';
 const RESOURCE = 'kuaizhizao:maintenance-plan';
@@ -34,6 +37,15 @@ interface MaintenanceExecution {
   status?: string;
   maintenance_cost?: number;
   spare_parts_used?: { items?: Array<{ spare_part_id?: number; quantity?: number }> };
+  source_type?: string;
+  source_uuid?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
+  executed_items?: Array<{
+    item_id?: number;
+    item_name?: string;
+    done?: boolean;
+    attachments?: Array<{ uid?: string; name?: string; url?: string }>;
+  }>;
   created_at?: string;
   updated_at?: string;
   created_by_name?: string;
@@ -47,6 +59,7 @@ const RESULT_COLORS: Record<string, string> = {
 };
 
 const MaintenanceExecutionsPage: React.FC = () => {
+  const navigate = useNavigate();
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
@@ -170,6 +183,27 @@ const MaintenanceExecutionsPage: React.FC = () => {
         sorter: true,
         hideInSearch: true,
       },
+      {
+        title: t(`${P}.col.source`),
+        dataIndex: 'source_type',
+        width: 110,
+        hideInSearch: true,
+        render: (_, r) =>
+          r.source_type === 'equipment_fault' && r.source_uuid ? (
+            <Typography.Link
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(
+                  `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(r.source_uuid!)}`,
+                );
+              }}
+            >
+              {t(`${P}.source.fault`)}
+            </Typography.Link>
+          ) : (
+            '-'
+          ),
+      },
       ...buildDocumentAuditColumns<MaintenanceExecution>(t),
       {
         title: t('common.actions'),
@@ -186,7 +220,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
         ],
       },
     ],
-    [t, perms.canRead, executionStatusValueEnum, executionResultValueEnum],
+    [t, perms.canRead, executionStatusValueEnum, executionResultValueEnum, navigate],
   );
 
   if (!perms.canRead) return null;
@@ -248,12 +282,50 @@ const MaintenanceExecutionsPage: React.FC = () => {
             <p>{t(`${P}.col.executionResult`)}: {detail.execution_result ?? '-'}</p>
             <p>{t(`${P}.col.status`)}: {detail.status ?? '-'}</p>
             <p>{t(`${P}.col.executionContent`)}: {detail.execution_content ?? '-'}</p>
+            <p>
+              {t(`${P}.col.source`)}:{' '}
+              {detail.source_type === 'equipment_fault' && detail.source_uuid ? (
+                <Typography.Link
+                  onClick={() =>
+                    navigate(
+                      `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(detail.source_uuid!)}`,
+                    )
+                  }
+                >
+                  {t(`${P}.viewFault`)}
+                </Typography.Link>
+              ) : (
+                '-'
+              )}
+            </p>
             {detail.spare_parts_used?.items?.length ? (
               <p>
                 {t(`${P}.col.sparePartsUsed`)}:{' '}
                 {detail.spare_parts_used.items.map((i) => `#${i.spare_part_id}×${i.quantity}`).join(', ')}
               </p>
             ) : null}
+            <div style={{ marginTop: 12 }}>
+              <div style={{ marginBottom: 8 }}>{t(`${P}.col.attachments`, { defaultValue: '照片' })}</div>
+              <LineAttachmentsUpload
+                category="maintenance_execution_attachments"
+                value={detail.attachments}
+                readOnly
+              />
+            </div>
+          </DetailDrawerSection>
+        ) : null}
+        {detail?.executed_items?.length ? (
+          <DetailDrawerSection title={t(`${P}.section.executedItems`, { defaultValue: '保养项' })}>
+            {detail.executed_items.map((item, index) => (
+              <div key={String(item.item_id ?? index)} style={{ marginBottom: 12 }}>
+                <p>{item.item_name ?? `#${item.item_id ?? index + 1}`}</p>
+                <LineAttachmentsUpload
+                  category="maintenance_execution_item"
+                  value={item.attachments}
+                  readOnly
+                />
+              </div>
+            ))}
           </DetailDrawerSection>
         ) : null}
       </DetailDrawerTemplate>

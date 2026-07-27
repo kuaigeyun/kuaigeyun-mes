@@ -32,6 +32,7 @@ from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.services.warehouse_service import _resolve_warehouse_name_by_id
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
 class StocktakingService(AppBaseService[Stocktaking]):
@@ -109,7 +110,7 @@ class StocktakingService(AppBaseService[Stocktaking]):
 
         async with in_transaction():
             # 生成盘点单号
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="STOCKTAKING_CODE",
@@ -202,7 +203,7 @@ class StocktakingService(AppBaseService[Stocktaking]):
         if stocktaking.status != "draft":
             raise BusinessLogicError("只有草稿状态的盘点单才能删除")
         await Stocktaking.filter(id=stocktaking_id, tenant_id=tenant_id).update(
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )
         return True
 
@@ -669,7 +670,7 @@ class StocktakingService(AppBaseService[Stocktaking]):
             item.difference_amount = difference_amount
             item.counted_by = counted_by
             item.counted_by_name = user_info["name"]
-            item.counted_at = datetime.now()
+            item.counted_at = resolve_business_datetime()
             item.status = "counted"
             if remarks:
                 item.remarks = remarks
@@ -768,7 +769,7 @@ class StocktakingService(AppBaseService[Stocktaking]):
             stocktaking.status = "completed"
             stocktaking.completed_by = completed_by
             stocktaking.completed_by_name = user_info["name"]
-            stocktaking.completed_at = datetime.now()
+            stocktaking.completed_at = resolve_business_datetime()
             stocktaking.updated_by = completed_by
             stocktaking.updated_by_name = user_info["name"]
 
@@ -807,7 +808,7 @@ class StocktakingService(AppBaseService[Stocktaking]):
             if counted > 0:
                 raise BusinessLogicError("已有盘点录入，不能撤回")
 
-            now = datetime.now()
+            now = resolve_business_datetime()
             await StocktakingItem.filter(
                 stocktaking_id=stocktaking_id,
                 tenant_id=tenant_id,

@@ -13,6 +13,7 @@ from loguru import logger
 
 from infra.config.infra_config import infra_settings as settings
 from infra.infrastructure.cache.cache_manager import cache_manager
+from core.utils.timezone_utils import now_utc
 
 
 class FilePreviewService:
@@ -47,7 +48,7 @@ class FilePreviewService:
         tenant_id: int,
         expires_in: int = 3600,
     ) -> str:
-        now = datetime.utcnow()
+        now = now_utc()
         stable_now = now.replace(minute=0, second=0, microsecond=0)
 
         payload = {

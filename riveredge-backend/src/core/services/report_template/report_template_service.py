@@ -25,6 +25,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
 from infra.infrastructure.http import get_http_client
+from core.utils.timezone_utils import resolve_business_datetime
 
 class ReportTemplateService(BaseService):
     """
@@ -225,7 +226,7 @@ class ReportTemplateService(BaseService):
         if not template:
             raise NotFoundError("报表模板不存在")
 
-        template.deleted_at = datetime.now()
+        template.deleted_at = resolve_business_datetime()
         await template.save()
 
     async def _validate_config(self, config: Dict[str, Any]) -> None:

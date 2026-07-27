@@ -9,7 +9,7 @@ from datetime import datetime
 from loguru import logger
 import traceback
 import json
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import now_utc, to_api_isoformat
 
 
 class ErrorLogger:
@@ -38,7 +38,7 @@ class ErrorLogger:
             "message": str(error),
             "traceback": traceback.format_exc(),
             "context": context or {},
-            "timestamp": to_api_isoformat(datetime.utcnow()),
+            "timestamp": to_api_isoformat(now_utc()),
         }
         
         log_message = f"错误: {error_info['type']} - {error_info['message']}"

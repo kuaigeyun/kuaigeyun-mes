@@ -23,6 +23,7 @@ from core.services.authorization.permission_policy_service import PermissionPoli
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import BusinessLogicError
+from core.utils.timezone_utils import today_site_str
 
 router = APIRouter(prefix="/receipts", tags=["App - Kuaicaiwu - Finance"])
 receipt_pull_service = ReceiptPullService()
@@ -85,7 +86,7 @@ async def create_receipt(
                 total_amount=Decimal(data.total_amount),
             )
 
-        today = datetime.now().strftime("%Y%m%d")
+        today = today_site_str()
         count = await Receipt.filter(tenant_id=tenant_id).count()
         code = f"SK{today}{count + 1:04d}"
         customer_id = data.customer_id

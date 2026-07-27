@@ -152,6 +152,18 @@ class WorkOrderOperation(BaseModel):
         description="超报值：fixed 为额外数量，percent 为计划数量的百分数",
     )
 
+    # 委外（计划委外落章 / 临时委外）
+    outsource_kind = fields.CharField(
+        max_length=20,
+        default="none",
+        description="委外类型：none / planned / ad_hoc",
+    )
+    outsource_lead_time_days = fields.IntField(null=True, description="委外提前期（天）")
+    default_outsource_supplier_id = fields.IntField(null=True, description="默认委外供应商ID")
+    default_outsource_supplier_name = fields.CharField(
+        max_length=200, null=True, description="默认委外供应商名称"
+    )
+
     # 备注
     remarks = fields.TextField(null=True, description="备注")
 

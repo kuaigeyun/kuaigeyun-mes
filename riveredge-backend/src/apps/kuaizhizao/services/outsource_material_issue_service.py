@@ -34,6 +34,7 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
 from loguru import logger
 
 from apps.kuaizhizao.utils.outsource_work_order_state import apply_outsource_work_order_execution_start
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
 class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
@@ -97,7 +98,7 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
 
             code = issue_data.code
             if not code:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 existing_codes = await OutsourceMaterialIssue.filter(
                     tenant_id=tenant_id,
                     code__startswith=f"OWI-{today}",
@@ -119,7 +120,7 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
                 if existing:
                     raise ValidationError(f"委外发料单编码 {code} 已存在")
 
-            now = datetime.now()
+            now = resolve_business_datetime()
             material_issue = await OutsourceMaterialIssue.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -323,7 +324,7 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
                 continue
             issue.status = "completed"
             if not issue.issued_at:
-                issue.issued_at = issue.created_at or datetime.now()
+                issue.issued_at = issue.created_at or resolve_business_datetime()
             if not issue.issued_by:
                 issue.issued_by = issue.created_by
             if not issue.issued_by_name:
@@ -454,7 +455,7 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
 
         # 更新状态
         issue.status = "completed"
-        issue.issued_at = datetime.now()
+        issue.issued_at = resolve_business_datetime()
         issue.issued_by = completed_by
         issue.issued_by_name = user_info["name"]
         issue.updated_by = completed_by

@@ -321,12 +321,12 @@ export const workOrderApi = {
       batching_order_code?: string
     }>(`/apps/kuaizhizao/work-orders/${id}/remind-batching`, { method: 'POST', data }),
 
-  /** 工单物料移动时间线（库存流水 / 单据兜底） */
+  /** 工单物料移动（库存流水 / 单据兜底） */
   getMaterialMovements: async (id: string | number, params?: { limit?: number }) =>
     apiRequest<{
       work_order_id: number
       total: number
-      source_mode: 'ledger' | 'document'
+      source_mode: 'ledger' | 'document' | 'mixed'
       items: Array<{
         id?: number
         source: 'ledger' | 'document'
@@ -339,12 +339,47 @@ export const workOrderApi = {
         from_warehouse_name?: string
         to_warehouse_name?: string
         source_doc_type?: string
+        source_doc_id?: number
         source_doc_code?: string
         operator_name?: string
         remark?: string
         occurred_at?: string
       }>
     }>(`/apps/kuaizhizao/work-orders/${id}/material-movements`, { method: 'GET', params }),
+
+  /** 工单物料履历（采购申请→订单→收货通知→来料检验→采购入库 + 库存移动，时间正序） */
+  getMaterialHistory: async (id: string | number, params?: { limit?: number }) =>
+    apiRequest<{
+      work_order_id: number
+      total: number
+      source_mode: 'ledger' | 'document' | 'mixed'
+      /** BOM/组件物料左栏；无履历事件的物料也会返回 */
+      materials?: Array<{
+        material_id: number
+        material_code?: string
+        material_name?: string
+        material_spec?: string
+      }>
+      items: Array<{
+        id?: number
+        source: 'ledger' | 'document'
+        movement_type: string
+        material_id?: number
+        material_code?: string
+        material_name?: string
+        material_spec?: string
+        batch_no?: string
+        quantity: number | string
+        from_warehouse_name?: string
+        to_warehouse_name?: string
+        source_doc_type?: string
+        source_doc_id?: number
+        source_doc_code?: string
+        operator_name?: string
+        remark?: string
+        occurred_at?: string
+      }>
+    }>(`/apps/kuaizhizao/work-orders/${id}/material-history`, { method: 'GET', params }),
 
   /** 工单下推生产领料预览 */
   previewPushProductionPicking: async (id: number | string) =>

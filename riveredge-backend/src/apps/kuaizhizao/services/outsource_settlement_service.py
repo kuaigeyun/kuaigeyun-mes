@@ -16,7 +16,7 @@ from loguru import logger
 from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder, OutsourceMaterialReceipt
 from apps.master_data.models.supplier import Supplier
 from core.services.base import BaseService
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat, today_site_str
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
@@ -75,7 +75,7 @@ class OutsourceSettlementService(BaseService):
             "processing_cost": float(processing_cost),
             "material_cost": 0.0,  # TODO: 计算材料成本
             "total_cost": float(processing_cost),
-            "calculated_at": to_api_isoformat(datetime.now()),
+            "calculated_at": to_api_isoformat(resolve_business_datetime()),
         }
     
     async def create_settlement_statement(
@@ -159,7 +159,7 @@ class OutsourceSettlementService(BaseService):
                 })
             
             # 生成结算单编码
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             settlement_code = f"OSS-{today}-{supplier.code}"
             
             # TODO: 创建结算单记录（需要创建结算单模型）
@@ -176,7 +176,7 @@ class OutsourceSettlementService(BaseService):
                 "total_amount": float(total_amount),
                 "item_count": len(settlement_items),
                 "items": settlement_items,
-                "created_at": to_api_isoformat(datetime.now()),
+                "created_at": to_api_isoformat(resolve_business_datetime()),
             }
     
     async def reconcile_outsource_orders(
@@ -234,5 +234,5 @@ class OutsourceSettlementService(BaseService):
                 "calculated_amount": float(calculated_amount),
                 "confirmed_amount": float(confirmed_amount),
                 "amount_difference": float(amount_difference),
-                "reconciled_at": to_api_isoformat(datetime.now()),
+                "reconciled_at": to_api_isoformat(resolve_business_datetime()),
             }

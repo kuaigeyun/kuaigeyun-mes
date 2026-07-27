@@ -18,6 +18,7 @@ from core.schemas.approval_process import ApprovalProcessCreate, ApprovalProcess
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.config.audit_registry import all_entries as _audit_entries, entry_by_node_key, is_auditable_node_key
 from core.schemas.approval_flow_schema import normalize_and_validate_flow
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 def _registry_canonical_names() -> Dict[str, str]:
@@ -316,7 +317,7 @@ class ApprovalProcessService:
         """
         approval_process = await ApprovalProcessService.get_approval_process_by_uuid(tenant_id, uuid)
 
-        approval_process.deleted_at = datetime.now()
+        approval_process.deleted_at = resolve_business_datetime()
         await approval_process.save()
 
     @staticmethod

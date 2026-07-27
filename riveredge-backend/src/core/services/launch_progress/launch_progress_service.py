@@ -10,7 +10,7 @@ Date: 2026-01-27
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from loguru import logger
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 from apps.kuaizhizao.services.launch_countdown_service import LaunchCountdownService
 from apps.kuaizhizao.models.launch_countdown import LaunchCountdown
@@ -51,7 +51,7 @@ class LaunchProgressService:
             }
         
         # 计算剩余天数
-        days_remaining = (countdown.launch_date - datetime.now()).days
+        days_remaining = (countdown.launch_date - resolve_business_datetime()).days
         days_remaining = max(0, days_remaining)
         
         # 计算进度百分比
@@ -125,7 +125,7 @@ class LaunchProgressService:
             is_critical = stage_key in ["inventory", "wip", "receivables_payables"]
             
             # 判断是否即将到期（距离上线日期3天内）
-            days_remaining = (countdown.launch_date - datetime.now()).days if countdown.launch_date else 999
+            days_remaining = (countdown.launch_date - resolve_business_datetime()).days if countdown.launch_date else 999
             is_due_soon = days_remaining <= 3 and not is_completed
             
             tasks.append({
@@ -176,7 +176,7 @@ class LaunchProgressService:
             })
         
         return {
-            "generated_at": to_api_isoformat(datetime.now()),
+            "generated_at": to_api_isoformat(resolve_business_datetime()),
             "summary": {
                 "total_tasks": total_tasks,
                 "completed_tasks": completed_tasks,

@@ -7,7 +7,7 @@ Author: Luigi Lu
 Date: 2025-12-30
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
@@ -46,7 +46,12 @@ from apps.kuaizhizao.services.inspection_policy_service import (
     resolve_inspection_policy,
     stage_plan_type,
 )
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import (
+    resolve_business_datetime,
+    to_api_isoformat,
+    to_site_date,
+    today_site_str,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 from datetime import date, time as dt_time
@@ -180,12 +185,13 @@ async def _is_quality_audit_required(tenant_id: int, stage_code: str) -> bool:
 async def _quality_inspection_initial_review_fields(
     tenant_id: int, stage_code: str
 ) -> Dict[str, Any]:
-    """未开启人工审核时，创建检验单即预置审核通过（与来料检验一致）。"""
-    if await _is_quality_audit_required(tenant_id, stage_code):
-        return {}
-    from apps.kuaizhizao.constants import ReviewStatus
+    """创建检验单时清空审核态（覆盖模型默认「待审核」）。
 
-    return {"review_status": ReviewStatus.APPROVED}
+    与系统审核规范一致：关闭人工审核 = 自动通过，但通过时机对齐「提交/生效」——
+    检验单对应「执行检验」(conduct)，创建时不预置已通过。
+    """
+    _ = tenant_id, stage_code
+    return {"review_status": ""}
 
 
 async def _quality_inspection_conduct_finalize_fields(
@@ -196,23 +202,30 @@ async def _quality_inspection_conduct_finalize_fields(
     inspected_by: int,
     inspector_name: str,
 ) -> Dict[str, Any]:
-    """执行检验后的状态字段：未开启人工审核且合格时自动审核通过。"""
-    fields: Dict[str, Any] = {"status": "已检验"}
-    if await _is_quality_audit_required(tenant_id, stage_code):
-        return fields
-    if quality_status != "合格":
-        return fields
+    """执行检验后的审核字段（系统规范）。
+
+    - 开启人工审核：进入待审核，由人审/驳
+    - 未开启人工审核：自动通过审核（非跳过）；合格件业务态落「已审核」，
+      不合格件业务态保持「已检验」以便缺陷/退货，审核列仍为已通过
+    """
     from apps.kuaizhizao.constants import ReviewStatus
 
+    fields: Dict[str, Any] = {"status": "已检验"}
+    if await _is_quality_audit_required(tenant_id, stage_code):
+        fields["review_status"] = ReviewStatus.PENDING.value
+        return fields
+
+    # 关闭人工审核：执行检验后自动通过
     fields.update(
         {
             "review_status": ReviewStatus.APPROVED,
-            "status": "已审核",
             "reviewer_id": inspected_by,
             "reviewer_name": inspector_name,
-            "review_time": datetime.now(),
+            "review_time": resolve_business_datetime(),
         }
     )
+    if quality_status == "合格":
+        fields["status"] = "已审核"
     return fields
 
 
@@ -507,6 +520,11 @@ _CONDUCT_PAYLOAD_SKIP_KEYS = frozenset({
     "conduct_step_results",
     "qualified_quantity",
     "unqualified_quantity",
+    # 业务时刻仅由服务端 resolve_business_datetime 写入，禁止请求体覆盖
+    "inspection_time",
+    "review_time",
+    "created_at",
+    "updated_at",
 })
 
 
@@ -617,7 +635,7 @@ async def _maybe_record_spc_samples_from_inspection(
         return
 
     spc_svc = SPCService()
-    sample_time = datetime.now()
+    sample_time = resolve_business_datetime()
     for row in payloads:
         await spc_svc.create_sample(
             tenant_id=tenant_id,
@@ -649,7 +667,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             raise BusinessLogicError("当前组织未开启来料检验，禁止创建来料检验单")
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}")
 
             create_data = inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
@@ -706,7 +724,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
     async def list_incoming_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取来料检验单列表"""
-        query = IncomingInspection.filter(tenant_id=tenant_id)
+        query = IncomingInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         if filters.get('status'):
             query = query.filter(status=filters['status'])
@@ -788,6 +806,25 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             await IncomingInspection.filter(tenant_id=tenant_id, id=inspection_id).update(**update_data)
             return await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
 
+    async def delete_incoming_inspection(
+        self, tenant_id: int, inspection_id: int, deleted_by: int
+    ) -> None:
+        """软删除来料检验单（仅待检验）。"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+
+        async with in_transaction():
+            row = await IncomingInspection.get_or_none(
+                tenant_id=tenant_id, id=inspection_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"来料检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(row, "delete")
+            _ = deleted_by
+            row.deleted_at = resolve_business_datetime()
+            await row.save(update_fields=["deleted_at"])
+
     async def conduct_inspection(self, tenant_id: int, inspection_id: int, inspection_data: dict, inspected_by: int) -> IncomingInspectionResponse:
         """执行检验"""
         from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
@@ -825,7 +862,6 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 "quality_status": quality_status,
                 "inspector_id": inspected_by,
                 "inspector_name": inspector_name,
-                "inspection_time": datetime.now(),
                 "updated_by": inspected_by,
                 "updated_by_name": inspector_name,
                 **conduct_payload,
@@ -839,6 +875,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     inspector_name=inspector_name,
                 )
             )
+            # 时刻必须最后写入，避免被 payload / finalize 之外的键污染
+            conduct_update["inspection_time"] = resolve_business_datetime()
+            if "review_time" in conduct_update and conduct_update["review_time"] is not None:
+                conduct_update["review_time"] = resolve_business_datetime()
             await IncomingInspection.filter(tenant_id=tenant_id, id=inspection_id).update(**conduct_update)
 
             updated_inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
@@ -1028,7 +1068,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 supplier_name=inspection.supplier_name,
                 purchase_receipt_id=inspection.purchase_receipt_id,
                 purchase_receipt_code=inspection.purchase_receipt_code,
-                return_date=datetime.now().date(),
+                return_date=to_site_date(resolve_business_datetime()),
                 status="待退项",
                 notes=f"由来料检验单 {inspection.inspection_code} 不合格项自动生成"
             )
@@ -1101,7 +1141,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             await IncomingInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
                 reviewer_id=approved_by,
                 reviewer_name=approver_name,
-                review_time=datetime.now(),
+                review_time=resolve_business_datetime(),
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 status=status,
@@ -1111,6 +1151,37 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
             updated_inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
             return updated_inspection
+
+    async def revoke_approval(
+        self, tenant_id: int, inspection_id: int, user_id: int
+    ) -> IncomingInspectionResponse:
+        """撤销来料检验审核（已审核 → 已检验；人工审→待审，关审→清空）。"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
+
+        async with in_transaction():
+            inspection = await IncomingInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+            if not inspection:
+                raise NotFoundError(f"来料检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(inspection, "revoke_approval")
+
+            audit_required = await _is_quality_audit_required(tenant_id, "incoming_inspection")
+            landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+            updater_name = await self.get_user_name(user_id)
+
+            await IncomingInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
+                status="已检验",
+                review_status="待审核" if landing == "pending" else "",
+                reviewer_id=None,
+                reviewer_name=None,
+                review_time=None,
+                review_remarks=None,
+                updated_by=user_id,
+                updated_by_name=updater_name,
+            )
+            return await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
 
     async def _ensure_missing_incoming_inspections_for_purchase_receipt(
         self,
@@ -1149,7 +1220,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 "iqc",
             )
 
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}")
 
             create_kwargs: Dict[str, Any] = {
@@ -1398,7 +1469,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             template = await _resolve_inspection_template_fields(
                 tenant_id, item.material_id, "iqc"
             )
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(
                 tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}"
             )
@@ -2190,7 +2261,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     continue
 
                 # 创建检验单
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 code = await self.generate_code(tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}")
                 
                 inspection_quantity = float(row[header_index_map.get('inspection_quantity', -1)]) if header_index_map.get('inspection_quantity', -1) >= 0 and row[header_index_map.get('inspection_quantity', -1)] else receipt_item.receipt_quantity
@@ -2271,7 +2342,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         os.makedirs(export_dir, exist_ok=True)
         
         # 生成文件名
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = resolve_business_datetime().strftime('%Y%m%d_%H%M%S')
         filename = f"incoming_inspections_{timestamp}.csv"
         file_path = os.path.join(export_dir, filename)
         
@@ -2324,7 +2395,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             raise BusinessLogicError("当前组织未开启过程检验，禁止创建过程检验单")
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "PROCESS_INSPECTION_CODE", prefix=f"PQ{today}")
 
             create_data = inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
@@ -2374,9 +2445,26 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         resp = enrich_quality_inspection_capabilities_on_response(inspection, resp)
         return await enrich_record(tenant_id, "process_inspection", resp)
 
+    async def _heal_duplicate_pending_process_inspections(self, tenant_id: int) -> None:
+        """合并同工单同工序的多张待检验单（列表加载时自愈）。"""
+        from collections import defaultdict
+
+        pending = await ProcessInspection.filter(
+            tenant_id=tenant_id,
+            status="待检验",
+            deleted_at__isnull=True,
+        ).all()
+        groups: Dict[Tuple[int, int], List[Any]] = defaultdict(list)
+        for row in pending:
+            groups[(int(row.work_order_id), int(row.operation_id))].append(row)
+        for rows in groups.values():
+            if len(rows) > 1:
+                await self._dedupe_pending_process_inspections(rows)
+
     async def list_process_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取过程检验单列表"""
-        query = ProcessInspection.filter(tenant_id=tenant_id)
+        await self._heal_duplicate_pending_process_inspections(tenant_id)
+        query = ProcessInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         if filters.get('status'):
             query = query.filter(status=filters['status'])
@@ -2423,6 +2511,25 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             "success": True,
         })
 
+    async def delete_process_inspection(
+        self, tenant_id: int, inspection_id: int, deleted_by: int
+    ) -> None:
+        """软删除过程检验单（仅待检验）。"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+
+        async with in_transaction():
+            row = await ProcessInspection.get_or_none(
+                tenant_id=tenant_id, id=inspection_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"过程检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(row, "delete")
+            _ = deleted_by
+            row.deleted_at = resolve_business_datetime()
+            await row.save(update_fields=["deleted_at"])
+
     async def conduct_inspection(self, tenant_id: int, inspection_id: int, inspection_data: dict, inspected_by: int) -> ProcessInspectionResponse:
         """执行过程检验"""
         from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
@@ -2457,7 +2564,6 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 "quality_status": quality_status,
                 "inspector_id": inspected_by,
                 "inspector_name": inspector_name,
-                "inspection_time": datetime.now(),
                 "updated_by": inspected_by,
                 "updated_by_name": inspector_name,
                 **conduct_payload,
@@ -2471,6 +2577,9 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                     inspector_name=inspector_name,
                 )
             )
+            conduct_update["inspection_time"] = resolve_business_datetime()
+            if "review_time" in conduct_update and conduct_update["review_time"] is not None:
+                conduct_update["review_time"] = resolve_business_datetime()
             await ProcessInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
                 **conduct_update
             )
@@ -2537,7 +2646,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             await ProcessInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
                 reviewer_id=approved_by,
                 reviewer_name=approver_name,
-                review_time=datetime.now(),
+                review_time=resolve_business_datetime(),
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 status=status,
@@ -2546,6 +2655,46 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             )
 
             if not rejection_reason and inspection.work_order_id:
+                from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+                await WorkOrderService().refresh_work_order_operation_transfer_state(
+                    tenant_id=tenant_id,
+                    work_order_id=int(inspection.work_order_id),
+                )
+
+            return await self.get_process_inspection_by_id(tenant_id, inspection_id)
+
+    async def revoke_approval(
+        self, tenant_id: int, inspection_id: int, user_id: int
+    ) -> ProcessInspectionResponse:
+        """撤销工序检验审核（已审核 → 已检验；人工审→待审，关审→清空）。"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
+
+        async with in_transaction():
+            inspection = await ProcessInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+            if not inspection:
+                raise NotFoundError(f"过程检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(inspection, "revoke_approval")
+
+            audit_required = await _is_quality_audit_required(tenant_id, "process_inspection")
+            landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+            updater_name = await self.get_user_name(user_id)
+
+            await ProcessInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
+                status="已检验",
+                review_status="待审核" if landing == "pending" else "",
+                reviewer_id=None,
+                reviewer_name=None,
+                review_time=None,
+                review_remarks=None,
+                updated_by=user_id,
+                updated_by_name=updater_name,
+            )
+
+            if inspection.work_order_id:
                 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 
                 await WorkOrderService().refresh_work_order_operation_transfer_state(
@@ -2607,7 +2756,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         await WorkOrderOperation.filter(tenant_id=tenant_id, id=woo.id).update(
             qualified_quantity=reconciled_qualified,
             unqualified_quantity=insp_u,
-            updated_at=datetime.now(),
+            updated_at=resolve_business_datetime(),
         )
         logger.info(
             "过程质检已回写工序质量口径: 工单%s 工序%s 合格%s 不合格%s",
@@ -2616,6 +2765,63 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             reconciled_qualified,
             insp_u,
         )
+
+    @staticmethod
+    async def _dedupe_pending_process_inspections(pending_rows: List[Any]) -> Any:
+        """同工单工序多张待检验时保留一张（优先有报工关联、再取最新），其余软删。"""
+        if not pending_rows:
+            raise ValidationError("待去重的过程检验单列表为空")
+        if len(pending_rows) == 1:
+            return pending_rows[0]
+        keep = max(
+            pending_rows,
+            key=lambda r: (
+                1 if getattr(r, "reporting_record_id", None) else 0,
+                int(getattr(r, "id", 0) or 0),
+            ),
+        )
+        now = resolve_business_datetime()
+        for row in pending_rows:
+            if int(row.id) == int(keep.id):
+                continue
+            row.deleted_at = now
+            await row.save(update_fields=["deleted_at"])
+            logger.info(
+                "过程检验重复待检单已软删: keep=%s removed=%s wo=%s op=%s",
+                keep.inspection_code,
+                row.inspection_code,
+                row.work_order_id,
+                row.operation_id,
+            )
+        return keep
+
+    async def dedupe_pending_process_inspections_for_operation(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        operation_ids: List[int],
+    ) -> Optional[ProcessInspectionResponse]:
+        """清理指定工序上重复的待检验单；若有则返回保留的一张。"""
+        ids = [int(x) for x in operation_ids if x is not None]
+        if not ids:
+            return None
+        async with in_transaction():
+            pending_rows = (
+                await ProcessInspection.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    operation_id__in=ids,
+                    status="待检验",
+                    deleted_at__isnull=True,
+                )
+                .select_for_update()
+                .order_by("id")
+                .all()
+            )
+            if not pending_rows:
+                return None
+            keep = await self._dedupe_pending_process_inspections(pending_rows)
+            return ProcessInspectionResponse.model_validate(keep)
 
     async def create_inspection_from_work_order(
         self,
@@ -2697,30 +2903,47 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 raise BusinessLogicError(
                     "当前工单工序未配置过程检验（工序/成品质检模式均为无质检），无需下推过程检验单"
                 )
+            if not wf.get("material_id"):
+                raise BusinessLogicError(
+                    f"工单 {work_order.code} 未关联生产物料，无法创建过程检验单"
+                )
+            if not (wf.get("material_code") and wf.get("material_name")):
+                raise BusinessLogicError(
+                    f"工单 {work_order.code} 物料编码/名称缺失，无法创建过程检验单"
+                )
 
             if reporting_record_id:
                 existing_by_report = await ProcessInspection.filter(
                     tenant_id=tenant_id,
                     reporting_record_id=reporting_record_id,
                     deleted_at__isnull=True,
-                ).first()
+                ).select_for_update().first()
                 if existing_by_report:
                     return ProcessInspectionResponse.model_validate(existing_by_report)
 
-            # 检查是否已存在检验单（与报工相同的工序主键）
-            existing = await ProcessInspection.filter(
-                tenant_id=tenant_id,
-                work_order_id=work_order_id,
-                operation_id=master_op_id,
-                status='待检验',
-                deleted_at__isnull=True,
-            ).first()
-            
-            if existing:
-                raise BusinessLogicError("该工单和工序已存在待检验的检验单")
-            
+            # 同工单同工序仅保留一张待检验单（兼容误存工单工序行 id）
+            op_id_aliases = {master_op_id, int(woo.id)}
+            pending_rows = (
+                await ProcessInspection.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    operation_id__in=list(op_id_aliases),
+                    status="待检验",
+                    deleted_at__isnull=True,
+                )
+                .select_for_update()
+                .order_by("id")
+                .all()
+            )
+            if pending_rows:
+                keep = await self._dedupe_pending_process_inspections(pending_rows)
+                if reporting_record_id and not keep.reporting_record_id:
+                    keep.reporting_record_id = reporting_record_id
+                    await keep.save(update_fields=["reporting_record_id"])
+                return ProcessInspectionResponse.model_validate(keep)
+
             # 创建检验单
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "PROCESS_INSPECTION_CODE", prefix=f"PQ{today}")
             
             # 获取报工数量作为检验数量
@@ -3171,7 +3394,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 if existing:
                     continue
 
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 code = await self.generate_code(tenant_id, "PROCESS_INSPECTION_CODE", prefix=f"PQ{today}")
 
                 base_qty = wf.get("planned_qty") or work_order.quantity
@@ -3246,7 +3469,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         export_dir = os.path.join(tempfile.gettempdir(), 'riveredge_exports')
         os.makedirs(export_dir, exist_ok=True)
         
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = resolve_business_datetime().strftime('%Y%m%d_%H%M%S')
         filename = f"process_inspections_{timestamp}.csv"
         file_path = os.path.join(export_dir, filename)
         
@@ -3407,7 +3630,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             raise BusinessLogicError("当前组织未开启成品检验，禁止创建成品检验单")
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "FINISHED_GOODS_INSPECTION_CODE", prefix=f"FQ{today}")
 
             create_data = inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
@@ -3464,7 +3687,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
 
     async def list_finished_goods_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取成品检验单列表"""
-        query = FinishedGoodsInspection.filter(tenant_id=tenant_id)
+        query = FinishedGoodsInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         if filters.get('status'):
             query = query.filter(status=filters['status'])
@@ -3518,6 +3741,25 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             "success": True,
         })
 
+    async def delete_finished_goods_inspection(
+        self, tenant_id: int, inspection_id: int, deleted_by: int
+    ) -> None:
+        """软删除成品检验单（仅待检验）。"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+
+        async with in_transaction():
+            row = await FinishedGoodsInspection.get_or_none(
+                tenant_id=tenant_id, id=inspection_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"成品检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(row, "delete")
+            _ = deleted_by
+            row.deleted_at = resolve_business_datetime()
+            await row.save(update_fields=["deleted_at"])
+
     async def conduct_inspection(self, tenant_id: int, inspection_id: int, inspection_data: dict, inspected_by: int) -> FinishedGoodsInspectionResponse:
         """执行成品检验"""
         from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
@@ -3552,7 +3794,6 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 "quality_status": quality_status,
                 "inspector_id": inspected_by,
                 "inspector_name": inspector_name,
-                "inspection_time": datetime.now(),
                 "updated_by": inspected_by,
                 "updated_by_name": inspector_name,
                 **conduct_payload,
@@ -3566,6 +3807,9 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     inspector_name=inspector_name,
                 )
             )
+            conduct_update["inspection_time"] = resolve_business_datetime()
+            if "review_time" in conduct_update and conduct_update["review_time"] is not None:
+                conduct_update["review_time"] = resolve_business_datetime()
             await FinishedGoodsInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
                 **conduct_update
             )
@@ -3618,7 +3862,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             await FinishedGoodsInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
                 reviewer_id=approved_by,
                 reviewer_name=approver_name,
-                review_time=datetime.now(),
+                review_time=resolve_business_datetime(),
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 status=status,
@@ -3626,6 +3870,41 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 updated_by_name=approver_name,
             )
 
+            return await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
+
+    async def revoke_approval(
+        self, tenant_id: int, inspection_id: int, user_id: int
+    ) -> FinishedGoodsInspectionResponse:
+        """撤销成品检验审核（已审核 → 已检验；人工审→待审，关审→清空）。"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
+
+        async with in_transaction():
+            inspection = await FinishedGoodsInspection.get_or_none(
+                tenant_id=tenant_id, id=inspection_id
+            )
+            if not inspection:
+                raise NotFoundError(f"成品检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(inspection, "revoke_approval")
+
+            audit_required = await _is_quality_audit_required(
+                tenant_id, "finished_goods_inspection"
+            )
+            landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+            updater_name = await self.get_user_name(user_id)
+
+            await FinishedGoodsInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
+                status="已检验",
+                review_status="待审核" if landing == "pending" else "",
+                reviewer_id=None,
+                reviewer_name=None,
+                review_time=None,
+                review_remarks=None,
+                updated_by=user_id,
+                updated_by_name=updater_name,
+            )
             return await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
 
     async def issue_certificate(self, tenant_id: int, inspection_id: int, certificate_number: str, issued_by: int) -> FinishedGoodsInspectionResponse:
@@ -3695,7 +3974,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                             sales_order_code=inspection.sales_order_code,
                             warehouse_id=wh_id or 0,
                             warehouse_name=wh_name or "",
-                            receipt_time=datetime.now(),
+                            receipt_time=resolve_business_datetime(),
                             status="待入库",
                             notes=f"由成品检验单 {inspection.inspection_code} 合格放行自动生成（半成品入库）",
                         )
@@ -3735,7 +4014,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                             sales_order_code=inspection.sales_order_code,
                             warehouse_id=wh_id or 0,
                             warehouse_name=wh_name or "",
-                            receipt_time=datetime.now(),
+                            receipt_time=resolve_business_datetime(),
                             status="待入库",
                             notes=f"由成品检验单 {inspection.inspection_code} 合格放行自动生成",
                         )
@@ -4350,7 +4629,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 raise BusinessLogicError("该工单已存在待检验的检验单")
             
             # 创建检验单
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "FINISHED_GOODS_INSPECTION_CODE", prefix=f"FQ{today}")
 
             inspection_qty = wf.get("planned_qty") or work_order.quantity
@@ -4494,7 +4773,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 if existing:
                     continue
 
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 code = await self.generate_code(tenant_id, "FINISHED_GOODS_INSPECTION_CODE", prefix=f"FQ{today}")
 
                 base_qty = wf.get("planned_qty") or work_order.quantity
@@ -4571,7 +4850,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         export_dir = os.path.join(tempfile.gettempdir(), 'riveredge_exports')
         os.makedirs(export_dir, exist_ok=True)
         
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = resolve_business_datetime().strftime('%Y%m%d_%H%M%S')
         filename = f"finished_goods_inspections_{timestamp}.csv"
         file_path = os.path.join(export_dir, filename)
         
@@ -4938,7 +5217,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         from tortoise.functions import Sum
         from apps.kuaizhizao.models.oqc_inspection import OQCInspection
 
-        now = datetime.now()
+        now = resolve_business_datetime()
         today_start = datetime(now.year, now.month, now.day)
         month_start = datetime(now.year, now.month, 1)
         last_month_end = month_start - timedelta(seconds=1)

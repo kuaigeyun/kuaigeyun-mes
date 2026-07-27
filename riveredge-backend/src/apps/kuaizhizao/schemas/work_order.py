@@ -289,6 +289,13 @@ class WorkOrderOperationMinimalForGantt(BaseSchema):
     assigned_equipment_name: Optional[str] = None
     assigned_mold_name: Optional[str] = None
     assigned_tool_name: Optional[str] = None
+    assigned_worker_id: Optional[int] = None
+    assigned_mold_id: Optional[int] = None
+    outsource_kind: Optional[str] = Field("none", description="委外类型 none/planned/ad_hoc")
+    outsource_lead_time_days: Optional[int] = None
+    default_outsource_supplier_id: Optional[int] = None
+    default_outsource_supplier_name: Optional[str] = None
+    is_outsourced: Optional[bool] = False
 
 
 class WorkOrderOperationStepSummary(BaseModel):
@@ -421,8 +428,15 @@ class KittingRelatedWorkOrderSummary(BaseModel):
     work_order_code: str = Field(..., description="关联工单编号")
     status: str = Field(..., description="工单状态")
     quantity: Decimal = Field(..., description="计划数量")
-    completed_quantity: Decimal = Field(default=Decimal("0"), description="完工数量")
-    progress_percent: float = Field(default=0.0, description="进度百分比 0-100")
+    completed_quantity: Decimal = Field(
+        default=Decimal("0"),
+        description="有效完工数量（方案质检为过程检验放行数，未检完不计）",
+    )
+    progress_percent: float = Field(
+        default=0.0,
+        description="有效完工进度 0-100（与 completed_quantity 同口径）",
+    )
+    planned_end_date: Optional[datetime] = Field(None, description="计划完工/结束时间")
 
 
 class KittingRelatedOutsourceWorkOrderSummary(BaseModel):
@@ -434,6 +448,7 @@ class KittingRelatedOutsourceWorkOrderSummary(BaseModel):
     received_quantity: Decimal = Field(default=Decimal("0"), description="已收货数量")
     progress_percent: float = Field(default=0.0, description="委外完成进度 0-100")
     supplier_name: Optional[str] = Field(None, description="委外供应商名称")
+    planned_end_date: Optional[datetime] = Field(None, description="计划完工/结束时间")
 
 
 class KittingSupplyProgress(BaseModel):
@@ -457,6 +472,9 @@ class KittingSupplyProgress(BaseModel):
     )
     document_id: Optional[int] = Field(None, description="关联单据 ID")
     document_code: Optional[str] = Field(None, description="关联单据编号")
+    expected_date: Optional[datetime] = Field(
+        None, description="预计完成/交期（采购订单交期或申请要求到货日）"
+    )
 
 
 class MaterialKittingItem(BaseModel):
@@ -469,7 +487,9 @@ class MaterialKittingItem(BaseModel):
     issue_method: Optional[str] = Field(
         None, description="发料方式 pick/backflush/none（解析后）"
     )
-    kitting_applicable: bool = Field(True, description="是否计入齐套率（服务/委外等为 false）")
+    kitting_applicable: bool = Field(
+        True, description="是否计入齐套率（服务/虚拟件为 false；委外子件为 true）"
+    )
     required_quantity: Decimal = Field(..., description="总需求数量")
     picked_quantity: Decimal = Field(
         ..., description="已正式发料数量（生产领料确认；不含线边备料/补料备料转移）"
@@ -494,7 +514,7 @@ class MaterialKittingItem(BaseModel):
     )
     work_order_supply_quantity: Decimal = Field(
         default=Decimal("0"),
-        description="关联工单完工量计入齐套可用量",
+        description="自制/可配置关联工单有效完工量（计入线边就绪；委外已收货不计入此字段，须主仓备到线边）",
     )
     related_outsource_work_order: Optional[KittingRelatedOutsourceWorkOrderSummary] = Field(
         None, description="关联委外工单（委外子件）"
@@ -583,6 +603,11 @@ class WorkOrderOperationBase(BaseSchema):
     assigned_tool_id: Optional[int] = Field(None, description="分配的工装ID")
     assigned_tool_name: Optional[str] = Field(None, description="分配的工装名称")
     assigned_at: Optional[datetime] = Field(None, description="分配时间")
+
+    outsource_kind: str = Field("none", description="委外类型：none / planned / ad_hoc")
+    outsource_lead_time_days: Optional[int] = Field(None, description="委外提前期（天）")
+    default_outsource_supplier_id: Optional[int] = Field(None, description="默认委外供应商ID")
+    default_outsource_supplier_name: Optional[str] = Field(None, description="默认委外供应商名称")
     
     remarks: Optional[str] = Field(None, description="备注")
 
@@ -699,7 +724,10 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
         alias="maxReportableQuantity",
         description="本道工序允许的最大累计完成数量（含超报，相对当前工单计划数量计算）",
     )
-    is_outsourced: bool = Field(False, description="是否已创建工序委外单（未取消）")
+    is_outsourced: bool = Field(
+        False,
+        description="是否委外（计划委外/临时委外或存在未取消委外单）",
+    )
     outsource_supplier_name: Optional[str] = Field(None, description="委外供应商名称")
     outsource_order_code: Optional[str] = Field(None, description="委外单编码")
 

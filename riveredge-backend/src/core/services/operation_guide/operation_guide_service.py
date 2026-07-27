@@ -10,7 +10,7 @@ Date: 2026-01-27
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from loguru import logger
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import now_utc, to_api_isoformat
 
 
 # 预定义的操作引导配置（按页面/功能分组）
@@ -170,7 +170,7 @@ class OperationGuideService:
             "page_key": page_key,
             "page_name": page_name,
             "steps": steps,
-            "updated_at": to_api_isoformat(datetime.utcnow()),
+            "updated_at": to_api_isoformat(now_utc()),
         }
         
         OPERATION_GUIDES[page_key] = guide

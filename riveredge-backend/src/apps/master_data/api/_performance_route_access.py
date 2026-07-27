@@ -23,6 +23,8 @@ _PATH_MODULE_RULES: tuple[tuple[str, str], ...] = (
     ("/work-groups", "performance-summaries"),
     ("/shifts", "performance-shifts"),
     ("/shift-rosters", "performance-shift-rosters"),
+    ("/work-calendar", "performance-work-calendar"),
+    ("/overtimes", "performance-overtimes"),
 )
 
 

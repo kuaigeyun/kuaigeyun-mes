@@ -8,6 +8,7 @@ from tortoise import fields
 from typing import Dict, Any, Optional
 from datetime import datetime
 from .base import BaseModel
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class IntegrationConfig(BaseModel):
@@ -97,7 +98,7 @@ class IntegrationConfig(BaseModel):
         """
         self.is_connected = is_connected
         if is_connected:
-            self.last_connected_at = datetime.now()
+            self.last_connected_at = resolve_business_datetime()
             self.last_error = None
         else:
             self.last_error = error

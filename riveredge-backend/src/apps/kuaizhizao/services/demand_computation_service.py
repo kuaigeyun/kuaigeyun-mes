@@ -69,7 +69,12 @@ from apps.kuaizhizao.utils.inventory_helper import (
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
-from core.utils.timezone_utils import make_aware, now_utc, to_api_isoformat
+from core.utils.timezone_utils import (
+    make_aware,
+    now_utc,
+    resolve_business_datetime,
+    to_api_isoformat,
+)
 
 # 草稿下推采购单时，无默认供应商的物料归入同一分组（supplier_id=0，名称「待定供应商」）
 PURCHASE_ORDER_NO_SUPPLIER_GROUP = 0
@@ -413,7 +418,7 @@ def _mrp_bom_as_of_datetime(delivery_date: Any, fallback: Optional[datetime] = N
         return delivery_date
     if isinstance(delivery_date, date):
         return datetime.combine(delivery_date, time.min)
-    return fallback or datetime.now()
+    return fallback or resolve_business_datetime()
 
 
 def _deep_merge_dict(base: Optional[Dict[str, Any]], patch: Dict[str, Any]) -> Dict[str, Any]:
@@ -886,7 +891,7 @@ class DemandComputationService(AppBaseService):
                 "computation_type": persist_computation_type,
                 "computation_params": computation_data.computation_params,
                 "computation_status": "进行中",
-                "computation_start_time": datetime.now(),
+                "computation_start_time": resolve_business_datetime(),
                 "notes": computation_data.notes,
                 "created_by": created_by,
             }
@@ -912,7 +917,7 @@ class DemandComputationService(AppBaseService):
                 "pushed_to_computation": True,
                 "computation_id": computation.id,
                 "computation_code": computation_code,
-                "updated_at": datetime.now(),
+                "updated_at": resolve_business_datetime(),
             }
             apply_update_audit(push_audit, user)
             await Demand.filter(tenant_id=tenant_id, id__in=demand_id_list).update(**push_audit)
@@ -968,7 +973,7 @@ class DemandComputationService(AppBaseService):
             return code
         except Exception as e:
             logger.warning(f"使用编码规则生成失败: {e}，使用简单编码")
-            now = datetime.now()
+            now = resolve_business_datetime()
             return f"MRP-{now.strftime('%Y%m%d')}-NEW"
     
     async def _build_computation_response(
@@ -1481,7 +1486,7 @@ class DemandComputationService(AppBaseService):
                 # 更新计算状态为计算中
                 start_audit: Dict[str, Any] = {
                     "computation_status": "计算中",
-                    "computation_start_time": datetime.now(),
+                    "computation_start_time": resolve_business_datetime(),
                 }
                 apply_update_audit(start_audit, operator)
                 await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
@@ -1526,7 +1531,7 @@ class DemandComputationService(AppBaseService):
                 # 更新计算状态为完成，清除失败时的错误信息
                 done_audit: Dict[str, Any] = {
                     "computation_status": "完成",
-                    "computation_end_time": datetime.now(),
+                    "computation_end_time": resolve_business_datetime(),
                     "computation_summary": summary,
                     "error_message": None,
                 }
@@ -1545,7 +1550,7 @@ class DemandComputationService(AppBaseService):
                 from infra.infrastructure.database.database import get_db_connection
                 conn = await get_db_connection()
                 try:
-                    now = datetime.now()
+                    now = resolve_business_datetime()
                     err_msg = str(e).replace("'", "''")[:2000]  # 转义并截断
                     if operator is not None:
                         await conn.execute(
@@ -1699,7 +1704,7 @@ class DemandComputationService(AppBaseService):
 
                 await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
                     computation_status="计算中",
-                    computation_start_time=datetime.now()
+                    computation_start_time=resolve_business_datetime()
                 )
 
                 await self._execute_mrp_computation(tenant_id, computation)
@@ -1787,7 +1792,7 @@ class DemandComputationService(AppBaseService):
             snapshot = await DemandComputationSnapshot.create(
                 tenant_id=tenant_id,
                 computation_id=computation_id,
-                snapshot_at=datetime.now(),
+                snapshot_at=resolve_business_datetime(),
                 trigger=trigger,
                 computation_summary_snapshot=summary_snapshot,
                 items_snapshot=items_snapshot,
@@ -1829,7 +1834,7 @@ class DemandComputationService(AppBaseService):
             await DemandComputationRecalcHistory.create(
                 tenant_id=tenant_id,
                 computation_id=computation_id,
-                recalc_at=datetime.now(),
+                recalc_at=resolve_business_datetime(),
                 trigger=trigger,
                 operator_id=operator_id,
                 result="success",
@@ -1841,7 +1846,7 @@ class DemandComputationService(AppBaseService):
             await DemandComputationRecalcHistory.create(
                 tenant_id=tenant_id,
                 computation_id=computation_id,
-                recalc_at=datetime.now(),
+                recalc_at=resolve_business_datetime(),
                 trigger=trigger,
                 operator_id=operator_id,
                 result="failed",
@@ -2973,7 +2978,7 @@ class DemandComputationService(AppBaseService):
                         pushed_to_computation=False,
                         computation_id=None,
                         computation_code=None,
-                        updated_at=datetime.now()
+                        updated_at=resolve_business_datetime()
                     )
                     # 同步上游（销售订单/销售预测）
                     await demand_svc.sync_upstream_planning_on_withdraw(tenant_id, d_obj)
@@ -4762,7 +4767,7 @@ class DemandComputationService(AppBaseService):
                 )
             except Exception:
                 # 回退到简单编码
-                now = datetime.now()
+                now = resolve_business_datetime()
                 order_code = f"PO-{now.strftime('%Y%m%d')}-{computation.id}"
             
             # 从物料来源配置获取默认供应商和采购价格（物料来源控制增强）
@@ -4903,7 +4908,7 @@ class DemandComputationService(AppBaseService):
                 )
             except Exception:
                 # 回退到简单编码
-                now = datetime.now()
+                now = resolve_business_datetime()
                 order_code = f"PO-{now.strftime('%Y%m%d')}-{computation.id}-{supplier_id}"
             
             # 确定交货日期（取所有物料中最早的日期）

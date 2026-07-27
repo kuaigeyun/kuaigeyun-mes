@@ -156,6 +156,8 @@ export interface Workstation {
   productionLineCode?: string;
   productionLineName?: string;
   description?: string;
+  /** 同刻最大并行工序数 */
+  maxParallel?: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -167,6 +169,7 @@ export interface WorkstationCreate {
   name: string;
   productionLineId: number;
   description?: string;
+  maxParallel?: number;
   isActive?: boolean;
 }
 
@@ -175,6 +178,7 @@ export interface WorkstationUpdate {
   name?: string;
   productionLineId?: number;
   description?: string;
+  maxParallel?: number;
   isActive?: boolean;
 }
 

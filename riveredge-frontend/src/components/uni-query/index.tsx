@@ -2986,7 +2986,12 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
         requestAnimationFrame(() => resolve());
       });
 
-      actionRef.current?.reload?.();
+      // 钉住条件变更须回第一页，避免旧页 offset 导致列表被搜空
+      if (typeof actionRef.current?.reloadAndRest === 'function') {
+        actionRef.current.reloadAndRest();
+      } else {
+        actionRef.current?.reload?.();
+      }
     } catch (error) {
       console.error('加载钉住的搜索条件失败:', error);
     }

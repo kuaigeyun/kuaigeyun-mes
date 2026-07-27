@@ -5,6 +5,10 @@
  */
 
 import { api, apiRequest } from '../../../services/api';
+import {
+  normalizeMasterBatchDeleteResponse,
+  type MasterBatchDeleteResult,
+} from '../utils/masterListCore';
 import type {
   Warehouse,
   WarehouseCreate,
@@ -103,20 +107,12 @@ export const warehouseApi = {
   /**
    * 批量删除仓库
    */
-  batchDelete: async (uuids: string[]): Promise<{
-    success: boolean;
-    message: string;
-    data: {
-      success_count: number;
-      failed_count: number;
-      success_records: Array<{ uuid: string; code?: string; name?: string }>;
-      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
-    };
-  }> => {
-    return apiRequest('/apps/master-data/warehouse/warehouses/batch-delete', {
+  batchDelete: async (uuids: string[]): Promise<MasterBatchDeleteResult> => {
+    const raw = await apiRequest('/apps/master-data/warehouse/warehouses/batch-delete', {
       method: 'DELETE',
       data: { uuids },
     });
+    return normalizeMasterBatchDeleteResponse(raw);
   },
 };
 
@@ -164,20 +160,12 @@ export const storageAreaApi = {
   /**
    * 批量删除库区
    */
-  batchDelete: async (uuids: string[]): Promise<{
-    success: boolean;
-    message: string;
-    data: {
-      success_count: number;
-      failed_count: number;
-      success_records: Array<{ uuid: string; code?: string; name?: string }>;
-      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
-    };
-  }> => {
-    return apiRequest('/apps/master-data/warehouse/storage-areas/batch-delete', {
+  batchDelete: async (uuids: string[]): Promise<MasterBatchDeleteResult> => {
+    const raw = await apiRequest('/apps/master-data/warehouse/storage-areas/batch-delete', {
       method: 'DELETE',
       data: { uuids },
     });
+    return normalizeMasterBatchDeleteResponse(raw);
   },
 };
 
@@ -225,20 +213,12 @@ export const storageLocationApi = {
   /**
    * 批量删除库位
    */
-  batchDelete: async (uuids: string[]): Promise<{
-    success: boolean;
-    message: string;
-    data: {
-      success_count: number;
-      failed_count: number;
-      success_records: Array<{ uuid: string; code?: string; name?: string }>;
-      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
-    };
-  }> => {
-    return apiRequest('/apps/master-data/warehouse/storage-locations/batch-delete', {
+  batchDelete: async (uuids: string[]): Promise<MasterBatchDeleteResult> => {
+    const raw = await apiRequest('/apps/master-data/warehouse/storage-locations/batch-delete', {
       method: 'DELETE',
       data: { uuids },
     });
+    return normalizeMasterBatchDeleteResponse(raw);
   },
 };
 

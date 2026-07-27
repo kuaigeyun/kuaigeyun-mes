@@ -200,6 +200,12 @@ export function isOperationEffectivelyCompleted(
 
 export type OperationCardPhase = 'completed' | 'in_progress' | 'pending';
 
+function hasActualStart(operation: any): boolean {
+  const raw = operation?.actual_start_date ?? operation?.actualStartDate;
+  if (raw == null || raw === '') return false;
+  return String(raw).trim() !== '';
+}
+
 /** 工序卡片展示阶段：与进度/已完成判定一致 */
 export function getOperationCardPhase(
   operation: any,
@@ -208,9 +214,30 @@ export function getOperationCardPhase(
   if (isOperationEffectivelyCompleted(operation, workOrderQuantity)) {
     return 'completed';
   }
-  const st = String(operation?.status ?? '');
+  const st = String(operation?.status ?? '')
+    .trim()
+    .toLowerCase();
   const progress = getOperationProgressPercent(operation, workOrderQuantity);
   if (st === 'in_progress' || st === 'processing' || progress > 0) {
+    return 'in_progress';
+  }
+  // 方案质检：报工后检验合格仍为 0，环形进度为 0%；不能因此回落「待开始」
+  const inspectionStatus = getProcessInspectionCardStatus(operation);
+  if (inspectionStatus === 'pending' || inspectionStatus === 'inspected') {
+    return 'in_progress';
+  }
+  const completed =
+    Number(operation?.completed_quantity ?? operation?.completedQuantity ?? 0) || 0;
+  const qualified =
+    Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
+  if (completed > 0 || qualified > 0 || hasActualStart(operation)) {
+    return 'in_progress';
+  }
+  if (st === 'pending' || st === '' || st === '待开始') {
+    return 'pending';
+  }
+  // 已开工类中文态 / 暂停等：仍按进行中展示，避免误显示待开始
+  if (st === '进行中' || st === 'paused' || st === '暂停') {
     return 'in_progress';
   }
   return 'pending';
@@ -277,15 +304,12 @@ export function buildProcessInspectionPageUrl(
   workOrderId?: number | string | null,
 ): string | null {
   const base = '/apps/kuaizhizao/quality-management/process-inspection';
-  const inspectionId = operation?.process_inspection_id ?? operation?.processInspectionId;
-  if (inspectionId != null && inspectionId !== '') {
-    return `${base}?id=${inspectionId}`;
-  }
+  // 只跳转列表并带过滤条件，不带会触发自动打开详情抽屉的 id 参数
   const operationId = operation?.operation_id ?? operation?.operationId;
   if (workOrderId != null && workOrderId !== '' && operationId != null && operationId !== '') {
     return `${base}?work_order_id=${workOrderId}&operation_id=${operationId}`;
   }
-  return null;
+  return base;
 }
 
 /** 是否因上道方案质检未放行导致无可报数量 */

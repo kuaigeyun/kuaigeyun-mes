@@ -140,6 +140,8 @@ class MaintenanceExecutionBase(BaseModel):
     acceptance_result: Optional[str] = Field(None, max_length=50, description="验收结果（合格、不合格）")
     remark: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    source_type: Optional[str] = Field(None, max_length=50, description="来源类型（equipment_fault 等）")
+    source_uuid: Optional[str] = Field(None, max_length=36, description="来源单据 UUID")
     
     @field_validator("execution_result")
     @classmethod
@@ -190,6 +192,8 @@ class MaintenanceExecutionUpdate(BaseModel):
     acceptance_result: Optional[str] = Field(None, max_length=50, description="验收结果")
     remark: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    source_type: Optional[str] = Field(None, max_length=50, description="来源类型")
+    source_uuid: Optional[str] = Field(None, max_length=36, description="来源单据 UUID")
 
 
 class MaintenanceExecutionResponse(MaintenanceExecutionBase):

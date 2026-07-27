@@ -15,6 +15,7 @@ from tortoise.exceptions import IntegrityError
 from core.models.site_setting import SiteSetting
 from core.schemas.site_setting import SiteSettingUpdate
 from infra.exceptions.exceptions import NotFoundError
+from core.utils.timezone_utils import now_utc
 
 # 新建站点设置时的默认安全项（inactivity_timeout=0 表示不启用「无操作自动退出」）
 _DEFAULT_SITE_SECURITY: Dict[str, Any] = {
@@ -90,7 +91,7 @@ class SiteSettingService:
         if len(rows) == 1:
             return canonical
 
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         for duplicate in rows[1:]:
             duplicate.deleted_at = now
             await duplicate.save(update_fields=["deleted_at", "updated_at"])

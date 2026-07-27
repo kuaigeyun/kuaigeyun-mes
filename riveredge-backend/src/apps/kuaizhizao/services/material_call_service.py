@@ -23,7 +23,7 @@ from apps.kuaizhizao.schemas.material_call import (
     MaterialCallRequestResponse,
     MaterialCallLineResponse,
 )
-from core.utils.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc, resolve_business_datetime
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 
@@ -53,7 +53,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
         super().__init__(MaterialCallRequest)
 
     def _next_material_call_code(self) -> str:
-        return f"MC{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:4].upper()}"
+        return f"MC{resolve_business_datetime().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:4].upper()}"
 
     @staticmethod
     def _needs_material_name(value: Optional[str]) -> bool:
@@ -463,18 +463,13 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             else:
                 tgt_id = None
         if not tgt_id:
-            ql = Warehouse.filter(
-                tenant_id=tenant_id, is_active=True, deleted_at__isnull=True, warehouse_type="line_side"
+            from apps.kuaizhizao.utils.warehouse_resolver import (
+                resolve_line_side_warehouse_for_work_order,
             )
-            wh = None
-            if wo and getattr(wo, "work_center_id", None):
-                wh = await ql.filter(work_center_id=wo.work_center_id).order_by("id").first()
-            if not wh and wo and getattr(wo, "workshop_id", None):
-                wh = await ql.filter(workshop_id=wo.workshop_id).order_by("id").first()
-            if not wh:
-                wh = await ql.order_by("id").first()
-            if wh:
-                tgt_id, tgt_name = wh.id, wh.name or ""
+
+            tgt_id, tgt_name = await resolve_line_side_warehouse_for_work_order(
+                tenant_id, wo, explicit_target_id=None
+            )
         if not tgt_id:
             raise BusinessLogicError(
                 "补料过账需要线边仓：请指定 target_warehouse_id，或维护 warehouse_type=line_side 的仓库"

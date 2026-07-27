@@ -19,7 +19,7 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   subjectDocNo: 10,
   registration_code: 10,
 
-  // 类型 / 来源
+  // 类型 / 来源（picking_code 在入库列表作来源展示时走 source 段，勿与主单号抢 10）
   receipt_type: 20,
   outbound_type: 20,
   reason_type: 20,
@@ -27,6 +27,7 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   stocktaking_type: 20,
   call_type: 20,
   sourceDocNo: 21,
+  source_doc_no: 21,
   purchase_order_code: 21,
   sales_order_code: 21,
   sales_delivery_code: 21,
@@ -47,11 +48,12 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   total_amount: 35,
   total_difference_amount: 36,
 
-  // 进度（阶段 / 数量占比）
-  lifecycle_stage: 40,
+  // 进度（数量占比；lifecycle 固定右侧，勿插在业务列中间）
   quantity_progress: 41,
   kitting_rate: 41,
   fulfillment_progress: 41,
+  receipt_progress: 41,
+  lifecycle_stage: 88,
 
   // 状态
   status: 50,
@@ -65,7 +67,8 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   suggested_warehouse_name: 60,
   target_warehouse_name: 60,
 
-  // 业务日期 / 责任人
+  // 业务时间（与操作员堆叠列）/ 责任人
+  biz_time_operator: 70,
   receipt_date: 70,
   receipt_time: 70,
   delivery_date: 70,
@@ -81,13 +84,13 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   expected_return_date: 71,
   needed_at: 71,
   sent_at: 72,
-  received_by: 75,
-  returner_name: 75,
-  delivered_by: 75,
-  deliverer_name: 75,
-  receiver_name: 75,
-  borrower_name: 75,
-  caller_name: 75,
+  received_by: 70,
+  returner_name: 70,
+  delivered_by: 70,
+  deliverer_name: 70,
+  receiver_name: 70,
+  borrower_name: 70,
+  caller_name: 70,
   department: 76,
   carrier: 77,
   tracking_number: 78,

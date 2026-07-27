@@ -108,4 +108,10 @@ export const rollingSchedulingApi = {
 
   publish: (planId: number) =>
     apiRequest<RollingSchedulePublishResult>(`${BASE}/${planId}/publish`, { method: 'POST' }),
+
+  syncFromAps: (data: { plan_date: string; work_order_ids: number[] }) =>
+    apiRequest<RollingSchedulePlan>(`${BASE}/sync-from-aps`, {
+      method: 'POST',
+      data,
+    }),
 };

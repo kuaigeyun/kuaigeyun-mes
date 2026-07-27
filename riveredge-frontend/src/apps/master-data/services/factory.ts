@@ -5,6 +5,10 @@
  */
 
 import { api, apiRequest } from '../../../services/api';
+import {
+  normalizeMasterBatchDeleteResponse,
+  type MasterBatchDeleteResult,
+} from '../utils/masterListCore';
 import type {
   Plant,
   PlantCreate,
@@ -32,6 +36,14 @@ import type {
   WorkGroupListParams,
   FactoryPaginatedList,
 } from '../types/factory';
+
+async function factoryBatchDelete(url: string, uuids: string[]): Promise<MasterBatchDeleteResult> {
+  const raw = await apiRequest(url, {
+    method: 'DELETE',
+    data: { uuids },
+  });
+  return normalizeMasterBatchDeleteResponse(raw);
+}
 
 /** 列表行数据（兼容旧调用方仍传入数组的情况） */
 export function factoryListItems<T>(res: FactoryPaginatedList<T> | T[]): T[] {
@@ -105,21 +117,8 @@ export const plantApi = {
   /**
    * 批量删除厂区
    */
-  batchDelete: async (uuids: string[]): Promise<{
-    success: boolean;
-    message: string;
-    data: {
-      success_count: number;
-      failed_count: number;
-      success_records: Array<{ uuid: string; code?: string; name?: string }>;
-      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
-    };
-  }> => {
-    return apiRequest('/apps/master-data/factory/plants/batch-delete', {
-      method: 'DELETE',
-      data: { uuids },
-    });
-  },
+  batchDelete: (uuids: string[]) =>
+    factoryBatchDelete('/apps/master-data/factory/plants/batch-delete', uuids),
 };
 
 /**
@@ -164,21 +163,8 @@ export const workshopApi = {
   /**
    * 批量删除车间
    */
-  batchDelete: async (uuids: string[]): Promise<{
-    success: boolean;
-    message: string;
-    data: {
-      success_count: number;
-      failed_count: number;
-      success_records: Array<{ uuid: string; code?: string; name?: string }>;
-      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
-    };
-  }> => {
-    return apiRequest('/apps/master-data/factory/workshops/batch-delete', {
-      method: 'DELETE',
-      data: { uuids },
-    });
-  },
+  batchDelete: (uuids: string[]) =>
+    factoryBatchDelete('/apps/master-data/factory/workshops/batch-delete', uuids),
 };
 
 /**
@@ -223,21 +209,8 @@ export const productionLineApi = {
   /**
    * 批量删除产线
    */
-  batchDelete: async (uuids: string[]): Promise<{
-    success: boolean;
-    message: string;
-    data: {
-      success_count: number;
-      failed_count: number;
-      success_records: Array<{ uuid: string; code?: string; name?: string }>;
-      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
-    };
-  }> => {
-    return apiRequest('/apps/master-data/factory/production-lines/batch-delete', {
-      method: 'DELETE',
-      data: { uuids },
-    });
-  },
+  batchDelete: (uuids: string[]) =>
+    factoryBatchDelete('/apps/master-data/factory/production-lines/batch-delete', uuids),
 };
 
 /**
@@ -282,21 +255,8 @@ export const workstationApi = {
   /**
    * 批量删除工位
    */
-  batchDelete: async (uuids: string[]): Promise<{
-    success: boolean;
-    message: string;
-    data: {
-      success_count: number;
-      failed_count: number;
-      success_records: Array<{ uuid: string; code?: string; name?: string }>;
-      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
-    };
-  }> => {
-    return apiRequest('/apps/master-data/factory/workstations/batch-delete', {
-      method: 'DELETE',
-      data: { uuids },
-    });
-  },
+  batchDelete: (uuids: string[]) =>
+    factoryBatchDelete('/apps/master-data/factory/workstations/batch-delete', uuids),
 };
 
 /**
@@ -323,21 +283,8 @@ export const workCenterApi = {
     return api.delete(`/apps/master-data/factory/work-centers/${uuid}`);
   },
 
-  batchDelete: async (uuids: string[]): Promise<{
-    success: boolean;
-    message: string;
-    data: {
-      success_count: number;
-      failed_count: number;
-      success_records: Array<{ uuid: string; code?: string; name?: string }>;
-      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
-    };
-  }> => {
-    return apiRequest('/apps/master-data/factory/work-centers/batch-delete', {
-      method: 'DELETE',
-      data: { uuids },
-    });
-  },
+  batchDelete: (uuids: string[]) =>
+    factoryBatchDelete('/apps/master-data/factory/work-centers/batch-delete', uuids),
 };
 
 /**
@@ -364,19 +311,6 @@ export const workGroupApi = {
     return api.delete(`/apps/master-data/factory/work-groups/${uuid}`);
   },
 
-  batchDelete: async (uuids: string[]): Promise<{
-    success: boolean;
-    message: string;
-    data: {
-      success_count: number;
-      failed_count: number;
-      success_records: Array<{ uuid: string; code?: string; name?: string }>;
-      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
-    };
-  }> => {
-    return apiRequest('/apps/master-data/factory/work-groups/batch-delete', {
-      method: 'DELETE',
-      data: { uuids },
-    });
-  },
+  batchDelete: (uuids: string[]) =>
+    factoryBatchDelete('/apps/master-data/factory/work-groups/batch-delete', uuids),
 };

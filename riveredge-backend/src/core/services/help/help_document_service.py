@@ -7,7 +7,7 @@
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from loguru import logger
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import now_utc, to_api_isoformat
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -105,7 +105,7 @@ class HelpDocumentService:
             "key": document_key,
             "title": title,
             "sections": sections,
-            "updated_at": to_api_isoformat(datetime.utcnow()),
+            "updated_at": to_api_isoformat(now_utc()),
         }
         
         HelpDocumentService._help_documents[cache_key] = document

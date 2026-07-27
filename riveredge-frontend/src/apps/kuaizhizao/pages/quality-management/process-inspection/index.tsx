@@ -38,7 +38,7 @@ import {
 } from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniPullQueryModal,
@@ -281,7 +281,7 @@ const ProcessInspectionPage: React.FC = () => {
     [selectedRowKeys],
   );
   const processAuditBatchHandlers = useMemo(
-    () => createUniAuditBatchHandlers('process_inspection', ['approve']),
+    () => createUniAuditBatchHandlers('process_inspection'),
     [],
   );
   const createButtonLabel = useMemo(
@@ -404,14 +404,9 @@ const ProcessInspectionPage: React.FC = () => {
     }
   };
 
+  // URL 深链只过滤列表，不自动打开详情抽屉（详情仅操作列「详情」按钮）
   useEffect(() => {
     if (deepLinkOpenedRef.current) return;
-    const idParam = searchParams.get('id');
-    if (idParam && /^\d+$/.test(idParam)) {
-      deepLinkOpenedRef.current = true;
-      void handleDetail({ id: Number(idParam) } as ProcessInspection);
-      return;
-    }
     const woId = searchParams.get('work_order_id');
     const opId = searchParams.get('operation_id');
     if (woId && /^\d+$/.test(woId) && opId && /^\d+$/.test(opId)) {
@@ -747,25 +742,28 @@ const ProcessInspectionPage: React.FC = () => {
 
   const inspectionCustomFieldColumns = generateInspectionCustomFieldColumns();
 
+  const handleDeleteRow = useCallback(
+    (record: ProcessInspection) => {
+      if (record.id == null) return;
+      Modal.confirm({
+        title: t('app.kuaizhizao.quality.process.messages.deleteConfirm', { count: 1 }),
+        onOk: async () => {
+          await qualityApi.processInspection.delete(String(record.id));
+          messageApi.success(t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: 1 }));
+          if (inspectionDetail?.id === record.id) {
+            setDetailDrawerVisible(false);
+            setInspectionDetail(null);
+          }
+          invalidateStats();
+          actionRef.current?.reload();
+        },
+      });
+    },
+    [inspectionDetail?.id, messageApi, t],
+  );
+
   const renderProcessRowNodes = (record: ProcessInspection): React.ReactNode[] => {
     const gates = qualityInspectionRowGates(record, processPerms, ncPerms, t);
-    if (gates.conduct.allowed) {
-      return [
-        <Button {...rowActionKind('execute')}
-          key="inspect"
-          size="small"
-          type="primary"
-          disabled={gates.conduct.disabled}
-          title={gates.conduct.title}
-          onClick={(e) => {
-            e.stopPropagation();
-            void handleInspect(record);
-          }}
-        >
-          {t('app.kuaizhizao.quality.common.actions.inspect')}
-        </Button>,
-      ];
-    }
     const nodes: React.ReactNode[] = [
       <Button {...rowActionKind('read')}
         key="detail"
@@ -780,6 +778,23 @@ const ProcessInspectionPage: React.FC = () => {
         {t('app.kuaizhizao.quality.common.actions.detail')}
       </Button>,
     ];
+    if (gates.conduct.allowed) {
+      nodes.push(
+        <Button {...rowActionKind('execute')}
+          key="inspect"
+          size="small"
+          type="primary"
+          disabled={gates.conduct.disabled}
+          title={gates.conduct.title}
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleInspect(record);
+          }}
+        >
+          {t('app.kuaizhizao.quality.common.actions.inspect')}
+        </Button>,
+      );
+    }
     nodes.push(
       <UniWorkflowActions
         {...rowActionKind('skip')}
@@ -823,6 +838,26 @@ const ProcessInspectionPage: React.FC = () => {
         >
           {t('app.kuaizhizao.quality.common.actions.createDefect')}
         </Button>
+      );
+    }
+    if (gates.delete.allowed) {
+      nodes.push(
+        <Button
+          {...rowActionKind('delete')}
+          key="delete"
+          size="small"
+          type="link"
+          danger
+          icon={<DeleteOutlined />}
+          disabled={gates.delete.disabled}
+          title={gates.delete.title}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDeleteRow(record);
+          }}
+        >
+          {t('common.delete')}
+        </Button>,
       );
     }
     return nodes;
@@ -1045,10 +1080,6 @@ const ProcessInspectionPage: React.FC = () => {
         enableRowSelection={true}
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        onRow={(record) => ({
-          onClick: () => void handleDetail(record),
-          style: { cursor: 'pointer' },
-        })}
         showImportButton={true}
         onImport={handleImport}
         importHeaders={processInspectionImportTemplate.importHeaders}
@@ -1110,7 +1141,7 @@ const ProcessInspectionPage: React.FC = () => {
           unqualified_quantity: 0,
           notes: '',
         }}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         formRef={formRef}
       >
         {currentInspection && (

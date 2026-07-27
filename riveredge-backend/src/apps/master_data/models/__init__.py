@@ -19,6 +19,7 @@ from .customer import Customer
 from .supplier import Supplier
 from .performance import Holiday, Skill
 from .shift_scheduling import Shift, ShiftRoster, ShiftAssignment
+from .work_calendar import WorkCalendarConfig, OvertimePlan, StationUnavailableWindow
 from .employee_performance import (
     EmployeePerformanceConfig,
     PieceRate,
@@ -58,6 +59,9 @@ __all__ = [
     "Shift",
     "ShiftRoster",
     "ShiftAssignment",
+    "WorkCalendarConfig",
+    "OvertimePlan",
+    "StationUnavailableWindow",
     "EmployeePerformanceConfig",
     "PieceRate",
     "HourlyRate",

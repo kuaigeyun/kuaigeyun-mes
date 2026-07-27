@@ -43,6 +43,7 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 from tortoise.queryset import Q
+from core.utils.timezone_utils import resolve_business_datetime
 
 EXCEPTION_PROCESS_SORTABLE_FIELDS = frozenset({
     "exception_type",
@@ -118,9 +119,9 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
             current_step="detected",
             assigned_to=data.assigned_to,
             assigned_to_name=assigned_to_name,
-            assigned_at=datetime.now() if data.assigned_to else None,
+            assigned_at=resolve_business_datetime() if data.assigned_to else None,
             process_config=data.process_config,
-            started_at=datetime.now(),
+            started_at=resolve_business_datetime(),
             remarks=data.remarks,
         )
 
@@ -188,7 +189,7 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
         # 更新处理记录
         process_record.assigned_to = data.assigned_to
         process_record.assigned_to_name = assigned_to_name
-        process_record.assigned_at = datetime.now()
+        process_record.assigned_at = resolve_business_datetime()
         if process_record.process_status == "pending":
             process_record.process_status = "processing"
             process_record.current_step = "assigned"
@@ -297,7 +298,7 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
         # 更新处理记录
         process_record.process_status = "resolved"
         process_record.current_step = "closed"
-        process_record.completed_at = datetime.now()
+        process_record.completed_at = resolve_business_datetime()
         if data.comment:
             process_record.remarks = data.comment
         await process_record.save()
@@ -362,7 +363,7 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
         # 更新处理记录
         process_record.process_status = "cancelled"
         process_record.current_step = "cancelled"
-        process_record.completed_at = datetime.now()
+        process_record.completed_at = resolve_business_datetime()
         if comment:
             process_record.remarks = comment
         await process_record.save()
@@ -591,7 +592,7 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
                 action=action,
                 action_by=action_by,
                 action_by_name=action_by_name,
-                action_at=datetime.now(),
+                action_at=resolve_business_datetime(),
                 from_step=from_step,
                 to_step=to_step,
                 comment=comment,

@@ -26,7 +26,7 @@ from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
 from apps.master_data.models.material import Material
 from apps.master_data.models.material_batch import MaterialBatch
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
     _INBOUND_PENDING_STATUSES,
 )
@@ -250,7 +250,7 @@ class WarehouseDashboardService:
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
                 status__in=_INBOUND_DOC_PENDING_STATUSES,
-                created_at__lt=datetime.now() - timedelta(days=3),
+                created_at__lt=resolve_business_datetime() - timedelta(days=3),
             ).count()
 
         tasks = [

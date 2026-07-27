@@ -18,6 +18,7 @@ import type { Material } from '../types/material';
 import type { VariantAttributeDefinition } from '../types/variant-attribute';
 import { VariantAttributeFields, parseVariantAttributesValue } from './VariantAttributeFields';
 import { normalizeFormListItems } from '../../../utils/formListItems';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../../utils/modalEventIsolation';
 
 /** Form.List 内注册 variant_attributes，不渲染 UI */
 const VariantAttributesFormBridge: React.FC<{
@@ -234,6 +235,8 @@ export const OrderLineVariantAttributesCell: React.FC<OrderLineVariantAttributes
         okText={t('common.confirm')}
         cancelText={t('common.cancel')}
         okButtonProps={{ disabled: !resolvedMasterUuid }}
+        maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+        wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
       >
         <Tabs
           activeKey={activeTab}

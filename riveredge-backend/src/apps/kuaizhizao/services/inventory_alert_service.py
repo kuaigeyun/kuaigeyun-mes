@@ -35,6 +35,7 @@ from apps.kuaizhizao.services.inventory_threshold_resolver import (
 
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 def _normalize_rule_threshold_fields(
@@ -343,7 +344,7 @@ class InventoryAlertRuleService(AppBaseService[InventoryAlertRule]):
             raise NotFoundError(f"预警规则不存在: {rule_id}")
 
         # 软删除
-        rule.deleted_at = datetime.now()
+        rule.deleted_at = resolve_business_datetime()
         await rule.save()
 
 
@@ -588,11 +589,11 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
             alert.status = handle_data.status
             alert.handled_by = handled_by
             alert.handled_by_name = user_info["name"]
-            alert.handled_at = datetime.now()
+            alert.handled_at = resolve_business_datetime()
             alert.handling_notes = handle_data.handling_notes
 
             if handle_data.status == "resolved":
-                alert.resolved_at = datetime.now()
+                alert.resolved_at = resolve_business_datetime()
 
             alert.updated_by = handled_by
             alert.updated_by_name = user_info["name"]
@@ -846,7 +847,7 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
                 deleted_at__isnull=True,
             )
 
-        now = datetime.now()
+        now = resolve_business_datetime()
 
         if not breached:
             if existing is None:

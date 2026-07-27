@@ -22,6 +22,8 @@ export interface RiverGanttSegment {
   end: Date;
   duration?: number;
   text?: string;
+  /** hover 原生 title */
+  title?: string;
   operation_id?: number;
   work_order_id?: number;
   css?: string;
@@ -55,6 +57,8 @@ export interface RiverGanttTask {
   gantt_primary_label?: string;
   /** 标签副行（工单号等） */
   gantt_work_order_code?: string;
+  /** hover 原生 title（非分段任务） */
+  title?: string;
 }
 
 export interface RiverGanttColumnHeader {
@@ -90,6 +94,11 @@ export interface RiverSelectTaskEvent {
   id: number | string;
   segmentIndex?: number;
   toggle?: boolean;
+}
+
+export interface RiverDoubleClickTaskEvent {
+  id: number | string;
+  segmentIndex?: number;
 }
 
 export interface RiverMoveTaskEvent {

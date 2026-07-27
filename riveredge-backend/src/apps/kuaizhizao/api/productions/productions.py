@@ -1238,6 +1238,7 @@ from apps.kuaizhizao.schemas.batch import (
     BatchUpdateRequest,
     BatchDeleteRequest,
     BatchResponse,
+    batch_result_message,
 )
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.sales_forecast import SalesForecast
@@ -1276,7 +1277,7 @@ async def batch_create_work_orders(
     
     return BatchResponse(
         success=result["failed_count"] == 0,
-        message=f"成功创建 {result['success_count']} 个工单，失败 {result['failed_count']} 个",
+        message=batch_result_message(result, "创建", "工单"),
         data=result
     )
 
@@ -1319,7 +1320,7 @@ async def batch_update_work_orders(
     
     return BatchResponse(
         success=result["failed_count"] == 0,
-        message=f"成功更新 {result['success_count']} 个工单，失败 {result['failed_count']} 个",
+        message=batch_result_message(result, "更新", "工单"),
         data=result
     )
 
@@ -1351,7 +1352,7 @@ async def batch_delete_work_orders(
     
     return BatchResponse(
         success=result["failed_count"] == 0,
-        message=f"成功删除 {result['success_count']} 个工单，失败 {result['failed_count']} 个",
+        message=batch_result_message(result, "删除", "工单"),
         data=result
     )
 
@@ -1387,7 +1388,7 @@ async def batch_create_sales_forecasts(
     
     return BatchResponse(
         success=result["failed_count"] == 0,
-        message=f"成功创建 {result['success_count']} 个销售预测，失败 {result['failed_count']} 个",
+        message=batch_result_message(result, "创建", "销售预测"),
         data=result
     )
 
@@ -1420,7 +1421,7 @@ async def batch_delete_sales_forecasts(
     
     return BatchResponse(
         success=result["failed_count"] == 0,
-        message=f"成功删除 {result['success_count']} 个销售预测，失败 {result['failed_count']} 个",
+        message=batch_result_message(result, "删除", "销售预测"),
         data=result
     )
 

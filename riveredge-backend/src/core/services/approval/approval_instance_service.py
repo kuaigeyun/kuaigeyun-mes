@@ -31,6 +31,7 @@ from core.schemas.message_template import SendMessageRequest
 from infra.models.user import User
 from infra.config.infra_config import infra_settings
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class ApprovalInstanceService:
@@ -139,7 +140,7 @@ class ApprovalInstanceService:
                 data=data.data,
                 status="pending",
                 submitter_id=user_id,
-                submitted_at=datetime.now(),
+                submitted_at=resolve_business_datetime(),
                 process_version=getattr(process, "published_version", None) or 1,
             )
             await approval_instance.save()
@@ -230,7 +231,7 @@ class ApprovalInstanceService:
         )
         if not next_node:
             approval_instance.status = "approved"
-            approval_instance.completed_at = datetime.now()
+            approval_instance.completed_at = resolve_business_datetime()
             approval_instance.current_node = None
             approval_instance.current_approver_id = None
             await approval_instance.save()
@@ -242,7 +243,7 @@ class ApprovalInstanceService:
         next_type = next_node.get("type") or (next_node.get("data") or {}).get("type")
         if next_type == "end":
             approval_instance.status = "approved"
-            approval_instance.completed_at = datetime.now()
+            approval_instance.completed_at = resolve_business_datetime()
             approval_instance.current_node = None
             approval_instance.current_approver_id = None
             await approval_instance.save()
@@ -817,7 +818,7 @@ class ApprovalInstanceService:
         ).update(status="cancelled")
 
         instance.status = "cancelled"
-        instance.completed_at = datetime.now()
+        instance.completed_at = resolve_business_datetime()
         instance.current_node = None
         instance.current_approver_id = None
         await instance.save()
@@ -980,7 +981,7 @@ class ApprovalInstanceService:
             NotFoundError: 当审批实例不存在时抛出
         """
         approval_instance = await ApprovalInstanceService.get_approval_instance_by_uuid(tenant_id, uuid)
-        approval_instance.deleted_at = datetime.now()
+        approval_instance.deleted_at = resolve_business_datetime()
         await approval_instance.save()
     
     @staticmethod
@@ -1025,7 +1026,7 @@ class ApprovalInstanceService:
             
         # 更新任务状态
         task.status = "approved" if action_data.action == "approve" else "rejected"
-        task.action_at = datetime.now()
+        task.action_at = resolve_business_datetime()
         task.comment = action_data.comment
         await task.save()
 
@@ -1048,7 +1049,7 @@ class ApprovalInstanceService:
             if instance_status == "rejected":
                 # 全盘拒绝
                 instance.status = "rejected"
-                instance.completed_at = datetime.now()
+                instance.completed_at = resolve_business_datetime()
                 instance.current_node = None
                 instance.current_approver_id = None
                 await instance.save()
@@ -1066,7 +1067,7 @@ class ApprovalInstanceService:
                 )
                 if not next_node:
                     instance.status = "approved"
-                    instance.completed_at = datetime.now()
+                    instance.completed_at = resolve_business_datetime()
                     instance.current_node = None
                     instance.current_approver_id = None
                     await instance.save()
@@ -1074,7 +1075,7 @@ class ApprovalInstanceService:
                     next_type = next_node.get("type") or (next_node.get("data") or {}).get("type")
                     if next_type == "end":
                         instance.status = "approved"
-                        instance.completed_at = datetime.now()
+                        instance.completed_at = resolve_business_datetime()
                         instance.current_node = None
                         instance.current_approver_id = None
                         await instance.save()
@@ -1108,7 +1109,7 @@ class ApprovalInstanceService:
             )
             if not next_node:
                 instance.status = "approved"
-                instance.completed_at = datetime.now()
+                instance.completed_at = resolve_business_datetime()
                 instance.current_node = None
                 instance.current_approver_id = None
                 await instance.save()
@@ -1116,7 +1117,7 @@ class ApprovalInstanceService:
             next_type = next_node.get("type") or (next_node.get("data") or {}).get("type")
             if next_type == "end":
                 instance.status = "approved"
-                instance.completed_at = datetime.now()
+                instance.completed_at = resolve_business_datetime()
                 instance.current_node = None
                 instance.current_approver_id = None
                 await instance.save()
@@ -1145,7 +1146,7 @@ class ApprovalInstanceService:
             )
             if not next_node:
                 instance.status = "approved"
-                instance.completed_at = datetime.now()
+                instance.completed_at = resolve_business_datetime()
                 instance.current_node = None
                 instance.current_approver_id = None
                 await instance.save()
@@ -1153,7 +1154,7 @@ class ApprovalInstanceService:
             next_type = next_node.get("type") or (next_node.get("data") or {}).get("type")
             if next_type == "end":
                 instance.status = "approved"
-                instance.completed_at = datetime.now()
+                instance.completed_at = resolve_business_datetime()
                 instance.current_node = None
                 instance.current_approver_id = None
                 await instance.save()
@@ -1413,17 +1414,17 @@ class ApprovalInstanceService:
                 approval_instance.status = "pending"
             else:
                 approval_instance.status = "approved"
-                approval_instance.completed_at = datetime.now()
+                approval_instance.completed_at = resolve_business_datetime()
                 approval_instance.current_node = None
                 approval_instance.current_approver_id = None
         elif action.action == "reject":
             approval_instance.status = "rejected"
-            approval_instance.completed_at = datetime.now()
+            approval_instance.completed_at = resolve_business_datetime()
             approval_instance.current_node = None
             approval_instance.current_approver_id = None
         elif action.action == "cancel":
             approval_instance.status = "cancelled"
-            approval_instance.completed_at = datetime.now()
+            approval_instance.completed_at = resolve_business_datetime()
             approval_instance.current_node = None
             approval_instance.current_approver_id = None
         elif action.action == "transfer":
@@ -1932,7 +1933,7 @@ class ApprovalInstanceService:
                 approval_instance_id=approval_instance_id,
                 action=action,
                 action_by=action_by,
-                action_at=datetime.now(),
+                action_at=resolve_business_datetime(),
                 comment=comment,
                 from_node=from_node,
                 to_node=to_node,
@@ -2011,7 +2012,7 @@ class ApprovalInstanceService:
                 await Demand.filter(tenant_id=tenant_id, id=entity_id).update(
                     reviewer_id=approver_id,
                     reviewer_name=approver_name,
-                    review_time=datetime.now(),
+                    review_time=resolve_business_datetime(),
                     review_status=ReviewStatus.APPROVED.value if approval_instance.status == "approved" else ReviewStatus.REJECTED.value,
                     review_remarks=remark,
                     status=DemandStatus.AUDITED.value if approval_instance.status == "approved" else DemandStatus.REJECTED.value,
@@ -2035,7 +2036,7 @@ class ApprovalInstanceService:
                 await PurchaseOrder.filter(tenant_id=tenant_id, id=entity_id).update(
                     reviewer_id=approver_id,
                     reviewer_name=approver_name,
-                    review_time=datetime.now(),
+                    review_time=resolve_business_datetime(),
                     review_status=ReviewStatus.APPROVED.value if approval_instance.status == "approved" else ReviewStatus.REJECTED.value,
                     review_remarks=remark,
                     status=DocumentStatus.AUDITED.value if approval_instance.status == "approved" else DocumentStatus.REJECTED.value,

@@ -6,6 +6,7 @@ from tortoise import Tortoise
 
 from core.services.system.data_backup_service import DataBackupService
 from core.schemas.data_backup import DataBackupCreate
+from core.utils.timezone_utils import resolve_business_datetime
 
 class ResetDataService:
     """
@@ -127,7 +128,7 @@ class ResetDataService:
         
         # 1. 自动触发一重备份 (4重保险之一)
         try:
-            backup_name = f"[AUTO] 重置前自动备份_快制造_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            backup_name = f"[AUTO] 重置前自动备份_快制造_{resolve_business_datetime().strftime('%Y%m%d_%H%M%S')}"
             backup_data = DataBackupCreate(
                 name=backup_name,
                 backup_type="full",

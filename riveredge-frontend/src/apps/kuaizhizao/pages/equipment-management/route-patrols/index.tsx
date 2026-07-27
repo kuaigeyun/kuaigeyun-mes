@@ -1,4 +1,5 @@
 import React, { useRef, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -9,7 +10,7 @@ import {
 } from '@ant-design/pro-components';
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
-import { App, Button, Modal, Row, Col, Tag, Table, Switch, Input } from 'antd';
+import { App, Button, Modal, Row, Col, Tag, Table, Switch, Input, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -24,6 +25,7 @@ import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { ROUTES } from '../../../constants/routes';
 import {
   buildAbnormalityValueEnum,
   buildSpotCheckStatusValueEnum,
@@ -31,6 +33,8 @@ import {
   normalizeEquipmentListResponse,
   resolveRoutePatrolListParams,
 } from '../../../utils/equipmentListCore';
+import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
+import type { DocumentAttachmentFile } from '../../../utils/documentAttachments';
 
 const P = 'app.kuaizhizao.equipmentOps.routePatrol';
 const RESOURCE = 'kuaizhizao:equipment-route-patrol';
@@ -47,11 +51,14 @@ interface RoutePatrolLine {
   equipment_id?: number;
   equipment_code?: string;
   equipment_name?: string;
+  item_id?: number;
   item_code?: string;
   item_name?: string;
   measured_value?: string;
   is_pass?: boolean;
   remark?: string;
+  fault_report_uuid?: string;
+  attachments?: DocumentAttachmentFile[];
 }
 
 interface RoutePatrol {
@@ -70,6 +77,7 @@ interface RoutePatrol {
 }
 
 const RoutePatrolsPage: React.FC = () => {
+  const navigate = useNavigate();
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
@@ -170,21 +178,30 @@ const RoutePatrolsPage: React.FC = () => {
       lines: previewLines.map((l) => ({
         step_no: l.step_no,
         equipment_id: l.equipment_id,
+        item_id: l.item_id,
         item_code: l.item_code,
         item_name: l.item_name,
         measured_value: l.measured_value,
         is_pass: l.is_pass ?? true,
         remark: l.remark,
+        attachments: l.attachments?.length ? l.attachments : undefined,
       })),
     };
     setSubmitting(true);
     try {
+      let saved: RoutePatrol | null = null;
       if (isEdit && current?.id) {
-        await routePatrolsApi.update(current.id, payload);
+        saved = (await routePatrolsApi.update(current.id, payload)) as RoutePatrol;
         messageApi.success(t('common.updateSuccess'));
       } else {
-        await routePatrolsApi.create(payload);
+        saved = (await routePatrolsApi.create(payload)) as RoutePatrol;
         messageApi.success(t('common.createSuccess'));
+      }
+      const abnormal =
+        Boolean(saved?.has_abnormality) ||
+        previewLines.some((l) => l.is_pass === false);
+      if (abnormal) {
+        messageApi.info(t(`${P}.faultAutoCreated`));
       }
       setModalVisible(false);
       setFormInitialValues(undefined);
@@ -232,6 +249,41 @@ const RoutePatrolsPage: React.FC = () => {
           }}
         />
       ),
+    },
+    {
+      title: t(`${P}.line.photos`, { defaultValue: '照片' }),
+      dataIndex: 'attachments',
+      width: 180,
+      render: (_: unknown, row: RoutePatrolLine, index: number) => (
+        <LineAttachmentsUpload
+          category="equipment_route_patrol_line"
+          value={row.attachments}
+          onChange={(next) => {
+            const copy = [...previewLines];
+            copy[index] = { ...copy[index], attachments: next };
+            setPreviewLines(copy);
+          }}
+        />
+      ),
+    },
+    {
+      title: t(`${P}.line.fault`),
+      dataIndex: 'fault_report_uuid',
+      width: 100,
+      render: (_: unknown, row: RoutePatrolLine) =>
+        row.fault_report_uuid ? (
+          <Typography.Link
+            onClick={() => {
+              navigate(
+                `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(row.fault_report_uuid!)}`,
+              );
+            }}
+          >
+            {t(`${P}.viewFault`)}
+          </Typography.Link>
+        ) : (
+          '-'
+        ),
     },
   ];
 
@@ -319,6 +371,25 @@ const RoutePatrolsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) =>
           r.has_abnormality ? <Tag color="error">{t(`${P}.abnormal`)}</Tag> : <Tag color="success">{t(`${P}.normal`)}</Tag>,
+      },
+      {
+        title: t(`${P}.col.linkedFault`),
+        key: 'linked_fault',
+        width: 110,
+        hideInSearch: true,
+        render: (_, r) =>
+          r.has_abnormality ? (
+            <Typography.Link
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleEdit(r);
+              }}
+            >
+              {t(`${P}.viewFault`)}
+            </Typography.Link>
+          ) : (
+            '-'
+          ),
       },
       {
         title: t('common.updatedAt'),

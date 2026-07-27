@@ -41,10 +41,10 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_shipment_notice_capabilities_on_response,
     enrich_shipment_notice_list_capabilities,
 )
-from apps.kuaizhizao.services.inspection_policy_service import assert_oqc_for_outbound_lines
 from infra.services.business_config_service import BusinessConfigService
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
 from core.services.approval.audit_record_enricher import enrich_items
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 SHIPMENT_NOTICE_SORTABLE_FIELDS = frozenset({
     "notice_code",
@@ -418,7 +418,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                         logger.warning("发货通知单编码规则生成失败: %s", e)
                 if not code:
                     import uuid
-                    code = f"SN{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+                    code = f"SN{today_site_str()}{uuid.uuid4().hex[:6].upper()}"
 
             dump = notice_data.model_dump(exclude_unset=True, exclude={"items", "notice_code"})
             audit_required = await self.business_config_service.check_audit_required(
@@ -602,7 +602,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             raise NotFoundError(f"发货通知单不存在: {notice_id}")
         assert_shipment_notice_capability(notice, "delete")
 
-        await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(deleted_at=datetime.now())
+        await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(deleted_at=resolve_business_datetime())
         return True
 
     async def submit_shipment_notice(
@@ -1065,22 +1065,6 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
 
         notice_items = await ShipmentNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
 
-        from apps.kuaizhizao.services.quality_automation_service import QualityAutomationService
-
-        await QualityAutomationService().maybe_auto_create_oqc_from_shipment_notice(
-            tenant_id=tenant_id,
-            notice_id=notice_id,
-            user_id=notified_by,
-        )
-        await assert_oqc_for_outbound_lines(
-            tenant_id,
-            sales_order_id=notice.sales_order_id,
-            customer_id=notice.customer_id,
-            lines=list(notice_items),
-            quantity_attr="notice_quantity",
-            shipment_notice_id=notice.id,
-        )
-
         # 按行出库仓库分组生成销售出库单
         from apps.kuaizhizao.services.warehouse_service import SalesDeliveryService
         from apps.kuaizhizao.schemas.warehouse import SalesDeliveryCreate, SalesDeliveryItemCreate
@@ -1165,12 +1149,21 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
 
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="已通知",
-            notified_at=datetime.now(),
+            notified_at=resolve_business_datetime(),
             sales_delivery_id=primary_delivery.id,
             sales_delivery_code=primary_delivery.delivery_code,
             related_sales_delivery_ids=related_deliveries,
             updated_by=notified_by,
             updated_by_name=(await self.get_user_info(notified_by))["name"],
+        )
+        # 回写关联后再自动建 OQC，避免与「销售出库创建时自动建 OQC」在未关联窗口双建。
+        # 门禁在确认出库时校验，此处只建待检验单。
+        from apps.kuaizhizao.services.quality_automation_service import QualityAutomationService
+
+        await QualityAutomationService().maybe_auto_create_oqc_from_shipment_notice(
+            tenant_id=tenant_id,
+            notice_id=notice_id,
+            user_id=notified_by,
         )
         updated = await ShipmentNotice.get(tenant_id=tenant_id, id=notice_id)
         resp = ShipmentNoticeResponse.model_validate(updated)
@@ -1204,7 +1197,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                 )
                 if delivery:
                     await SalesDelivery.filter(tenant_id=tenant_id, id=delivery.id).update(
-                        deleted_at=datetime.now()
+                        deleted_at=resolve_business_datetime()
                     )
                     await SalesDeliveryItem.filter(tenant_id=tenant_id, delivery_id=delivery.id).delete()
 

@@ -20,6 +20,7 @@ from core.services.code_rule.code_rule_component_service import CodeRuleComponen
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 from loguru import logger
+from core.utils.timezone_utils import now_utc, today_site_str
 
 
 class SerialRuleService:
@@ -183,7 +184,7 @@ class SerialRuleService:
             raise NotFoundError("序列号规则", rule_uuid)
         if rule.is_system:
             raise ValidationError("系统规则不可删除")
-        rule.deleted_at = datetime.utcnow()
+        rule.deleted_at = now_utc()
         await rule.save()
 
     @staticmethod
@@ -209,7 +210,7 @@ class SerialRuleService:
         """
         components = rule.get_rule_components()
         if not components:
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             context.setdefault("material_code", "")
             result = []
             for _ in range(count):

@@ -15,7 +15,7 @@ from loguru import logger
 import uuid
 from apps.kuaizhizao.models.launch_countdown import LaunchCountdown
 from apps.common.base_service import AppBaseService
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -128,14 +128,14 @@ class LaunchCountdownService(AppBaseService[LaunchCountdown]):
             countdown.progress[stage] = {
                 "status": status,
                 "completed": done,
-                "updated_at": to_api_isoformat(datetime.now()),
+                "updated_at": to_api_isoformat(resolve_business_datetime()),
             }
         else:
             countdown.progress = {
                 stage: {
                     "status": status,
                     "completed": done,
-                    "updated_at": to_api_isoformat(datetime.now()),
+                    "updated_at": to_api_isoformat(resolve_business_datetime()),
                 }
             }
         
@@ -152,7 +152,7 @@ class LaunchCountdownService(AppBaseService[LaunchCountdown]):
         existing = await self.get_countdown(tenant_id)
         if existing:
             return existing
-        default_launch = datetime.now() + timedelta(days=30)
+        default_launch = resolve_business_datetime() + timedelta(days=30)
         default_launch = default_launch.replace(hour=23, minute=59, second=0, microsecond=0)
         return await self.create_or_update_countdown(
             tenant_id=tenant_id,
@@ -178,14 +178,14 @@ class LaunchCountdownService(AppBaseService[LaunchCountdown]):
         wizard_meta: Dict[str, Any] = dict(progress.get("wizard") or {})
         if wizard_step is not None:
             wizard_meta["current_step"] = wizard_step
-            wizard_meta["updated_at"] = to_api_isoformat(datetime.now())
+            wizard_meta["updated_at"] = to_api_isoformat(resolve_business_datetime())
         progress["wizard"] = wizard_meta
         valid_stages = ("inventory", "wip", "receivables_payables", "compensation")
         if stage and stage_status and stage in valid_stages:
             progress[stage] = {
                 "status": stage_status,
                 "completed": stage_status in ("completed", "skipped"),
-                "updated_at": to_api_isoformat(datetime.now()),
+                "updated_at": to_api_isoformat(resolve_business_datetime()),
             }
         countdown.progress = progress
         countdown.updated_by = created_by

@@ -16,6 +16,7 @@ from apps.kuaicaiwu.schemas.standard_cost import (
     StandardCostResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 def standard_cost_effective_q(ref_date: date) -> Q:
@@ -154,7 +155,7 @@ class StandardCostService(AppBaseService[StandardCost]):
         from datetime import datetime
 
         await StandardCost.filter(tenant_id=tenant_id, id=standard_cost_id).update(
-            deleted_at=datetime.now(),
+            deleted_at=resolve_business_datetime(),
             is_active=False,
         )
 

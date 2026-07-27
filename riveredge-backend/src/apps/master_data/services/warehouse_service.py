@@ -1348,9 +1348,9 @@ class WarehouseService:
         current_user: Optional[User] = None,
     ) -> dict:
         """
-        根据车间/工位/工作中心自动建立线边仓。
-        为每个车间、工位、工作中心创建对应的线边仓（若不存在）。
-        编码规则：LBX-CJ-{车间编码}、LBX-GW-{工位编码}、LBX-GZZX-{工作中心编码}
+        按车间/工作中心自动建立线边仓（备料 staging 主路径）。
+        不为工位批量建仓：工位级在制应走报工/WIP，而非仓库主数据。
+        编码规则：LBX-CJ-{车间编码}、LBX-GZZX-{工作中心编码}
         """
         created = 0
         skipped = 0
@@ -1380,39 +1380,7 @@ class WarehouseService:
                 except IntegrityError:
                     skipped += 1
 
-        # 2. 工位级线边仓（工位 -> 产线 -> 车间）
-        workstations = await Workstation.filter(
-            tenant_id=tenant_id, is_active=True, deleted_at__isnull=True
-        ).prefetch_related("production_line")
-        for wst in workstations:
-            code = f"LBX-GW-{wst.code}"
-            exists = await Warehouse.filter(
-                tenant_id=tenant_id, code=code, deleted_at__isnull=True
-            ).exists()
-            if not exists and wst.production_line:
-                workshop_id = wst.production_line.workshop_id
-                workshop = await Workshop.filter(
-                    id=workshop_id, tenant_id=tenant_id, deleted_at__isnull=True
-                ).first()
-                workshop_name = workshop.name if workshop else None
-                try:
-                    payload = {
-                        "code": code,
-                        "name": f"{wst.name}线边仓",
-                        "warehouse_type": "line_side",
-                        "workshop_id": workshop_id,
-                        "workshop_name": workshop_name,
-                        "workstation_id": wst.id,
-                        "workstation_name": wst.name,
-                        "is_active": True,
-                    }
-                    apply_create_audit(payload, current_user)
-                    await Warehouse.create(tenant_id=tenant_id, **payload)
-                    created += 1
-                except IntegrityError:
-                    skipped += 1
-
-        # 3. 工作中心级线边仓（从关联工位反推车间）
+        # 2. 工作中心级线边仓（从关联工位反推车间）
         work_centers = await WorkCenter.filter(
             tenant_id=tenant_id, is_active=True, deleted_at__isnull=True
         ).all()

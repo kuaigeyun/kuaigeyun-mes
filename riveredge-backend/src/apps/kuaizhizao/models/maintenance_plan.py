@@ -188,6 +188,10 @@ class MaintenanceExecution(BaseModel):
     acceptance_result = fields.CharField(max_length=50, null=True, description="验收结果（合格、不合格）")
     remark = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
+
+    # 来源单据（如故障转保养：source_type=equipment_fault）
+    source_type = fields.CharField(max_length=50, null=True, description="来源类型（equipment_fault 等）")
+    source_uuid = fields.CharField(max_length=36, null=True, description="来源单据 UUID")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

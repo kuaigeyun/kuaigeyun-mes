@@ -4,16 +4,19 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from core.schemas.base import BaseSchema
 
 
-class WorkOrderMaterialMovementItem(BaseModel):
+class WorkOrderMaterialMovementItem(BaseSchema):
     id: Optional[int] = None
     source: Literal["ledger", "document"] = "ledger"
     movement_type: str
     material_id: Optional[int] = None
     material_code: Optional[str] = None
     material_name: Optional[str] = None
+    material_spec: Optional[str] = None
     batch_no: Optional[str] = None
     quantity: Decimal
     qty_before: Optional[Decimal] = None
@@ -33,8 +36,20 @@ class WorkOrderMaterialMovementItem(BaseModel):
     occurred_at: Optional[datetime] = None
 
 
-class WorkOrderMaterialMovementListResponse(BaseModel):
+class WorkOrderMaterialHistoryMaterial(BaseSchema):
+    """物料履历左栏：工单 BOM/成品物料（即使尚无履历事件也列出）。"""
+    material_id: int
+    material_code: Optional[str] = None
+    material_name: Optional[str] = None
+    material_spec: Optional[str] = None
+
+
+class WorkOrderMaterialMovementListResponse(BaseSchema):
     work_order_id: int
     total: int = 0
     items: List[WorkOrderMaterialMovementItem] = Field(default_factory=list)
-    source_mode: Literal["ledger", "document"] = "ledger"
+    materials: List[WorkOrderMaterialHistoryMaterial] = Field(
+        default_factory=list,
+        description="工单 BOM/成品物料列表（左栏数据源，含无履历事件的物料）",
+    )
+    source_mode: Literal["ledger", "document", "mixed"] = "ledger"

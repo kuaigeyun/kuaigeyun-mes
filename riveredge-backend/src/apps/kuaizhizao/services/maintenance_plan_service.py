@@ -25,6 +25,7 @@ from apps.common.audit_actor import apply_create_audit
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class MaintenancePlanService:
@@ -75,7 +76,7 @@ class MaintenancePlanService:
                     )
                 except ValidationError:
                     # 如果编码规则不存在，使用默认编码格式
-                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                    timestamp = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
                     data.plan_no = f"MP{timestamp}"
             
             plan = MaintenancePlan(
@@ -270,7 +271,7 @@ class MaintenancePlanService:
         plan = await MaintenancePlanService.get_maintenance_plan_by_uuid(tenant_id, uuid)
         
         # 软删除
-        plan.deleted_at = datetime.now()
+        plan.deleted_at = resolve_business_datetime()
         await plan.save()
 
 
@@ -334,9 +335,27 @@ class MaintenanceExecutionService:
                     )
                 except ValidationError:
                     # 如果编码规则不存在，使用默认编码格式
-                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                    timestamp = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
                     data.execution_no = f"ME{timestamp}"
             
+            source_type = (data.source_type or "").strip() or None
+            source_uuid = (data.source_uuid or "").strip() or None
+            linked_fault = None
+            if source_type == "equipment_fault":
+                if not source_uuid:
+                    raise ValidationError("故障转保养须提供 source_uuid")
+                from apps.kuaizhizao.models.equipment_fault import EquipmentFault
+
+                linked_fault = await EquipmentFault.filter(
+                    tenant_id=tenant_id,
+                    uuid=source_uuid,
+                    deleted_at__isnull=True,
+                ).first()
+                if not linked_fault:
+                    raise ValidationError(f"设备故障记录不存在: {source_uuid}")
+                if linked_fault.equipment_id != equipment.id:
+                    raise ValidationError("故障单关联设备与保养执行设备不一致")
+
             execution = MaintenanceExecution(
                 tenant_id=tenant_id,
                 equipment_id=equipment.id,
@@ -344,12 +363,34 @@ class MaintenanceExecutionService:
                 equipment_name=equipment.name,
                 maintenance_plan_id=maintenance_plan.id if maintenance_plan else None,
                 maintenance_plan_uuid=maintenance_plan.uuid if maintenance_plan else None,
-                **data.model_dump(exclude_none=True, exclude={'equipment_uuid', 'maintenance_plan_uuid'})
+                **data.model_dump(
+                    exclude_none=True,
+                    exclude={
+                        "equipment_uuid",
+                        "maintenance_plan_uuid",
+                        "source_type",
+                        "source_uuid",
+                    },
+                ),
+                source_type=source_type,
+                source_uuid=source_uuid,
             )
             if created_by is not None:
                 actor = await User.filter(id=created_by).first()
                 apply_create_audit(execution, actor)
             await execution.save()
+
+            # 故障转保养：故障置处理中，并同步设备状态
+            if linked_fault and linked_fault.status not in ("已关闭", "已修复"):
+                if linked_fault.status != "处理中":
+                    linked_fault.status = "处理中"
+                    await linked_fault.save()
+                from apps.kuaizhizao.services.equipment_fault_service import (
+                    sync_equipment_status_from_faults,
+                )
+
+                await sync_equipment_status_from_faults(tenant_id, equipment.id)
+
             if data.spare_parts_used:
                 await SparePartService().apply_parts_usage(
                     tenant_id,
@@ -512,6 +553,31 @@ class MaintenanceExecutionService:
             setattr(execution, key, value)
         
         await execution.save()
+
+        # 验收合格且来源为故障 → 闭环故障并同步设备状态
+        accepted = (
+            execution.status == "已验收"
+            and str(execution.acceptance_result or "") == "合格"
+            and str(execution.source_type or "") == "equipment_fault"
+            and execution.source_uuid
+        )
+        if accepted and ("status" in update_data or "acceptance_result" in update_data):
+            from apps.kuaizhizao.models.equipment_fault import EquipmentFault
+            from apps.kuaizhizao.services.equipment_fault_service import (
+                sync_equipment_status_from_faults,
+            )
+
+            linked_fault = await EquipmentFault.filter(
+                tenant_id=tenant_id,
+                uuid=execution.source_uuid,
+                deleted_at__isnull=True,
+            ).first()
+            if linked_fault and linked_fault.status not in ("已关闭", "已修复"):
+                linked_fault.status = "已修复"
+                linked_fault.repair_required = False
+                await linked_fault.save()
+            await sync_equipment_status_from_faults(tenant_id, execution.equipment_id)
+
         return execution
     
     @staticmethod
@@ -532,6 +598,6 @@ class MaintenanceExecutionService:
         execution = await MaintenanceExecutionService.get_maintenance_execution_by_uuid(tenant_id, uuid)
         
         # 软删除
-        execution.deleted_at = datetime.now()
+        execution.deleted_at = resolve_business_datetime()
         await execution.save()
 

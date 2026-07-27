@@ -5,6 +5,38 @@
 import { apiRequest } from '../../../services/api';
 import type { SalesReturnListParams, SalesReturnListResult } from './sales-return';
 
+/** 销售出库确认前 OQC ensure 结果 */
+export interface EnsureOqcForSalesDeliveryLineSummary {
+  delivery_item_id: number;
+  material_id: number;
+  material_code: string;
+  material_name: string;
+  delivery_quantity: number;
+  oqc_required: boolean;
+  oqc_mode?: string | null;
+  plan_label?: string | null;
+  inspection_id?: number | null;
+  inspection_code?: string | null;
+  inspection_status?: string | null;
+  quality_status?: string | null;
+  review_status?: string | null;
+  release_decision?: string | null;
+  passed: boolean;
+  can_outbound: boolean;
+}
+
+export interface EnsureOqcForSalesDeliveryResult {
+  can_confirm_outbound: boolean;
+  requires_oqc: boolean;
+  gate_enabled: boolean;
+  oqc_stage_enabled: boolean;
+  created_count: number;
+  created_inspections: unknown[];
+  pending_inspections: unknown[];
+  line_summaries: EnsureOqcForSalesDeliveryLineSummary[];
+  message?: string | null;
+}
+
 export const warehouseApi = {
   productionPicking: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/production-pickings', { method: 'GET', params }),
@@ -189,6 +221,11 @@ export const warehouseApi = {
     update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}`, { method: 'PUT', data }),
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}`, { method: 'GET' }),
+    ensureOqc: async (id: string) =>
+      apiRequest<EnsureOqcForSalesDeliveryResult>(
+        `/apps/kuaizhizao/sales-deliveries/${id}/ensure-oqc`,
+        { method: 'POST' },
+      ),
     confirm: async (
       id: string,
       data?: { item_batches?: { item_id: number; batch_no: string }[] },

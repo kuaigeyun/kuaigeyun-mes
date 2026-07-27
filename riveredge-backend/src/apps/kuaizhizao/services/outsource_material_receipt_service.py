@@ -32,7 +32,7 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
 )
 from loguru import logger
 
-from core.utils.timezone_utils import to_site_date
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 
 from apps.kuaizhizao.utils.outsource_work_order_state import (
     apply_outsource_work_order_execution_start,
@@ -103,7 +103,7 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
         )
 
     async def _generate_outsource_receipt_code(self, tenant_id: int) -> str:
-        today = datetime.now().strftime("%Y%m%d")
+        today = today_site_str()
         existing_codes = await OutsourceMaterialReceipt.filter(
             tenant_id=tenant_id,
             code__startswith=f"OWR-{today}",
@@ -239,7 +239,7 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                     )
 
                 code = receipt_data.code or await self._generate_outsource_receipt_code(tenant_id)
-                now = datetime.now()
+                now = resolve_business_datetime()
                 material_receipt = await OutsourceMaterialReceipt.create(
                     tenant_id=tenant_id,
                     uuid=str(uuid.uuid4()),
@@ -443,7 +443,7 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
             from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
 
             payable_service = PayableService()
-            biz_date = datetime.now().date()
+            biz_date = to_site_date(resolve_business_datetime())
             due_date = await resolve_partner_due_date(
                 tenant_id, "supplier", int(outsource_work_order.supplier_id), biz_date
             )
@@ -503,7 +503,7 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                 continue
             receipt.status = "completed"
             if not receipt.received_at:
-                receipt.received_at = receipt.created_at or datetime.now()
+                receipt.received_at = receipt.created_at or resolve_business_datetime()
             if not receipt.received_by:
                 receipt.received_by = receipt.created_by
             if not receipt.received_by_name:
@@ -629,7 +629,7 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
         # 更新状态
         receipt.status = "completed"
-        receipt.received_at = datetime.now()
+        receipt.received_at = resolve_business_datetime()
         receipt.received_by = completed_by
         receipt.received_by_name = user_info["name"]
         receipt.updated_by = completed_by

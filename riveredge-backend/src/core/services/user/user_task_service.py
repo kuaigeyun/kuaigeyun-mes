@@ -25,6 +25,7 @@ from core.schemas.user_task import (
     UserTaskCreateRequest,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 # 个人任务在 ApprovalProcess 表里对应的占位流程 code，各租户首次创建个人任务时自动落库
@@ -39,6 +40,29 @@ def _parse_status_filter(status: Optional[str]) -> Optional[List[str]]:
         return None
     values = [s.strip() for s in status.split(",") if s and s.strip()]
     return values or None
+
+
+async def _enrich_user_display_names(
+    tenant_id: int, items: List[UserTaskResponse]
+) -> List[UserTaskResponse]:
+    """为任务列表补齐提交人 / 当前审批人显示名。"""
+    if not items:
+        return items
+    user_ids: List[int] = []
+    for item in items:
+        if item.submitter_id:
+            user_ids.append(int(item.submitter_id))
+        if item.current_approver_id:
+            user_ids.append(int(item.current_approver_id))
+    name_map = await ApprovalInstanceService._user_display_map(tenant_id, user_ids)
+    for item in items:
+        sid = int(item.submitter_id) if item.submitter_id else None
+        if sid:
+            item.submitter_name = name_map.get(sid) or str(sid)
+        aid = int(item.current_approver_id) if item.current_approver_id else None
+        if aid:
+            item.current_approver_name = name_map.get(aid) or str(aid)
+    return items
 
 
 class UserTaskService:
@@ -163,7 +187,8 @@ class UserTaskService:
                         created_at=task.created_at,
                         updated_at=task.updated_at
                     ))
-            
+
+            await _enrich_user_display_names(tenant_id, items)
             return UserTaskListResponse(
                 items=items,
                 total=total,
@@ -224,7 +249,9 @@ class UserTaskService:
             "created_at": task.created_at,
             "updated_at": task.updated_at,
         }
-        return UserTaskResponse.model_validate(task_dict)
+        response = UserTaskResponse.model_validate(task_dict)
+        await _enrich_user_display_names(tenant_id, [response])
+        return response
     
     @staticmethod
     async def process_user_task(
@@ -394,7 +421,7 @@ class UserTaskService:
                 status="pending",
                 submitter_id=user_id,
                 current_approver_id=user_id,
-                submitted_at=datetime.now(),
+                submitted_at=resolve_business_datetime(),
             )
 
             # 同时创建一条关联任务，方便在"待办"中看到

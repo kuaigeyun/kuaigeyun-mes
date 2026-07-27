@@ -8,6 +8,7 @@ import {
   type OrderChangeSourceOrderOption,
 } from '../../utils/orderChangeSourceOrder';
 import { formatDateTime } from '../../../../utils/format';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../../../utils/modalEventIsolation';
 
 export type OrderChangeSourceDocType = 'sales' | 'purchase';
 
@@ -118,6 +119,8 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
       okText={t('common.confirm')}
       okButtonProps={{ disabled: !selectedId }}
       destroyOnHidden
+      maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+      wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
     >
       <Space orientation="vertical" style={{ width: '100%' }} size={12}>
         <Input.Search

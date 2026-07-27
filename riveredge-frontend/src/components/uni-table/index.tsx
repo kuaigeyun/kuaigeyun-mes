@@ -1895,20 +1895,19 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
     // 设置防抖定时器（300ms）
     debounceTimerRef.current = setTimeout(() => {
-      // 更新搜索参数
-      if (searchParamsRef.current) {
-        searchParamsRef.current.keyword = value.trim() || undefined
+      const trimmed = value.trim()
+      // 合并 keyword，保留钉住/高级搜索中的其它条件（如 warehouseType）
+      const next: Record<string, any> = { ...(searchParamsRef.current || {}) }
+      if (trimmed) {
+        next.keyword = trimmed
       } else {
-        searchParamsRef.current = {
-          keyword: value.trim() || undefined,
-        }
+        delete next.keyword
       }
+      searchParamsRef.current = Object.keys(next).length > 0 ? next : undefined
       setPinnedSearchUiEpoch((e) => e + 1)
 
-      // 触发表格重新加载
-      if (actionRefForProTable?.current) {
-        actionRefForProTable.current.reload()
-      }
+      // 必须回第一页并清 TanStack 缓存：仅 reload 会停在旧页导致「有数据却搜空」
+      reloadAndRestWithTanstackCacheBust()
     }, 300)
   }
 
@@ -1927,8 +1926,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     } catch {
       /* ignore */
     }
-    actionRefForProTable.current?.reload?.()
-  }, [])
+    reloadAndRestWithTanstackCacheBust()
+  }, [reloadAndRestWithTanstackCacheBust])
 
   /**
    * 组件卸载时清除防抖定时器和 loading 延迟定时器
@@ -2153,6 +2152,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         const keywordLower = keyword.toLowerCase()
         const keywordUpper = keyword.toUpperCase()
 
+        const compactToken = (s: string) => s.toLowerCase().replace(/[\s\-_]+/g, '')
+        const keywordCompact = compactToken(keyword)
+
         const filteredDataPromises = result.data.map(async (record: any) => {
           for (const column of livePinyinCols) {
             if (!column.dataIndex) continue
@@ -2168,6 +2170,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             if (!fieldValue) continue
             const valueStr = String(fieldValue)
             if (valueStr.toLowerCase().includes(keywordLower)) return record
+            // 编码忽略分隔符：LBXGW 可命中 LBX-GW-GW0001（避免拼音二次过滤误杀）
+            if (keywordCompact && compactToken(valueStr).includes(keywordCompact)) return record
             const pinyinMatch = await matchPinyinInitialsAsync(valueStr, keywordUpper)
             if (pinyinMatch) return record
           }

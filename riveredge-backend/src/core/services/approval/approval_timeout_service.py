@@ -9,13 +9,14 @@ from loguru import logger
 from core.models.approval_history import ApprovalHistory
 from core.models.approval_task import ApprovalTask
 from core.services.approval.approval_instance_service import ApprovalInstanceService
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class ApprovalTimeoutService:
     @staticmethod
     async def scan_and_escalate(limit: int = 200) -> int:
         """扫描已过期 pending 任务，写 timeout_escalate 历史并通知。"""
-        now = datetime.now()
+        now = resolve_business_datetime()
         tasks = (
             await ApprovalTask.filter(
                 status="pending",

@@ -532,7 +532,23 @@ export async function apiRequest<T = any>(
 
       // 如果是成功响应 { success: true, data: ... }（非列表响应）
       if (responseObj.success === true && 'data' in responseObj) {
-        return responseObj.data;
+        const inner = responseObj.data;
+        // 批量操作结果：{ success_count / failed_count }。若只解包 data，
+        // 调用方读 result.success 会得到 undefined，误报「部分删除失败」。
+        if (
+          inner &&
+          typeof inner === 'object' &&
+          !Array.isArray(inner) &&
+          ('failed_count' in inner || 'success_count' in inner)
+        ) {
+          return {
+            ...inner,
+            success: true,
+            message: typeof responseObj.message === 'string' ? responseObj.message : '',
+            data: inner,
+          } as T;
+        }
+        return inner;
       }
 
       // 数据集查询 ExecuteQueryResponse：HTTP 200、success=false 时 error 为字符串（非 { message } 对象）
@@ -546,6 +562,24 @@ export async function apiRequest<T = any>(
           typeof responseObj.error === 'string')
       ) {
         return responseObj as T;
+      }
+
+      // 批量操作部分失败：{ success: false, message, data: { failed_count, ... } }（无 error 字段）
+      if (
+        responseObj.success === false &&
+        responseObj.data &&
+        typeof responseObj.data === 'object' &&
+        !Array.isArray(responseObj.data) &&
+        ('failed_count' in responseObj.data || 'success_count' in responseObj.data) &&
+        !('error' in responseObj)
+      ) {
+        const inner = responseObj.data;
+        return {
+          ...inner,
+          success: false,
+          message: typeof responseObj.message === 'string' ? responseObj.message : '',
+          data: inner,
+        } as T;
       }
 
       // 如果是错误响应 { success: false, error: string | object }

@@ -38,6 +38,7 @@ from apps.kuaizhizao.schemas.assembly_template import ApplyAssemblyTemplateReque
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError, ConflictError
 from infra.services.business_config_service import BusinessConfigService
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
 class AssemblyOrderService(AppBaseService[AssemblyOrder]):
@@ -55,7 +56,7 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
         if not is_enabled:
             raise BusinessLogicError("组装单节点未启用，无法创建组装单")
         async with in_transaction():
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="ASSEMBLY_ORDER_CODE",
@@ -313,7 +314,7 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
             if item.status != "pending":
                 raise ValidationError(f"组装明细状态为{item.status}，不能删除")
 
-            item.deleted_at = datetime.now()
+            item.deleted_at = resolve_business_datetime()
             await item.save(update_fields=["deleted_at"])
             await self._update_order_statistics(tenant_id, order_id)
             return True
@@ -372,7 +373,7 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
             )
 
             user_info = await self.get_user_info(executed_by)
-            executed_at = datetime.now()
+            executed_at = resolve_business_datetime()
             order.status = "completed"
             order.executed_by = executed_by
             order.executed_by_name = user_info["name"]
@@ -451,7 +452,7 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
                     {"pending_count": len(pending_items)},
                 )
 
-            now = datetime.now()
+            now = resolve_business_datetime()
             if pending_items:
                 await AssemblyOrderItem.filter(
                     tenant_id=tenant_id,
@@ -503,7 +504,7 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
         if order.status not in ['draft']:
             raise ValidationError(f"组装单状态为{order.status}，不能删除")
         await AssemblyOrder.filter(id=order_id, tenant_id=tenant_id).update(
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )
         return True
 

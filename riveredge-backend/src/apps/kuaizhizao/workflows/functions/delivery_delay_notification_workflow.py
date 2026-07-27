@@ -12,14 +12,14 @@ from apps.kuaizhizao.services.delivery_delay_notification_service import (
 )
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 from core.tasks.event_compat import Event, TriggerEvent
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from core.utils.workflow_tenant_isolation import with_tenant_isolation
 from core.workflows.client import workflow_client
 from infra.domain.tenant_context import get_current_tenant_id
 
 
 async def run_delivery_delay_notification_scheduler() -> Dict[str, Any]:
-    now = datetime.now()
+    now = resolve_business_datetime()
     try:
         await dispatch_event(
             TaskEvent(

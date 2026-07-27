@@ -26,6 +26,7 @@ from apps.kuaizhizao.schemas.sales_contract_term import (
     SalesContractTermItemUpdate,
 )
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class SalesContractTermService:
@@ -177,7 +178,7 @@ class SalesContractTermService:
         in_group = await SalesContractTermGroupItem.filter(tenant_id=tenant_id, term_item_id=item_id).exists()
         if in_group:
             raise BusinessLogicError("该条款项已被条款组引用，请先从条款组中移除")
-        item.deleted_at = datetime.now()
+        item.deleted_at = resolve_business_datetime()
         await item.save(update_fields=["deleted_at"])
 
     async def list_term_groups(
@@ -289,7 +290,7 @@ class SalesContractTermService:
             raise NotFoundError("条款组不存在")
         async with in_transaction():
             await SalesContractTermGroupItem.filter(tenant_id=tenant_id, group_id=group_id).delete()
-            group.deleted_at = datetime.now()
+            group.deleted_at = resolve_business_datetime()
             await group.save(update_fields=["deleted_at"])
 
     async def build_terms_snapshot(

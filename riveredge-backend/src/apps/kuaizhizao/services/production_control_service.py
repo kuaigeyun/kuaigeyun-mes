@@ -20,7 +20,7 @@ from apps.master_data.models.process import ProcessRoute, Operation
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 
 class ProductionControlService:
@@ -125,7 +125,7 @@ class ProductionControlService:
         2. 按工作中心分组，汇总 (标准工时 * 计划数量)
         3. 假设工作中心每天 8 小时产能（实际应从工作中心日历获取，此处先做简化）
         """
-        start_date = datetime.now()
+        start_date = resolve_business_datetime()
         end_date = start_date + timedelta(days=days)
         
         # 获取期间内的工序
@@ -393,7 +393,7 @@ class ProductionControlService:
                 tenant_id=tenant_id,
                 status__in=['draft', 'released', 'in_progress'],
                 deleted_at__isnull=True,
-                planned_start_date__lte=datetime.now() + timedelta(days=7)
+                planned_start_date__lte=resolve_business_datetime() + timedelta(days=7)
             ).all()
             
             for victim in potential_victims:

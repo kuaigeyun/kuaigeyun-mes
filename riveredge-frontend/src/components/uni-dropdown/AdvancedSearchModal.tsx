@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 import { Modal, Form, Input, InputNumber, DatePicker, Button, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import type { AdvancedSearchField } from './types';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
 import dayjs from 'dayjs';
 
 export interface AdvancedSearchModalProps {
@@ -98,6 +99,8 @@ export const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
       width={480}
       destroyOnHidden
       styles={{ body: { maxHeight: '70vh', overflow: 'auto' } }}
+      maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+      wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
     >
       <Form form={form} layout="vertical" onFinish={handleSearch}>
         {fields.map(renderField)}

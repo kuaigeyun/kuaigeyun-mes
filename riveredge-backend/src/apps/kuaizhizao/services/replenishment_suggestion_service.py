@@ -25,6 +25,7 @@ from apps.kuaizhizao.schemas.replenishment_suggestion import (
 
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
@@ -125,7 +126,7 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
                     priority=priority,
                     suggestion_type="low_stock",
                     estimated_delivery_days=None,  # TODO: 从供应商信息获取
-                    suggested_order_date=datetime.now(),  # TODO: 根据预计交货天数计算
+                    suggested_order_date=resolve_business_datetime(),  # TODO: 根据预计交货天数计算
                     supplier_id=None,  # TODO: 从物料主数据或供应商信息获取
                     supplier_name=None,
                     alert_id=alert.id,
@@ -299,7 +300,7 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
             suggestion.status = process_data.status
             suggestion.processed_by = processed_by
             suggestion.processed_by_name = user_info["name"]
-            suggestion.processed_at = datetime.now()
+            suggestion.processed_at = resolve_business_datetime()
             suggestion.processing_notes = process_data.processing_notes
             suggestion.updated_by = processed_by
             suggestion.updated_by_name = user_info["name"]

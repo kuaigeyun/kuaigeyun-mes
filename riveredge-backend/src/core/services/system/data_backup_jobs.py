@@ -22,6 +22,7 @@ from tortoise import Tortoise
 
 from core.services.system.backup_storage import resolve_data_backup_dir
 from infra.config.infra_config import infra_settings
+from core.utils.timezone_utils import resolve_business_datetime
 
 TENANT_BACKUP_EXCLUDED_TABLES = {
     # 超大运行日志表：对业务恢复价值有限，但会显著拖慢租户级备份
@@ -365,7 +366,7 @@ def run_backup_dump_and_zip_sync(
         with open(db_dump_path, "w", encoding="utf-8") as f:
             f.write("-- Tenant Isolated Backup\n")
             f.write(f"-- Tenant ID: {tenant_id}\n")
-            f.write(f"-- Date: {datetime.now()}\n\n")
+            f.write(f"-- Date: {resolve_business_datetime()}\n\n")
             if skipped_tables:
                 f.write(f"-- Skipped tables: {', '.join(skipped_tables)}\n\n")
 
@@ -463,7 +464,7 @@ def run_backup_dump_and_zip_sync(
         if result.returncode != 0:
             raise RuntimeError(f"pg_dump 失败: {result.stderr}")
 
-    final_zip_name = f"{backup_name}_{datetime.now().strftime('%Y%m%d%H%M%S')}.zip"
+    final_zip_name = f"{backup_name}_{resolve_business_datetime().strftime('%Y%m%d%H%M%S')}.zip"
     final_zip_path = os.path.join(backup_dir, final_zip_name)
 
     dump_path = db_dump_file if backup_scope != "tenant" else os.path.join(temp_dir, "db_dump.sql")
@@ -547,7 +548,7 @@ def run_full_backup_dump_and_zip(backup_dir: str, temp_dir: str, backup_name: st
     if result.returncode != 0:
         raise RuntimeError(f"pg_dump 失败: {result.stderr}")
 
-    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    ts = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
     final_zip_name = f"{backup_name}_{ts}.zip"
     final_zip_path = os.path.join(backup_dir, final_zip_name)
 

@@ -159,7 +159,7 @@ const codeRulePageZhCN = {
   'codeRulePage.master-data-defect-type.codeFieldLabel': '不良品编码',
   'codeRulePage.master-data-defect-type.pageName': '不良品项',
   'codeRulePage.master-data-engineering-bom.codeFieldLabel': 'BOM编码',
-  'codeRulePage.master-data-engineering-bom.pageName': '物料清单BOM',
+  'codeRulePage.master-data-engineering-bom.pageName': '物料清单 (BOM)',
   'codeRulePage.master-data-factory-plant.codeFieldLabel': '厂区编码',
   'codeRulePage.master-data-factory-plant.pageName': '厂区管理',
   'codeRulePage.master-data-factory-production-line.codeFieldLabel': '产线编码',

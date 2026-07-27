@@ -15,6 +15,7 @@ from core.models.data_backup import DataBackup
 from core.schemas.data_backup import DataBackupCreate, DataBackupResponse, DataBackupListResponse
 from core.services.system.data_backup_service import DataBackupService
 from core.services.system.backup_download_service import BackupDownloadService
+from core.utils.timezone_utils import resolve_business_datetime
 
 router = APIRouter(prefix="/data-backups", tags=["Core - Data Backups"])
 
@@ -83,7 +84,7 @@ async def get_worker_health(
     - backlog: 存在超时 pending（任务堆积，未必代表 worker 进程离线）
     - idle: 当前无执行活动且无堆积（空闲）
     """
-    now = datetime.now()
+    now = resolve_business_datetime()
     stale_threshold = now - timedelta(minutes=2)
     recent_window = now - timedelta(minutes=10)
 

@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from core.models.role import Role
 from core.services.role_scenario.role_scenario_service import ROLE_SCENARIOS
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import now_utc, to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError
 from loguru import logger
 
@@ -1128,7 +1128,7 @@ class OnboardingService:
             "counts": counts,
             "flags": flags,
             "cached": False,
-            "generated_at": to_api_isoformat(datetime.now(timezone.utc)),
+            "generated_at": to_api_isoformat(now_utc()),
         }
         OnboardingService._counts_cache_set(tenant_id, scope, payload)
         return payload

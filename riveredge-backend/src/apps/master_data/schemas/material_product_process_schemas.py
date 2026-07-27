@@ -53,6 +53,16 @@ class ProductProcessLineSchema(BaseModel):
     is_node_operation: bool = Field(False, alias="isNodeOperation")
     over_report_mode: Optional[str] = Field("none", alias="overReportMode")
     over_report_value: Optional[float] = Field(0, alias="overReportValue")
+    is_outsourced: bool = Field(False, alias="isOutsourced", description="计划工序委外")
+    outsource_lead_time_days: Optional[int] = Field(
+        None, alias="outsourceLeadTimeDays", description="委外提前期（天）", ge=0
+    )
+    outsource_supplier_id: Optional[int] = Field(
+        None, alias="outsourceSupplierId", description="默认委外供应商ID"
+    )
+    outsource_supplier_name: Optional[str] = Field(
+        None, alias="outsourceSupplierName", description="默认委外供应商名称"
+    )
 
     @field_validator("standard_time_qty")
     @classmethod

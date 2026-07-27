@@ -38,6 +38,7 @@ from core.services.authorization.permission_policy_service import PermissionPoli
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 router = APIRouter(prefix="/sales-invoices", tags=["App - Kuaicaiwu - Finance"])
 business_config_service = BusinessConfigService()
@@ -47,7 +48,7 @@ sales_invoice_service = SalesInvoiceService()
 
 
 async def _generate_sales_invoice_code(tenant_id: int) -> str:
-    today = datetime.now().strftime("%Y%m%d")
+    today = today_site_str()
     return await invoice_service.generate_code(tenant_id, "SALES_INVOICE_CODE", prefix=f"SI{today}")
 
 
@@ -549,7 +550,7 @@ async def delete_sales_invoice(
         )
     from datetime import datetime
 
-    await Invoice.filter(tenant_id=tenant_id, id=id).update(deleted_at=datetime.now())
+    await Invoice.filter(tenant_id=tenant_id, id=id).update(deleted_at=resolve_business_datetime())
 
 
 @router.post("/{id}/void", response_model=SalesInvoiceResponse)

@@ -31,6 +31,7 @@ from apps.kuaizhizao.schemas.disassembly_order import (
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
 class DisassemblyOrderService(AppBaseService[DisassemblyOrder]):
@@ -48,7 +49,7 @@ class DisassemblyOrderService(AppBaseService[DisassemblyOrder]):
         if not is_enabled:
             raise BusinessLogicError("拆卸单节点未启用，无法创建拆卸单")
         async with in_transaction():
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="DISASSEMBLY_ORDER_CODE",
@@ -292,7 +293,7 @@ class DisassemblyOrderService(AppBaseService[DisassemblyOrder]):
             if item.status != "pending":
                 raise ValidationError(f"拆卸明细状态为{item.status}，不能删除")
 
-            item.deleted_at = datetime.now()
+            item.deleted_at = resolve_business_datetime()
             await item.save(update_fields=["deleted_at"])
             await self._update_order_statistics(tenant_id, order_id)
             return True
@@ -352,7 +353,7 @@ class DisassemblyOrderService(AppBaseService[DisassemblyOrder]):
             order.status = "completed"
             order.executed_by = executed_by
             order.executed_by_name = user_info["name"]
-            order.executed_at = datetime.now()
+            order.executed_at = resolve_business_datetime()
             order.updated_by = executed_by
             order.updated_by_name = user_info["name"]
             await order.save()
@@ -371,7 +372,7 @@ class DisassemblyOrderService(AppBaseService[DisassemblyOrder]):
         if order.status not in ['draft']:
             raise ValidationError(f"拆卸单状态为{order.status}，不能删除")
         await DisassemblyOrder.filter(id=order_id, tenant_id=tenant_id).update(
-            deleted_at=datetime.now()
+            deleted_at=resolve_business_datetime()
         )
         return True
 

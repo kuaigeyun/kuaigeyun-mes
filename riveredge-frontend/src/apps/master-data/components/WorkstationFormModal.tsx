@@ -80,7 +80,7 @@ export const WorkstationFormModal: React.FC<WorkstationFormModalProps> = ({
   useEffect(() => {
     if (!open) return;
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ isActive: true });
+    formRef.current?.setFieldsValue({ isActive: true, maxParallel: 1 });
     resetFieldValues();
 
     if (!editUuid) {
@@ -123,6 +123,7 @@ export const WorkstationFormModal: React.FC<WorkstationFormModalProps> = ({
           name: detail.name,
           productionLineId: detail.productionLineId,
           description: detail.description,
+          maxParallel: detail.maxParallel ?? 1,
           isActive: detail.isActive ?? true,
         });
         const fieldFormValues = await loadFieldValues(detail.id);

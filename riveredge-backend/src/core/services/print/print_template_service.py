@@ -27,6 +27,7 @@ from core.schemas.print_template import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
+from core.utils.timezone_utils import resolve_business_datetime
 
 # 设计器 / HTML 预览 / Playwright PDF 共用的正文字体栈：Linux 上 Chromium 往往没有「微软雅黑」，
 # 若把 system-ui 放在最前会优先匹配拉丁无衬线 + 系统回退，易与 Windows 设计机不一致。
@@ -474,7 +475,7 @@ class PrintTemplateService:
             NotFoundError: 当打印模板不存在时抛出
         """
         print_template = await PrintTemplateService.get_print_template_by_uuid(tenant_id, uuid)
-        print_template.deleted_at = datetime.now()
+        print_template.deleted_at = resolve_business_datetime()
         await print_template.save()
     
     @staticmethod
@@ -1131,7 +1132,7 @@ class PrintTemplateService:
         
         # 更新使用统计
         print_template.usage_count += 1
-        print_template.last_used_at = datetime.now()
+        print_template.last_used_at = resolve_business_datetime()
         await print_template.save()
         
         # TODO: 根据 output_format 生成文件（PDF、HTML等）

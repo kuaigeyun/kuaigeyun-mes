@@ -61,6 +61,9 @@ class ProductionPickingResponse(ProductionPickingBase):
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
     updated_by: Optional[int] = Field(None, description="更新人ID")
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
+    # 表头无仓库字段；由明细汇总供出库 Hub 列表/详情展示
+    warehouse_id: Optional[int] = Field(None, description="出库仓库ID（明细汇总，多仓时为空）")
+    warehouse_name: Optional[str] = Field(None, description="出库仓库名称（明细汇总）")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
     capabilities: Optional[OutboundHubCapabilities] = Field(
         None, description="业务态 capabilities（出库 Hub，document_action_policy）",
@@ -781,6 +784,10 @@ class PurchaseReceiptResponse(PurchaseReceiptBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",

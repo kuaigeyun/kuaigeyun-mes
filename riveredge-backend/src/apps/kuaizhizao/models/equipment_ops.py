@@ -224,6 +224,7 @@ class EquipmentSpotCheckLine(BaseModel):
     measured_value = fields.TextField(null=True)
     is_pass = fields.BooleanField(default=True)
     remark = fields.TextField(null=True)
+    attachments = fields.JSONField(null=True, description="行级附件（问题/对比照片）")
     deleted_at = fields.DatetimeField(null=True)
 
 
@@ -272,6 +273,7 @@ class EquipmentRoutePatrolLine(BaseModel):
     is_pass = fields.BooleanField(default=True)
     fault_report_uuid = fields.CharField(max_length=36, null=True)
     remark = fields.TextField(null=True)
+    attachments = fields.JSONField(null=True, description="行级附件（问题/对比照片）")
     deleted_at = fields.DatetimeField(null=True)
 
 

@@ -25,7 +25,7 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.equipment_service import EquipmentService
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -71,7 +71,7 @@ class EquipmentOEEService:
 
         # 设置默认时间范围（最近30天）
         if not date_end:
-            date_end = datetime.now()
+            date_end = resolve_business_datetime()
         if not date_start:
             date_start = date_end - timedelta(days=30)
 
@@ -184,7 +184,7 @@ class EquipmentOEEService:
         """
         # 设置默认时间范围（最近30天）
         if not date_end:
-            date_end = datetime.now()
+            date_end = resolve_business_datetime()
         if not date_start:
             date_start = date_end - timedelta(days=30)
 
@@ -269,7 +269,7 @@ class EquipmentOEEService:
         """
         # 设置默认时间范围（最近30天）
         if not date_end:
-            date_end = datetime.now()
+            date_end = resolve_business_datetime()
         if not date_start:
             if period == "day":
                 date_start = date_end - timedelta(days=30)

@@ -28,7 +28,7 @@ export function WorkOrderOperationStepsStrip({
   }, [steps]);
 
   const nodeSize = compact ? 28 : 32;
-  const progressFontSize = compact ? 10 : 11;
+  const progressFontSize = compact ? 9 : 10;
   const labelFontSize = compact ? 11 : 12;
   const labelGap = compact ? 2 : 4;
   const slotWidth = compact ? 56 : 64;

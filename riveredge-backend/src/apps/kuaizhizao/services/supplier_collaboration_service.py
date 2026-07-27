@@ -15,7 +15,7 @@ from loguru import logger
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.master_data.models.supplier import Supplier
 from core.services.base import BaseService
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
@@ -86,7 +86,7 @@ class SupplierCollaborationService(BaseService):
                 "purchase_order_code": purchase_order.order_code,
                 "supplier_id": supplier.id,
                 "supplier_name": supplier.name,
-                "sent_at": to_api_isoformat(datetime.now()),
+                "sent_at": to_api_isoformat(resolve_business_datetime()),
             }
     
     async def update_purchase_order_progress(
@@ -138,9 +138,9 @@ class SupplierCollaborationService(BaseService):
             # 更新备注
             if progress_data.get('remarks'):
                 if purchase_order.remarks:
-                    purchase_order.remarks += f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {progress_data['remarks']}"
+                    purchase_order.remarks += f"\n[{resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {progress_data['remarks']}"
                 else:
-                    purchase_order.remarks = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {progress_data['remarks']}"
+                    purchase_order.remarks = f"[{resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {progress_data['remarks']}"
             
             await purchase_order.save()
             
@@ -153,7 +153,7 @@ class SupplierCollaborationService(BaseService):
                 "progress_percentage": progress_percentage,
                 "estimated_delivery_date": to_api_isoformat(estimated_delivery_date) if estimated_delivery_date else None,
                 "delivery_date": to_api_isoformat(purchase_order.delivery_date) if purchase_order.delivery_date else None,
-                "updated_at": to_api_isoformat(datetime.now()),
+                "updated_at": to_api_isoformat(resolve_business_datetime()),
             }
     
     async def submit_delivery_notice(
@@ -208,7 +208,7 @@ class SupplierCollaborationService(BaseService):
                 delivery_info += f", 物流单号: {tracking_number}"
             
             # 更新备注
-            delivery_remarks = f"[发货通知 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {delivery_info}"
+            delivery_remarks = f"[发货通知 {resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {delivery_info}"
             if delivery_data.get('remarks'):
                 delivery_remarks += f" - {delivery_data['remarks']}"
             
@@ -228,7 +228,7 @@ class SupplierCollaborationService(BaseService):
                 "delivery_quantity": delivery_quantity,
                 "delivery_date": to_api_isoformat(delivery_date) if delivery_date else None,
                 "tracking_number": tracking_number,
-                "submitted_at": to_api_isoformat(datetime.now()),
+                "submitted_at": to_api_isoformat(resolve_business_datetime()),
             }
     
     async def get_supplier_purchase_orders(

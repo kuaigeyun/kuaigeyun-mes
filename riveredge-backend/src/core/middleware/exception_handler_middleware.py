@@ -20,7 +20,7 @@ from infra.exceptions.exceptions import (
     create_error_response,
 )
 from core.utils.error_logger import ErrorLogger
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import now_utc, to_api_isoformat
 
 
 class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
@@ -85,7 +85,7 @@ class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
                     "message": "请求参数验证失败",
                     "details": e.errors() if hasattr(e, 'errors') else str(e),
                 },
-                "timestamp": to_api_isoformat(datetime.utcnow())
+                "timestamp": to_api_isoformat(now_utc())
             }
             
             # 记录错误日志
@@ -121,7 +121,7 @@ class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
                         "message": str(e),
                     },
                 },
-                "timestamp": to_api_isoformat(datetime.utcnow())
+                "timestamp": to_api_isoformat(now_utc())
             }
             
             # 记录错误日志
@@ -157,7 +157,7 @@ class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
                         "message": str(e),
                     },
                 },
-                "timestamp": to_api_isoformat(datetime.utcnow())
+                "timestamp": to_api_isoformat(now_utc())
             }
             
             # 记录详细错误日志

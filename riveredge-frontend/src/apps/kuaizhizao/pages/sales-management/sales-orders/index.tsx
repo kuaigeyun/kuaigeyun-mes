@@ -4063,6 +4063,13 @@ const SalesOrdersPage: React.FC = () => {
               </Typography.Title>
             </Space>
             <Space wrap align="center">
+              <DocumentFormPageHeaderActions
+                onCancel={leaveSalesOrderFormPage}
+                onSaveDraft={() => void handleSaveDraft()}
+                onPrimarySubmit={triggerSalesOrderFormSubmit}
+                isCreatePage={isCreatePage}
+                canSubmitAfterSave={canSubmitAfterSave}
+              />
               {isCreatePage && kuaiaiAvailable ? (
                 <SalesOrderAiCreateTrigger
                   formRef={formRef}
@@ -4073,13 +4080,6 @@ const SalesOrdersPage: React.FC = () => {
                   onMaterialsChange={setMaterials}
                 />
               ) : null}
-              <DocumentFormPageHeaderActions
-                onCancel={leaveSalesOrderFormPage}
-                onSaveDraft={() => void handleSaveDraft()}
-                onPrimarySubmit={triggerSalesOrderFormSubmit}
-                isCreatePage={isCreatePage}
-                canSubmitAfterSave={canSubmitAfterSave}
-              />
             </Space>
             </>
           }

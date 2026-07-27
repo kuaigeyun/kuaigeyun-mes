@@ -65,8 +65,10 @@ function equipmentStatusTag(
 ): { text: string; color: string } {
   const statusMap: Record<string, { text: string; color: string }> = {
     正常: { text: t('app.kuaizhizao.equipment.statusNormal'), color: 'success' },
+    故障: { text: t('app.kuaizhizao.equipment.statusFault'), color: 'error' },
     维修中: { text: t('app.kuaizhizao.equipment.statusRepairing'), color: 'warning' },
     停用: { text: t('app.kuaizhizao.equipment.statusDisabled'), color: 'default' },
+    校验中: { text: t('app.kuaizhizao.equipment.statusCalibrating'), color: 'processing' },
     报废: { text: t('app.kuaizhizao.equipment.statusScrapped'), color: 'error' },
   };
   return statusMap[status ?? ''] ?? { text: status ?? '-', color: 'default' };

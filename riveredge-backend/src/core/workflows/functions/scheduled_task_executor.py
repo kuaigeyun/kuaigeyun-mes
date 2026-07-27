@@ -17,6 +17,7 @@ from core.utils.workflow_tenant_isolation import with_tenant_isolation
 from core.workflows.client import workflow_client
 from infra.domain.tenant_context import get_current_tenant_id
 from infra.infrastructure.http import get_http_client
+from core.utils.timezone_utils import today_site_str
 
 
 @workflow_client.create_function(
@@ -136,7 +137,7 @@ async def _execute_python_script_task(scheduled_task: ScheduledTask) -> Dict[str
 
 async def _execute_backup_task(tenant_id: int, scheduled_task: ScheduledTask) -> Dict[str, Any]:
     task_config = scheduled_task.task_config or {}
-    name = task_config.get("name", f"自动备份_{datetime.now().strftime('%Y%m%d')}")
+    name = task_config.get("name", f"自动备份_{today_site_str()}")
     backup_type = task_config.get("backup_type", "full")
     backup_scope = task_config.get("backup_scope", "all")
     include_files = task_config.get("include_files", True)

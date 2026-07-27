@@ -3381,6 +3381,18 @@
             "allow_manual_edit": true
         },
         {
+            "page_code": "kuaizhizao-quality-oqc-inspection",
+            "page_name": "出货检验",
+            "page_path": "/apps/kuaizhizao/quality-management/oqc-inspection",
+            "code_field": "inspection_code",
+            "code_field_label": "出货检验单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "OQC_INSPECTION_CODE",
+            "allow_manual_edit": true
+        },
+        {
             "page_code": "kuaizhizao-equipment-management-equipment",
             "page_name": "设备台账",
             "page_path": "/apps/kuaizhizao/equipment-management/equipment",

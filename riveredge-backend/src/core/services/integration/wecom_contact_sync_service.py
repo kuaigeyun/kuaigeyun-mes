@@ -27,6 +27,7 @@ from core.services.integration.wecom_oauth_service import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 from infra.services.tenant_service import TenantService
+from core.utils.timezone_utils import now_utc
 
 WECOM_SOURCE = "wecom"
 _CN_MOBILE_RE = re.compile(r"^1[3-9]\d{9}$")
@@ -95,7 +96,7 @@ class WeComContactSyncService:
         result = {
             "departments": dept_stats,
             "users": user_stats,
-            "synced_at": datetime.now(timezone.utc).isoformat(),
+            "synced_at": now_utc().isoformat(),
         }
         await WeComContactSyncService._persist_sync_meta(integration, result)
         logger.info(
@@ -353,6 +354,6 @@ class WeComContactSyncService:
         }
         integration.config = config
         integration.is_connected = True
-        integration.last_connected_at = datetime.now(timezone.utc)
+        integration.last_connected_at = now_utc()
         integration.last_error = None
         await integration.save()

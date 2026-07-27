@@ -32,6 +32,7 @@ from apps.kuaizhizao.schemas.station import (
 from apps.kuaizhizao.schemas.work_order import WorkOrderOperationResponse
 from apps.kuaizhizao.services.work_order_service import WorkOrderService, _max_reportable_quantity_for_op
 from apps.kuaizhizao.services.work_order_service import _batch_default_operators_snapshots_by_master_operation_id
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 DOWNTIME_REASON_LABELS = {
@@ -263,7 +264,7 @@ class StationService(WorkOrderService):
             tenant_id=tenant_id,
             data=EquipmentFaultCreate(
                 equipment_uuid=data.equipment_uuid,
-                fault_date=datetime.now(),
+                fault_date=resolve_business_datetime(),
                 fault_type="其他",
                 fault_description=data.remarks or f"工位安灯：{andon.workstation_name or andon.workstation_id}",
                 fault_level=level,
@@ -466,7 +467,7 @@ class StationService(WorkOrderService):
         if record.status != "open":
             raise BusinessLogicError(f"仅 open 状态可响应，当前：{record.status}")
         record.status = "acknowledged"
-        record.acknowledged_at = datetime.now()
+        record.acknowledged_at = resolve_business_datetime()
         record.acknowledged_by = user_id
         record.acknowledged_by_name = user_name
         await record.save()
@@ -488,11 +489,11 @@ class StationService(WorkOrderService):
         if record.status not in ("open", "acknowledged"):
             raise BusinessLogicError(f"当前状态不可关闭：{record.status}")
         if record.status == "open":
-            record.acknowledged_at = datetime.now()
+            record.acknowledged_at = resolve_business_datetime()
             record.acknowledged_by = user_id
             record.acknowledged_by_name = user_name
         record.status = "closed"
-        record.closed_at = datetime.now()
+        record.closed_at = resolve_business_datetime()
         await record.save()
         await self._push_andon_event(tenant_id, "closed", record)
         return record
@@ -513,7 +514,7 @@ class StationService(WorkOrderService):
         if record.status != "open":
             raise BusinessLogicError("仅未响应的安灯可撤销")
         record.status = "closed"
-        record.closed_at = datetime.now()
+        record.closed_at = resolve_business_datetime()
         record.remarks = (record.remarks or "") + "\n[撤销]"
         await record.save()
         await self._push_andon_event(tenant_id, "cancelled", record)
@@ -546,7 +547,7 @@ class StationService(WorkOrderService):
             operation_id=data.operation_id,
             worker_id=worker_id,
             worker_name=worker_name,
-            acknowledged_at=datetime.now(),
+            acknowledged_at=resolve_business_datetime(),
         )
 
     async def check_sop_acknowledged(
@@ -952,7 +953,7 @@ class StationService(WorkOrderService):
         master_op_id, op_name = await self.resolve_master_operation_id(
             tenant_id, operation_id, work_order_id
         )
-        now = datetime.now()
+        now = resolve_business_datetime()
         q = OperatorSkillQualification.filter(
             tenant_id=tenant_id,
             user_id=user_id,
@@ -1054,7 +1055,7 @@ class StationService(WorkOrderService):
         shift_end: Optional[datetime] = None,
         workstation_id: Optional[int] = None,
     ) -> dict:
-        end = shift_end or datetime.now()
+        end = shift_end or resolve_business_datetime()
         report_q = ReportingRecord.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -1186,7 +1187,7 @@ class StationService(WorkOrderService):
                 operation_id=operation_id,
                 reason_code=data.reason_code,
                 reason_label=label,
-                started_at=datetime.now(),
+                started_at=resolve_business_datetime(),
                 operator_id=operator_id,
                 operator_name=user_info["name"],
                 remarks=data.remarks,
@@ -1211,7 +1212,7 @@ class StationService(WorkOrderService):
             ).first()
             if not open_dt:
                 raise BusinessLogicError("工序未处于暂停状态")
-            open_dt.ended_at = datetime.now()
+            open_dt.ended_at = resolve_business_datetime()
             await open_dt.save()
             return {"downtime_id": open_dt.id, "paused": False}
 
@@ -1237,7 +1238,7 @@ class StationService(WorkOrderService):
                 deleted_at__isnull=True,
             ).first()
             if open_dt:
-                open_dt.ended_at = datetime.now()
+                open_dt.ended_at = resolve_business_datetime()
                 await open_dt.save()
 
             user_info = await self.get_user_info(completed_by)
@@ -1256,7 +1257,7 @@ class StationService(WorkOrderService):
                         f"合格数量（{qualified}）未达计划数量（{plan_qty}），不能结束工序"
                     )
             op.status = "completed"
-            op.actual_end_date = datetime.now()
+            op.actual_end_date = resolve_business_datetime()
             op.updated_by = completed_by
             op.updated_by_name = user_info["name"]
             if remarks:

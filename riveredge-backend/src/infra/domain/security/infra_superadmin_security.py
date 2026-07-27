@@ -12,6 +12,7 @@ from jose import JWTError, jwt
 
 from infra.config.infra_config import infra_settings as settings
 from infra.models.infra_superadmin import InfraSuperAdmin
+from core.utils.timezone_utils import now_utc
 
 
 def create_infra_superadmin_token(
@@ -45,11 +46,11 @@ def create_infra_superadmin_token(
     }
     
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = now_utc() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = now_utc() + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
+    to_encode.update({"exp": expire, "iat": now_utc()})
     
     encoded_jwt = jwt.encode(
         to_encode,

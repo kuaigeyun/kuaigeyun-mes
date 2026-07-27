@@ -44,7 +44,12 @@ from apps.kuaizhizao.schemas.cost import (
     CostOptimizationResponse,
 )
 from loguru import logger
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import (
+    now_utc,
+    resolve_business_datetime,
+    to_api_isoformat,
+    today_site_str,
+)
 
 
 class CostRuleService(AppBaseService[CostRule]):
@@ -61,7 +66,7 @@ class CostRuleService(AppBaseService[CostRule]):
     ) -> CostRuleResponse:
         async with in_transaction():
             if not cost_rule_data.code:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 code = await self.generate_code(
                     tenant_id=tenant_id,
                     code_type="COST_RULE_CODE",
@@ -166,7 +171,7 @@ class CostRuleService(AppBaseService[CostRule]):
     async def delete_cost_rule(self, tenant_id: int, cost_rule_id: int) -> None:
         async with in_transaction():
             cost_rule = await self.get_by_id(tenant_id, cost_rule_id, raise_if_not_found=True)
-            cost_rule.deleted_at = datetime.utcnow()
+            cost_rule.deleted_at = now_utc()
             await cost_rule.save()
 
     async def init_preset_rules(self, tenant_id: int, created_by: int):
@@ -274,7 +279,7 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         - 从最近报工/领料变更中提取脏工单
         - 仅重算落后于最新业务事件的工单
         """
-        now = datetime.now()
+        now = resolve_business_datetime()
         cutoff = now - timedelta(hours=max(1, min(lookback_hours, 168)))
 
         reporting_rows = await ReportingRecord.filter(
@@ -1215,7 +1220,7 @@ class CostCalculationService(AppBaseService[CostCalculation]):
             if not work_order:
                 raise NotFoundError(f"工单 {request.work_order_id} 不存在")
 
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             calculation_no = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="COST_CALCULATION_CODE",
@@ -1271,7 +1276,7 @@ class CostCalculationService(AppBaseService[CostCalculation]):
             if not product:
                 raise NotFoundError(f"产品 {request.product_id} 不存在")
 
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             calculation_no = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="COST_CALCULATION_CODE",
@@ -2227,7 +2232,7 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         
         user_info = await self.get_user_info(created_by)
         results = []
-        today = datetime.now().strftime("%Y%m%d")
+        today = today_site_str()
 
         for pid, data in product_summary.items():
             if allocation_basis == "产量" and total_period_quantity > 0:

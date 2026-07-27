@@ -45,6 +45,14 @@ router = APIRouter(
 )
 
 
+def _batch_delete_message(result: dict, entity_label: str) -> str:
+    """批量删除成功时不带「失败 0 个」。"""
+    failed = result["failed_count"]
+    if failed == 0:
+        return f"成功删除 {result['success_count']} 个{entity_label}"
+    return f"成功删除 {result['success_count']} 个{entity_label}，失败 {failed} 个"
+
+
 def _http_exception_with_trace(
     status_code: int,
     message: str,
@@ -200,7 +208,7 @@ async def batch_delete_plants(
         result = await FactoryService.batch_delete_plants(tenant_id, request.uuids)
         return {
             "success": result["failed_count"] == 0,
-            "message": f"成功删除 {result['success_count']} 个厂区，失败 {result['failed_count']} 个",
+            "message": _batch_delete_message(result, "厂区"),
             "data": result
         }
     except Exception as e:
@@ -373,7 +381,7 @@ async def batch_delete_workshops(
         result = await FactoryService.batch_delete_workshops(tenant_id, request.uuids)
         return {
             "success": result["failed_count"] == 0,
-            "message": f"成功删除 {result['success_count']} 个车间，失败 {result['failed_count']} 个",
+            "message": _batch_delete_message(result, "车间"),
             "data": result
         }
     except Exception as e:
@@ -538,7 +546,7 @@ async def batch_delete_production_lines(
         result = await FactoryService.batch_delete_production_lines(tenant_id, request.uuids)
         return {
             "success": result["failed_count"] == 0,
-            "message": f"成功删除 {result['success_count']} 个产线，失败 {result['failed_count']} 个",
+            "message": _batch_delete_message(result, "产线"),
             "data": result
         }
     except Exception as e:
@@ -701,7 +709,7 @@ async def batch_delete_workstations(
         result = await FactoryService.batch_delete_workstations(tenant_id, request.uuids)
         return {
             "success": result["failed_count"] == 0,
-            "message": f"成功删除 {result['success_count']} 个工位，失败 {result['failed_count']} 个",
+            "message": _batch_delete_message(result, "工位"),
             "data": result
         }
     except Exception as e:
@@ -866,7 +874,7 @@ async def batch_delete_work_centers(
         result = await FactoryService.batch_delete_work_centers(tenant_id, request.uuids)
         return {
             "success": result["failed_count"] == 0,
-            "message": f"成功删除 {result['success_count']} 个工作中心，失败 {result['failed_count']} 个",
+            "message": _batch_delete_message(result, "工作中心"),
             "data": result
         }
     except Exception as e:
@@ -1033,7 +1041,7 @@ async def batch_delete_work_groups(
         result = await WorkGroupService.batch_delete_work_groups(tenant_id, request.uuids)
         return {
             "success": result["failed_count"] == 0,
-            "message": f"成功删除 {result['success_count']} 个工作小组，失败 {result['failed_count']} 个",
+            "message": _batch_delete_message(result, "工作小组"),
             "data": result
         }
     except Exception as e:

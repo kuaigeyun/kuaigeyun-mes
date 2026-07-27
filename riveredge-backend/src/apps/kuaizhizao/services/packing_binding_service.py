@@ -38,6 +38,7 @@ from loguru import logger
 from apps.kuaizhizao.services.document_action_policy.packing_binding import (
     assert_packing_binding_capability,
 )
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_packing_binding_capabilities_on_response,
     enrich_packing_binding_list_capabilities,
@@ -124,7 +125,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
             box_no = binding_data.box_no
             if not box_no:
                 # 使用编码生成服务生成箱号
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 try:
                     box_no = await self.generate_code(
                         tenant_id=tenant_id,
@@ -160,7 +161,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                 barcode=binding_data.barcode,
                 bound_by=bound_by,
                 bound_by_name=bound_by_name,
-                bound_at=binding_data.bound_at or datetime.now(),
+                bound_at=binding_data.bound_at or resolve_business_datetime(),
                 remarks=binding_data.remarks,
             )
             apply_create_audit(create_payload, user)
@@ -225,7 +226,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
             bound_by_name = operator_name_from_user(user)
             box_no = binding_data.box_no
             if not box_no:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 try:
                     box_no = await self.generate_code(
                         tenant_id=tenant_id,
@@ -258,7 +259,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                 barcode=binding_data.barcode,
                 bound_by=bound_by,
                 bound_by_name=bound_by_name,
-                bound_at=binding_data.bound_at or datetime.now(),
+                bound_at=binding_data.bound_at or resolve_business_datetime(),
                 remarks=binding_data.remarks,
             )
             apply_create_audit(create_payload, user)
@@ -356,7 +357,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
         assert_packing_binding_capability(binding, "delete")
 
         # 软删除
-        binding.deleted_at = datetime.now()
+        binding.deleted_at = resolve_business_datetime()
         await binding.save()
 
     def _build_packing_binding_list_query(

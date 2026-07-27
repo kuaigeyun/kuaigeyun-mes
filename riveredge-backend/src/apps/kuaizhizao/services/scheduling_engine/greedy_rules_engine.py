@@ -1,10 +1,10 @@
-"""规则式贪心排产引擎：逾期优先、工位最早可行槽。"""
+"""规则式贪心排产引擎：逾期优先、工位最早可行槽（工作日/工作时段内）。"""
 
 from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from tortoise.timezone import now as tz_now
 
@@ -13,13 +13,22 @@ from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.services.rolling_schedule_service import RollingScheduleService
 from apps.kuaizhizao.services.scheduling_engine.base import SchedulingPlanRequest
 from apps.kuaizhizao.services.scheduling_freeze import freeze_anchor_datetime
-from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingService, _intervals_overlap
+from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingService
 from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
 from apps.kuaizhizao.utils.work_order_operation_scheduling import (
-    build_operation_time_slots,
     has_operation_hours,
     operation_total_hours,
 )
+from apps.kuaizhizao.utils.working_time import (
+    add_working_hours,
+    find_earliest_working_slot,
+    find_latest_working_slot,
+    load_scheduling_work_context,
+    subtract_working_hours,
+)
+from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+from apps.kuaizhizao.utils.outsource_operation import occupies_factory_capacity
+from apps.master_data.models.work_calendar import StationUnavailableWindow
 from apps.master_data.models.factory import Workstation
 from core.utils.timezone_utils import make_aware, to_site_timezone
 from infra.config.infra_config import infra_settings
@@ -55,6 +64,52 @@ def _is_overdue(wo: WorkOrder, now: datetime) -> bool:
     return bool(planned_end and planned_end < now)
 
 
+
+def _timeline_3(intervals: List[Tuple]) -> List[Tuple[datetime, datetime, int]]:
+    """Strip product_id for slot finder."""
+    out = []
+    for iv in intervals:
+        if len(iv) >= 3:
+            out.append((iv[0], iv[1], int(iv[2])))
+    return out
+
+
+def _prev_interval(timeline: List[Tuple], before: datetime) -> Optional[Tuple]:
+    prev = None
+    for iv in timeline:
+        if iv[1] <= before and (prev is None or iv[1] > prev[1]):
+            prev = iv
+    return prev
+
+
+def _apply_changeover_earliest(
+    timeline: List[Tuple],
+    earliest: datetime,
+    product_id: int,
+    changeover_hours: float,
+    *,
+    holidays,
+    work_hours,
+    overtime,
+) -> datetime:
+    if changeover_hours <= 0 or product_id <= 0 or not timeline:
+        return earliest
+    prev = _prev_interval(timeline, earliest)
+    if prev is None:
+        return earliest
+    prev_pid = int(prev[3]) if len(prev) > 3 else 0
+    if prev_pid <= 0 or prev_pid == product_id:
+        return earliest
+    ready = add_working_hours(
+        prev[1],
+        changeover_hours,
+        holidays=holidays,
+        config=work_hours,
+        overtime=overtime,
+    )
+    return max(earliest, ready)
+
+
 class GreedyRulesSchedulingEngine:
     async def plan(self, request: SchedulingPlanRequest) -> Dict[str, Any]:
         tenant_id = request.tenant_id
@@ -72,8 +127,24 @@ class GreedyRulesSchedulingEngine:
         anchor_day = request.plan_date or await rolling_svc.get_next_workday(
             tenant_id, to_site_timezone(now).date()
         )
-        anchor_start = _scheduling_dt(
-            datetime.combine(anchor_day, datetime.min.time().replace(hour=8))
+        span_days = max(120, int(constraints.get("rolling_horizon_days", 14)) * 3)
+        holidays, work_hours, overtime = await load_scheduling_work_context(
+            tenant_id, around=anchor_day, span_days=span_days
+        )
+        changeover_hours = float(constraints.get("setup_changeover_hours") or 0.0)
+        schedule_mode = str(constraints.get("schedule_mode") or "forward").strip().lower()
+        material_hard = bool(constraints.get("material_hard_constraint"))
+        station_rows = await Workstation.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True
+        ).values("id", "max_parallel")
+        station_parallel = {
+            int(r["id"]): max(1, int(r.get("max_parallel") or 1)) for r in station_rows
+        }
+
+        # 锚点为业务墙钟（厂级上班时刻），须按站点时区 make_aware，不可走 to_site_timezone（naive=UTC）
+        anchor_start = make_aware(
+            datetime.combine(anchor_day, work_hours.start),
+            _business_tz_name(),
         )
 
         candidate_ids = await self._resolve_candidate_ids(tenant_id, request, now)
@@ -115,17 +186,67 @@ class GreedyRulesSchedulingEngine:
             planned_end_date__isnull=False,
             assigned_station_id__gt=0,
         ).all()
-        station_timeline: Dict[int, List[Tuple[datetime, datetime, int]]] = defaultdict(list)
+        candidate_op_ids = set()
+        for wo in wos:
+            for op in await WorkOrderOperation.filter(
+                tenant_id=tenant_id, work_order_id=wo.id, deleted_at__isnull=True
+            ).all():
+                if op.status not in {"completed", "cancelled"}:
+                    candidate_op_ids.add(int(op.id))
+
+        # (start, end, op_id, product_id)
+        station_timeline: Dict[int, List[Tuple[datetime, datetime, int, int]]] = defaultdict(list)
+        existing_wo_ids = list({int(op.work_order_id) for op in existing_ops if op.work_order_id})
+        product_by_wo: Dict[int, int] = {}
+        if existing_wo_ids:
+            for row in await WorkOrder.filter(tenant_id=tenant_id, id__in=existing_wo_ids).values("id", "product_id"):
+                product_by_wo[int(row["id"])] = int(row.get("product_id") or 0)
+        active_outsource_op_ids: Set[int] = set(
+            await OutsourceOrder.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            .exclude(status="cancelled")
+            .values_list("work_order_operation_id", flat=True)
+        )
+
         for op in existing_ops:
             sid = int(op.assigned_station_id or 0)
-            if sid > 0 and op.planned_start_date and op.planned_end_date:
-                station_timeline[sid].append(
-                    (
-                        _scheduling_dt(op.planned_start_date),
-                        _scheduling_dt(op.planned_end_date),
-                        int(op.id),
-                    )
+            if sid <= 0 or not op.planned_start_date or not op.planned_end_date:
+                continue
+            if not occupies_factory_capacity(
+                op, has_active_outsource_order=int(op.id) in active_outsource_op_ids
+            ):
+                continue
+            # 将被重排的工序从占用时间线中排除，避免自己挡自己
+            if int(op.id) in candidate_op_ids:
+                continue
+            station_timeline[sid].append(
+                (
+                    _scheduling_dt(op.planned_start_date),
+                    _scheduling_dt(op.planned_end_date),
+                    int(op.id),
+                    product_by_wo.get(int(op.work_order_id or 0), 0),
                 )
+            )
+
+        downtime_rows = await StationUnavailableWindow.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).all()
+        for row in downtime_rows:
+            sid = int(row.station_id or 0)
+            if sid <= 0 or not row.start_at or not row.end_at:
+                continue
+            station_timeline[sid].append(
+                (
+                    _scheduling_dt(row.start_at),
+                    _scheduling_dt(row.end_at),
+                    0,
+                    0,
+                )
+            )
 
         proposals: Dict[str, Any] = {
             "summary": None,
@@ -161,10 +282,51 @@ class GreedyRulesSchedulingEngine:
             if not pending:
                 continue
 
-            cursor = max(anchor_start, freeze_anchor)
-            wo_op_slots: List[Tuple[WorkOrderOperation, datetime, datetime, int]] = []
+            if material_hard:
+                readiness = getattr(wo, "readiness_rate", None)
+                try:
+                    rate = float(readiness) if readiness is not None else 100.0
+                except (TypeError, ValueError):
+                    rate = 100.0
+                if rate < 100.0:
+                    proposals["warnings"].append(
+                        f"工单 {wo.code} 物料未齐套（{rate}%），硬约束跳过"
+                    )
+                    continue
 
-            for op in pending:
+            place_backward = (
+                schedule_mode == "backward" and wo.planned_end_date is not None
+            )
+            if place_backward:
+                due = _scheduling_dt(wo.planned_end_date)
+                cursor = max(freeze_anchor, due)
+            else:
+                cursor = max(anchor_start, freeze_anchor)
+            wo_op_slots: List[Tuple[WorkOrderOperation, datetime, datetime, int]] = []
+            op_iter = list(reversed(pending)) if place_backward else pending
+
+            for op in op_iter:
+                is_outsource = not occupies_factory_capacity(
+                    op, has_active_outsource_order=int(op.id) in active_outsource_op_ids
+                )
+                if is_outsource:
+                    lead_days = int(getattr(op, "outsource_lead_time_days", None) or 1)
+                    lead_days = max(0, lead_days)
+                    if place_backward:
+                        end = cursor
+                        start = end - timedelta(days=lead_days if lead_days > 0 else 0)
+                        if start < freeze_anchor:
+                            start = freeze_anchor
+                            end = start + timedelta(days=lead_days if lead_days > 0 else 0)
+                        wo_op_slots.insert(0, (op, start, end, 0))
+                        cursor = start
+                    else:
+                        start = cursor
+                        end = start + timedelta(days=lead_days if lead_days > 0 else 0)
+                        wo_op_slots.append((op, start, end, 0))
+                        cursor = end
+                    continue
+
                 if not has_operation_hours(op.setup_time, op.standard_time):
                     proposals["warnings"].append(
                         f"工单 {wo.code} 工序 {op.operation_name or op.operation_code or op.id} "
@@ -173,7 +335,6 @@ class GreedyRulesSchedulingEngine:
                     wo_op_slots = []
                     break
                 duration_hours = operation_total_hours(op.setup_time, op.standard_time, wo.quantity)
-                duration = timedelta(hours=duration_hours)
                 station_id = int(op.assigned_station_id or 0)
                 if station_id <= 0:
                     station_id = await self._resolve_default_station_id(tenant_id, op)
@@ -184,18 +345,108 @@ class GreedyRulesSchedulingEngine:
                     wo_op_slots = []
                     break
 
-                start, end = self._find_earliest_slot(
-                    station_timeline.get(station_id, []),
-                    cursor,
-                    duration,
-                    exclude_op_id=int(op.id),
-                )
-                if start < cursor:
-                    start = cursor
-                    end = start + duration
-                wo_op_slots.append((op, start, end, station_id))
-                cursor = end
-                station_timeline[station_id].append((start, end, int(op.id)))
+                product_id = int(wo.product_id or 0)
+                timeline = station_timeline.get(station_id, [])
+                capacity = station_parallel.get(station_id, 1)
+                earliest = cursor
+                try:
+                    start = end = None
+                    if place_backward:
+                        latest = cursor
+                        for _attempt in range(40):
+                            start, end = find_latest_working_slot(
+                                _timeline_3(timeline),
+                                latest,
+                                duration_hours,
+                                holidays=holidays,
+                                config=work_hours,
+                                overtime=overtime,
+                                exclude_op_id=int(op.id),
+                                max_parallel=capacity,
+                            )
+                            nxt = None
+                            for iv in timeline:
+                                if iv[0] >= end and (nxt is None or iv[0] < nxt[0]):
+                                    nxt = iv
+                            if (
+                                nxt
+                                and changeover_hours > 0
+                                and product_id > 0
+                                and int(nxt[3] if len(nxt) > 3 else 0)
+                                not in (0, product_id)
+                            ):
+                                ready = add_working_hours(
+                                    end,
+                                    changeover_hours,
+                                    holidays=holidays,
+                                    config=work_hours,
+                                    overtime=overtime,
+                                )
+                                if ready > nxt[0]:
+                                    latest = subtract_working_hours(
+                                        nxt[0],
+                                        changeover_hours,
+                                        holidays=holidays,
+                                        config=work_hours,
+                                        overtime=overtime,
+                                    )
+                                    continue
+                            break
+                    else:
+                        for _attempt in range(40):
+                            earliest = _apply_changeover_earliest(
+                                timeline,
+                                earliest,
+                                product_id,
+                                changeover_hours,
+                                holidays=holidays,
+                                work_hours=work_hours,
+                                overtime=overtime,
+                            )
+                            start, end = find_earliest_working_slot(
+                                _timeline_3(timeline),
+                                earliest,
+                                duration_hours,
+                                holidays=holidays,
+                                config=work_hours,
+                                overtime=overtime,
+                                exclude_op_id=int(op.id),
+                                max_parallel=capacity,
+                            )
+                            prev = _prev_interval(timeline, start)
+                            if (
+                                prev
+                                and changeover_hours > 0
+                                and product_id > 0
+                                and int(prev[3] if len(prev) > 3 else 0) not in (0, product_id)
+                            ):
+                                ready = add_working_hours(
+                                    prev[1],
+                                    changeover_hours,
+                                    holidays=holidays,
+                                    config=work_hours,
+                                    overtime=overtime,
+                                )
+                                if start < ready:
+                                    earliest = ready
+                                    continue
+                            break
+                    if start is None or end is None:
+                        raise ValueError("无法找到可行槽位")
+                except ValueError as e:
+                    proposals["warnings"].append(
+                        f"工单 {wo.code} 工序 {op.operation_name} 无法安排工作时段：{e}"
+                    )
+                    wo_op_slots = []
+                    break
+
+                if place_backward:
+                    wo_op_slots.insert(0, (op, start, end, station_id))
+                    cursor = start
+                else:
+                    wo_op_slots.append((op, start, end, station_id))
+                    cursor = end
+                station_timeline[station_id].append((start, end, int(op.id), product_id))
 
             if not wo_op_slots:
                 continue
@@ -208,7 +459,7 @@ class GreedyRulesSchedulingEngine:
                         "planned_end_date": end.isoformat(),
                     }
                 )
-                if int(op.assigned_station_id or 0) != station_id:
+                if station_id > 0 and int(op.assigned_station_id or 0) != station_id:
                     proposals["operation_station_adjustments"].append(
                         {
                             "operation_id": int(op.id),
@@ -218,6 +469,12 @@ class GreedyRulesSchedulingEngine:
 
             wo_start = wo_op_slots[0][1]
             wo_end = wo_op_slots[-1][2]
+            if place_backward and wo.planned_end_date:
+                due = _scheduling_dt(wo.planned_end_date)
+                if wo_end > due:
+                    proposals["warnings"].append(
+                        f"工单 {wo.code} 倒排无法满足交期，最早可行完工 {wo_end.isoformat()}"
+                    )
             proposals["work_order_adjustments"].append(
                 {
                     "work_order_id": int(wo.id),
@@ -296,23 +553,3 @@ class GreedyRulesSchedulingEngine:
             is_active=True,
         ).order_by("id").first()
         return int(station.id) if station else 0
-
-    @staticmethod
-    def _find_earliest_slot(
-        intervals: List[Tuple[datetime, datetime, int]],
-        earliest: datetime,
-        duration: timedelta,
-        *,
-        exclude_op_id: int,
-    ) -> Tuple[datetime, datetime]:
-        cursor = earliest
-        sorted_iv = sorted(
-            [(s, e) for s, e, oid in intervals if oid != exclude_op_id],
-            key=lambda x: x[0],
-        )
-        for start, end in sorted_iv:
-            if cursor + duration <= start:
-                return cursor, cursor + duration
-            if _intervals_overlap(cursor, cursor + duration, start, end):
-                cursor = max(cursor, end)
-        return cursor, cursor + duration

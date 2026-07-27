@@ -18,6 +18,7 @@ from core.models.material_variant_attribute import (
     MaterialVariantAttributeHistory,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class MaterialVariantAttributeService:
@@ -521,7 +522,7 @@ class MaterialVariantAttributeService:
         
         # 软删除
         await MaterialVariantAttributeDefinition.filter(id=attribute_def.id).update(
-            deleted_at=datetime.now(),
+            deleted_at=resolve_business_datetime(),
             updated_by=deleted_by,
         )
         
@@ -666,7 +667,7 @@ class MaterialVariantAttributeService:
             attribute_config=clean_config,
             change_description=change_description,
             changed_by=changed_by,
-            changed_at=datetime.now(),
+            changed_at=resolve_business_datetime(),
         )
         
         return history

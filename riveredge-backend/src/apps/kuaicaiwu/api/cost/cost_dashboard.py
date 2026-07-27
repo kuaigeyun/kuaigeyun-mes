@@ -12,6 +12,7 @@ from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from core.utils.api_cache import cache_by_kwargs
+from core.utils.timezone_utils import resolve_business_datetime
 
 router = APIRouter(
     prefix="/cost",
@@ -27,7 +28,7 @@ async def get_cost_summary(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """成本中心 KPI：待核算、已审核核算、本月核算次数。"""
-    now = datetime.now()
+    now = resolve_business_datetime()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     pending = await CostCalculation.filter(

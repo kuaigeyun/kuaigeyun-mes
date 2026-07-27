@@ -15,7 +15,9 @@ export interface UserTask {
   content?: string;
   data?: Record<string, any>;
   submitter_id: number;
+  submitter_name?: string;
   current_approver_id?: number;
+  current_approver_name?: string;
   status: string;
   current_node?: string;
   remind_at?: string;

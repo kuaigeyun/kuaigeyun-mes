@@ -37,6 +37,7 @@ from infra.services.tenant_service import TenantService
 from core.services.authorization.user_permission_service import UserPermissionService
 from core.services.authorization.permission_version_service import PermissionVersionService
 from core.services.authorization.role_service import RoleService
+from core.utils.timezone_utils import now_utc, resolve_business_datetime
 
 
 
@@ -952,7 +953,7 @@ class AuthService:
         }
 
         from datetime import datetime, timezone
-        user.last_login = datetime.now(timezone.utc)
+        user.last_login = now_utc()
         await user.save(update_fields=["last_login", "updated_at"])
 
         # 5. 记录登录日志和活动
@@ -976,7 +977,7 @@ class AuthService:
                         tenant_id=final_tenant_id,
                         user_id=user.id,
                         login_ip=login_ip,
-                        login_time=datetime.now(),
+                        login_time=resolve_business_datetime(),
                     )
                 )
             except Exception as e:

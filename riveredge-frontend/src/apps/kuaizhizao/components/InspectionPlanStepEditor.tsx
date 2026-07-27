@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Table, Empty, Modal, Form, Input, Select, message, theme, Space, Tag, Row, Col } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, HolderOutlined } from '@ant-design/icons';
 import { SequenceIndexCell, StepDragHandleContext, getSequenceIndexBadgeStyle } from '../../../components/sequence-index-cell';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../../utils/modalEventIsolation';
 import {
   DndContext,
   closestCenter,
@@ -485,6 +486,8 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
         onCancel={closeStepModal}
         destroyOnHidden
         width={560}
+        maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+        wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
       >
         <Form form={stepForm} layout="vertical" initialValues={{ sampling_type: 'full', value_type: 'boolean' }}>
           <Form.Item

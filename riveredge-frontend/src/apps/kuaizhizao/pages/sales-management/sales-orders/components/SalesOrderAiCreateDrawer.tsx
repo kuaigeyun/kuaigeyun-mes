@@ -12,6 +12,7 @@ import type { ProFormInstance } from '@ant-design/pro-components';
 import { DRAWER_CONFIG } from '../../../../../../components/layout-templates';
 import { UniDetail } from '../../../../../../components/uni-detail';
 import { UniAiButton, UniAiLottieIcon } from '../../../../../../components/uni-ai-button';
+import { useKuaiaiEntryAvailable } from '../../../../../kuaiai/hooks/useKuaiaiEntryAvailable';
 import { formatApiErrorDetail } from '../../../../../../services/api';
 import {
   extractSalesOrderFromImage,
@@ -81,6 +82,11 @@ export function SalesOrderAiCreateTrigger({
 }: SalesOrderAiCreateTriggerProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const kuaiaiAvailable = useKuaiaiEntryAvailable();
+
+  if (!kuaiaiAvailable) {
+    return null;
+  }
 
   return (
     <>

@@ -41,6 +41,9 @@ const LIFECYCLE_STAGE_TAG_LOOKUP: Record<string, Pick<TagProps, 'color' | 'style
   PENDING: { color: 'warning' },
   SUBMITTED: { color: 'warning' },
   待检验: { color: 'warning' },
+  已检验: { color: 'success' },
+  待收货: { color: 'processing' },
+  已通知: { color: 'cyan' },
   /** 入库/出库待处理：与 Ant processing 对齐（蓝），区别于「待审核」金橙 */
   待入库: { color: 'processing' },
   待出库: { color: 'processing' },

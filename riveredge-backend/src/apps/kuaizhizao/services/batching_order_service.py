@@ -38,6 +38,7 @@ from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_fro
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
 class BatchingOrderService(AppBaseService[BatchingOrder]):
@@ -57,7 +58,7 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
         items: Optional[List[BatchingOrderItemCreate]] = None,
     ) -> BatchingOrderResponse:
         async with in_transaction():
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="BATCHING_ORDER_CODE",
@@ -129,15 +130,20 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
         lines = []
         for item in analysis.items:
             im = issue_map.get(item.material_id, "pick")
-            if not is_batching_material(im, getattr(item, "source_type", None)):
+            source_type = getattr(item, "source_type", None)
+            if not is_batching_material(im, source_type):
                 continue
-            # 配料口径：线边就绪（正式发料 + 线边备料 + 关联工单供给），不含主仓。
+            # 配料口径：线边就绪（正式发料 + 线边备料 + 自制关联工单供给），不含主仓。
+            # 委外已收货在主仓/半成品仓，须备到线边，不把委外收货量当线边就绪。
             # picked 不含历史叫料备料转移，避免与线边双计。
             required = item.required_quantity or Decimal("0")
+            wo_supply = item.work_order_supply_quantity or Decimal("0")
+            if str(source_type or "").strip() == "Outsource":
+                wo_supply = Decimal("0")
             line_ready = (
                 (item.picked_quantity or Decimal("0"))
                 + (item.line_side_available or Decimal("0"))
-                + (item.work_order_supply_quantity or Decimal("0"))
+                + wo_supply
             )
             shortage = required - line_ready
             if shortage <= 0:
@@ -430,10 +436,10 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
         tgt_wh_id = request_data.target_warehouse_id or tgt_id
         tgt_wh_name = request_data.target_warehouse_name or tgt_name
 
-        batching_date = request_data.batching_date or datetime.now()
+        batching_date = request_data.batching_date or resolve_business_datetime()
 
         async with in_transaction():
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="BATCHING_ORDER_CODE",
@@ -616,7 +622,7 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
             enforce_fifo = bool(biz_config.get("parameters", {}).get("warehouse", {}).get("fifo", False))
 
             user_info = await self.get_user_info(executed_by)
-            executed_at = datetime.now()
+            executed_at = resolve_business_datetime()
             wo_code = order.work_order_code
 
             use_selective_confirm = bool(confirm_data and confirm_data.item_batches)
@@ -727,7 +733,7 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
         if order.status != "draft":
             raise ValidationError(f"线边备料单状态为 {order.status}，不能删除")
 
-        now = datetime.now()
+        now = resolve_business_datetime()
         await BatchingOrder.filter(id=order_id, tenant_id=tenant_id).update(deleted_at=now)
         await BatchingOrderItem.filter(batching_order_id=order_id, tenant_id=tenant_id).update(deleted_at=now)
         return True

@@ -20,6 +20,7 @@ from core.schemas.dictionary_item import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache_manager import cache_manager
+from core.utils.timezone_utils import now_utc
 
 
 class DataDictionaryService:
@@ -380,7 +381,7 @@ class DataDictionaryService:
         
         # 软删除
         from datetime import datetime
-        dictionary.deleted_at = datetime.utcnow()
+        dictionary.deleted_at = now_utc()
         await dictionary.save()
         
         # 清除相关缓存
@@ -615,7 +616,7 @@ class DataDictionaryService:
         
         # 软删除
         from datetime import datetime
-        item.deleted_at = datetime.utcnow()
+        item.deleted_at = now_utc()
         await item.save()
     
     @staticmethod

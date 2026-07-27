@@ -2,6 +2,7 @@ import React from 'react';
 import { Alert, Button, Descriptions, Modal, Space, Table, Tag, Typography } from 'antd';
 import type { TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
+import { MODAL_CONFIG } from '../../../../../components/layout-templates/constants';
 import { ROUTES } from '../../../constants/routes';
 import type {
   EnsureIqcForPurchaseReceiptLineSummary,
@@ -47,32 +48,32 @@ export const PurchaseReceiptIqcReviewModal: React.FC<Props> = ({
     {
       title: t('app.kuaizhizao.warehouseInbound.col.materialCode'),
       dataIndex: 'material_code',
-      width: 110,
+      width: 130,
       ellipsis: true,
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.materialName'),
       dataIndex: 'material_name',
-      width: 140,
+      width: 180,
       ellipsis: true,
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.actualQty'),
       dataIndex: 'receipt_quantity',
-      width: 88,
+      width: 100,
       align: 'right' as const,
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.iqcReview.colRequired'),
       dataIndex: 'iqc_required',
-      width: 92,
+      width: 100,
       render: (v: boolean) =>
         v ? t('app.kuaizhizao.warehouseInbound.iqcReview.requiredYes') : t('app.kuaizhizao.warehouseInbound.iqcReview.requiredNo'),
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.iqcReview.colPlan'),
       dataIndex: 'plan_label',
-      width: 140,
+      width: 200,
       ellipsis: true,
       render: (_: unknown, row: EnsureIqcForPurchaseReceiptLineSummary) =>
         row.iqc_required ? row.plan_label || '—' : '—',
@@ -80,14 +81,14 @@ export const PurchaseReceiptIqcReviewModal: React.FC<Props> = ({
     {
       title: t('app.kuaizhizao.warehouseInbound.iqcReview.colInspection'),
       dataIndex: 'inspection_code',
-      width: 130,
+      width: 180,
       ellipsis: true,
       render: (_: unknown, row: EnsureIqcForPurchaseReceiptLineSummary) => row.inspection_code || '—',
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.iqcReview.colStatus'),
       key: 'status',
-      width: 120,
+      width: 140,
       render: (_: unknown, row: EnsureIqcForPurchaseReceiptLineSummary) => {
         if (!row.iqc_required) return '—';
         if (!row.inspection_status) return t('app.kuaizhizao.warehouseInbound.iqcReview.statusNotCreated');
@@ -108,7 +109,8 @@ export const PurchaseReceiptIqcReviewModal: React.FC<Props> = ({
     <Modal
       open={open}
       title={t('app.kuaizhizao.warehouseInbound.iqcReview.title')}
-      width={960}
+      width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+      style={{ maxWidth: 'min(1400px, calc(100vw - 48px))' }}
       destroyOnHidden
       confirmLoading={loading}
       onCancel={onCancel}
@@ -160,7 +162,7 @@ export const PurchaseReceiptIqcReviewModal: React.FC<Props> = ({
           size="small"
           rowKey="receipt_item_id"
           pagination={false}
-          scroll={{ x: 900, y: 320 }}
+          scroll={{ x: 1200, y: 360 }}
           columns={columns}
           dataSource={lines}
         />

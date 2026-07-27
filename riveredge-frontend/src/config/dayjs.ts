@@ -11,7 +11,7 @@ dayjs.extend(relativeTime);
 dayjs.extend(localizedFormat);
 dayjs.extend(customParseFormat);
 
-// 默认设置时区为上海（北京时间）
-dayjs.tz.setDefault('Asia/Shanghai');
+// 禁止 dayjs.tz.setDefault 硬编码时区。业务展示必须走
+// formatDateTimeBySiteSetting / formatDateBySiteSetting（站点 configs.timezone）。
 
 export default dayjs;

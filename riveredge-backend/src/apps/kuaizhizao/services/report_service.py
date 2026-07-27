@@ -14,7 +14,7 @@ from decimal import Decimal
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity, get_material_inventory_info
 from core.services.authorization.data_scope_service import DataScopeService
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
@@ -339,8 +339,8 @@ class ReportService:
     ) -> Dict[str, Any]:
         """获取库存周转率报表"""
         logger.warning("库存周转率报表为简化实现，返回示例数据")
-        if not date_start: date_start = datetime.now() - timedelta(days=30)
-        if not date_end: date_end = datetime.now()
+        if not date_start: date_start = resolve_business_datetime() - timedelta(days=30)
+        if not date_end: date_end = resolve_business_datetime()
         return {
             "period": {"start": to_api_isoformat(date_start), "end": to_api_isoformat(date_end)},
             "summary": {"avg_turnover_rate": 0.0, "avg_turnover_days": 0.0},
@@ -3595,7 +3595,7 @@ class ReportService:
 
         export_dir = os.path.join(tempfile.gettempdir(), "riveredge_exports")
         os.makedirs(export_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = resolve_business_datetime().strftime("%Y%m%d_%H%M%S")
         filename = f"{domain_key}_{report_type}_{timestamp}.csv"
         file_path = os.path.join(export_dir, filename)
 

@@ -8,7 +8,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
+import { Alert, App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -580,6 +580,13 @@ const WorkCentersPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate>
+        <Alert
+          type="info"
+          showIcon
+          closable
+          style={{ marginBottom: 12 }}
+          message={t('app.master-data.workCenters.dimensionHint')}
+        />
         <UniTable<WorkCenter>
           columnPersistenceId="apps.master-data.pages.factory.work-centers.status-v2"
           actionRef={actionRef}

@@ -17,7 +17,7 @@ from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 from apps.master_data.models.material import Material
 from apps.master_data.models.material_batch import MaterialBatch
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 
 class InventoryAnalysisService:
@@ -90,7 +90,7 @@ class InventoryAnalysisService:
         warehouse_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         if not date_end:
-            date_end = datetime.now()
+            date_end = resolve_business_datetime()
         if not date_start:
             date_start = date_end - timedelta(days=30)
 
@@ -222,7 +222,7 @@ class InventoryAnalysisService:
         days_threshold: int = 90,
     ) -> Dict[str, Any]:
         inv_by_material = await self._inventory_value_by_material(tenant_id)
-        cutoff = datetime.now() - timedelta(days=days_threshold)
+        cutoff = resolve_business_datetime() - timedelta(days=days_threshold)
 
         outbound_rows = await SalesDeliveryItem.filter(
             tenant_id=tenant_id,
@@ -238,7 +238,7 @@ class InventoryAnalysisService:
 
         materials = []
         total_value = Decimal("0")
-        now = datetime.now()
+        now = resolve_business_datetime()
         for mid, data in inv_by_material.items():
             qty = data["quantity"]
             if qty <= 0:
@@ -275,9 +275,9 @@ class InventoryAnalysisService:
         warehouse_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         if not date_start:
-            date_start = datetime.now() - timedelta(days=30)
+            date_start = resolve_business_datetime() - timedelta(days=30)
         if not date_end:
-            date_end = datetime.now()
+            date_end = resolve_business_datetime()
 
         inv_by_material = await self._inventory_value_by_material(tenant_id)
         total_cost = sum(v["inventory_value"] for v in inv_by_material.values())

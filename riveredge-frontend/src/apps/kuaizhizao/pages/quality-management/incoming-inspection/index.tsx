@@ -39,7 +39,7 @@ import {
 } from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniPullQueryModal,
@@ -273,7 +273,7 @@ const IncomingInspectionPage: React.FC = () => {
     [selectedRowKeys],
   );
   const incomingAuditBatchHandlers = useMemo(
-    () => createUniAuditBatchHandlers('incoming_inspection', ['approve']),
+    () => createUniAuditBatchHandlers('incoming_inspection'),
     [],
   );
   const inspectionDocStatusValueEnum = useMemo(
@@ -870,25 +870,28 @@ const IncomingInspectionPage: React.FC = () => {
 
   const inspectionCustomFieldColumns = generateInspectionCustomFieldColumns();
 
+  const handleDeleteRow = useCallback(
+    (record: IncomingInspection) => {
+      if (record.id == null) return;
+      Modal.confirm({
+        title: t('app.kuaizhizao.quality.incoming.messages.deleteConfirm', { count: 1 }),
+        onOk: async () => {
+          await qualityApi.incomingInspection.delete(String(record.id));
+          messageApi.success(t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: 1 }));
+          if (inspectionDetail?.id === record.id) {
+            setDetailVisible(false);
+            setInspectionDetail(null);
+          }
+          invalidateStats();
+          actionRef.current?.reload();
+        },
+      });
+    },
+    [inspectionDetail?.id, messageApi, t],
+  );
+
   const renderIncomingRowNodes = (record: IncomingInspection): React.ReactNode[] => {
     const gates = qualityInspectionRowGates(record, incomingPerms, ncPerms, t);
-    if (gates.conduct.allowed) {
-      return [
-        <Button {...rowActionKind('execute')}
-          key="inspect"
-          size="small"
-          type="primary"
-          disabled={gates.conduct.disabled}
-          title={gates.conduct.title}
-          onClick={(e) => {
-            e.stopPropagation();
-            void handleInspect(record);
-          }}
-        >
-          {t('app.kuaizhizao.quality.common.actions.inspect')}
-        </Button>,
-      ];
-    }
     const nodes: React.ReactNode[] = [
       <Button {...rowActionKind('read')}
         key="detail"
@@ -903,6 +906,23 @@ const IncomingInspectionPage: React.FC = () => {
         {t('app.kuaizhizao.quality.common.actions.detail')}
       </Button>,
     ];
+    if (gates.conduct.allowed) {
+      nodes.push(
+        <Button {...rowActionKind('execute')}
+          key="inspect"
+          size="small"
+          type="primary"
+          disabled={gates.conduct.disabled}
+          title={gates.conduct.title}
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleInspect(record);
+          }}
+        >
+          {t('app.kuaizhizao.quality.common.actions.inspect')}
+        </Button>,
+      );
+    }
     nodes.push(
       <UniWorkflowActions
         {...rowActionKind('skip')}
@@ -947,6 +967,26 @@ const IncomingInspectionPage: React.FC = () => {
         >
           {t('app.kuaizhizao.quality.common.actions.createDefect')}
         </Button>
+      );
+    }
+    if (gates.delete.allowed) {
+      nodes.push(
+        <Button
+          {...rowActionKind('delete')}
+          key="delete"
+          size="small"
+          type="link"
+          danger
+          icon={<DeleteOutlined />}
+          disabled={gates.delete.disabled}
+          title={gates.delete.title}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDeleteRow(record);
+          }}
+        >
+          {t('common.delete')}
+        </Button>,
       );
     }
     return nodes;
@@ -1200,10 +1240,6 @@ const IncomingInspectionPage: React.FC = () => {
         enableRowSelection={true}
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        onRow={(record) => ({
-          onClick: () => void handleDetail(record),
-          style: { cursor: 'pointer' },
-        })}
         showImportButton={true}
         onImport={handleImport}
         importHeaders={incomingInspectionImportTemplate.importHeaders}
@@ -1266,7 +1302,7 @@ const IncomingInspectionPage: React.FC = () => {
             unqualified_quantity: 0,
           } : {}
         }
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         formRef={formRef}
       >
         {currentInspection && (

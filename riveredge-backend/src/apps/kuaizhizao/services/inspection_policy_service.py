@@ -477,6 +477,33 @@ async def resolve_iqc_plan_label_for_material(tenant_id: int, material_id: int) 
     return str(plan.plan_name or plan.plan_code or "检验方案").strip() or "检验方案"
 
 
+async def resolve_oqc_plan_label_for_material(tenant_id: int, material_id: int) -> Optional[str]:
+    """解析物料出货检验方案展示名；无需检验时返回 None。"""
+    from apps.kuaizhizao.models.inspection_plan import InspectionPlan
+
+    mode, plan_id, _ = await resolve_inspection_policy(tenant_id, "oqc", material_id=material_id)
+    if mode == "none":
+        return None
+    if mode == "simple":
+        return "简易检验"
+    if plan_id:
+        plan = await InspectionPlan.filter(
+            tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True
+        ).first()
+        if plan:
+            return str(plan.plan_name or plan.plan_code or "检验方案").strip() or "检验方案"
+    plan = await InspectionPlan.filter(
+        tenant_id=tenant_id,
+        material_id=material_id,
+        plan_type="outbound",
+        deleted_at__isnull=True,
+        is_active=True,
+    ).order_by("-created_at").first()
+    if plan:
+        return str(plan.plan_name or plan.plan_code or "检验方案").strip() or "检验方案"
+    return "检验方案"
+
+
 async def resolve_fqc_plan_label_for_material(tenant_id: int, material_id: int) -> Optional[str]:
     """解析物料成品检验方案展示名；无需检验时返回 None。"""
     from apps.kuaizhizao.models.inspection_plan import InspectionPlan
@@ -784,6 +811,46 @@ async def assert_fqc_for_finished_goods_receipt(
         )
 
 
+async def _shipment_notice_ids_for_sales_delivery(
+    tenant_id: int,
+    sales_delivery_id: int,
+) -> List[int]:
+    """解析销售出库单关联的发货通知单 ID（主关联 + related 列表）。"""
+    from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+    from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+
+    notice_ids: set[int] = set()
+    for nid in await ShipmentNotice.filter(
+        tenant_id=tenant_id,
+        sales_delivery_id=int(sales_delivery_id),
+        deleted_at__isnull=True,
+    ).values_list("id", flat=True):
+        notice_ids.add(int(nid))
+
+    delivery = await SalesDelivery.get_or_none(
+        tenant_id=tenant_id, id=int(sales_delivery_id), deleted_at__isnull=True
+    )
+    so_id = getattr(delivery, "sales_order_id", None) if delivery else None
+    if so_id:
+        candidates = await ShipmentNotice.filter(
+            tenant_id=tenant_id,
+            sales_order_id=int(so_id),
+            deleted_at__isnull=True,
+        ).all()
+        for notice in candidates:
+            if int(notice.id) in notice_ids:
+                continue
+            related = getattr(notice, "related_sales_delivery_ids", None) or []
+            if not isinstance(related, list):
+                continue
+            for entry in related:
+                eid = entry.get("id") if isinstance(entry, dict) else None
+                if eid is not None and int(eid) == int(sales_delivery_id):
+                    notice_ids.add(int(notice.id))
+                    break
+    return sorted(notice_ids)
+
+
 async def assert_oqc_for_outbound_lines(
     tenant_id: int,
     *,
@@ -792,6 +859,7 @@ async def assert_oqc_for_outbound_lines(
     lines: List[Any],
     quantity_attr: str = "delivery_quantity",
     shipment_notice_id: Optional[int] = None,
+    shipment_notice_ids: Optional[List[int]] = None,
     source_type: Optional[str] = None,
     source_id: Optional[int] = None,
 ) -> None:
@@ -799,18 +867,29 @@ async def assert_oqc_for_outbound_lines(
     出库相关动作前的出货检（OQC）校验。
     当行物料 oqc 策略≠none 时，要求存在合格且放行的 OQC 检验单；
     是否必须「已审核」由业务配置中 oqc_inspection 审核开关决定（与 IQC/FQC 一致）。
+
+    单据锚定优先级：发货通知 / 销售出库（可同时 OR）→ 销售订单 → 客户。
     """
     cfg = await get_quality_effective_config(tenant_id)
     if not cfg["gate"]["require_oqc_before_outbound"]:
         return
 
-    from decimal import Decimal
+    from tortoise.expressions import Q
 
     from apps.kuaizhizao.models.oqc_inspection import OQCInspection
     from infra.exceptions.exceptions import BusinessLogicError
     from infra.services.business_config_service import BusinessConfigService
 
     oqc_audit_required = await BusinessConfigService().check_audit_required(tenant_id, "oqc_inspection")
+
+    notice_ids: List[int] = []
+    for nid in list(shipment_notice_ids or []):
+        if nid is not None:
+            notice_ids.append(int(nid))
+    if shipment_notice_id is not None:
+        notice_ids.append(int(shipment_notice_id))
+    notice_ids = sorted({n for n in notice_ids if n > 0})
+    has_doc_anchor = bool(notice_ids) or bool(source_type and source_id)
 
     for item in lines:
         qty_raw = getattr(item, quantity_attr, None)
@@ -835,10 +914,13 @@ async def assert_oqc_for_outbound_lines(
             release_decision="released",
             deleted_at__isnull=True,
         )
-        if shipment_notice_id:
-            q = q.filter(shipment_notice_id=int(shipment_notice_id))
-        elif source_type and source_id:
-            q = q.filter(source_type=str(source_type), source_id=int(source_id))
+        if has_doc_anchor:
+            doc_q = Q()
+            if notice_ids:
+                doc_q |= Q(shipment_notice_id__in=notice_ids)
+            if source_type and source_id:
+                doc_q |= Q(source_type=str(source_type), source_id=int(source_id))
+            q = q.filter(doc_q)
         elif sales_order_id:
             q = q.filter(sales_order_id=int(sales_order_id))
         elif customer_id is not None:
@@ -854,8 +936,8 @@ async def assert_oqc_for_outbound_lines(
             continue
 
         hint = ""
-        if shipment_notice_id:
-            hint = "（需与本发货通知关联且已审核放行的 OQC 检验单一致）"
+        if has_doc_anchor:
+            hint = "（需与本发货通知或销售出库关联且已合格放行的 OQC 检验单一致）"
         elif sales_order_id:
             hint = "（需与销售订单关联的 OQC 检验单一致）"
         elif customer_id is not None:
@@ -874,12 +956,12 @@ async def assert_oqc_before_sales_delivery_confirm(
     delivery_items: List[Any],
     sales_delivery_id: Optional[int] = None,
 ) -> None:
-    """销售出库「确认出库」前的 OQC 校验。"""
-    from infra.services.business_config_service import BusinessConfigService
-
-    # 业务配置「销售出库审核」为总开关：未启用时不应再因 OQC 审核场景拦截确认出库
-    if not await BusinessConfigService().check_audit_required(tenant_id, "sales_delivery"):
-        return
+    """销售出库「确认出库」前的 OQC 校验（由组织 OQC 门禁控制，不依赖销售出库审核开关）。"""
+    notice_ids: List[int] = []
+    if sales_delivery_id:
+        notice_ids = await _shipment_notice_ids_for_sales_delivery(
+            tenant_id, int(sales_delivery_id)
+        )
 
     await assert_oqc_for_outbound_lines(
         tenant_id,
@@ -887,6 +969,7 @@ async def assert_oqc_before_sales_delivery_confirm(
         customer_id=customer_id,
         lines=list(delivery_items),
         quantity_attr="delivery_quantity",
+        shipment_notice_ids=notice_ids or None,
         source_type="sales_delivery" if sales_delivery_id else None,
         source_id=sales_delivery_id,
     )

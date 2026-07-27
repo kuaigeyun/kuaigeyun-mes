@@ -363,6 +363,7 @@ class SpotCheckLineInput(BaseModel):
     measured_value: Optional[str] = None
     is_pass: bool = True
     remark: Optional[str] = None
+    attachments: Optional[List[dict]] = None
 
 
 class SpotCheckLineResponse(SpotCheckLineInput):
@@ -452,6 +453,7 @@ class RoutePatrolLineInput(BaseModel):
     measured_value: Optional[str] = None
     is_pass: bool = True
     remark: Optional[str] = None
+    attachments: Optional[List[dict]] = None
 
 
 class RoutePatrolLineResponse(RoutePatrolLineInput):

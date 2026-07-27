@@ -13,6 +13,7 @@ from datetime import datetime
 from .plugin_discovery import PluginDiscoveryService
 from .plugin_loader import PluginLoaderService
 from infra.infrastructure.database.database import get_db_connection
+from core.utils.timezone_utils import now_utc
 
 
 class PluginManagerService:
@@ -125,7 +126,7 @@ class PluginManagerService:
                 WHERE tenant_id = $2 AND code = $3 AND deleted_at IS NULL
                 RETURNING id
                 """,
-                datetime.utcnow(), tenant_id, plugin_code
+                now_utc(), tenant_id, plugin_code
             )
 
             if result:
@@ -156,7 +157,7 @@ class PluginManagerService:
                 WHERE tenant_id = $2 AND code = $3 AND deleted_at IS NULL
                 RETURNING id
                 """,
-                datetime.utcnow(), tenant_id, plugin_code
+                now_utc(), tenant_id, plugin_code
             )
 
             if result:
@@ -270,8 +271,8 @@ class PluginManagerService:
             str(uuid.uuid4()),  # 需要导入 uuid
             False,  # 默认不启用
             False,  # 默认未安装
-            datetime.utcnow(),
-            datetime.utcnow()
+            now_utc(),
+            now_utc()
         )
 
     async def _update_plugin_info(self, conn: asyncpg.Connection, plugin_id: int, plugin) -> None:
@@ -297,6 +298,6 @@ class PluginManagerService:
             manifest.menu_config,
             manifest.permissions,
             manifest.dependencies,
-            datetime.utcnow(),
+            now_utc(),
             plugin_id
         )

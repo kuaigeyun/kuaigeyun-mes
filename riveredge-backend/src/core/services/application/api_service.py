@@ -17,6 +17,7 @@ from core.models.api import API
 from core.schemas.api import APICreate, APIUpdate, APITestRequest
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.config.infra_config import infra_settings as settings
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class APIService:
@@ -272,7 +273,7 @@ class APIService:
         
         # 软删除
         from datetime import datetime
-        api.deleted_at = datetime.now()
+        api.deleted_at = resolve_business_datetime()
         await api.save()
     
     @staticmethod

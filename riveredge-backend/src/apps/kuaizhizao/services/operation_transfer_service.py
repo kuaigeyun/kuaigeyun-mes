@@ -166,11 +166,15 @@ async def resolve_process_inspection_card_status(
     """
     方案质检工序卡片状态徽章（仅展示检验执行态，不含合格/不合格判定）。
 
+    仅依据真实过程检验单：无单据时为 not_started（即使已报工），
+    避免「列表无单、卡片却显示待检验」的假象。
+
     Returns:
         not_started | pending | inspected
     """
+    _ = reported_qualified  # 保留入参兼容调用方；不再用报工数伪造 pending
     if not inspections:
-        return "pending" if reported_qualified > 0 else "not_started"
+        return "not_started"
 
     has_pending = False
     has_inspected = False

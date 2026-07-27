@@ -26,6 +26,7 @@ from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class QualityStandardService(AppBaseService[QualityStandard]):
@@ -194,7 +195,7 @@ class QualityStandardService(AppBaseService[QualityStandard]):
 
             # 更新字段
             update_dict = standard_data.model_dump(exclude_unset=True)
-            update_dict["updated_at"] = datetime.now()
+            update_dict["updated_at"] = resolve_business_datetime()
             actor = await User.filter(id=updated_by).first()
             apply_update_audit(update_dict, actor)
 
@@ -227,7 +228,7 @@ class QualityStandardService(AppBaseService[QualityStandard]):
             if not standard:
                 raise NotFoundError(f"质检标准 ID {standard_id} 不存在")
 
-            standard.deleted_at = datetime.now()
+            standard.deleted_at = resolve_business_datetime()
             await standard.save()
 
     async def get_standards_by_material(

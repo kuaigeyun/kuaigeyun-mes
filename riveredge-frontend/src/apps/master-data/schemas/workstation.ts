@@ -43,6 +43,13 @@ export const workstationFormSchema: FieldConfig[] = [
     fieldProps: { rows: 2, maxLength: 1000 },
   },
   {
+    name: 'maxParallel',
+    type: 'number',
+    labelKey: 'field.workstation.maxParallel',
+    colSpan: 12,
+    fieldProps: { min: 1, max: 99, precision: 0 },
+  },
+  {
     name: 'isActive',
     type: 'switch',
     labelKey: 'field.workstation.isActive',

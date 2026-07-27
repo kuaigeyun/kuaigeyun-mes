@@ -1,25 +1,43 @@
-"""UTC 时刻与 naive / aware 互转（供 ORM、业务比较与 API 使用）。"""
+"""全站时区唯一工具（写入 / 比较 / API 展示口径）。
+
+契约见 ``.cursor/rules/timezone-contract.mdc``。
+业务时刻写入只用 :func:`resolve_business_datetime`；禁止 ``datetime.now()``。
+"""
 
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
+
 from infra.config.infra_config import infra_settings
 
 
+def site_timezone_name() -> str:
+    """站点时区名：仅来自 ``infra_settings.TIMEZONE``（配置真源）。"""
+    name = (infra_settings.TIMEZONE or "").strip()
+    if not name:
+        raise RuntimeError("infra_settings.TIMEZONE 未配置，拒绝静默假定时区")
+    return name
+
+
 def now_utc() -> datetime:
-    """当前 UTC（timezone-aware）。"""
+    """当前 UTC（timezone-aware）。系统戳 / 比较用。"""
     return datetime.now(timezone.utc)
 
 
 def now() -> datetime:
-    """与 :func:`now_utc` 相同；需业务默认时区请用 Tortoise ``timezone.now()`` 或 ``make_aware``。"""
+    """与 :func:`now_utc` 相同。"""
     return now_utc()
 
 
 def today_str() -> str:
-    """UTC 日历日 ``YYYY-MM-DD``。"""
+    """UTC 日历日 ``YYYY-MM-DD``（非业务单号日期；业务请用 :func:`today_site_str`）。"""
     return now_utc().date().isoformat()
+
+
+def today_site_str(fmt: str = "%Y%m%d") -> str:
+    """站点时区下的业务日历串（单号前缀、业务日等）。"""
+    return to_site_timezone(now_utc()).strftime(fmt)
 
 
 def make_aware(dt: datetime, tz_name: str = "UTC") -> datetime:
@@ -43,16 +61,16 @@ def is_future_datetime(
     dt: datetime,
     *,
     slack_seconds: int = 60,
-    naive_tz: str = "Asia/Shanghai",
+    naive_tz: str | None = None,
 ) -> bool:
     """
     判断 ``dt`` 是否明显晚于当前 UTC 时刻。
 
     - aware：按瞬时 UTC 比较
-    - naive：按 ``naive_tz`` 解释（默认业务时区 Asia/Shanghai），避免 UTC 服务器将本地墙钟误判为未来
+    - naive：按站点时区（或显式 ``naive_tz``）解释
     """
     if dt.tzinfo is None:
-        aware = make_aware(dt, naive_tz)
+        aware = make_aware(dt, naive_tz or site_timezone_name())
     else:
         aware = dt
     limit = now_utc() + timedelta(seconds=slack_seconds)
@@ -61,17 +79,16 @@ def is_future_datetime(
 
 def to_site_timezone(dt: datetime) -> datetime:
     """
-    将 ``datetime`` 转换到系统配置时区（默认 Asia/Shanghai）。
+    将 ``datetime`` 转换到系统配置时区。
 
     naive 按 **UTC** 解释（与 ``BaseSchema`` / Tortoise ``USE_TZ`` 落库口径一致）；
     业务表单墙钟入参请用 :func:`resolve_business_datetime`，勿走本函数。
     """
-    tz_name = infra_settings.TIMEZONE or "Asia/Shanghai"
     if dt.tzinfo is None:
         aware = make_aware(dt, "UTC")
     else:
         aware = dt
-    return aware.astimezone(ZoneInfo(tz_name))
+    return aware.astimezone(ZoneInfo(site_timezone_name()))
 
 
 def to_site_date(dt: datetime) -> date:
@@ -84,31 +101,29 @@ def coerce_business_datetime_to_utc(value: datetime | None) -> datetime | None:
     业务表单/推单墙钟 → ORM 写入用的 UTC aware。
 
     - None 保持 None
-    - naive：按站点时区（Asia/Shanghai）解释
+    - naive：按站点时区解释
     - aware：转到 UTC
     """
     if value is None:
         return None
     if value.tzinfo is None:
-        value = make_aware(value, infra_settings.TIMEZONE or "Asia/Shanghai")
+        value = make_aware(value, site_timezone_name())
     return value.astimezone(timezone.utc)
 
 
 def resolve_business_datetime(value: datetime | None = None) -> datetime:
     """
-    业务入库/出库时刻，供 QuerySet.update 等绕过 ORM 的路径写入 DB。
+    业务时刻唯一写入入口（入库/出库/审核/检验等）。
 
-    - 默认：站点当前时刻（Tortoise tz_now）
+    - 默认：当前 UTC 瞬时（``now_utc``，不依赖 Tortoise ``timezone.now`` / 环境变量）
     - naive：按站点墙钟解释后转 UTC
     - aware：统一转 UTC
-    """
-    from tortoise.timezone import now as tz_now
 
+    禁止把 ``datetime.now()`` 裸 naive 交给 ORM ``QuerySet.update``：
+    Tortoise 在 USE_TZ 下会把 naive **标成 UTC**（而非按站点解释），导致展示 +8h。
+    """
     if value is None:
-        dt = tz_now()
-        if dt.tzinfo is None:
-            dt = make_aware(dt, infra_settings.TIMEZONE or "Asia/Shanghai")
-        return dt.astimezone(timezone.utc)
+        return now_utc()
     coerced = coerce_business_datetime_to_utc(value)
     assert coerced is not None
     return coerced
@@ -130,9 +145,11 @@ def to_api_isoformat(value: datetime | date | None) -> str | None:
 
 
 __all__ = [
+    "site_timezone_name",
     "now",
     "now_utc",
     "today_str",
+    "today_site_str",
     "make_aware",
     "to_naive_utc",
     "is_future_datetime",

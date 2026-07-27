@@ -989,10 +989,10 @@
     },
     {
       "page_code": "master-data-engineering-bom",
-      "page_name": "物料清单BOM",
+      "page_name": "物料清单 (BOM)",
       "page_path": "/apps/master-data/process/engineering-bom",
       "table_name": "master_data_boms",
-      "table_name_label": "物料清单BOM表",
+      "table_name_label": "物料清单 (BOM)表",
       "module": "主数据管理",
       "module_icon": "database"
     },
@@ -1034,10 +1034,10 @@
     },
     {
       "page_code": "master-data-manufacturing-bom",
-      "page_name": "标准操作SOP",
+      "page_name": "标准操作 (SOP)",
       "page_path": "/apps/master-data/process/sop",
       "table_name": "master_data_sops",
-      "table_name_label": "标准操作SOP表",
+      "table_name_label": "标准操作 (SOP)表",
       "module": "主数据管理",
       "module_icon": "database"
     },

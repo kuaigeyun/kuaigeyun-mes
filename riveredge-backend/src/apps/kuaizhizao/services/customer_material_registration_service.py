@@ -575,7 +575,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 mapping_rule_id=mapping_rule_id,
                 quantity=registration_data.quantity or total_qty,
                 total_quantity=total_qty,
-                registration_date=registration_data.registration_date or datetime.now(),
+                registration_date=registration_data.registration_date or resolve_business_datetime(),
                 registered_by=registered_by,
                 registered_by_name=user_info["name"],
                 created_by=registered_by,
@@ -655,7 +655,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             if update_data.items is not None:
                 await CustomerMaterialRegistrationItem.filter(
                     tenant_id=tenant_id, registration_id=registration_id
-                ).update(deleted_at=datetime.now())
+                ).update(deleted_at=resolve_business_datetime())
                 items = await self._create_items(tenant_id, registration_id, update_data.items)
                 registration.total_quantity = sum((it.quantity for it in items), Decimal("0"))
                 if items and not registration.mapped_material_id:
@@ -962,7 +962,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             if registration.status != "pending":
                 raise BusinessLogicError("仅待入库状态的代工来料单可删除")
 
-            now = datetime.now()
+            now = resolve_business_datetime()
             user_name = await self.get_user_name(deleted_by)
             registration.deleted_at = now
             registration.updated_by = deleted_by

@@ -16,6 +16,7 @@ from core.schemas.online_user import (
     OnlineUserStatisticsResponse,
 )
 from infra.models.user import User
+from core.utils.timezone_utils import now_utc
 
 
 class OnlineUserService:
@@ -59,7 +60,7 @@ class OnlineUserService:
             login_time: 登录时间（可选，首次登录时设置）
         """
         try:
-            now = datetime.now(timezone.utc)
+            now = now_utc()
             expire_seconds = (OnlineUserService.ONLINE_THRESHOLD_MINUTES + 10) * 60
             expires_at = now + timedelta(seconds=expire_seconds)
             entry = await UserActivity.filter(tenant_id=tenant_id, user_id=user_id).first()
@@ -103,7 +104,7 @@ class OnlineUserService:
         """
         try:
             online_users = []
-            activity_threshold = datetime.now(timezone.utc) - timedelta(minutes=OnlineUserService.ONLINE_THRESHOLD_MINUTES)
+            activity_threshold = now_utc() - timedelta(minutes=OnlineUserService.ONLINE_THRESHOLD_MINUTES)
             query = UserActivity.filter(last_activity_time__gte=activity_threshold)
             if tenant_id is not None:
                 query = query.filter(tenant_id=tenant_id)
@@ -173,7 +174,7 @@ class OnlineUserService:
             last_activity_time = OnlineUserService._to_utc_aware(activity.last_activity_time)
             if not last_activity_time:
                 return None
-            activity_threshold = datetime.now(timezone.utc) - timedelta(minutes=OnlineUserService.ONLINE_THRESHOLD_MINUTES)
+            activity_threshold = now_utc() - timedelta(minutes=OnlineUserService.ONLINE_THRESHOLD_MINUTES)
             if last_activity_time < activity_threshold:
                 return None
             user = await User.filter(id=user_id).first()
@@ -219,7 +220,7 @@ class OnlineUserService:
                 return False
             
             activity_threshold = (
-                datetime.now(timezone.utc) - timedelta(minutes=threshold_minutes)
+                now_utc() - timedelta(minutes=threshold_minutes)
             )
             last_activity_time = OnlineUserService._to_utc_aware(activity.last_activity_time)
             if not last_activity_time:
@@ -270,7 +271,7 @@ class OnlineUserService:
         total = len(online_users)
         
         # 统计活跃用户（最近5分钟有活动）
-        active_threshold = datetime.now(timezone.utc) - timedelta(minutes=5)
+        active_threshold = now_utc() - timedelta(minutes=5)
         active = 0
         for user in online_users:
             normalized_last_activity = OnlineUserService._to_utc_aware(user.last_activity_time)
@@ -297,7 +298,7 @@ class OnlineUserService:
     async def cleanup_expired_activities() -> None:
         """定时任务：清理已过期的在线用户活动记录。"""
         try:
-            now = datetime.now(timezone.utc)
+            now = now_utc()
             deleted_count = await UserActivity.filter(expires_at__lt=now).delete()
             if deleted_count > 0:
                 logger.info(f"🧹 在线用户清理任务：已清理 {deleted_count} 条过期记录")

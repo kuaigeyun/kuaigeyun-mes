@@ -10,6 +10,7 @@ import type { FormListFieldData } from 'antd/es/form';
 import type { ColumnsType, TableProps } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../layout-templates/constants';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
 
 export interface FormListDetailColumn {
   title: React.ReactNode;
@@ -242,6 +243,8 @@ export const FormListDetailTable: React.FC<FormListDetailTableProps> = ({
                 open={pickOpen}
                 zIndex={modalZIndex}
                 destroyOnClose
+                maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+                wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
                 onCancel={() => {
                   setPickOpen(false);
                   setPickedValues([]);

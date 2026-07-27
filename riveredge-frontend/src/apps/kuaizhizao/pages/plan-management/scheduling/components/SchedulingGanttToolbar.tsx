@@ -72,7 +72,6 @@ function buildSchedulingGanttToolbar({
 }: SchedulingGanttToolbarProps): SchedulingGanttToolbarNodes {
   const title = (
     <Space wrap align="center" size={[8, 8]} className="scheduling-gantt-toolbar__title">
-      {aiTrigger}
       <ReloadOutlined onClick={onRefresh} className="scheduling-gantt-toolbar__icon-btn" />
       <Typography.Text strong>{t('app.kuaizhizao.scheduling.ganttToolbar.title')}</Typography.Text>
       <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.fullscreenTip')}>
@@ -165,6 +164,7 @@ function buildSchedulingGanttToolbar({
           </Space.Compact>
         </>
       ) : null}
+      {aiTrigger}
     </Space>
   );
 

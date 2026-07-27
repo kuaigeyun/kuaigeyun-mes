@@ -52,14 +52,42 @@ export function runAfterUniverSheetsRenderServiceInit(run: () => void): void {
   queueMicrotask(run);
 }
 
-/** 容器尺寸变化后（如 Modal 全屏）通知 Univer 渲染引擎按当前 DOM 尺寸重排 */
-export function relayoutUniverSheet(instance: UniverSheetInstance): void {
+/**
+ * 容器尺寸变化后通知 Univer 按「可见盒」重排。
+ *
+ * Engine.resize() 用 getComputedStyle(width)；子树若被外层 overflow:hidden 裁切，
+ * 画布父级 clientWidth 仍可能是未裁切布局宽，列已被切掉却不出现横滚条。
+ * 传入 clipEl（如 .uni-import-sheet-host）时用其 clientWidth 作为视口宽。
+ */
+export function relayoutUniverSheet(
+  instance: UniverSheetInstance,
+  clipEl?: HTMLElement | null,
+): void {
   const workbook = instance.univerAPI.getActiveWorkbook();
   if (!workbook) return;
 
   const unitId = workbook.getId();
   const injector = instance.univer.__getInjector();
   const renderManager = injector.get(IRenderManagerService);
-  const renderUnit = renderManager.getRenderById(unitId);
-  renderUnit?.engine?.resize();
+  const engine = renderManager.getRenderById(unitId)?.engine as
+    | {
+        resize?: () => void;
+        resizeBySize?: (width: number, height: number) => void;
+        getCanvasElement?: () => HTMLCanvasElement | null;
+      }
+    | undefined;
+  if (!engine) return;
+
+  const canvas = typeof engine.getCanvasElement === 'function' ? engine.getCanvasElement() : null;
+  const canvasHost = canvas?.parentElement;
+  if (typeof engine.resizeBySize === 'function') {
+    const width = (clipEl ?? canvasHost)?.clientWidth ?? 0;
+    // 高度取画布宿主（不含工具栏/Sheet 栏）；若无则回退 clipEl
+    const height = canvasHost?.clientHeight || clipEl?.clientHeight || 0;
+    if (width > 0 && height > 0) {
+      engine.resizeBySize(width, height);
+      return;
+    }
+  }
+  engine.resize?.();
 }

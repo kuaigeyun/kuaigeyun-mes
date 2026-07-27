@@ -49,7 +49,7 @@ from apps.kuaizhizao.services.document_action_policy.sales_contract import (
     assert_sales_contract_capability,
 )
 from apps.kuaizhizao.services.sales_contract_term_service import SalesContractTermService
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 SALES_CONTRACT_SORTABLE_FIELDS = frozenset({
     "contract_code",
@@ -728,7 +728,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         from apps.kuaizhizao.models.document_relation import DocumentRelation
 
         async with in_transaction():
-            contract.deleted_at = datetime.now()
+            contract.deleted_at = resolve_business_datetime()
             contract.updated_by = deleted_by
             await contract.save(update_fields=["deleted_at", "updated_by"])
             await Quotation.filter(tenant_id=tenant_id, contract_id=contract_id).update(
@@ -767,7 +767,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             contract.review_status = ReviewStatus.APPROVED
             contract.reviewer_id = submitted_by
             contract.reviewer_name = submitter_name
-            contract.review_time = datetime.now()
+            contract.review_time = resolve_business_datetime()
             contract.updated_by = submitted_by
             await contract.save()
             return await self.get_contract_by_id(tenant_id, contract_id)
@@ -819,7 +819,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract.review_status = ReviewStatus.APPROVED
         contract.reviewer_id = reviewer_id
         contract.reviewer_name = reviewer_name
-        contract.review_time = datetime.now()
+        contract.review_time = resolve_business_datetime()
         contract.review_remarks = review_remarks
         contract.updated_by = reviewer_id
         await contract.save()
@@ -841,7 +841,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract.review_status = ReviewStatus.REJECTED
         contract.reviewer_id = reviewer_id
         contract.reviewer_name = reviewer_name
-        contract.review_time = datetime.now()
+        contract.review_time = resolve_business_datetime()
         contract.review_remarks = review_remarks
         contract.updated_by = reviewer_id
         await contract.save()

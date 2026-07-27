@@ -25,6 +25,63 @@ import {
   TaskActionRequest,
 } from '../../../services/userTask';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
+import {
+  KUAIPLM_APPROVAL_TITLE_PREFIX_I18N,
+  KUAIPLM_CHANGE_TYPE_I18N,
+} from '../../../apps/kuaiplm/components/kuaiplmMeta';
+
+/** 后端写入的中文变更类型 → i18n key（与码表对齐，覆盖尚未出现的全部类型） */
+const APPROVAL_CHANGE_TYPE_LABEL_TO_I18N: Record<string, string> = {
+  ...KUAIPLM_CHANGE_TYPE_I18N,
+  新增子件: KUAIPLM_CHANGE_TYPE_I18N.item_add,
+  删除子件: KUAIPLM_CHANGE_TYPE_I18N.item_remove,
+  修改子件: KUAIPLM_CHANGE_TYPE_I18N.item_modify,
+  版本变更: KUAIPLM_CHANGE_TYPE_I18N.version_change,
+  生效日期变更: KUAIPLM_CHANGE_TYPE_I18N.effective_change,
+  工序变更: KUAIPLM_CHANGE_TYPE_I18N.operation_change,
+  标准工时变更: KUAIPLM_CHANGE_TYPE_I18N.time_change,
+  SOP变更: KUAIPLM_CHANGE_TYPE_I18N.sop_change,
+  其他: KUAIPLM_CHANGE_TYPE_I18N.other,
+};
+
+const APPROVAL_CONTENT_AUTO_SUBMIT_ZH = '工程变更自动提交审批';
+
+/** 将审批 content 前缀中的变更类型码/中文标签译为当前语言；兼容历史存量。 */
+function formatApprovalTaskContent(
+  content: string | null | undefined,
+  translate: (key: string) => string,
+): string {
+  const raw = (content || '').trim();
+  if (!raw) return '-';
+  if (raw === APPROVAL_CONTENT_AUTO_SUBMIT_ZH) {
+    return translate('app.kuaiplm.common.approvalContent.autoSubmit');
+  }
+  const sep = ' - ';
+  const idx = raw.indexOf(sep);
+  const head = (idx >= 0 ? raw.slice(0, idx) : raw).trim();
+  const rest = idx >= 0 ? raw.slice(idx + sep.length) : '';
+  const i18nKey = APPROVAL_CHANGE_TYPE_LABEL_TO_I18N[head];
+  if (!i18nKey) return raw;
+  const label = translate(i18nKey);
+  return rest ? `${label}${sep}${rest}` : label;
+}
+
+/** 将审批 title 前缀（BOM/工艺路线变更）译为当前语言。 */
+function formatApprovalTaskTitle(
+  title: string | null | undefined,
+  translate: (key: string) => string,
+): string {
+  const raw = (title || '').trim();
+  if (!raw) return '-';
+  for (const { prefix, i18nKey } of KUAIPLM_APPROVAL_TITLE_PREFIX_I18N) {
+    if (raw === prefix) return translate(i18nKey);
+    const withColon = `${prefix}: `;
+    if (raw.startsWith(withColon)) {
+      return `${translate(i18nKey)}: ${raw.slice(withColon.length)}`;
+    }
+  }
+  return raw;
+}
 
 /**
  * 我的任务页面组件
@@ -180,7 +237,7 @@ const UserTasksPage: React.FC = () => {
           <Space>
             {isPending && <Badge dot />}
             <Typography.Text strong={isPending} style={{ fontSize: 14 }}>
-              {item.title}
+              {formatApprovalTaskTitle(item.title, t)}
             </Typography.Text>
           </Space>
         </div>
@@ -189,7 +246,7 @@ const UserTasksPage: React.FC = () => {
             ellipsis={{ rows: 2, expandable: false }}
             style={{ marginBottom: 8, fontSize: 12, color: themeToken.colorTextSecondary }}
           >
-            {item.content}
+            {formatApprovalTaskContent(item.content, t)}
           </Typography.Paragraph>
         )}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
@@ -200,7 +257,7 @@ const UserTasksPage: React.FC = () => {
         </div>
       </div>
     );
-  }, [taskType, themeToken, getStatusTag, handleView]);
+  }, [taskType, themeToken, getStatusTag, handleView, t]);
 
   /**
    * 处理删除任务
@@ -227,13 +284,13 @@ const UserTasksPage: React.FC = () => {
       dataIndex: 'title',
       key: 'title',
       ellipsis: true,
-      render: (dom: any, record: UserTask) => {
+      render: (_: any, record: UserTask) => {
         const isPending = record.status === 'pending' && taskType === 'pending';
         return (
           <Space>
             {isPending && <Badge status="error" dot />}
             <span style={{ fontWeight: isPending ? 600 : 400 }}>
-              {dom}
+              {formatApprovalTaskTitle(record.title, t)}
             </span>
           </Space>
         );
@@ -245,6 +302,7 @@ const UserTasksPage: React.FC = () => {
       key: 'content',
       ellipsis: true,
       hideInSearch: true,
+      render: (_: any, record: UserTask) => formatApprovalTaskContent(record.content, t),
     },
     {
       title: t('pages.personal.tasks.status'),
@@ -261,11 +319,16 @@ const UserTasksPage: React.FC = () => {
     },
     {
       title: taskType === 'submitted' ? t('pages.personal.tasks.currentApproverId') : t('pages.personal.tasks.submitter'),
-      dataIndex: taskType === 'submitted' ? 'current_approver_id' : 'submitter_id',
+      dataIndex: taskType === 'submitted' ? 'current_approver_name' : 'submitter_name',
       key: 'relation',
       width: 120,
       hideInSearch: true,
-      render: (val) => val || '-',
+      render: (_: any, record: UserTask) => {
+        if (taskType === 'submitted') {
+          return record.current_approver_name || record.current_approver_id || '-';
+        }
+        return record.submitter_name || record.submitter_id || '-';
+      },
     },
     {
       title: t('pages.personal.tasks.submittedAt'),
@@ -340,12 +403,26 @@ const UserTasksPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns = useMemo(() => [
-    { title: t('pages.personal.tasks.title'), dataIndex: 'title' },
-    { title: t('pages.personal.tasks.content'), dataIndex: 'content', span: 2 },
+    {
+      title: t('pages.personal.tasks.title'),
+      dataIndex: 'title',
+      render: (_: any, record: UserTask) => formatApprovalTaskTitle(record.title, t),
+    },
+    {
+      title: t('pages.personal.tasks.content'),
+      dataIndex: 'content',
+      span: 2,
+      render: (_: any, record: UserTask) => formatApprovalTaskContent(record.content, t),
+    },
     {
       title: t('pages.personal.tasks.status'),
       dataIndex: 'status',
       render: (dom: any) => getStatusTag(dom as string),
+    },
+    {
+      title: t('pages.personal.tasks.submitter'),
+      dataIndex: 'submitter_name',
+      render: (_: any, record: UserTask) => record.submitter_name || record.submitter_id || '-',
     },
     { title: t('pages.personal.tasks.submittedAt'), dataIndex: 'submitted_at', valueType: 'dateTime' },
     { title: t('pages.personal.tasks.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
@@ -576,10 +653,14 @@ const UserTasksPage: React.FC = () => {
         {currentTask && (
           <>
             <Typography.Paragraph>
-              <strong>{t('pages.personal.tasks.taskTitleLabel')}</strong>{currentTask.title}
+              <strong>{t('pages.personal.tasks.taskTitleLabel')}</strong>
+              {formatApprovalTaskTitle(currentTask.title, t)}
             </Typography.Paragraph>
             <Typography.Paragraph>
-              <strong>{t('pages.personal.tasks.taskContentLabel')}</strong>{currentTask.content || t('pages.personal.tasks.noContent')}
+              <strong>{t('pages.personal.tasks.taskContentLabel')}</strong>
+              {currentTask.content
+                ? formatApprovalTaskContent(currentTask.content, t)
+                : t('pages.personal.tasks.noContent')}
             </Typography.Paragraph>
             <ProFormTextArea
               name="comment"

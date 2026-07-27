@@ -34,6 +34,8 @@ if [ "$DEPLOY_MODE" = "prod" ]; then
 else
     BACKEND_START_TIMEOUT="${BACKEND_START_TIMEOUT:-30}"
 fi
+# Vite 冷启动 / optimizeDeps 偏慢；仅开发前端就绪探测使用
+FRONTEND_START_TIMEOUT="${FRONTEND_START_TIMEOUT:-90}"
 
 log_info()  { echo -e "\033[0;34m[$(date +'%H:%M:%S')] INFO: $*\033[0m"; }
 log_warn()  { echo -e "\033[1;33m[$(date +'%H:%M:%S')] WARN: $*\033[0m"; }
@@ -824,6 +826,26 @@ wait_for_backend_health() {
     local retries=0
     while [ $retries -lt "$BACKEND_START_TIMEOUT" ]; do
         if curl -sf "http://127.0.0.1:${BACKEND_PORT}/health" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+        retries=$((retries + 1))
+    done
+    return 1
+}
+
+wait_for_frontend_ready() {
+    local retries=0
+    local pid=""
+    while [ $retries -lt "$FRONTEND_START_TIMEOUT" ]; do
+        if [ -f "$LOGS_DIR/frontend.pid" ]; then
+            pid="$(cat "$LOGS_DIR/frontend.pid" 2>/dev/null || true)"
+            if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+                log_error "前端进程已退出，查看 $LOGS_DIR/frontend.log"
+                return 1
+            fi
+        fi
+        if curl -sf --max-time 2 "http://127.0.0.1:${FRONTEND_PORT}/" >/dev/null 2>&1; then
             return 0
         fi
         sleep 1
@@ -2540,6 +2562,12 @@ start_frontend_dev() {
         nohup npx vite --port "$FRONTEND_PORT" --host 0.0.0.0 > "$LOGS_DIR/frontend.log" 2>&1 &
         echo $! > "$LOGS_DIR/frontend.pid"
     )
+    log_info "等待前端就绪（最多 ${FRONTEND_START_TIMEOUT}s，首次依赖预构建可能较慢）..."
+    if ! wait_for_frontend_ready; then
+        log_error "前端启动超时或未响应 HTTP，查看 $LOGS_DIR/frontend.log"
+        [ -f "$LOGS_DIR/frontend.log" ] && tail -30 "$LOGS_DIR/frontend.log" >&2
+        exit 1
+    fi
     log_ok "前端已启动"
 }
 

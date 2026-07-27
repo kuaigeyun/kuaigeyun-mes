@@ -26,6 +26,8 @@ from apps.kuaizhizao.services.material_call_service import MaterialCallService
 from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.utils.issue_method_resolver import ISSUE_METHOD_PICK, is_batching_material
+from apps.kuaizhizao.utils.warehouse_resolver import resolve_line_side_warehouse_for_work_order
+from infra.exceptions.exceptions import BusinessLogicError
 
 
 @dataclass
@@ -86,11 +88,26 @@ class BatchingCenterService:
 
     async def _analyze_wo_batching_shortages(
         self, tenant_id: int, wo: WorkOrder
-    ) -> Tuple[Optional[float], List[_BatchingShortageLine], str]:
+    ) -> Tuple[Optional[float], List[_BatchingShortageLine], str, Optional[float]]:
         """
         轻量齐套快照：单次 BOM 展开 + 批量库存，不做逐物料库位查询。
-        返回 (齐套率, 配料缺料行, status)；status 为 no_bom | fully_kitted | shortage。
+
+        返回 (线边齐套率, 配料缺料行, status, 厂库齐套率)。
+        - 缺料判定与下推备料单一致：已领 + 线边 + 关联工单供给（不含主仓）。
+        - 厂库齐套率另含主仓批次，与工单列表齐套率同口径。
+        status: no_bom | fully_kitted | shortage
         """
+        from datetime import date
+
+        from tortoise.expressions import Q
+
+        from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
+        from apps.kuaizhizao.utils.material_source_helper import (
+            SOURCE_TYPE_CONFIGURE,
+            SOURCE_TYPE_MAKE,
+        )
+        from apps.master_data.models.material_batch import MaterialBatch
+
         try:
             reqs = await calculate_material_requirements_from_bom(
                 tenant_id=tenant_id,
@@ -102,17 +119,15 @@ class BatchingCenterService:
                 for_kitting_analysis=True,
             )
         except Exception:
-            return None, [], "no_bom"
+            return None, [], "no_bom", None
         if not reqs:
-            return None, [], "no_bom"
+            return None, [], "no_bom", None
 
         issue_map = {r.component_id: r.issue_method for r in reqs}
         comp_ids = [r.component_id for r in reqs]
-        # 配料缺料只看线边就绪（已领 + 线边仓），不含主仓批次库存
+
         line_side_map: Dict[int, Decimal] = {mid: Decimal("0") for mid in comp_ids}
         try:
-            from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
-
             line_items = await LineSideInventory.filter(
                 tenant_id=tenant_id,
                 material_id__in=comp_ids,
@@ -126,10 +141,45 @@ class BatchingCenterService:
                     line_side_map[mid] += available
         except Exception:
             line_side_map = {mid: Decimal("0") for mid in comp_ids}
+
+        main_map: Dict[int, Decimal] = {mid: Decimal("0") for mid in comp_ids}
+        try:
+            today = date.today()
+            batch_filter = Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
+            batches = (
+                await MaterialBatch.filter(
+                    tenant_id=tenant_id,
+                    material_id__in=comp_ids,
+                    deleted_at__isnull=True,
+                    quantity__gt=0,
+                )
+                .filter(~Q(status__in=["out_stock", "scrapped", "expired"]))
+                .filter(batch_filter)
+                .all()
+            )
+            for batch in batches:
+                mid = int(batch.material_id)
+                if mid in main_map:
+                    main_map[mid] += Decimal(str(batch.quantity or 0))
+        except Exception:
+            main_map = {mid: Decimal("0") for mid in comp_ids}
+
         picked_map = await self._batch_picked_quantities(tenant_id, wo.id, comp_ids)
 
+        # 关联子工单完工量（与 get_work_order_kitting_analysis / 下推缺料同口径）
+        component_wos: Dict[int, WorkOrder] = {}
+        if wo.work_order_group_id:
+            child_rows = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                work_order_group_id=wo.work_order_group_id,
+                bom_parent_work_order_id=wo.id,
+                deleted_at__isnull=True,
+            ).all()
+            component_wos = {int(r.product_id): r for r in child_rows if r.product_id}
+
         batching_shortages: List[_BatchingShortageLine] = []
-        fully_kitted_count = 0
+        line_fully_kitted_count = 0
+        factory_fully_kitted_count = 0
         batching_item_count = 0
 
         for req in reqs:
@@ -139,16 +189,25 @@ class BatchingCenterService:
                 continue
             batching_item_count += 1
             required = Decimal(str(req.gross_requirement))
-            # 线边就绪 = 已正式发料（无需再配）+ 线边备料；不含主仓
             picked = picked_map.get(req.component_id, Decimal("0"))
             line_side = line_side_map.get(req.component_id, Decimal("0"))
-            line_ready = picked + line_side
+            main_qty = main_map.get(req.component_id, Decimal("0"))
+            wo_supply = Decimal("0")
+            if source_type in (SOURCE_TYPE_MAKE, SOURCE_TYPE_CONFIGURE):
+                child_wo = component_wos.get(int(req.component_id))
+                if child_wo:
+                    wo_supply = Decimal(str(child_wo.completed_quantity or 0))
+            # 配料缺料：正式发料 + 线边 + 关联工单供给（不含主仓）
+            line_ready = picked + line_side + wo_supply
+            factory_ready = line_ready + main_qty
+            if factory_ready >= required:
+                factory_fully_kitted_count += 1
             if line_ready >= required:
-                fully_kitted_count += 1
+                line_fully_kitted_count += 1
                 continue
             shortage = required - line_ready
             if shortage <= 0:
-                fully_kitted_count += 1
+                line_fully_kitted_count += 1
                 continue
             batching_shortages.append(
                 _BatchingShortageLine(
@@ -160,12 +219,13 @@ class BatchingCenterService:
             )
 
         if batching_item_count == 0:
-            return None, [], "no_bom"
+            return None, [], "no_bom", None
 
-        kitting_rate = round(fully_kitted_count / batching_item_count * 100, 2)
+        line_kitting_rate = round(line_fully_kitted_count / batching_item_count * 100, 2)
+        factory_kitting_rate = round(factory_fully_kitted_count / batching_item_count * 100, 2)
         if not batching_shortages:
-            return kitting_rate, [], "fully_kitted"
-        return kitting_rate, batching_shortages, "shortage"
+            return line_kitting_rate, [], "fully_kitted", factory_kitting_rate
+        return line_kitting_rate, batching_shortages, "shortage", factory_kitting_rate
 
     async def list_tasks(
         self,
@@ -215,6 +275,28 @@ class BatchingCenterService:
             )
             self._sort_tasks_by_order(items, filters.get("order_by"))
             return BatchingCenterTaskListResponse(items=items, total=total)
+
+        # 线边备料：备料建议 + 线边备料单草稿/拣货合并（行级 task_type 仍为 proactive_prep|batching_draft）
+        if task_type == "line_side_prep":
+            pp_items, _ = await self._build_proactive_prep_tasks(
+                tenant_id,
+                skip=0,
+                limit=self._PROACTIVE_PREP_WO_LIMIT,
+                **builder_filters,
+            )
+            # status 仅作用于草稿行；建议行无单据状态
+            bd_items, _ = await self._build_batching_draft_tasks(
+                tenant_id,
+                status,
+                skip=0,
+                limit=200,
+                include_completed=include_completed_batching,
+                **builder_filters,
+            )
+            tasks = list(pp_items) + list(bd_items)
+            self._sort_tasks_by_order(tasks, filters.get("order_by"))
+            total = len(tasks)
+            return BatchingCenterTaskListResponse(items=tasks[skip : skip + limit], total=total)
 
         if task_type == "backflush_alert":
             items, total = await self._build_backflush_alert_tasks(
@@ -365,9 +447,12 @@ class BatchingCenterService:
             if wo.id in open_batch_wo_ids:
                 continue
             try:
-                kitting_rate, batching_shortages, status = await self._analyze_wo_batching_shortages(
-                    tenant_id, wo
-                )
+                (
+                    _line_kitting_rate,
+                    batching_shortages,
+                    status,
+                    factory_kitting_rate,
+                ) = await self._analyze_wo_batching_shortages(tenant_id, wo)
                 if status in ("fully_kitted", "no_bom") or not batching_shortages:
                     continue
 
@@ -377,7 +462,35 @@ class BatchingCenterService:
                 if len(batching_shortages) > 3:
                     summary += f" 等{len(batching_shortages)}项"
 
+                # 列表「齐套率」与工单页同口径（含主仓）；仍因线边缺料出现在建议中
+                display_rate = (
+                    factory_kitting_rate
+                    if factory_kitting_rate is not None
+                    else _line_kitting_rate
+                )
+                # 主仓已齐但仍需主仓→线边：待备；主仓也缺：缺料待备
+                prep_status = (
+                    "ready_to_prep"
+                    if factory_kitting_rate is not None and factory_kitting_rate >= 100
+                    else "pending_prep"
+                )
+
                 score_detail = score_detail_map.get(wo.id)
+                tgt_wh_id: Optional[int] = None
+                tgt_wh_name: Optional[str] = None
+                try:
+                    tgt_wh_id, tgt_wh_name = await resolve_line_side_warehouse_for_work_order(
+                        tenant_id, wo, None
+                    )
+                except BusinessLogicError:
+                    logger.warning(
+                        "备料建议未解析到线边仓: tenant_id={}, work_order_id={}",
+                        tenant_id,
+                        wo.id,
+                    )
+
+                created_by_name = getattr(wo, "created_by_name", None) or None
+                updated_by_name = getattr(wo, "updated_by_name", None) or created_by_name
                 tasks.append(
                     BatchingCenterTaskItem(
                         task_type="proactive_prep",
@@ -388,14 +501,20 @@ class BatchingCenterService:
                         product_name=wo.product_name,
                         picking_score=score_detail.composite_score if score_detail else None,
                         picking_rank_band=score_detail.rank_band if score_detail else None,
-                        kitting_rate=kitting_rate,
+                        kitting_rate=display_rate,
                         shortage_summary=summary,
+                        requested_quantity=float(wo.quantity) if wo.quantity is not None else None,
+                        total_items=len(batching_shortages),
                         priority=wo.priority or "normal",
-                        status="pending_prep",
-                        created_at=wo.planned_start_date,
+                        status=prep_status,
+                        created_by_name=created_by_name,
+                        updated_by_name=updated_by_name,
+                        created_at=wo.created_at or wo.planned_start_date,
+                        updated_at=wo.updated_at or wo.created_at,
                         score_breakdown=score_detail.breakdown if score_detail else None,
-                        suggested_warehouse_id=None,
-                        suggested_warehouse_name=None,
+                        suggested_warehouse_id=tgt_wh_id,
+                        suggested_warehouse_name=tgt_wh_name,
+                        target_warehouse_name=tgt_wh_name,
                     )
                 )
             except Exception as exc:
@@ -467,6 +586,9 @@ class BatchingCenterService:
             tgt_wh_name = None
             if call.target_warehouse_id:
                 tgt_wh_name = wh_name_by_id.get(call.target_warehouse_id) or None
+            created_by_name = getattr(call, "created_by_name", None) or call.caller_name
+            updated_by_name = getattr(call, "updated_by_name", None) or created_by_name
+            call_items = resp.items or []
             tasks.append(
                 BatchingCenterTaskItem(
                     task_type="material_call",
@@ -483,16 +605,17 @@ class BatchingCenterService:
                     material_name=call.material_name,
                     material_code=call.material_code,
                     requested_quantity=float(call.requested_quantity or 0),
+                    total_items=len(call_items) if call_items else (1 if call.material_id else None),
                     delivered_quantity=float(call.delivered_quantity or 0),
                     material_unit=call.material_unit,
                     caller_name=call.caller_name,
-                    created_by_name=getattr(call, "created_by_name", None),
-                    updated_by_name=getattr(call, "updated_by_name", None),
+                    created_by_name=created_by_name,
+                    updated_by_name=updated_by_name,
                     created_at=call.created_at,
-                    updated_at=call.updated_at,
+                    updated_at=call.updated_at or call.created_at,
                     needed_at=call.needed_at,
                     target_warehouse_name=tgt_wh_name,
-                    items=[ln.model_dump() for ln in (resp.items or [])],
+                    items=[ln.model_dump() for ln in call_items],
                 )
             )
         self._sort_tasks(tasks)
@@ -570,11 +693,16 @@ class BatchingCenterService:
             if len(lines) > 3:
                 summary += f" 等{len(lines)}项"
 
-            # 齐套率：按工单配料 BOM+库存分析（与主动备料同源）；无工单时退化为明细行已拣占比
+            # 齐套率：与备料建议/工单页同口径（厂库含主仓）；无工单时退化为明细行已拣占比
             kitting_rate: Optional[float] = None
             if wo is not None:
                 try:
-                    kitting_rate, _, _ = await self._analyze_wo_batching_shortages(tenant_id, wo)
+                    line_rate, _, _, factory_rate = await self._analyze_wo_batching_shortages(
+                        tenant_id, wo
+                    )
+                    kitting_rate = (
+                        factory_rate if factory_rate is not None else line_rate
+                    )
                 except Exception:
                     kitting_rate = None
             if kitting_rate is None and lines:
@@ -583,6 +711,25 @@ class BatchingCenterService:
                 if req_sum > 0:
                     kitting_rate = round(min(100.0, picked_sum / req_sum * 100), 2)
 
+            created_by_name = order.created_by_name or None
+            updated_by_name = order.updated_by_name or created_by_name
+            # 目标线边仓：勿用拣选源仓 warehouse_*（常为原料仓）；空则按工单解析
+            tgt_wh_id = order.target_warehouse_id
+            tgt_wh_name = order.target_warehouse_name
+            if (not tgt_wh_id or not tgt_wh_name) and wo is not None:
+                try:
+                    resolved_id, resolved_name = await resolve_line_side_warehouse_for_work_order(
+                        tenant_id, wo, tgt_wh_id
+                    )
+                    tgt_wh_id = tgt_wh_id or resolved_id
+                    tgt_wh_name = tgt_wh_name or resolved_name
+                except BusinessLogicError:
+                    logger.warning(
+                        "线边备料单未解析到目标线边仓: tenant_id={}, order_id={}",
+                        tenant_id,
+                        order.id,
+                    )
+            sku_count = int(order.total_items or 0) or len(lines)
             tasks.append(
                 BatchingCenterTaskItem(
                     task_type="batching_draft",
@@ -597,15 +744,16 @@ class BatchingCenterService:
                     kitting_rate=kitting_rate,
                     shortage_summary=summary or None,
                     requested_quantity=float(wo.quantity) if wo and wo.quantity else None,
+                    total_items=sku_count if sku_count > 0 else None,
                     priority=wo.priority if wo and wo.priority else "normal",
                     status=order.status,
-                    created_by_name=order.created_by_name,
-                    updated_by_name=order.updated_by_name,
+                    created_by_name=created_by_name,
+                    updated_by_name=updated_by_name,
                     created_at=order.created_at,
-                    updated_at=order.updated_at,
-                    suggested_warehouse_id=order.warehouse_id,
-                    suggested_warehouse_name=order.warehouse_name,
-                    target_warehouse_name=order.warehouse_name,
+                    updated_at=order.updated_at or order.created_at,
+                    suggested_warehouse_id=tgt_wh_id,
+                    suggested_warehouse_name=tgt_wh_name,
+                    target_warehouse_name=tgt_wh_name,
                 )
             )
         self._sort_tasks(tasks)
@@ -634,6 +782,17 @@ class BatchingCenterService:
 
         tasks: List[BatchingCenterTaskItem] = []
         for row in rows:
+            created_by_name = (
+                getattr(row, "created_by_name", None)
+                or row.processed_by_name
+                or None
+            )
+            updated_by_name = (
+                getattr(row, "updated_by_name", None)
+                or row.processed_by_name
+                or created_by_name
+            )
+            event_at = row.processed_at or row.updated_at or row.created_at
             tasks.append(
                 BatchingCenterTaskItem(
                     task_type="backflush_alert",
@@ -647,7 +806,10 @@ class BatchingCenterService:
                     material_unit=row.material_unit,
                     status=row.status,
                     error_message=row.error_message,
-                    created_at=row.processed_at,
+                    created_by_name=created_by_name,
+                    updated_by_name=updated_by_name,
+                    created_at=row.created_at or event_at,
+                    updated_at=event_at,
                 )
             )
         if priority:

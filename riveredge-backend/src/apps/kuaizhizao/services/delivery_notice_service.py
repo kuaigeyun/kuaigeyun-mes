@@ -32,6 +32,7 @@ from apps.kuaizhizao.schemas.delivery_notice import (
 )
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
 class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
@@ -248,7 +249,7 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
                 has_noticeable_lines=has_lines,
             )
         async with in_transaction():
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "DELIVERY_NOTICE_CODE", prefix=f"DN{today}")
 
             dump = notice_data.model_dump(exclude_unset=True, exclude={"items", "notice_code"})
@@ -381,7 +382,7 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         if notice.status != "待发送":
             raise BusinessLogicError("只能删除待发送状态的送货单")
 
-        await DeliveryNotice.filter(tenant_id=tenant_id, id=notice_id).update(deleted_at=datetime.now())
+        await DeliveryNotice.filter(tenant_id=tenant_id, id=notice_id).update(deleted_at=resolve_business_datetime())
         return True
 
     async def send_notice(
@@ -399,7 +400,7 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
 
         await DeliveryNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="已发送",
-            sent_at=datetime.now(),
+            sent_at=resolve_business_datetime(),
             updated_by=sent_by,
             updated_by_name=(await self.get_user_info(sent_by))["name"],
         )

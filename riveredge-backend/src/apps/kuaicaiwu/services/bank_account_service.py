@@ -16,6 +16,7 @@ from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.kuaicaiwu.models.bank_account import BankAccount
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import now_utc
 
 
 class BankAccountService:
@@ -128,7 +129,7 @@ class BankAccountService:
 
     async def delete(self, tenant_id: int, account_id: int) -> None:
         row = await self.get_by_id(tenant_id, account_id)
-        row.deleted_at = datetime.utcnow()
+        row.deleted_at = now_utc()
         row.is_active = False
         await row.save()
 

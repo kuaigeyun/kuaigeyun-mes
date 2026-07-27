@@ -14,7 +14,7 @@ from tortoise.expressions import Q
 from apps.kuaizhizao.models.demand_change_event import DemandChangeEvent
 from apps.kuaizhizao.models.demand_impact_record import DemandImpactRecord
 from apps.kuaizhizao.models.demand_replan_task import DemandReplanTask
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from apps.kuaizhizao.services.demand_replan_impact_service import DemandReplanImpactService
 from apps.kuaizhizao.services.demand_replanning_orchestrator_service import (
     DemandReplanningOrchestratorService,
@@ -55,7 +55,7 @@ class DemandChangeEventService:
 
     @staticmethod
     async def _generate_event_code(tenant_id: int) -> str:
-        ts = datetime.now().strftime("%Y%m%d%H%M%S")
+        ts = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
         count = await DemandChangeEvent.filter(tenant_id=tenant_id).count()
         return f"DCE-{ts}-{count + 1:04d}"
 

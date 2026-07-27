@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { MODAL_CONFIG, FORM_LAYOUT } from './constants';
 import { useSubmitShortcut } from '../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../utils/globalSubmitShortcut';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
 
 export interface FormModalTemplateProps {
   title: string;
@@ -131,6 +132,8 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
       destroyOnHidden
       className={[className, 'form-modal-template'].filter(Boolean).join(' ')}
       modalRender={modalRender}
+      maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+      wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
       footer={
         readOnly ? (
           <Space wrap>

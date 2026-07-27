@@ -8,6 +8,7 @@ from typing import Optional
 from loguru import logger
 
 from core.models.cache_entry import CacheEntry
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class Cache:
@@ -49,7 +50,7 @@ class Cache:
         entry = await CacheEntry.filter(namespace=namespace, key=real_key).first()
         if not entry:
             return None
-        if entry.expires_at and entry.expires_at <= datetime.now():
+        if entry.expires_at and entry.expires_at <= resolve_business_datetime():
             await entry.delete()
             return None
         return entry.value
@@ -75,7 +76,7 @@ class Cache:
         if not cls._connected:
             raise RuntimeError("Cache 未连接，请先调用 connect()")
         namespace, real_key = cls._split_key(key)
-        expires_at = datetime.now() + timedelta(seconds=expire) if expire else None
+        expires_at = resolve_business_datetime() + timedelta(seconds=expire) if expire else None
         await CacheEntry.update_or_create(
             defaults={"value": value, "expires_at": expires_at},
             namespace=namespace,
@@ -132,7 +133,7 @@ class Cache:
         entry = await CacheEntry.filter(namespace=namespace, key=real_key).first()
         if not entry:
             return False
-        if entry.expires_at and entry.expires_at <= datetime.now():
+        if entry.expires_at and entry.expires_at <= resolve_business_datetime():
             await entry.delete()
             return False
         return True
@@ -148,7 +149,7 @@ class Cache:
         if not cls._connected:
             return 0
         try:
-            return await CacheEntry.filter(expires_at__isnull=False, expires_at__lte=datetime.now()).delete()
+            return await CacheEntry.filter(expires_at__isnull=False, expires_at__lte=resolve_business_datetime()).delete()
         except Exception as e:
             logger.warning(f"purge_expired 失败: {e}")
             return 0
@@ -169,7 +170,7 @@ class Cache:
             raise RuntimeError("Cache 未连接，请先调用 connect()")
         namespace, real_key = cls._split_key(key)
         updated = await CacheEntry.filter(namespace=namespace, key=real_key).update(
-            expires_at=datetime.now() + timedelta(seconds=seconds)
+            expires_at=resolve_business_datetime() + timedelta(seconds=seconds)
         )
         return updated > 0
 

@@ -22,6 +22,7 @@ from apps.kuaizhizao.schemas.tool import ToolCreate, ToolUpdate
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class ToolService:
@@ -42,7 +43,7 @@ class ToolService:
                         context=None,
                     )
                 except Exception:
-                    data.code = f"TL{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                    data.code = f"TL{resolve_business_datetime().strftime('%Y%m%d%H%M%S')}"
 
             tool = Tool(tenant_id=tenant_id, **data.model_dump(exclude_none=True))
             apply_create_audit(tool, current_user)

@@ -10,7 +10,7 @@ Date: 2026-01-27
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
 from loguru import logger
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 
 class UsageAnalysisService:
@@ -38,7 +38,7 @@ class UsageAnalysisService:
             Dict[str, Any]: 功能使用分析结果
         """
         if not end_date:
-            end_date = datetime.now()
+            end_date = resolve_business_datetime()
         if not start_date:
             start_date = end_date - timedelta(days=30)
         
@@ -173,7 +173,7 @@ class UsageAnalysisService:
             Dict[str, Any]: 性能分析结果
         """
         if not end_date:
-            end_date = datetime.now()
+            end_date = resolve_business_datetime()
         if not start_date:
             start_date = end_date - timedelta(days=7)
         
@@ -234,7 +234,7 @@ class UsageAnalysisService:
         performance = await self.analyze_performance(tenant_id)
         
         return {
-            "generated_at": to_api_isoformat(datetime.now()),
+            "generated_at": to_api_isoformat(resolve_business_datetime()),
             "function_usage": function_usage,
             "data_quality": data_quality,
             "performance": performance,

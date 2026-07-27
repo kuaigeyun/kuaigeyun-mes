@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 
 from loguru import logger
 
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.infrastructure.cache.cache import Cache, cache
 from infra.exceptions.exceptions import CacheError  # Fixed import path
 
@@ -323,14 +323,14 @@ class CacheManager:
             "interval": interval,
             "enabled": enabled,
             "last_run": None,
-            "next_run": datetime.now(),
+            "next_run": resolve_business_datetime(),
         }
 
     async def run_warmup_tasks(self):
         """
         执行缓存预热任务
         """
-        now = datetime.now()
+        now = resolve_business_datetime()
 
         for name, task in self._warmup_tasks.items():
             if not task["enabled"]:

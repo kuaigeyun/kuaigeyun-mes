@@ -53,8 +53,14 @@ class QualityAutomationService:
         reporting_record: Any,
         created_by: int,
     ) -> None:
+        """
+        报工生效后自动建质检待检单：
+        - IPQC：工序质检模式为 plan（含末道）；不可因末道只建 FQC 而跳过过程检验
+        - FQC：仅末道，按成品检验策略
+        """
         cfg = await get_quality_effective_config(tenant_id)
         from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+        from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
 
         all_ops = await WorkOrderOperation.filter(
             tenant_id=tenant_id,
@@ -63,61 +69,168 @@ class QualityAutomationService:
         ).order_by("sequence").all()
 
         is_last_op = bool(all_ops and all_ops[-1].id == work_order_operation.id)
+        master_op_id = int(work_order_operation.operation_id or 0)
 
-        if is_last_op:
-            if not cfg["stage_enabled"]["fqc"]:
-                return
-            if not cfg["module_enabled"]["finished"]:
-                return
-            if not cfg["auto_create"]["fqc_on_last_reporting"]:
-                return
-            try:
-                from apps.kuaizhizao.services.quality_service import FinishedGoodsInspectionService
+        # 过程检验：任意工序（含末道）在 plan 模式下自动建单
+        if (
+            cfg["stage_enabled"]["ipqc"]
+            and cfg["module_enabled"]["process"]
+            and cfg["auto_create"]["ipqc_on_reporting"]
+            and master_op_id > 0
+        ):
+            eff, _, _ = await resolve_inspection_policy(
+                tenant_id, "ipqc", operation_id=master_op_id
+            )
+            if eff == "plan":
+                try:
+                    from apps.kuaizhizao.services.quality_service import ProcessInspectionService
 
-                await FinishedGoodsInspectionService().create_inspection_from_work_order(
-                    tenant_id=tenant_id,
-                    work_order_id=work_order.id,
-                    created_by=created_by,
-                    reporting_record_id=reporting_record.id,
-                )
-                logger.info(f"末道工序报工 -> 自动创建成品检验: 工单 {work_order.code}")
-            except Exception as e:
-                logger.warning(
-                    f"末道工序报工自动创建成品检验失败 工单 {work_order.code}: {e}"
-                )
-            return
+                    await ProcessInspectionService().create_inspection_from_work_order(
+                        tenant_id=tenant_id,
+                        work_order_id=work_order.id,
+                        operation_id=work_order_operation.operation_id,
+                        created_by=created_by,
+                        reporting_record_id=reporting_record.id,
+                    )
+                    logger.info(
+                        f"报工 -> 自动创建过程检验: 工单 {work_order.code}, "
+                        f"工序 {work_order_operation.operation_name}"
+                    )
+                except Exception as e:
+                    msg = str(e)
+                    if "已存在待检验" in msg:
+                        logger.info(
+                            f"报工自动创建过程检验跳过（已有待检单）工单 {work_order.code}"
+                        )
+                    else:
+                        logger.warning(
+                            f"报工自动创建过程检验失败 工单 {work_order.code}: {e}"
+                        )
 
-        if not cfg["stage_enabled"]["ipqc"]:
+        # 成品检验：仅末道
+        if not is_last_op:
             return
-        if not cfg["module_enabled"]["process"]:
+        if not cfg["stage_enabled"]["fqc"]:
             return
-        if not cfg["auto_create"]["ipqc_on_reporting"]:
+        if not cfg["module_enabled"]["finished"]:
             return
-        from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
-
-        master_op_id = int(work_order_operation.operation_id)
-        eff, _, _ = await resolve_inspection_policy(
-            tenant_id, "ipqc", operation_id=master_op_id
-        )
-        if eff != "plan":
+        if not cfg["auto_create"]["fqc_on_last_reporting"]:
             return
         try:
-            from apps.kuaizhizao.services.quality_service import ProcessInspectionService
+            from apps.kuaizhizao.services.quality_service import FinishedGoodsInspectionService
 
-            await ProcessInspectionService().create_inspection_from_work_order(
+            await FinishedGoodsInspectionService().create_inspection_from_work_order(
                 tenant_id=tenant_id,
                 work_order_id=work_order.id,
-                operation_id=work_order_operation.operation_id,
                 created_by=created_by,
                 reporting_record_id=reporting_record.id,
             )
-            logger.info(
-                f"报工 -> 自动创建过程检验: 工单 {work_order.code}, 工序 {work_order_operation.operation_name}"
-            )
+            logger.info(f"末道工序报工 -> 自动创建成品检验: 工单 {work_order.code}")
         except Exception as e:
             logger.warning(
-                f"报工自动创建过程检验失败 工单 {work_order.code}: {e}"
+                f"末道工序报工自动创建成品检验失败 工单 {work_order.code}: {e}"
             )
+
+    async def maybe_backfill_missing_ipqc_for_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+    ) -> None:
+        """
+        补建：方案质检工序已有生效报工、却无过程检验单时自动建单。
+        用于历史报工漏触发或建单失败后的列表/工序展开自愈。
+        """
+        cfg = await get_quality_effective_config(tenant_id)
+        if not (
+            cfg["stage_enabled"]["ipqc"]
+            and cfg["module_enabled"]["process"]
+            and cfg["auto_create"]["ipqc_on_reporting"]
+        ):
+            return
+
+        from apps.kuaizhizao.models.process_inspection import ProcessInspection
+        from apps.kuaizhizao.models.reporting_record import ReportingRecord
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+        from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
+        from apps.kuaizhizao.services.quality_service import ProcessInspectionService
+
+        work_order = await WorkOrder.get_or_none(
+            id=work_order_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not work_order:
+            return
+
+        operations = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).all()
+        svc = ProcessInspectionService()
+        for op in operations:
+            master_op_id = int(op.operation_id or 0)
+            if master_op_id <= 0:
+                continue
+            eff, _, _ = await resolve_inspection_policy(
+                tenant_id, "ipqc", operation_id=master_op_id
+            )
+            if eff != "plan":
+                continue
+            op_aliases = [master_op_id, int(op.id)]
+            # 先合并已产生的重复待检单
+            await svc.dedupe_pending_process_inspections_for_operation(
+                tenant_id, work_order_id, op_aliases
+            )
+            existing = await ProcessInspection.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                operation_id__in=op_aliases,
+                deleted_at__isnull=True,
+            ).exists()
+            if existing:
+                continue
+            reporting = (
+                await ReportingRecord.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    operation_id=master_op_id,
+                    status="approved",
+                    deleted_at__isnull=True,
+                )
+                .order_by("-id")
+                .first()
+            )
+            if not reporting:
+                continue
+            created_by = int(
+                getattr(reporting, "recorded_by", None)
+                or getattr(reporting, "approved_by", None)
+                or getattr(work_order, "created_by", None)
+                or 0
+            )
+            if created_by <= 0:
+                continue
+            try:
+                await svc.create_inspection_from_work_order(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    operation_id=master_op_id,
+                    created_by=created_by,
+                    reporting_record_id=int(reporting.id),
+                )
+                logger.info(
+                    f"补建过程检验: 工单 {work_order.code}, 工序 {op.operation_name}, "
+                    f"报工 {reporting.id}"
+                )
+            except Exception as e:
+                msg = str(e)
+                if "已存在待检验" in msg:
+                    continue
+                logger.warning(
+                    f"补建过程检验失败 工单 {work_order.code} 工序 {op.operation_name}: {e}"
+                )
 
     async def maybe_auto_create_oqc_from_shipment_notice(
         self,
@@ -139,8 +252,11 @@ class QualityAutomationService:
                 user_id=user_id,
             )
             if created:
-                logger.info(f"发货通知 {notice_id} 通知仓库前自动创建 OQC {len(created)} 张")
+                logger.info(f"发货通知 {notice_id} 通知仓库后自动创建 OQC {len(created)} 张")
         except Exception as e:
+            msg = str(e)
+            if "均已存在检验单" in msg or "没有需要 OQC" in msg:
+                return
             logger.warning(f"发货通知 {notice_id} 自动创建 OQC 失败: {e}")
 
     async def maybe_auto_create_oqc_from_sales_delivery(
@@ -154,6 +270,41 @@ class QualityAutomationService:
             return
         if not cfg["auto_create"]["oqc_on_sales_delivery"]:
             return
+        # 通知仓库路径：create_sales_delivery 会先触发本钩子，随后 notice 回写关联并
+        # maybe_auto_create_oqc_from_shipment_notice。双开关同时开时由发货通知路径唯一建单。
+        if cfg["auto_create"]["oqc_on_shipment_notice_notify"]:
+            from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+            from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+            from apps.kuaizhizao.services.inspection_policy_service import (
+                _shipment_notice_ids_for_sales_delivery,
+            )
+
+            linked_notice_ids = await _shipment_notice_ids_for_sales_delivery(
+                tenant_id, int(delivery_id)
+            )
+            if linked_notice_ids:
+                logger.info(
+                    f"销售出库 {delivery_id} 已关联发货通知 {linked_notice_ids}，"
+                    "跳过出库侧自动建 OQC（由通知仓库路径建单）"
+                )
+                return
+            delivery = await SalesDelivery.get_or_none(
+                tenant_id=tenant_id, id=int(delivery_id), deleted_at__isnull=True
+            )
+            so_id = getattr(delivery, "sales_order_id", None) if delivery else None
+            if so_id:
+                pending_notice = await ShipmentNotice.filter(
+                    tenant_id=tenant_id,
+                    sales_order_id=int(so_id),
+                    deleted_at__isnull=True,
+                    status__in=["待发货", "已通知"],
+                ).exists()
+                if pending_notice:
+                    logger.info(
+                        f"销售出库 {delivery_id} 同销售订单存在发货通知且已开启通知仓库自动建 OQC，"
+                        "跳过出库侧自动建单"
+                    )
+                    return
         try:
             from apps.kuaizhizao.services.quality_improvement_service import OQCInspectionService
 
@@ -165,4 +316,7 @@ class QualityAutomationService:
             if created:
                 logger.info(f"销售出库 {delivery_id} 自动创建 OQC {len(created)} 张")
         except Exception as e:
+            msg = str(e)
+            if "均已存在检验单" in msg or "没有需要 OQC" in msg:
+                return
             logger.warning(f"销售出库 {delivery_id} 自动创建 OQC 失败: {e}")

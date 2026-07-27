@@ -13,6 +13,7 @@ from decimal import Decimal
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
 
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
 from apps.kuaizhizao.models.receipt_notice_item import ReceiptNoticeItem
@@ -197,7 +198,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         if not source_order:
             raise BusinessLogicError("采购订单不存在或已删除，无法创建收货通知单")
         async with in_transaction():
-            today = datetime.now().strftime("%Y%m%d")
+            today = today_site_str()
             code = await self.generate_code(tenant_id, "RECEIPT_NOTICE_CODE", prefix=f"RN{today}")
 
             dump = notice_data.model_dump(exclude_unset=True, exclude={"items", "notice_code"})
@@ -393,7 +394,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         if notice.status != "待收货":
             raise BusinessLogicError("只能删除待收货状态的收货通知单")
 
-        await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(deleted_at=datetime.now())
+        await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(deleted_at=resolve_business_datetime())
         return True
 
     async def preview_notify_warehouse(
@@ -637,7 +638,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
 
         await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="已通知",
-            notified_at=datetime.now(),
+            notified_at=resolve_business_datetime(),
             updated_by=notified_by,
             updated_by_name=(await self.get_user_info(notified_by))["name"],
             purchase_receipt_id=receipt.id,
@@ -676,7 +677,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
                 )
             if receipt:
                 await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt.id).update(
-                    deleted_at=datetime.now()
+                    deleted_at=resolve_business_datetime()
                 )
                 await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt.id).delete()
 

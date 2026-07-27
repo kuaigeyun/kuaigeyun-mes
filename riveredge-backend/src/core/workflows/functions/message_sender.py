@@ -13,6 +13,7 @@ from core.tasks.event_compat import Event, TriggerEvent
 from core.utils.workflow_tenant_isolation import with_tenant_isolation
 from core.workflows.client import workflow_client
 from infra.domain.tenant_context import get_current_tenant_id
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 @workflow_client.create_function(
@@ -40,7 +41,7 @@ async def message_sender_function(event: Event) -> Dict[str, Any]:
         return {"success": False, "error": f"消息记录不存在: {message_log_uuid}"}
 
     message_log.status = "sending"
-    message_log.sent_at = datetime.now()
+    message_log.sent_at = resolve_business_datetime()
     await message_log.save()
 
     try:
@@ -58,7 +59,7 @@ async def message_sender_function(event: Event) -> Dict[str, Any]:
         if result.get("success"):
             message_log.status = "success"
             if not message_log.sent_at:
-                message_log.sent_at = datetime.now()
+                message_log.sent_at = resolve_business_datetime()
         else:
             message_log.status = "failed"
             message_log.error_message = result.get("error", "未知错误")

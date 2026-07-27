@@ -21,7 +21,7 @@ from apps.kuaizhizao.schemas.equipment_status_monitor import (
 )
 from apps.kuaizhizao.services.equipment_service import EquipmentService
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -275,7 +275,7 @@ class EquipmentStatusMonitorService:
             equipment_uuid=data.equipment_uuid,
             status=data.status,
             is_online=data.is_online if data.is_online is not None else equipment.status == "运行中",
-            monitored_at=datetime.now(),
+            monitored_at=resolve_business_datetime(),
             data_source="manual",
             attachments=data.attachments,
         )
@@ -351,7 +351,7 @@ class EquipmentStatusMonitorService:
             equipment_uuid=equipment_uuid,
             from_status=from_status,
             to_status=to_status,
-            status_changed_at=datetime.now(),
+            status_changed_at=resolve_business_datetime(),
             changed_by=changed_by,
             changed_by_name=changed_by_name,
             reason=reason,

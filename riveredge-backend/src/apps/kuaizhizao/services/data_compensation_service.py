@@ -22,6 +22,7 @@ from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaicaiwu.models.payable import Payable
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import ValidationError
+from core.utils.timezone_utils import today_site_str
 
 
 class DataCompensationService:
@@ -192,7 +193,7 @@ class DataCompensationService:
                         continue
                     
                     # 生成补偿入库单（标记为"动态补偿"）
-                    today = datetime.now().strftime("%Y%m%d")
+                    today = today_site_str()
                     base_service = AppBaseService(PurchaseReceipt)
                     receipt_code = await base_service.generate_code(
                         tenant_id, "PURCHASE_RECEIPT_CODE", prefix=f"COMP-INV{today}"
@@ -250,7 +251,7 @@ class DataCompensationService:
                         continue
                     
                     # 生成负补偿单（出库单）
-                    today = datetime.now().strftime("%Y%m%d")
+                    today = today_site_str()
                     from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
                     base_service = AppBaseService(SalesDelivery)
                     delivery_code = await base_service.generate_code(

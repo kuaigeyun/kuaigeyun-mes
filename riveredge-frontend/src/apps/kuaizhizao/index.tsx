@@ -176,6 +176,7 @@ const PackingBindingPage = lazy(() => import('./pages/production-execution/packi
 const HolidaysPage = lazy(() => import('./pages/performance/holidays'));
 const ShiftsPage = lazy(() => import('./pages/performance/shifts'));
 const ShiftRostersPage = lazy(() => import('./pages/performance/shift-rosters'));
+const WorkCalendarPage = lazy(() => import('./pages/performance/work-calendar'));
 const PerformanceCenterDashboardPage = lazy(() => import('./pages/performance/dashboard'));
 const SkillsPage = lazy(() => import('./pages/performance/skills'));
 const EmployeeConfigsPage = lazy(() => import('./pages/performance/employee-configs'));
@@ -400,6 +401,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="performance/holidays" element={withPageSuspense(HolidaysPage)} />
       <Route path="performance/shifts" element={withPageSuspense(ShiftsPage)} />
       <Route path="performance/shift-rosters" element={withPageSuspense(ShiftRostersPage)} />
+      <Route path="performance/work-calendar" element={withPageSuspense(WorkCalendarPage)} />
       <Route path="performance/skills" element={withPageSuspense(SkillsPage)} />
       <Route path="performance/employee-configs" element={withPageSuspense(EmployeeConfigsPage)} />
       <Route path="performance/hourly-rates" element={withPageSuspense(HourlyRatesPage)} />

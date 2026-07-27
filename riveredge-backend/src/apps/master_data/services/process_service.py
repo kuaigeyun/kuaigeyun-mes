@@ -38,6 +38,7 @@ from apps.master_data.services.process_preset_catalog import (
 )
 from apps.master_data.services.master_data_list_core import apply_master_crud_list_filters
 from core.services.business.code_generation_service import CodeGenerationService
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 async def _resolve_default_operator_uuids(tenant_id: int, default_operator_uuids: Optional[List[str]]) -> List[int]:
@@ -2370,7 +2371,7 @@ class ProcessService:
             "version": data.version,
             "version_description": data.version_description,
             "base_version": current_route.version,
-            "effective_date": data.effective_date or datetime.now(),
+            "effective_date": data.effective_date or resolve_business_datetime(),
             "operation_sequence": current_route.operation_sequence,
             "is_active": current_route.is_active,
             "over_report_mode": getattr(current_route, "over_report_mode", None) or "none",
@@ -2604,7 +2605,7 @@ class ProcessService:
             version=new_version,
             version_description=f"回退到版本 {target_version}",
             base_version=target_version,
-            effective_date=datetime.now(),
+            effective_date=resolve_business_datetime(),
             operation_sequence=target_route.operation_sequence,
             is_active=target_route.is_active,
             over_report_mode=getattr(target_route, "over_report_mode", None) or "none",

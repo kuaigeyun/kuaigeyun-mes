@@ -951,9 +951,15 @@ export const WORK_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'work_order.unfreeze.not_frozen': '工单未冻结，不能解冻',
   'work_order.cancel.not_allowed': '当前状态不可取消工单',
   'work_order.set_priority.not_allowed': '当前状态不可调整优先级',
-  'work_order.push_production_picking.not_allowed': '当前状态不可下推生产领料',
-  'work_order.push_production_picking.frozen': '工单已冻结，不可下推生产领料',
-  'work_order.push_production_picking.pending_picking': '已存在待领料单，请先处理后再下推',
+  'work_order.push_production_picking.not_allowed':
+    '仅「已下达」或「执行中」的工单可下推生产领料，当前状态不符合',
+  'work_order.push_production_picking.draft': '工单仍为草稿，请先下达后再确认生产领料',
+  'work_order.push_production_picking.completed': '工单已完工，不能再下推生产领料',
+  'work_order.push_production_picking.cancelled': '工单已取消，不能下推生产领料',
+  'work_order.push_production_picking.split': '工单已拆分，不能下推生产领料',
+  'work_order.push_production_picking.frozen': '工单已冻结，请先解冻后再下推生产领料',
+  'work_order.push_production_picking.pending_picking':
+    '该工单已有待处理的生产领料单，请先完成或取消后再下推',
   'work_order.push_finished_goods_receipt.not_allowed': '当前状态不可下推成品入库',
   'work_order.push_finished_goods_receipt.frozen': '工单已冻结，不可下推成品入库',
   'work_order.push_production_return.not_allowed': '当前状态不可下推生产退料',
@@ -1226,6 +1232,7 @@ export function replenishmentBatchIgnoreAllowed(
 export const QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'quality_inspection.conduct.not_pending': '只有待检验状态的检验单才能执行检验',
   'quality_inspection.approve.not_pending': '检验单审核状态不是待审核',
+  'quality_inspection.revoke_approval.not_approved': '仅已审核通过的检验单可撤销审核',
   'quality_inspection.create_defect.not_allowed': '只有已检验且不合格的检验单才能登记不良',
   'quality_inspection.push_purchase_return.not_allowed': '只有不合格的来料检验单才能下推采购退货单',
   'quality_inspection.push_purchase_return.already_pushed': '不合格数量已全部下推采购退货，删除待退货单后可再次下推',
@@ -1248,6 +1255,7 @@ export const QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES: Record<string, strin
   'process_inspection.pull_from_work_order.no_lines': '工单无工序明细，无法上拉过程检验',
   'process_inspection.pull_from_work_order.already_pulled': '相关工序均已存在待检验的过程检验单，删除后可再次上拉',
   'quality_inspection.update.not_pending': '只能更新待检验状态的检验单',
+  'quality_inspection.delete.not_pending': '只能删除待检验状态的检验单',
 };
 
 export const OQC_INSPECTION_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
@@ -1295,9 +1303,11 @@ export interface QualityInspectionCapabilitiesShape {
   conduct?: ActionCapability;
   approve?: ActionCapability;
   reject?: ActionCapability;
+  revoke_approval?: ActionCapability;
   create_defect?: ActionCapability;
   push_purchase_return?: ActionCapability;
   update?: ActionCapability;
+  delete?: ActionCapability;
   print?: ActionCapability;
 }
 
@@ -1342,9 +1352,25 @@ export function qualityInspectionRowGates(
       QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES,
       'app.kuaizhizao.quality.capability',
     ),
+    revokeApproval: qualityCapView(
+      caps?.revoke_approval,
+      inspectionPerms.canAction?.('revoke') ?? false,
+      permDeniedTitle,
+      t,
+      QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES,
+      'app.kuaizhizao.quality.capability',
+    ),
     update: qualityCapView(
       caps?.update,
       inspectionPerms.canUpdate,
+      permDeniedTitle,
+      t,
+      QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES,
+      'app.kuaizhizao.quality.capability',
+    ),
+    delete: qualityCapView(
+      caps?.delete,
+      inspectionPerms.canDelete,
       permDeniedTitle,
       t,
       QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES,

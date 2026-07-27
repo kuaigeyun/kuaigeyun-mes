@@ -49,12 +49,6 @@ interface InventorySummary {
   near_expiry_count: number;
 }
 
-interface GroupItem {
-  group_key: string;
-  record_count: number;
-  total_quantity: number;
-}
-
 function InTransitPopoverContent({
   breakdown,
   t,
@@ -140,14 +134,11 @@ const InventoryPage: React.FC = () => {
 
   const [includeZeroStock, setIncludeZeroStock] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | 'in_stock' | 'zero'>('all');
-  const [groupBy, setGroupBy] = useState<'warehouse' | 'material' | 'status' | 'aging_bucket'>('warehouse');
   // setState 后立刻 reload 时闭包仍是旧值；用 ref 保证请求参数与开关一致
   const includeZeroStockRef = useRef(true);
   const statusFilterRef = useRef(statusFilter);
-  const groupByRef = useRef(groupBy);
   includeZeroStockRef.current = includeZeroStock;
   statusFilterRef.current = statusFilter;
-  groupByRef.current = groupBy;
   const [summary, setSummary] = useState<InventorySummary>({
     total_records: 0,
     total_quantity: 0,
@@ -156,7 +147,6 @@ const InventoryPage: React.FC = () => {
     expired_count: 0,
     near_expiry_count: 0,
   });
-  const [groups, setGroups] = useState<GroupItem[]>([]);
 
   const escapeCsv = (v: unknown) => {
     const s = String(v ?? '');
@@ -212,8 +202,6 @@ const InventoryPage: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const groupTags = useMemo(() => groups.slice(0, 8), [groups]);
-
   const tableHeaderActions = useMemo(
     () => (
       <Space wrap>
@@ -245,24 +233,9 @@ const InventoryPage: React.FC = () => {
             actionRef.current?.reload();
           }}
         />
-        <Select
-          value={groupBy}
-          style={{ width: 150 }}
-          options={[
-            { label: t('app.kuaizhizao.warehouseCommon.groupByWarehouse'), value: 'warehouse' },
-            { label: t('app.kuaizhizao.warehouseCommon.groupByMaterial'), value: 'material' },
-            { label: t('app.kuaizhizao.warehouseCommon.groupByStatus'), value: 'status' },
-            { label: t('app.kuaizhizao.warehouseCommon.groupByAging'), value: 'aging_bucket' },
-          ]}
-          onChange={(v) => {
-            groupByRef.current = v;
-            setGroupBy(v);
-            actionRef.current?.reload();
-          }}
-        />
       </Space>
     ),
-    [t, includeZeroStock, statusFilter, groupBy]
+    [t, includeZeroStock, statusFilter]
   );
 
   const columns: ProColumns<InventoryItem>[] = useMemo(
@@ -397,13 +370,12 @@ const InventoryPage: React.FC = () => {
             },
           }
         ),
-        apiRequest<{ summary: InventorySummary; groups: GroupItem[] }>(
+        apiRequest<{ summary: InventorySummary }>(
           '/apps/kuaizhizao/reports/inventory/material-balances/summary',
-          { method: 'GET', params: { ...baseQuery, group_by: groupByRef.current } }
+          { method: 'GET', params: baseQuery }
         ),
       ]);
       setSummary(summaryRes.summary);
-      setGroups(summaryRes.groups || []);
       return {
         data: listRes.items || [],
         total: listRes.total || 0,
@@ -456,17 +428,6 @@ const InventoryPage: React.FC = () => {
           <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statNearExpiry')} value={summary.near_expiry_count} /></Col>
           <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statExpired')} value={summary.expired_count} /></Col>
         </Row>
-        <Space style={{ marginTop: 8, flexWrap: 'wrap' }}>
-          {groupTags.map((g) => (
-            <Tag key={g.group_key}>
-              {t('app.kuaizhizao.warehouseCommon.groupTag', {
-                key: g.group_key,
-                count: g.record_count,
-                qty: formatQuantity(g.total_quantity),
-              })}
-            </Tag>
-          ))}
-        </Space>
       </Card>
 
       <UniTable<InventoryItem>

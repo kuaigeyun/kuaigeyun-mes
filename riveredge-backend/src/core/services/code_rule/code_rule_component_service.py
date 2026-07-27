@@ -12,6 +12,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 import re
 from loguru import logger
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class CodeRuleComponentService:
@@ -216,7 +217,7 @@ class CodeRuleComponentService:
         )
 
         parts = []
-        now = datetime.now()
+        now = resolve_business_datetime()
         group_code_field_index = 0
         group_code_field_total = _count_group_code_fields_before_counter(sorted_components)
         render_ctx = dict(context) if context else None

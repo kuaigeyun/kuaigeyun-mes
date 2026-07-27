@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, time as dt_time
 from typing import Dict, List, Optional, Tuple
 
-from tortoise.expressions import Q
+from tortoise.expressions import Q, RawSQL
 
 MASTER_CRUD_FIELD_ALIASES: Dict[str, str] = {
     "createdAt": "created_at",
@@ -66,6 +67,9 @@ MASTER_CRUD_SORT_DB_COLS = frozenset({
 
 MASTER_CRUD_KEYWORD_FIELDS = ["code", "name"]
 
+# 允许做「忽略分隔符」匹配的字段（仅白名单，用于 RawSQL 列名）
+MASTER_CRUD_COMPACT_KEYWORD_FIELDS = frozenset({"code", "name", "main_code"})
+
 
 def _parse_optional_api_date(value: Optional[str]) -> Optional[date]:
     if value is None or not str(value).strip():
@@ -74,6 +78,11 @@ def _parse_optional_api_date(value: Optional[str]) -> Optional[date]:
         return date.fromisoformat(str(value).strip()[:10])
     except ValueError:
         return None
+
+
+def _compact_search_token(value: str) -> str:
+    """去掉空格/连字符/下划线，便于 LBXGW 匹配 LBX-GW-*。"""
+    return re.sub(r"[\s\-_]+", "", value or "")
 
 
 def apply_master_crud_search_filters(
@@ -90,9 +99,33 @@ def apply_master_crud_search_filters(
         cond = Q()
         for field in fields:
             cond |= Q(**{f"{field}__icontains": kw})
+
+        # 编码类关键词常含/省略分隔符：LBX-GW ↔ LBXGW 都能命中 LBX-GW-GW0001
+        kw_compact = _compact_search_token(kw)
+        compact_fields = [f for f in fields if f in MASTER_CRUD_COMPACT_KEYWORD_FIELDS]
+        if kw_compact and compact_fields:
+            annotations: Dict[str, RawSQL] = {}
+            compact_cond = Q()
+            for field in compact_fields:
+                alias = f"_md_kw_compact_{field}"
+                annotations[alias] = RawSQL(
+                    f"REPLACE(REPLACE(REPLACE(COALESCE(\"{field}\", ''), '-', ''), '_', ''), ' ', '')"
+                )
+                compact_cond |= Q(**{f"{alias}__icontains": kw_compact})
+            return query.annotate(**annotations).filter(cond | compact_cond)
+
         return query.filter(cond)
     if code and str(code).strip():
-        query = query.filter(code__icontains=str(code).strip())
+        code_kw = str(code).strip()
+        code_compact = _compact_search_token(code_kw)
+        if code_compact and code_compact != code_kw:
+            query = query.annotate(
+                _md_kw_compact_code=RawSQL(
+                    "REPLACE(REPLACE(REPLACE(COALESCE(\"code\", ''), '-', ''), '_', ''), ' ', '')"
+                )
+            ).filter(Q(code__icontains=code_kw) | Q(_md_kw_compact_code__icontains=code_compact))
+        else:
+            query = query.filter(code__icontains=code_kw)
     if name and str(name).strip():
         query = query.filter(name__icontains=str(name).strip())
     return query

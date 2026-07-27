@@ -19,6 +19,7 @@ from apps.kuaizhizao.services.spare_part_service import SparePartService
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 async def _generate_requisition_no(tenant_id: int) -> str:
@@ -29,7 +30,7 @@ async def _generate_requisition_no(tenant_id: int) -> str:
             prefix="SPR",
         )
     except Exception:
-        return f"SPR{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        return f"SPR{resolve_business_datetime().strftime('%Y%m%d%H%M%S')}"
 
 
 class SparePartRequisitionService:
@@ -52,7 +53,7 @@ class SparePartRequisitionService:
             deleted_at__isnull=True,
         )
         for row in existing:
-            row.deleted_at = datetime.now()
+            row.deleted_at = resolve_business_datetime()
             await row.save()
 
         for idx, line in enumerate(lines, start=1):
@@ -262,7 +263,7 @@ class SparePartRequisitionService:
             row.status = "已审核"
             row.approver_id = approver_id
             row.approver_name = approver_name
-            row.approved_at = datetime.now()
+            row.approved_at = resolve_business_datetime()
             await row.save()
             await SparePartService().apply_parts_usage(
                 tenant_id,
@@ -290,7 +291,7 @@ class SparePartRequisitionService:
         row.reject_reason = reject_reason
         row.approver_id = approver_id
         row.approver_name = approver_name
-        row.approved_at = datetime.now()
+        row.approved_at = resolve_business_datetime()
         await row.save()
         return row
 
@@ -298,5 +299,5 @@ class SparePartRequisitionService:
         row = await self.get(tenant_id, row_id)
         if row.status not in ("草稿", "已驳回"):
             raise ValidationError("仅草稿或已驳回状态可删除")
-        row.deleted_at = datetime.now()
+        row.deleted_at = resolve_business_datetime()
         await row.save()

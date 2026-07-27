@@ -578,8 +578,10 @@ const EquipmentPage: React.FC = () => {
   const equipmentStatusValueEnum = useMemo(
     () => ({
       正常: { text: t('app.kuaizhizao.equipment.statusNormal') },
+      故障: { text: t('app.kuaizhizao.equipment.statusFault') },
       维修中: { text: t('app.kuaizhizao.equipment.statusRepairing') },
       停用: { text: t('app.kuaizhizao.equipment.statusDisabled') },
+      校验中: { text: t('app.kuaizhizao.equipment.statusCalibrating') },
       报废: { text: t('app.kuaizhizao.equipment.statusScrapped') },
     }),
     [t],

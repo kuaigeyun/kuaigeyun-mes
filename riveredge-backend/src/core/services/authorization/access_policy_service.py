@@ -2,6 +2,7 @@ from core.models.access_policy import AccessPolicy
 from core.models.policy_binding import PolicyBinding
 from core.services.authorization.permission_version_service import PermissionVersionService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class AccessPolicyService:
@@ -49,7 +50,7 @@ class AccessPolicyService:
             raise NotFoundError("策略", policy_uuid)
         from datetime import datetime
 
-        policy.deleted_at = datetime.now()
+        policy.deleted_at = resolve_business_datetime()
         await policy.save()
         await PolicyBinding.filter(policy_id=policy.id).delete()
         await PermissionVersionService.bump(tenant_id=tenant_id, user_id=None)

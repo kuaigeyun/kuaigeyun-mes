@@ -20,6 +20,7 @@ from apps.kuaizhizao.schemas.document_node_timing import (
 )
 from apps.common.base_service import AppBaseService
 from core.services.system.working_hours_config_service import WorkingHoursConfigService
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class DocumentTimingService(AppBaseService[DocumentNodeTiming]):
@@ -81,7 +82,7 @@ class DocumentTimingService(AppBaseService[DocumentNodeTiming]):
             document_code=document_code,
             node_name=node_name,
             node_code=node_code,
-            start_time=datetime.now(),
+            start_time=resolve_business_datetime(),
             operator_id=operator_id,
             operator_name=operator_name,
         )
@@ -125,7 +126,7 @@ class DocumentTimingService(AppBaseService[DocumentNodeTiming]):
             raise ValueError(f"未找到节点 {node_code} 的开始记录")
 
         # 更新结束时间
-        end_time = datetime.now()
+        end_time = resolve_business_datetime()
         timing.end_time = end_time
 
         # 计算耗时

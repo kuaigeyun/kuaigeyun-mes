@@ -5,11 +5,12 @@ type FieldRankMap = Record<string, number>
 export const DEFAULT_UNRANKED_FIELD_RANK = 91.5
 
 function normalizeFieldKey(dataIndex: unknown, fallbackKey?: unknown): string {
+  // 显式 key 优先：多字段 dataIndex 数组时仍按业务意图排序（如来源单号）。
+  if (typeof fallbackKey === 'string' && fallbackKey.trim()) return fallbackKey.trim()
   if (typeof dataIndex === 'string' && dataIndex.trim()) return dataIndex.trim()
   if (Array.isArray(dataIndex) && dataIndex.length > 0) {
     return String(dataIndex[dataIndex.length - 1] ?? '').trim()
   }
-  if (typeof fallbackKey === 'string' && fallbackKey.trim()) return fallbackKey.trim()
   return ''
 }
 

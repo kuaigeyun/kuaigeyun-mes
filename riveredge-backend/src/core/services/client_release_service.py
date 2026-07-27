@@ -15,7 +15,7 @@ from packaging.version import InvalidVersion, Version
 from core.config.client_product_registry import DEFAULT_CLIENT_PRODUCTS
 from core.models.client_product import CoreClientProduct
 from core.models.client_release import CoreClientRelease
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import now_utc, to_api_isoformat
 from infra.config.infra_config import infra_settings
 from infra.domain.timezone_utils import now
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -621,7 +621,7 @@ def build_expo_updates_manifest(row: CoreClientRelease, origin: str) -> dict[str
     created_at = (
         row.published_at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
         if row.published_at
-        else datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        else now_utc().strftime("%Y-%m-%dT%H:%M:%S.000Z")
     )
 
     file_metadata = meta.get("fileMetadata") or {}

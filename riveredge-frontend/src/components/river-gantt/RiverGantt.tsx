@@ -23,6 +23,7 @@ import type {
   RiverGanttScale,
   RiverGanttTask,
   RiverMoveTaskEvent,
+  RiverDoubleClickTaskEvent,
   RiverSelectTaskEvent,
   RiverTaskTemplate,
   RiverUpdateTaskEvent,
@@ -131,9 +132,22 @@ export interface RiverGanttProps {
   todayMarker?: boolean;
   /** 冻结带：从时间轴起点至该日期 */
   freezeUntil?: Date | null;
+  /** 非工作时间底纹（夜间/休息/节假日） */
+  timeBands?: Array<{ start: Date; end: Date; className?: string; title?: string }>;
+  /** 资源行级底纹（如工位停机），resourceId 对应任务 id */
+  resourceTimeBands?: Array<{
+    resourceId: number | string;
+    start: Date;
+    end: Date;
+    className?: string;
+    title?: string;
+  }>;
   nonDraggableTaskIds?: Array<number | string>;
+  /** 当前主选中任务（同组高亮中再区分） */
+  primarySelectedId?: number | string | null;
   onUpdateTask?: (ev: RiverUpdateTaskEvent) => void;
   onSelectTask?: (ev: RiverSelectTaskEvent) => void;
+  onDoubleClickTask?: (ev: RiverDoubleClickTaskEvent) => void;
   onBlockedDragAttempt?: (id: number | string) => void;
   init?: (api: RiverGanttApi) => void;
 }
@@ -155,21 +169,35 @@ const RiverGantt: React.FC<RiverGanttProps> = ({
   taskTemplate,
   todayMarker = false,
   freezeUntil = null,
+  timeBands = [],
+  resourceTimeBands = [],
   nonDraggableTaskIds = [],
+  primarySelectedId = null,
   onUpdateTask,
   onSelectTask,
+  onDoubleClickTask,
   onBlockedDragAttempt,
   init,
 }) => {
   const minUnit = useMemo(() => getMinUnit(scales), [scales]);
   const unitMs = useMemo(() => getUnitMs(minUnit), [minUnit]);
 
-  const [cellWidth, setCellWidth] = useState<number>(
-    () => cellWidthProp ?? DEFAULT_CELL_WIDTH[minUnit] ?? 40
-  );
-  useEffect(() => {
-    setCellWidth(cellWidthProp ?? DEFAULT_CELL_WIDTH[minUnit] ?? 40);
-  }, [minUnit, cellWidthProp]);
+  // 基准列宽随 scales / cellWidthProp 同步（首帧即正确，避免切视图后几何滞后）
+  const baseCellWidth = cellWidthProp ?? DEFAULT_CELL_WIDTH[minUnit] ?? 40;
+  const baseKey = `${minUnit}:${baseCellWidth}`;
+  const [zoomOverride, setZoomOverride] = useState<number | null>(null);
+  const [activeBaseKey, setActiveBaseKey] = useState(baseKey);
+  if (activeBaseKey !== baseKey) {
+    setActiveBaseKey(baseKey);
+    setZoomOverride(null);
+  }
+  const cellWidth = zoomOverride ?? baseCellWidth;
+  const setCellWidth = useCallback((updater: number | ((prev: number) => number)) => {
+    setZoomOverride((prev) => {
+      const current = prev ?? baseCellWidth;
+      return typeof updater === 'function' ? updater(current) : updater;
+    });
+  }, [baseCellWidth]);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [dropTargetRowId, setDropTargetRowId] = useState<number | string | null>(null);
@@ -213,6 +241,9 @@ const RiverGantt: React.FC<RiverGanttProps> = ({
   onUpdateTaskRef.current = onUpdateTask;
   const onSelectTaskRef = useRef<RiverGanttProps['onSelectTask']>(onSelectTask);
   onSelectTaskRef.current = onSelectTask;
+  const onDoubleClickTaskRef = useRef<RiverGanttProps['onDoubleClickTask']>(onDoubleClickTask);
+  onDoubleClickTaskRef.current = onDoubleClickTask;
+  const lastClickRef = useRef<{ id: string; at: number } | null>(null);
   const onBlockedDragAttemptRef = useRef<RiverGanttProps['onBlockedDragAttempt']>(onBlockedDragAttempt);
   onBlockedDragAttemptRef.current = onBlockedDragAttempt;
 
@@ -235,6 +266,8 @@ const RiverGantt: React.FC<RiverGanttProps> = ({
   );
 
   const selectedSet = useMemo(() => new Set(selected.map((id) => String(id))), [selected]);
+  const primarySelectedKey =
+    primarySelectedId != null && primarySelectedId !== '' ? String(primarySelectedId) : null;
 
   // 解析任务（叠加 committed override 与实时 drag）
   const resolvedTasks = useMemo(
@@ -399,9 +432,19 @@ const RiverGantt: React.FC<RiverGanttProps> = ({
     if (!d) return;
 
     if (!d.moved) {
-      // 点击 → 选中
+      // 点击 → 选中；短间隔二次点击同一节点 → 双击（不二次 toggle）
       let id: number | string = d.rowId;
       if (d.segmentIndex != null && d.operationId != null) id = `op-${d.operationId}`;
+      const idKey = String(id);
+      const now = Date.now();
+      const prev = lastClickRef.current;
+      if (prev && prev.id === idKey && now - prev.at < 350) {
+        lastClickRef.current = null;
+        onDoubleClickTaskRef.current?.({ id, segmentIndex: d.segmentIndex });
+        force();
+        return;
+      }
+      lastClickRef.current = { id: idKey, at: now };
       onSelectTaskRef.current?.({ id, segmentIndex: d.segmentIndex, toggle: true });
       force();
       return;
@@ -685,6 +728,20 @@ const RiverGantt: React.FC<RiverGanttProps> = ({
             className="river-gantt__content"
             style={{ width: geometry.totalWidth, height: contentHeight }}
           >
+            {timeBands.map((band, idx) => {
+              const left = dateToX(geometry, band.start);
+              const right = dateToX(geometry, band.end);
+              const width = Math.max(0, right - left);
+              if (width <= 0) return null;
+              return (
+                <div
+                  key={`tb-${idx}-${band.start.getTime()}`}
+                  className={band.className || 'gantt-nonwork-band'}
+                  style={{ left, width }}
+                  title={band.title || undefined}
+                />
+              );
+            })}
             {freezeWidth > 0 ? (
               <div className="gantt-freeze-band" style={{ width: freezeWidth }} title="冻结窗" />
             ) : null}
@@ -702,6 +759,22 @@ const RiverGantt: React.FC<RiverGanttProps> = ({
                 }`}
                 style={{ top: rowIndex * cellHeight, height: cellHeight }}
               >
+                {resourceTimeBands
+                  .filter((band) => String(band.resourceId) === String(row.task.id))
+                  .map((band, idx) => {
+                    const left = dateToX(geometry, band.start);
+                    const right = dateToX(geometry, band.end);
+                    const width = Math.max(0, right - left);
+                    if (width <= 0) return null;
+                    return (
+                      <div
+                        key={`rtb-${String(row.task.id)}-${idx}-${band.start.getTime()}`}
+                        className={band.className || 'gantt-station-downtime-band'}
+                        style={{ left, width, height: '100%', position: 'absolute', top: 0 }}
+                        title={band.title || undefined}
+                      />
+                    );
+                  })}
                 <GanttBar
                   geometry={geometry}
                   task={row.task}
@@ -710,6 +783,7 @@ const RiverGantt: React.FC<RiverGanttProps> = ({
                   readonly={readonly}
                   taskTemplate={taskTemplate}
                   selectedSet={selectedSet}
+                  primarySelectedId={primarySelectedKey}
                   onBarPointerDown={handleBarPointerDown}
                 />
               </div>

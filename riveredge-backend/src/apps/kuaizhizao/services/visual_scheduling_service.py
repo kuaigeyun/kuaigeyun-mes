@@ -25,10 +25,11 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 
 from apps.kuaizhizao.schemas.scheduling_constraints import SchedulingConstraints
+from apps.kuaizhizao.utils.working_time import is_within_working_hours, load_scheduling_work_context
 
 from apps.kuaizhizao.services.scheduling_config_service import SchedulingConfigService
 
-from core.utils.timezone_utils import make_aware
+from core.utils.timezone_utils import make_aware, resolve_business_datetime
 
 from infra.config.infra_config import infra_settings
 
@@ -241,7 +242,10 @@ class VisualSchedulingService(BaseService):
 
         constraints = await self._load_constraints(tenant_id)
 
-        daily_capacity = float(constraints.get("daily_capacity_hours", 24.0))
+        holidays_cap, work_hours_cap, _ot_cap = await load_scheduling_work_context(
+            tenant_id, around=plan_date
+        )
+        daily_capacity = max(1.0, work_hours_cap.daily_net_hours())
 
         horizon_days = max(1, min(horizon_days, 90))
 
@@ -533,6 +537,17 @@ class VisualSchedulingService(BaseService):
 
         freeze_days = int(constraints.get("freeze_horizon_days", 0))
 
+        holiday_dates: list = []
+        for item in (operation_updates or []):
+            for key in ("planned_start_date", "planned_end_date"):
+                dt = _parse_dt(item.get(key))
+                if dt:
+                    holiday_dates.append(dt.date())
+        around = min(holiday_dates) if holiday_dates else None
+        holidays, work_hours, overtime = await load_scheduling_work_context(
+            tenant_id, around=around
+        )
+
         conflicts: List[Dict[str, Any]] = []
 
 
@@ -586,6 +601,38 @@ class VisualSchedulingService(BaseService):
             if not start_dt or not end_dt:
 
                 continue
+
+            if not is_within_working_hours(
+                start_dt, holidays=holidays, config=work_hours, overtime=overtime
+            ):
+                conflicts.append(
+                    _conflict_item(
+                        "outside_working_hours",
+                        f"工序开工时间不在工作时段内（{work_hours.start.strftime('%H:%M')}-{work_hours.end.strftime('%H:%M')}，或加班窗口；且须为工作日/加班日）",
+                        work_order_id=int(op.work_order_id) if op.work_order_id else None,
+                        work_order_code=wo.code if wo else None,
+                        operation_id=op_id,
+                    )
+                )
+
+
+            changeover_hours = float(constraints.get("setup_changeover_hours") or 0.0)
+            material_hard = bool(constraints.get("material_hard_constraint"))
+            if material_hard and wo is not None:
+                try:
+                    rate = float(wo.readiness_rate) if wo.readiness_rate is not None else 100.0
+                except (TypeError, ValueError):
+                    rate = 100.0
+                if rate < 100.0:
+                    conflicts.append(
+                        _conflict_item(
+                            "material_not_ready",
+                            f"物料未齐套（{rate:.0f}%），硬约束禁止排产",
+                            work_order_id=int(op.work_order_id) if op.work_order_id else None,
+                            work_order_code=wo.code if wo else None,
+                            operation_id=op_id,
+                        )
+                    )
 
             seq_conflicts = await self._check_operation_sequence(
 
@@ -661,6 +708,13 @@ class VisualSchedulingService(BaseService):
 
 
 
+        if op_updates and float(constraints.get("setup_changeover_hours") or 0) > 0:
+            conflicts.extend(
+                await self._check_changeover_for_updates(
+                    tenant_id, op_updates, constraints, holidays, work_hours, overtime
+                )
+            )
+
         return {
 
             "valid": len(conflicts) == 0,
@@ -671,6 +725,127 @@ class VisualSchedulingService(BaseService):
 
         }
 
+
+
+    async def _check_changeover_for_updates(
+        self,
+        tenant_id: int,
+        op_updates: List[Dict[str, Any]],
+        constraints: Dict[str, Any],
+        holidays,
+        work_hours,
+        overtime,
+    ) -> List[Dict[str, Any]]:
+        from apps.kuaizhizao.utils.working_time import add_working_hours
+
+        changeover_hours = float(constraints.get("setup_changeover_hours") or 0.0)
+        if changeover_hours <= 0:
+            return []
+        update_by_id = {
+            int(u["operation_id"]): u
+            for u in op_updates
+            if int(u.get("operation_id") or 0) > 0
+        }
+        op_ids = list(update_by_id.keys())
+        ops = await WorkOrderOperation.filter(
+            tenant_id=tenant_id, id__in=op_ids, deleted_at__isnull=True
+        ).all()
+        wo_ids = list({int(o.work_order_id) for o in ops if o.work_order_id})
+        product_by_wo = {}
+        if wo_ids:
+            for row in await WorkOrder.filter(tenant_id=tenant_id, id__in=wo_ids).values(
+                "id", "product_id", "code"
+            ):
+                product_by_wo[int(row["id"])] = (
+                    int(row.get("product_id") or 0),
+                    row.get("code"),
+                )
+        # Build proposed intervals by station
+        by_station: Dict[int, List[Dict[str, Any]]] = {}
+        for op in ops:
+            patch = update_by_id.get(op.id) or {}
+            start_dt = _parse_dt(patch.get("planned_start_date"))
+            end_dt = _parse_dt(patch.get("planned_end_date"))
+            if not start_dt or not end_dt:
+                continue
+            sid = int(op.assigned_station_id or 0)
+            if sid <= 0:
+                continue
+            pid, code = product_by_wo.get(int(op.work_order_id or 0), (0, None))
+            by_station.setdefault(sid, []).append(
+                {
+                    "op_id": int(op.id),
+                    "wo_id": int(op.work_order_id or 0),
+                    "wo_code": code,
+                    "product_id": pid,
+                    "start": start_dt,
+                    "end": end_dt,
+                }
+            )
+        # Also load neighboring fixed ops on same stations
+        station_ids = list(by_station.keys())
+        if station_ids:
+            others = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                assigned_station_id__in=station_ids,
+                deleted_at__isnull=True,
+                planned_start_date__isnull=False,
+                planned_end_date__isnull=False,
+            ).exclude(id__in=op_ids).all()
+            other_wo_ids = list({int(o.work_order_id) for o in others if o.work_order_id})
+            if other_wo_ids:
+                for row in await WorkOrder.filter(
+                    tenant_id=tenant_id, id__in=other_wo_ids
+                ).values("id", "product_id", "code"):
+                    product_by_wo.setdefault(
+                        int(row["id"]),
+                        (int(row.get("product_id") or 0), row.get("code")),
+                    )
+            for op in others:
+                sid = int(op.assigned_station_id or 0)
+                pid, code = product_by_wo.get(int(op.work_order_id or 0), (0, None))
+                by_station.setdefault(sid, []).append(
+                    {
+                        "op_id": int(op.id),
+                        "wo_id": int(op.work_order_id or 0),
+                        "wo_code": code,
+                        "product_id": pid,
+                        "start": op.planned_start_date,
+                        "end": op.planned_end_date,
+                    }
+                )
+        conflicts: List[Dict[str, Any]] = []
+        touched = set(op_ids)
+        for sid, items in by_station.items():
+            items.sort(key=lambda x: x["start"])
+            for i in range(len(items) - 1):
+                a, b = items[i], items[i + 1]
+                if a["product_id"] <= 0 or b["product_id"] <= 0:
+                    continue
+                if a["product_id"] == b["product_id"]:
+                    continue
+                if a["op_id"] not in touched and b["op_id"] not in touched:
+                    continue
+                ready = add_working_hours(
+                    a["end"],
+                    changeover_hours,
+                    holidays=holidays,
+                    config=work_hours,
+                    overtime=overtime,
+                )
+                if b["start"] < ready:
+                    target = b if b["op_id"] in touched else a
+                    conflicts.append(
+                        _conflict_item(
+                            "insufficient_changeover",
+                            f"同工位跨产品换型不足（需净工时 {changeover_hours:g}h）",
+                            work_order_id=target["wo_id"] or None,
+                            work_order_code=target["wo_code"],
+                            operation_id=target["op_id"],
+                            station_id=sid,
+                        )
+                    )
+        return conflicts
 
 
     async def _freeze_conflicts_for_wo(
@@ -1196,6 +1371,9 @@ class VisualSchedulingService(BaseService):
                 station_id = int(op.assigned_station_id or 0)
 
                 if station_id > 0:
+                    from apps.master_data.models.factory import Workstation
+                    ws = await Workstation.get_or_none(tenant_id=tenant_id, id=station_id, deleted_at__isnull=True)
+                    capacity = max(1, int(getattr(ws, "max_parallel", 1) or 1)) if ws else 1
 
                     conflicts.extend(
 
@@ -1218,6 +1396,8 @@ class VisualSchedulingService(BaseService):
                             end_dt=end_dt,
 
                             update_by_id=update_by_id,
+
+                            max_parallel=capacity,
 
                         )
 
@@ -1326,115 +1506,59 @@ class VisualSchedulingService(BaseService):
 
 
     async def _overlap_conflicts_for_resource(
-
         self,
-
         *,
-
         tenant_id: int,
-
         op: WorkOrderOperation,
-
         resource_field: str,
-
         resource_id: int,
-
         resource_label: str,
-
         conflict_type: str,
-
         start_dt: datetime,
-
         end_dt: datetime,
-
         update_by_id: Dict[int, Dict[str, Any]],
-
+        max_parallel: int = 1,
     ) -> List[Dict[str, Any]]:
-
         conflicts: List[Dict[str, Any]] = []
-
         station_id = int(op.assigned_station_id or 0) if resource_field == "assigned_station_id" else None
-
+        capacity = max(1, int(max_parallel or 1))
         others = await WorkOrderOperation.filter(
-
             tenant_id=tenant_id,
-
             **{resource_field: resource_id},
-
             deleted_at__isnull=True,
-
             planned_start_date__isnull=False,
-
             planned_end_date__isnull=False,
-
         ).exclude(id=op.id).all()
-
+        overlapping = []
         for other in others:
-
             if other.id in update_by_id:
-
                 o_patch = update_by_id[other.id]
-
                 o_start_dt = _parse_dt(o_patch.get("planned_start_date"))
-
                 o_end_dt = _parse_dt(o_patch.get("planned_end_date"))
-
                 if o_start_dt and o_end_dt and _intervals_overlap(start_dt, end_dt, o_start_dt, o_end_dt):
-
-                    conflicts.append(
-
-                        _conflict_item(
-
-                            conflict_type=conflict_type,
-
-                            work_order_id=int(op.work_order_id),
-
-                            work_order_code=op.work_order_code or str(op.work_order_id),
-
-                            operation_id=int(op.id),
-
-                            station_id=station_id,
-
-                            resource_id=resource_id,
-
-                            message=f"与工单 {other.work_order_code or other.work_order_id} 在{resource_label} 时间重叠",
-
-                        )
-
-                    )
-
+                    overlapping.append(other)
             elif other.planned_start_date and other.planned_end_date:
-
                 if _intervals_overlap(start_dt, end_dt, other.planned_start_date, other.planned_end_date):
-
-                    conflicts.append(
-
-                        _conflict_item(
-
-                            conflict_type=conflict_type,
-
-                            work_order_id=int(op.work_order_id),
-
-                            work_order_code=op.work_order_code or str(op.work_order_id),
-
-                            operation_id=int(op.id),
-
-                            station_id=station_id,
-
-                            resource_id=resource_id,
-
-                            message=f"与工单 {other.work_order_code or other.work_order_id} 在{resource_label} 时间重叠",
-
-                        )
-
-                    )
-
+                    overlapping.append(other)
+        if len(overlapping) < capacity:
+            return conflicts
+        # 超出并行度时提示与最早重叠工序冲突
+        for other in overlapping[: max(1, len(overlapping) - capacity + 1)]:
+            conflicts.append(
+                _conflict_item(
+                    conflict_type=conflict_type,
+                    work_order_id=int(op.work_order_id),
+                    work_order_code=op.work_order_code or str(op.work_order_id),
+                    operation_id=int(op.id),
+                    station_id=station_id,
+                    resource_id=resource_id,
+                    message=f"与工单 {other.work_order_code or other.work_order_id} 在{resource_label} 时间重叠（并行度 {capacity}）",
+                )
+            )
         return conflicts
 
 
-
     @staticmethod
-
     def _aggregate_load_by_work_center(
 
         ops: List[WorkOrderOperation],
@@ -1447,7 +1571,7 @@ class VisualSchedulingService(BaseService):
 
     ) -> List[Dict[str, Any]]:
 
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = resolve_business_datetime().replace(hour=0, minute=0, second=0, microsecond=0)
 
         wc_names: Dict[int, str] = {}
 
@@ -1549,7 +1673,7 @@ class VisualSchedulingService(BaseService):
 
     ) -> List[Dict[str, Any]]:
 
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = resolve_business_datetime().replace(hour=0, minute=0, second=0, microsecond=0)
 
         station_names: Dict[int, str] = {}
 

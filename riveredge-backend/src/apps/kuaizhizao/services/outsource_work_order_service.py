@@ -52,6 +52,7 @@ from apps.kuaizhizao.utils.outsource_operation_helper import (
     display_outsource_operation,
     normalize_outsource_operation_value,
 )
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 from apps.kuaizhizao.utils.outsource_work_order_state import (
     apply_outsource_work_order_execution_start,
     apply_outsource_work_order_receipt_completion,
@@ -150,7 +151,7 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
             code = work_order_data.code
             if not code:
                 # 自动生成编码（使用简单格式：OWO-日期-序号）
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 # 查找当天最大的序号
                 existing_codes = await OutsourceWorkOrder.filter(
                     tenant_id=tenant_id,
@@ -478,7 +479,7 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
                 raise ValidationError("委外数量已全部收货，无需强制结案")
 
             user_info = await self.get_user_info(closed_by)
-            now = datetime.now()
+            now = resolve_business_datetime()
             if status == "released":
                 apply_outsource_work_order_execution_start(outsource_work_order, now=now)
             outsource_work_order.status = "completed"
@@ -655,7 +656,7 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
 
         # 软删除
         from datetime import datetime
-        work_order.deleted_at = datetime.now()
+        work_order.deleted_at = resolve_business_datetime()
         await work_order.save()
 
         logger.info(f"删除委外工单成功: {work_order.code}")

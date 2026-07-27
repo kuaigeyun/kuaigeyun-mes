@@ -24,7 +24,7 @@ from apps.kuaizhizao.schemas.document_relation import (
     DocumentTraceReportingEntry,
 )
 from apps.common.audit_actor import audit_response_fields
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
@@ -67,8 +67,8 @@ def _derived_to_response(
         try:
             created = datetime.fromisoformat(created.replace("Z", "+00:00"))
         except Exception:
-            created = datetime.now()
-    created = created or datetime.now()
+            created = resolve_business_datetime()
+    created = created or resolve_business_datetime()
 
     if is_upstream:
         source_type, source_id = doc_type, doc_id

@@ -11,6 +11,7 @@ from tortoise.exceptions import IntegrityError
 from core.models.language import Language
 from core.schemas.language import LanguageCreate, LanguageUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class LanguageService:
@@ -264,7 +265,7 @@ class LanguageService:
         
         # 软删除
         from datetime import datetime
-        language.deleted_at = datetime.now()
+        language.deleted_at = resolve_business_datetime()
         await language.save()
     
     @staticmethod

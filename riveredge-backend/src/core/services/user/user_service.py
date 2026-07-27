@@ -23,6 +23,7 @@ from core.services.authorization.permission_version_service import PermissionVer
 from core.services.user.user_import_reference_service import UserImportReferenceService
 from infra.services.tenant_service import TenantService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
+from core.utils.timezone_utils import resolve_business_datetime
 
 # 向后兼容别名
 PermissionDeniedError = AuthorizationError
@@ -596,7 +597,7 @@ class UserService:
             raise ValidationError("不能删除当前登录用户")
         
         # 软删除
-        user.deleted_at = datetime.now()
+        user.deleted_at = resolve_business_datetime()
         await user.save()
         
         # 清除在线用户信息（异步，不阻塞主流程）
@@ -1053,7 +1054,7 @@ class UserService:
         file_dir = os.path.join(tempfile.gettempdir(), 'riveredge_exports')
         os.makedirs(file_dir, exist_ok=True)
         
-        filename = f"users_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        filename = f"users_{resolve_business_datetime().strftime('%Y%m%d_%H%M%S')}.csv"
         file_path = os.path.join(file_dir, filename)
         
         # 写入 CSV 文件

@@ -24,7 +24,7 @@ from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaicaiwu.models.receipt import Receipt
 from apps.master_data.models.customer import Customer
 from apps.master_data.models.supplier import Supplier
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import to_api_isoformat, today_site_str
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.tenant import Tenant
 from infra.models.user import User
@@ -281,7 +281,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         }
 
     async def _generate_statement_code(self, tenant_id: int) -> str:
-        today = datetime.now().strftime("%Y%m%d")
+        today = today_site_str()
         return await self.generate_code(tenant_id, "PARTNER_STATEMENT_CODE", prefix=f"DZ{today}")
 
     async def create_statement(

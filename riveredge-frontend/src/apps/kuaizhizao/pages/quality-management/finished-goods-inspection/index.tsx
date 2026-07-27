@@ -39,7 +39,7 @@ import {
 } from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniPullQueryModal,
@@ -311,7 +311,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     [t, finishedAuditEnabled],
   );
   const finishedAuditBatchHandlers = useMemo(
-    () => createUniAuditBatchHandlers('finished_goods_inspection', ['approve']),
+    () => createUniAuditBatchHandlers('finished_goods_inspection'),
     [],
   );
   const inspectionDocStatusValueEnum = useMemo(
@@ -837,25 +837,28 @@ const FinishedGoodsInspectionPage: React.FC = () => {
 
   const inspectionCustomFieldColumns = generateInspectionCustomFieldColumns();
 
+  const handleDeleteRow = useCallback(
+    (record: FinishedGoodsInspection) => {
+      if (record.id == null) return;
+      Modal.confirm({
+        title: t('app.kuaizhizao.quality.finished.messages.deleteConfirm', { count: 1 }),
+        onOk: async () => {
+          await qualityApi.finishedGoodsInspection.delete(String(record.id));
+          messageApi.success(t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: 1 }));
+          if (inspectionDetail?.id === record.id) {
+            setDetailDrawerVisible(false);
+            setInspectionDetail(null);
+          }
+          invalidateStats();
+          actionRef.current?.reload();
+        },
+      });
+    },
+    [inspectionDetail?.id, messageApi, t],
+  );
+
   const renderFinishedRowNodes = (record: FinishedGoodsInspection): React.ReactNode[] => {
     const gates = qualityInspectionRowGates(record, finishedPerms, ncPerms, t);
-    if (gates.conduct.allowed) {
-      return [
-        <Button {...rowActionKind('execute')}
-          key="inspect"
-          size="small"
-          type="primary"
-          disabled={gates.conduct.disabled}
-          title={gates.conduct.title}
-          onClick={(e) => {
-            e.stopPropagation();
-            void handleInspect(record);
-          }}
-        >
-          {t('app.kuaizhizao.quality.common.actions.inspect')}
-        </Button>,
-      ];
-    }
     const nodes: React.ReactNode[] = [
       <Button {...rowActionKind('read')}
         key="detail"
@@ -870,6 +873,23 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         {t('app.kuaizhizao.quality.common.actions.detail')}
       </Button>,
     ];
+    if (gates.conduct.allowed) {
+      nodes.push(
+        <Button {...rowActionKind('execute')}
+          key="inspect"
+          size="small"
+          type="primary"
+          disabled={gates.conduct.disabled}
+          title={gates.conduct.title}
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleInspect(record);
+          }}
+        >
+          {t('app.kuaizhizao.quality.common.actions.inspect')}
+        </Button>,
+      );
+    }
     nodes.push(
       <UniWorkflowActions
         {...rowActionKind('skip')}
@@ -913,6 +933,26 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         >
           {t('app.kuaizhizao.quality.common.actions.createDefect')}
         </Button>
+      );
+    }
+    if (gates.delete.allowed) {
+      nodes.push(
+        <Button
+          {...rowActionKind('delete')}
+          key="delete"
+          size="small"
+          type="link"
+          danger
+          icon={<DeleteOutlined />}
+          disabled={gates.delete.disabled}
+          title={gates.delete.title}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDeleteRow(record);
+          }}
+        >
+          {t('common.delete')}
+        </Button>,
       );
     }
     return nodes;
@@ -1173,10 +1213,6 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         enableRowSelection={true}
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        onRow={(record) => ({
-          onClick: () => void handleDetail(record),
-          style: { cursor: 'pointer' },
-        })}
         showImportButton={true}
         onImport={handleImport}
         importHeaders={finishedInspectionImportTemplate.importHeaders}
@@ -1240,7 +1276,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
             notes: '',
           } : {}
         }
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         formRef={formRef}
       >
         {currentInspection && (

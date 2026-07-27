@@ -33,6 +33,7 @@ import { workshopApi, workGroupApi, factoryListItems } from '../services/factory
 import { equipmentApi } from '../../kuaizhizao/services/equipment';
 import { searchUserDisplay } from '../../../services/user';
 import { operationApi, unwrapProcessPagedList } from '../services/process';
+import { supplierApi, unwrapSupplyPagedList } from '../services/supply-chain';
 import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
 import {
   lineToPersonnelConfigs,
@@ -183,6 +184,7 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
   const [rawUsers, setRawUsers] = useState<UserDisplayItem[]>([]);
   const [rawTeams, setRawTeams] = useState<TeamItem[]>([]);
   const [equipmentOptions, setEquipmentOptions] = useState<{ label: string; value: number }[]>([]);
+  const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
   const [operationOptions, setOperationOptions] = useState<{ label: string; value: string }[]>([]);
   const [operationByUuid, setOperationByUuid] = useState<Record<string, Operation>>({});
   const [userIdToUuid, setUserIdToUuid] = useState<Map<number, string>>(new Map());
@@ -200,12 +202,13 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
   useEffect(() => {
     void (async () => {
       try {
-        const [workshopsRes, usersRes, teamsRes, equipmentRes, opsRes] = await Promise.all([
+        const [workshopsRes, usersRes, teamsRes, equipmentRes, opsRes, suppliersRes] = await Promise.all([
           workshopApi.list({ limit: 500, is_active: true }),
           searchUserDisplay({ page: 1, page_size: 200 }),
           workGroupApi.list({ limit: 500, is_active: true }),
           equipmentApi.list({ is_active: true, limit: 500 }),
           operationApi.list({ limit: 1000, is_active: true }),
+          supplierApi.list({ limit: 1000, isActive: true }),
         ]);
         setWorkshopOptions(
           factoryListItems(workshopsRes as Parameters<typeof factoryListItems>[0]).map((w) => ({
@@ -246,11 +249,21 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
             value: o.uuid,
           })),
         );
+        const suppliers = unwrapSupplyPagedList(suppliersRes);
+        setSupplierOptions(
+          suppliers
+            .map((s: { id?: number; code?: string; name?: string }) => ({
+              value: Number(s.id),
+              label: s.code ? `${s.code} ${s.name ?? ''}` : String(s.name ?? s.id),
+            }))
+            .filter((o) => Number.isFinite(o.value) && o.value > 0),
+        );
       } catch {
         setWorkshopOptions([]);
         setRawUsers([]);
         setRawTeams([]);
         setEquipmentOptions([]);
+        setSupplierOptions([]);
         setOperationOptions([]);
         setOperationByUuid({});
       }
@@ -590,6 +603,67 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
           ]
         : []),
       {
+        title: t('app.master-data.operationSequence.plannedOutsource'),
+        width: 88,
+        align: 'center' as const,
+        render: (_: unknown, row: ProductProcessLine, index: number) => (
+          <Switch
+            size="small"
+            disabled={disabled}
+            checked={Boolean(row.isOutsourced)}
+            onChange={(v) =>
+              patchLine(index, {
+                isOutsourced: v,
+                outsourceLeadTimeDays: v ? row.outsourceLeadTimeDays ?? 1 : undefined,
+                outsourceSupplierId: v ? row.outsourceSupplierId : undefined,
+                outsourceSupplierName: v ? row.outsourceSupplierName : undefined,
+              })
+            }
+          />
+        ),
+      },
+      {
+        title: t('app.master-data.operationSequence.outsourceLeadDays'),
+        width: 96,
+        render: (_: unknown, row: ProductProcessLine, index: number) => (
+          <InputNumber
+            size="small"
+            min={0}
+            precision={0}
+            style={{ width: '100%' }}
+            disabled={disabled || !row.isOutsourced}
+            value={row.isOutsourced ? row.outsourceLeadTimeDays ?? 1 : undefined}
+            onChange={(v) => patchLine(index, { outsourceLeadTimeDays: v == null ? 1 : Number(v) })}
+          />
+        ),
+      },
+      {
+        title: t('app.master-data.operationSequence.outsourceSupplier'),
+        width: 168,
+        render: (_: unknown, row: ProductProcessLine, index: number) => (
+          <Select
+            size="small"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            style={{ width: '100%' }}
+            disabled={disabled || !row.isOutsourced}
+            options={supplierOptions}
+            value={row.outsourceSupplierId}
+            placeholder={t('app.master-data.operationSequence.selectOutsourceSupplier')}
+            onChange={(v, opt) => {
+              const label = Array.isArray(opt)
+                ? undefined
+                : (opt as { label?: string } | undefined)?.label;
+              patchLine(index, {
+                outsourceSupplierId: v == null ? undefined : Number(v),
+                outsourceSupplierName: v == null ? undefined : String(label || ''),
+              });
+            }}
+          />
+        ),
+      },
+      {
         title: t('field.operation.overReportMode'),
         key: 'overReport',
         width: 196,
@@ -658,6 +732,7 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
     workshopOptions,
     personnelOptions,
     equipmentOptions,
+    supplierOptions,
     userIdToUuid,
     userUuidToId,
     lines,

@@ -15,6 +15,7 @@ from core.models.integration_config import IntegrationConfig
 from core.schemas.integration_config import IntegrationConfigCreate, IntegrationConfigUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.http import get_http_client
+from core.utils.timezone_utils import resolve_business_datetime
 
 # 系统默认数据源代码（密码从 ENV 读取，不可编辑）
 SYSTEM_DEFAULT_CODE = "system_default"
@@ -322,7 +323,7 @@ class IntegrationConfigService:
         
         # 软删除
         from datetime import datetime
-        integration.deleted_at = datetime.now()
+        integration.deleted_at = resolve_business_datetime()
         await integration.save()
     
     @staticmethod

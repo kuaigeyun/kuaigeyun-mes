@@ -25,6 +25,7 @@ from apps.kuaizhizao.schemas.assembly_template import (
     AssemblyTemplateBomPreviewResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
 class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
@@ -94,7 +95,7 @@ class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
         template_id: int,
         items: List[AssemblyTemplateItemCreate],
     ) -> None:
-        now = datetime.now()
+        now = resolve_business_datetime()
         await AssemblyTemplateItem.filter(
             tenant_id=tenant_id,
             template_id=template_id,
@@ -165,7 +166,7 @@ class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
                 if existing:
                     raise ValidationError(f"模板编码 '{template_code}' 已存在")
             else:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 template_code = await self.generate_code(
                     tenant_id=tenant_id,
                     code_type="ASSEMBLY_TEMPLATE_CODE",
@@ -272,7 +273,7 @@ class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
         )
         if not template:
             raise NotFoundError(f"组装模板不存在: {template_id}")
-        now = datetime.now()
+        now = resolve_business_datetime()
         await AssemblyTemplate.filter(id=template_id, tenant_id=tenant_id).update(deleted_at=now)
         await AssemblyTemplateItem.filter(
             tenant_id=tenant_id, template_id=template_id, deleted_at__isnull=True
@@ -415,7 +416,7 @@ class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
         )
         if not item:
             raise NotFoundError(f"模板明细不存在: {item_id}")
-        item.deleted_at = datetime.now()
+        item.deleted_at = resolve_business_datetime()
         await item.save(update_fields=["deleted_at"])
 
         template = await AssemblyTemplate.get(id=template_id, tenant_id=tenant_id)

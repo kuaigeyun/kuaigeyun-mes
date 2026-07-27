@@ -16,6 +16,7 @@ from apps.kuaicaiwu.models.voucher import Voucher
 from apps.kuaicaiwu.models.voucher_line import VoucherLine
 from apps.kuaicaiwu.services.voucher_template_service import VoucherTemplateService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 
 
 class PostingService:
@@ -44,13 +45,13 @@ class PostingService:
         if not draft_lines:
             raise ValidationError(f"事件 {event.event_code} 无法生成凭证分录（请维护科目表）")
 
-        voucher_date = event.event_date or datetime.now().date()
+        voucher_date = event.event_date or to_site_date(resolve_business_datetime())
         total_debit = sum(Decimal(str(l["debit_amount"])) for l in draft_lines)
         total_credit = sum(Decimal(str(l["credit_amount"])) for l in draft_lines)
         if total_debit != total_credit:
             raise ValidationError("凭证借贷不平衡")
 
-        today = datetime.now().strftime("%Y%m%d")
+        today = today_site_str()
         voucher_code = f"PZ{today}{uuid.uuid4().hex[:6].upper()}"
 
         async with in_transaction():
@@ -101,7 +102,7 @@ class PostingService:
         )
 
         voucher.status = "posted"
-        voucher.posted_at = datetime.now()
+        voucher.posted_at = resolve_business_datetime()
         voucher.posted_by = posted_by
         await voucher.save()
         return voucher

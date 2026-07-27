@@ -186,6 +186,19 @@ export function buildLineFromRowAndOperation(
     isNodeOperation: Boolean(row.is_node_operation ?? row.isNodeOperation ?? false),
     overReportMode: String(row.over_report_mode ?? row.overReportMode ?? 'none'),
     overReportValue: Number(row.over_report_value ?? row.overReportValue ?? 0) || 0,
+    isOutsourced: Boolean(row.is_outsourced ?? row.isOutsourced ?? false),
+    outsourceLeadTimeDays: (() => {
+      const flagged = Boolean(row.is_outsourced ?? row.isOutsourced ?? false);
+      if (!flagged) return undefined;
+      const raw = row.outsource_lead_time_days ?? row.outsourceLeadTimeDays ?? 1;
+      return Math.max(0, Number(raw) || 1);
+    })(),
+    outsourceSupplierId: (() => {
+      const id = Number(row.outsource_supplier_id ?? row.outsourceSupplierId);
+      return Number.isFinite(id) && id > 0 ? id : undefined;
+    })(),
+    outsourceSupplierName:
+      String(row.outsource_supplier_name ?? row.outsourceSupplierName ?? '').trim() || undefined,
   };
 }
 
@@ -250,6 +263,10 @@ export function operationItemsToLines(
       isNodeOperation: item.isNodeOperation ?? false,
       overReportMode: item.overReportMode ?? 'none',
       overReportValue: item.overReportValue ?? 0,
+      isOutsourced: item.isOutsourced ?? false,
+      outsourceLeadTimeDays: item.outsourceLeadTimeDays,
+      outsourceSupplierId: item.outsourceSupplierId,
+      outsourceSupplierName: item.outsourceSupplierName,
     };
     return enrichLineFromOperation(base, op, userIdToUuid);
   });

@@ -247,7 +247,8 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "正常", "value": "正常", "description": "正常", "sort_order": 1},
             {"label": "维修中", "value": "维修中", "description": "维修中", "sort_order": 2},
             {"label": "停用", "value": "停用", "description": "停用", "sort_order": 3},
-            {"label": "报废", "value": "报废", "description": "报废", "sort_order": 4},
+            {"label": "校验中", "value": "校验中", "description": "校验中", "sort_order": 4},
+            {"label": "报废", "value": "报废", "description": "报废", "sort_order": 5},
         ],
     },
     {

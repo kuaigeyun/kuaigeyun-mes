@@ -105,74 +105,8 @@ async def list_equipment_faults(
     )
 
 
-@router.get("/{uuid}", response_model=EquipmentFaultResponse)
-async def get_equipment_fault(
-    uuid: str,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    获取设备故障记录详情
-    
-    根据UUID获取设备故障记录详情。
-    """
-    try:
-        fault = await EquipmentFaultService.get_equipment_fault_by_uuid(tenant_id, uuid)
-        return EquipmentFaultResponse.model_validate(fault)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
-@router.put("/{uuid}", response_model=EquipmentFaultResponse)
-async def update_equipment_fault(
-    uuid: str,
-    data: EquipmentFaultUpdate,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    更新设备故障记录
-    
-    更新设备故障记录信息。
-    """
-    try:
-        fault = await EquipmentFaultService.update_equipment_fault(
-            tenant_id=tenant_id,
-            uuid=uuid,
-            data=data
-        )
-        return EquipmentFaultResponse.model_validate(fault)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
-@router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_equipment_fault(
-    uuid: str,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    删除设备故障记录
-    
-    软删除设备故障记录（标记为已删除，不实际删除数据）。
-    """
-    try:
-        await EquipmentFaultService.delete_equipment_fault(tenant_id, uuid)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
 # ========== 设备维修记录相关端点 ==========
+# 须注册在 /{uuid} 之前，否则 GET /equipment-faults/repairs 会被当成故障详情 uuid=repairs
 
 @router.post("/repairs", response_model=EquipmentRepairResponse, status_code=status.HTTP_201_CREATED)
 async def create_equipment_repair(
@@ -307,6 +241,73 @@ async def delete_equipment_repair(
     """
     try:
         await EquipmentRepairService.delete_equipment_repair(tenant_id, uuid)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.get("/{uuid}", response_model=EquipmentFaultResponse)
+async def get_equipment_fault(
+    uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取设备故障记录详情
+    
+    根据UUID获取设备故障记录详情。
+    """
+    try:
+        fault = await EquipmentFaultService.get_equipment_fault_by_uuid(tenant_id, uuid)
+        return EquipmentFaultResponse.model_validate(fault)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.put("/{uuid}", response_model=EquipmentFaultResponse)
+async def update_equipment_fault(
+    uuid: str,
+    data: EquipmentFaultUpdate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    更新设备故障记录
+    
+    更新设备故障记录信息。
+    """
+    try:
+        fault = await EquipmentFaultService.update_equipment_fault(
+            tenant_id=tenant_id,
+            uuid=uuid,
+            data=data
+        )
+        return EquipmentFaultResponse.model_validate(fault)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_equipment_fault(
+    uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    删除设备故障记录
+    
+    软删除设备故障记录（标记为已删除，不实际删除数据）。
+    """
+    try:
+        await EquipmentFaultService.delete_equipment_fault(tenant_id, uuid)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

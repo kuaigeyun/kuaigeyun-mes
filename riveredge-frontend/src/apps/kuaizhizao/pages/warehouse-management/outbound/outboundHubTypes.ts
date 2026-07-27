@@ -38,6 +38,11 @@ export interface OutboundHubOrder {
   picker_name?: string;
   deliverer_name?: string;
   borrower_name?: string;
+  issued_by_name?: string;
+  picking_time?: string;
+  delivery_time?: string;
+  borrow_time?: string;
+  issued_at?: string;
   reason_type?: string;
   picking_score?: number | null;
   picking_rank_band?: string | null;
@@ -153,6 +158,30 @@ export function outboundSourceDocNo(record: OutboundHubOrder): string {
   return parts.join(' / ');
 }
 
+/** Hub 统一「出库日期」原始值 */
+export function resolveOutboundHubDateRaw(record: OutboundHubOrder): unknown {
+  return (
+    record.delivery_date ||
+    record.picking_time ||
+    record.delivery_time ||
+    record.borrow_time ||
+    record.issued_at ||
+    null
+  );
+}
+
+/** Hub 统一「操作员」 */
+export function resolveOutboundHubOperator(record: OutboundHubOrder): string {
+  const value =
+    record.delivered_by ||
+    record.picker_name ||
+    record.deliverer_name ||
+    record.borrower_name ||
+    record.issued_by_name ||
+    '';
+  return String(value).trim();
+}
+
 export function mapOutsourceIssueToOutbound(item: Record<string, unknown>): OutboundHubOrder {
   const code = String(item.code ?? '');
   const statusRaw = String(item.status ?? '');
@@ -175,6 +204,10 @@ export function mapOutsourceIssueToOutbound(item: Record<string, unknown>): Outb
     status,
     updated_at: String(item.updated_at ?? item.updatedAt ?? ''),
     created_at: String(item.created_at ?? item.createdAt ?? ''),
+    created_by: item.created_by ?? item.createdBy,
+    created_by_name: item.created_by_name ?? item.createdByName,
+    updated_by: item.updated_by ?? item.updatedBy,
+    updated_by_name: item.updated_by_name ?? item.updatedByName,
     notes: String(item.remarks ?? item.notes ?? ''),
   };
 }

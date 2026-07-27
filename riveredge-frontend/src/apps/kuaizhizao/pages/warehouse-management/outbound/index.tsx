@@ -44,7 +44,7 @@ import { outboundTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintC
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import OutboundQuickPullModals, { type OutboundQuickPullModalsRef } from './OutboundQuickPullModals';
 import OutboundConfirmPreviewModal from './OutboundConfirmPreviewModal';
-import {formatDateTime, formatQuantity} from '../../../../../utils/format';
+import { formatDateTime, formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -68,11 +68,14 @@ import {
   outboundIssueTypeSegmentOptions,
   isOutboundConfirmable,
   isOutboundWithdrawable,
+  OUTBOUND_POSTED_STATUSES,
   outboundConfirmCapabilityReasonMessage,
   outboundWithdrawCapabilityReasonMessage,
   mapOutsourceIssueToOutbound,
   outboundDocumentCode,
   outboundSourceDocNo,
+  resolveOutboundHubDateRaw,
+  resolveOutboundHubOperator,
 } from './outboundHubTypes';
 import type { OutboundPullEntryNavigationState } from './outboundPullEntryTypes';
 
@@ -553,7 +556,8 @@ const OutboundPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.sourceDocNo'),
-      dataIndex: ['sales_order_code', 'work_order_code', 'outsource_work_order_code'],
+      key: 'sourceDocNo',
+      dataIndex: 'source_doc_no',
       width: 160,
       ellipsis: true,
       hideInSearch: true,
@@ -575,22 +579,33 @@ const OutboundPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.pickingProgress'),
+      title: t('app.kuaizhizao.warehouseOutbound.col.outboundProgress'),
       dataIndex: 'fulfillment_progress',
       width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
       uniTableKeepWidth: true,
       hideInSearch: true,
       render: (_, record) => {
-        if (record.outbound_type !== 'production_picking') return '-';
-        const required = Number(record.required_quantity_total ?? record.total_quantity ?? 0);
-        const picked = Number(record.picked_quantity_total ?? 0);
-        if (!(required > 0) && !(picked > 0)) return '-';
-        const percent = ratioToPushProgressPercent(picked, required);
+        let done = 0;
+        let required = 0;
+        if (record.outbound_type === 'production_picking') {
+          required = Number(record.required_quantity_total ?? record.total_quantity ?? 0);
+          done = Number(record.picked_quantity_total ?? 0);
+        } else {
+          required = Number(record.total_quantity ?? 0);
+          const posted = OUTBOUND_POSTED_STATUSES.has(String(record.status || '').trim());
+          done = posted ? required : 0;
+          if (!(required > 0) && posted) {
+            required = 1;
+            done = 1;
+          }
+        }
+        if (!(required > 0) && !(done > 0)) return '-';
+        const percent = ratioToPushProgressPercent(done, required);
         return (
           <DocumentPushProgressBar
             percent={percent}
-            tooltip={t('app.kuaizhizao.warehouseOutbound.col.pickingProgressTip', {
-              picked: formatQuantity(picked),
+            tooltip={t('app.kuaizhizao.warehouseOutbound.col.outboundProgressTip', {
+              done: formatQuantity(done),
               required: formatQuantity(required),
               percent,
             })}
@@ -606,18 +621,24 @@ const OutboundPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.operator'),
-      dataIndex: 'delivered_by',
-      width: 100,
-      ellipsis: true,
-    },
-    {
-      title: t('app.kuaizhizao.warehouseOutbound.col.outboundDate'),
-      dataIndex: 'delivery_date',
-      valueType: 'date',
-      width: 132,
+      title: t('app.kuaizhizao.warehouseOutbound.col.time'),
+      key: 'biz_time_operator',
+      dataIndex: 'biz_time_operator',
+      width: 148,
       uniTableKeepWidth: true,
+      hideInSearch: true,
       sorter: true,
+      render: (_, record) => {
+        const raw = resolveOutboundHubDateRaw(record);
+        return (
+          <UniTableStackedPrimaryCell
+            primary={resolveOutboundHubOperator(record) || '-'}
+            secondary={raw ? formatDateTimeBySiteSetting(raw as string) : '-'}
+            secondaryCopyable={false}
+            primaryBold={false}
+          />
+        );
+      },
     },
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
@@ -718,7 +739,7 @@ const OutboundPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle={t('app.kuaizhizao.warehouseOutbound.title')}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound.v2"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound.v3"
         actionRef={actionRef}
         formRef={searchFormRef}
         rowKey={outboundRowKey}
@@ -900,8 +921,17 @@ const OutboundPage: React.FC = () => {
                   <p><strong>{t('app.kuaizhizao.warehouseOutbound.col.workOrderCode')}：</strong>{currentOrder.work_order_code}</p>
                 )}
                 <p><strong>{t('app.kuaizhizao.warehouseOutbound.field.warehouse')}：</strong>{currentOrder.warehouse_name}</p>
-                <p><strong>{t('app.kuaizhizao.warehouseOutbound.col.outboundDate')}：</strong>{currentOrder.delivery_date}</p>
-                <p><strong>{t('app.kuaizhizao.warehouseOutbound.col.operator')}：</strong>{currentOrder.delivered_by}</p>
+                <p>
+                  <strong>{t('app.kuaizhizao.warehouseOutbound.col.outboundDate')}：</strong>
+                  {(() => {
+                    const raw = resolveOutboundHubDateRaw(currentOrder);
+                    return raw ? formatDateTimeBySiteSetting(raw as string) : '-';
+                  })()}
+                </p>
+                <p>
+                  <strong>{t('app.kuaizhizao.warehouseOutbound.col.operator')}：</strong>
+                  {resolveOutboundHubOperator(currentOrder) || '-'}
+                </p>
                 <p><strong>{t('app.kuaizhizao.warehouseOutbound.col.totalQty')}：</strong>{currentOrder.total_quantity}</p>
                 <p><strong>{t('app.kuaizhizao.warehouseOutbound.col.totalSku')}：</strong>{currentOrder.total_items}</p>
                 {currentOrder.outbound_type === 'sales_delivery' &&

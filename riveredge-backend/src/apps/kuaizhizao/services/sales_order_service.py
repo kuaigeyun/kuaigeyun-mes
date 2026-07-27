@@ -57,7 +57,7 @@ from apps.kuaizhizao.constants import (
 )
 from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
 from core.services.authorization.data_scope_service import DataScopeService
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat, today_site_str
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 
@@ -524,7 +524,7 @@ class SalesOrderService:
                 transition_comment=reason_extra,
                 operator_id=operator_id,
                 operator_name=operator_name,
-                transition_time=datetime.now(),
+                transition_time=resolve_business_datetime(),
             )
         except Exception as e:
             logger.warning("写入状态流转日志失败（表可能未创建），跳过: %s", e)
@@ -706,8 +706,8 @@ class SalesOrderService:
                     delivery_status=it.delivery_status,
                     work_order_id=getattr(it, "work_order_id", None),
                     work_order_code=getattr(it, "work_order_code", None),
-                    created_at=it.created_at if getattr(it, "created_at", None) else datetime.now(),
-                    updated_at=it.updated_at if getattr(it, "updated_at", None) else datetime.now(),
+                    created_at=it.created_at if getattr(it, "created_at", None) else resolve_business_datetime(),
+                    updated_at=it.updated_at if getattr(it, "updated_at", None) else resolve_business_datetime(),
                 )
                 for it in items
             ]
@@ -1100,7 +1100,7 @@ class SalesOrderService:
                 )
             except Exception as e:
                 logger.warning("编码规则生成失败，使用备用格式: %s", e)
-        today = datetime.now().strftime("%Y%m%d")
+        today = today_site_str()
         import uuid
         return f"SO-{today}-{uuid.uuid4().hex[:6].upper()}"
 
@@ -2086,10 +2086,10 @@ class SalesOrderService:
                 source_name=order.order_code,
                 changed_fields=[str(x) for x in changed_fields] if changed_fields else [],
                 payload={"field_changes": field_changes or []},
-                effective_at=datetime.now(),
+                effective_at=resolve_business_datetime(),
                 trigger_reason="sales_order_updated",
                 requested_by=updated_by,
-                correlation_id=f"sales_order:{sales_order_id}:{int(datetime.now().timestamp())}",
+                correlation_id=f"sales_order:{sales_order_id}:{int(resolve_business_datetime().timestamp())}",
                 auto_create_task=True,
             )
         except Exception as e:
@@ -2168,7 +2168,7 @@ class SalesOrderService:
                     review_status=ReviewStatus.APPROVED,
                     reviewer_id=submitted_by,
                     reviewer_name=submitter_name,
-                    review_time=datetime.now(),
+                    review_time=resolve_business_datetime(),
                     updated_by=submitted_by,
                 )
                 await self._log_state_transition(
@@ -2249,7 +2249,7 @@ class SalesOrderService:
                 await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
                     reviewer_id=approved_by,
                     reviewer_name=approver_name,
-                    review_time=datetime.now(),
+                    review_time=resolve_business_datetime(),
                     review_status=ReviewStatus.APPROVED,
                     status=DemandStatus.AUDITED,
                     updated_by=approved_by,
@@ -2309,7 +2309,7 @@ class SalesOrderService:
                 await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
                     reviewer_id=approved_by,
                     reviewer_name=approver_name,
-                    review_time=datetime.now(),
+                    review_time=resolve_business_datetime(),
                     review_status=ReviewStatus.REJECTED,
                     review_remarks=reject_reason,
                     status=DemandStatus.REJECTED,
@@ -3346,7 +3346,7 @@ class SalesOrderService:
                 tenant_id=tenant_id, sales_order_id=sales_order_id
             ).delete()
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
-                deleted_at=datetime.now()
+                deleted_at=resolve_business_datetime()
             )
             from apps.kuaizhizao.models.quotation import Quotation
             from apps.kuaizhizao.services.quotation_service import QuotationService
@@ -3761,7 +3761,7 @@ class SalesOrderService:
             ShipmentNoticeService,
             _resolve_warehouse_name_by_id,
         )
-        today = datetime.now().strftime("%Y%m%d")
+        today = today_site_str()
         code = await ShipmentNoticeService().generate_code(
             tenant_id, "SHIPMENT_NOTICE_CODE", prefix=f"SN{today}"
         )

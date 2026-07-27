@@ -25,6 +25,7 @@ interface GanttBarProps {
   readonly: boolean;
   taskTemplate?: RiverTaskTemplate;
   selectedSet: Set<string>;
+  primarySelectedId?: string | null;
   onBarPointerDown: (e: React.PointerEvent, info: BarPointerInfo) => void;
 }
 
@@ -96,6 +97,7 @@ const GanttBar: React.FC<GanttBarProps> = ({
   readonly,
   taskTemplate,
   selectedSet,
+  primarySelectedId = null,
   onBarPointerDown,
 }) => {
   // 分段行
@@ -104,19 +106,22 @@ const GanttBar: React.FC<GanttBarProps> = ({
       <div className="gantt-station-segments">
         {task.segments.map((seg: RiverGanttSegment, index: number) => {
           const rect = barRect(geometry, seg.start, seg.end);
-          const isSelected =
-            seg.operation_id != null && selectedSet.has(`op-${seg.operation_id}`);
+          const opKey = seg.operation_id != null ? `op-${seg.operation_id}` : null;
+          const isSelected = opKey != null && selectedSet.has(opKey);
+          const isPrimary = opKey != null && primarySelectedId != null && opKey === primarySelectedId;
           const className = joinCss(
             'gantt-delfoi-segment',
             seg.css,
             seg.class,
-            isSelected ? 'gantt-wo-flow-selected river-selected' : undefined
+            isSelected ? 'gantt-wo-flow-selected river-selected' : undefined,
+            isPrimary ? 'gantt-wo-flow-primary' : undefined
           );
           return (
             <div
               key={seg.operation_id != null ? `op-${seg.operation_id}` : `seg-${index}`}
               className={className}
               data-segment={index}
+              title={seg.title || seg.text || undefined}
               style={{ left: rect.left, width: rect.width }}
               onPointerDown={(e) => {
                 e.stopPropagation();
@@ -152,16 +157,20 @@ const GanttBar: React.FC<GanttBarProps> = ({
   const rect = barRect(geometry, task.start, task.end);
   const progress = Math.max(0, Math.min(100, Number(task.progress ?? 0)));
   const isSelected = selectedSet.has(String(task.id));
+  const isPrimary =
+    primarySelectedId != null && String(task.id) === primarySelectedId;
   const className = joinCss(
     'river-gantt-bar',
     task.css,
     task.class,
-    isSelected ? 'gantt-wo-flow-selected river-selected' : undefined
+    isSelected ? 'gantt-wo-flow-selected river-selected' : undefined,
+    isPrimary ? 'gantt-wo-flow-primary' : undefined
   );
 
   return (
     <div
       className={className}
+      title={task.title || task.text || undefined}
       style={{ left: rect.left, width: rect.width }}
       onPointerDown={(e) => {
         e.stopPropagation();

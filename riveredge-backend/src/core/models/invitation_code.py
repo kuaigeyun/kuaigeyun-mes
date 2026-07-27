@@ -7,6 +7,7 @@
 from datetime import datetime
 from tortoise import fields
 from .base import BaseModel
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 class InvitationCode(BaseModel):
@@ -72,7 +73,7 @@ class InvitationCode(BaseModel):
             return False
         if self.used_count >= self.max_uses:
             return False
-        if self.expires_at and self.expires_at < datetime.now():
+        if self.expires_at and self.expires_at < resolve_business_datetime():
             return False
         return True
     

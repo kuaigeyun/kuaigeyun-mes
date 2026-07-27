@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Query, Path, HTTPException, status, Body
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
@@ -76,10 +76,10 @@ async def transition_state(
             update_data = {"status": to_state}
             if to_state == "in_progress" and not entity.actual_start_date:
                 from datetime import datetime
-                update_data["actual_start_date"] = datetime.now()
+                update_data["actual_start_date"] = resolve_business_datetime()
             elif to_state == "completed" and not entity.actual_end_date:
                 from datetime import datetime
-                update_data["actual_end_date"] = datetime.now()
+                update_data["actual_end_date"] = resolve_business_datetime()
             await WorkOrder.filter(tenant_id=tenant_id, id=entity_id).update(**update_data)
         
         return {

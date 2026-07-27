@@ -11,6 +11,7 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime
 from loguru import logger
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 @dataclass
@@ -337,7 +338,7 @@ class DataQualityService:
                 consistency=0,
                 issues=validation_report.issues,
                 suggestions=cleaning_suggestions,
-                generated_at=datetime.now()
+                generated_at=resolve_business_datetime()
             )
         
         # 计算完整性（基于必填字段缺失情况）
@@ -357,5 +358,5 @@ class DataQualityService:
             consistency=round(consistency, 2),
             issues=validation_report.issues,
             suggestions=cleaning_suggestions,
-            generated_at=datetime.now()
+            generated_at=resolve_business_datetime()
         )

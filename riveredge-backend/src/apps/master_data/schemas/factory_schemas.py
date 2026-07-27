@@ -262,6 +262,7 @@ class WorkstationBase(BaseModel):
     description: Optional[str] = Field(None, description="描述")
     work_center_id: Optional[int] = Field(None, description="关联工作中心ID", alias="workCenterId")
     work_center_name: Optional[str] = Field(None, description="关联工作中心名称", alias="workCenterName")
+    max_parallel: int = Field(1, ge=1, le=99, description="同刻最大并行工序数", alias="maxParallel")
     is_active: bool = Field(True, description="是否启用", alias="isActive")
     
     model_config = ConfigDict(populate_by_name=True)
@@ -295,6 +296,7 @@ class WorkstationUpdate(BaseModel):
     description: Optional[str] = Field(None, description="描述")
     work_center_id: Optional[int] = Field(None, description="关联工作中心ID", alias="workCenterId")
     work_center_name: Optional[str] = Field(None, description="关联工作中心名称", alias="workCenterName")
+    max_parallel: Optional[int] = Field(None, ge=1, le=99, description="同刻最大并行工序数", alias="maxParallel")
     is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
     
     model_config = ConfigDict(populate_by_name=True)

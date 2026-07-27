@@ -12,6 +12,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from infra.config.infra_config import infra_settings as settings
+from core.utils.timezone_utils import now_utc
 
 # 访问令牌过期后，仍允许在多少秒内通过 /auth/refresh 换发新令牌（签名仍须有效）
 JWT_REFRESH_GRACE_SECONDS = 300
@@ -50,11 +51,11 @@ def create_access_token(
     to_encode = data.copy()
     
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = now_utc() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = now_utc() + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
+    to_encode.update({"exp": expire, "iat": now_utc()})
     
     encoded_jwt = jwt.encode(
         to_encode,

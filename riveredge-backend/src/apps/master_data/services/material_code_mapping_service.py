@@ -24,6 +24,7 @@ from apps.master_data.schemas.material_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+from core.utils.timezone_utils import now_utc
 
 
 class MaterialCodeMappingService:
@@ -294,7 +295,7 @@ class MaterialCodeMappingService:
         
         # 软删除
         from datetime import datetime
-        mapping.deleted_at = datetime.utcnow()
+        mapping.deleted_at = now_utc()
         await mapping.save()
     
     @staticmethod

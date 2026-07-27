@@ -28,6 +28,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
 from apps.kuaizhizao.utils.outsource_work_order_state import resolve_outsource_work_order_product_unit
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
 class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
@@ -191,7 +192,7 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
 
             code = return_data.code
             if not code:
-                today = datetime.now().strftime("%Y%m%d")
+                today = today_site_str()
                 existing_codes = await OutsourceProductReturn.filter(
                     tenant_id=tenant_id,
                     code__startswith=f"OPR-{today}",
@@ -214,7 +215,7 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
                     raise ValidationError(f"委外退货单编码 {code} 已存在")
 
             user_info = await self.get_user_info(created_by)
-            now = datetime.now()
+            now = resolve_business_datetime()
             product_return = await OutsourceProductReturn.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),

@@ -60,6 +60,7 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_purchase_inquiry_capabilities_on_response,
     enrich_purchase_inquiry_list_capabilities,
 )
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 from apps.kuaizhizao.services.document_action_policy.purchase_inquiry import (
     assert_purchase_inquiry_capability,
 )
@@ -94,7 +95,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             return await self.generate_code(tenant_id, "PURCHASE_INQUIRY_CODE", prefix="CGXJ")
         except Exception:
             import uuid
-            return f"CGXJ{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+            return f"CGXJ{today_site_str()}{uuid.uuid4().hex[:6].upper()}"
 
     def _status_label(self, status: str) -> str:
         return INQUIRY_STATUS_LABELS.get(status, status)
@@ -432,7 +433,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
         if inquiry.status != PurchaseInquiryStatus.DRAFT.value:
             raise BusinessLogicError("只有草稿状态的询价单可删除")
-        await inquiry.update_from_dict({"deleted_at": datetime.now(), "updated_by": deleted_by}).save()
+        await inquiry.update_from_dict({"deleted_at": resolve_business_datetime(), "updated_by": deleted_by}).save()
 
     async def _recommend_supplier_ids(self, tenant_id: int, material_ids: List[int]) -> List[int]:
         ids: List[int] = []
@@ -679,7 +680,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             await quote.update_from_dict({"total_amount": total_amount.quantize(Decimal("0.01"))}).save()
             await vendor.update_from_dict({
                 "status": PurchaseInquiryVendorStatus.QUOTED.value,
-                "quoted_at": datetime.now(),
+                "quoted_at": resolve_business_datetime(),
             }).save()
 
         q_items = await PurchaseSupplierQuoteItem.filter(tenant_id=tenant_id, quote_id=quote.id).all()
@@ -1152,7 +1153,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             "review_status": ReviewStatus.APPROVED.value if approved else ReviewStatus.REJECTED.value,
             "reviewer_id": user_id,
             "reviewer_name": reviewer_name,
-            "review_time": datetime.now(),
+            "review_time": resolve_business_datetime(),
             "review_remarks": remarks,
             "updated_by": user_id,
             "updated_by_name": user_info["name"],
