@@ -154,6 +154,7 @@ class WorkOrderTreeService:
         roots: Iterable[WorkOrderListResponse],
         *,
         operation_steps_by_wo_id: dict[int, list] | None = None,
+        refresh_stale_readiness: bool = True,
     ) -> List[WorkOrderListResponse]:
         root_list = list(roots)
         if not root_list:
@@ -181,7 +182,7 @@ class WorkOrderTreeService:
             and row.readiness_rate is None
             and (row.status or "") in READINESS_ACTIVE_STATUSES
         ]
-        if stale_split_ids:
+        if refresh_stale_readiness and stale_split_ids:
             await WorkOrderReadinessService().refresh_work_orders(tenant_id, stale_split_ids)
             split_rows = await WorkOrder.filter(
                 tenant_id=tenant_id,

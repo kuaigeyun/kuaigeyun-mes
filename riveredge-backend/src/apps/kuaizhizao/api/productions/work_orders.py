@@ -477,6 +477,10 @@ async def list_work_orders(
         False,
         description="是否附带排程/备料综合分（读缓存快照，不触发重算）",
     ),
+    include_downstream_push_progress: bool = Query(
+        True,
+        description="是否计算当前页完工下推进度（方案质检口径，较重；首屏可传 false）",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -518,6 +522,7 @@ async def list_work_orders(
             include_operation_steps=include_operation_steps,
             include_readiness=include_readiness,
             include_scores=include_scores,
+            include_downstream_push_progress=include_downstream_push_progress,
         )
         return {
             "data": result,

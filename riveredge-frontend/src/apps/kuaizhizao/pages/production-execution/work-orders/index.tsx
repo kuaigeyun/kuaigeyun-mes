@@ -1493,8 +1493,12 @@ const WorkOrdersPage: React.FC = () => {
     })
   }
 
+  /** 定时/聚焦刷新时重算齐套率与下推进度；首屏与翻页保持轻量读库 */
+  const workOrderListHeavyMetricsRef = useRef(false)
+
   /** 静默刷新列表：拉持久化/重算后的齐套率与下推进度（UniTable 无 useQuery 观察者，须 reload） */
   const softReloadWorkOrderList = useCallback(() => {
+    workOrderListHeavyMetricsRef.current = true
     void queryClient.invalidateQueries({
       queryKey: [...WORK_ORDER_LIST_UNITABLE_QUERY_KEY],
       exact: false,
@@ -1601,11 +1605,16 @@ const WorkOrdersPage: React.FC = () => {
   const handleWorkOrderTableRequest = useCallback(
     async (params: any, sort: any, _filter: any, searchFormValues: any) => {
       try {
+        const heavyMetrics = workOrderListHeavyMetricsRef.current
+        workOrderListHeavyMetricsRef.current = false
         const result = await fetchWorkOrderListForTable(
           { current: params.current!, pageSize: params.pageSize! },
           sort,
           _filter,
-          searchFormValues
+          searchFormValues,
+          heavyMetrics
+            ? { include_readiness: true, include_downstream_push_progress: true }
+            : undefined,
         )
         if (result.success && Array.isArray(result.data)) {
           // 行索引不得在此同步：UniTable prefetchNextPage 也走本 request，

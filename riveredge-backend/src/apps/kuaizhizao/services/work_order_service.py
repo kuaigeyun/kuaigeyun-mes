@@ -1781,6 +1781,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         include_operation_steps: bool = False,
         include_readiness: bool = False,
         include_scores: bool = False,
+        include_downstream_push_progress: bool = True,
     ) -> Tuple[List[WorkOrderListResponse], int]:
         """
         获取工单列表
@@ -1949,32 +1950,6 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     f"{so.order_code} - {so.customer_name}" if so.customer_name else so.order_code,
                 )
 
-        # 列表带工序步骤时：按有效合格回写误标「已完成」的工序/工单（已报未检等历史数据）
-        if include_operation_steps and work_orders:
-            from apps.kuaizhizao.services.reporting_service import (
-                sync_work_order_operations_completion,
-            )
-
-            reconcile_ids = [
-                int(wo.id)
-                for wo in work_orders
-                if wo.id is not None
-                and str(wo.status or "") in ("released", "in_progress", "completed")
-            ]
-            for wid in reconcile_ids:
-                await sync_work_order_operations_completion(tenant_id, wid)
-            if reconcile_ids:
-                refreshed = await WorkOrder.filter(
-                    tenant_id=tenant_id,
-                    id__in=reconcile_ids,
-                    deleted_at__isnull=True,
-                ).all()
-                by_id = {int(w.id): w for w in refreshed if w.id is not None}
-                work_orders = [
-                    by_id.get(int(wo.id), wo) if wo.id is not None and int(wo.id) in by_id else wo
-                    for wo in work_orders
-                ]
-
         # 批量预取工序（include_operations 时消除 N+1）
         operations_map: dict[int, list] = {}
         operation_steps_map: dict[int, list] = {}
@@ -2052,27 +2027,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         )
 
         # 齐套率：读持久化字段；include_readiness=true 时强制重算当前页；缺失值同步补算当前页后返回
-        from apps.kuaizhizao.services.work_order_readiness_service import (
-            READINESS_ACTIVE_STATUSES,
-            WorkOrderReadinessService,
-        )
+        from apps.kuaizhizao.services.work_order_readiness_service import WorkOrderReadinessService
 
         if include_readiness and work_orders:
             await WorkOrderReadinessService().refresh_work_orders(
                 tenant_id, [wo.id for wo in work_orders if wo.id is not None]
             )
             work_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
-        elif work_orders:
-            stale_readiness_ids = [
-                wo.id
-                for wo in work_orders
-                if wo.id is not None
-                and wo.readiness_rate is None
-                and (wo.status or "") in READINESS_ACTIVE_STATUSES
-            ]
-            if stale_readiness_ids:
-                await WorkOrderReadinessService().refresh_work_orders(tenant_id, stale_readiness_ids)
-                work_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
 
         group_ids = list({wo.work_order_group_id for wo in work_orders if wo.work_order_group_id})
         group_code_map: dict[int, str] = {}
@@ -2098,10 +2059,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             tenant_id,
             wo_ids_for_cap,
         )
-        push_progress_by_wo = await self._batch_work_order_downstream_push_progress(
-            tenant_id,
-            list(work_orders),
-        )
+        push_progress_by_wo: Dict[int, float] = {}
+        if include_downstream_push_progress and work_orders:
+            push_progress_by_wo = await self._batch_work_order_downstream_push_progress(
+                tenant_id,
+                list(work_orders),
+            )
 
         for wo in work_orders:
             try:
@@ -2163,6 +2126,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             tenant_id,
             result,
             operation_steps_by_wo_id=operation_steps_map if include_operation_steps else None,
+            refresh_stale_readiness=include_readiness,
         )
 
         return result, total

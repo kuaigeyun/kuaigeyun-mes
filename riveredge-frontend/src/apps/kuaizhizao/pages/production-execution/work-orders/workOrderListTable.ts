@@ -404,7 +404,12 @@ function buildWorkOrderListApiParams(
   params: { current: number; pageSize: number },
   sort: Record<string, 'ascend' | 'descend' | null>,
   searchFormValues: Record<string, any> | undefined,
-  options: { include_readiness: boolean; include_scores: boolean; include_operation_steps: boolean }
+  options: {
+    include_readiness: boolean
+    include_scores: boolean
+    include_operation_steps: boolean
+    include_downstream_push_progress: boolean
+  }
 ): Record<string, any> {
   const apiParams: Record<string, any> = {
     skip: (params.current - 1) * params.pageSize,
@@ -412,6 +417,7 @@ function buildWorkOrderListApiParams(
     include_readiness: options.include_readiness,
     include_scores: options.include_scores,
     include_operation_steps: options.include_operation_steps,
+    include_downstream_push_progress: options.include_downstream_push_progress,
   }
   const s = searchFormValues || {}
   if (s.code) apiParams.code = s.code
@@ -441,6 +447,13 @@ function buildWorkOrderListApiParams(
   return apiParams
 }
 
+export type WorkOrderListFetchOptions = {
+  /** 强制重算齐套率（较重；定时刷新时开启） */
+  include_readiness?: boolean
+  /** 计算完工下推进度（较重；定时刷新时开启） */
+  include_downstream_push_progress?: boolean
+}
+
 /**
  * 列表请求（无 UI 提示，供预取与表格共用；失败时 throw 避免写入坏缓存）
  */
@@ -449,18 +462,17 @@ export async function fetchWorkOrderListForTable(
   sort: Record<string, 'ascend' | 'descend' | null>,
   filter: Record<string, ReactText[] | null>,
   searchFormValues: Record<string, any> | undefined,
-  options?: { include_readiness?: boolean },
+  options?: WorkOrderListFetchOptions,
 ): Promise<WorkOrderListTableResult> {
   const apiParams = buildWorkOrderListApiParams(params, sort, searchFormValues, {
-    /**
-     * 列表默认重算当前页齐套率并写库（与下推进度「每次列表现算」同思路）。
-     * 预取可传 include_readiness:false 避免暖缓存拖慢。
-     */
-    include_readiness: options?.include_readiness ?? true,
+    /** 首屏/翻页读库内持久化齐套率；仅定时刷新重算 */
+    include_readiness: options?.include_readiness ?? false,
     /** 列表首屏关闭；避免 batch_ensure_scores 触发大量快照计算 */
     include_scores: false,
-    /** 工序列：与运营看板同口径的步骤摘要 */
+    /** 工序列：与运营看板同口径的步骤摘要（只读，不在列表内回写完成态） */
     include_operation_steps: true,
+    /** 完工进度列：首屏跳过方案质检口径重算，定时刷新再补 */
+    include_downstream_push_progress: options?.include_downstream_push_progress ?? false,
   })
   const response = await workOrderApi.list(apiParams)
   const result = normalizeListResponse(response)
@@ -488,6 +500,7 @@ export function prefetchDefaultWorkOrderList(queryClient: QueryClient, pageSize:
     queryFn: () =>
       fetchWorkOrderListForTable({ current: 1, pageSize }, emptySort, emptyFilter, {}, {
         include_readiness: false,
+        include_downstream_push_progress: false,
       }),
     staleTime: WORK_ORDER_LIST_STALE_MS,
   })
