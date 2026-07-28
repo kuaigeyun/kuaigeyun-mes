@@ -51,6 +51,7 @@ import {
   MODAL_NESTED_ABOVE_PARENT_OFFSET,
   FILE_PREVIEW_OVERLAY_Z_INDEX,
 } from '../../../components/layout-templates/constants';
+import { SequenceIndexCell, StepDragHandleContext } from '../../../components/sequence-index-cell';
 
 const operationPickModalStyles = {
   body: { paddingTop: 8, paddingBottom: 12 },
@@ -583,6 +584,12 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   const tableColSpan =
     4 + (showNodeOperationColumn ? 1 : 0) + (showTimeColumns ? 2 : 0) + 3;
   const sortableRowIds = useMemo(() => operations.map((op) => op.uuid), [operations]);
+  const tableScrollX = useMemo(() => {
+    let w = 100 + 220 + 120 + 88 + 100 + 180 + 320;
+    if (showNodeOperationColumn) w += 88;
+    if (showTimeColumns) w += 148 + 136;
+    return w;
+  }, [showNodeOperationColumn, showTimeColumns]);
 
   const columns = [
     {
@@ -600,10 +607,16 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     {
       title: t('app.master-data.operationSequence.operationCodeName'),
       key: 'operation',
+      width: 220,
+      ellipsis: true,
       render: (_: any, record: OperationItem) => (
-        <div>
+        <div style={{ whiteSpace: 'nowrap' }}>
           <div style={{ fontWeight: 500 }}>{record.code} - {record.name}</div>
-          {record.description && <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>{record.description}</div>}
+          {record.description && (
+            <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {record.description}
+            </div>
+          )}
         </div>
       ),
     },
@@ -967,7 +980,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                   },
                 }}
                 style={{ width: '100%' }}
-                scroll={{ x: showNodeOperationColumn ? 820 : 732 }}
+                scroll={{ x: tableScrollX }}
                 locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noData')} /> }}
               />
             </div>
