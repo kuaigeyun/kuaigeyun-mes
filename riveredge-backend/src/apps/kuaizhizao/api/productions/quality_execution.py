@@ -493,6 +493,33 @@ async def conduct_incoming_inspection(
     )
 
 
+@router.post(
+    "/incoming-inspections/{inspection_id}/revoke-conduct",
+    response_model=IncomingInspectionResponse,
+    summary="Revoke incoming inspection conduct",
+    dependencies=[
+        Depends(require_permission_codes("kuaizhizao:quality-management-incoming-inspection:update"))
+    ],
+)
+async def revoke_conduct_incoming_inspection(
+    inspection_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> IncomingInspectionResponse:
+    """撤回来料检验：已检验/已驳回 → 待检验。"""
+    await _assert_incoming_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    service = IncomingInspectionService()
+    return await service.revoke_conduct(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        user_id=current_user.id,
+    )
+
+
 @router.post("/incoming-inspections/{inspection_id}/approve", response_model=IncomingInspectionResponse, summary="Approve incoming inspection")
 async def approve_incoming_inspection(
     inspection_id: int,
@@ -1078,6 +1105,32 @@ async def conduct_process_inspection(
     )
 
 
+@router.post(
+    "/process-inspections/{inspection_id}/revoke-conduct",
+    response_model=ProcessInspectionResponse,
+    summary="Revoke in-process inspection conduct",
+    dependencies=[
+        Depends(require_permission_codes("kuaizhizao:quality-management-process-inspection:update"))
+    ],
+)
+async def revoke_conduct_process_inspection(
+    inspection_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProcessInspectionResponse:
+    """撤回过程检验：已检验/已驳回 → 待检验。"""
+    await _assert_process_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    return await ProcessInspectionService().revoke_conduct(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        user_id=current_user.id,
+    )
+
+
 @router.post("/process-inspections/from-work-order", response_model=ProcessInspectionResponse, summary="Create in-process inspection from work order")
 async def create_process_inspection_from_work_order(
     work_order_id: int = Query(..., description="工单ID"),
@@ -1435,6 +1488,33 @@ async def conduct_finished_goods_inspection(
         inspection_id=inspection_id,
         inspection_data=inspection_data,
         inspected_by=current_user.id
+    )
+
+
+@router.post(
+    "/finished-goods-inspections/{inspection_id}/revoke-conduct",
+    response_model=FinishedGoodsInspectionResponse,
+    summary="Revoke finished goods inspection conduct",
+    dependencies=[
+        Depends(require_permission_codes("kuaizhizao:quality-management-finished-goods-inspection:update"))
+    ],
+)
+async def revoke_conduct_finished_goods_inspection(
+    inspection_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> FinishedGoodsInspectionResponse:
+    """撤回成品检验：已检验/已驳回 → 待检验。"""
+    await _assert_finished_goods_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    service = FinishedGoodsInspectionService()
+    return await service.revoke_conduct(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        user_id=current_user.id,
     )
 
 

@@ -576,6 +576,64 @@ async def _resolve_purchase_receipt_line_warehouse_id_for_stock(
     return None
 
 
+_SALES_OUTBOUND_CLOSED_STATUSES = frozenset(
+    {"已出库", "已完成", "completed", "COMPLETED", "done", "DONE"}
+)
+
+
+async def _list_sales_order_material_outbound_batches(
+    tenant_id: int,
+    sales_order_id: int,
+    material_id: int,
+) -> List[Dict[str, Any]]:
+    """列出销售订单某物料在已出库明细上的批次（按出库明细倒序，批号去重）。"""
+    delivery_ids = await SalesDelivery.filter(
+        tenant_id=tenant_id,
+        sales_order_id=sales_order_id,
+        deleted_at__isnull=True,
+        status__in=list(_SALES_OUTBOUND_CLOSED_STATUSES),
+    ).order_by("-id").values_list("id", flat=True)
+    if not delivery_ids:
+        return []
+
+    items = await SalesDeliveryItem.filter(
+        tenant_id=tenant_id,
+        delivery_id__in=list(delivery_ids),
+        material_id=material_id,
+        deleted_at__isnull=True,
+    ).order_by("-id")
+
+    result: List[Dict[str, Any]] = []
+    seen_batches: set[str] = set()
+    for item in items:
+        batch = str(getattr(item, "batch_number", None) or "").strip()
+        entry = {
+            "batch_number": batch or None,
+            "sales_delivery_id": int(item.delivery_id),
+            "sales_delivery_item_id": int(item.id),
+        }
+        if batch:
+            if batch in seen_batches:
+                continue
+            seen_batches.add(batch)
+        result.append(entry)
+    return result
+
+
+def _resolve_outbound_link_for_batch(
+    outbound_batches: List[Dict[str, Any]],
+    batch_number: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """按退货批号匹配原销售出库明细；未指定批号时取最近一条出库明细。"""
+    bn = str(batch_number or "").strip()
+    if bn:
+        for row in outbound_batches:
+            if str(row.get("batch_number") or "").strip() == bn:
+                return row
+        return None
+    return outbound_batches[0] if outbound_batches else None
+
+
 def _validate_sales_return_batch_traceability(
     *,
     source_batch_number: Optional[str],
@@ -642,26 +700,32 @@ async def _sum_confirmed_purchase_receipt_qty_for_po_item(
     return total
 
 
-async def occupied_purchase_receipt_qty_by_po_item_ids(
+async def _sum_pending_purchase_receipt_qty_for_po_item(
     tenant_id: int,
-    order_ids: List[int],
-) -> dict[int, Decimal]:
-    """
-    统计采购订单行被未完成入库单占用的数量（草稿/待入库等，不含已入库与作废）。
-    对齐销售出库下推预览：避免重复下推生成多张占用同一余量的入库草稿。
-    """
-    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
-    from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+    purchase_order_item_id: int,
+    *,
+    exclude_receipt_id: Optional[int] = None,
+) -> Decimal:
+    """统计采购订单行被其他未完成入库单占用的数量（草稿/待入库，不含已入库与作废）。"""
+    historical_items = await PurchaseReceiptItem.filter(
+        tenant_id=tenant_id,
+        purchase_order_item_id=purchase_order_item_id,
+    ).all()
+    if not historical_items:
+        return Decimal("0")
 
-    if not order_ids:
-        return {}
+    receipt_ids = {int(h.receipt_id) for h in historical_items}
+    if exclude_receipt_id is not None:
+        receipt_ids.discard(int(exclude_receipt_id))
+    if not receipt_ids:
+        return Decimal("0")
 
     receipts = await PurchaseReceipt.filter(
         tenant_id=tenant_id,
-        purchase_order_id__in=order_ids,
+        id__in=list(receipt_ids),
         deleted_at__isnull=True,
     ).values("id", "status")
-    occupying_receipt_ids: List[int] = []
+    pending_receipt_ids: set[int] = set()
     for row in receipts:
         rid = row.get("id")
         if rid is None:
@@ -671,7 +735,84 @@ async def occupied_purchase_receipt_qty_by_po_item_ids(
             continue
         if status in _PURCHASE_RECEIPT_CONFIRMED_STATUSES:
             continue
-        occupying_receipt_ids.append(int(rid))
+        pending_receipt_ids.add(int(rid))
+
+    total = Decimal("0")
+    for historical in historical_items:
+        rid = int(historical.receipt_id)
+        if rid not in pending_receipt_ids:
+            continue
+        total += Decimal(str(historical.receipt_quantity or 0))
+    return total
+
+
+async def occupied_purchase_receipt_qty_by_po_item_ids(
+    tenant_id: int,
+    order_ids: List[int],
+) -> dict[int, Decimal]:
+    """
+    统计采购订单行被未完成入库单占用的数量（草稿/待入库等，不含已入库与作废）。
+    对齐销售出库下推预览：避免重复下推生成多张占用同一余量的入库草稿。
+    除表头 purchase_order_id 外，亦按明细 purchase_order_item_id 关联，避免表头丢链后重复下推。
+    """
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+    from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+    if not order_ids:
+        return {}
+
+    po_item_ids = [
+        int(x)
+        for x in await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            order_id__in=order_ids,
+        ).values_list("id", flat=True)
+    ]
+    if not po_item_ids:
+        return {}
+
+    receipt_id_set: set[int] = set()
+    header_rows = await PurchaseReceipt.filter(
+        tenant_id=tenant_id,
+        purchase_order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).values("id", "status")
+    item_linked_rows = await PurchaseReceiptItem.filter(
+        tenant_id=tenant_id,
+        purchase_order_item_id__in=po_item_ids,
+    ).values_list("receipt_id", flat=True)
+    receipt_id_set.update(int(x) for x in item_linked_rows if x is not None)
+
+    status_by_receipt_id: dict[int, str] = {}
+    for row in header_rows:
+        rid = row.get("id")
+        if rid is None:
+            continue
+        receipt_id_set.add(int(rid))
+        status_by_receipt_id[int(rid)] = str(row.get("status") or "").strip()
+
+    missing_ids = receipt_id_set - set(status_by_receipt_id)
+    if missing_ids:
+        extra_rows = await PurchaseReceipt.filter(
+            tenant_id=tenant_id,
+            id__in=list(missing_ids),
+            deleted_at__isnull=True,
+        ).values("id", "status")
+        for row in extra_rows:
+            rid = row.get("id")
+            if rid is None:
+                continue
+            status_by_receipt_id[int(rid)] = str(row.get("status") or "").strip()
+
+    occupying_receipt_ids: List[int] = []
+    for rid in receipt_id_set:
+        status = status_by_receipt_id.get(rid, "")
+        if status in _PURCHASE_RECEIPT_VOID_STATUSES:
+            continue
+        if status in _PURCHASE_RECEIPT_CONFIRMED_STATUSES:
+            continue
+        occupying_receipt_ids.append(rid)
 
     if not occupying_receipt_ids:
         return {}
@@ -680,6 +821,7 @@ async def occupied_purchase_receipt_qty_by_po_item_ids(
     item_rows = await PurchaseReceiptItem.filter(
         tenant_id=tenant_id,
         receipt_id__in=occupying_receipt_ids,
+        purchase_order_item_id__in=po_item_ids,
     ).values("purchase_order_item_id", "receipt_quantity")
     for row in item_rows:
         po_item_id = int(row.get("purchase_order_item_id") or 0)
@@ -786,6 +928,9 @@ def _validate_purchase_receipt_tolerance(
     incoming_quantity: Decimal,
     tolerance_percentage: float,
     material_label: str,
+    *,
+    confirmed_quantity: Optional[Decimal] = None,
+    pending_other_quantity: Optional[Decimal] = None,
 ) -> None:
     """校验采购入库是否超过配置容差。"""
     if ordered_quantity <= 0:
@@ -794,10 +939,60 @@ def _validate_purchase_receipt_tolerance(
     max_receivable = ordered_quantity * (Decimal("1") + tolerance_ratio)
     after_receipt = already_received_quantity + incoming_quantity
     if after_receipt > max_receivable:
+        detail_parts: List[str] = []
+        if confirmed_quantity is not None and confirmed_quantity > 0:
+            detail_parts.append(f"已确认入库 {confirmed_quantity}")
+        if pending_other_quantity is not None and pending_other_quantity > 0:
+            detail_parts.append(f"其他待入库占用 {pending_other_quantity}")
+        detail_parts.append(f"本次入库 {incoming_quantity}")
+        detail_suffix = f"（{'，'.join(detail_parts)}）" if detail_parts else ""
         raise BusinessLogicError(
             f"采购入库超容差：物料 {material_label} 入库后累计 {after_receipt}，"
             f"超过允许上限 {max_receivable}（订单数量 {ordered_quantity}，容差 {tolerance_percentage}%）"
+            f"{detail_suffix}。请检查是否已有其他采购入库单占用了该采购订单行。"
         )
+
+
+async def _assert_purchase_receipt_tolerance_for_po_item(
+    tenant_id: int,
+    purchase_order_item_id: int,
+    incoming_quantity: Decimal,
+    tolerance_percentage: float,
+    material_label: str,
+    *,
+    exclude_receipt_id: Optional[int] = None,
+    extra_pending_qty: Decimal = Decimal("0"),
+) -> None:
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    po_item = await PurchaseOrderItem.filter(
+        tenant_id=tenant_id,
+        id=purchase_order_item_id,
+        deleted_at__isnull=True,
+    ).select_for_update().first()
+    if not po_item:
+        raise ValidationError(f"采购订单明细不存在: {purchase_order_item_id}")
+
+    confirmed_qty = await _sum_confirmed_purchase_receipt_qty_for_po_item(
+        tenant_id,
+        purchase_order_item_id,
+        exclude_receipt_id=exclude_receipt_id,
+    )
+    pending_other_qty = await _sum_pending_purchase_receipt_qty_for_po_item(
+        tenant_id,
+        purchase_order_item_id,
+        exclude_receipt_id=exclude_receipt_id,
+    )
+    committed_qty = confirmed_qty + pending_other_qty + extra_pending_qty
+    _validate_purchase_receipt_tolerance(
+        ordered_quantity=Decimal(str(po_item.ordered_quantity or 0)),
+        already_received_quantity=committed_qty,
+        incoming_quantity=incoming_quantity,
+        tolerance_percentage=tolerance_percentage,
+        material_label=material_label,
+        confirmed_quantity=confirmed_qty,
+        pending_other_quantity=pending_other_qty + extra_pending_qty,
+    )
 
 
 def _resolve_purchase_item_quality_fields(
@@ -5445,27 +5640,13 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
                 purchase_order_item_id = int(getattr(item_data, "purchase_order_item_id", 0) or 0)
                 if purchase_order_item_id > 0:
-                    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
-
-                    po_item = await PurchaseOrderItem.filter(
-                        tenant_id=tenant_id,
-                        id=purchase_order_item_id,
-                        deleted_at__isnull=True,
-                    ).select_for_update().first()
-                    if not po_item:
-                        raise ValidationError(f"采购订单明细不存在: {purchase_order_item_id}")
-
-                    already_received_qty = await _sum_confirmed_purchase_receipt_qty_for_po_item(
+                    await _assert_purchase_receipt_tolerance_for_po_item(
                         tenant_id,
                         purchase_order_item_id,
+                        receipt_quantity,
+                        tolerance_percentage,
+                        getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
                         extra_pending_qty=pending_po_received.get(purchase_order_item_id, Decimal("0")),
-                    )
-                    _validate_purchase_receipt_tolerance(
-                        ordered_quantity=Decimal(str(po_item.ordered_quantity or 0)),
-                        already_received_quantity=already_received_qty,
-                        incoming_quantity=receipt_quantity,
-                        tolerance_percentage=tolerance_percentage,
-                        material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
                     )
                     pending_po_received[purchase_order_item_id] = (
                         pending_po_received.get(purchase_order_item_id, Decimal("0")) + receipt_quantity
@@ -5631,6 +5812,10 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             # 更新入库单头
             user_info = await self.get_user_info(updated_by)
             receipt_dict = receipt_data.model_dump(exclude_unset=True, exclude={"items", "receipt_code"})
+            if not int(receipt_dict.get("purchase_order_id") or 0):
+                receipt_dict.pop("purchase_order_id", None)
+            if not str(receipt_dict.get("purchase_order_code") or "").strip():
+                receipt_dict.pop("purchase_order_code", None)
             receipt_dict["updated_by"] = updated_by
             receipt_dict["updated_by_name"] = user_info.get("name", "")
             await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(**receipt_dict)
@@ -5665,25 +5850,19 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     if purchase_order_item_id > 0:
                         from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
 
-                        po_item = await PurchaseOrderItem.filter(
+                        await PurchaseOrderItem.filter(
                             tenant_id=tenant_id,
                             id=purchase_order_item_id,
                         ).select_for_update().first()
-                        if not po_item:
-                            raise ValidationError(f"采购订单明细不存在: {purchase_order_item_id}")
 
-                        already_received_qty = await _sum_confirmed_purchase_receipt_qty_for_po_item(
+                        await _assert_purchase_receipt_tolerance_for_po_item(
                             tenant_id,
                             purchase_order_item_id,
+                            qty,
+                            tolerance_percentage,
+                            getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
                             exclude_receipt_id=receipt_id,
                             extra_pending_qty=pending_po_received.get(purchase_order_item_id, Decimal("0")),
-                        )
-                        _validate_purchase_receipt_tolerance(
-                            ordered_quantity=Decimal(str(po_item.ordered_quantity or 0)),
-                            already_received_quantity=already_received_qty,
-                            incoming_quantity=qty,
-                            tolerance_percentage=tolerance_percentage,
-                            material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
                         )
                         pending_po_received[purchase_order_item_id] = (
                             pending_po_received.get(purchase_order_item_id, Decimal("0")) + qty
@@ -5909,6 +6088,10 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             # 过账前重载表头，避免仅内存对象与库内表头仓库等不一致
             receipt = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
 
+            receipt_po_id = int(getattr(receipt, "purchase_order_id", 0) or 0)
+            if receipt_po_id > 0:
+                await sync_purchase_order_receipt_quantities(tenant_id, receipt_po_id)
+
             tolerance_percentage = await self.business_config_service.get_purchase_tolerance_percentage(tenant_id)
             items_for_tolerance = await PurchaseReceiptItem.filter(
                 tenant_id=tenant_id, receipt_id=receipt_id
@@ -5923,24 +6106,18 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 qty = item.receipt_quantity or Decimal(0)
                 if qty <= 0:
                     continue
-                po_item = await PurchaseOrderItem.filter(
+                await PurchaseOrderItem.filter(
                     tenant_id=tenant_id,
                     id=purchase_order_item_id,
-                ).first()
-                if not po_item:
-                    raise ValidationError(f"采购订单明细不存在: {purchase_order_item_id}")
-                already_received_qty = await _sum_confirmed_purchase_receipt_qty_for_po_item(
+                ).select_for_update().first()
+                await _assert_purchase_receipt_tolerance_for_po_item(
                     tenant_id,
                     purchase_order_item_id,
+                    qty,
+                    tolerance_percentage,
+                    getattr(item, "material_name", None) or getattr(item, "material_code", "未知物料"),
                     exclude_receipt_id=receipt_id,
                     extra_pending_qty=pending_po_received.get(purchase_order_item_id, Decimal("0")),
-                )
-                _validate_purchase_receipt_tolerance(
-                    ordered_quantity=Decimal(str(po_item.ordered_quantity or 0)),
-                    already_received_quantity=already_received_qty,
-                    incoming_quantity=qty,
-                    tolerance_percentage=tolerance_percentage,
-                    material_label=getattr(item, "material_name", None) or getattr(item, "material_code", "未知物料"),
                 )
                 pending_po_received[purchase_order_item_id] = (
                     pending_po_received.get(purchase_order_item_id, Decimal("0")) + qty
@@ -6902,6 +7079,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         warehouse_id: int,
         warehouse_name: Optional[str] = None,
         return_quantities: Optional[Dict[int, float]] = None,
+        batch_numbers: Optional[Dict[int, str]] = None,
         return_code: Optional[str] = None,
     ) -> SalesReturnResponse:
         """从销售订单下推生成销售退货单。"""
@@ -6929,6 +7107,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
 
         qty_keys = set(return_quantities.keys()) if return_quantities else None
         return_items: List[SalesReturnItemCreate] = []
+        header_delivery_ids: set[int] = set()
         for item in order_items:
             if qty_keys is not None and item.id not in qty_keys:
                 continue
@@ -6945,6 +7124,33 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 raise BusinessLogicError(
                     f"物料 {item.material_code or item.material_name} 的退货数量不能超过可退数量 {returnable_qty}"
                 )
+            outbound_batches = await _list_sales_order_material_outbound_batches(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+                material_id=int(item.material_id),
+            )
+            batch_number: Optional[str] = None
+            if batch_numbers and item.id in batch_numbers:
+                batch_number = str(batch_numbers[item.id] or "").strip() or None
+            if not batch_number and outbound_batches:
+                for row in outbound_batches:
+                    candidate = str(row.get("batch_number") or "").strip()
+                    if candidate:
+                        batch_number = candidate
+                        break
+            outbound_link = _resolve_outbound_link_for_batch(outbound_batches, batch_number)
+            sales_delivery_item_id = (
+                int(outbound_link["sales_delivery_item_id"])
+                if outbound_link and outbound_link.get("sales_delivery_item_id")
+                else None
+            )
+            item_delivery_id = (
+                int(outbound_link["sales_delivery_id"])
+                if outbound_link and outbound_link.get("sales_delivery_id")
+                else None
+            )
+            if item_delivery_id:
+                header_delivery_ids.add(item_delivery_id)
             unit_price = Decimal(str(item.unit_price or 0))
             total_amount = selected_qty * unit_price
             return_items.append(
@@ -6957,6 +7163,8 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     return_quantity=float(selected_qty),
                     unit_price=float(unit_price),
                     total_amount=float(total_amount),
+                    batch_number=batch_number,
+                    sales_delivery_item_id=sales_delivery_item_id,
                     status="待退货",
                 )
             )
@@ -6964,8 +7172,13 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         if not return_items:
             raise BusinessLogicError("没有可退货的明细")
 
+        header_sales_delivery_id: Optional[int] = None
+        if len(header_delivery_ids) == 1:
+            header_sales_delivery_id = next(iter(header_delivery_ids))
+
         return_data = SalesReturnCreate(
             return_code=return_code,
+            sales_delivery_id=header_sales_delivery_id,
             sales_order_id=sales_order.id,
             sales_order_code=sales_order.order_code,
             customer_id=sales_order.customer_id,

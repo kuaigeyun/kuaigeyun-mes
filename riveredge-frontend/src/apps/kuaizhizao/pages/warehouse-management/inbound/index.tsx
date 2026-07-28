@@ -34,6 +34,7 @@ import {
 import { ListPageTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useGlobalStore } from '../../../../../stores';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
@@ -497,6 +498,7 @@ const InboundPage: React.FC = () => {
     [t],
   );
   const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const handledDirectConfirmKeyRef = useRef<string | null>(null);
@@ -2075,7 +2077,9 @@ const InboundPage: React.FC = () => {
               enrichPurchaseReceiptRecordsWithCustomFields,
               enrichFinishedGoodsReceiptRecordsWithCustomFields,
               enrichProductionReturnRecordsWithCustomFields,
-            });
+            },
+              currentUser,
+            );
             const next = new Map<string, InboundOrder>();
             for (const row of result.data ?? []) {
               next.set(inboundRowKey(row), row);

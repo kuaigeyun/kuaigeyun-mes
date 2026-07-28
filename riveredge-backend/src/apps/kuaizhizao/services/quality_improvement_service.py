@@ -778,6 +778,46 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             OQCInspectionResponse.model_validate(row),
         )
 
+    async def revoke_conduct(
+        self, tenant_id: int, inspection_id: int, user_id: int
+    ) -> OQCInspectionResponse:
+        """撤回出货检验（已检验/已驳回 → 待检验，清空检验结果）。"""
+        from apps.kuaizhizao.services.document_action_policy.oqc_inspection import (
+            assert_oqc_inspection_capability,
+        )
+        from apps.kuaizhizao.services.quality_inspection_lifecycle import (
+            assert_revoke_conduct_no_downstream,
+            build_quality_inspection_revoke_conduct_fields,
+        )
+
+        row = await OQCInspection.get_or_none(
+            id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("OQC 检验单不存在")
+        assert_oqc_inspection_capability(row, "revoke_conduct")
+        await assert_revoke_conduct_no_downstream(
+            tenant_id,
+            entity_type="oqc_inspection",
+            source_id=inspection_id,
+        )
+        user_info = await self.get_user_info(user_id)
+        update_fields = build_quality_inspection_revoke_conduct_fields(
+            entity_type="oqc_inspection",
+            updated_by=user_id,
+            updated_by_name=user_info.get("name", ""),
+        )
+        for key, value in update_fields.items():
+            setattr(row, key, value)
+        await row.save()
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_oqc_inspection_capabilities_on_response,
+        )
+        return enrich_oqc_inspection_capabilities_on_response(
+            row,
+            OQCInspectionResponse.model_validate(row),
+        )
+
     _OQC_SHIPMENT_NOTICE_PULL_ELIGIBLE_STATUSES = frozenset({"待发货", "已通知"})
     _OQC_SALES_DELIVERY_PULL_ELIGIBLE_STATUSES = frozenset({"待出库"})
 

@@ -64,7 +64,7 @@ def sales_order_capabilities_to_suggestions(
     if caps.approve.allowed:
         suggestions.append("驳回")
     _append_if_allowed(suggestions, caps.withdraw_submit, "撤回提交")
-    _append_if_allowed(suggestions, caps.revoke_approval, "反审核")
+    _append_if_allowed(suggestions, caps.revoke_approval, "撤销审核")
     _append_if_allowed(suggestions, caps.push_computation, "下推需求计算")
     _append_if_allowed(suggestions, caps.push_work_order, "建立工单")
     _append_if_allowed(suggestions, caps.push_shipment_notice, "下推发货通知")
@@ -135,7 +135,7 @@ def sales_forecast_capabilities_to_suggestions(
     if caps.approve.allowed:
         suggestions.append("驳回")
     _append_if_allowed(suggestions, caps.withdraw_submit, "撤回提交（回到草稿）")
-    _append_if_allowed(suggestions, caps.revoke_approval, "反审核")
+    _append_if_allowed(suggestions, caps.revoke_approval, "撤销审核")
     _append_if_allowed(suggestions, caps.push_computation, "下推需求计算")
 
     if current_stage_key == "pending_review" and caps.approve.allowed:
@@ -281,6 +281,8 @@ def quality_inspection_capabilities_to_suggestions(
     _append_if_allowed(suggestions, caps.approve, "审核通过")
     if caps.approve.allowed:
         suggestions.append("审核驳回")
+    _append_if_allowed(suggestions, caps.revoke_approval, "撤销审核")
+    _append_if_allowed(suggestions, caps.revoke_conduct, "撤回检验")
     if current_stage_key == "pending":
         return suggestions or ["执行检验"]
     if current_stage_key == "pending_review" and caps.approve.allowed:

@@ -283,6 +283,7 @@ class QualityInspectionCapabilities(BaseModel):
     approve: ActionCapability
     reject: ActionCapability
     revoke_approval: ActionCapability
+    revoke_conduct: ActionCapability
     create_defect: ActionCapability
     push_purchase_return: ActionCapability
     push_rework: ActionCapability
@@ -296,6 +297,7 @@ class OQCInspectionCapabilities(BaseModel):
     approve: ActionCapability
     reject: ActionCapability
     revoke_approval: ActionCapability
+    revoke_conduct: ActionCapability
     delete: ActionCapability
     print: ActionCapability
 
@@ -597,6 +599,10 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "quality_inspection.conduct.approved_locked": "已审核的检验单不可执行检验，请先撤销审核",
     "quality_inspection.approve.not_pending": "检验单审核状态不是待审核",
     "quality_inspection.revoke_approval.not_approved": "仅已审核通过的检验单可撤销审核",
+    "quality_inspection.revoke_conduct.not_allowed": "当前状态不可撤回检验",
+    "quality_inspection.revoke_conduct.not_conducted": "检验单尚未执行检验，无需撤回",
+    "quality_inspection.revoke_conduct.need_revoke_approval": "请先撤销审核，再撤回检验",
+    "quality_inspection.revoke_conduct.has_downstream": "该检验单已有下游单据，请先处理后再撤回检验",
     "quality_inspection.create_defect.not_allowed": "只有已检验且不合格的检验单才能登记不良",
     "quality_inspection.push_purchase_return.not_allowed": "只有不合格的来料检验单才能下推采购退货单",
     "quality_inspection.push_purchase_return.already_pushed": "不合格数量已全部下推采购退货，删除待退货单后可再次下推",
@@ -625,6 +631,10 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "oqc_inspection.conduct.approved_locked": "已审核的出货检验单不可执行检验，请先撤销审核",
     "oqc_inspection.approve.not_pending": "出货检验单当前不可审核",
     "oqc_inspection.revoke_approval.not_approved": "仅已审核通过的出货检验单可撤销审核",
+    "oqc_inspection.revoke_conduct.not_allowed": "当前状态不可撤回检验",
+    "oqc_inspection.revoke_conduct.not_conducted": "出货检验单尚未执行检验，无需撤回",
+    "oqc_inspection.revoke_conduct.need_revoke_approval": "请先撤销审核，再撤回检验",
+    "oqc_inspection.revoke_conduct.has_downstream": "该出货检验单已有下游单据，请先处理后再撤回检验",
     "oqc_inspection.delete.not_pending": "仅待检验状态的出货检验单可删除",
     "oqc_inspection.pull_from_shipment_notice.not_allowed": "当前状态的发货通知单不可加载出货检验",
     "oqc_inspection.pull_from_shipment_notice.no_lines": "发货通知单无需要出货检验的明细",

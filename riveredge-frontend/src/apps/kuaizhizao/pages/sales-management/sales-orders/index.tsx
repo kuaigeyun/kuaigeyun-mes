@@ -1418,6 +1418,7 @@ const SalesOrdersPage: React.FC = () => {
   const [workOrderGranularity, setWorkOrderGranularity] = useState<'grouped' | 'per_unit'>('grouped');
   const [pushShipmentNoticeWarehouseOptions, setPushShipmentNoticeWarehouseOptions] = useState<Array<{ label: string; value: number }>>([]);
   const [pushShipmentNoticeLineWh, setPushShipmentNoticeLineWh] = useState<Record<number, number>>({});
+  const [pushReturnLineBatch, setPushReturnLineBatch] = useState<Record<number, string>>({});
 
   const resolvePushPreviewModalTitle = (
     targetType: NonNullable<PushPreviewResponse['target_type']>,
@@ -1453,6 +1454,7 @@ const SalesOrdersPage: React.FC = () => {
     setWorkOrderGranularity('grouped');
     setPushShipmentNoticeWarehouseOptions([]);
     setPushShipmentNoticeLineWh({});
+    setPushReturnLineBatch({});
     const ensureWorkCentersLoaded = async () => {
       if (workCenterList.length > 0) return;
       try {
@@ -1516,6 +1518,22 @@ const SalesOrdersPage: React.FC = () => {
               }
             });
             setPushShipmentNoticeLineWh(lineWh);
+            if (res.target_type === 'sales_return') {
+              const lineBatch: Record<number, string> = {};
+              rows.forEach((row) => {
+                const itemId = Number((row as any).item_id);
+                const suggested = String((row as any).batch_number ?? '').trim();
+                if (
+                  Number.isFinite(itemId) &&
+                  itemId > 0 &&
+                  (row as any).requires_batch_number &&
+                  suggested
+                ) {
+                  lineBatch[itemId] = suggested;
+                }
+              });
+              setPushReturnLineBatch(lineBatch);
+            }
           }
         } else if (res?.target_type === 'sales_invoice') {
           const ids = (res.items || [])
@@ -1710,6 +1728,7 @@ const SalesOrdersPage: React.FC = () => {
           return;
         }
         const returnQuantities: Record<number, number> = {};
+        const batchNumbers: Record<number, string> = {};
         const warehouseIds = new Set<number>();
         for (const id of selectedIds) {
           const row = rowById.get(id);
@@ -1729,6 +1748,18 @@ const SalesOrdersPage: React.FC = () => {
             );
             return;
           }
+          if (row?.requires_batch_number) {
+            const batchNo = String(pushReturnLineBatch[id] ?? row?.batch_number ?? '').trim();
+            if (!batchNo) {
+              messageApi.warning(
+                t('app.kuaizhizao.salesOrder.pushReturnSelectLineBatch', {
+                  material: row?.material_code || row?.material_name || id,
+                }),
+              );
+              return;
+            }
+            batchNumbers[id] = batchNo;
+          }
           returnQuantities[id] = qty;
           warehouseIds.add(lineWh);
         }
@@ -1746,6 +1777,7 @@ const SalesOrdersPage: React.FC = () => {
           warehouse_id: warehouseId,
           warehouse_name: warehouseOption?.label,
           return_quantities: returnQuantities,
+          batch_numbers: Object.keys(batchNumbers).length ? batchNumbers : undefined,
         });
         messageApi.success(
           t('app.kuaizhizao.salesOrder.returnCreated', {
@@ -1789,6 +1821,7 @@ const SalesOrdersPage: React.FC = () => {
       setWorkOrderGranularity('grouped');
       setPushShipmentNoticeWarehouseOptions([]);
       setPushShipmentNoticeLineWh({});
+      setPushReturnLineBatch({});
     } catch (error: any) {
       messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.pushFailed')));
     } finally {
@@ -4851,6 +4884,7 @@ const SalesOrdersPage: React.FC = () => {
           setWorkOrderGranularity('grouped');
           setPushShipmentNoticeWarehouseOptions([]);
           setPushShipmentNoticeLineWh({});
+          setPushReturnLineBatch({});
         }}
         okText={t('app.kuaizhizao.salesOrder.confirmPush')}
         cancelText={t('common.cancel')}
@@ -5316,7 +5350,7 @@ const SalesOrdersPage: React.FC = () => {
               <Table
                 size="small"
                 dataSource={pushPreviewData.items}
-                scroll={{ x: 1180 }}
+                scroll={{ x: 1320 }}
                 columns={[
                   {
                     title: t('common.select'),
@@ -5371,6 +5405,50 @@ const SalesOrdersPage: React.FC = () => {
                           options={pushShipmentNoticeWarehouseOptions}
                           onChange={(nv) => {
                             setPushShipmentNoticeLineWh((prev) => ({ ...prev, [itemId]: Number(nv) }));
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  {
+                    title: t('app.kuaizhizao.warehouseCommon.colBatchNo'),
+                    key: 'batch_number',
+                    width: 150,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                      if (!row?.requires_batch_number) {
+                        return <Typography.Text type="secondary">—</Typography.Text>;
+                      }
+                      const selected = workOrderSelectedItemIds.includes(itemId);
+                      const options = (Array.isArray(row.outbound_batch_options) ? row.outbound_batch_options : [])
+                        .map((batch: string) => String(batch || '').trim())
+                        .filter(Boolean)
+                        .map((batch: string) => ({ label: batch, value: batch }));
+                      if (options.length > 1) {
+                        return (
+                          <Select
+                            style={{ width: '100%', minWidth: 120 }}
+                            placeholder={t('app.kuaizhizao.salesOrder.pushReturnSelectBatchPlaceholder')}
+                            showSearch
+                            optionFilterProp="label"
+                            disabled={!selected}
+                            value={pushReturnLineBatch[itemId] || undefined}
+                            options={options}
+                            onChange={(nv) => {
+                              setPushReturnLineBatch((prev) => ({ ...prev, [itemId]: String(nv ?? '') }));
+                            }}
+                          />
+                        );
+                      }
+                      return (
+                        <Input
+                          style={{ width: '100%', minWidth: 120 }}
+                          placeholder={t('app.kuaizhizao.salesOrder.pushReturnSelectBatchPlaceholder')}
+                          disabled={!selected}
+                          value={pushReturnLineBatch[itemId] ?? ''}
+                          onChange={(e) => {
+                            setPushReturnLineBatch((prev) => ({ ...prev, [itemId]: e.target.value }));
                           }}
                         />
                       );

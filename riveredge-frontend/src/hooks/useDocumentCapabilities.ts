@@ -218,7 +218,7 @@ export const SALES_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'sales_order.close.not_approved': '只有已审核通过的订单才能关闭',
   'sales_order.withdraw_submit.not_allowed': '只能撤回已提交且未审核的订单（待审核或已生效）',
   'sales_order.withdraw_submit.computation_pushed': '订单已下推需求计算，请先在「下推」菜单中撤回计算后再撤回提交',
-  'sales_order.revoke_approval.not_allowed': '只能反审核已审核或已驳回的订单',
+  'sales_order.revoke_approval.not_allowed': '只能撤销审核已审核或已驳回的订单',
   'sales_order.push.requires_approved': '只能下推已审核的销售订单',
   'sales_order.push.closed': '订单已关闭，无法继续执行',
   'sales_order.push.cancelled': '订单已取消，无法继续执行',
@@ -1235,6 +1235,10 @@ export const QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES: Record<string, strin
   'quality_inspection.update.not_editable': '已审核的检验单不可编辑，请先撤销审核',
   'quality_inspection.approve.not_pending': '检验单审核状态不是待审核',
   'quality_inspection.revoke_approval.not_approved': '仅已审核通过的检验单可撤销审核',
+  'quality_inspection.revoke_conduct.not_allowed': '当前状态不可撤回检验',
+  'quality_inspection.revoke_conduct.not_conducted': '检验单尚未执行检验，无需撤回',
+  'quality_inspection.revoke_conduct.need_revoke_approval': '请先撤销审核，再撤回检验',
+  'quality_inspection.revoke_conduct.has_downstream': '该检验单已有下游单据，请先处理后再撤回检验',
   'quality_inspection.create_defect.not_allowed': '只有已检验且不合格的检验单才能登记不良',
   'quality_inspection.push_purchase_return.not_allowed': '只有不合格的来料检验单才能下推采购退货单',
   'quality_inspection.push_purchase_return.already_pushed': '不合格数量已全部下推采购退货，删除待退货单后可再次下推',
@@ -1265,6 +1269,10 @@ export const OQC_INSPECTION_CAPABILITY_REASON_MESSAGES: Record<string, string> =
   'oqc_inspection.conduct.approved_locked': '已审核的出货检验单不可执行检验，请先撤销审核',
   'oqc_inspection.approve.not_pending': '出货检验单当前不可审核',
   'oqc_inspection.revoke_approval.not_approved': '仅已审核通过的出货检验单可撤销审核',
+  'oqc_inspection.revoke_conduct.not_allowed': '当前状态不可撤回检验',
+  'oqc_inspection.revoke_conduct.not_conducted': '出货检验单尚未执行检验，无需撤回',
+  'oqc_inspection.revoke_conduct.need_revoke_approval': '请先撤销审核，再撤回检验',
+  'oqc_inspection.revoke_conduct.has_downstream': '该出货检验单已有下游单据，请先处理后再撤回检验',
   'oqc_inspection.delete.not_pending': '仅待检验状态的出货检验单可删除',
   'oqc_inspection.pull_from_shipment_notice.not_allowed': '当前状态的发货通知单不可加载出货检验',
   'oqc_inspection.pull_from_shipment_notice.no_lines': '发货通知单无需要出货检验的明细',
@@ -1307,6 +1315,7 @@ export interface QualityInspectionCapabilitiesShape {
   approve?: ActionCapability;
   reject?: ActionCapability;
   revoke_approval?: ActionCapability;
+  revoke_conduct?: ActionCapability;
   create_defect?: ActionCapability;
   push_purchase_return?: ActionCapability;
   update?: ActionCapability;
@@ -1363,6 +1372,14 @@ export function qualityInspectionRowGates(
       QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES,
       'app.kuaizhizao.quality.capability',
     ),
+    revokeConduct: qualityCapView(
+      caps?.revoke_conduct,
+      inspectionPerms.canUpdate,
+      permDeniedTitle,
+      t,
+      QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES,
+      'app.kuaizhizao.quality.capability',
+    ),
     update: qualityCapView(
       caps?.update,
       inspectionPerms.canUpdate,
@@ -1396,7 +1413,7 @@ export function oqcInspectionCapabilityReasonMessage(
 }
 
 export function oqcInspectionRowGates(
-  record: { capabilities?: { conduct?: ActionCapability; delete?: ActionCapability } } | null | undefined,
+  record: { capabilities?: { conduct?: ActionCapability; delete?: ActionCapability; revoke_conduct?: ActionCapability } } | null | undefined,
   oqcPerms: ResourcePermissionGates,
   t?: TFunction,
   permDeniedTitle?: string,
@@ -1414,6 +1431,14 @@ export function oqcInspectionRowGates(
     delete: qualityCapView(
       caps?.delete,
       oqcPerms.canDelete,
+      permDeniedTitle,
+      t,
+      OQC_INSPECTION_CAPABILITY_REASON_MESSAGES,
+      'app.kuaizhizao.quality.oqc.capability',
+    ),
+    revokeConduct: qualityCapView(
+      caps?.revoke_conduct,
+      oqcPerms.canUpdate,
       permDeniedTitle,
       t,
       OQC_INSPECTION_CAPABILITY_REASON_MESSAGES,

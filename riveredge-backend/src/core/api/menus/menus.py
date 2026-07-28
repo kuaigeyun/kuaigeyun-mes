@@ -125,11 +125,16 @@ async def get_menu_tree(
         application_uuid=application_uuid,
         is_active=is_active,
         use_cache=use_cache,
+        overlay_manifest_sort=False,
     )
 
 
 @router.get("/navigation-tree", response_model=List[MenuTreeResponse])
 async def get_navigation_menu_tree(
+    fresh: bool = Query(
+        False,
+        description="为 true 时跳过缓存，供自组菜单编辑等需与保存校验一致的场景",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -137,7 +142,7 @@ async def get_navigation_menu_tree(
     侧栏 / 工作台导航用菜单树：任意登录用户可读（仅返回 is_active=true）。
     可见性由前端按 RBAC 过滤；勿与菜单管理接口共用 system.menu 权限。
     """
-    use_cache = _menu_cache_enabled()
+    use_cache = _menu_cache_enabled() and not fresh
 
     return await MenuService.get_menu_tree(
         tenant_id=tenant_id,
@@ -258,7 +263,7 @@ async def get_menu(
     """
     try:
         menu = await MenuService.get_menu_by_uuid(tenant_id=tenant_id, menu_uuid=uuid)
-        return MenuResponse.model_validate(menu)
+        return await MenuService.enrich_menu_response_for_admin(tenant_id, menu)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

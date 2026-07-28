@@ -149,6 +149,8 @@ export const qualityApi = {
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}`, { method: 'GET' }),
     conduct: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/conduct`, { method: 'POST', data }),
+    revokeConduct: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/revoke-conduct`, { method: 'POST' }),
     approve: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, { method: 'POST', data }),
     pushToPurchaseReturn: async (id: string) =>
@@ -204,6 +206,8 @@ export const qualityApi = {
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/process-inspections/${id}`, { method: 'GET' }),
     conduct: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/process-inspections/${id}/conduct`, { method: 'POST', data }),
+    revokeConduct: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/process-inspections/${id}/revoke-conduct`, { method: 'POST' }),
     approve: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/process-inspections/${id}/approve`, { method: 'POST', data }),
     createFromWorkOrder: async (workOrderId: string, operationId: string) =>
@@ -238,6 +242,8 @@ export const qualityApi = {
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}`, { method: 'GET' }),
     conduct: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/conduct`, { method: 'POST', data }),
+    revokeConduct: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/revoke-conduct`, { method: 'POST' }),
     approve: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/approve`, { method: 'POST', data }),
     pushToRework: async (id: string, data?: { quantity?: number }) =>

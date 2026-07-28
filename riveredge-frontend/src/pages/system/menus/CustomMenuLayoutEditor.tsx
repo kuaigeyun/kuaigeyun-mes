@@ -106,6 +106,64 @@ function collectMenuUuidsFromGroups(groups: CustomLayoutGroupNode[]): string[] {
   return uuids;
 }
 
+export function collectMenuUuidsFromSourceTree(sourceTree: MenuTree[]): Set<string> {
+  const uuids = new Set<string>();
+  const walk = (nodes: MenuTree[]) => {
+    nodes.forEach((node) => {
+      uuids.add(node.uuid);
+      if (node.children?.length) walk(node.children);
+    });
+  };
+  walk(sourceTree);
+  return uuids;
+}
+
+/** 移除已失效的 menu_ref（菜单已禁用、删除或应用已卸载） */
+export function pruneStaleMenuRefsFromEditorState(
+  state: CustomLayoutEditorState,
+  validMenuUuids: Set<string>,
+): { state: CustomLayoutEditorState; removedCount: number } {
+  const before = collectMenuUuidsFromGroups(state.appGroups).length;
+  const pruneGroup = (group: CustomLayoutGroupNode): CustomLayoutGroupNode => ({
+    ...group,
+    menuUuids: group.menuUuids.filter((uuid) => validMenuUuids.has(uuid)),
+    children: group.children.map(pruneGroup),
+  });
+  const appGroups = state.appGroups.map(pruneGroup);
+  const after = collectMenuUuidsFromGroups(appGroups).length;
+  return {
+    state: { ...state, appGroups },
+    removedCount: before - after,
+  };
+}
+
+export function sanitizeCustomLayoutNodes(
+  nodes: CustomMenuLayoutNode[],
+  validMenuUuids: Set<string>,
+): { nodes: CustomMenuLayoutNode[]; removedCount: number } {
+  let removedCount = 0;
+  const walk = (items: CustomMenuLayoutNode[]): CustomMenuLayoutNode[] => {
+    const next: CustomMenuLayoutNode[] = [];
+    items.forEach((node) => {
+      if (node.type === 'menu_ref') {
+        const menuUuid = String(node.menu_uuid || '').trim();
+        if (menuUuid && validMenuUuids.has(menuUuid)) {
+          next.push(node);
+        } else {
+          removedCount += 1;
+        }
+        return;
+      }
+      next.push({
+        ...node,
+        children: walk(node.children || []),
+      });
+    });
+    return next;
+  };
+  return { nodes: walk(nodes), removedCount };
+}
+
 function findGroupNode(
   groups: CustomLayoutGroupNode[],
   id: string,
@@ -419,7 +477,9 @@ export function buildCustomLayoutPayload(
 ): { enabled: boolean; nodes: CustomMenuLayoutNode[] } {
   const buildGroupNode = (group: CustomLayoutGroupNode): CustomMenuLayoutNode => {
     const childGroups = group.children.map(buildGroupNode);
-    const menuRefs = (group.menuUuids || []).map((uuid) => {
+    const menuRefs = (group.menuUuids || [])
+      .filter((uuid) => menuLookup.has(uuid))
+      .map((uuid) => {
       const source = menuLookup.get(uuid);
       const override = state.menuOverrides[uuid] || {};
       return {
@@ -653,7 +713,7 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
           mode="multiple"
           size="small"
           style={{ width: '100%' }}
-          value={group.menuUuids}
+          value={group.menuUuids.filter((uuid) => menuLookup.has(uuid))}
           disabled={group.type === 'app_group'}
           onChange={(value) =>
             setAppGroups((prev) =>

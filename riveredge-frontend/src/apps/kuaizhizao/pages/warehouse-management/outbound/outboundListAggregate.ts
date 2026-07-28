@@ -1,9 +1,11 @@
+import type { CurrentUser } from '../../../../../types/api';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { outsourceMaterialIssueApi } from '../../../services/production';
 import {
   normalizeWarehouseListResponse,
   sortOutboundHubRows,
 } from '../../../utils/warehouseListCore';
+import { shouldFetchOutboundHubType } from '../../../utils/warehouseHubFetchGates';
 import type { OutboundHubOrder } from './outboundHubTypes';
 import {
   mapOutsourceIssueToOutbound,
@@ -38,16 +40,17 @@ export type OutboundListEnrichers = {
 export async function fetchOutboundHubList(
   params: Record<string, unknown>,
   enrichers: OutboundListEnrichers,
+  user: CurrentUser | undefined,
 ): Promise<{ data: OutboundHubOrder[]; total: number; success: boolean }> {
   const skip = (((params.current as number) || 1) - 1) * ((params.pageSize as number) || 20);
   const limit = (params.pageSize as number) || 20;
   const typeFilter = params.outbound_type as string | undefined;
 
-  const fetchPicking = !typeFilter || typeFilter === 'production_picking';
-  const fetchDelivery = !typeFilter || typeFilter === 'sales_delivery';
-  const fetchOutsource = !typeFilter || typeFilter === 'outsource_issue';
-  const fetchOther = !typeFilter || typeFilter === 'other_outbound';
-  const fetchBorrow = !typeFilter || typeFilter === 'material_borrow';
+  const fetchPicking = shouldFetchOutboundHubType(user, typeFilter, 'production_picking');
+  const fetchDelivery = shouldFetchOutboundHubType(user, typeFilter, 'sales_delivery');
+  const fetchOutsource = shouldFetchOutboundHubType(user, typeFilter, 'outsource_issue');
+  const fetchOther = shouldFetchOutboundHubType(user, typeFilter, 'other_outbound');
+  const fetchBorrow = shouldFetchOutboundHubType(user, typeFilter, 'material_borrow');
 
   const listParams = {
     skip: 0,

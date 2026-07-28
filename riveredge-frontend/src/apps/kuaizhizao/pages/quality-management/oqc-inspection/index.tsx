@@ -3,7 +3,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDigit, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { Alert, App, Button, Descriptions, Empty, Modal, Spin, Table, Typography } from 'antd';
 import type { DescriptionsProps, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EyeOutlined, PlusOutlined, RollbackOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -64,6 +64,10 @@ import {
   renderQualityResultTag,
   renderReleaseDecisionTag,
 } from '../components/qualityMeta';
+import {
+  filterDeletableQualityInspectionRecords,
+  filterRevokeConductQualityInspectionRecords,
+} from '../components/qualityRevokeConduct';
 import {
   buildOqcSalesDeliveryPullColumns,
   buildOqcShipmentNoticePullColumns,
@@ -357,6 +361,55 @@ const OQCInspectionPage: React.FC = () => {
     [messageApi, t],
   );
 
+  const handleRevokeConduct = useCallback(
+    (record: OQCInspection) => {
+      if (record.id == null) return;
+      Modal.confirm({
+        title: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle'),
+        content: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmContent', {
+          code: record.inspection_code || record.id,
+        }),
+        onOk: async () => {
+          await qualityImprovementApi.oqc.revokeConduct(Number(record.id));
+          messageApi.success(t('app.kuaizhizao.quality.common.messages.revokeConductSuccess'));
+          actionRef.current?.reload();
+        },
+      });
+    },
+    [messageApi, t],
+  );
+
+  const handleBatchRevokeConduct = useCallback(async () => {
+    const targets = filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch);
+    if (!targets.length) {
+      messageApi.warning(t('app.kuaizhizao.quality.common.messages.revokeConductBatchEmpty'));
+      return;
+    }
+    Modal.confirm({
+      title: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle'),
+      content: t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', { count: targets.length }),
+      onOk: async () => {
+        try {
+          for (const row of targets) {
+            if (row.id == null) continue;
+            await qualityImprovementApi.oqc.revokeConduct(Number(row.id));
+          }
+          messageApi.success(
+            t('app.kuaizhizao.quality.common.messages.revokeConductBatchSuccess', { count: targets.length }),
+          );
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(
+            oqcInspectionCapabilityReasonMessage(error?.message, t) ||
+              error?.message ||
+              t('app.kuaizhizao.quality.common.messages.revokeConductFailed'),
+          );
+        }
+      },
+    });
+  }, [messageApi, selectedRecordsForBatch, t]);
+
   const renderOqcRowNodes = useCallback(
     (record: OQCInspection): React.ReactNode[] => {
       const gates = oqcInspectionRowGates(record, oqcPerms, t);
@@ -406,6 +459,25 @@ const OQCInspectionPage: React.FC = () => {
           })}
         />,
       );
+      if (gates.revokeConduct.allowed) {
+        nodes.push(
+          <Button
+            {...rowActionKind('update')}
+            key="revoke-conduct"
+            size="small"
+            type="link"
+            icon={<RollbackOutlined />}
+            disabled={gates.revokeConduct.disabled}
+            title={gates.revokeConduct.title}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRevokeConduct(record);
+            }}
+          >
+            {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
+          </Button>,
+        );
+      }
       if (gates.delete.allowed) {
         nodes.push(
           <Button
@@ -428,7 +500,7 @@ const OQCInspectionPage: React.FC = () => {
       }
       return nodes;
     },
-    [handleDeleteRow, handleDetail, oqcPerms, openConductModal, t],
+    [handleDeleteRow, handleDetail, handleRevokeConduct, oqcPerms, openConductModal, t],
   );
 
   const detailBaseColumns: ProDescriptionsItemProps<OQCInspection>[] = useMemo(
@@ -561,12 +633,20 @@ const OQCInspectionPage: React.FC = () => {
             }
           }}
           showDeleteButton
-          onDelete={async (keys) => {
+          onDelete={async () => {
             try {
-              for (const key of keys) {
-                await qualityImprovementApi.oqc.delete(Number(key));
+              const deletable = filterDeletableQualityInspectionRecords(selectedRecordsForBatch);
+              if (!deletable.length) {
+                messageApi.warning(t('app.kuaizhizao.quality.common.messages.deleteBatchEmpty'));
+                return;
               }
-              messageApi.success(t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: keys.length }));
+              for (const row of deletable) {
+                if (row.id == null) continue;
+                await qualityImprovementApi.oqc.delete(Number(row.id));
+              }
+              messageApi.success(
+                t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: deletable.length }),
+              );
               setSelectedRowKeys([]);
               actionRef.current?.reload();
             } catch (e: any) {
@@ -576,6 +656,9 @@ const OQCInspectionPage: React.FC = () => {
           deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.oqc.messages.deleteConfirm', { count })}
           deleteConfirmDescription={t('app.kuaizhizao.quality.oqc.messages.deleteConfirmDescription')}
           toolBarActionsAfterDelete={[
+            <Button key="revoke-conduct-batch" icon={<RollbackOutlined />} onClick={() => void handleBatchRevokeConduct()}>
+              {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
+            </Button>,
             <UniAuditBatchMenuButton
               key="oqc-inspection-batch-menu"
               selectedRowKeys={selectedRowKeys}

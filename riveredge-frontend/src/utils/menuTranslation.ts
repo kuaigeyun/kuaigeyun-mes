@@ -188,6 +188,30 @@ export function getAppDisplayName(
   return fallback ?? '';
 }
 
+/** 库内菜单/应用名为租户自定义文案（非 i18n key） */
+export function isTenantCustomMenuDisplayName(name?: string | null): boolean {
+  const n = (name || '').trim();
+  if (!n) return false;
+  if (n.startsWith('sys.')) return false;
+  if (n.startsWith('app.') && n.includes('.')) return false;
+  return true;
+}
+
+/**
+ * 侧栏 APP 分组标题：租户在菜单/应用中心改过名称时优先用库内名，否则走 locale。
+ */
+export function resolveAppMenuGroupDisplayName(
+  appCode: string,
+  dbName: string | undefined,
+  t: (key: string, options?: { defaultValue?: string }) => string,
+): string {
+  const name = (dbName || '').trim();
+  if (isTenantCustomMenuDisplayName(name)) {
+    return name;
+  }
+  return getAppDisplayName(appCode, t, name);
+}
+
 /**
  * 应用描述：优先 app.${code}.desc，其次 sys.app.${code}.desc，最后 fallback
  */
@@ -348,6 +372,11 @@ export function translateAppMenuItemName(
   let relativePath: string | null = null;
 
   if (path) {
+    const normalized = path.replace(/\/$/, '');
+    const rootAppCode = extractAppCodeFromPath(path);
+    if (rootAppCode && normalized === `/apps/${rootAppCode}`) {
+      return resolveAppMenuGroupDisplayName(rootAppCode, name, t);
+    }
     const fromPath = translateAppMenuByPath(path, t);
     if (fromPath) return fromPath;
     appCode = extractAppCodeFromPath(path);

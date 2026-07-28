@@ -52,6 +52,61 @@ _CUSTOM_MENU_LAYOUT_KEY = "custom_menu_layout"
 
 class MenuService:
     @staticmethod
+    def _parse_app_root_code(path: Optional[str]) -> Optional[str]:
+        if not path:
+            return None
+        normalized = str(path).strip().rstrip("/")
+        matched = re.fullmatch(r"/apps/([^/]+)", normalized)
+        return matched.group(1).lower() if matched else None
+
+    @staticmethod
+    def _is_app_root_menu_path(path: Optional[str]) -> bool:
+        return MenuService._parse_app_root_code(path) is not None
+
+    @staticmethod
+    async def _sync_app_root_menu_to_application(
+        tenant_id: int,
+        menu: Menu,
+        update_data: Dict[str, Any],
+    ) -> None:
+        """应用根入口菜单的名称/排序写入 core_applications（与应用中心一致）。"""
+        if not MenuService._is_app_root_menu_path(menu.path) or not menu.application_uuid:
+            return
+        from core.schemas.application import ApplicationUpdate
+
+        app_fields: Dict[str, Any] = {}
+        if "name" in update_data:
+            app_fields["name"] = update_data["name"]
+            app_fields["is_custom_name"] = True
+        if "sort_order" in update_data:
+            app_fields["sort_order"] = update_data["sort_order"]
+            app_fields["is_custom_sort"] = True
+        if not app_fields:
+            return
+        await ApplicationService.update_application(
+            tenant_id=tenant_id,
+            uuid=str(menu.application_uuid),
+            data=ApplicationUpdate(**app_fields),
+            sync_derived_resources=False,
+        )
+
+    @staticmethod
+    async def enrich_menu_response_for_admin(
+        tenant_id: int,
+        menu: Menu,
+    ) -> MenuResponse:
+        """菜单管理详情：应用根入口展示/编辑应用级名称与排序。"""
+        payload = MenuResponse.model_validate(menu).model_dump()
+        if MenuService._is_app_root_menu_path(menu.path) and menu.application_uuid:
+            app = await ApplicationService.get_application_by_uuid_optional(
+                tenant_id, str(menu.application_uuid)
+            )
+            if app:
+                payload["name"] = app.get("name") or payload.get("name")
+                payload["sort_order"] = int(app.get("sort_order") or 0)
+        return MenuResponse.model_validate(payload)
+
+    @staticmethod
     def _infer_root_entry_permission(path: Optional[str], parent_id: Optional[int]) -> Optional[str]:
         """为根入口兜底推导 permission_code（仅根节点）。"""
         if parent_id is not None or not path:
@@ -493,13 +548,59 @@ class MenuService:
         return by_uuid
 
     @staticmethod
-    def _validate_custom_menu_layout_nodes(
+    async def _resolve_active_menu_ref_paths(
+        tenant_id: int,
+        menu_uuids: List[str],
+        source_lookup: Dict[str, MenuTreeResponse],
+    ) -> Dict[str, str]:
+        """
+        解析 menu_ref 可用路径：优先导航树，树中不可达时再查库。
+
+        导航树会过滤孤儿节点（父级已禁用等），但库内菜单仍可能 is_active=true；
+        仅用树校验会导致「菜单存在却保存失败」的偶发误报。
+        """
+        paths: Dict[str, str] = {}
+        missing_from_tree: List[str] = []
+        for menu_uuid in menu_uuids:
+            source = source_lookup.get(menu_uuid)
+            if source and source.path:
+                paths[menu_uuid] = str(source.path).strip()
+            elif menu_uuid not in paths:
+                missing_from_tree.append(menu_uuid)
+
+        if not missing_from_tree:
+            return paths
+
+        db_menus = await Menu.filter(
+            tenant_id=tenant_id,
+            uuid__in=missing_from_tree,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).all()
+        visible_app_uuids: set[str] | None = None
+        for menu in db_menus:
+            app_uuid = menu.application_uuid
+            if app_uuid:
+                if visible_app_uuids is None:
+                    visible_apps = await ApplicationService.get_installed_applications(
+                        tenant_id=tenant_id
+                    )
+                    visible_app_uuids = {str(a["uuid"]) for a in visible_apps}
+                if str(app_uuid) not in visible_app_uuids:
+                    continue
+            paths[str(menu.uuid)] = str(menu.path or "").strip()
+        return paths
+
+    @staticmethod
+    async def _validate_custom_menu_layout_nodes(
+        tenant_id: int,
         nodes: List[CustomMenuLayoutNode],
         source_lookup: Dict[str, MenuTreeResponse],
     ) -> None:
         flat_nodes = MenuService._iter_custom_layout_nodes(nodes)
         seen_ids: set[str] = set()
         seen_menu_refs: set[str] = set()
+        ref_uuids: List[str] = []
         for node in flat_nodes:
             node_id = (node.id or "").strip()
             if not node_id:
@@ -514,12 +615,24 @@ class MenuService:
             if menu_uuid in seen_menu_refs:
                 raise ValidationError(f"菜单引用重复：{menu_uuid}")
             seen_menu_refs.add(menu_uuid)
+            ref_uuids.append(menu_uuid)
 
-            source = source_lookup.get(menu_uuid)
-            if not source:
+        ref_paths = await MenuService._resolve_active_menu_ref_paths(
+            tenant_id, ref_uuids, source_lookup
+        )
+        for node in flat_nodes:
+            if node.type != "menu_ref":
+                continue
+            menu_uuid = (node.menu_uuid or "").strip()
+            source_path = ref_paths.get(menu_uuid)
+            if source_path is None:
                 raise ValidationError(f"引用菜单不存在或已禁用：{menu_uuid}")
 
-            if node.menu_path and source.path and str(node.menu_path).strip() != str(source.path).strip():
+            if (
+                node.menu_path
+                and source_path
+                and str(node.menu_path).strip() != source_path
+            ):
                 raise ValidationError(f"菜单路径校验失败：{menu_uuid}")
 
     @staticmethod
@@ -556,7 +669,9 @@ class MenuService:
             cache_key_suffix="nav_v1",
         )
         source_lookup = MenuService._collect_menu_tree_lookup(source_tree)
-        MenuService._validate_custom_menu_layout_nodes(data.nodes, source_lookup)
+        await MenuService._validate_custom_menu_layout_nodes(
+            tenant_id, data.nodes, source_lookup
+        )
 
         settings_row = await SiteSettingService.get_settings(tenant_id)
         current = MenuService._normalize_custom_menu_layout(
@@ -780,6 +895,7 @@ class MenuService:
         use_cache: bool = True,
         *,
         cache_key_suffix: str = "",
+        overlay_manifest_sort: bool = True,
     ) -> List[MenuTreeResponse]:
         """
         获取菜单树
@@ -791,6 +907,7 @@ class MenuService:
             is_active: 是否启用过滤（可选）
             use_cache: 是否使用缓存（默认True）
             cache_key_suffix: 缓存键附加段（导航树与管理树分离）
+            overlay_manifest_sort: 是否用 manifest 排序覆盖响应 sort_order（侧栏为 true，菜单管理为 false）
             
         Returns:
             List[MenuTreeResponse]: 菜单树列表
@@ -800,9 +917,10 @@ class MenuService:
         #     使部署改动 manifest 后自动失效；改版本号使旧缓存失效
         suffix = f"_{cache_key_suffix}" if cache_key_suffix else ""
         manifest_fp = MenuService._get_manifest_fingerprint()
+        overlay_tag = "o1" if overlay_manifest_sort else "o0"
         cache_key_value = (
             f"p{parent_uuid or 'root'}_a{application_uuid or 'all'}"
-            f"_i{is_active if is_active is not None else 'all'}_v7{suffix}_m{manifest_fp}"
+            f"_i{is_active if is_active is not None else 'all'}_v7{suffix}_m{manifest_fp}_{overlay_tag}"
         )
         cache_key = MenuService._get_cache_key(tenant_id, "tree", cache_key_value)
         
@@ -921,13 +1039,26 @@ class MenuService:
             tenant_id, app_uuids
         )
         MenuService._sort_menu_tree_children_inplace(root_menus, manifest_sort_indexes)
-        MenuService._overlay_manifest_sort_order_on_tree(root_menus, manifest_sort_indexes)
+        if overlay_manifest_sort:
+            MenuService._overlay_manifest_sort_order_on_tree(root_menus, manifest_sort_indexes)
 
-        # 第三遍：如果根菜单有关联应用，按应用的 sort_order 排序
         # 使用 ApplicationService（raw SQL）避免 Tortoise 模型列与数据库不一致
         applications = await ApplicationService.get_applications_uuid_sort_order(tenant_id)
         app_sort_order_map = {a["uuid"]: a["sort_order"] for a in applications}
+
+        def apply_app_root_admin_sort(items: List[MenuTreeResponse]) -> None:
+            for node in items:
+                if MenuService._is_app_root_menu_path(node.path) and node.application_uuid:
+                    app_sort = app_sort_order_map.get(str(node.application_uuid))
+                    if app_sort is not None:
+                        node.sort_order = int(app_sort)
+                if node.children:
+                    apply_app_root_admin_sort(node.children)
+
+        if not overlay_manifest_sort:
+            apply_app_root_admin_sort(root_menus)
         
+        # 第三遍：如果根菜单有关联应用，按应用的 sort_order 排序
         # 按应用的 sort_order 排序根菜单（如果有关联应用）
         # 没有关联应用的菜单保持原顺序（按菜单的 sort_order）
         root_menus.sort(key=lambda m: (
@@ -1056,6 +1187,8 @@ class MenuService:
             if hasattr(menu, key):
                 setattr(menu, key, value)
 
+        await MenuService._sync_app_root_menu_to_application(tenant_id, menu, update_data)
+
         next_is_external = menu.is_external
         next_external_url = menu.external_url
         if next_is_external and not (next_external_url or "").strip():
@@ -1086,7 +1219,7 @@ class MenuService:
                     )
                 )
         
-        return MenuResponse.model_validate(menu)
+        return await MenuService.enrich_menu_response_for_admin(tenant_id, menu)
     
     @staticmethod
     async def delete_menu(

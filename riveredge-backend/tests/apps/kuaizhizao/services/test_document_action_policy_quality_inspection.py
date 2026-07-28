@@ -90,6 +90,37 @@ def test_revoke_when_approved():
     assert not caps.approve.allowed
 
 
+def test_revoke_conduct_when_inspected():
+    caps = derive_quality_inspection_capabilities(
+        _inspection(status="已检验", inspection_result="已检验", review_status=""),
+    )
+    assert caps.revoke_conduct.allowed
+
+
+def test_revoke_conduct_blocked_when_approved():
+    caps = derive_quality_inspection_capabilities(
+        _inspection(status="已审核", review_status="通过", inspection_result="已检验"),
+    )
+    assert not caps.revoke_conduct.allowed
+    assert caps.revoke_conduct.reason == "quality_inspection.revoke_conduct.need_revoke_approval"
+
+
+def test_revoke_conduct_blocked_when_pending():
+    caps = derive_quality_inspection_capabilities(_inspection())
+    assert not caps.revoke_conduct.allowed
+    assert caps.revoke_conduct.reason == "quality_inspection.revoke_conduct.not_conducted"
+
+
+def test_revoke_conduct_blocked_when_pushed_return():
+    caps = derive_quality_inspection_capabilities(
+        _inspection(status="已检验", inspection_result="已检验", quality_status="不合格", unqualified_quantity=2),
+        supports_purchase_return=True,
+        pushed_purchase_return_quantity=1.0,
+    )
+    assert not caps.revoke_conduct.allowed
+    assert caps.revoke_conduct.reason == "quality_inspection.revoke_conduct.has_downstream"
+
+
 def test_revoke_denied_when_inspected_pending():
     caps = derive_quality_inspection_capabilities(
         _inspection(status="已检验", review_status="待审核", inspection_result="已检验"),

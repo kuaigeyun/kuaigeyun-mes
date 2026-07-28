@@ -2772,6 +2772,7 @@ cmd_start_prod() {
             exit 1
         fi
     fi
+    cmd_migrate
     record_deploy_release_metadata
     start_backend_prod
     start_worker_prod

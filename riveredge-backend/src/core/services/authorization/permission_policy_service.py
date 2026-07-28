@@ -732,6 +732,34 @@ class PermissionPolicyService:
         return f"{raw[0]}{'*' * (len(raw) - 2)}{raw[-1]}"
 
     @classmethod
+    async def _collect_user_granted_field_policy_resources(
+        cls, tenant_id: int, role_uuids: Iterable[str]
+    ) -> set[str]:
+        """用户全部角色已勾选、且 manifest 真源存在的 app:resource（字段权限默认 full 的范围）。"""
+        allowed = await cls._collect_allowed_function_resources(tenant_id=tenant_id)
+        out: set[str] = set()
+        for role_uuid in role_uuids:
+            role_resources = await cls._collect_role_granted_function_resources(
+                tenant_id, role_uuid
+            )
+            out |= role_resources
+        return out & allowed
+
+    @classmethod
+    def _merge_field_mask_levels(
+        cls,
+        nested: dict[str, dict[str, str]],
+        *,
+        resource: str,
+        field: str,
+        level: str,
+    ) -> None:
+        priority = {FieldMaskLevel.FULL: 0, FieldMaskLevel.MASKED: 1, FieldMaskLevel.HIDDEN: 2}
+        prev = nested.get(resource, {}).get(field, FieldMaskLevel.FULL)
+        if priority.get(level, 0) > priority.get(prev, 0):
+            nested.setdefault(resource, {})[field] = level
+
+    @classmethod
     async def get_user_effective_field_masks(
         cls,
         tenant_id: int,
@@ -741,12 +769,27 @@ class PermissionPolicyService:
     ) -> dict[str, dict[str, str]]:
         """
         当前用户各业务资源下的有效字段掩码（多角色取最严格级别）。
+        默认可配置字段为 full（与角色字段权限页 synthetic 一致；save 时 full 不落库）；
         返回形如 {"kuaizhizao:quotation": {"tax_amount": "full", "unit_price": "masked"}}。
         """
         role_uuids = await cls._collect_user_role_uuids(tenant_id=tenant_id, user_id=user_id)
         if not role_uuids:
             return {}
         alias_map = await cls._load_tenant_field_alias_map(tenant_id=tenant_id)
+        user_resources = await cls._collect_user_granted_field_policy_resources(
+            tenant_id, role_uuids
+        )
+        if resource:
+            normalized_filter = cls._normalize_resource(resource)
+            user_resources = (
+                {normalized_filter} if normalized_filter in user_resources else set()
+            )
+
+        nested: dict[str, dict[str, str]] = {}
+        for res in user_resources:
+            for field_name in cls._masked_fields_for_resource(res):
+                nested.setdefault(res, {})[field_name] = FieldMaskLevel.FULL
+
         query = FieldPermissionPolicy.filter(
             tenant_id=tenant_id,
             role_uuid__in=role_uuids,
@@ -755,19 +798,16 @@ class PermissionPolicyService:
         if resource:
             query = query.filter(resource=cls._normalize_resource(resource))
         policies = await query.all()
-        if not policies:
-            return {}
-
-        priority = {FieldMaskLevel.FULL: 0, FieldMaskLevel.MASKED: 1, FieldMaskLevel.HIDDEN: 2}
-        nested: dict[str, dict[str, str]] = {}
         for row in policies:
             res = cls._normalize_resource(row.resource)
-            field = cls._canonicalize_field_name_with_aliases(row.field_name, alias_map)
-            if not res or not field:
+            if res not in user_resources:
                 continue
-            prev = nested.get(res, {}).get(field)
-            if prev is None or priority.get(row.mask_level, 0) > priority.get(prev, 0):
-                nested.setdefault(res, {})[field] = row.mask_level
+            field = cls._canonicalize_field_name_with_aliases(row.field_name, alias_map)
+            if not field or not cls._is_valid_field_policy_pair(res, field):
+                continue
+            cls._merge_field_mask_levels(
+                nested, resource=res, field=field, level=row.mask_level
+            )
         return nested
 
     @classmethod

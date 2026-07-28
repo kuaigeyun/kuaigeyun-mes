@@ -1374,7 +1374,7 @@ async def push_sales_order_to_sales_return(
     sales_order_id: int = Path(..., description="销售订单ID"),
     body: Optional[Dict[str, Any]] = Body(
         default=None,
-        description="必填：warehouse_id；可选：warehouse_name、return_quantities={\"item_id\": qty}、return_code",
+        description="必填：warehouse_id；可选：warehouse_name、return_quantities={\"item_id\": qty}、batch_numbers={\"item_id\": batch}、return_code",
     ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -1409,6 +1409,18 @@ async def push_sales_order_to_sales_return(
             except Exception:
                 continue
 
+    batch_numbers_raw = payload.get("batch_numbers")
+    batch_numbers = None
+    if isinstance(batch_numbers_raw, dict):
+        batch_numbers = {}
+        for k, v in batch_numbers_raw.items():
+            try:
+                batch_text = str(v or "").strip()
+                if batch_text:
+                    batch_numbers[int(k)] = batch_text
+            except Exception:
+                continue
+
     try:
         return await sales_order_service.push_sales_order_to_sales_return(
             tenant_id=tenant_id,
@@ -1417,6 +1429,7 @@ async def push_sales_order_to_sales_return(
             warehouse_id=warehouse_id,
             warehouse_name=payload.get("warehouse_name"),
             return_quantities=return_quantities,
+            batch_numbers=batch_numbers,
             return_code=payload.get("return_code"),
         )
     except NotFoundError as e:

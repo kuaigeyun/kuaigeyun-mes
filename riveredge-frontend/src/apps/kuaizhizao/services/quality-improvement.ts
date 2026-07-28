@@ -223,6 +223,8 @@ export const qualityImprovementApi = {
       }),
     conduct: async (id: number, data: any) =>
       apiRequest<OQCInspection>(`/apps/kuaizhizao/oqc-inspections/${id}/conduct`, { method: 'POST', data }),
+    revokeConduct: async (id: number) =>
+      apiRequest<OQCInspection>(`/apps/kuaizhizao/oqc-inspections/${id}/revoke-conduct`, { method: 'POST' }),
     approve: async (id: number, approve = true) =>
       apiRequest<OQCInspection>(`/apps/kuaizhizao/oqc-inspections/${id}/approve`, {
         method: 'POST',

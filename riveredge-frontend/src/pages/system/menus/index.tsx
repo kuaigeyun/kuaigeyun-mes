@@ -16,6 +16,9 @@ import {
   LinkOutlined,
   CheckCircleOutlined,
   HomeOutlined,
+  UndoOutlined,
+  NodeCollapseOutlined,
+  NodeExpandOutlined,
 } from '@ant-design/icons';
 import { App, Button, Tag, Space, Popconfirm, Tooltip, Descriptions, Col, Modal, Spin, Switch, Typography } from 'antd';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
@@ -38,6 +41,7 @@ import {
   getMenuCustomLayout,
   updateMenuCustomLayout,
   getNavigationMenuTree,
+  syncAllMenus,
 } from '../../../services/menu';
 import { getApplicationList } from '../../../services/application';
 import { useGlobalStore } from '../../../stores';
@@ -51,11 +55,25 @@ import {
 } from '../../../utils/menuTranslation';
 import CustomMenuLayoutEditor, {
   buildCustomLayoutPayload,
+  collectMenuUuidsFromSourceTree,
   parseCustomLayoutEditorState,
+  pruneStaleMenuRefsFromEditorState,
+  sanitizeCustomLayoutNodes,
   type CustomLayoutEditorState,
 } from './CustomMenuLayoutEditor';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 import { renderMenuIconMarker, renderMenuSourceMarker } from './menuMeta';
+
+function isAppRootMenuPath(path?: string | null): boolean {
+  if (!path) return false;
+  const normalized = String(path).trim().replace(/\/$/, '');
+  return /^\/apps\/[^/]+$/.test(normalized);
+}
+
+function isManifestSyncedAppMenuName(name?: string | null): boolean {
+  const n = (name || '').trim();
+  return n.startsWith('app.') && n.includes('.menu.');
+}
 
 // 菜单图标展示（与侧栏 ManufacturingIcons 一致）
 const IconItem = ({ icon }: { icon?: string }) => renderMenuIconByKey(icon, 16);
@@ -160,6 +178,15 @@ const MenuListPage: React.FC = () => {
   const [currentMenuUuid, setCurrentMenuUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
+
+  const editingMenuMeta = useMemo(() => {
+    const path = formInitialValues?.path as string | undefined;
+    const name = formInitialValues?.name as string | undefined;
+    const isAppRoot = isAppRootMenuPath(path);
+    const isManifestMenu =
+      !!formInitialValues?.application_uuid && isManifestSyncedAppMenuName(name) && !isAppRoot;
+    return { isAppRoot, isManifestMenu };
+  }, [formInitialValues]);
   
   // 菜单树数据缓存（用于父菜单选择）
   const [menuTreeData, setMenuTreeData] = useState<MenuTree[]>([]);
@@ -173,8 +200,7 @@ const MenuListPage: React.FC = () => {
 
   // 展开/收起状态
   const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
-  // 选中行状态（用于批量删除）
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [restoreDefaultLoading, setRestoreDefaultLoading] = useState(false);
   // 缓存扁平化数据
   const [allMenus, setAllMenus] = useState<Menu[]>([]);
   const [customLayoutModalOpen, setCustomLayoutModalOpen] = useState(false);
@@ -212,18 +238,6 @@ const MenuListPage: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: [...EFFECTIVE_HOME_QUERY_KEY] });
   }, [queryClient]);
 
-  const customLayoutMenuLookup = useMemo(() => {
-    const byUuid = new Map<string, MenuTree>();
-    const walk = (nodes: MenuTree[]) => {
-      nodes.forEach((node) => {
-        byUuid.set(node.uuid, node);
-        if (node.children?.length) walk(node.children);
-      });
-    };
-    walk(customLayoutSourceTree);
-    return byUuid;
-  }, [customLayoutSourceTree]);
-
   useEffect(() => {
     setShowAppMenuNames(configShowAppMenuNames);
   }, [configShowAppMenuNames]);
@@ -251,13 +265,23 @@ const MenuListPage: React.FC = () => {
       setCustomLayoutModalOpen(true);
       const [layout, sourceTree] = await Promise.all([
         getMenuCustomLayout(),
-        getNavigationMenuTree(),
+        getNavigationMenuTree({ fresh: true }),
       ]);
       setCustomLayoutSourceTree(sourceTree);
+      const validMenuUuids = collectMenuUuidsFromSourceTree(sourceTree);
       const parsed = parseCustomLayoutEditorState(layout.nodes || [], t);
-      setCustomLayoutEditorState({ ...parsed, enabled: !!layout.enabled });
-      setCustomLayoutActiveGroupId(parsed.appGroups[0]?.id);
+      const { state: prunedState, removedCount } = pruneStaleMenuRefsFromEditorState(
+        { ...parsed, enabled: !!layout.enabled },
+        validMenuUuids,
+      );
+      setCustomLayoutEditorState(prunedState);
+      setCustomLayoutActiveGroupId(prunedState.appGroups[0]?.id);
       setShowAppMenuNames(layout.show_app_names !== false);
+      if (removedCount > 0) {
+        messageApi.warning(
+          t('pages.system.menus.customLayoutStaleRefsRemoved', { count: removedCount }),
+        );
+      }
     } catch (error: any) {
       messageApi.error(error?.message || t('pages.system.menus.customLayoutLoadFailed'));
     } finally {
@@ -268,12 +292,31 @@ const MenuListPage: React.FC = () => {
   const handleSaveCustomLayout = useCallback(async () => {
     try {
       setCustomLayoutSaving(true);
-      const payload = buildCustomLayoutPayload(customLayoutEditorState, customLayoutMenuLookup);
+      const sourceTree = await getNavigationMenuTree({ fresh: true });
+      const validMenuUuids = collectMenuUuidsFromSourceTree(sourceTree);
+      const { state: prunedState, removedCount } = pruneStaleMenuRefsFromEditorState(
+        customLayoutEditorState,
+        validMenuUuids,
+      );
+      const menuLookup = new Map<string, MenuTree>();
+      const walk = (nodes: MenuTree[]) => {
+        nodes.forEach((node) => {
+          menuLookup.set(node.uuid, node);
+          if (node.children?.length) walk(node.children);
+        });
+      };
+      walk(sourceTree);
+      const payload = buildCustomLayoutPayload(prunedState, menuLookup);
       await updateMenuCustomLayout({
         ...payload,
         show_app_names: showAppMenuNames,
       });
       patchShowAppMenuNamesConfig(showAppMenuNames);
+      if (removedCount > 0) {
+        messageApi.warning(
+          t('pages.system.menus.customLayoutStaleRefsRemoved', { count: removedCount }),
+        );
+      }
       messageApi.success(t('pages.system.menus.customLayoutSaveSuccess'));
       setCustomLayoutModalOpen(false);
       refreshLayoutMenus();
@@ -285,7 +328,6 @@ const MenuListPage: React.FC = () => {
     }
   }, [
     customLayoutEditorState,
-    customLayoutMenuLookup,
     messageApi,
     patchShowAppMenuNamesConfig,
     refreshLayoutMenus,
@@ -299,14 +341,27 @@ const MenuListPage: React.FC = () => {
       setShowAppMenuNames(checked);
       setShowAppMenuNamesSaving(true);
       try {
-        const layout = await getMenuCustomLayout();
+        const [layout, sourceTree] = await Promise.all([
+          getMenuCustomLayout(),
+          getNavigationMenuTree({ fresh: true }),
+        ]);
+        const validMenuUuids = collectMenuUuidsFromSourceTree(sourceTree);
+        const { nodes, removedCount } = sanitizeCustomLayoutNodes(
+          layout.nodes || [],
+          validMenuUuids,
+        );
         await updateMenuCustomLayout({
           enabled: !!layout.enabled,
           show_app_names: checked,
-          nodes: layout.nodes || [],
+          nodes,
         });
         patchShowAppMenuNamesConfig(checked);
         refreshLayoutMenus();
+        if (removedCount > 0) {
+          messageApi.warning(
+            t('pages.system.menus.customLayoutStaleRefsRemoved', { count: removedCount }),
+          );
+        }
         messageApi.success(
           checked
             ? t('pages.system.menus.showAppNamesEnabled')
@@ -473,38 +528,31 @@ const MenuListPage: React.FC = () => {
     }
   }, [messageApi, refreshLayoutMenus, t]);
 
-  const handleBatchDelete = useCallback(async (keys: React.Key[]) => {
-    const canDeleteKeys: string[] = [];
-    const cannotDeleteNames: string[] = [];
-
-    keys.forEach((key) => {
-      const menu = allMenus.find((m) => m.uuid === key);
-      if (menu) {
-        if (menu.application_uuid) {
-          cannotDeleteNames.push(menu.name + '(' + t('pages.system.menus.appMenuSuffix') + ')');
-        } else if (allMenus.some((m) => m.parent_uuid === menu.uuid)) {
-          cannotDeleteNames.push(menu.name);
-        } else {
-          canDeleteKeys.push(menu.uuid);
-        }
-      }
+  const handleRestoreDefault = useCallback(async () => {
+    setRestoreDefaultLoading(true);
+    messageApi.loading({
+      content: t('pages.system.menus.restoreDefaultLoading'),
+      key: 'restore-default',
     });
-
-    if (cannotDeleteNames.length > 0) {
-      messageApi.warning(t('pages.system.menus.cannotDeleteMenus', { names: cannotDeleteNames.join(', ') }));
-      return;
-    }
-
     try {
-      await Promise.all(canDeleteKeys.map((key) => deleteMenu(key)));
-      messageApi.success(t('pages.system.menus.batchDeleteSuccess'));
-      setSelectedRowKeys([]);
+      const result = await syncAllMenus();
       refreshLayoutMenus();
       actionRef.current?.reload();
-    } catch (e: any) {
-      messageApi.error(e.message || t('pages.system.menus.batchDeleteFailed'));
+      messageApi.success({
+        content: t('pages.system.menus.restoreDefaultSuccess', {
+          count: result.count ?? 0,
+        }),
+        key: 'restore-default',
+      });
+    } catch (error: any) {
+      messageApi.error({
+        content: error?.message || t('pages.system.menus.restoreDefaultFailed'),
+        key: 'restore-default',
+      });
+    } finally {
+      setRestoreDefaultLoading(false);
     }
-  }, [allMenus, messageApi, refreshLayoutMenus, t]);
+  }, [messageApi, refreshLayoutMenus, t]);
 
   const handleCreate = useCallback((parentUuid?: string) => {
     const parent = findMenuInTree(parentUuid, menuTreeData);
@@ -618,12 +666,20 @@ const MenuListPage: React.FC = () => {
                record.name,
                record.path,
                t,
-               treeItem.children
+               treeItem.children,
              );
+             const dbName = (record.name || '').trim();
+             const showDbHint = dbName.length > 0 && dbName !== displayName;
              return (
                <Space size={6}>
                  <IconItem icon={record.icon} />
-                 <span style={{ fontWeight: 500 }}>{displayName}</span>
+                 {showDbHint ? (
+                   <Tooltip title={t('pages.system.menus.dbMenuName', { name: dbName })}>
+                     <span style={{ fontWeight: 500 }}>{displayName}</span>
+                   </Tooltip>
+                 ) : (
+                   <span style={{ fontWeight: 500 }}>{displayName}</span>
+                 )}
                  {backendHome?.menu_uuid === record.uuid ? (
                    <Tag color="gold">{t('pages.system.menus.backendHomeCurrent')}</Tag>
                  ) : null}
@@ -770,14 +826,6 @@ const MenuListPage: React.FC = () => {
             showCreateButton
             createButtonText={t('pages.system.menus.createMenu')}
             onCreate={() => handleCreate()}
-            showDeleteButton
-            onDelete={handleBatchDelete}
-            deleteButtonText={t('pages.system.menus.batchDelete')}
-            deleteConfirmTitle={t('pages.system.menus.batchDeleteTitle')}
-            deleteConfirmDescription={(c) => t('pages.system.menus.batchDeleteDescription', { count: c })}
-            enableRowSelection
-            selectedRowKeys={selectedRowKeys}
-            onRowSelectionChange={setSelectedRowKeys}
             showImportButton={false}
             showExportButton={true}
             onExport={async (type, keys, pageData) => {
@@ -825,6 +873,13 @@ const MenuListPage: React.FC = () => {
                 : []),
                  <Button {...rowActionKind('skip')}
                     key="toggleExpand"
+                    icon={
+                      expandedRowKeys.length > 0 ? (
+                        <NodeCollapseOutlined />
+                      ) : (
+                        <NodeExpandOutlined />
+                      )
+                    }
                     onClick={() => {
                     if (expandedRowKeys.length > 0) {
                         setExpandedRowKeys([]);
@@ -835,8 +890,20 @@ const MenuListPage: React.FC = () => {
                 >
                     {expandedRowKeys.length > 0 ? t('pages.system.menus.collapseAll') : t('pages.system.menus.expandAll')}
                 </Button>,
-            ]}
-            toolBarActionsAfterDelete={[
+              <Popconfirm
+                {...rowActionKind('update')}
+                key="restoreDefault"
+                title={t('pages.system.menus.restoreDefaultTitle')}
+                description={t('pages.system.menus.restoreDefaultConfirm')}
+                onConfirm={() => void handleRestoreDefault()}
+              >
+                <Button
+                  icon={<UndoOutlined />}
+                  loading={restoreDefaultLoading}
+                >
+                  {t('pages.system.menus.restoreDefault')}
+                </Button>
+              </Popconfirm>,
               <Space key="showAppNames" align="center" size={8}>
                 <Typography.Text>{t('pages.system.menus.showAppNames')}</Typography.Text>
                 <Switch
@@ -880,6 +947,14 @@ const MenuListPage: React.FC = () => {
                label={t('pages.system.menus.menuName')}
                rules={[{ required: true, message: t('pages.system.menus.menuNameRequired') }]}
                placeholder={t('pages.system.menus.menuNamePlaceholder')}
+               disabled={isEdit && editingMenuMeta.isManifestMenu}
+               tooltip={
+                 editingMenuMeta.isAppRoot
+                   ? t('pages.system.menus.appRootNameHint')
+                   : editingMenuMeta.isManifestMenu
+                     ? t('menu.system.appMenuSyncTip')
+                     : undefined
+               }
                colProps={{ span: 12 }}
              />
              <ProFormText name="path" label={t('pages.system.menus.path')} placeholder={t('pages.system.menus.pathPlaceholder')} colProps={{ span: 12 }} />
@@ -938,8 +1013,15 @@ const MenuListPage: React.FC = () => {
              <ProFormText
                name="sort_order"
                label={t('pages.system.menus.sort')}
-               tooltip={t('pages.system.menus.sortOrderAppMenuHint')}
+               tooltip={
+                 editingMenuMeta.isAppRoot
+                   ? t('pages.system.menus.appRootSortHint')
+                   : editingMenuMeta.isManifestMenu
+                     ? t('pages.system.menus.sortOrderManifestHint')
+                     : t('pages.system.menus.sortOrderAppMenuHint')
+               }
                fieldProps={{ type: 'number' }}
+               disabled={isEdit && editingMenuMeta.isManifestMenu}
                colProps={{ span: 12 }}
              />
              <ProFormSwitch name="is_active" label={t('pages.system.menus.enabled')} colProps={{ span: 12 }} />

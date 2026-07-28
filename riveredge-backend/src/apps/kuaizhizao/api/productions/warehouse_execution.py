@@ -3863,6 +3863,7 @@ async def pull_sales_return_from_sales_order(
     warehouse_id = request.get("warehouse_id")
     warehouse_name = request.get("warehouse_name")
     return_quantities = request.get("return_quantities")
+    batch_numbers = request.get("batch_numbers")
     return_code = request.get("return_code")
 
     if not sales_order_id:
@@ -3882,6 +3883,7 @@ async def pull_sales_return_from_sales_order(
         warehouse_id=int(warehouse_id),
         warehouse_name=warehouse_name,
         return_quantities=return_quantities if isinstance(return_quantities, dict) else None,
+        batch_numbers=batch_numbers if isinstance(batch_numbers, dict) else None,
         return_code=return_code if return_code else None,
     )
 

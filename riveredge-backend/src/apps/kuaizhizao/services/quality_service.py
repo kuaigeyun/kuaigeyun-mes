@@ -1283,6 +1283,47 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             )
             return await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
 
+    async def revoke_conduct(
+        self, tenant_id: int, inspection_id: int, user_id: int
+    ) -> IncomingInspectionResponse:
+        """撤回来料检验（已检验/已驳回 → 待检验，清空检验结果）。"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+        from apps.kuaizhizao.services.quality_inspection_lifecycle import (
+            assert_revoke_conduct_no_downstream,
+            build_quality_inspection_revoke_conduct_fields,
+        )
+
+        async with in_transaction():
+            inspection = await IncomingInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+            if not inspection:
+                raise NotFoundError(f"来料检验单不存在: {inspection_id}")
+            pushed_return_qty = await self._pushed_purchase_return_quantity_for_inspection(
+                tenant_id, inspection_id
+            )
+            assert_quality_inspection_capability(
+                inspection,
+                "revoke_conduct",
+                supports_purchase_return=True,
+                pushed_purchase_return_quantity=pushed_return_qty,
+            )
+            await assert_revoke_conduct_no_downstream(
+                tenant_id,
+                entity_type="incoming_inspection",
+                source_id=inspection_id,
+                pushed_purchase_return_quantity=pushed_return_qty,
+            )
+            updater_name = await self.get_user_name(user_id)
+            await IncomingInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
+                **build_quality_inspection_revoke_conduct_fields(
+                    entity_type="incoming_inspection",
+                    updated_by=user_id,
+                    updated_by_name=updater_name,
+                )
+            )
+            return await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
+
     async def _ensure_missing_incoming_inspections_for_purchase_receipt(
         self,
         tenant_id: int,
@@ -2840,6 +2881,45 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
 
             return await self.get_process_inspection_by_id(tenant_id, inspection_id)
 
+    async def revoke_conduct(
+        self, tenant_id: int, inspection_id: int, user_id: int
+    ) -> ProcessInspectionResponse:
+        """撤回过程检验（已检验/已驳回 → 待检验，清空检验结果）。"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+        from apps.kuaizhizao.services.quality_inspection_lifecycle import (
+            assert_revoke_conduct_no_downstream,
+            build_quality_inspection_revoke_conduct_fields,
+        )
+
+        async with in_transaction():
+            inspection = await ProcessInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+            if not inspection:
+                raise NotFoundError(f"过程检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(inspection, "revoke_conduct")
+            await assert_revoke_conduct_no_downstream(
+                tenant_id,
+                entity_type="process_inspection",
+                source_id=inspection_id,
+            )
+            updater_name = await self.get_user_name(user_id)
+            await ProcessInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
+                **build_quality_inspection_revoke_conduct_fields(
+                    entity_type="process_inspection",
+                    updated_by=user_id,
+                    updated_by_name=updater_name,
+                )
+            )
+            if inspection.work_order_id:
+                from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+                await WorkOrderService().refresh_work_order_operation_transfer_state(
+                    tenant_id=tenant_id,
+                    work_order_id=int(inspection.work_order_id),
+                )
+            return await self.get_process_inspection_by_id(tenant_id, inspection_id)
+
     async def _reconcile_operation_quality_after_inspection(
         self,
         tenant_id: int,
@@ -3833,6 +3913,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             pushed_rework_quantity=await self._pushed_rework_quantity_for_inspection(
                 tenant_id, inspection_id
             ),
+            certificate_issued=bool(getattr(inspection, "certificate_issued", False)),
         )
         return await enrich_record(tenant_id, "finished_goods_inspection", resp)
 
@@ -4055,6 +4136,51 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 review_remarks=None,
                 updated_by=user_id,
                 updated_by_name=updater_name,
+            )
+            return await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
+
+    async def revoke_conduct(
+        self, tenant_id: int, inspection_id: int, user_id: int
+    ) -> FinishedGoodsInspectionResponse:
+        """撤回成品检验（已检验/已驳回 → 待检验，清空检验结果）。"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+        from apps.kuaizhizao.services.quality_inspection_lifecycle import (
+            assert_revoke_conduct_no_downstream,
+            build_quality_inspection_revoke_conduct_fields,
+        )
+
+        async with in_transaction():
+            inspection = await FinishedGoodsInspection.get_or_none(
+                tenant_id=tenant_id, id=inspection_id
+            )
+            if not inspection:
+                raise NotFoundError(f"成品检验单不存在: {inspection_id}")
+            pushed_rework_qty = await self._pushed_rework_quantity_for_inspection(
+                tenant_id, inspection_id
+            )
+            assert_quality_inspection_capability(
+                inspection,
+                "revoke_conduct",
+                supports_push_rework=True,
+                pushed_rework_quantity=pushed_rework_qty,
+                certificate_issued=bool(getattr(inspection, "certificate_issued", False)),
+            )
+            await assert_revoke_conduct_no_downstream(
+                tenant_id,
+                entity_type="finished_goods_inspection",
+                source_id=inspection_id,
+                pushed_rework_quantity=pushed_rework_qty,
+                certificate_issued=bool(getattr(inspection, "certificate_issued", False)),
+            )
+            updater_name = await self.get_user_name(user_id)
+            await FinishedGoodsInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
+                **build_quality_inspection_revoke_conduct_fields(
+                    entity_type="finished_goods_inspection",
+                    updated_by=user_id,
+                    updated_by_name=updater_name,
+                )
             )
             return await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
 

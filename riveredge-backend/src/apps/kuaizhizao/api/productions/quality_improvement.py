@@ -559,6 +559,20 @@ async def conduct_oqc_inspection(
     return await oqc_service.conduct(tenant_id=tenant_id, inspection_id=inspection_id, user_id=current_user.id, payload=payload)
 
 
+@router.post("/oqc-inspections/{inspection_id}/revoke-conduct", response_model=OQCInspectionResponse, summary="Revoke OQC inspection conduct")
+async def revoke_conduct_oqc_inspection(
+    inspection_id: int = Path(...),
+    _auth=_OQC_UPDATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OQCInspectionResponse:
+    return await oqc_service.revoke_conduct(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        user_id=current_user.id,
+    )
+
+
 @router.post("/oqc-inspections/{inspection_id}/approve", response_model=OQCInspectionResponse, summary="Approve OQC inspection")
 async def approve_oqc_inspection(
     request: Request,

@@ -1,3 +1,4 @@
+import type { CurrentUser } from '../../../../../types/api';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
 import {
@@ -9,7 +10,8 @@ import {
   normalizeWarehouseListResponse,
   sortInboundHubRows,
 } from '../../../utils/warehouseListCore';
-import type { InboundHubOrder, InboundReceiptType } from './inboundHubTypes';
+import { shouldFetchInboundHubType } from '../../../utils/warehouseHubFetchGates';
+import type { InboundHubOrder } from './inboundHubTypes';
 import { resolveInboundHubDateRaw, resolveInboundHubOperator } from './inboundHubTypes';
 
 function withInboundHubDisplayFields(row: InboundHubOrder): InboundHubOrder {
@@ -37,13 +39,10 @@ export type InboundListEnrichers = {
   enrichProductionReturnRecordsWithCustomFields: (rows: InboundHubOrder[]) => Promise<InboundHubOrder[]>;
 };
 
-function shouldFetchType(typeFilter: string | undefined, type: InboundReceiptType) {
-  return !typeFilter || typeFilter === type;
-}
-
 export async function fetchInboundHubList(
   params: Record<string, unknown>,
   enrichers: InboundListEnrichers,
+  user: CurrentUser | undefined,
 ): Promise<{ data: InboundHubOrder[]; total: number; success: boolean }> {
   const skip = (((params.current as number) || 1) - 1) * ((params.pageSize as number) || 20);
   const limit = (params.pageSize as number) || 20;
@@ -74,37 +73,37 @@ export async function fetchInboundHubList(
     otherInboundRes,
     materialReturnRes,
   ] = await Promise.all([
-    shouldFetchType(typeFilter, 'purchase')
+    shouldFetchInboundHubType(user, typeFilter, 'purchase')
       ? warehouseApi.purchaseReceipt.list(listParams)
       : Promise.resolve(emptyList),
-    shouldFetchType(typeFilter, 'finished_goods')
+    shouldFetchInboundHubType(user, typeFilter, 'finished_goods')
       ? warehouseApi.finishedGoodsReceipt.list(listParams)
       : Promise.resolve(emptyList),
-    shouldFetchType(typeFilter, 'semi_finished_goods')
+    shouldFetchInboundHubType(user, typeFilter, 'semi_finished_goods')
       ? warehouseApi.semiFinishedGoodsReceipt.list(listParams)
       : Promise.resolve(emptyList),
-    shouldFetchType(typeFilter, 'production_return')
+    shouldFetchInboundHubType(user, typeFilter, 'production_return')
       ? warehouseApi.productionReturn.list(listParams)
       : Promise.resolve(emptyList),
-    shouldFetchType(typeFilter, 'customer_material')
+    shouldFetchInboundHubType(user, typeFilter, 'customer_material')
       ? customerMaterialRegistrationApi.list(listParams)
       : Promise.resolve(emptyList),
-    shouldFetchType(typeFilter, 'sales_return')
+    shouldFetchInboundHubType(user, typeFilter, 'sales_return')
       ? warehouseApi.salesReturn.list(listParams)
       : Promise.resolve(emptyList),
-    shouldFetchType(typeFilter, 'outsource_receipt')
+    shouldFetchInboundHubType(user, typeFilter, 'outsource_receipt')
       ? outsourceMaterialReceiptApi.list(listParams)
       : Promise.resolve(emptyList),
-    shouldFetchType(typeFilter, 'outsource_material_return')
+    shouldFetchInboundHubType(user, typeFilter, 'outsource_material_return')
       ? outsourceMaterialReturnApi.list(listParams)
       : Promise.resolve(emptyList),
-    shouldFetchType(typeFilter, 'outsource_product_return')
+    shouldFetchInboundHubType(user, typeFilter, 'outsource_product_return')
       ? outsourceProductReturnApi.list(listParams)
       : Promise.resolve(emptyList),
-    shouldFetchType(typeFilter, 'other_inbound')
+    shouldFetchInboundHubType(user, typeFilter, 'other_inbound')
       ? warehouseApi.otherInbound.list(listParams)
       : Promise.resolve(emptyList),
-    shouldFetchType(typeFilter, 'material_return')
+    shouldFetchInboundHubType(user, typeFilter, 'material_return')
       ? warehouseApi.materialReturn.list(listParams)
       : Promise.resolve(emptyList),
   ]);

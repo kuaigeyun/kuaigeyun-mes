@@ -17,7 +17,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { getMenuCustomLayout, type MenuTree, type CustomMenuLayoutNode } from '../services/menu';
 import { refreshCurrentUserInStore } from '../services/auth';
-import { extractAppCodeFromPath, getAppDisplayName } from '../utils/menuTranslation';
+import { extractAppCodeFromPath, resolveAppMenuGroupDisplayName } from '../utils/menuTranslation';
 import { useGlobalStore } from '../stores';
 import { useConfigStore } from '../stores/configStore';
 import { filterMenuItemsByPermission, resolveUserForMenuPermission, isAppGroupTitleItem } from '../utils/permission';
@@ -339,7 +339,7 @@ export function useUnifiedMenuData(
           const code = firstPath ? extractAppCodeFromPath(firstPath) : null;
           const appName = (appMenu.meta as any)?.custom_layout_virtual
             ? appMenu.name
-            : (code ? getAppDisplayName(code, t, appMenu.name) : appMenu.name);
+            : (code ? resolveAppMenuGroupDisplayName(code, appMenu.name, t) : appMenu.name);
           appMenuItems.push({
             name: appName,
             label: appName,
@@ -413,7 +413,7 @@ export function useUnifiedMenuData(
         const code = firstPath ? extractAppCodeFromPath(firstPath) : null;
         const appName = (appMenu.meta as any)?.custom_layout_virtual
           ? appMenu.name
-          : (code ? getAppDisplayName(code, t, appMenu.name) : appMenu.name);
+          : (code ? resolveAppMenuGroupDisplayName(code, appMenu.name, t) : appMenu.name);
         return {
           ...convertMenuTreeToMenuDataItem(appMenu, true),
           name: appName,

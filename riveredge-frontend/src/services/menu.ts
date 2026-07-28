@@ -125,8 +125,13 @@ export async function getMenuTree(params?: {
 /**
  * 侧栏 / 工作台导航菜单树（任意登录用户可读，前端再按 RBAC 过滤）
  */
-export async function getNavigationMenuTree(): Promise<MenuTree[]> {
-  return apiRequest<MenuTree[]>('/core/menus/navigation-tree');
+export async function getNavigationMenuTree(options?: {
+  /** 跳过缓存，与自组菜单保存校验保持一致 */
+  fresh?: boolean;
+}): Promise<MenuTree[]> {
+  return apiRequest<MenuTree[]>('/core/menus/navigation-tree', {
+    params: options?.fresh ? { fresh: true } : undefined,
+  });
 }
 
 /** 获取租户级自组菜单布局（展示映射层） */

@@ -18,6 +18,7 @@ from apps.kuaizhizao.models.other_inbound import OtherInbound
 from apps.kuaizhizao.models.other_inbound_item import OtherInboundItem
 from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
 from apps.kuaizhizao.models.production_return import ProductionReturn
+from apps.kuaizhizao.models.production_return_item import ProductionReturnItem
 from apps.kuaizhizao.models.other_outbound import OtherOutbound
 from apps.kuaizhizao.models.other_outbound_item import OtherOutboundItem
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
@@ -194,6 +195,21 @@ async def _first_other_out_item_name(tenant_id: int, outbound_ids: List[int]) ->
         if it.outbound_id not in out:
             out[it.outbound_id] = it.material_name or ""
     return out
+
+
+async def _production_return_total_qty_by_ids(
+    tenant_id: int, return_ids: List[int]
+) -> Dict[int, float]:
+    """生产退料单头表无 total_quantity，按明细 return_quantity 汇总。"""
+    if not return_ids:
+        return {}
+    rows = (
+        await ProductionReturnItem.filter(tenant_id=tenant_id, return_id__in=return_ids)
+        .group_by("return_id")
+        .annotate(total=Sum("return_quantity"))
+        .values("return_id", "total")
+    )
+    return {int(row["return_id"]): float(row["total"] or 0) for row in rows}
 
 
 class WarehouseDashboardService:
@@ -422,15 +438,23 @@ class WarehouseDashboardService:
                 }))
             for r in pr_ret_list:
                 merged.append((r.created_at or datetime.min, "production_return", {
+                    "return_id": r.id,
                     "return_code": r.return_code,
-                    "total_quantity": float(r.total_quantity or 0),
                 }))
 
             merged.sort(key=lambda x: x[0], reverse=True)
             merged = merged[:limit]
 
             pr_ids = [m[2]["receipt_id"] for m in merged if m[1] == "purchase"]
-            labels = await _first_purchase_item_labels(tenant_id, pr_ids)
+            prod_return_ids = [
+                m[2]["return_id"]
+                for m in merged
+                if m[1] == "production_return" and m[2].get("return_id") is not None
+            ]
+            labels, prod_return_qty_map = await asyncio.gather(
+                _first_purchase_item_labels(tenant_id, pr_ids),
+                _production_return_total_qty_by_ids(tenant_id, prod_return_ids),
+            )
 
             pending = []
             for ts, kind, payload in merged:
@@ -454,10 +478,11 @@ class WarehouseDashboardService:
                         "doc_type": "finished_goods_receipt",
                     })
                 elif kind == "production_return":
+                    return_id = payload.get("return_id")
                     pending.append({
                         "doc_code": payload["return_code"],
                         "material_name": "生产退料",
-                        "quantity": payload["total_quantity"],
+                        "quantity": prod_return_qty_map.get(int(return_id), 0.0) if return_id else 0.0,
                         "time": _iso(ts if ts != datetime.min else None),
                         "doc_type": "production_return",
                     })

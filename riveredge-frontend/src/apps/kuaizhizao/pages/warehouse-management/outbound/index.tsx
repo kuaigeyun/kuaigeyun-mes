@@ -59,6 +59,7 @@ import {
 import { fetchOutboundHubList } from './outboundListAggregate';
 import { withdrawOutboundDocument, deleteOutboundDocument } from './outboundHubWithdraw';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useGlobalStore } from '../../../../../stores';
 import {
   type OutboundHubOrder,
   type OutboundIssueType,
@@ -187,6 +188,7 @@ const OutboundPage: React.FC = () => {
 
   const [executionConfig, setExecutionConfig] = useState<any>(null);
   const outboundPerms = useResourcePermissions('kuaizhizao:outbound');
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
 
   const [confirmPreviewOpen, setConfirmPreviewOpen] = useState(false);
@@ -859,7 +861,9 @@ const OutboundPage: React.FC = () => {
               {
               enrichProductionPickingRecordsWithCustomFields,
               enrichSalesDeliveryRecordsWithCustomFields,
-            });
+            },
+              currentUser,
+            );
             const next = new Map<string, OutboundOrder>();
             for (const row of result.data ?? []) {
               next.set(outboundRowKey(row), row);

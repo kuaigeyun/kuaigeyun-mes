@@ -298,10 +298,10 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
 
-  // 产品列表状态（只显示委外件）
+  // 产品/供应商列表：仅供新建/编辑弹窗与高级搜索供应商下拉；按需加载，无 master-data 权限时不阻断列表
   const [productList, setProductList] = useState<any[]>([]);
-  // 供应商列表状态
   const [supplierList, setSupplierList] = useState<any[]>([]);
+  const formReferenceLoadedRef = useRef(false);
   const [priorityOptions, setPriorityOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [priorityLoading, setPriorityLoading] = useState(false);
 
@@ -393,27 +393,39 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     canCreateWorkOrder?: boolean;
   } | null>(null);
 
-  // 初始化数据
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        // 加载产品列表（只显示委外件）
-        const productsRes = await materialApi.list({ isActive: true, limit: 1000 });
-        const outsourceProducts = unwrapMaterialList(productsRes).filter((p: any) =>
-          (p.sourceType === 'Outsource' || p.source_type === 'Outsource')
-        );
-        setProductList(outsourceProducts);
+  const loadFormReferenceData = useCallback(async () => {
+    if (formReferenceLoadedRef.current) return;
+    const [productsResult, suppliersResult] = await Promise.allSettled([
+      materialApi.list({ isActive: true, limit: 1000 }),
+      supplierApi.list({ isActive: true }),
+    ]);
+    let loaded = false;
+    if (productsResult.status === 'fulfilled') {
+      const outsourceProducts = unwrapMaterialList(productsResult.value).filter(
+        (p: { sourceType?: string; source_type?: string }) =>
+          p.sourceType === 'Outsource' || p.source_type === 'Outsource',
+      );
+      setProductList(outsourceProducts);
+      loaded = true;
+    }
+    if (suppliersResult.status === 'fulfilled') {
+      setSupplierList(unwrapSupplyPagedList(suppliersResult.value));
+      loaded = true;
+    }
+    if (loaded) {
+      formReferenceLoadedRef.current = true;
+    }
+  }, []);
 
-        // 加载供应商列表
-        const suppliers = unwrapSupplyPagedList(await supplierApi.list({ isActive: true }));
-        setSupplierList(suppliers);
-      } catch (error) {
-        window.console.error('获取数据失败:', error);
-        messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.fetchDataFailed'));
-      }
-    };
-    loadData();
-  }, [messageApi, t]);
+  useEffect(() => {
+    void loadFormReferenceData();
+  }, [loadFormReferenceData]);
+
+  useEffect(() => {
+    if (modalVisible) {
+      void loadFormReferenceData();
+    }
+  }, [modalVisible, loadFormReferenceData]);
 
   useEffect(() => {
     const loadPriority = async () => {

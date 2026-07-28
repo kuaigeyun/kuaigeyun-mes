@@ -3689,6 +3689,7 @@ class SalesOrderService:
         warehouse_id: int,
         warehouse_name: Optional[str] = None,
         return_quantities: Optional[Dict[int, float]] = None,
+        batch_numbers: Optional[Dict[int, str]] = None,
         return_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         """下推销售订单到销售退货单。"""
@@ -3711,6 +3712,7 @@ class SalesOrderService:
             warehouse_id=warehouse_id,
             warehouse_name=warehouse_name,
             return_quantities=return_quantities if isinstance(return_quantities, dict) else None,
+            batch_numbers=batch_numbers if isinstance(batch_numbers, dict) else None,
             return_code=return_code if return_code else None,
         )
         return {
@@ -4141,6 +4143,25 @@ class SalesOrderService:
         from apps.master_data.services.material_service import (
             resolve_primary_default_warehouse_from_material,
         )
+        from apps.kuaizhizao.services.warehouse_service import (
+            _list_sales_order_material_outbound_batches,
+        )
+
+        cfg = await self.business_config_service.get_business_config(tenant_id)
+        batch_mgmt_enabled = bool(
+            cfg.get("parameters", {}).get("warehouse", {}).get("batch_management", False)
+        )
+        material_ids = [
+            int(line.material_id)
+            for line in raw.lines
+            if getattr(line, "material_id", None) is not None
+        ]
+        materials = (
+            await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
+            if material_ids
+            else []
+        )
+        material_by_id = {int(m.id): m for m in materials}
 
         preview_items: List[Dict[str, Any]] = []
         for line in raw.lines:
@@ -4154,6 +4175,35 @@ class SalesOrderService:
                 )
                 if material_wh:
                     line_wh_id, line_wh_name = material_wh
+            material = material_by_id.get(int(material_id)) if material_id else None
+            requires_batch_number = bool(
+                batch_mgmt_enabled
+                and material
+                and getattr(material, "batch_managed", False)
+            )
+            outbound_batches: List[Dict[str, Any]] = []
+            suggested_batch: Optional[str] = None
+            outbound_batch_options: List[str] = []
+            sales_delivery_item_id: Optional[int] = None
+            sales_delivery_id: Optional[int] = None
+            if material_id:
+                outbound_batches = await _list_sales_order_material_outbound_batches(
+                    tenant_id=tenant_id,
+                    sales_order_id=sales_order_id,
+                    material_id=int(material_id),
+                )
+                for row in outbound_batches:
+                    batch = str(row.get("batch_number") or "").strip()
+                    if batch and batch not in outbound_batch_options:
+                        outbound_batch_options.append(batch)
+                if outbound_batches:
+                    for row in outbound_batches:
+                        batch = str(row.get("batch_number") or "").strip()
+                        if batch:
+                            suggested_batch = batch
+                            sales_delivery_item_id = row.get("sales_delivery_item_id")
+                            sales_delivery_id = row.get("sales_delivery_id")
+                            break
             preview_items.append(
                 {
                     "item_id": int(line.sales_order_item_id),
@@ -4165,12 +4215,18 @@ class SalesOrderService:
                     "max_push_quantity": float(line.source_pending_quantity),
                     "warehouse_id": line_wh_id,
                     "warehouse_name": line_wh_name,
+                    "requires_batch_number": requires_batch_number,
+                    "batch_number": suggested_batch,
+                    "outbound_batch_options": outbound_batch_options,
+                    "sales_delivery_id": sales_delivery_id,
+                    "sales_delivery_item_id": sales_delivery_item_id,
                 }
             )
 
         pushable_count = sum(
             1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
         )
+        batch_required = any(row.get("requires_batch_number") for row in preview_items)
         return {
             "target_type": "sales_return",
             "summary": (
@@ -4183,7 +4239,11 @@ class SalesOrderService:
             "blocking_reason": (
                 "sales_order.push_return.no_delivered" if not preview_items else None
             ),
-            "tip": "请为每行选择退入仓库；退货数量不能超过可退数量。",
+            "tip": (
+                "请为每行选择退入仓库并填写批号（批号管理物料必填）；退货数量不能超过可退数量。"
+                if batch_required
+                else "请为每行选择退入仓库；退货数量不能超过可退数量。"
+            ),
             "line_warehouse_required": True,
         }
 

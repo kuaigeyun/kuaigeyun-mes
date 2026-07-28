@@ -1272,6 +1272,7 @@ def enrich_quality_inspection_capabilities_on_response(
     supports_push_rework: bool = False,
     pushed_purchase_return_quantity: float = 0.0,
     pushed_rework_quantity: float = 0.0,
+    certificate_issued: bool = False,
 ) -> T:
     caps = derive_quality_inspection_capabilities(
         inspection,
@@ -1279,6 +1280,7 @@ def enrich_quality_inspection_capabilities_on_response(
         supports_push_rework=supports_push_rework,
         pushed_purchase_return_quantity=pushed_purchase_return_quantity,
         pushed_rework_quantity=pushed_rework_quantity,
+        certificate_issued=certificate_issued,
     )
     if hasattr(response, "model_copy"):
         attached = _attach_capabilities_to_response(response, caps)
@@ -1320,6 +1322,7 @@ def enrich_quality_inspection_list_capabilities(
             supports_push_rework=supports_push_rework,
             pushed_purchase_return_quantity=pushed_return_qty,
             pushed_rework_quantity=pushed_qty,
+            certificate_issued=bool(getattr(inspection, "certificate_issued", False)),
         )
         if hasattr(resp, "model_copy"):
             attached = _attach_capabilities_to_response(resp, caps)

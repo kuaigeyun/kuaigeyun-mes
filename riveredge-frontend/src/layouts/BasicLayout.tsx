@@ -43,7 +43,7 @@ import {
   translateAppMenuItemName,
   extractAppCodeFromPath,
   findMenuTitleWithTranslation,
-  getAppDisplayName,
+  resolveAppMenuGroupDisplayName,
   translateMenuItemTitle,
   type MenuDataItemWithLocaleKey,
 } from '../utils/menuTranslation';
@@ -5409,7 +5409,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             const firstChildPath = item.children?.[0]?.path;
             const fallback = item.name || item.label || '';
             const appCode = firstChildPath ? extractAppCodeFromPath(firstChildPath) : null;
-            const groupTitle = appCode ? getAppDisplayName(appCode, t, fallback) : fallback;
+            const groupTitle = appCode ? resolveAppMenuGroupDisplayName(appCode, fallback, t) : fallback;
 
             return (
               <div

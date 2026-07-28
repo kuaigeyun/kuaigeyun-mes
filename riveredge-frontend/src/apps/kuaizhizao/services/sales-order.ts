@@ -571,6 +571,7 @@ export async function pushSalesOrderToSalesReturn(
   warehouse_id: number;
   warehouse_name?: string;
   return_quantities?: Record<number, number>;
+  batch_numbers?: Record<number, string>;
   return_code?: string;
 }): Promise<PushToSalesReturnResponse> {
   return apiRequest<PushToSalesReturnResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-sales-return`, {

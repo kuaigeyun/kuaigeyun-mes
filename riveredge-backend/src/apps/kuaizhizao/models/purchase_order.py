@@ -14,13 +14,14 @@ from decimal import Decimal
 
 
 def effective_po_item_outstanding(item: "PurchaseOrderItem") -> Decimal:
-    """未到货数量：优先 stored outstanding；为 0 且仍有订单余量时用 ordered - received 推算。"""
+    """未到货数量：ordered - received 为真源；stored 仅作上限，避免与 received 不一致时重复下推。"""
     ordered = Decimal(str(item.ordered_quantity or 0))
     received = Decimal(str(item.received_quantity or 0))
     stored = Decimal(str(item.outstanding_quantity or 0))
-    if stored > 0:
-        return stored
-    return max(Decimal("0"), ordered - received)
+    computed = max(Decimal("0"), ordered - received)
+    if stored <= 0:
+        return computed
+    return min(stored, computed)
 
 
 class PurchaseOrder(BaseModel):

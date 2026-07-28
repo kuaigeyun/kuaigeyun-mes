@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from tortoise import timezone
+from tortoise.exceptions import IntegrityError
 
 from apps.kuaizhizao.services.customer_pool_list_core import apply_customer_pool_list_filters
 
@@ -30,6 +31,36 @@ from infra.models.user import User
 RESOURCE_CUSTOMER_POOL = "kuaizhizao:customer-pool"
 
 
+def _to_customer_pool_item(row: Customer) -> CustomerPoolItem:
+    """列表响应：显式映射字段，兼容 pool_status 历史脏数据。"""
+    raw_pool_status = str(getattr(row, "pool_status", None) or "").strip().lower()
+    if raw_pool_status in ("pool", "owned"):
+        pool_status = raw_pool_status
+    elif getattr(row, "salesman_id", None):
+        pool_status = "owned"
+    else:
+        pool_status = "pool"
+    return CustomerPoolItem(
+        id=int(row.id),
+        uuid=str(row.uuid),
+        code=str(row.code),
+        name=str(row.name),
+        short_name=getattr(row, "short_name", None),
+        contact_person=getattr(row, "contact_person", None),
+        phone=getattr(row, "phone", None),
+        salesman_id=getattr(row, "salesman_id", None),
+        salesman_name=getattr(row, "salesman_name", None),
+        pool_status=pool_status,
+        assigned_at=getattr(row, "assigned_at", None),
+        last_follow_up_at=getattr(row, "last_follow_up_at", None),
+        recycle_at=getattr(row, "recycle_at", None),
+        created_by_name=getattr(row, "created_by_name", None),
+        updated_by_name=getattr(row, "updated_by_name", None),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
 class CustomerPoolService:
     @staticmethod
     async def _get_rule(tenant_id: int) -> CustomerPoolRule:
@@ -39,7 +70,16 @@ class CustomerPoolService:
         ).first()
         if rule:
             return rule
-        return await CustomerPoolRule.create(tenant_id=tenant_id)
+        try:
+            return await CustomerPoolRule.create(tenant_id=tenant_id)
+        except IntegrityError:
+            rule = await CustomerPoolRule.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).first()
+            if rule:
+                return rule
+            raise
 
     @staticmethod
     async def _load_customer(tenant_id: int, customer_id: int) -> Customer:
@@ -305,7 +345,7 @@ class CustomerPoolService:
 
         total = await query.count()
         rows = await query.order_by(primary_order, secondary_order).offset(skip).limit(limit)
-        items = [CustomerPoolItem.model_validate(r) for r in rows]
+        items = [_to_customer_pool_item(r) for r in rows]
         return CustomerPoolListEnvelope(items=items, total=total)
 
     @classmethod
@@ -340,7 +380,7 @@ class CustomerPoolService:
             reason=body.reason if body else None,
             action="claim",
         )
-        return CustomerPoolItem.model_validate(customer)
+        return _to_customer_pool_item(customer)
 
     @classmethod
     async def assign_customer(
@@ -370,7 +410,7 @@ class CustomerPoolService:
             reason=body.reason,
             action="assign",
         )
-        return CustomerPoolItem.model_validate(customer)
+        return _to_customer_pool_item(customer)
 
     @classmethod
     async def release_customer(
@@ -395,7 +435,7 @@ class CustomerPoolService:
             reason=body.reason if body else None,
             action="release",
         )
-        return CustomerPoolItem.model_validate(customer)
+        return _to_customer_pool_item(customer)
 
     @classmethod
     async def recycle_customer(
@@ -419,7 +459,7 @@ class CustomerPoolService:
             operator=current_user,
             reason=body.reason if body else None,
         )
-        return CustomerPoolItem.model_validate(customer)
+        return _to_customer_pool_item(customer)
 
     @classmethod
     async def get_rule(

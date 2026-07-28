@@ -38,7 +38,7 @@ import {
 } from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EyeOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniPullQueryModal,
@@ -124,6 +124,10 @@ import {
   getQualityDefectTypeOptions,
   qualityInspectionUniAuditProps,
 } from '../components/qualityMeta';
+import {
+  filterDeletableQualityInspectionRecords,
+  filterRevokeConductQualityInspectionRecords,
+} from '../components/qualityRevokeConduct';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
@@ -748,6 +752,61 @@ const ProcessInspectionPage: React.FC = () => {
     [inspectionDetail?.id, messageApi, t],
   );
 
+  const handleRevokeConduct = useCallback(
+    (record: ProcessInspection) => {
+      if (record.id == null) return;
+      Modal.confirm({
+        title: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle'),
+        content: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmContent', {
+          code: record.inspection_code || record.id,
+        }),
+        onOk: async () => {
+          await qualityApi.processInspection.revokeConduct(String(record.id));
+          messageApi.success(t('app.kuaizhizao.quality.common.messages.revokeConductSuccess'));
+          if (inspectionDetail?.id === record.id) {
+            setDetailDrawerVisible(false);
+            setInspectionDetail(null);
+          }
+          invalidateStats();
+          actionRef.current?.reload();
+        },
+      });
+    },
+    [inspectionDetail?.id, messageApi, t],
+  );
+
+  const handleBatchRevokeConduct = useCallback(async () => {
+    const targets = filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch);
+    if (!targets.length) {
+      messageApi.warning(t('app.kuaizhizao.quality.common.messages.revokeConductBatchEmpty'));
+      return;
+    }
+    Modal.confirm({
+      title: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle'),
+      content: t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', { count: targets.length }),
+      onOk: async () => {
+        try {
+          for (const row of targets) {
+            if (row.id == null) continue;
+            await qualityApi.processInspection.revokeConduct(String(row.id));
+          }
+          messageApi.success(
+            t('app.kuaizhizao.quality.common.messages.revokeConductBatchSuccess', { count: targets.length }),
+          );
+          setSelectedRowKeys([]);
+          invalidateStats();
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(
+            qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+              error?.message ||
+              t('app.kuaizhizao.quality.common.messages.revokeConductFailed'),
+          );
+        }
+      },
+    });
+  }, [messageApi, selectedRecordsForBatch, t]);
+
   const renderProcessRowNodes = (record: ProcessInspection): React.ReactNode[] => {
     const gates = qualityInspectionRowGates(record, processPerms, ncPerms, t);
     const nodes: React.ReactNode[] = [
@@ -824,6 +883,25 @@ const ProcessInspectionPage: React.FC = () => {
         >
           {t('app.kuaizhizao.quality.common.actions.createDefect')}
         </Button>
+      );
+    }
+    if (gates.revokeConduct.allowed) {
+      nodes.push(
+        <Button
+          {...rowActionKind('update')}
+          key="revoke-conduct"
+          size="small"
+          type="link"
+          icon={<RollbackOutlined />}
+          disabled={gates.revokeConduct.disabled}
+          title={gates.revokeConduct.title}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleRevokeConduct(record);
+          }}
+        >
+          {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
+        </Button>,
       );
     }
     if (gates.delete.allowed) {
@@ -996,13 +1074,18 @@ const ProcessInspectionPage: React.FC = () => {
         showExportButton={true}
         onExport={handleExport}
         showDeleteButton={true}
-        onDelete={async (keys) => {
+        onDelete={async () => {
           try {
-            const ids = keys.map(Number);
-            for (const id of keys) {
+            const deletable = filterDeletableQualityInspectionRecords(selectedRecordsForBatch);
+            if (!deletable.length) {
+              messageApi.warning(t('app.kuaizhizao.quality.common.messages.deleteBatchEmpty'));
+              return;
+            }
+            const ids = deletable.map((row) => Number(row.id)).filter((id) => Number.isFinite(id));
+            for (const id of ids) {
               await qualityApi.processInspection.delete(String(id));
             }
-            messageApi.success(t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: keys.length }));
+            messageApi.success(t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: ids.length }));
             setSelectedRowKeys([]);
             if (inspectionDetail?.id != null && ids.includes(inspectionDetail.id)) {
               setDetailDrawerVisible(false);
@@ -1015,6 +1098,9 @@ const ProcessInspectionPage: React.FC = () => {
           }
         }}
         toolBarActionsAfterDelete={[
+          <Button key="revoke-conduct-batch" icon={<RollbackOutlined />} onClick={() => void handleBatchRevokeConduct()}>
+            {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
+          </Button>,
           <UniAuditBatchMenuButton
             key="process-inspection-batch-menu"
             selectedRowKeys={selectedRowKeys}

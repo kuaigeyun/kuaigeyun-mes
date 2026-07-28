@@ -11,6 +11,9 @@ from apps.kuaizhizao.services.document_action_policy.types import (
     CAPABILITY_REASON_MESSAGES,
     QualityInspectionCapabilities,
 )
+from apps.kuaizhizao.services.quality_inspection_lifecycle import (
+    can_revoke_quality_inspection_conduct,
+)
 
 _PENDING_REVIEW_STATUSES = frozenset({"待审核", "PENDING", "pending_review", "PENDING_REVIEW"})
 
@@ -31,7 +34,7 @@ _CONDUCT_ALLOWED_STATUSES = frozenset({"待检验", "已检验", "已驳回", "�
 
 
 def can_conduct_quality_inspection(status: Any, inspection_result: Any = None) -> bool:
-    """检验录入/改单：未审核前可执行；反审核后 status 回落为已检验，须允许再次录入。"""
+    """检验录入/改单：未审核前可执行；撤销审核后 status 回落为已检验，须允许再次录入。"""
     normalized_status = _norm(status)
     if normalized_status == "已审核":
         return False
@@ -49,6 +52,7 @@ def derive_quality_inspection_capabilities(
     supports_push_rework: bool = False,
     pushed_purchase_return_quantity: float = 0.0,
     pushed_rework_quantity: float = 0.0,
+    certificate_issued: bool = False,
 ) -> QualityInspectionCapabilities:
     status = _norm(getattr(inspection, "status", None))
     review_status = _norm(getattr(inspection, "review_status", None))
@@ -73,6 +77,27 @@ def derive_quality_inspection_capabilities(
         status == "已审核",
         "quality_inspection.revoke_approval.not_approved" if status != "已审核" else None,
     )
+
+    revoke_conduct_allowed = can_revoke_quality_inspection_conduct(status, inspection_result)
+    if revoke_conduct_allowed:
+        if supports_purchase_return and float(pushed_purchase_return_quantity or 0) > 0:
+            revoke_conduct_allowed = False
+            revoke_conduct_reason = "quality_inspection.revoke_conduct.has_downstream"
+        elif supports_push_rework and float(pushed_rework_quantity or 0) > 0:
+            revoke_conduct_allowed = False
+            revoke_conduct_reason = "quality_inspection.revoke_conduct.has_downstream"
+        elif certificate_issued:
+            revoke_conduct_allowed = False
+            revoke_conduct_reason = "quality_inspection.revoke_conduct.has_downstream"
+        else:
+            revoke_conduct_reason = None
+    elif status == "已审核":
+        revoke_conduct_reason = "quality_inspection.revoke_conduct.need_revoke_approval"
+    elif status == "待检验" or inspection_result == "待检验":
+        revoke_conduct_reason = "quality_inspection.revoke_conduct.not_conducted"
+    else:
+        revoke_conduct_reason = "quality_inspection.revoke_conduct.not_allowed"
+    revoke_conduct_cap = _cap(revoke_conduct_allowed, revoke_conduct_reason)
 
     defect_allowed = (
         quality_status == "不合格"
@@ -128,6 +153,7 @@ def derive_quality_inspection_capabilities(
         approve=approve_cap,
         reject=reject_cap,
         revoke_approval=revoke_cap,
+        revoke_conduct=revoke_conduct_cap,
         create_defect=create_defect_cap,
         push_purchase_return=push_return_cap,
         push_rework=push_rework_cap,
@@ -145,6 +171,7 @@ def assert_quality_inspection_capability(
     supports_push_rework: bool = False,
     pushed_purchase_return_quantity: float = 0.0,
     pushed_rework_quantity: float = 0.0,
+    certificate_issued: bool = False,
 ) -> None:
     caps = derive_quality_inspection_capabilities(
         inspection,
@@ -152,12 +179,14 @@ def assert_quality_inspection_capability(
         supports_push_rework=supports_push_rework,
         pushed_purchase_return_quantity=pushed_purchase_return_quantity,
         pushed_rework_quantity=pushed_rework_quantity,
+        certificate_issued=certificate_issued,
     )
     cap_map = {
         "conduct": caps.conduct,
         "approve": caps.approve,
         "reject": caps.reject,
         "revoke_approval": caps.revoke_approval,
+        "revoke_conduct": caps.revoke_conduct,
         "create_defect": caps.create_defect,
         "push_purchase_return": caps.push_purchase_return,
         "push_rework": caps.push_rework,
