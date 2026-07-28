@@ -194,6 +194,37 @@ class InventoryService:
         return await query.first()
 
     @staticmethod
+    async def _resolve_ledger_production_date(
+        tenant_id: int,
+        material_id: int,
+        batch_no: Optional[str],
+        ownership_type: Optional[str] = None,
+        customer_id: Optional[int] = None,
+    ) -> Optional[date]:
+        """
+        出库撤回等回冲场景：未显式传入入库日期时，从既有批次台账读取 production_date。
+        批号行在扣至 0 后仍为 out_stock，production_date 保留原入库确认日。
+        """
+        if not batch_no or not str(batch_no).strip():
+            return None
+        bn = InventoryService._normalize_batch_no_for_ledger(batch_no)
+        if bn == "DEFAULT":
+            return None
+        from apps.master_data.models.material_batch import MaterialBatch
+
+        own = InventoryService._ownership_filter(ownership_type, customer_id)
+        q = InventoryService._material_batch_no_lookup_q(batch_no)
+        batch = await MaterialBatch.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            deleted_at__isnull=True,
+            **own,
+        ).filter(q).first()
+        if batch and batch.production_date is not None:
+            return batch.production_date
+        return None
+
+    @staticmethod
     async def _material_batch_increase_or_restore(
         tenant_id: int,
         material_id: int,
@@ -390,6 +421,15 @@ class InventoryService:
             except Exception as _flag_exc:
                 logger.warning(f"获取仓库管理标志失败（跳过批号/序列号强制校验）: {_flag_exc}")
             material = await Material.get_or_none(tenant_id=tenant_id, id=material_id, deleted_at__isnull=True)
+
+            if ledger_production_date is None and batch_no:
+                ledger_production_date = await InventoryService._resolve_ledger_production_date(
+                    tenant_id=tenant_id,
+                    material_id=material_id,
+                    batch_no=batch_no,
+                    ownership_type=ownership_type,
+                    customer_id=customer_id,
+                )
 
             if not use_line_side:
                 # 批号管理校验
