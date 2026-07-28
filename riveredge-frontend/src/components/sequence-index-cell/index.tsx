@@ -15,6 +15,8 @@ export type StepDragHandleContextValue = {
   attributes?: DraggableAttributes;
   listeners?: SyntheticListenerMap;
   setActivatorNodeRef?: (element: HTMLElement | null) => void;
+  /** 当前行正在被拖拽时，仅手柄展示强调样式 */
+  isDragging?: boolean;
 };
 
 export const StepDragHandleContext = createContext<StepDragHandleContextValue>({});
@@ -40,12 +42,20 @@ export function getSequenceIndexBadgeStyle(token: GlobalToken): React.CSSPropert
   };
 }
 
+export type SequenceIndexNativeDragHandle = {
+  onDragStart: React.DragEventHandler<HTMLSpanElement>;
+  onDragEnd: React.DragEventHandler<HTMLSpanElement>;
+  isDragging?: boolean;
+};
+
 export type SequenceIndexCellProps = {
   index: number;
   token: GlobalToken;
   dragSortTitle?: string;
   showDragHandle?: boolean;
   dragHandleProps?: React.HTMLAttributes<HTMLSpanElement>;
+  /** 工艺路线等：手柄原生 HTML5 拖拽，不经过 dnd-kit，避免 Ant Table 行闪烁 */
+  nativeDragHandle?: SequenceIndexNativeDragHandle;
 };
 
 export function SequenceIndexCell({
@@ -54,18 +64,28 @@ export function SequenceIndexCell({
   dragSortTitle,
   showDragHandle = true,
   dragHandleProps,
+  nativeDragHandle,
 }: SequenceIndexCellProps) {
   const dnd = useStepDragHandleContext();
-  const mergedDragProps = {
-    ...dragHandleProps,
-    ...dnd.attributes,
-    ...dnd.listeners,
-    ref: (node: HTMLElement | null) => {
-      dnd.setActivatorNodeRef?.(node);
-      const propRef = (dragHandleProps as { ref?: (node: HTMLElement | null) => void } | undefined)?.ref;
-      if (typeof propRef === 'function') propRef(node);
-    },
-  };
+  const useNative = !!nativeDragHandle;
+  const mergedDragProps = useNative
+    ? {
+        ...dragHandleProps,
+        draggable: true,
+        onDragStart: nativeDragHandle.onDragStart,
+        onDragEnd: nativeDragHandle.onDragEnd,
+      }
+    : {
+        ...dragHandleProps,
+        ...dnd.attributes,
+        ...dnd.listeners,
+        ref: (node: HTMLElement | null) => {
+          dnd.setActivatorNodeRef?.(node);
+          const propRef = (dragHandleProps as { ref?: (node: HTMLElement | null) => void } | undefined)?.ref;
+          if (typeof propRef === 'function') propRef(node);
+        },
+      };
+  const handleDragging = useNative ? nativeDragHandle.isDragging : dnd.isDragging;
 
   return (
     <Space>
@@ -75,7 +95,7 @@ export function SequenceIndexCell({
           title={dragSortTitle}
           style={{
             color: token.colorPrimary,
-            cursor: 'move',
+            cursor: 'grab',
             touchAction: 'none',
             display: 'inline-flex',
             alignItems: 'center',
@@ -84,6 +104,14 @@ export function SequenceIndexCell({
             padding: 4,
             minWidth: 24,
             minHeight: 24,
+            borderRadius: 4,
+            ...(handleDragging
+              ? {
+                  cursor: 'grabbing',
+                  backgroundColor: token.colorPrimaryBg,
+                  boxShadow: token.boxShadowSecondary,
+                }
+              : null),
           }}
           {...mergedDragProps}
         >

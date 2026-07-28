@@ -16088,6 +16088,8 @@ export default {
   'app.master-data.operationSequence.replaceNotFound': 'Operation to replace not found',
   'app.master-data.operationSequence.replaceSuccess': 'Operation replaced successfully',
   'app.master-data.operationSequence.index': 'Index',
+  'app.master-data.operationSequence.moveUp': 'Move up',
+  'app.master-data.operationSequence.moveDown': 'Move down',
   'app.master-data.operationSequence.dragSort': 'Drag to sort',
   'app.master-data.operationSequence.operationCodeName': 'Operation Code/Name',
   'app.master-data.operationSequence.reportingType': 'Reporting Type',
@@ -16123,7 +16125,7 @@ export default {
   'app.master-data.operationSequence.quickAddOperation': 'Quick add operation',
   'app.master-data.operationSequence.createOperationFirst': 'No available operations. Use Quick add operation above to create one',
   'app.master-data.operationSequence.currentOperation': 'Current operation:',
-  'app.master-data.operationSequence.hint': 'Supports drag-and-drop sorting, click delete to remove',
+  'app.master-data.operationSequence.hint': 'Use the buttons beside the sequence number to reorder; click delete to remove',
   'app.master-data.operationSequence.noDataAddHint': 'No operations yet, click the button below to add',
 
   // FormSchemaEditor collection field config

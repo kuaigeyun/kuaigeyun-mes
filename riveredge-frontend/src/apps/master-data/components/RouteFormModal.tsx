@@ -313,6 +313,25 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
         .process-route-modal .operation-sequence-form-item .ant-form-item-control-input { padding-left: 8px; padding-right: 8px; width: 100%; min-width: 0; }
         .process-route-modal .operation-sequence-form-item .ant-form-item-control-input-content { width: 100%; min-width: 0; }
         .process-route-modal .operation-sequence-form-item .ant-form-item-label { padding-left: 8px; }
+        .process-route-modal .operation-sequence-form-item .ant-form-item-label > label {
+          display: inline-flex !important;
+          align-items: center;
+          flex-wrap: nowrap;
+          gap: 8px;
+          width: auto !important;
+          max-width: 100%;
+          height: auto !important;
+        }
+        .process-route-modal .operation-sequence-form-label {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: nowrap;
+        }
+        .process-route-modal .operation-sequence-count-tag.ant-tag {
+          margin-inline-end: 0;
+          font-weight: 400;
+        }
       `}</style>
       <SchemaFormRenderer
         schema={routeFormSchema.filter((f) => ['code', 'name'].includes(f.name))}
@@ -323,17 +342,22 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
       />
       <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} gridColumns={2} />
       <ProForm.Item
-        label={t('field.route.operationSequence')}
-        colProps={{ span: 24 }}
-        className="operation-sequence-form-item"
-        style={{ width: '100%', minWidth: 0 }}
-      >
-        <div style={{ width: '100%', minWidth: 0 }}>
-          <div style={{ marginBottom: 16 }}>
-            <Tag color={operationSequence.length > 0 ? 'processing' : 'default'}>
+        label={
+          <span className="operation-sequence-form-label">
+            {t('field.route.operationSequence')}
+            <Tag
+              className="operation-sequence-count-tag"
+              color={operationSequence.length > 0 ? 'processing' : 'default'}
+            >
               {t('app.master-data.operationsConfigured', { count: operationSequence.length })}
             </Tag>
-          </div>
+          </span>
+        }
+        colProps={{ span: 24 }}
+        style={{ width: '100%', minWidth: 0 }}
+        className="operation-sequence-form-item"
+      >
+        <div style={{ width: '100%', minWidth: 0 }}>
           <ProFormDependency name={['allowOperationJump']}>
             {({ allowOperationJump }) => (
               <OperationSequenceEditor

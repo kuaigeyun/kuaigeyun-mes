@@ -1,6 +1,6 @@
 /**
  * 工序序列编辑器
- * 支持拖拽排序、添加工序、替换工序、删除工序
+ * 支持手柄拖拽排序（原生 HTML5，仅手柄）、添加工序、替换工序、删除工序
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -23,25 +23,12 @@ import {
   Radio,
   theme,
 } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../utils/globalSubmitShortcut';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../utils/modalEventIsolation';
-import { PlusOutlined, HolderOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import { renderOperationReportingTypeMarker } from '../utils/operationMeta';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-  DragStartEvent,
-  DragOverlay,
-  DragOverEvent,
-} from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { operationApi } from '../services/process';
 import type { Operation } from '../types/process';
 import { OperationFormModal } from './OperationFormModal';
@@ -51,83 +38,22 @@ import {
   MODAL_NESTED_ABOVE_PARENT_OFFSET,
   FILE_PREVIEW_OVERLAY_Z_INDEX,
 } from '../../../components/layout-templates/constants';
-import { SequenceIndexCell, StepDragHandleContext } from '../../../components/sequence-index-cell';
+import { SequenceIndexCell } from '../../../components/sequence-index-cell';
 
 const operationPickModalStyles = {
   body: { paddingTop: 8, paddingBottom: 12 },
 };
 
-const DND_IGNORE_SELECTOR =
-  'button,a,input,textarea,select,option,.ant-btn,.ant-select,.ant-select-dropdown,.ant-input-number,.ant-switch,.ant-picker';
+const OPERATION_ROW_DRAG_MIME = 'application/x-riveredge-operation-uuid';
 
-/** 忽略操作列等交互控件上的 pointerdown，避免拖拽传感器吞掉点击 */
-class OperationRowPointerSensor extends PointerSensor {
-  static activators = [
-    {
-      eventName: 'onPointerDown' as const,
-      handler: ({ nativeEvent: event }: React.PointerEvent) => {
-        if (!event.isPrimary || event.button !== 0) return false;
-        const target = event.target as HTMLElement | null;
-        if (target?.closest?.(DND_IGNORE_SELECTOR)) return false;
-        return true;
-      },
-    },
-  ];
-}
-
-const INSERT_LINE_STYLE: React.CSSProperties = {
-  height: 2,
-  backgroundColor: '#1890ff',
-  margin: 0,
-  boxShadow: '0 0 4px rgba(24, 144, 255, 0.5)',
-};
-
-function InsertLineRow({ colSpan }: { colSpan: number }) {
-  return (
-    <tr>
-      <td colSpan={colSpan} style={{ padding: 0, height: 0, lineHeight: 0 }}>
-        <div style={INSERT_LINE_STYLE} />
-      </td>
-    </tr>
-  );
-}
-
-function SortableOperationTableRow({
-  children,
-  ...props
-}: React.HTMLAttributes<HTMLTableRowElement> & { 'data-row-key'?: string | number }) {
-  const { token } = theme.useToken();
-  const rowKey = String(props['data-row-key'] ?? '');
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    setActivatorNodeRef,
-    transform,
-    transition,
-    isDragging,
-    isOver,
-  } = useSortable({
-    id: rowKey,
-    disabled: !rowKey,
-  });
-  const style: React.CSSProperties = {
-    ...props.style,
-    transform: CSS.Transform.toString(transform),
-    transition: isDragging ? 'none' : transition,
-    opacity: isDragging ? 0.4 : 1,
-    backgroundColor: isDragging ? token.colorPrimaryBg : isOver && !isDragging ? token.colorFillSecondary : 'transparent',
-    boxShadow: isDragging ? token.boxShadowSecondary : 'none',
-    position: 'relative',
-  };
-  return (
-    <StepDragHandleContext.Provider value={{ attributes, listeners, setActivatorNodeRef }}>
-      {/* ref 必须在 props 之后，避免被 Table 传入的 ref 覆盖 */}
-      <tr {...props} ref={setNodeRef} style={style}>
-        {children}
-      </tr>
-    </StepDragHandleContext.Provider>
-  );
+function moveOperationList(items: OperationItem[], sourceUuid: string, targetUuid: string): OperationItem[] {
+  const oldIndex = items.findIndex((op) => op.uuid === sourceUuid);
+  const newIndex = items.findIndex((op) => op.uuid === targetUuid);
+  if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return items;
+  const next = [...items];
+  const [moved] = next.splice(oldIndex, 1);
+  next.splice(newIndex, 0, moved);
+  return next;
 }
 
 function filterOperationList(ops: Operation[], keyword: string): Operation[] {
@@ -366,10 +292,9 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   const pickModalZIndex =
     nestedModalZIndex ??
     token.zIndexPopupBase + MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET + MODAL_NESTED_ABOVE_PARENT_OFFSET;
-  /** 与选择/替换工序 Modal 一致：须高于业务 Modal 抬升层（见 FILE_PREVIEW_OVERLAY_Z_INDEX） */
   const effectivePickModalZIndex = Math.max(pickModalZIndex, FILE_PREVIEW_OVERLAY_Z_INDEX);
   const operationFormModalZIndex = effectivePickModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
-  /** 受控：列表以父组件 value 为唯一真源，避免本地 state 被旧 value 同步打回 */
+  const selectPopupZIndex = effectivePickModalZIndex;
   const operations = value ?? [];
   const commitOperations = useCallback(
     (next: OperationItem[]) => {
@@ -386,13 +311,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   const [operationFormModalOpen, setOperationFormModalOpen] = useState(false);
   const [replacingOperationUuid, setReplacingOperationUuid] = useState<string | null>(null);
   const [replacementOperationUuid, setReplacementOperationUuid] = useState<string | undefined>(undefined);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
-
-  const sensors = useSensors(
-    useSensor(OperationRowPointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const [draggingUuid, setDraggingUuid] = useState<string | null>(null);
 
   useEffect(() => {
     onPickModalOpenChange?.(addModalVisible || replaceModalVisible || operationFormModalOpen);
@@ -458,25 +377,34 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     [addModalVisible, replaceModalVisible, operations],
   );
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
+  const handleNativeDragStart = useCallback((uuid: string, e: React.DragEvent<HTMLSpanElement>) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData(OPERATION_ROW_DRAG_MIME, uuid);
+    setDraggingUuid(uuid);
+  }, []);
 
-  const handleDragOver = (event: DragOverEvent) => {
-    setOverId(event.over ? (event.over.id as string) : null);
-  };
+  const handleNativeDragEnd = useCallback(() => {
+    setDraggingUuid(null);
+  }, []);
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-    setOverId(null);
-    if (over && active.id !== over.id) {
-      const oldIndex = operations.findIndex((op) => op.uuid === active.id);
-      const newIndex = operations.findIndex((op) => op.uuid === over.id);
-      if (oldIndex < 0 || newIndex < 0) return;
-      commitOperations(arrayMove(operations, oldIndex, newIndex));
-    }
-  };
+  const handleNativeRowDragOver = useCallback((e: React.DragEvent<HTMLTableRowElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const handleNativeRowDrop = useCallback(
+    (targetUuid: string, e: React.DragEvent<HTMLTableRowElement>) => {
+      e.preventDefault();
+      const sourceUuid = e.dataTransfer.getData(OPERATION_ROW_DRAG_MIME);
+      if (!sourceUuid) {
+        setDraggingUuid(null);
+        return;
+      }
+      commitOperations(moveOperationList(operations, sourceUuid, targetUuid));
+      setDraggingUuid(null);
+    },
+    [commitOperations, operations],
+  );
 
   const handleAddOperation = () => {
     if (!selectedOperationUuids?.length) {
@@ -581,9 +509,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     return allOperations.filter((op) => op.uuid === excludeUuid || !operations.some((a) => a.uuid === op.uuid));
   };
 
-  const tableColSpan =
-    4 + (showNodeOperationColumn ? 1 : 0) + (showTimeColumns ? 2 : 0) + 3;
-  const sortableRowIds = useMemo(() => operations.map((op) => op.uuid), [operations]);
+  /** 与昨日布局一致：scroll.x ≥ 列宽之和，避免挤列；弹窗加宽后仍按列宽总和滚动 */
   const tableScrollX = useMemo(() => {
     let w = 100 + 220 + 120 + 88 + 100 + 180 + 320;
     if (showNodeOperationColumn) w += 88;
@@ -591,240 +517,233 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     return w;
   }, [showNodeOperationColumn, showTimeColumns]);
 
-  const columns = [
-    {
-      title: t('app.master-data.operationSequence.index'),
-      key: 'index',
-      width: 100,
-      render: (_: any, __: OperationItem, index: number) => (
-        <SequenceIndexCell
-          index={index}
-          token={token}
-          dragSortTitle={t('app.master-data.operationSequence.dragSort')}
-        />
-      ),
-    },
-    {
-      title: t('app.master-data.operationSequence.operationCodeName'),
-      key: 'operation',
-      width: 220,
-      ellipsis: true,
-      render: (_: any, record: OperationItem) => (
-        <div style={{ whiteSpace: 'nowrap' }}>
-          <div style={{ fontWeight: 500 }}>{record.code} - {record.name}</div>
-          {record.description && (
-            <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {record.description}
-            </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: t('app.master-data.operationSequence.reportingType'),
-      key: 'reportingType',
-      width: 120,
-      render: (_: any, record: OperationItem) =>
-        renderOperationReportingTypeMarker(t, record.reportingType),
-    },
-    ...(showNodeOperationColumn
-      ? [
-          {
-            title: t('app.master-data.operationSequence.nodeOperation'),
-            key: 'isNodeOperation',
-            width: 88,
-            render: (_: any, record: OperationItem) => (
-              <Switch
-                size="small"
-                checked={!!record.isNodeOperation}
-                onChange={(c) => toggleNodeOperation(record.uuid, c)}
-              />
-            ),
-          },
-        ]
-      : []),
-    ...(showTimeColumns
-      ? [
-          {
-            title: t('app.master-data.manufacturing.standardTime'),
-            key: 'standardTime',
-            width: 148,
-            render: (_: unknown, record: OperationItem) => (
-              <InputNumber
-                size="small"
-                min={0}
-                precision={0}
-                step={1}
-                style={{ width: '100%' }}
-                addonAfter={t('app.master-data.manufacturing.minutePerPieceUnit')}
-                placeholder="0"
-                value={record.standardTime}
-                onChange={(v) => patchTime(record.uuid, { standardTime: v ?? undefined })}
-              />
-            ),
-          },
-          {
-            title: t('app.master-data.manufacturing.setupTime'),
-            key: 'setupTime',
-            width: 136,
-            render: (_: unknown, record: OperationItem) => (
-              <InputNumber
-                size="small"
-                min={0}
-                precision={0}
-                step={1}
-                style={{ width: '100%' }}
-                addonAfter={t('app.master-data.manufacturing.minuteUnit')}
-                placeholder="0"
-                value={record.setupTime}
-                onChange={(v) => patchTime(record.uuid, { setupTime: v ?? undefined })}
-              />
-            ),
-          },
-        ]
-      : []),
-    {
-      title: t('app.master-data.operationSequence.plannedOutsource'),
-      key: 'isOutsourced',
-      width: 88,
-      render: (_: unknown, record: OperationItem) => (
-        <Switch
-          size="small"
-          checked={!!record.isOutsourced}
-          onChange={(c) =>
-            patchOutsource(record.uuid, {
-              isOutsourced: c,
-              outsourceLeadTimeDays: c ? record.outsourceLeadTimeDays ?? 1 : undefined,
-              outsourceSupplierId: c ? record.outsourceSupplierId : undefined,
-              outsourceSupplierName: c ? record.outsourceSupplierName : undefined,
-            })
-          }
-        />
-      ),
-    },
-    {
-      title: t('app.master-data.operationSequence.outsourceLeadDays'),
-      key: 'outsourceLeadTimeDays',
-      width: 100,
-      render: (_: unknown, record: OperationItem) => (
-        <InputNumber
-          size="small"
-          min={0}
-          precision={0}
-          style={{ width: '100%' }}
-          disabled={!record.isOutsourced}
-          value={record.isOutsourced ? record.outsourceLeadTimeDays ?? 1 : undefined}
-          onChange={(v) =>
-            patchOutsource(record.uuid, {
-              outsourceLeadTimeDays: v == null ? 1 : Number(v),
-            })
-          }
-        />
-      ),
-    },
-    {
-      title: t('app.master-data.operationSequence.outsourceSupplier'),
-      key: 'outsourceSupplierId',
-      width: 180,
-      render: (_: unknown, record: OperationItem) => (
-        <Select
-          size="small"
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          style={{ width: '100%' }}
-          disabled={!record.isOutsourced}
-          options={supplierOptions}
-          value={record.outsourceSupplierId}
-          placeholder={t('app.master-data.operationSequence.selectOutsourceSupplier')}
-          onChange={(v, opt) => {
-            const label = Array.isArray(opt)
-              ? undefined
-              : (opt as { label?: string } | undefined)?.label;
-            patchOutsource(record.uuid, {
-              outsourceSupplierId: v == null ? undefined : Number(v),
-              outsourceSupplierName: v == null ? undefined : String(label || ''),
-            });
-          }}
-        />
-      ),
-    },
-    {
-      title: t('app.master-data.operationSequence.overReportAction'),
-      key: 'action',
-      width: 320,
-      render: (_: any, record: OperationItem) => (
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'nowrap',
-            alignItems: 'center',
-            gap: 8,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          <Select
-            size="small"
-            style={{ width: 100, flexShrink: 0 }}
-            value={record.overReportMode ?? 'none'}
-            options={[
-              { label: t('field.operation.overReportModeNone'), value: 'none' },
-              { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
-              { label: t('field.operation.overReportModePercent'), value: 'percent' },
-            ]}
-            onChange={(v) => patchOverReport(record.uuid, { overReportMode: v as OperationItem['overReportMode'] })}
+  const selectPopupProps = useMemo(
+    () => ({
+      getPopupContainer: () => document.body,
+      styles: { popup: { root: { zIndex: selectPopupZIndex } } },
+    }),
+    [selectPopupZIndex],
+  );
+
+  const columns: ColumnsType<OperationItem> = [
+      {
+        title: t('app.master-data.operationSequence.index'),
+        key: 'index',
+        width: 100,
+        render: (_: unknown, record: OperationItem, index: number) => (
+          <SequenceIndexCell
+            index={index}
+            token={token}
+            dragSortTitle={t('app.master-data.operationSequence.dragSort')}
+            nativeDragHandle={{
+              isDragging: draggingUuid === record.uuid,
+              onDragStart: (e) => handleNativeDragStart(record.uuid, e),
+              onDragEnd: handleNativeDragEnd,
+            }}
           />
+        ),
+      },
+      {
+        title: t('app.master-data.operationSequence.operationCodeName'),
+        key: 'operation',
+        width: 220,
+        ellipsis: true,
+        render: (_: unknown, record: OperationItem) => (
+          <div style={{ whiteSpace: 'nowrap' }}>
+            <div style={{ fontWeight: 500 }}>
+              {record.code} - {record.name}
+            </div>
+            {record.description ? (
+              <div
+                style={{
+                  fontSize: 12,
+                  color: token.colorTextSecondary,
+                  marginTop: 4,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {record.description}
+              </div>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        title: t('app.master-data.operationSequence.reportingType'),
+        key: 'reportingType',
+        width: 120,
+        render: (_: unknown, record: OperationItem) =>
+          renderOperationReportingTypeMarker(t, record.reportingType),
+      },
+      ...(showNodeOperationColumn
+        ? [
+            {
+              title: t('app.master-data.operationSequence.nodeOperation'),
+              key: 'isNodeOperation',
+              width: 88,
+              render: (_: unknown, record: OperationItem) => (
+                <Switch
+                  size="small"
+                  checked={!!record.isNodeOperation}
+                  onChange={(c) => toggleNodeOperation(record.uuid, c)}
+                />
+              ),
+            },
+          ]
+        : []),
+      ...(showTimeColumns
+        ? [
+            {
+              title: t('app.master-data.manufacturing.standardTime'),
+              key: 'standardTime',
+              width: 148,
+              render: (_: unknown, record: OperationItem) => (
+                <InputNumber
+                  size="small"
+                  min={0}
+                  precision={0}
+                  step={1}
+                  style={{ width: '100%' }}
+                  addonAfter={t('app.master-data.manufacturing.minutePerPieceUnit')}
+                  placeholder="0"
+                  value={record.standardTime}
+                  onChange={(v) => patchTime(record.uuid, { standardTime: v ?? undefined })}
+                />
+              ),
+            },
+            {
+              title: t('app.master-data.manufacturing.setupTime'),
+              key: 'setupTime',
+              width: 136,
+              render: (_: unknown, record: OperationItem) => (
+                <InputNumber
+                  size="small"
+                  min={0}
+                  precision={0}
+                  step={1}
+                  style={{ width: '100%' }}
+                  addonAfter={t('app.master-data.manufacturing.minuteUnit')}
+                  placeholder="0"
+                  value={record.setupTime}
+                  onChange={(v) => patchTime(record.uuid, { setupTime: v ?? undefined })}
+                />
+              ),
+            },
+          ]
+        : []),
+      {
+        title: t('app.master-data.operationSequence.plannedOutsource'),
+        key: 'isOutsourced',
+        width: 88,
+        render: (_: unknown, record: OperationItem) => (
+          <Switch
+            size="small"
+            checked={!!record.isOutsourced}
+            onChange={(c) =>
+              patchOutsource(record.uuid, {
+                isOutsourced: c,
+                outsourceLeadTimeDays: c ? record.outsourceLeadTimeDays ?? 1 : undefined,
+                outsourceSupplierId: c ? record.outsourceSupplierId : undefined,
+                outsourceSupplierName: c ? record.outsourceSupplierName : undefined,
+              })
+            }
+          />
+        ),
+      },
+      {
+        title: t('app.master-data.operationSequence.outsourceLeadDays'),
+        key: 'outsourceLeadTimeDays',
+        width: 100,
+        render: (_: unknown, record: OperationItem) => (
           <InputNumber
             size="small"
             min={0}
-            style={{ width: 88, flexShrink: 0 }}
-            value={record.overReportValue ?? 0}
-            onChange={(v) => patchOverReport(record.uuid, { overReportValue: v ?? 0 })}
+            precision={0}
+            style={{ width: '100%' }}
+            disabled={!record.isOutsourced}
+            value={record.isOutsourced ? record.outsourceLeadTimeDays ?? 1 : undefined}
+            onChange={(v) =>
+              patchOutsource(record.uuid, {
+                outsourceLeadTimeDays: v == null ? 1 : Number(v),
+              })
+            }
           />
-          {/* 动作由外层 capture 委托处理（data-seq-action），避免行内 dnd / Table 吞点击 */}
-          <button
-            type="button"
-            className="ant-btn ant-btn-link ant-btn-sm"
-            data-seq-action="replace"
-            data-seq-uuid={record.uuid}
-            style={{ padding: '0 4px', flexShrink: 0, border: 'none', background: 'none', cursor: 'pointer', color: token.colorPrimary }}
+        ),
+      },
+      {
+        title: t('app.master-data.operationSequence.outsourceSupplier'),
+        key: 'outsourceSupplierId',
+        width: 180,
+        render: (_: unknown, record: OperationItem) => (
+          <Select
+            size="small"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            style={{ width: '100%' }}
+            disabled={!record.isOutsourced}
+            options={supplierOptions}
+            value={record.outsourceSupplierId}
+            placeholder={t('app.master-data.operationSequence.selectOutsourceSupplier')}
+            {...selectPopupProps}
+            onChange={(v, opt) => {
+              const label = Array.isArray(opt)
+                ? undefined
+                : (opt as { label?: string } | undefined)?.label;
+              patchOutsource(record.uuid, {
+                outsourceSupplierId: v == null ? undefined : Number(v),
+                outsourceSupplierName: v == null ? undefined : String(label || ''),
+              });
+            }}
+          />
+        ),
+      },
+      {
+        title: t('app.master-data.operationSequence.overReportAction'),
+        key: 'action',
+        width: 320,
+        render: (_: unknown, record: OperationItem) => (
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'nowrap',
+              alignItems: 'center',
+              gap: 8,
+              whiteSpace: 'nowrap',
+            }}
           >
-            {t('app.master-data.operationSequence.replace')}
-          </button>
-          <button
-            type="button"
-            className="ant-btn ant-btn-link ant-btn-sm ant-btn-dangerous"
-            data-seq-action="delete"
-            data-seq-uuid={record.uuid}
-            style={{ padding: '0 4px', flexShrink: 0, border: 'none', background: 'none', cursor: 'pointer', color: token.colorError }}
-          >
-            {t('app.master-data.operationSequence.delete')}
-          </button>
-        </div>
-      ),
-    },
-  ];
-
-  const activeOperation = activeId ? operations.find((op) => op.uuid === activeId) : null;
-
-  /** 捕获阶段处理替换/删除：早于 dnd-kit / Table 行事件，避免“点击无反应” */
-  const handleSeqActionCapture = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
-    const el = (e.target as HTMLElement | null)?.closest?.('[data-seq-action]') as HTMLElement | null;
-    if (!el) return;
-    const action = el.dataset.seqAction;
-    const uuid = el.dataset.seqUuid;
-    if (!action || !uuid) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (action === 'replace') {
-      handleOpenReplaceModal(uuid);
-      return;
-    }
-    if (action === 'delete') {
-      handleDeleteOperation(uuid);
-    }
-  };
+            <Select
+              size="small"
+              style={{ width: 100, flexShrink: 0 }}
+              value={record.overReportMode ?? 'none'}
+              options={[
+                { label: t('field.operation.overReportModeNone'), value: 'none' },
+                { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
+                { label: t('field.operation.overReportModePercent'), value: 'percent' },
+              ]}
+              {...selectPopupProps}
+              onChange={(v) =>
+                patchOverReport(record.uuid, { overReportMode: v as OperationItem['overReportMode'] })
+              }
+            />
+            <InputNumber
+              size="small"
+              min={0}
+              style={{ width: 88, flexShrink: 0 }}
+              value={record.overReportValue ?? 0}
+              onChange={(v) => patchOverReport(record.uuid, { overReportValue: v ?? 0 })}
+            />
+            <Button type="link" size="small" style={{ paddingInline: 4, flexShrink: 0 }} onClick={() => handleOpenReplaceModal(record.uuid)}>
+              {t('app.master-data.operationSequence.replace')}
+            </Button>
+            <Button type="link" size="small" danger style={{ paddingInline: 4, flexShrink: 0 }} onClick={() => handleDeleteOperation(record.uuid)}>
+              {t('app.master-data.operationSequence.delete')}
+            </Button>
+          </div>
+        ),
+      },
+    ];
 
   const pickModals = (
     <>
@@ -930,92 +849,50 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   );
 
   return (
-    <div style={{ width: '100%' }} onPointerDownCapture={handleSeqActionCapture}>
+    <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>{t('app.master-data.operationSequence.hint')}</span>
-        {operations.length > 0 && (
+        {operations.length > 0 ? (
           <Button type="dashed" icon={<PlusOutlined />} onClick={() => setAddModalVisible(true)} size="small">
             {t('app.master-data.operationSequence.addOperation')}
           </Button>
-        )}
+        ) : null}
       </div>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
-        {operations.length > 0 ? (
-          <SortableContext items={operations.map((op) => op.uuid)} strategy={verticalListSortingStrategy}>
-            <div style={{ position: 'relative', width: '100%', margin: 0, padding: 0 }}>
-              <Table
-                columns={columns}
-                dataSource={operations}
-                rowKey="uuid"
-                pagination={false}
-                size="small"
-                components={{
-                  body: {
-                    wrapper: (wrapperProps: React.HTMLAttributes<HTMLTableSectionElement>) => {
-                      const activeIndex = activeId ? operations.findIndex((op) => op.uuid === activeId) : -1;
-                      const overIndex = overId ? operations.findIndex((op) => op.uuid === overId) : -1;
-                      const showInsertLine =
-                        activeId && overId && activeId !== overId && activeIndex !== -1 && overIndex !== -1;
-                      const insertBefore = showInsertLine && activeIndex < overIndex;
-                      const insertAfter = showInsertLine && activeIndex > overIndex;
-                      const insertIndex = insertBefore ? overIndex : insertAfter ? overIndex + 1 : -1;
-                      const rowChildren = React.Children.toArray(wrapperProps.children);
-                      return (
-                        <tbody {...wrapperProps}>
-                          {rowChildren.map((child, idx) => {
-                            const isInsertBefore = showInsertLine && insertIndex === idx && insertBefore;
-                            const isInsertAfter = showInsertLine && insertIndex === idx && insertAfter;
-                            return (
-                              <React.Fragment key={sortableRowIds[idx] ?? idx}>
-                                {isInsertBefore ? <InsertLineRow colSpan={tableColSpan} /> : null}
-                                {child}
-                                {isInsertAfter ? <InsertLineRow colSpan={tableColSpan} /> : null}
-                              </React.Fragment>
-                            );
-                          })}
-                        </tbody>
-                      );
-                    },
-                    row: SortableOperationTableRow,
-                  },
-                }}
-                style={{ width: '100%' }}
-                scroll={{ x: tableScrollX }}
-                locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noData')} /> }}
-              />
-            </div>
-          </SortableContext>
-        ) : (
-          <div
-            className="operation-sequence-editor-empty"
-            style={{
-              padding: 24,
-              background: token.colorFillAlter,
-              borderRadius: token.borderRadius,
-              border: '1px dashed var(--river-border-color)',
-              textAlign: 'center',
-            }}
-          >
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noDataAddHint')} />
-            <Button type="primary" ghost icon={<PlusOutlined />} onClick={() => setAddModalVisible(true)} style={{ marginTop: 12 }}>
-              {t('app.master-data.operationSequence.addOperation')}
-            </Button>
-          </div>
-        )}
-        <DragOverlay>
-          {activeOperation ? (
-            <div style={{ padding: '12px 16px', background: token.colorBgElevated, border: `1px solid ${token.colorPrimary}`, borderRadius: token.borderRadius, boxShadow: token.boxShadowSecondary, width: '100%', minWidth: 300 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <HolderOutlined style={{ color: token.colorPrimary, fontSize: 16 }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 500, color: token.colorText }}>{activeOperation.code} - {activeOperation.name}</div>
-                  {activeOperation.description && <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>{activeOperation.description}</div>}
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+      {operations.length > 0 ? (
+        <div style={{ position: 'relative', width: '100%', margin: 0, padding: 0 }}>
+          <Table
+            className="operation-sequence-editor-table"
+            columns={columns}
+            dataSource={operations}
+            rowKey="uuid"
+            pagination={false}
+            size="small"
+            style={{ width: '100%' }}
+            scroll={{ x: tableScrollX }}
+            onRow={(record) => ({
+              onDragOver: handleNativeRowDragOver,
+              onDrop: (e) => handleNativeRowDrop(record.uuid, e),
+            })}
+            locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noData')} /> }}
+          />
+        </div>
+      ) : (
+        <div
+          className="operation-sequence-editor-empty"
+          style={{
+            padding: 24,
+            background: token.colorFillAlter,
+            borderRadius: token.borderRadius,
+            border: '1px dashed var(--river-border-color)',
+            textAlign: 'center',
+          }}
+        >
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noDataAddHint')} />
+          <Button type="primary" ghost icon={<PlusOutlined />} onClick={() => setAddModalVisible(true)} style={{ marginTop: 12 }}>
+            {t('app.master-data.operationSequence.addOperation')}
+          </Button>
+        </div>
+      )}
 
       {typeof document !== 'undefined' ? createPortal(pickModals, document.body) : pickModals}
     </div>

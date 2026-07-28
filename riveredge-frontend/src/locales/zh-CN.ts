@@ -16549,6 +16549,8 @@ export default {
   'app.master-data.operationSequence.replaceNotFound': '未找到要替换的工序',
   'app.master-data.operationSequence.replaceSuccess': '工序替换成功',
   'app.master-data.operationSequence.index': '序号',
+  'app.master-data.operationSequence.moveUp': '上移',
+  'app.master-data.operationSequence.moveDown': '下移',
   'app.master-data.operationSequence.dragSort': '拖拽排序',
   'app.master-data.operationSequence.operationCodeName': '工序代码/名称',
   'app.master-data.operationSequence.reportingType': '报工类型',
@@ -16584,7 +16586,7 @@ export default {
   'app.master-data.operationSequence.quickAddOperation': '快速新增工序',
   'app.master-data.operationSequence.createOperationFirst': '没有可用的工序，可点击上方「快速新增工序」创建',
   'app.master-data.operationSequence.currentOperation': '当前工序：',
-  'app.master-data.operationSequence.hint': '支持拖拽排序，点击删除移除工序',
+  'app.master-data.operationSequence.hint': '拖动手柄排序，点击删除移除工序',
   'app.master-data.operationSequence.noDataAddHint': '暂无工序，点击下方按钮添加',
 
   // FormSchemaEditor 表单字段配置
