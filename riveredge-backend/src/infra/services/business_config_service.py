@@ -329,6 +329,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.reporting.data_correction",
     "parameters.warehouse.batch_management",
     "parameters.warehouse.serial_management",
+    "parameters.warehouse.fifo",
     "parameters.warehouse.lifo",
     "parameters.warehouse.location_management",
     "parameters.warehouse.auto_outbound",

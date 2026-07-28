@@ -126,6 +126,30 @@ export function convertBaseQtyToProductionDisplay(
   return qty / factor;
 }
 
+/** 工单表单录入：与列表展示同一口径，并归一化为有限 number（避免 1.6E+2 等科学计数法串） */
+export function resolveWorkOrderFormQuantity(
+  record: Parameters<typeof formatWorkOrderDisplayQuantity>[0] & {
+    quantity?: number | string;
+    unit_to_base_factor?: number;
+    unitToBaseFactor?: number;
+  },
+  qtyField: Parameters<typeof formatWorkOrderDisplayQuantity>[1] = 'quantity',
+): number | undefined {
+  if (qtyField !== 'quantity') {
+    const { value } = formatWorkOrderDisplayQuantity(record, qtyField);
+    return Number.isFinite(value) ? value : undefined;
+  }
+
+  const displayRaw = record.display_quantity ?? record.displayQuantity;
+  if (displayRaw != null && displayRaw !== '') {
+    const display = Number(displayRaw);
+    if (Number.isFinite(display)) return display;
+  }
+
+  const converted = convertBaseQtyToProductionDisplay(Number(record.quantity) || 0, record);
+  return Number.isFinite(converted) ? converted : undefined;
+}
+
 export function formatWorkOrderDisplayQuantity(
   record: {
     quantity?: number;

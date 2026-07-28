@@ -18,6 +18,11 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
+from apps.kuaizhizao.services.station_service import StationService
+from apps.kuaizhizao.schemas.station import (
+    StationOperationDocumentsResponse,
+    StationWorkOrderDocumentFlagsResponse,
+)
 from apps.kuaizhizao.services.rework_order_service import ReworkOrderService, REWORK_ORDER_SORTABLE_FIELDS
 from apps.kuaizhizao.services.demand_source_chain_service import DemandSourceChainService
 from apps.kuaizhizao.services.outsource_service import OutsourceService, OUTSOURCE_ORDER_SORTABLE_FIELDS
@@ -716,6 +721,59 @@ async def get_work_order_operations(
         work_order_id=work_order_id,
         include_meta=include_meta,
     )
+
+
+@router.get(
+    "/work-orders/document-flags",
+    response_model=StationWorkOrderDocumentFlagsResponse,
+    summary="Batch ESOP/drawing flags for work order list",
+)
+async def get_work_order_document_flags(
+    ids: str = Query(..., description="Comma-separated work order IDs"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StationWorkOrderDocumentFlagsResponse:
+    """工单列表角标：与工位端同一套 ESOP/图纸存在性判定（权限走 work-order:read）。"""
+    id_list: List[int] = []
+    for part in (ids or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            id_list.append(int(part))
+        except ValueError:
+            continue
+    items = await StationService().get_work_orders_document_flags(
+        tenant_id=tenant_id,
+        work_order_ids=id_list,
+    )
+    return StationWorkOrderDocumentFlagsResponse(items=items)
+
+
+@router.get(
+    "/work-orders/{work_order_id}/operations/{operation_id}/documents",
+    response_model=StationOperationDocumentsResponse,
+    summary="Aggregate ESOP and drawings for work order operation",
+)
+async def get_work_order_operation_documents(
+    work_order_id: int,
+    operation_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StationOperationDocumentsResponse:
+    """
+    工单工序文档聚合（与工位端 StationService.get_operation_documents 同逻辑）：
+    物料感知 SOP + 已发布工程图纸 + 物料/工单/SOP 附件。
+    operation_id 为工单工序行 ID（WorkOrderOperation.id）。
+    """
+    try:
+        return await StationService().get_operation_documents(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            operation_id=operation_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
 
 @router.put("/work-orders/{work_order_id}/operations", response_model=List[WorkOrderOperationResponse], summary="Update work order operation")

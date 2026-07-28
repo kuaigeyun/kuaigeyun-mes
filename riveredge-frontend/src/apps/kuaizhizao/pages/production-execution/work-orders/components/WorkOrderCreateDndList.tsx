@@ -3,7 +3,7 @@
  */
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button, Space } from 'antd'
+import { Button, Space, theme } from 'antd'
 import { HolderOutlined, DeleteOutlined } from '@ant-design/icons'
 import {
   DndContext,
@@ -37,6 +37,7 @@ const SortableCreateOperationItem: React.FC<{
   disabled?: boolean
   onDelete: () => void
 }> = ({ operation, index, disabled, onDelete }) => {
+  const { token } = theme.useToken()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: operation.operation_id,
   })
@@ -46,7 +47,7 @@ const SortableCreateOperationItem: React.FC<{
     transition,
     opacity: isDragging ? 0.5 : 1,
     padding: '8px 12px',
-    background: '#fff',
+    background: token.colorBgContainer,
     border: '1px solid var(--river-border-color)',
     borderRadius: 4,
     display: 'flex',
@@ -58,15 +59,15 @@ const SortableCreateOperationItem: React.FC<{
     <div ref={setNodeRef} style={style}>
       {!disabled && (
         <div {...attributes} {...listeners} style={{ cursor: 'grab', display: 'flex' }}>
-          <HolderOutlined style={{ color: '#999' }} />
+          <HolderOutlined style={{ color: token.colorTextSecondary }} />
         </div>
       )}
       <div style={{ flex: 1 }}>
         <Space>
-          <span style={{ fontWeight: 'bold' }}>
+          <span style={{ fontWeight: 'bold', color: token.colorText }}>
             {index + 1}. {operation.operation_name}
           </span>
-          <span style={{ color: '#999', fontSize: 12 }}>({operation.operation_code})</span>
+          <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>({operation.operation_code})</span>
         </Space>
       </div>
       {!disabled && (
@@ -84,6 +85,7 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
   disabled,
 }) => {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -128,7 +130,7 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
         style={{
           padding: '24px',
           textAlign: 'center',
-          color: '#999',
+          color: token.colorTextSecondary,
           border: '1px dashed var(--river-border-color)',
           borderRadius: 4,
         }}

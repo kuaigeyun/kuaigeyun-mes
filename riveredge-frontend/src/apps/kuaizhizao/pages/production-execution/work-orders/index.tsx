@@ -307,6 +307,7 @@ import {
   convertToBaseQuantity,
   formatWorkOrderDisplayQuantity,
   resolveMaterialScenarioUnit,
+  resolveWorkOrderFormQuantity,
 } from '../../../../../utils/materialScenarioUnit'
 import type { Material } from '../../../../master-data/types/material'
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate'
@@ -2965,10 +2966,7 @@ const WorkOrdersPage: React.FC = () => {
           product_id: detail.product_id,
           product_code: detail.product_code,
           product_name: detail.product_name,
-          quantity:
-            detail.display_quantity ??
-            detail.displayQuantity ??
-            convertBaseQtyToProductionDisplay(Number(detail.quantity) || 0, detail),
+          quantity: resolveWorkOrderFormQuantity(detail),
           production_mode: mode,
           variant_attributes: variantAttrs != null
             ? (typeof variantAttrs === 'string' ? variantAttrs : JSON.stringify(variantAttrs, null, 2))
@@ -8547,6 +8545,18 @@ const WorkOrdersPage: React.FC = () => {
           placeholder={t('app.kuaizhizao.workOrder.formEnter')}
           min={0}
           precision={2}
+          fieldProps={{
+            formatter: (value) => {
+              if (value === undefined || value === null || value === '') return '';
+              const n = Number(value);
+              return Number.isFinite(n) ? formatQuantity(n) : String(value);
+            },
+            parser: (display) => {
+              if (display === undefined || display === null || display === '') return display as '';
+              const n = Number(String(display).replace(/,/g, ''));
+              return Number.isFinite(n) ? n : (display as string);
+            },
+          }}
           rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedQtyRequired') }]}
           colProps={{ span: 6 }}
         />

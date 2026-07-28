@@ -3,7 +3,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, Button, Modal, Popconfirm, Space, Tag } from 'antd'
+import { App, Button, Modal, Popconfirm, Space, Tag, theme } from 'antd'
 import { HolderOutlined } from '@ant-design/icons'
 import {
   DndContext,
@@ -51,6 +51,7 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
   statusMap,
 }) => {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: operation.id,
   })
@@ -59,7 +60,7 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    backgroundColor: isReported ? '#f5f5f5' : '#fff',
+    backgroundColor: isReported ? token.colorFillSecondary : token.colorBgContainer,
     border: '1px solid var(--river-border-color)',
     borderRadius: '4px',
     padding: '12px',
@@ -83,18 +84,18 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
               alignItems: 'center',
             }}
           >
-            <HolderOutlined style={{ color: '#999' }} />
+            <HolderOutlined style={{ color: token.colorTextSecondary }} />
           </div>
         )}
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span style={{ fontWeight: 'bold', color: isReported ? '#999' : '#000' }}>
+            <span style={{ fontWeight: 'bold', color: isReported ? token.colorTextSecondary : token.colorText }}>
               {operation.sequence}. {operation.operation_name || operation.name}
             </span>
             <Tag color={statusConfig.color}>{statusConfig.text}</Tag>
             {isReported && <Tag color="warning">{t('app.kuaizhizao.workOrder.tagReported')}</Tag>}
           </div>
-          <div style={{ fontSize: '12px', color: '#999' }}>
+          <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
             <Space separator={<span>|</span>}>
               <span>
                 {t('app.kuaizhizao.workOrder.colCodeShort')}: {operation.operation_code || operation.code}
@@ -150,6 +151,7 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
 }) => {
   const { t } = useTranslation()
   const { message: messageApi } = App.useApp()
+  const { token } = theme.useToken()
   const [localOperations, setLocalOperations] = useState<any[]>(operations)
   const [, setSaving] = useState(false)
 
@@ -252,7 +254,7 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
 
   if (localOperations.length === 0) {
     return (
-      <div style={{ padding: '48px 24px', textAlign: 'center', color: '#999' }}>
+      <div style={{ padding: '48px 24px', textAlign: 'center', color: token.colorTextSecondary }}>
         {t('app.kuaizhizao.workOrder.msgNoOperations')}
       </div>
     )
