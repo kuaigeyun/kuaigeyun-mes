@@ -45,3 +45,5 @@ def test_quality_management_router_mounts_dashboard_routes() -> None:
     assert "/quality/inspection-center-summary" in paths
     assert "/quality/anomalies" in paths
     assert "/quality/statistics" in paths
+    assert "/inspection-plans" in paths
+    assert "/quality-standards" in paths
