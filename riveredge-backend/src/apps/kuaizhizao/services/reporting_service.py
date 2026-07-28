@@ -1453,8 +1453,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             await record.save()
 
-            # 如果审核通过，触发物料倒冲
-            if record.status == 'approved':
+            is_rework_report = bool(getattr(record, "rework_order_id", None))
+
+            # 如果审核通过，触发物料倒冲（返工报工不走原工单倒冲）
+            if record.status == 'approved' and not is_rework_report:
                 try:
                     from apps.kuaizhizao.services.backflush_service import BackflushService
                     backflush_svc = BackflushService()
@@ -1470,12 +1472,19 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 except Exception as e:
                     logger.warning(f"报工审核通过，但物料倒冲失败: {e}")
 
-            # 如果审核通过，更新工单完成数量
-            if record.status == 'approved':
+            if record.status == 'approved' and not is_rework_report:
                 await self._update_work_order_progress(tenant_id, record.work_order_id)
 
-            # 审核通过时自动累计模具使用次数
-            if record.status == 'approved':
+            if record.status == "approved" and is_rework_report:
+                await ReworkOrderService.on_rework_reporting_approved(
+                    tenant_id,
+                    record,
+                    approved_by,
+                    approved_by_name or "",
+                )
+
+            # 审核通过时自动累计模具使用次数（返工报工跳过）
+            if record.status == 'approved' and not is_rework_report:
                 work_order_op = await _resolve_work_order_operation_for_reporting(
                     tenant_id=tenant_id,
                     work_order_id=record.work_order_id,
@@ -1504,7 +1513,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     except Exception as qc_err:
                         logger.warning(f"报工审核成功但触发质量检验失败：{qc_err}")
 
-            if record.status == "approved":
+            if record.status == "approved" and not is_rework_report:
                 should_try_direct_inbound = True
                 reporting_record_id_for_inbound = record.id
 

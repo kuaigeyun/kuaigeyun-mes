@@ -36,8 +36,39 @@ from apps.kuaizhizao.schemas.rework_order import (
     ReworkReportingCreate,
     ReworkReportingOptionItem,
     ReworkReportingOptionsResponse,
+    ReworkAdvanceNextRequest,
+    ReworkRequestCompleteRequest,
+    ReworkQualityReleaseRequest,
+    ReworkCloseRequest,
+    ReworkCancelRequest,
+    ReworkHoldRequest,
 )
 from apps.kuaizhizao.schemas.reporting_record import ReportingRecordResponse
+from apps.kuaizhizao.services.document_action_policy.rework_order import (
+    capability_kwargs_from_context,
+    derive_rework_order_capabilities,
+)
+from apps.kuaizhizao.services.rework_order_workflow import (
+    advance_next_operation,
+    after_rework_report_approved,
+    build_operation_items,
+    cancel_rework_order,
+    close_rework_order,
+    compute_capability_context,
+    hold_rework_order,
+    quality_release,
+    release_rework_order,
+    request_completion,
+    resume_rework_order,
+    sync_route_on_create,
+    complete_operation_link,
+    sync_link_quantities_from_reports,
+)
+from apps.kuaizhizao.utils.rework_order_constants import (
+    ROUTING_MODE_DYNAMIC,
+    ROUTING_MODE_PREDEFINED,
+    TERMINAL_REWORK_ORDER_STATUSES,
+)
 from loguru import logger
 
 
@@ -55,6 +86,13 @@ REWORK_ORDER_SORTABLE_FIELDS = frozenset({
     "created_at",
     "updated_at",
 })
+
+
+def _dec(value) -> Decimal:
+    try:
+        return Decimal(str(value or 0))
+    except Exception:
+        return Decimal("0")
 
 
 class ReworkOrderService(AppBaseService[ReworkOrder]):
@@ -144,46 +182,52 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         tenant_id: int,
         rework_order_id: int,
         start_work_order_operation_id: int,
+        *,
+        routing_mode: str = ROUTING_MODE_DYNAMIC,
+        predefined_operation_ids: Optional[List[int]] = None,
+        quantity: Optional[Decimal] = None,
     ) -> None:
-        await ReworkOrderOperation.filter(
-            tenant_id=tenant_id,
-            rework_order_id=rework_order_id,
-        ).delete()
-        await ReworkOrderOperation.create(
-            tenant_id=tenant_id,
-            rework_order_id=rework_order_id,
-            work_order_operation_id=start_work_order_operation_id,
-            sequence=0,
+        rework_order = await ReworkOrder.get_or_none(
+            tenant_id=tenant_id, id=rework_order_id, deleted_at__isnull=True
         )
+        qty = quantity if quantity is not None else _dec(rework_order.quantity if rework_order else 0)
+        await sync_route_on_create(
+            tenant_id,
+            rework_order_id,
+            routing_mode=routing_mode,
+            start_work_order_operation_id=start_work_order_operation_id,
+            predefined_operation_ids=predefined_operation_ids,
+            quantity=qty,
+        )
+
+    async def _enrich_rework_order_response(
+        self,
+        tenant_id: int,
+        resp: ReworkOrderResponse | ReworkOrderListResponse,
+        rework_order: ReworkOrder,
+    ) -> None:
+        ctx = await compute_capability_context(tenant_id, rework_order)
+        caps = derive_rework_order_capabilities(
+            rework_order,
+            **capability_kwargs_from_context(ctx),
+        )
+        resp.capabilities = caps
+        if isinstance(resp, ReworkOrderResponse):
+            items = await build_operation_items(tenant_id, rework_order)
+            resp.rework_operations = [ReworkOrderOperationItem.model_validate(i) for i in items]
 
     async def _get_rework_operations(
         self, tenant_id: int, rework_order_id: int
     ) -> List[ReworkOrderOperationItem]:
-        """获取返工单起始工序（创建时指定的第一道）"""
         rework_order = await ReworkOrder.get_or_none(
             tenant_id=tenant_id,
             id=rework_order_id,
             deleted_at__isnull=True,
         )
-        start_id = rework_order.start_work_order_operation_id if rework_order else None
-        if not start_id:
+        if not rework_order:
             return []
-        op = await WorkOrderOperation.get_or_none(
-            tenant_id=tenant_id,
-            id=start_id,
-            deleted_at__isnull=True,
-        )
-        if not op:
-            return []
-        return [
-            ReworkOrderOperationItem(
-                work_order_operation_id=start_id,
-                operation_code=op.operation_code,
-                operation_name=op.operation_name,
-                sequence=op.sequence,
-                is_start=True,
-            )
-        ]
+        items = await build_operation_items(tenant_id, rework_order)
+        return [ReworkOrderOperationItem.model_validate(i) for i in items]
 
     async def _load_original_work_order_code_map(
         self,
@@ -306,12 +350,28 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 raise NotFoundError(f"原工单不存在: {rework_order_data.original_work_order_id}")
 
         start_work_order_operation_id = None
+        predefined_operation_ids = None
+        routing_mode = (rework_order_data.routing_mode or ROUTING_MODE_DYNAMIC).upper()
+        if routing_mode not in (ROUTING_MODE_DYNAMIC, ROUTING_MODE_PREDEFINED):
+            raise ValidationError(f"无效的路线模式: {rework_order_data.routing_mode}")
+
         if rework_order_data.original_work_order_id:
-            start_work_order_operation_id = await self._resolve_start_work_order_operation_id(
-                tenant_id,
-                rework_order_data.original_work_order_id,
-                rework_order_data.start_work_order_operation_id,
-            )
+            if routing_mode == ROUTING_MODE_PREDEFINED:
+                predefined_operation_ids = list(rework_order_data.predefined_operation_ids or [])
+                if len(predefined_operation_ids) < 1:
+                    raise ValidationError("预设路线至少需指定一道工序")
+                await self._validate_rework_operation_ids(
+                    tenant_id,
+                    rework_order_data.original_work_order_id,
+                    predefined_operation_ids,
+                )
+                start_work_order_operation_id = predefined_operation_ids[0]
+            else:
+                start_work_order_operation_id = await self._resolve_start_work_order_operation_id(
+                    tenant_id,
+                    rework_order_data.original_work_order_id,
+                    rework_order_data.start_work_order_operation_id,
+                )
 
         async with in_transaction():
             rework_order = await ReworkOrder.create(
@@ -321,6 +381,9 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 original_work_order_id=rework_order_data.original_work_order_id,
                 original_work_order_uuid=rework_order_data.original_work_order_uuid,
                 start_work_order_operation_id=start_work_order_operation_id,
+                routing_mode=routing_mode,
+                verification_required=bool(rework_order_data.verification_required),
+                source_inspection_id=rework_order_data.source_inspection_id,
                 product_id=rework_order_data.product_id,
                 product_code=rework_order_data.product_code,
                 product_name=rework_order_data.product_name,
@@ -349,6 +412,9 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                     tenant_id,
                     rework_order.id,
                     start_work_order_operation_id,
+                    routing_mode=routing_mode,
+                    predefined_operation_ids=predefined_operation_ids,
+                    quantity=rework_order_data.quantity,
                 )
 
         if rework_order_data.original_work_order_id:
@@ -360,9 +426,11 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             )
 
         resp = ReworkOrderResponse.model_validate(rework_order)
-        resp.rework_operations = await self._get_rework_operations(tenant_id, rework_order.id)
+        await self._enrich_rework_order_response(tenant_id, resp, rework_order)
         if original_work_order:
             resp.original_work_order_code = original_work_order.code
+        from apps.kuaizhizao.services.document_lifecycle_service import get_rework_order_lifecycle
+        resp.lifecycle = get_rework_order_lifecycle(rework_order)
         return resp
 
     async def create_rework_order_from_work_order(
@@ -442,12 +510,15 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             quantity=quantity,
             rework_reason=request_data.rework_reason,
             rework_type=request_data.rework_type,
+            routing_mode=request_data.routing_mode,
+            verification_required=request_data.verification_required,
             route_id=request_data.route_id,
             planned_start_date=request_data.planned_start_date,
             planned_end_date=request_data.planned_end_date,
             work_center_id=request_data.work_center_id or original_work_order.work_center_id,
             work_center_name=original_work_order.work_center_name if not request_data.work_center_id else None,
             start_work_order_operation_id=request_data.start_work_order_operation_id,
+            predefined_operation_ids=request_data.predefined_operation_ids,
             remarks=request_data.remarks,
         )
 
@@ -479,7 +550,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         resp = ReworkOrderResponse.model_validate(rework_order)
         from apps.kuaizhizao.services.document_lifecycle_service import get_rework_order_lifecycle
         resp.lifecycle = get_rework_order_lifecycle(rework_order)
-        resp.rework_operations = await self._get_rework_operations(tenant_id, rework_order_id)
+        await self._enrich_rework_order_response(tenant_id, resp, rework_order)
         if rework_order.original_work_order_id:
             code_map = await self._load_original_work_order_code_map(
                 tenant_id, [rework_order.original_work_order_id]
@@ -517,6 +588,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         resp = ReworkOrderResponse.model_validate(rework_order)
         from apps.kuaizhizao.services.document_lifecycle_service import get_rework_order_lifecycle
         resp.lifecycle = get_rework_order_lifecycle(rework_order)
+        await self._enrich_rework_order_response(tenant_id, resp, rework_order)
         if rework_order.original_work_order_id:
             code_map = await self._load_original_work_order_code_map(
                 tenant_id, [rework_order.original_work_order_id]
@@ -614,6 +686,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         for ro in rework_orders:
             resp = ReworkOrderListResponse.model_validate(ro)
             resp.lifecycle = get_rework_order_lifecycle(ro)
+            await self._enrich_rework_order_response(tenant_id, resp, ro)
             self._attach_original_work_order_code(resp, code_map, ro.original_work_order_id)
             result.append(resp)
         return {
@@ -649,40 +722,46 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             # 获取返工单
             rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
 
-            # 验证状态（已完成的返工单不允许修改）
-            if rework_order.status == "completed":
-                raise BusinessLogicError("已完成的返工单不允许修改")
+            if rework_order.status != "draft":
+                raise BusinessLogicError("仅草稿态返工单允许修改")
 
-            # 获取更新人信息
             user_info = await self.get_user_info(updated_by)
 
-            # 更新字段
             update_data = rework_order_data.model_dump(exclude_unset=True)
+            update_data.pop("status", None)
             update_data["updated_by"] = updated_by
             update_data["updated_by_name"] = user_info["name"]
-
-            # 如果状态变更为in_progress，记录实际开始时间
-            if "status" in update_data and update_data["status"] == "in_progress" and not rework_order.actual_start_date:
-                update_data["actual_start_date"] = resolve_business_datetime()
-
-            # 如果状态变更为completed，记录实际结束时间
-            if "status" in update_data and update_data["status"] == "completed" and not rework_order.actual_end_date:
-                update_data["actual_end_date"] = resolve_business_datetime()
 
             await ReworkOrder.filter(
                 tenant_id=tenant_id,
                 id=rework_order_id
             ).update(**update_data)
 
-            if "start_work_order_operation_id" in update_data:
-                start_id = update_data.get("start_work_order_operation_id")
+            if "start_work_order_operation_id" in update_data or "predefined_operation_ids" in update_data:
+                start_id = update_data.get("start_work_order_operation_id") or rework_order.start_work_order_operation_id
+                routing_mode = update_data.get("routing_mode") or rework_order.routing_mode
+                predefined_ids = update_data.get("predefined_operation_ids")
                 if rework_order.original_work_order_id and start_id is not None:
-                    await self._validate_rework_operation_ids(
+                    if predefined_ids:
+                        await self._validate_rework_operation_ids(
+                            tenant_id,
+                            rework_order.original_work_order_id,
+                            predefined_ids,
+                        )
+                    else:
+                        await self._validate_rework_operation_ids(
+                            tenant_id,
+                            rework_order.original_work_order_id,
+                            [start_id],
+                        )
+                    await self._sync_start_operation_link(
                         tenant_id,
-                        rework_order.original_work_order_id,
-                        [start_id],
+                        rework_order_id,
+                        start_id,
+                        routing_mode=routing_mode,
+                        predefined_operation_ids=predefined_ids,
+                        quantity=update_data.get("quantity", rework_order.quantity),
                     )
-                    await self._sync_start_operation_link(tenant_id, rework_order_id, start_id)
 
             # 返回更新后的返工单
             updated_rework_order = await self.get_rework_order_by_id(tenant_id, rework_order_id)
@@ -711,9 +790,17 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             # 获取返工单
             rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
 
-            # 验证状态（已完成的返工单不允许删除）
-            if rework_order.status == "completed":
-                raise BusinessLogicError("已完成的返工单不允许删除")
+            if rework_order.status not in ("draft", "cancelled"):
+                if rework_order.status == "released":
+                    has_reports = await ReportingRecord.filter(
+                        tenant_id=tenant_id,
+                        rework_order_id=rework_order_id,
+                        deleted_at__isnull=True,
+                    ).exists()
+                    if has_reports:
+                        raise BusinessLogicError("已有报工记录的返工单不允许删除")
+                elif rework_order.status not in TERMINAL_REWORK_ORDER_STATUSES:
+                    raise BusinessLogicError("当前状态的返工单不允许删除")
 
             # 软删除
             await ReworkOrder.filter(
@@ -751,10 +838,17 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         rework_order_id: int,
     ) -> ReworkReportingOptionsResponse:
         rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
-        if not rework_order.original_work_order_id or not rework_order.start_work_order_operation_id:
-            raise BusinessLogicError("返工单未配置起始工序，无法报工")
-        if rework_order.status in ("draft", "cancelled", "completed"):
-            raise BusinessLogicError(f"返工单状态为 {rework_order.status}，无法报工")
+        ctx = await compute_capability_context(tenant_id, rework_order)
+        caps = derive_rework_order_capabilities(rework_order, **capability_kwargs_from_context(ctx))
+        from apps.kuaizhizao.services.document_action_policy.rework_order import assert_rework_order_capability
+        assert_rework_order_capability(rework_order, "execute", caps)
+
+        if not rework_order.original_work_order_id:
+            raise BusinessLogicError("返工单未关联原工单，无法报工")
+
+        current_link = ctx["current_link"]
+        if not current_link:
+            raise BusinessLogicError("当前无激活工序，请先下达或选择下一工序")
 
         ops = await WorkOrderOperation.filter(
             tenant_id=tenant_id,
@@ -769,27 +863,22 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             status__in=["pending", "approved"],
         ).all()
         reported_by_op: dict[int, Decimal] = {}
+        qualified_by_op: dict[int, Decimal] = {}
         for record in reports:
             op_id = record.operation_id
-            reported_by_op[op_id] = reported_by_op.get(op_id, Decimal("0")) + Decimal(
-                str(record.reported_quantity or 0)
-            )
+            reported_by_op[op_id] = reported_by_op.get(op_id, Decimal("0")) + _dec(record.reported_quantity)
+            if record.status == "approved":
+                qualified_by_op[op_id] = qualified_by_op.get(op_id, Decimal("0")) + _dec(record.qualified_quantity)
 
-        has_start_report, total_qualified, remaining = await self._get_rework_reporting_summary(
-            tenant_id, rework_order
-        )
-        start_op = next(
-            (op for op in ops if op.id == rework_order.start_work_order_operation_id),
-            None,
-        )
+        await sync_link_quantities_from_reports(tenant_id, current_link)
+        remaining = max(Decimal("0"), _dec(current_link.input_quantity) - _dec(current_link.qualified_quantity))
+        current_op = next((op for op in ops if op.id == current_link.work_order_operation_id), None)
+
         operation_items: List[ReworkReportingOptionItem] = []
         for op in ops:
             if op.id is None:
                 continue
-            selectable = (
-                (not has_start_report and op.id == rework_order.start_work_order_operation_id)
-                or has_start_report
-            )
+            selectable = op.id == current_link.work_order_operation_id
             operation_items.append(
                 ReworkReportingOptionItem(
                     work_order_operation_id=op.id,
@@ -797,7 +886,9 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                     operation_name=op.operation_name,
                     sequence=op.sequence,
                     is_start_operation=op.id == rework_order.start_work_order_operation_id,
+                    is_current_operation=selectable,
                     reported_quantity=reported_by_op.get(op.id, Decimal("0")),
+                    qualified_quantity=qualified_by_op.get(op.id, Decimal("0")),
                     selectable=selectable,
                 )
             )
@@ -805,12 +896,12 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         return ReworkReportingOptionsResponse(
             rework_order_id=rework_order.id,
             rework_order_code=rework_order.code,
+            routing_mode=rework_order.routing_mode,
             rework_quantity=rework_order.quantity,
-            start_work_order_operation_id=rework_order.start_work_order_operation_id,
-            start_operation_name=start_op.operation_name if start_op else None,
-            has_start_report=has_start_report,
-            total_qualified_quantity=total_qualified,
-            remaining_rework_quantity=remaining,
+            current_work_order_operation_id=current_link.work_order_operation_id,
+            current_operation_name=current_op.operation_name if current_op else None,
+            remaining_input_quantity=remaining,
+            total_qualified_quantity=_dec(current_link.qualified_quantity),
             operations=operation_items,
         )
 
@@ -822,10 +913,16 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         reported_by: int,
     ) -> ReportingRecordResponse:
         rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
-        if not rework_order.original_work_order_id or not rework_order.start_work_order_operation_id:
-            raise BusinessLogicError("返工单未配置起始工序，无法报工")
-        if rework_order.status in ("draft", "cancelled", "completed"):
-            raise BusinessLogicError(f"返工单状态为 {rework_order.status}，无法报工")
+        ctx = await compute_capability_context(tenant_id, rework_order)
+        caps = derive_rework_order_capabilities(rework_order, **capability_kwargs_from_context(ctx))
+        from apps.kuaizhizao.services.document_action_policy.rework_order import assert_rework_order_capability
+        assert_rework_order_capability(rework_order, "execute", caps)
+
+        current_link = ctx["current_link"]
+        if not current_link:
+            raise BusinessLogicError("当前无激活工序，无法报工")
+        if reporting_data.work_order_operation_id != current_link.work_order_operation_id:
+            raise BusinessLogicError("报工必须落在当前激活工序上")
 
         work_order = await WorkOrder.get_or_none(
             tenant_id=tenant_id,
@@ -844,40 +941,33 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         if not work_order_operation:
             raise ValidationError("所选工序不属于原工单或不存在")
 
-        has_start_report, total_qualified, remaining = await self._get_rework_reporting_summary(
-            tenant_id, rework_order
-        )
-        if not has_start_report and reporting_data.work_order_operation_id != rework_order.start_work_order_operation_id:
-            raise BusinessLogicError("首次报工必须在返工起始工序上进行")
-
-        reported_qty = Decimal(str(reporting_data.reported_quantity))
-        qualified_qty = Decimal(str(reporting_data.qualified_quantity))
-        unqualified_qty = Decimal(str(reporting_data.unqualified_quantity))
+        await sync_link_quantities_from_reports(tenant_id, current_link)
+        reported_qty = _dec(reporting_data.reported_quantity)
+        qualified_qty = _dec(reporting_data.qualified_quantity)
+        unqualified_qty = _dec(reporting_data.unqualified_quantity)
         if reported_qty <= 0:
             raise ValidationError("报工数量必须大于 0")
         if qualified_qty + unqualified_qty != reported_qty:
             raise ValidationError("合格数量 + 不合格数量必须等于报工数量")
-        if total_qualified + qualified_qty > Decimal(str(rework_order.quantity or 0)):
-            raise BusinessLogicError(
-                f"返工合格数量不能超过返工数量（{rework_order.quantity}）"
-            )
+        remaining = max(Decimal("0"), _dec(current_link.input_quantity) - _dec(current_link.qualified_quantity))
+        if qualified_qty > remaining:
+            raise BusinessLogicError(f"当前工序合格数量不能超过剩余投入数量（{remaining}）")
 
-        wh = Decimal(str(reporting_data.work_hours or 0))
+        wh = _dec(reporting_data.work_hours)
         if wh < 0:
             raise ValidationError("报工工时不能为负数")
 
-        if reporting_data.reported_at:
-            if is_future_datetime(reporting_data.reported_at):
-                raise ValidationError("报工时间不能晚于当前时间")
+        if reporting_data.reported_at and is_future_datetime(reporting_data.reported_at):
+            raise ValidationError("报工时间不能晚于当前时间")
 
         user_info = await self.get_user_info(reported_by)
         recorder_name = user_info.get("name")
 
-        biz_config = await self.business_config_service.get_business_config(tenant_id)
-        reporting_params = biz_config.get("parameters", {}).get("reporting", {})
         reporting_audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "reporting_record"
         )
+        biz_config = await self.business_config_service.get_business_config(tenant_id)
+        reporting_params = biz_config.get("parameters", {}).get("reporting", {})
         auto_approve = reporting_params.get("auto_approve", False)
         should_auto_approve = (not reporting_audit_required) or bool(auto_approve)
 
@@ -897,6 +987,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 uuid=str(uuid.uuid4()),
                 work_order_id=work_order.id,
                 rework_order_id=rework_order.id,
+                rework_order_operation_id=current_link.id,
                 work_order_code=work_order.code,
                 work_order_name=work_order.name,
                 operation_id=work_order_operation.id,
@@ -918,17 +1009,172 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 approved_by_name=approved_by_name,
             )
 
-            if rework_order.status == "released":
+            if status == "approved":
+                await after_rework_report_approved(
+                    tenant_id,
+                    rework_order.id,
+                    current_link.id,
+                    actor_id=reported_by,
+                    actor_name=recorder_name or "",
+                )
+            elif rework_order.status == "released":
                 rework_order.status = "in_progress"
                 rework_order.actual_start_date = rework_order.actual_start_date or resolve_business_datetime()
-            new_total_qualified = total_qualified + (
-                qualified_qty if status == "approved" else Decimal("0")
-            )
-            if new_total_qualified >= Decimal(str(rework_order.quantity or 0)):
-                rework_order.status = "completed"
-                rework_order.actual_end_date = rework_order.actual_end_date or resolve_business_datetime()
-            rework_order.updated_by = reported_by
-            rework_order.updated_by_name = recorder_name
-            await rework_order.save()
+                rework_order.updated_by = reported_by
+                rework_order.updated_by_name = recorder_name
+                await rework_order.save()
 
         return ReportingRecordResponse.model_validate(reporting_record)
+
+    async def release_rework_order(self, tenant_id: int, rework_order_id: int, released_by: int) -> ReworkOrderResponse:
+        rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        user_info = await self.get_user_info(released_by)
+        await release_rework_order(
+            tenant_id,
+            rework_order,
+            released_by=released_by,
+            released_by_name=user_info["name"],
+            get_user_info=self.get_user_info,
+        )
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def advance_rework_next_operation(
+        self,
+        tenant_id: int,
+        rework_order_id: int,
+        request: ReworkAdvanceNextRequest,
+        actor_id: int,
+    ) -> ReworkOrderResponse:
+        rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        user_info = await self.get_user_info(actor_id)
+        await advance_next_operation(
+            tenant_id,
+            rework_order,
+            request,
+            actor_id=actor_id,
+            actor_name=user_info["name"],
+        )
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def request_rework_completion(
+        self,
+        tenant_id: int,
+        rework_order_id: int,
+        request: ReworkRequestCompleteRequest,
+        actor_id: int,
+    ) -> ReworkOrderResponse:
+        rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        user_info = await self.get_user_info(actor_id)
+        await request_completion(
+            tenant_id,
+            rework_order,
+            request,
+            actor_id=actor_id,
+            actor_name=user_info["name"],
+        )
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def quality_release_rework_order(
+        self,
+        tenant_id: int,
+        rework_order_id: int,
+        request: ReworkQualityReleaseRequest,
+        actor_id: int,
+    ) -> ReworkOrderResponse:
+        rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        user_info = await self.get_user_info(actor_id)
+        await quality_release(
+            tenant_id,
+            rework_order,
+            request,
+            actor_id=actor_id,
+            actor_name=user_info["name"],
+        )
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def close_rework_order(
+        self,
+        tenant_id: int,
+        rework_order_id: int,
+        request: ReworkCloseRequest,
+        actor_id: int,
+    ) -> ReworkOrderResponse:
+        rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        user_info = await self.get_user_info(actor_id)
+        await close_rework_order(
+            tenant_id,
+            rework_order,
+            request,
+            actor_id=actor_id,
+            actor_name=user_info["name"],
+        )
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def cancel_rework_order_flow(
+        self,
+        tenant_id: int,
+        rework_order_id: int,
+        request: ReworkCancelRequest,
+        actor_id: int,
+    ) -> ReworkOrderResponse:
+        rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        user_info = await self.get_user_info(actor_id)
+        await cancel_rework_order(
+            tenant_id,
+            rework_order,
+            request,
+            actor_id=actor_id,
+            actor_name=user_info["name"],
+        )
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def hold_rework_order_flow(
+        self,
+        tenant_id: int,
+        rework_order_id: int,
+        request: ReworkHoldRequest,
+        actor_id: int,
+    ) -> ReworkOrderResponse:
+        rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        user_info = await self.get_user_info(actor_id)
+        await hold_rework_order(
+            tenant_id,
+            rework_order,
+            request,
+            actor_id=actor_id,
+            actor_name=user_info["name"],
+        )
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def resume_rework_order_flow(
+        self,
+        tenant_id: int,
+        rework_order_id: int,
+        actor_id: int,
+    ) -> ReworkOrderResponse:
+        rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        user_info = await self.get_user_info(actor_id)
+        await resume_rework_order(
+            tenant_id,
+            rework_order,
+            actor_id=actor_id,
+            actor_name=user_info["name"],
+        )
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    @staticmethod
+    async def on_rework_reporting_approved(
+        tenant_id: int,
+        reporting_record: ReportingRecord,
+        approved_by: int,
+        approved_by_name: str,
+    ) -> None:
+        if not reporting_record.rework_order_id or not reporting_record.rework_order_operation_id:
+            return
+        await after_rework_report_approved(
+            tenant_id,
+            reporting_record.rework_order_id,
+            reporting_record.rework_order_operation_id,
+            actor_id=approved_by,
+            actor_name=approved_by_name,
+        )

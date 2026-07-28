@@ -457,4 +457,20 @@ export const reworkOrderApi = {
     apiRequest(`/apps/kuaizhizao/rework-orders/${id}/reporting-options`, { method: 'GET' }),
   report: async (id: string, data: any) =>
     apiRequest(`/apps/kuaizhizao/rework-orders/${id}/report`, { method: 'POST', data }),
+  release: async (id: string) =>
+    apiRequest(`/apps/kuaizhizao/rework-orders/${id}/release`, { method: 'POST' }),
+  advanceNext: async (id: string, data: any) =>
+    apiRequest(`/apps/kuaizhizao/rework-orders/${id}/advance-next`, { method: 'POST', data }),
+  requestComplete: async (id: string, data?: any) =>
+    apiRequest(`/apps/kuaizhizao/rework-orders/${id}/request-complete`, { method: 'POST', data: data ?? {} }),
+  qualityRelease: async (id: string, data?: any) =>
+    apiRequest(`/apps/kuaizhizao/rework-orders/${id}/quality-release`, { method: 'POST', data: data ?? {} }),
+  close: async (id: string, data?: any) =>
+    apiRequest(`/apps/kuaizhizao/rework-orders/${id}/close`, { method: 'POST', data: data ?? {} }),
+  cancel: async (id: string, data?: any) =>
+    apiRequest(`/apps/kuaizhizao/rework-orders/${id}/cancel`, { method: 'POST', data: data ?? {} }),
+  hold: async (id: string, data?: any) =>
+    apiRequest(`/apps/kuaizhizao/rework-orders/${id}/hold`, { method: 'POST', data: data ?? {} }),
+  resume: async (id: string) =>
+    apiRequest(`/apps/kuaizhizao/rework-orders/${id}/resume`, { method: 'POST' }),
 };

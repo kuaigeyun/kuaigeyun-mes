@@ -3832,7 +3832,6 @@ const PurchaseOrdersPage: React.FC = () => {
                     dataSource={orderDetail.fee_details}
                     rowKey={(_: any, i?: number) => i ?? 0}
                     pagination={false}
-                    bordered
                   />
                 </>
               )}
@@ -3962,7 +3961,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     style={{ minWidth: PO_DETAIL_ITEMS_MIN_WIDTH }}
                     columns={[
                       { title: t('app.kuaizhizao.purchaseOrder.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-                      { title: t('app.kuaizhizao.purchaseOrder.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+                      { title: t('app.kuaizhizao.purchaseOrder.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true, render: (_, record) => record.material_name || record.materialName || '—' },
                       { title: t('app.kuaizhizao.purchaseOrder.col.orderedQty'), dataIndex: 'ordered_quantity', width: 100, align: 'right' , render: formatQuantity },
                       { title: t('app.kuaizhizao.purchaseOrder.col.unit'), dataIndex: 'unit', width: 60 },
                       {
@@ -3992,7 +3991,6 @@ const PurchaseOrdersPage: React.FC = () => {
                     dataSource={orderDetail.items}
                     pagination={false}
                     rowKey="id"
-                    bordered
                   />
               ) : (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.salesOrder.emptyItems')} />

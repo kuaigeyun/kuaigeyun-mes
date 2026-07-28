@@ -293,6 +293,7 @@ function isWorkOrderReleasedForStart(status?: string | null): boolean {
 }
 import { getFileDownloadUrl } from '../../../../../services/file'
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField'
+import ReworkOrderCreateModal from '../../../components/ReworkOrderCreateModal'
 import { batchImport } from '../../../../../utils/batchOperations'
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts'
 import {
@@ -2075,7 +2076,6 @@ const WorkOrdersPage: React.FC = () => {
   const [reworkModalOperations, setReworkModalOperations] = useState<any[]>([])
   const [reworkableQuantity, setReworkableQuantity] = useState<number>(0)
   const [reworkSubmitLoading, setReworkSubmitLoading] = useState(false)
-  const reworkFormRef = useRef<any>(null)
 
   // 创建工序委外相关状态
   const [outsourceModalVisible, setOutsourceModalVisible] = useState(false)
@@ -2183,6 +2183,8 @@ const WorkOrdersPage: React.FC = () => {
     return {
       quantity: defaultQty,
       rework_type: '返工',
+      routing_mode: 'DYNAMIC',
+      verification_required: false,
     }
   }, [reworkModalVisible, currentWorkOrderForRework, reworkableQuantity])
 
@@ -5147,11 +5149,14 @@ const WorkOrdersPage: React.FC = () => {
       const submitData = {
         rework_reason: values.rework_reason,
         rework_type: values.rework_type,
+        routing_mode: values.routing_mode || 'DYNAMIC',
+        verification_required: Boolean(values.verification_required),
         quantity: qty,
         route_id: values.route_id || undefined,
         work_center_id:
           values.work_center_id || currentWorkOrderForRework.work_center_id || undefined,
         start_work_order_operation_id: values.start_work_order_operation_id || undefined,
+        predefined_operation_ids: values.predefined_operation_ids || undefined,
         planned_start_date: toApiDateTimeString(values.planned_start_date),
         planned_end_date: toApiDateTimeString(values.planned_end_date),
         remarks: values.remarks || undefined,
@@ -5162,7 +5167,6 @@ const WorkOrdersPage: React.FC = () => {
       setCurrentWorkOrderForRework(null)
       setReworkModalOperations([])
       setReworkableQuantity(0)
-      reworkFormRef.current?.resetFields()
       actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error.message || '创建返工单失败')
@@ -9221,129 +9225,35 @@ const WorkOrdersPage: React.FC = () => {
         }
       />
 
-      {/* 创建返工单Modal */}
-      <FormModalTemplate
-        title="创建返工单"
+      <ReworkOrderCreateModal
+        key={currentWorkOrderForRework?.id ? String(currentWorkOrderForRework.id) : 'rework-create-empty'}
         open={reworkModalVisible}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        title={t('app.kuaizhizao.reworkOrder.createFromWorkOrderModalTitle')}
         loading={reworkSubmitLoading}
         initialValues={reworkFormInitialValues}
+        workOrderCode={currentWorkOrderForRework?.code}
+        productName={currentWorkOrderForRework?.product_name}
+        reworkableQuantity={reworkableQuantity}
+        operations={reworkModalOperations.map((op: any) => ({
+          id: op.id,
+          sequence: op.sequence,
+          operation_code: op.operation_code,
+          operation_name: op.operation_name,
+          workshop_name: op.workshop_name,
+          standard_time: op.standard_time,
+        }))}
+        formatOperationOption={(op) => ({
+          label: `工序${op.sequence || ''} - ${op.operation_name || op.operation_code || op.id}`,
+          value: op.id,
+        })}
         onClose={() => {
           setReworkModalVisible(false)
           setCurrentWorkOrderForRework(null)
           setReworkModalOperations([])
           setReworkableQuantity(0)
-          reworkFormRef.current?.resetFields()
         }}
         onFinish={handleSubmitRework}
-        formRef={reworkFormRef}
-      >
-        {currentWorkOrderForRework ? (
-          <>
-            <Card size="small" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <div>
-                    <strong>工单编号：</strong>
-                    {currentWorkOrderForRework.code}
-                  </div>
-                </Col>
-                <Col span={12}>
-                  <div>
-                    <strong>产品名称：</strong>
-                    {currentWorkOrderForRework.product_name}
-                  </div>
-                </Col>
-                <Col span={12} style={{ marginTop: 8 }}>
-                  <div>
-                    <strong>可返工数量：</strong>
-                    {reworkableQuantity}
-                  </div>
-                </Col>
-              </Row>
-            </Card>
-            <ProFormDigit
-              name="quantity"
-              label="返工数量"
-              placeholder="请输入返工数量"
-              rules={[
-                { required: true, message: '请输入返工数量' },
-                {
-                  validator: async (_, value) => {
-                    const qty = Number(value)
-                    if (!Number.isFinite(qty) || qty <= 0) {
-                      throw new Error('返工数量必须大于 0')
-                    }
-                    if (qty > reworkableQuantity) {
-                      throw new Error(`返工数量不能超过可返工数量（${reworkableQuantity}）`)
-                    }
-                  },
-                },
-              ]}
-              min={0.01}
-              max={reworkableQuantity > 0 ? reworkableQuantity : undefined}
-              fieldProps={{ precision: 2 }}
-            />
-            <ProFormSelect
-              name="rework_type"
-              label="返工类型"
-              placeholder="请选择返工类型"
-              rules={[{ required: true, message: '请选择返工类型' }]}
-              options={[
-                { label: '返工', value: '返工' },
-                { label: '返修', value: '返修' },
-                { label: '报废', value: '报废' },
-              ]}
-            />
-            <ProFormSelect
-              name="start_work_order_operation_id"
-              label="返工起始工序"
-              placeholder="不选则取原工单首道工序"
-              allowClear
-              options={reworkModalOperations.map((op: any) => ({
-                label: `工序${op.sequence || ''} - ${op.operation_name || op.operation_code || op.id}`,
-                value: op.id,
-              }))}
-              fieldProps={{
-                showSearch: true,
-                filterOption: (input: string, option: any) =>
-                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-              }}
-            />
-            <ProFormTextArea
-              name="rework_reason"
-              label="返工原因"
-              placeholder="请输入返工原因"
-              rules={[{ required: true, message: '请输入返工原因' }]}
-              fieldProps={{ rows: 3 }}
-            />
-            <ProFormDatePicker
-              name="planned_start_date"
-              label="计划开始时间"
-              placeholder="请选择计划开始时间"
-              fieldProps={{ showTime: true }}
-            />
-            <ProFormDatePicker
-              name="planned_end_date"
-              label="计划结束时间"
-              placeholder="请选择计划结束时间"
-              fieldProps={buildFutureDateShortcutFieldProps({
-                getForm: () => reworkFormRef.current,
-                fieldName: 'planned_end_date',
-                baseFieldName: 'planned_start_date',
-                t,
-                fieldProps: { showTime: true },
-              })}
-            />
-            <ProFormTextArea
-              name="remarks"
-              label="备注"
-              placeholder="请输入备注"
-              fieldProps={{ rows: 3 }}
-            />
-          </>
-        ) : null}
-      </FormModalTemplate>
+      />
 
       {/* 工序委外加载预览 */}
       <Modal

@@ -4263,6 +4263,9 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 quantity=float(push_qty),
                 rework_reason=inspection.nonconformance_reason or "质量检验不合格",
                 rework_type="返工",
+                routing_mode="DYNAMIC",
+                verification_required=True,
+                source_inspection_id=inspection_id,
                 remarks=f"由成品检验单 {inspection.inspection_code} 不合格项自动生成"
             )
             

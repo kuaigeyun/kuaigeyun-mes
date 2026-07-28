@@ -213,6 +213,21 @@ class OutsourceWorkOrderCapabilities(BaseModel):
     print: ActionCapability
 
 
+class ReworkOrderCapabilities(BaseModel):
+    update: ActionCapability
+    delete: ActionCapability
+    release: ActionCapability
+    execute: ActionCapability
+    advance_next: ActionCapability
+    request_complete: ActionCapability
+    quality_release: ActionCapability
+    close: ActionCapability
+    cancel: ActionCapability
+    hold: ActionCapability
+    resume: ActionCapability
+    print: ActionCapability
+
+
 class ReportingRecordCapabilities(BaseModel):
     update: ActionCapability
     delete: ActionCapability
@@ -544,6 +559,22 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "outsource_work_order.close.cancelled": "已取消的委外工单不能结案",
     "outsource_work_order.close.fully_received": "委外数量已全部收货，无需强制结案",
     "outsource_work_order.close.no_activity_use_cancel": "未发生发料/收货时请使用取消，而非强制结案",
+    "rework_order.update.not_draft": "仅草稿态返工单可编辑",
+    "rework_order.delete.not_allowed": "当前状态不可删除返工单",
+    "rework_order.release.not_draft": "仅草稿态返工单可下达",
+    "rework_order.execute.not_allowed": "当前状态不可报工",
+    "rework_order.execute.awaiting_decision": "当前工序已完成，请选择下一工序或申请完修",
+    "rework_order.advance.not_dynamic": "仅动态路线可追加下一工序",
+    "rework_order.advance.not_allowed": "当前不可追加下一工序",
+    "rework_order.request_complete.not_allowed": "当前不可申请完修",
+    "rework_order.quality_release.not_allowed": "当前状态不可质量放行",
+    "rework_order.quality_release.verification_pending": "复检尚未通过，无法质量放行",
+    "rework_order.close.not_allowed": "当前状态不可关闭",
+    "rework_order.cancel.not_allowed": "当前状态不可取消",
+    "rework_order.cancel.already_cancelled": "返工单已取消",
+    "rework_order.cancel.terminal": "已关闭的返工单不能取消",
+    "rework_order.hold.not_allowed": "当前状态不可暂停",
+    "rework_order.resume.not_on_hold": "仅暂停中的返工单可恢复",
     "reporting_record.update.not_pending": "仅待审核报工记录可编辑",
     "reporting_record.delete.not_pending": "仅待审核报工记录可删除",
     "reporting_record.approve.not_pending": "只有待审核状态的报工记录才可以审核",

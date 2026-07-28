@@ -69,9 +69,8 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
     "obsolete": "作废",
 }
 
-
-# 同一 action 在不同模块语义不同时，按完整权限码覆盖展示文案（优先于 ACTION_DISPLAY_LABELS）
 PERMISSION_CODE_DISPLAY_LABELS: dict[str, str] = {
+    "kuaizhizao:rework-order:release": "下达",
     "haoligo:equipment-documents-acceptance:submit": "调试",
     "haoligo:equipment-documents-acceptance:execute": "试产",
     "haoligo:equipment-documents-acceptance:complete": "台账结案",

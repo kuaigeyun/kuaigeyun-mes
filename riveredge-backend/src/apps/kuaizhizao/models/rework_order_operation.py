@@ -39,6 +39,31 @@ class ReworkOrderOperation(BaseModel):
     rework_order_id = fields.IntField(description="返工单ID（关联ReworkOrder）")
     work_order_operation_id = fields.IntField(description="工单工序ID（关联WorkOrderOperation）")
     sequence = fields.IntField(default=0, description="工序顺序（用于展示排序）")
+    role = fields.CharField(
+        max_length=20,
+        default="start",
+        description="工序角色（start/planned/dynamic）",
+    )
+    status = fields.CharField(
+        max_length=20,
+        default="pending",
+        description="执行状态（pending/active/completed/skipped）",
+    )
+    input_quantity = fields.DecimalField(
+        max_digits=18, decimal_places=4, null=True, description="投入数量"
+    )
+    qualified_quantity = fields.DecimalField(
+        max_digits=18, decimal_places=4, default=0, description="合格数量汇总"
+    )
+    unqualified_quantity = fields.DecimalField(
+        max_digits=18, decimal_places=4, default=0, description="不合格数量汇总"
+    )
+    started_at = fields.DatetimeField(null=True, description="开始时间")
+    completed_at = fields.DatetimeField(null=True, description="完成时间")
+    decision_reason = fields.TextField(null=True, description="动态追加/决策原因")
+    decided_by = fields.IntField(null=True, description="决策人 ID")
+    decided_by_name = fields.CharField(max_length=100, null=True, description="决策人姓名")
+    decided_at = fields.DatetimeField(null=True, description="决策时间")
 
     def __str__(self):
         return f"返工单#{self.rework_order_id} - 工序#{self.work_order_operation_id}"

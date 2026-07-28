@@ -97,11 +97,52 @@ class ReworkOrder(BaseModel):
     route_id = fields.IntField(null=True, description="返工工艺路线ID（关联物料）")
     route_name = fields.CharField(max_length=200, null=True, description="返工工艺路线名称")
 
+    routing_mode = fields.CharField(
+        max_length=20,
+        default="DYNAMIC",
+        description="路线模式（DYNAMIC 动态返工路线 / PREDEFINED 预设返工路线）",
+    )
+    current_operation_link_id = fields.IntField(
+        null=True,
+        description="当前激活的返工工序行 ID",
+    )
+    verification_required = fields.BooleanField(
+        default=False,
+        description="关闭前是否需复检",
+    )
+    completed_quantity = fields.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        description="申请完修数量",
+    )
+    completion_requested_at = fields.DatetimeField(null=True, description="申请完修时间")
+    completion_requested_by = fields.IntField(null=True, description="申请完修人 ID")
+    completion_requested_by_name = fields.CharField(
+        max_length=100, null=True, description="申请完修人姓名"
+    )
+    quality_released_at = fields.DatetimeField(null=True, description="质量放行时间")
+    quality_released_by = fields.IntField(null=True, description="质量放行人 ID")
+    quality_released_by_name = fields.CharField(
+        max_length=100, null=True, description="质量放行人姓名"
+    )
+    closed_at = fields.DatetimeField(null=True, description="业务关闭时间")
+    closed_by = fields.IntField(null=True, description="关闭人 ID")
+    closed_by_name = fields.CharField(max_length=100, null=True, description="关闭人姓名")
+    on_hold_at = fields.DatetimeField(null=True, description="暂停时间")
+    on_hold_by = fields.IntField(null=True, description="暂停人 ID")
+    on_hold_by_name = fields.CharField(max_length=100, null=True, description="暂停人姓名")
+    hold_previous_status = fields.CharField(
+        max_length=30, null=True, description="暂停前状态（恢复时使用）"
+    )
+    source_inspection_id = fields.IntField(null=True, description="来源成品检验单 ID")
+    verification_inspection_id = fields.IntField(null=True, description="完修复检单 ID")
+
     # 返工状态
     status = fields.CharField(
-        max_length=20,
+        max_length=30,
         default="draft",
-        description="返工状态（draft/released/in_progress/completed/cancelled）",
+        description="返工状态（draft/released/in_progress/pending_verification/quality_released/closed/cancelled/on_hold）",
     )
 
     # 计划时间

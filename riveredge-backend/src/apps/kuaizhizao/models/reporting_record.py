@@ -67,6 +67,9 @@ class ReportingRecord(BaseModel):
     # 工单信息
     work_order_id = fields.IntField(description="工单ID")
     rework_order_id = fields.IntField(null=True, description="返工单 ID（返工报工时有值）")
+    rework_order_operation_id = fields.IntField(
+        null=True, description="返工工序行 ID（apps_kuaizhizao_rework_order_operations.id）"
+    )
     work_order_code = fields.CharField(max_length=50, description="工单编码")
     work_order_name = fields.CharField(max_length=200, description="工单名称")
 

@@ -962,14 +962,83 @@ def get_sales_forecast_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# 返工单生命周期（与工单相同：草稿→已下达→执行中→已完成→已取消）
+# 返工单生命周期（草稿→已下达→执行中→待复检→质量放行→已关闭）
 # ---------------------------------------------------------------------------
+REWORK_ORDER_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "released", "label": "已下达"},
+    {"key": "in_progress", "label": "执行中"},
+    {"key": "pending_verification", "label": "待复检"},
+    {"key": "quality_released", "label": "质量放行"},
+    {"key": "closed", "label": "已关闭"},
+]
+
+REWORK_ORDER_FLOW_LABELS = {
+    "draft": "草稿",
+    "released": "已下达",
+    "in_progress": "执行中",
+    "pending_verification": "待复检",
+    "quality_released": "质量放行",
+    "closed": "已关闭",
+    "cancelled": "已取消",
+    "on_hold": "已暂停",
+}
+
+
 def get_rework_order_lifecycle(
     rework_order: Any,
     milestones: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
-    """返工单生命周期计算（复用工单阶段）"""
-    return get_work_order_lifecycle(rework_order, milestones=milestones)
+    """返工单生命周期计算"""
+    status_raw = _norm(getattr(rework_order, "status", None))
+    status_key = status_raw.lower() if status_raw else "draft"
+    if status_key == "cancelled":
+        return {
+            "status_class": status_raw,
+            "flow_class": "cancelled",
+            "current_stage_key": "cancelled",
+            "current_stage_name": "已取消",
+            "status": "exception",
+            "main_stages": [
+                {"key": s["key"], "label": s["label"], "status": "pending"}
+                for s in REWORK_ORDER_MAIN_STAGES
+            ] + [{"key": "cancelled", "label": "已取消", "status": "active"}],
+            "next_step_suggestions": [],
+            "milestones": milestones or [],
+        }
+    if status_key == "on_hold":
+        status_key = "in_progress"
+    visual_key = status_key if status_key in REWORK_ORDER_FLOW_LABELS else "draft"
+    stage_name = REWORK_ORDER_FLOW_LABELS.get(visual_key, "草稿")
+    main_stages = []
+    order_keys = [s["key"] for s in REWORK_ORDER_MAIN_STAGES]
+    cur_idx = order_keys.index(visual_key) if visual_key in order_keys else 0
+    for idx, stage in enumerate(REWORK_ORDER_MAIN_STAGES):
+        st = "pending"
+        if idx < cur_idx:
+            st = "done"
+        elif idx == cur_idx:
+            st = "active"
+        main_stages.append({"key": stage["key"], "label": stage["label"], "status": st})
+
+    suggestions_map = {
+        "draft": ["下达"],
+        "released": ["报工"],
+        "in_progress": ["报工", "下一工序", "申请完修"],
+        "pending_verification": ["复检", "质量放行"],
+        "quality_released": ["关闭"],
+        "closed": [],
+    }
+    return {
+        "status_class": status_raw,
+        "flow_class": visual_key,
+        "current_stage_key": visual_key,
+        "current_stage_name": stage_name,
+        "status": "success" if visual_key == "closed" else "active" if visual_key in ("in_progress", "released") else "normal",
+        "main_stages": main_stages,
+        "next_step_suggestions": suggestions_map.get(visual_key, []),
+        "milestones": milestones or [],
+    }
 
 
 # ---------------------------------------------------------------------------

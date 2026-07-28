@@ -228,6 +228,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 outstanding_quantity = item_data.ordered_quantity
 
                 item_dict = item_data.model_dump()
+                if not str(item_dict.get("material_name") or "").strip():
+                    item_dict["material_name"] = str(material.name or "")[:200]
+                if not str(item_dict.get("material_code") or "").strip():
+                    item_dict["material_code"] = str(
+                        material.main_code or getattr(material, "code", None) or ""
+                    )[:50]
                 item_dict.update({
                     'tenant_id': tenant_id,
                     'order_id': order.id,
@@ -276,6 +282,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         # 获取订单明细
         items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
+        material_fallback = await self._load_material_fallback_for_po_items(tenant_id, items)
         
         # 使用model_validate，但需要手动处理items字段（因为order.items是ReverseRelation）
         # 先获取订单的所有字段，排除items
@@ -285,8 +292,16 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         
         # 使用model_construct构建响应对象
         response = PurchaseOrderResponse.model_construct(**order_data)
-        # 手动设置items
-        response.items = [PurchaseOrderItemResponse.model_validate(item) for item in items]
+        # 手动设置items（编码/名称以物料主数据为准，避免明细行仅存 material_id 时名称为空）
+        response.items = []
+        for item in items:
+            item_resp = PurchaseOrderItemResponse.model_validate(item)
+            material_code, material_name = self._resolve_po_item_material_display(item, material_fallback)
+            if material_code:
+                item_resp.material_code = material_code
+            if material_name:
+                item_resp.material_name = material_name
+            response.items.append(item_resp)
         # 生命周期
         from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_lifecycle, get_document_milestones
         milestones = await get_document_milestones(order.tenant_id, "purchase_order", order.id)
@@ -827,6 +842,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     outstanding_quantity = item_data.ordered_quantity
 
                     item_dict = item_data.model_dump()
+                    if not str(item_dict.get("material_name") or "").strip():
+                        item_dict["material_name"] = str(material.name or "")[:200]
+                    if not str(item_dict.get("material_code") or "").strip():
+                        item_dict["material_code"] = str(
+                            material.main_code or getattr(material, "code", None) or ""
+                        )[:50]
                     item_dict.update({
                         'tenant_id': tenant_id,
                         'order_id': order.id,

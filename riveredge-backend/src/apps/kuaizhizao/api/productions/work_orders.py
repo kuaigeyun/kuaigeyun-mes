@@ -85,6 +85,12 @@ from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderFromWorkOrderRequest,
     ReworkReportingCreate,
     ReworkReportingOptionsResponse,
+    ReworkAdvanceNextRequest,
+    ReworkRequestCompleteRequest,
+    ReworkQualityReleaseRequest,
+    ReworkCloseRequest,
+    ReworkCancelRequest,
+    ReworkHoldRequest,
 )
 from apps.kuaizhizao.schemas.reporting_record import ReportingRecordResponse
 from apps.kuaizhizao.schemas.station import OperationPauseRequest, OperationCompleteRequest
@@ -1451,6 +1457,7 @@ async def get_rework_order_reporting_options(
     "/rework-orders/{rework_order_id}/report",
     response_model=ReportingRecordResponse,
     summary="Create reporting record for rework order",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:execute"))],
 )
 async def create_rework_order_reporting(
     rework_order_id: int,
@@ -1458,12 +1465,168 @@ async def create_rework_order_reporting(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ReportingRecordResponse:
-    """返工报工：首次必须在起始工序；之后可选原工单任意工序并录入数量。"""
+    """返工报工：仅可在当前激活工序上报。"""
     return await ReworkOrderService().create_rework_reporting(
         tenant_id=tenant_id,
         rework_order_id=rework_order_id,
         reporting_data=reporting_data,
         reported_by=current_user.id,
+    )
+
+
+@router.post(
+    "/rework-orders/{rework_order_id}/release",
+    response_model=ReworkOrderResponse,
+    summary="Release rework order",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:release"))],
+)
+async def release_rework_order_endpoint(
+    rework_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    return await ReworkOrderService().release_rework_order(
+        tenant_id=tenant_id,
+        rework_order_id=rework_order_id,
+        released_by=current_user.id,
+    )
+
+
+@router.post(
+    "/rework-orders/{rework_order_id}/advance-next",
+    response_model=ReworkOrderResponse,
+    summary="Advance rework to next operation (dynamic route)",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:execute"))],
+)
+async def advance_rework_next_operation(
+    rework_order_id: int,
+    request: ReworkAdvanceNextRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    return await ReworkOrderService().advance_rework_next_operation(
+        tenant_id=tenant_id,
+        rework_order_id=rework_order_id,
+        request=request,
+        actor_id=current_user.id,
+    )
+
+
+@router.post(
+    "/rework-orders/{rework_order_id}/request-complete",
+    response_model=ReworkOrderResponse,
+    summary="Request rework completion",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:complete"))],
+)
+async def request_rework_completion(
+    rework_order_id: int,
+    request: ReworkRequestCompleteRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    return await ReworkOrderService().request_rework_completion(
+        tenant_id=tenant_id,
+        rework_order_id=rework_order_id,
+        request=request,
+        actor_id=current_user.id,
+    )
+
+
+@router.post(
+    "/rework-orders/{rework_order_id}/quality-release",
+    response_model=ReworkOrderResponse,
+    summary="Quality release rework order after verification",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:audit"))],
+)
+async def quality_release_rework_order(
+    rework_order_id: int,
+    request: ReworkQualityReleaseRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    return await ReworkOrderService().quality_release_rework_order(
+        tenant_id=tenant_id,
+        rework_order_id=rework_order_id,
+        request=request,
+        actor_id=current_user.id,
+    )
+
+
+@router.post(
+    "/rework-orders/{rework_order_id}/close",
+    response_model=ReworkOrderResponse,
+    summary="Close rework order",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:close"))],
+)
+async def close_rework_order_endpoint(
+    rework_order_id: int,
+    request: ReworkCloseRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    return await ReworkOrderService().close_rework_order(
+        tenant_id=tenant_id,
+        rework_order_id=rework_order_id,
+        request=request,
+        actor_id=current_user.id,
+    )
+
+
+@router.post(
+    "/rework-orders/{rework_order_id}/cancel",
+    response_model=ReworkOrderResponse,
+    summary="Cancel rework order",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:revoke"))],
+)
+async def cancel_rework_order_endpoint(
+    rework_order_id: int,
+    request: ReworkCancelRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    return await ReworkOrderService().cancel_rework_order_flow(
+        tenant_id=tenant_id,
+        rework_order_id=rework_order_id,
+        request=request,
+        actor_id=current_user.id,
+    )
+
+
+@router.post(
+    "/rework-orders/{rework_order_id}/hold",
+    response_model=ReworkOrderResponse,
+    summary="Hold rework order",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:revoke"))],
+)
+async def hold_rework_order_endpoint(
+    rework_order_id: int,
+    request: ReworkHoldRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    return await ReworkOrderService().hold_rework_order_flow(
+        tenant_id=tenant_id,
+        rework_order_id=rework_order_id,
+        request=request,
+        actor_id=current_user.id,
+    )
+
+
+@router.post(
+    "/rework-orders/{rework_order_id}/resume",
+    response_model=ReworkOrderResponse,
+    summary="Resume rework order",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:execute"))],
+)
+async def resume_rework_order_endpoint(
+    rework_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    return await ReworkOrderService().resume_rework_order_flow(
+        tenant_id=tenant_id,
+        rework_order_id=rework_order_id,
+        actor_id=current_user.id,
     )
 
 
