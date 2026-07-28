@@ -36,3 +36,12 @@ def test_conduct_maps_to_update() -> None:
         module_code="quality-management-process-inspection",
     )
     assert action == "update"
+
+
+def test_quality_management_router_mounts_dashboard_routes() -> None:
+    from apps.kuaizhizao.api.productions.quality_management import router as qm
+
+    paths = {getattr(r, "path", "") for r in qm.routes}
+    assert "/quality/inspection-center-summary" in paths
+    assert "/quality/anomalies" in paths
+    assert "/quality/statistics" in paths

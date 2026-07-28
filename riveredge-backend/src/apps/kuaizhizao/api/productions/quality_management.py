@@ -45,8 +45,6 @@ plans_router = APIRouter(
 )
 
 router = APIRouter()
-router.include_router(dashboard_router)
-router.include_router(plans_router)
 
 
 def _http_exception_with_trace(
@@ -397,3 +395,7 @@ async def get_inspection_plans_by_material(
             "/inspection-plans/by-material/{material_id}",
             tenant_id,
         )
+
+
+router.include_router(dashboard_router)
+router.include_router(plans_router)
