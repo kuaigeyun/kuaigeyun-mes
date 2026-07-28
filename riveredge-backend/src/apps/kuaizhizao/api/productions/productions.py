@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
-from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_productions_access
 from core.api.deps.access import require_permission_codes
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
@@ -38,8 +38,6 @@ from apps.kuaizhizao.services.disassembly_order_service import DisassemblyOrderS
 from apps.kuaizhizao.services.exception_service import ExceptionService
 from apps.kuaizhizao.services.exception_process_service import ExceptionProcessService
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
-
-# 初始化服务实例
 work_order_service = WorkOrderService()
 outsource_work_order_service = OutsourceWorkOrderService()
 outsource_material_issue_service = OutsourceMaterialIssueService()
@@ -53,14 +51,7 @@ assembly_template_service = AssemblyTemplateService()
 disassembly_order_service = DisassemblyOrderService()
 exception_service = ExceptionService()
 exception_process_service = ExceptionProcessService()
-from apps.kuaizhizao.services.quality_service import (
-    IncomingInspectionService,
-    ProcessInspectionService,
-    FinishedGoodsInspectionService,
-)
-from apps.kuaizhizao.services.quality_standard_service import QualityStandardService
-from apps.kuaizhizao.services.inspection_plan_service import InspectionPlanService
-# 财务服务已迁移至 kuaicaiwu，productions 中的财务端点已移除
+
 from apps.kuaizhizao.services.sales_service import (
     SalesForecastService,
 )
@@ -218,22 +209,6 @@ from apps.kuaizhizao.schemas.exception_process_record import (
     ExceptionProcessAssignRequest,
     ExceptionProcessResolveRequest,
 )
-from apps.kuaizhizao.schemas.quality import (
-    # 来料/过程/成品检验 schema 已迁移至 quality_execution.py
-    # 质检标准
-    QualityStandardCreate,
-    QualityStandardUpdate,
-    QualityStandardResponse,
-    QualityStandardListResponse,
-)
-from apps.kuaizhizao.schemas.inspection_plan import (
-    InspectionPlanCreate,
-    InspectionPlanUpdate,
-    InspectionPlanResponse,
-    InspectionPlanListResponse,
-    InspectionPlanListEnvelope,
-)
-from apps.kuaizhizao.services.inspection_plan_list_core import INSPECTION_PLAN_SORTABLE_FIELDS
 # 财务 schema 已迁移至 kuaicaiwu，财务 API 由 /apps/kuaicaiwu 提供
 from apps.kuaizhizao.schemas.sales import (
     # 销售预测
@@ -260,13 +235,8 @@ from apps.kuaizhizao.schemas.bom import (
     MaterialRequirement,
     MRPRequirement,
 )
-from .work_orders import router as work_orders_router
-from .work_order_groups import router as work_order_groups_router
 from .reporting import router as reporting_router
-from .warehouse_execution import router as warehouse_execution_router
-from .quality_execution import router as quality_execution_router
-from .quality_improvement import router as quality_improvement_router
-from ..station.station import router as station_router
+
 
 def _scheduling_deep_link(work_order_id: int) -> str:
     return f"/apps/kuaizhizao/plan-management/scheduling?work_order_ids={work_order_id}"
@@ -292,15 +262,9 @@ def _attach_visual_scheduling_guidance(handled: Any, *, action: str, plan_adjust
 # 注意：路由前缀为空，因为应用路由注册时会自动添加 /apps/kuaizhizao 前缀
 router = APIRouter(
     tags=["App - Kuaige Zhizao - Production Execution"],
-    dependencies=[Depends(require_kuaizhizao_module_access("production-execution-reporting", resolve_print=False))],
+    dependencies=[Depends(require_kuaizhizao_productions_access(resolve_print=False))],
 )
-router.include_router(work_orders_router)
-router.include_router(work_order_groups_router)
 router.include_router(reporting_router)
-router.include_router(warehouse_execution_router)
-router.include_router(quality_execution_router)
-router.include_router(quality_improvement_router)
-router.include_router(station_router)
 
 
 def _http_exception_with_trace(
@@ -321,394 +285,6 @@ def _http_exception_with_trace(
     return HTTPException(
         status_code=status_code,
         detail={"message": message, "trace_id": trace_id},
-    )
-
-
-# ============ 质量异常与质检标准 API ============
-# 注：来料检验、过程检验、成品检验 API 已迁移至 quality_execution.py
-
-@router.get("/quality/inspection-center-summary", summary="QC center dashboard summary")
-async def get_inspection_center_summary(
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> JSONResponse:
-    data = await FinishedGoodsInspectionService().get_inspection_center_summary(tenant_id=tenant_id)
-    return JSONResponse(content=data, status_code=http_status.HTTP_200_OK)
-
-
-@router.get("/quality/anomalies", summary="List quality anomaly records")
-async def get_quality_anomalies(
-    inspection_type: Optional[str] = Query(None, description="检验类型（incoming/process/finished）"),
-    start_date: Optional[datetime] = Query(None, description="开始日期"),
-    end_date: Optional[datetime] = Query(None, description="结束日期"),
-    material_id: Optional[int] = Query(None, description="物料ID"),
-    supplier_id: Optional[int] = Query(None, description="供应商ID（仅用于来料检验）"),
-    limit: int = Query(100, ge=1, le=500, description="返回条数上限"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> JSONResponse:
-    """
-    查询质量异常记录（不合格的检验单）
-
-    - **inspection_type**: 检验类型（可选：incoming/process/finished）
-    - **start_date**: 开始日期（可选）
-    - **end_date**: 结束日期（可选）
-    - **material_id**: 物料ID（可选）
-    - **supplier_id**: 供应商ID（可选，仅用于来料检验）
-    """
-    anomalies = await FinishedGoodsInspectionService().get_quality_anomalies(
-        tenant_id=tenant_id,
-        inspection_type=inspection_type,
-        start_date=start_date,
-        end_date=end_date,
-        material_id=material_id,
-        supplier_id=supplier_id,
-        limit=limit,
-    )
-    return JSONResponse(
-        content={
-            "total": len(anomalies),
-            "anomalies": anomalies
-        },
-        status_code=http_status.HTTP_200_OK
-    )
-
-
-# ============ 质检标准管理 API ============
-
-@router.post("/quality-standards", response_model=QualityStandardResponse, summary="Create quality standard")
-async def create_quality_standard(
-    standard: QualityStandardCreate,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> QualityStandardResponse:
-    """
-    创建质检标准
-
-    - **standard**: 质检标准创建数据
-    - **current_user**: 当前用户
-    - **tenant_id**: 当前组织ID
-
-    返回创建的质检标准信息。
-    """
-    try:
-        return await QualityStandardService().create_quality_standard(
-            tenant_id=tenant_id,
-            standard_data=standard,
-            created_by=current_user.id
-        )
-    except ValidationError as e:
-        raise _http_exception_with_trace(400, str(e), "/quality-standards", tenant_id)
-    except NotFoundError as e:
-        raise _http_exception_with_trace(404, str(e), "/quality-standards", tenant_id)
-
-
-@router.get("/quality-standards", response_model=List[QualityStandardListResponse], summary="List quality standards")
-async def list_quality_standards(
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    standard_type: Optional[str] = Query(None, description="标准类型（incoming/process/finished）"),
-    material_id: Optional[int] = Query(None, description="物料ID"),
-    is_active: Optional[bool] = Query(None, description="是否启用"),
-    standard_code: Optional[str] = Query(None, description="标准编码（模糊搜索）"),
-    standard_name: Optional[str] = Query(None, description="标准名称（模糊搜索）"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> List[QualityStandardListResponse]:
-    """
-    获取质检标准列表
-
-    支持多种筛选条件的高级搜索。
-    """
-    try:
-        return await QualityStandardService().list_quality_standards(
-            tenant_id=tenant_id,
-            skip=skip,
-            limit=limit,
-            standard_type=standard_type,
-            material_id=material_id,
-            is_active=is_active,
-            standard_code=standard_code,
-            standard_name=standard_name,
-        )
-    except Exception as e:
-        logger.error(f"获取质检标准列表失败: {str(e)}")
-        raise _http_exception_with_trace(500, f"获取列表失败: {str(e)}", "/quality-standards", tenant_id)
-
-
-@router.get("/quality-standards/{standard_id}", response_model=QualityStandardResponse, summary="Get quality standard")
-async def get_quality_standard(
-    standard_id: int = Path(..., description="质检标准ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> QualityStandardResponse:
-    """
-    根据ID获取质检标准详情
-
-    - **standard_id**: 质检标准ID
-    """
-    try:
-        return await QualityStandardService().get_quality_standard_by_id(
-            tenant_id=tenant_id,
-            standard_id=standard_id
-        )
-    except NotFoundError as e:
-        raise _http_exception_with_trace(404, str(e), "/quality-standards/{standard_id}", tenant_id)
-
-
-@router.put("/quality-standards/{standard_id}", response_model=QualityStandardResponse, summary="Update quality standard")
-async def update_quality_standard(
-    standard_id: int = Path(..., description="质检标准ID"),
-    standard: QualityStandardUpdate = Body(..., description="质检标准更新数据"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> QualityStandardResponse:
-    """
-    更新质检标准
-
-    - **standard_id**: 质检标准ID
-    - **standard**: 质检标准更新数据
-    """
-    try:
-        return await QualityStandardService().update_quality_standard(
-            tenant_id=tenant_id,
-            standard_id=standard_id,
-            standard_data=standard,
-            updated_by=current_user.id
-        )
-    except NotFoundError as e:
-        raise _http_exception_with_trace(404, str(e), "/quality-standards/{standard_id}", tenant_id)
-
-
-@router.delete("/quality-standards/{standard_id}", summary="Delete quality standard")
-async def delete_quality_standard(
-    standard_id: int = Path(..., description="质检标准ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> JSONResponse:
-    """
-    删除质检标准（软删除）
-
-    - **standard_id**: 质检标准ID
-    """
-    try:
-        await QualityStandardService().delete_quality_standard(
-            tenant_id=tenant_id,
-            standard_id=standard_id
-        )
-        return JSONResponse(
-            content={"message": "质检标准删除成功"},
-            status_code=http_status.HTTP_200_OK
-        )
-    except NotFoundError as e:
-        raise _http_exception_with_trace(404, str(e), "/quality-standards/{standard_id}", tenant_id)
-
-
-@router.get("/quality-standards/by-material/{material_id}", response_model=List[QualityStandardListResponse], summary="List quality standards by material")
-async def get_standards_by_material(
-    material_id: int = Path(..., description="物料ID"),
-    standard_type: Optional[str] = Query(None, description="标准类型（incoming/process/finished）"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> List[QualityStandardListResponse]:
-    """
-    根据物料ID获取适用的质检标准
-
-    - **material_id**: 物料ID
-    - **standard_type**: 标准类型（可选，用于过滤）
-
-    返回适用于该物料的质检标准列表（包括物料特定的标准和通用标准）。
-    """
-    try:
-        return await QualityStandardService().get_standards_by_material(
-            tenant_id=tenant_id,
-            material_id=material_id,
-            standard_type=standard_type
-        )
-    except Exception as e:
-        logger.error(f"根据物料ID获取质检标准失败: {str(e)}")
-        raise _http_exception_with_trace(500, f"获取标准失败: {str(e)}", "/quality-standards/by-material/{material_id}", tenant_id)
-
-
-# ============ 质检方案管理 API ============
-
-@router.post("/inspection-plans", response_model=InspectionPlanResponse, summary="Create inspection plan")
-async def create_inspection_plan(
-    plan: InspectionPlanCreate,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> InspectionPlanResponse:
-    """创建质检方案（含检验步骤）"""
-    try:
-        return await InspectionPlanService().create_inspection_plan(
-            tenant_id=tenant_id,
-            plan_data=plan,
-            created_by=current_user.id,
-        )
-    except ValidationError as e:
-        raise _http_exception_with_trace(400, str(e), "/inspection-plans", tenant_id)
-    except NotFoundError as e:
-        raise _http_exception_with_trace(404, str(e), "/inspection-plans", tenant_id)
-
-
-@router.get("/inspection-plans", response_model=InspectionPlanListEnvelope, summary="List inspection plans")
-async def list_inspection_plans(
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    plan_type: Optional[str] = Query(None, description="方案类型（incoming/process/finished）"),
-    material_id: Optional[int] = Query(None, description="物料ID"),
-    operation_id: Optional[int] = Query(None, description="工序ID（过程检验时筛选）"),
-    is_active: Optional[bool] = Query(None, description="是否启用"),
-    plan_code: Optional[str] = Query(None, description="方案编码（模糊搜索）"),
-    plan_name: Optional[str] = Query(None, description="方案名称（模糊搜索）"),
-    keyword: Optional[str] = Query(None, description="模糊搜索（编码、名称）"),
-    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
-    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
-    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
-    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
-    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
-    include_steps: bool = Query(False, description="是否包含检验步骤"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> InspectionPlanListEnvelope:
-    """获取质检方案列表"""
-    safe_order_by = None
-    if order_by:
-        field = order_by.lstrip("-")
-        if field in INSPECTION_PLAN_SORTABLE_FIELDS:
-            safe_order_by = order_by
-    try:
-        return await InspectionPlanService().list_inspection_plans(
-            tenant_id=tenant_id,
-            skip=skip,
-            limit=limit,
-            plan_type=plan_type,
-            material_id=material_id,
-            operation_id=operation_id,
-            is_active=is_active,
-            plan_code=plan_code,
-            plan_name=plan_name,
-            keyword=keyword,
-            created_start_date=created_start_date,
-            created_end_date=created_end_date,
-            updated_start_date=updated_start_date,
-            updated_end_date=updated_end_date,
-            order_by=safe_order_by,
-            include_steps=include_steps,
-        )
-    except Exception as e:
-        logger.error(f"获取质检方案列表失败: {str(e)}")
-        raise _http_exception_with_trace(500, f"获取列表失败: {str(e)}", "/inspection-plans", tenant_id)
-
-
-@router.get("/inspection-plans/{plan_id}", response_model=InspectionPlanResponse, summary="Get inspection plan")
-async def get_inspection_plan(
-    plan_id: int = Path(..., description="质检方案ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> InspectionPlanResponse:
-    """根据ID获取质检方案详情（含检验步骤）"""
-    try:
-        return await InspectionPlanService().get_inspection_plan_by_id(
-            tenant_id=tenant_id,
-            plan_id=plan_id,
-        )
-    except NotFoundError as e:
-        raise _http_exception_with_trace(404, str(e), "/inspection-plans/{plan_id}", tenant_id)
-
-
-@router.put("/inspection-plans/{plan_id}", response_model=InspectionPlanResponse, summary="Update inspection plan")
-async def update_inspection_plan(
-    plan_id: int = Path(..., description="质检方案ID"),
-    plan: InspectionPlanUpdate = Body(..., description="质检方案更新数据"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> InspectionPlanResponse:
-    """更新质检方案（含步骤替换）"""
-    try:
-        return await InspectionPlanService().update_inspection_plan(
-            tenant_id=tenant_id,
-            plan_id=plan_id,
-            plan_data=plan,
-            updated_by=current_user.id,
-        )
-    except NotFoundError as e:
-        raise _http_exception_with_trace(404, str(e), "/inspection-plans/{plan_id}", tenant_id)
-    except ValidationError as e:
-        raise _http_exception_with_trace(400, str(e), "/inspection-plans/{plan_id}", tenant_id)
-
-
-@router.delete("/inspection-plans/{plan_id}", summary="Delete inspection plan")
-async def delete_inspection_plan(
-    plan_id: int = Path(..., description="质检方案ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> JSONResponse:
-    """删除质检方案（软删除）"""
-    try:
-        await InspectionPlanService().delete_inspection_plan(
-            tenant_id=tenant_id,
-            plan_id=plan_id,
-        )
-        return JSONResponse(
-            content={"message": "质检方案删除成功"},
-            status_code=http_status.HTTP_200_OK,
-        )
-    except NotFoundError as e:
-        raise _http_exception_with_trace(404, str(e), "/inspection-plans/{plan_id}", tenant_id)
-
-
-@router.get("/inspection-plans/by-material/{material_id}", response_model=List[InspectionPlanListResponse], summary="List inspection plans by material")
-async def get_inspection_plans_by_material(
-    material_id: int = Path(..., description="物料ID"),
-    plan_type: Optional[str] = Query(None, description="方案类型（incoming/process/finished）"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> List[InspectionPlanListResponse]:
-    """根据物料ID获取适用的质检方案"""
-    try:
-        return await InspectionPlanService().get_plans_by_material(
-            tenant_id=tenant_id,
-            material_id=material_id,
-            plan_type=plan_type,
-        )
-    except Exception as e:
-        logger.error(f"根据物料ID获取质检方案失败: {str(e)}")
-        raise _http_exception_with_trace(500, f"获取方案失败: {str(e)}", "/inspection-plans/by-material/{material_id}", tenant_id)
-
-
-@router.get("/quality/statistics", summary="Quality analytics")
-async def get_quality_statistics(
-    inspection_type: Optional[str] = Query(None, description="检验类型（incoming/process/finished）"),
-    start_date: Optional[datetime] = Query(None, description="开始日期"),
-    end_date: Optional[datetime] = Query(None, description="结束日期"),
-    material_id: Optional[int] = Query(None, description="物料ID"),
-    supplier_id: Optional[int] = Query(None, description="供应商ID（仅用于来料检验）"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> JSONResponse:
-    """
-    获取质量统计分析
-
-    统计检验数量、合格率、不合格率等质量指标。
-
-    - **inspection_type**: 检验类型（可选：incoming/process/finished）
-    - **start_date**: 开始日期（可选）
-    - **end_date**: 结束日期（可选）
-    - **material_id**: 物料ID（可选）
-    - **supplier_id**: 供应商ID（可选，仅用于来料检验）
-    """
-    stats = await FinishedGoodsInspectionService().get_quality_statistics(
-        tenant_id=tenant_id,
-        inspection_type=inspection_type,
-        start_date=start_date,
-        end_date=end_date,
-        material_id=material_id,
-        supplier_id=supplier_id
-    )
-    return JSONResponse(
-        content=stats,
-        status_code=http_status.HTTP_200_OK
     )
 
 

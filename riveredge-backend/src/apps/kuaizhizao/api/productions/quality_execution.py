@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTP
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from loguru import logger
 
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_quality_execution_access
 from core.api.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_permission_codes
 from core.services.authorization.data_scope_service import DataScopeService
@@ -53,7 +54,10 @@ from apps.kuaizhizao.services.inspection_policy_service import (
 
 defect_record_service = DefectRecordService()
 
-router = APIRouter(tags=["App - Kuaige Zhizao - Quality Execution"])
+router = APIRouter(
+    tags=["App - Kuaige Zhizao - Quality Execution"],
+    dependencies=[Depends(require_kuaizhizao_quality_execution_access())],
+)
 
 
 def _http_exception_with_trace(

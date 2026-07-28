@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
-from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_warehouse_execution_access
 from core.api.deps.access import require_permission_codes
 from core.services.authorization.data_scope_service import DataScopeService
 from infra.models.user import User
@@ -182,7 +182,7 @@ from apps.kuaizhizao.schemas.batching_order import (
 
 router = APIRouter(
     tags=["App - Kuaige Zhizao - Warehouse Execution"],
-    dependencies=[Depends(require_kuaizhizao_module_access("warehouse-management-inventory", resolve_print=False))],
+    dependencies=[Depends(require_kuaizhizao_warehouse_execution_access(resolve_print=False))],
 )
 
 
@@ -1030,7 +1030,7 @@ async def withdraw_production_return(
 @router.get(
     "/production-returns/{return_id}/print",
     summary="Print production return",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:material-return:print"))],
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:print"))],
 )
 async def print_production_return(
     return_id: int,

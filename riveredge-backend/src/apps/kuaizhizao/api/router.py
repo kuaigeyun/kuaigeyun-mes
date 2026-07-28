@@ -12,6 +12,13 @@ from fastapi import APIRouter
 # 导入子路由（按资源分目录，主文件复数与目录一致）
 from .exceptions.exceptions import router as exceptions_router
 from .productions.productions import router as production_router
+from .productions.work_orders import router as work_orders_router
+from .productions.work_order_groups import router as work_order_groups_router
+from .productions.warehouse_execution import router as warehouse_execution_router
+from .station.station import router as station_router
+from .productions.quality_execution import router as quality_execution_router
+from .productions.quality_improvement import router as quality_improvement_router
+from .productions.quality_management import router as quality_management_router
 from .productions.outsource_receipt_api import router as outsource_receipt_router
 from .productions.document_relations_legacy import router as document_relations_legacy_router
 from .productions.production_control_api import router as production_control_router
@@ -98,6 +105,13 @@ router.include_router(sales_opportunity_router)  # 销售商机
 router.include_router(customer_pool_router)  # 客户池（公海管理）
 router.include_router(exceptions_router)
 router.include_router(outsource_receipt_router)
+router.include_router(quality_execution_router)
+router.include_router(quality_improvement_router)
+router.include_router(quality_management_router)
+router.include_router(work_orders_router)
+router.include_router(work_order_groups_router)
+router.include_router(warehouse_execution_router)
+router.include_router(station_router)
 router.include_router(production_router)
 router.include_router(document_relations_legacy_router)
 router.include_router(purchase_router)
