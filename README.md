@@ -1,6 +1,5 @@
 # <img src="docs/screenshots/logo/kuaige.png" alt="Logo" height="36" align="absmiddle" /> 快格云制造
 
-> **开源范围**：本仓库公开 **后端 API** 与 **PC Web 前端**（`riveredge-backend` + `riveredge-frontend`）。移动端 App、H5、企微/钉钉/飞书接入、触屏工位终端等源码在私仓维护。
 
 ![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)
@@ -37,7 +36,10 @@
 
 ## 立即体验与接入
 
+
+
 > [!WARNING]
+> **开源范围**：本仓库公开 **后端 API** 与 **PC Web 前端**（`riveredge-backend` + `riveredge-frontend`）。移动端 App、H5、企微/钉钉/飞书接入、触屏工位终端等源码在私仓维护。
 > 快格云制造仍在**积极开发中**，功能、数据模型与界面可能频繁变更；在线演示与本地部署**仅供预览与评估**，请勿用于正式生产或承载真实业务数据。
 
 - **在线演示**：[https://kuaigeyun.com](https://kuaigeyun.com)（支持免注册体验，数据可能定期重置）
@@ -62,7 +64,7 @@
 
 ## 为什么选择快格云制造
 
-- **统一业务主线**：销售预测/销售订单统一进入 `Demand`，贯通需求计算、工单/采购、执行与出入库。
+- **统一业务主线**：销售预测/销售订单统一进入 `需求`，贯通需求计算、工单/采购、执行与出入库。
 - **可渐进上线**：插件化应用按需启用，支持从最小可用到全流程协同的分阶段实施。
 - **低运维负担**：默认 PostgreSQL + Taskiq，无 Redis 依赖；部署路径标准化。
 - **高配置灵活性**：流程开关、自定义字段、打印与报表能力内建，适配多工厂差异流程。
@@ -74,7 +76,7 @@
 
 ### 业务域能力
 
-覆盖 **快制造** 全流程，并与 **主数据**、**快财务**、**快研发** 插件协同（销售/采购/仓储能力已统一在快制造内，不再单独拆「进销存」「快车间」）。
+覆盖 **快制造** 全流程，并与 **主数据**、**快财务**、**快研发** 插件协同。
 
 | 业务域 | 关键能力 |
 | --- | --- |
@@ -109,7 +111,7 @@
 
 ## 插件应用矩阵
 
-插件按需装配；**开源版**随本仓库发布，**高级版**在私仓 [`kuaigeyun-pro`](https://gitee.com/kuaigeyun/kuaigeyun-pro) 维护，经 `./fast-deploy/deploy.sh pro-apps` 或部署向导 **[4] 扩展应用** 安装。原「快车间」「进销存」拆分应用已并入 **快制造**，不再单独发布。
+插件按需装配；**开源版**随本仓库发布，**高级版**在私仓 [`kuaigeyun-pro`](https://gitee.com/kuaigeyun/kuaigeyun-pro) 维护，经 `./fast-deploy/deploy.sh pro-apps` 或部署向导 **[4] 扩展应用** 安装。
 
 ### 开源版（本仓库）
 
