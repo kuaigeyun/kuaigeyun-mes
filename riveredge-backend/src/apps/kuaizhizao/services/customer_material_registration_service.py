@@ -518,12 +518,8 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 )
                 mapped_material_name = registration_data.material_name or mat.name
 
-            from core.services.default.default_values_service import DefaultValuesService
             from apps.kuaizhizao.services.warehouse_service import _resolve_warehouse_name_by_id
 
-            await DefaultValuesService.ensure_code_rule_for_page(
-                tenant_id, "kuaizhizao-warehouse-customer-material-registration"
-            )
             code = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="CUSTOMER_MATERIAL_REGISTRATION_CODE",

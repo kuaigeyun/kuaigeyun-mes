@@ -398,27 +398,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         async with in_transaction():
             code = notice_data.notice_code
             if not code:
-                try:
-                    code = await self.generate_code(tenant_id, "SHIPMENT_NOTICE_CODE", prefix="SN")
-                except Exception as e:
-                    from infra.exceptions.exceptions import ValidationError
-                    if isinstance(e, ValidationError) and ("不存在" in str(e) or "未启用" in str(e)):
-                        from core.services.default.default_values_service import DefaultValuesService
-                        created = await DefaultValuesService.ensure_code_rule_for_page(
-                            tenant_id, "kuaizhizao-shipment-notice"
-                        )
-                        if created:
-                            try:
-                                code = await self.generate_code(tenant_id, "SHIPMENT_NOTICE_CODE", prefix="SN")
-                            except Exception as e2:
-                                logger.warning("发货通知单编码规则补建后生成仍失败: %s", e2)
-                        else:
-                            logger.warning("发货通知单编码规则生成失败: %s", e)
-                    else:
-                        logger.warning("发货通知单编码规则生成失败: %s", e)
-                if not code:
-                    import uuid
-                    code = f"SN{today_site_str()}{uuid.uuid4().hex[:6].upper()}"
+                code = await self.generate_code(tenant_id, "SHIPMENT_NOTICE_CODE", prefix="SN")
 
             dump = notice_data.model_dump(exclude_unset=True, exclude={"items", "notice_code"})
             audit_required = await self.business_config_service.check_audit_required(

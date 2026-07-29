@@ -19,7 +19,6 @@ from core.services.organization.department_service import DepartmentService
 from core.services.authorization.position_service import PositionService
 from core.services.authorization.role_service import RoleService
 from core.services.business.code_generation_service import CodeGenerationService
-from core.services.default.default_values_service import DefaultValuesService
 from infra.exceptions.exceptions import ValidationError
 
 PAGE_DEPARTMENT = "system-department"
@@ -55,7 +54,6 @@ class UserImportReferenceService:
 
     @staticmethod
     async def _generate_code(tenant_id: int, page_code: str, rule_code: str) -> str:
-        await DefaultValuesService.ensure_code_rule_for_page(tenant_id, page_code)
         return await CodeGenerationService.generate_code(tenant_id, rule_code)
 
     @staticmethod

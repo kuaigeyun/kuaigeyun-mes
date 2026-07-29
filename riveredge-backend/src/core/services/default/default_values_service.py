@@ -379,62 +379,6 @@ class DefaultValuesService:
         return created_rules
 
     @staticmethod
-    async def ensure_code_rule_for_page(tenant_id: int, page_code: str) -> bool:
-        """
-        确保指定页面的编码规则存在，若不存在则创建（用于已有组织补建缺失规则）。
-        
-        Returns:
-            True 表示新建了规则，False 表示规则已存在未创建。
-        """
-        from core.schemas.code_rule import CodeRuleCreate
-        from core.config.code_rule_pages import get_canonical_rule_code
-
-        page_config = next((p for p in CODE_RULE_PAGES if p.get("page_code") == page_code), None)
-        if not page_config:
-            return False
-        rule_code = get_canonical_rule_code(page_code)
-        if not rule_code:
-            return False
-        existing = await CodeRuleService.get_rule_by_code(tenant_id, rule_code, active_only=False)
-        if existing:
-            return False
-        page_name = page_config.get("page_name", page_code)
-        abbreviation = DefaultValuesService.PAGE_CODE_ABBREVIATIONS.get(
-            page_code
-        ) or "".join([p[0].upper() for p in page_code.split("-")[-2:]])[:4]
-        rule_components = DefaultValuesService._build_rule_components(page_code, abbreviation, page_config)
-        skip_date = page_config.get("skip_date", False)
-        is_business = DefaultValuesService._is_business_document(page_code) and not skip_date
-        rule_name = f"{page_name}编码规则"
-        if page_config.get("code_rule_description"):
-            description = page_config["code_rule_description"]
-        elif page_code == "master-data-material":
-            description = "物料主编码规则，格式：分组编码 + 4位流水，不自动重置"
-        elif page_code == "master-data-engineering-bom":
-            description = "BOM编码规则，格式：BOM-物料编码-版本号"
-        else:
-            description = (
-                f"{page_name}编码规则，格式：{abbreviation} + 日期（YYYYMMDD）+ 4位序号，每日重置"
-                if is_business
-                else f"{page_name}编码规则，格式：{abbreviation} + 4位序号"
-            )
-        try:
-            rule_data = CodeRuleCreate(
-                name=rule_name,
-                code=rule_code,
-                rule_components=rule_components,
-                description=description,
-                is_system=True,
-                is_active=True,
-            )
-            await CodeRuleService.create_rule(tenant_id, rule_data)
-            logger.info(f"为组织 {tenant_id} 补建编码规则: {rule_code} ({page_name})")
-            return True
-        except Exception as e:
-            logger.warning(f"为组织 {tenant_id} 补建编码规则 {rule_code} 失败: {e}")
-            return False
-
-    @staticmethod
     async def restore_preset_for_page(
         tenant_id: int,
         page_code: str,

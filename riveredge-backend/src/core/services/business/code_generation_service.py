@@ -704,15 +704,11 @@ class CodeGenerationService:
 
     @staticmethod
     def _rule_code_key_for_seq_sync(rule_code: str) -> Optional[str]:
-        """与 RULE_CODE_ENTITY_FOR_SEQ_SYNC 匹配的 key（大小写不敏感）。"""
+        """manifest rule_code 精确匹配 RULE_CODE_ENTITY_FOR_SEQ_SYNC。"""
         if not rule_code:
             return None
         if rule_code in RULE_CODE_ENTITY_FOR_SEQ_SYNC:
             return rule_code
-        u = rule_code.upper()
-        for k in RULE_CODE_ENTITY_FOR_SEQ_SYNC:
-            if k.upper() == u:
-                return k
         return None
 
     @staticmethod
@@ -794,31 +790,14 @@ class CodeGenerationService:
         if not scan_prefix and "MATERIAL" in _rc and context and _get_leaf_group_code(context):
             return None
 
-        def _entity_config_for(code: Optional[str]) -> Optional[tuple]:
-            if not code:
-                return None
-            c = RULE_CODE_ENTITY_FOR_SEQ_SYNC.get(code)
-            if c:
-                return c
-            code_upper = code.upper()
-            for k, v in RULE_CODE_ENTITY_FOR_SEQ_SYNC.items():
-                if k.upper() == code_upper:
-                    return v
-            return None
-
-        entity_config = _entity_config_for(rule.code) or _entity_config_for(request_rule_code)
+        entity_config = RULE_CODE_ENTITY_FOR_SEQ_SYNC.get(rule.code) or RULE_CODE_ENTITY_FOR_SEQ_SYNC.get(
+            request_rule_code or ""
+        )
         if not entity_config:
             return None
-        rule_code_for_lookup = (
-            rule.code
-            if _entity_config_for(rule.code)
-            else request_rule_code
-        )
-        if not _entity_config_for(rule_code_for_lookup):
-            rule_code_for_lookup = next(
-                (k for k in RULE_CODE_ENTITY_FOR_SEQ_SYNC if k.upper() == (rule_code_for_lookup or "").upper()),
-                rule_code_for_lookup,
-            )
+        rule_code_for_lookup = rule.code if rule.code in RULE_CODE_ENTITY_FOR_SEQ_SYNC else request_rule_code
+        if rule_code_for_lookup not in RULE_CODE_ENTITY_FOR_SEQ_SYNC:
+            return None
         return await CodeGenerationService._get_max_sequence_from_db(
             tenant_id=tenant_id,
             rule_code=rule_code_for_lookup,

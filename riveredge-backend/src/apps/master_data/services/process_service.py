@@ -624,13 +624,9 @@ class ProcessService:
             Dict[input, uuid]: 输入字符串 -> 不良品 uuid 的映射
         """
         from core.services.business.code_generation_service import CodeGenerationService
-        from core.services.default.default_values_service import DefaultValuesService
         
         result: Dict[str, str] = {}
         seen: Dict[str, str] = {}  # 归一化后的 key -> uuid，用于去重（同一输入只查一次）
-        
-        # 确保编码规则存在
-        await DefaultValuesService.ensure_code_rule_for_page(tenant_id, "master-data-defect-type")
         
         for raw in items:
             if not raw or not str(raw).strip():

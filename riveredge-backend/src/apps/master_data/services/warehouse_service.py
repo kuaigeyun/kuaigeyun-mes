@@ -1308,9 +1308,6 @@ class WarehouseService:
         names: 若指定则只创建这些名称的预设，否则创建全部。
         """
         from core.services.business.code_generation_service import CodeGenerationService
-        from core.services.default.default_values_service import DefaultValuesService
-
-        await DefaultValuesService.ensure_code_rule_for_page(tenant_id, "master-data-warehouse-warehouse")
 
         items = WarehouseService.PRESET_WAREHOUSES
         if names is not None:

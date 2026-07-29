@@ -422,17 +422,12 @@ class QuotationService:
         self, tenant_id: int, quotation_date: Optional[date]
     ) -> str:
         """生成报价单编码"""
-        from core.config.code_rule_pages import CODE_RULE_PAGES
+        from core.config.code_rule_pages import get_canonical_rule_code
         from core.services.business.code_generation_service import CodeGenerationService
 
-        rule_code = next(
-            (
-                p.get("rule_code")
-                for p in CODE_RULE_PAGES
-                if p.get("page_code") == "kuaizhizao-quotation"
-            ),
-            None,
-        )
+        rule_code = get_canonical_rule_code("kuaizhizao-quotation")
+        if not rule_code:
+            raise ValidationError("报价单页面未配置编码规则")
         context = {}
         if quotation_date:
             context["quotation_date"] = (
@@ -440,39 +435,11 @@ class QuotationService:
                 if hasattr(quotation_date, "isoformat")
                 else str(quotation_date)
             )
-        generated = None
-        if rule_code:
-            try:
-                generated = await CodeGenerationService.generate_code(
-                    tenant_id=tenant_id,
-                    rule_code=rule_code,
-                    context=context or None,
-                )
-            except Exception as e:
-                from infra.exceptions.exceptions import ValidationError
-                if isinstance(e, ValidationError) and ("不存在" in str(e) or "未启用" in str(e)):
-                    from core.services.default.default_values_service import DefaultValuesService
-                    created = await DefaultValuesService.ensure_code_rule_for_page(
-                        tenant_id, "kuaizhizao-quotation"
-                    )
-                    if created:
-                        try:
-                            generated = await CodeGenerationService.generate_code(
-                                tenant_id=tenant_id,
-                                rule_code=rule_code,
-                                context=context or None,
-                            )
-                        except Exception as e2:
-                            logger.warning("报价单编码规则补建后生成仍失败，使用备用格式: %s", e2)
-                    else:
-                        logger.warning("报价单编码规则生成失败，使用备用格式: %s", e)
-                else:
-                    logger.warning("报价单编码规则生成失败，使用备用格式: %s", e)
-        if generated is None:
-            today = today_site_str()
-            import uuid
-            generated = f"QT-{today}-{uuid.uuid4().hex[:6].upper()}"
-        return generated
+        return await CodeGenerationService.generate_code(
+            tenant_id=tenant_id,
+            rule_code=rule_code,
+            context=context or None,
+        )
 
     async def _release_quotation_from_draft(
         self,

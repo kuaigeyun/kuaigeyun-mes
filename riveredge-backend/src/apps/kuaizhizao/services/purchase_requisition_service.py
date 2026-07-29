@@ -70,11 +70,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
     async def _generate_requisition_code(self, tenant_id: int) -> str:
         """生成采购申请编码"""
-        try:
-            return await self.generate_code(tenant_id, "PURCHASE_REQUISITION_CODE", prefix="CGSQ")
-        except Exception:
-            import uuid
-            return f"CGSQ{today_site_str()}{uuid.uuid4().hex[:6].upper()}"
+        return await self.generate_code(tenant_id, "PURCHASE_REQUISITION_CODE", prefix="CGSQ")
 
     async def create_requisition(
         self,
@@ -91,27 +87,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         # 写事务内只做插入；读回详情（含 enrich）放在提交后，避免嵌套事务/连接池等待
         async with in_transaction():
             if not data.requisition_code:
-                try:
-                    data.requisition_code = await self._generate_requisition_code(tenant_id)
-                except Exception as e:
-                    from infra.exceptions.exceptions import ValidationError
-                    if isinstance(e, ValidationError) and ("不存在" in str(e) or "未启用" in str(e)):
-                        from core.services.default.default_values_service import DefaultValuesService
-                        created = await DefaultValuesService.ensure_code_rule_for_page(
-                            tenant_id, "kuaizhizao-purchase-requisition"
-                        )
-                        if created:
-                            try:
-                                data.requisition_code = await self._generate_requisition_code(tenant_id)
-                            except Exception as e2:
-                                logger.warning("采购申请编码规则补建后生成仍失败: %s", e2)
-                        else:
-                            logger.warning("采购申请编码规则生成失败: %s", e)
-                    else:
-                        logger.warning("采购申请编码规则生成失败: %s", e)
-                if not data.requisition_code:
-                    import uuid
-                    data.requisition_code = f"CGSQ{today_site_str()}{uuid.uuid4().hex[:6].upper()}"
+                data.requisition_code = await self._generate_requisition_code(tenant_id)
 
             req_date = data.requisition_date or date.today()
             user_info = await self.get_user_info(created_by)
