@@ -2,9 +2,9 @@
 # 占位符：{{ADDR}} {{BACKEND_ADDR}} {{FRONTEND_ROOT}} {{MOBILE_WEB_ROOT}} {{CLIENT_RELEASE_ROOT}} {{FILE_UPLOAD_ROOT}}
 # 实际生成文件：fast-deploy/caddy/Caddyfile
 
-# 禁用 admin API 避免与系统 Caddy 端口 2019 冲突
+# 管理 API 使用 2018，避免与系统 Caddy 默认 2019 冲突；供 caddy reload 热加载
 {
-    admin off
+	admin 127.0.0.1:2018
 }
 
 # 地址: {{ADDR}}

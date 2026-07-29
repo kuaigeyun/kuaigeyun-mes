@@ -365,7 +365,7 @@ bg_reload_dev_api_proxy() {
     caddy_bin="$(resolve_caddy)"
     caddy_config="$(caddy_native_path "$BG_DEV_API_CADDYFILE")"
     if [ -f "${LOGS_DIR}/dev-api-proxy.pid" ] && kill -0 "$(cat "${LOGS_DIR}/dev-api-proxy.pid")" 2>/dev/null; then
-        if "$caddy_bin" reload --config "$caddy_config" >/dev/null 2>&1; then
+        if caddy_reload_with_admin "$caddy_bin" "$caddy_config" "$(caddy_dev_api_admin_address)" >/dev/null 2>&1; then
             log_ok "dev API 代理已 reload -> ${backend_addr}"
             return 0
         fi

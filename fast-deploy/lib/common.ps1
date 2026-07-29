@@ -20,6 +20,8 @@ $script:LogsDir = Join-Path $script:ProjectRoot '.logs'
 $script:CaddyDir = Join-Path $script:FastDeployDir 'caddy'
 $script:Caddyfile = Join-Path $script:CaddyDir 'Caddyfile'
 $script:CaddyTemplate = Join-Path $script:FastDeployDir 'templates\Caddyfile.template'
+$script:CaddyProdAdminAddr = if ($env:CADDY_PROD_ADMIN_ADDR) { $env:CADDY_PROD_ADMIN_ADDR } else { '127.0.0.1:2018' }
+$script:CaddyDevApiAdminAddr = if ($env:CADDY_DEV_API_ADMIN_ADDR) { $env:CADDY_DEV_API_ADMIN_ADDR } else { '127.0.0.1:2017' }
 $script:InstallScriptsJson = Join-Path $script:ConfigDir 'install-scripts.json'
 $script:BootTaskName = 'RiverEdge'
 $script:BootTaskStopName = 'RiverEdge-Stop'
@@ -189,6 +191,15 @@ function Resolve-Caddy {
     $bundled = Join-Path $script:FastDeployDir '.tools\caddy\caddy.exe'
     if (Test-Path $bundled) { return $bundled }
     return $null
+}
+
+function Invoke-CaddyReload {
+    param(
+        [Parameter(Mandatory = $true)][string]$CaddyBin,
+        [Parameter(Mandatory = $true)][string]$ConfigPath,
+        [Parameter(Mandatory = $true)][string]$AdminAddress
+    )
+    & $CaddyBin reload --config $ConfigPath --address $AdminAddress
 }
 
 function Test-CheckNode {

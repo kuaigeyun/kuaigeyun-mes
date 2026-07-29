@@ -18,6 +18,9 @@ LOGS_DIR="$PROJECT_ROOT/.logs"
 CADDY_DIR="$FAST_DEPLOY_DIR/caddy"
 CADDYFILE="$CADDY_DIR/Caddyfile"
 CADDY_TEMPLATE="$FAST_DEPLOY_DIR/templates/Caddyfile.template"
+# 项目 Caddy 管理 API（非默认 2019，避免与 apt caddy.service 冲突；reload 依赖此端口）
+CADDY_PROD_ADMIN_ADDR="${CADDY_PROD_ADMIN_ADDR:-127.0.0.1:2018}"
+CADDY_DEV_API_ADMIN_ADDR="${CADDY_DEV_API_ADMIN_ADDR:-127.0.0.1:2017}"
 SYSTEMD_UNIT_NAME="riveredge.service"
 SYSTEMD_UNIT_PATH="/etc/systemd/system/${SYSTEMD_UNIT_NAME}"
 SYSTEMD_UNIT_TEMPLATE="$FAST_DEPLOY_DIR/templates/riveredge.service.template"
@@ -676,6 +679,19 @@ caddy_resolved_config_path() {
         return
     fi
     echo "$p"
+}
+
+caddy_prod_admin_address() {
+    echo "$CADDY_PROD_ADMIN_ADDR"
+}
+
+caddy_dev_api_admin_address() {
+    echo "$CADDY_DEV_API_ADMIN_ADDR"
+}
+
+caddy_reload_with_admin() {
+    local caddy_bin=$1 caddy_config=$2 admin_addr=$3
+    "$caddy_bin" reload --config "$caddy_config" --address "$admin_addr"
 }
 
 check_port() {
@@ -2720,7 +2736,7 @@ reload_caddy_prod_config() {
     if [ -f "$LOGS_DIR/caddy.pid" ] && kill -0 "$(cat "$LOGS_DIR/caddy.pid")" 2>/dev/null; then
         reload_err="$LOGS_DIR/caddy-reload.err"
         : >"$reload_err"
-        if "$caddy_bin" reload --config "$caddy_config" 2>"$reload_err"; then
+        if caddy_reload_with_admin "$caddy_bin" "$caddy_config" "$(caddy_prod_admin_address)" 2>"$reload_err"; then
             if verify_caddy_serving; then
                 log_ok "Caddy 已 reload"
                 return 0

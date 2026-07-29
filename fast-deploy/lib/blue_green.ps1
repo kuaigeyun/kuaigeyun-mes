@@ -267,7 +267,7 @@ function Reload-BgDevApiProxy([int]$ActivePort) {
     $caddy = Resolve-Caddy
     $pidFile = Join-Path $script:LogsDir 'dev-api-proxy.pid'
     if (Test-PidFileAlive $pidFile) {
-        & $caddy reload --config $script:BgDevApiCaddyfile 2>$null
+        Invoke-CaddyReload -CaddyBin $caddy -ConfigPath $script:BgDevApiCaddyfile -AdminAddress $script:CaddyDevApiAdminAddr 2>$null
         if ($LASTEXITCODE -eq 0) { Write-LogOk "dev API 代理已 reload -> 127.0.0.1:$ActivePort"; return }
     }
     Start-BgDevApiProxy
@@ -360,7 +360,7 @@ function Reload-CaddyProdConfig {
     if ($LASTEXITCODE -ne 0) { throw 'Caddyfile 校验失败' }
     $pidFile = Join-Path $script:LogsDir 'caddy.pid'
     if (Test-PidFileAlive $pidFile) {
-        & $caddy reload --config $config 2>$reloadErr
+        Invoke-CaddyReload -CaddyBin $caddy -ConfigPath $config -AdminAddress $script:CaddyProdAdminAddr 2>$reloadErr
         if ($LASTEXITCODE -eq 0) {
             Write-LogOk 'Caddy 已 reload'
             return

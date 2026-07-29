@@ -2,7 +2,7 @@
 # 占位符：{{LISTEN_PORT}} {{BACKEND_ADDR}}
 
 {
-    admin off
+	admin 127.0.0.1:2017
 }
 
 :{{LISTEN_PORT}} {
