@@ -14,6 +14,7 @@ import { setToken, setUserInfo, setTenantId } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
 import { theme } from 'antd';
 import { getPlatformSettingsPublic } from '../../services/platformSettings';
+import { useTranslation } from 'react-i18next';
 import { captureLoginEntryFromCurrentUrl } from '../../utils/loginEntry';
 
 /**
