@@ -3,21 +3,8 @@ import { Form, Input, Space, Typography, theme } from 'antd';
 import { LinkOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { checkTenantDomainAvailability } from '../../services/siteSetting';
+import { isReservedTenantDomain } from '../../utils/reservedTenantDomain';
 
-const RESERVED_DOMAIN_KEYWORDS = [
-  'admin',
-  'login',
-  'infra',
-  'system',
-  'apps',
-  'api',
-  'docs',
-  'debug',
-  'qrcode',
-  'init',
-  'personal',
-  'lock',
-];
 const TENANT_DOMAIN_PATTERN = /^[a-z][a-z0-9_-]{2,11}$/;
 
 export type LoginDomainSettingsBlockProps = {
@@ -57,9 +44,8 @@ const LoginDomainSettingsBlock: React.FC<LoginDomainSettingsBlockProps> = ({ ten
                   if (!domain) return;
                   if (domain.length < 3 || domain.length > 12) return;
                   if (!TENANT_DOMAIN_PATTERN.test(domain)) return;
-                  const hit = RESERVED_DOMAIN_KEYWORDS.find((kw) => domain.includes(kw));
-                  if (hit) {
-                    throw new Error(t('pages.system.siteSettings.tenantDomainReserved', { keyword: hit }));
+                  if (isReservedTenantDomain(domain)) {
+                    throw new Error(t('pages.system.siteSettings.tenantDomainReserved', { keyword: domain }));
                   }
                   const result = await checkTenantDomainAvailability(domain);
                   if (!result.available) {

@@ -16,6 +16,7 @@ import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, 
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { isReservedTenantDomain } from '../../../../utils/reservedTenantDomain';
 import {
   getTenantList,
   getPackageList,
@@ -1474,6 +1475,15 @@ const SuperAdminTenantList: React.FC = () => {
             { required: true, message: t('pages.infra.tenant.formDomainRequired') },
             { min: 1, max: 100, message: t('pages.infra.tenant.domainLength') },
             { pattern: /^[a-z0-9-]+$/, message: t('pages.infra.tenant.formDomainPattern') },
+            {
+              validator: async (_, value) => {
+                const domain = String(value || '').trim().toLowerCase();
+                if (!domain) return;
+                if (isReservedTenantDomain(domain)) {
+                  throw new Error(t('pages.system.siteSettings.tenantDomainReserved', { keyword: domain }));
+                }
+              },
+            },
           ]}
         />
         <SafeProFormSelect

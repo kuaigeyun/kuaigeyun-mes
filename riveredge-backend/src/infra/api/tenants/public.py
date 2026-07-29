@@ -89,7 +89,13 @@ async def check_tenant_domain(domain: str):
     Example:
         GET /api/v1/tenants/check-domain/test-org
     """
-    tenant = await Tenant.get_or_none(domain=domain)
+    from infra.domain.tenant.reserved_tenant_domain import is_reserved_tenant_domain
+
+    normalized = (domain or "").strip().lower()
+    if is_reserved_tenant_domain(normalized):
+        return TenantCheckResponse(exists=False)
+
+    tenant = await Tenant.get_or_none(domain=normalized)
     
     if tenant:
         return TenantCheckResponse(

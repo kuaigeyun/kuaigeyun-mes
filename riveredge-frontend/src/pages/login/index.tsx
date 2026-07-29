@@ -47,7 +47,7 @@ import { setToken, setTenantId, setUserInfo, getTenantId, getToken } from '../..
 import { clearSessionScopedQueries } from '../../utils/clearSessionQueries';
 import { applySessionUserAfterLogin } from '../../utils/restoredUser';
 import { getImmediatePostLoginHomePath, refinePostLoginHomeInBackground } from '../../utils/tenantHomePath';
-import { buildTenantLoginPathForHistoryReplace, resolveTenantDomainFromUrl } from '../../utils/tenantDomainAccess';
+import { buildTenantLoginPathForHistoryReplace, resolvePlatformAdminLoginPathFromUrl, resolveTenantDomainFromUrl } from '../../utils/tenantDomainAccess';
 import { captureLoginEntryFromCurrentUrl } from '../../utils/loginEntry';
 const TenantSelectionModal = lazy(() => import('../../components/tenant-selection-modal'));
 const TermsModal = lazy(() => import('../../components/terms-modal'));
@@ -142,6 +142,13 @@ export default function LoginPage() {
     () => getPlatformSettingsCacheKey(window.location.pathname, window.location.search),
     [],
   );
+
+  useEffect(() => {
+    const adminLoginPath = resolvePlatformAdminLoginPathFromUrl();
+    if (adminLoginPath) {
+      navigate(adminLoginPath, { replace: true });
+    }
+  }, [navigate]);
 
   /** 登录成功：同步用户态并清理会话级 query，避免 navigate 时 AuthGuard 竞态 */
   const syncUserStateAfterLogin = useCallback((userInfo: Parameters<typeof setUserInfo>[0]) => {

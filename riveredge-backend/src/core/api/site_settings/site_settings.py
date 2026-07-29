@@ -82,20 +82,7 @@ class TenantDomainAvailabilityResponse(BaseModel):
     message: str
 
 
-_RESERVED_DOMAIN_KEYWORDS = (
-    "admin",
-    "login",
-    "infra",
-    "system",
-    "apps",
-    "api",
-    "docs",
-    "debug",
-    "qrcode",
-    "init",
-    "personal",
-    "lock",
-)
+from infra.domain.tenant.reserved_tenant_domain import normalize_tenant_domain
 
 _LOGIN_PAGE_SETTING_KEYS = {
     "platform_name",
@@ -117,27 +104,6 @@ _LOGIN_PAGE_SETTING_KEYS = {
     "login_client_android_enabled",
     "login_quick_enabled",
 }
-
-
-def _normalize_tenant_domain(domain: str) -> str:
-    normalized = (domain or "").strip().lower()
-    if not normalized:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="组织域名不能为空")
-    import re
-    if len(normalized) < 3 or len(normalized) > 12:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="组织域名长度需为3-12位")
-    if not re.fullmatch(r"[a-z][a-z0-9_-]{2,11}", normalized):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="组织域名必须以小写字母开头，仅支持小写字母、数字、下划线和中划线，且不允许中文",
-        )
-    hit = next((kw for kw in _RESERVED_DOMAIN_KEYWORDS if kw in normalized), None)
-    if hit:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"组织域名不能包含保留关键词：{hit}",
-        )
-    return normalized
 
 
 async def _rollback_created_tenant(tenant_id: int) -> None:
@@ -276,7 +242,7 @@ async def update_settings(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     if tenant_domain is not None:
-        normalized_domain = _normalize_tenant_domain(str(tenant_domain))
+        normalized_domain = normalize_tenant_domain(str(tenant_domain))
         exists = await Tenant.filter(domain=normalized_domain).exclude(id=tenant_id).exists()
         if exists:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"组织域名 {normalized_domain} 已被占用")
@@ -315,7 +281,7 @@ async def check_tenant_domain_availability(
     domain: str = Query(..., min_length=1, description="待检查组织域名"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    normalized_domain = _normalize_tenant_domain(domain)
+    normalized_domain = normalize_tenant_domain(domain)
     exists = await Tenant.filter(domain=normalized_domain).exclude(id=tenant_id).exists()
     if exists:
         return TenantDomainAvailabilityResponse(
@@ -530,7 +496,7 @@ async def update_branch_organization_from_site_settings(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请提供要修改的字段")
 
     if "domain" in update_payload:
-        normalized_domain = _normalize_tenant_domain(update_payload["domain"])
+        normalized_domain = normalize_tenant_domain(update_payload["domain"])
         domain_taken = await Tenant.filter(domain=normalized_domain).exclude(id=branch_org_id).exists()
         if domain_taken:
             raise HTTPException(

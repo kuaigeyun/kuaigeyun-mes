@@ -61,10 +61,16 @@ async def get_platform_settings_public(
 
         # 支持按组织域名叠加登录页皮肤：登录页模板不变，仅覆盖展示字段
         if tenant_domain:
-            tenant = await Tenant.get_or_none(
-                domain=tenant_domain.strip().lower(),
-                status=TenantStatus.ACTIVE,
-            )
+            from infra.domain.tenant.reserved_tenant_domain import is_reserved_tenant_domain
+
+            domain = tenant_domain.strip().lower()
+            if not is_reserved_tenant_domain(domain):
+                tenant = await Tenant.get_or_none(
+                    domain=domain,
+                    status=TenantStatus.ACTIVE,
+                )
+            else:
+                tenant = None
             if tenant:
                 site_settings = await SiteSettingService.get_settings_with_platform_fallback(tenant.id)
                 merged = settings.model_dump()

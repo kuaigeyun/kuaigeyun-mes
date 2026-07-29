@@ -581,6 +581,8 @@ class AuthService:
         tenant_service = TenantService()
         user_service = UserService()
         
+        from infra.domain.tenant.reserved_tenant_domain import normalize_tenant_domain
+
         # 确定组织域名
         tenant_domain = data.tenant_domain
         
@@ -596,6 +598,12 @@ class AuthService:
             while await Tenant.get_or_none(domain=tenant_domain) and attempts < max_attempts:
                 tenant_domain = ''.join(random.choices(chars, k=8))
                 attempts += 1
+
+            from infra.domain.tenant.reserved_tenant_domain import is_reserved_tenant_domain
+
+            while is_reserved_tenant_domain(tenant_domain) and attempts < max_attempts:
+                tenant_domain = ''.join(random.choices(chars, k=8))
+                attempts += 1
             
             if attempts >= max_attempts:
                 raise HTTPException(
@@ -603,6 +611,9 @@ class AuthService:
                     detail="无法生成唯一的组织域名，请稍后重试"
                 )
         
+        if tenant_domain:
+            tenant_domain = normalize_tenant_domain(str(tenant_domain).strip())
+
         # 检查域名是否已存在
         existing_tenant = await Tenant.get_or_none(domain=tenant_domain)
         if existing_tenant:

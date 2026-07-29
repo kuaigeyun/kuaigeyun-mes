@@ -61,6 +61,9 @@ class TenantService:
         tenant_name = (data.name or "").strip()
         if not tenant_name:
             raise TenantError("组织名称不能为空")
+        from infra.domain.tenant.reserved_tenant_domain import normalize_tenant_domain
+
+        data.domain = normalize_tenant_domain(str(data.domain or "").strip())
         if await Tenant.filter(name__iexact=tenant_name).exists():
             raise tenant_name_already_exists(tenant_name)
 
@@ -523,6 +526,11 @@ class TenantService:
             if existing:
                 raise tenant_name_already_exists(new_name)
             update_data["name"] = new_name
+
+        if "domain" in update_data:
+            from infra.domain.tenant.reserved_tenant_domain import normalize_tenant_domain
+
+            update_data["domain"] = normalize_tenant_domain(str(update_data["domain"] or "").strip())
 
         # 记录变更信息（用于日志）
         changes = []

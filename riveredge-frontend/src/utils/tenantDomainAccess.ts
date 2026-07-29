@@ -6,6 +6,7 @@
  */
 
 import { getPersistedConfigs, useConfigStore } from '../stores/configStore';
+import { isPlatformAdminTenantDomain, isReservedTenantDomain } from './reservedTenantDomain';
 
 /** 路径首段保留字：不作为组织域名 */
 export const TENANT_PATH_RESERVED_SEGMENTS = new Set([
@@ -96,17 +97,23 @@ export function resolveTenantDomainFromPathname(pathname: string): string | null
   if (!segments.length) return null;
 
   if (!TENANT_PATH_RESERVED_SEGMENTS.has(segments[0])) {
-    return segments[0].toLowerCase();
+    const domain = segments[0].toLowerCase();
+    return isReservedTenantDomain(domain) ? null : domain;
   }
   if (segments[0] === 'login' && segments[1] && !TENANT_PATH_RESERVED_SEGMENTS.has(segments[1])) {
-    return segments[1].toLowerCase();
+    const domain = segments[1].toLowerCase();
+    return isReservedTenantDomain(domain) ? null : domain;
   }
   return null;
 }
 
 export function resolveTenantDomainFromSearch(search: string): string | null {
   try {
-    return normalizeTenantDomain(new URLSearchParams(search).get('tenant_domain'));
+    const domain = normalizeTenantDomain(new URLSearchParams(search).get('tenant_domain'));
+    if (!domain || isReservedTenantDomain(domain)) {
+      return null;
+    }
+    return domain;
   } catch {
     return null;
   }
@@ -146,11 +153,16 @@ export function resolveTenantDomainForLogout(): string | null {
   }
 
   const fromStore = normalizeTenantDomain(useConfigStore.getState().configs?.tenant_domain as string | undefined);
-  if (fromStore) {
+  if (fromStore && !isReservedTenantDomain(fromStore)) {
     return fromStore;
   }
 
-  return normalizeTenantDomain(getPersistedConfigs()?.tenant_domain as string | undefined);
+  const fromPersisted = normalizeTenantDomain(getPersistedConfigs()?.tenant_domain as string | undefined);
+  if (fromPersisted && !isReservedTenantDomain(fromPersisted)) {
+    return fromPersisted;
+  }
+
+  return null;
 }
 
 /** 鉴权重定向：仅 URL 有租户信号时带 tenant_domain，否则平台总入口 /login */
@@ -160,6 +172,20 @@ export function buildLoginRedirectPath(): string {
     return '/login';
   }
   return `/login?tenant_domain=${encodeURIComponent(domain)}`;
+}
+
+/** 若 URL 指定保留域名 infra，应进入平台超管登录页 */
+export function resolvePlatformAdminLoginPathFromUrl(parts: TenantLocationParts = {}): string | null {
+  const search = parts.search ?? window.location.search;
+  try {
+    const domain = (new URLSearchParams(search).get('tenant_domain') || '').trim().toLowerCase();
+    if (isPlatformAdminTenantDomain(domain)) {
+      return '/infra/login';
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 /** 退出 / 401：尽量回到当前组织的登录页（含会话内 tenant_domain 回退） */
