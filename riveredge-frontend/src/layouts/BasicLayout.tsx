@@ -166,6 +166,7 @@ import { verifyCopyright } from '../utils/copyrightIntegrity';
 import { getBuildProvenance, registerInstallInstance } from '../services/platformSettings';
 import { useTouchScreen } from '../hooks/useTouchScreen';
 import { buildLoginRedirectPath } from '../utils/tenantDomainAccess';
+import { isPlatformAdminLoginPathname, isPlatformInfraPath } from '../utils/platformScope';
 import { redirectAfterLogout } from '../utils/loginEntry';
 
 /**
@@ -357,7 +358,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, [userData, setCurrentUser]);
 
   const publicPaths = ['/login', '/debug/'];
-  const isInfraLoginPage = location.pathname === '/infra/login';
+  const isInfraLoginPage = isPlatformAdminLoginPathname(location.pathname);
   const isSharedReportOrDashboard =
     location.pathname === '/apps/kuaireport/dashboards/shared' ||
     location.pathname === '/apps/kuaireport/reports/shared';
@@ -416,7 +417,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // 如果不是公开页面且未登录，自动重定向到登录页（SPA 内部跳转，避免 dev 下 /login MPA 缺 Provider 白屏）
   if (!isPublicPath && !currentUser && !getToken()) {
-    if (location.pathname.startsWith('/infra')) {
+    if (isPlatformInfraPath(location.pathname)) {
       return <Navigate to="/infra/login" replace />;
     }
     return <Navigate to={buildLoginRedirectPath()} replace />;
@@ -2028,7 +2029,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    */
   useEffect(() => {
     // 排除登录页等特殊页面
-    if (location.pathname.startsWith('/login') || location.pathname.startsWith('/infra/login')) {
+    if (location.pathname.startsWith('/login') || isPlatformAdminLoginPathname(location.pathname)) {
       return;
     }
 

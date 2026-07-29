@@ -96,11 +96,12 @@ export function resolveTenantDomainFromPathname(pathname: string): string | null
   const segments = pathname.split('/').filter(Boolean);
   if (!segments.length) return null;
 
-  if (!TENANT_PATH_RESERVED_SEGMENTS.has(segments[0])) {
-    const domain = segments[0].toLowerCase();
+  const firstLower = segments[0].toLowerCase();
+  if (!TENANT_PATH_RESERVED_SEGMENTS.has(firstLower)) {
+    const domain = firstLower;
     return isReservedTenantDomain(domain) ? null : domain;
   }
-  if (segments[0] === 'login' && segments[1] && !TENANT_PATH_RESERVED_SEGMENTS.has(segments[1])) {
+  if (firstLower === 'login' && segments[1] && !TENANT_PATH_RESERVED_SEGMENTS.has(segments[1].toLowerCase())) {
     const domain = segments[1].toLowerCase();
     return isReservedTenantDomain(domain) ? null : domain;
   }

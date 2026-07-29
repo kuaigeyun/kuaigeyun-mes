@@ -5,6 +5,7 @@
 import { navigateTo } from './navigation';
 import { buildLoginRedirectPath } from './tenantDomainAccess';
 import { isPlatformAdminEntryPathname, isPlatformAdminTenantDomain } from './reservedTenantDomain';
+import { isPlatformInfraPath } from './platformScope';
 
 const LOGIN_ENTRY_STORAGE_KEY = 'riveredge-login-entry';
 
@@ -112,7 +113,7 @@ export function resolvePostLogoutLoginTarget(): PostLogoutLoginTarget {
     return { path, fullUrl: `${saved.origin}${path}` };
   }
 
-  if (window.location.pathname.startsWith('/infra')) {
+  if (isPlatformInfraPath(window.location.pathname)) {
     return { path: '/infra/login' };
   }
 

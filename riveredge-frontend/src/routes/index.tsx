@@ -17,6 +17,8 @@
 import React, { Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import BasicLayout from '../layouts/BasicLayout';
+import PlatformInfraPathNormalizer from '../components/PlatformInfraPathNormalizer';
+import { isPlatformInfraPublicPath } from '../utils/platformScope';
 // 系统核心路由（不依赖应用加载）
 import SystemRoutes from './SystemRoutes';
 // 应用业务路由（异步加载，隔离错误）
@@ -59,7 +61,11 @@ const useShouldRenderLayout = (): boolean => {
   // 报表/大屏分享页（全屏展示，无需布局）
   const sharedViewPaths = ['/apps/kuaireport/dashboards/shared', '/apps/kuaireport/reports/shared'];
 
-  // 检查是否是公开路由
+  // 检查是否是公开路由（平台 /infra 入口大小写不敏感）
+  if (isPlatformInfraPublicPath(pathname)) {
+    return false;
+  }
+
   if (publicRoutes.includes(pathname)) {
     return false;
   }
@@ -97,6 +103,7 @@ const MainRoutes: React.FC = () => {
 
   return (
     <>
+      <PlatformInfraPathNormalizer />
       {shouldRenderLayout ? (
         <BasicLayout>
           <Routes>

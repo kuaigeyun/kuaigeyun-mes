@@ -42,6 +42,7 @@ import { updateLastActivity, getLastActivityTime, hasPendingRequests } from './u
 import { useTouchScreen } from './hooks/useTouchScreen';
 import { initDocumentStatusCache } from './services/enums';
 import { buildLoginRedirectPath, resolveTenantDomainFromUrl } from './utils/tenantDomainAccess';
+import { isPlatformAdminLoginPathname, isPlatformInfraPath, isPlatformInfraPublicPath } from './utils/platformScope';
 import { redirectAfterLogout } from './utils/loginEntry';
 // 使用 routes 中的路由配置
 import MainRoutes from './routes';
@@ -92,15 +93,13 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const tenantDomainFromPath = resolveTenantDomainFromUrl({ pathname, search: location.search });
   const isPublicPath = pathname === '/' ||
     pathname.startsWith('/login') ||
-    pathname === '/infra' ||
-    pathname === '/infra/' ||
-    pathname === '/infra/login' ||
+    isPlatformInfraPublicPath(pathname) ||
     pathname.startsWith('/lock-screen') ||
     pathname.startsWith('/init/') ||
     pathname.startsWith('/docs') ||
     pathname.startsWith('/debug/') ||
     pathname.startsWith('/qrcode/');
-  const isInfraLoginPage = pathname === '/infra/login';
+  const isInfraLoginPage = isPlatformAdminLoginPathname(pathname);
 
   // ⚠️ 修复：公开页面若存在过期 token，立即清除，避免触发需认证的请求导致短暂错误提示（如 "Token缺失"）
   // 使用 useLayoutEffect 在首屏绘制前同步执行，减少闪烁
@@ -426,7 +425,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     // 有 token = 已登录，允许访问所有页面（包括功能菜单）
     if (!isPublicPath && !hasToken) {
       // 平台级路由重定向到平台登录页
-      if (location.pathname.startsWith('/infra')) {
+      if (isPlatformInfraPath(location.pathname)) {
         return '/infra/login';
       }
       if (tenantDomainFromPath) {

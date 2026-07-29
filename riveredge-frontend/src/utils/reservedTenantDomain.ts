@@ -30,7 +30,7 @@ export const PLATFORM_ADMIN_ENTRY_PATH = '/infra';
 
 export function isPlatformAdminEntryPathname(pathname: string): boolean {
   const path = (pathname || '').replace(/\/+$/, '') || '/';
-  return path === PLATFORM_ADMIN_ENTRY_PATH;
+  return path.toLowerCase() === PLATFORM_ADMIN_ENTRY_PATH;
 }
 
 export function isPlatformAdminTenantDomain(domain: string | null | undefined): boolean {
