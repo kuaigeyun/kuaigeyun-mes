@@ -16,6 +16,7 @@ import {
   getCodeRulePages,
   restorePresetRules,
   enableAllRules,
+  testGenerateCode,
   CodeRule,
   CreateCodeRuleData,
   UpdateCodeRuleData,
@@ -160,7 +161,8 @@ const CodeRuleListPage: React.FC = () => {
   const resetPageRuleForm = (pageCode: string, configsList?: CodeRulePageConfig[]) => {
     const currentConfigs = configsList ?? pageConfigs;
     const pageConfig = currentConfigs.find(p => p.pageCode === pageCode);
-    const defaultRuleCode = `auto-${pageCode}`;
+    const defaultRuleCode =
+      pageConfig?.ruleCode || pageCode.toUpperCase().replace(/-/g, '_');
     const defaultExpression = '{YYYY}{MM}{DD}-{SEQ:4}';
     pageRuleFormRef.current?.setFieldsValue({
       name: t('pages.system.codeRules.ruleNameTemplate', { pageName: pageConfig?.pageName || '' }),
@@ -401,9 +403,14 @@ const CodeRuleListPage: React.FC = () => {
       const pageConfig = pageConfigs.find(p => p.pageCode === selectedPageCode);
       if (!pageConfig) return;
 
+      const canonicalRuleCode =
+        pageConfig.ruleCode || selectedPageCode.toUpperCase().replace(/-/g, '_');
+      pageRuleFormRef.current?.setFieldValue('code', canonicalRuleCode);
+
       // 准备保存数据
       const saveData: CreateCodeRuleData | UpdateCodeRuleData = {
         ...values,
+        code: canonicalRuleCode,
       };
 
       if (ruleComponents.length > 0) {
@@ -420,7 +427,7 @@ const CodeRuleListPage: React.FC = () => {
       const allRules = await getAllCodeRules();
 
       // 检查规则是否已存在（通过规则代码查找，包括所有状态的规则）
-      const existingRule = allRules.find(r => r.code === values.code);
+      const existingRule = allRules.find(r => r.code === canonicalRuleCode);
 
       if (existingRule) {
         // 规则已存在，更新现有规则
@@ -450,7 +457,7 @@ const CodeRuleListPage: React.FC = () => {
           if (isDuplicateError) {
             // 重新获取所有规则，可能规则刚刚被创建或之前查询有遗漏
             const reloadRules = await getAllCodeRules();
-            const ruleAfterReload = reloadRules.find(r => r.code === values.code);
+            const ruleAfterReload = reloadRules.find(r => r.code === canonicalRuleCode);
 
             if (ruleAfterReload) {
               // 如果找到了，更新它
@@ -471,7 +478,7 @@ const CodeRuleListPage: React.FC = () => {
                 allRuleCodes: reloadRules.map(r => r.code),
                 error: createError
               });
-              messageApi.error(t('pages.system.codeRules.ruleCodeExistsHint', { code: values.code }));
+              messageApi.error(t('pages.system.codeRules.ruleCodeExistsHint', { code: canonicalRuleCode }));
               throw createError;
             }
           } else {
@@ -491,7 +498,7 @@ const CodeRuleListPage: React.FC = () => {
       // 从而可以同步把 freshRules / freshConfigs 传给 handleSelectPage，取消 setTimeout 妥协。
       const updates: Partial<CodeRulePageConfig> = {
         autoGenerate: values.is_active ?? true,
-        ruleCode: values.code,
+        ruleCode: canonicalRuleCode,
       };
       const freshConfigs = pageConfigs.map(page =>
         page.pageCode === selectedPageCode ? { ...page, ...updates } : page,
@@ -503,7 +510,17 @@ const CodeRuleListPage: React.FC = () => {
       }));
       window.localStorage.setItem(getCodeRulePageConfigsKey(), JSON.stringify(configsToSave));
       setPageConfigs(freshConfigs);
-      messageApi.success(t('pages.system.codeRules.configSaved'));
+      try {
+        const preview = await testGenerateCode({ rule_code: canonicalRuleCode });
+        const previewCode = (preview?.code ?? '').trim();
+        messageApi.success(
+          previewCode
+            ? `${t('pages.system.codeRules.configSaved')} ${previewCode}`
+            : t('pages.system.codeRules.configSaved'),
+        );
+      } catch {
+        messageApi.success(t('pages.system.codeRules.configSaved'));
+      }
 
       // 立即用最新数据刷新表单，无需等 state 提交
       handleSelectPage(selectedPageCode, freshRules, freshConfigs);

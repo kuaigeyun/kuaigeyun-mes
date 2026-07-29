@@ -20,7 +20,7 @@ WIZARD_PANEL_W=120
 WIZARD_LOGO_W=48
 
 WIZARD_OFFICIAL_REPO_GITEE='https://gitee.com/kuaigeyun/kuaigeyun'
-WIZARD_OFFICIAL_REPO_GITHUB='https://github.com/kuaigeyun/kuaigeyun'
+WIZARD_OFFICIAL_REPO_GITHUB='https://github.com/kuaigeyun/kuaigeyun-mes'
 WIZARD_PRO_REPO_GITEE='https://gitee.com/kuaigeyun/kuaigeyun-pro'
 WIZARD_CUSTOM_REPO_GITEE='https://gitee.com/kuaigeyun/kuaigeyun-custom'
 WIZARD_CLIENT_REPO_GITEE='https://gitee.com/kuaigeyun/kuaigeyun-client'

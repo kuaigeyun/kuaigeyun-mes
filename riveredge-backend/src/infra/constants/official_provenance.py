@@ -9,9 +9,10 @@ from __future__ import annotations
 from typing import FrozenSet
 
 OFFICIAL_REPO_GITEE = "https://gitee.com/kuaigeyun/kuaigeyun"
-OFFICIAL_REPO_GITHUB = "https://github.com/kuaigeyun/kuaigeyun"
+OFFICIAL_REPO_GITHUB = "https://github.com/kuaigeyun/kuaigeyun-mes"
 OFFICIAL_SITE = "https://kuaigeyun.com"
 OFFICIAL_GITEE_REPO_SLUG = "kuaigeyun/kuaigeyun"
+OFFICIAL_GITHUB_REPO_SLUG = "kuaigeyun/kuaigeyun-mes"
 
 TELEMETRY_DISCLOSURE_PATH = "docs/telemetry-disclosure.md"
 
@@ -41,6 +42,9 @@ _OFFICIAL_CANONICAL: FrozenSet[str] = frozenset(
         _normalize_git_remote(f"{OFFICIAL_REPO_GITEE}.git"),
         _normalize_git_remote(f"{OFFICIAL_REPO_GITHUB}.git"),
         _normalize_git_remote("git@gitee.com:kuaigeyun/kuaigeyun.git"),
+        _normalize_git_remote("git@github.com:kuaigeyun/kuaigeyun-mes.git"),
+        # 旧 GitHub 仓库名，仍视为官方来源
+        _normalize_git_remote("https://github.com/kuaigeyun/kuaigeyun"),
         _normalize_git_remote("git@github.com:kuaigeyun/kuaigeyun.git"),
     }
 )

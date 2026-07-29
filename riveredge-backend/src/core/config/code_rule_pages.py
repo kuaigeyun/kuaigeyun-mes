@@ -4,7 +4,7 @@
 定义系统中所有有编码字段的功能页面，用于在编码规则页面展示和配置。
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 # 页面代码 -> 固定字符预设（汉语拼音缩写）
 # 用于编码规则默认前缀和重置
@@ -1588,7 +1588,9 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     "MATERIAL_CODE": ("apps.master_data.models.material", "Material", "main_code"),
     "master-data-material": ("apps.master_data.models.material", "Material", "main_code"),
     "master-data-supply-chain-customer": ("apps.master_data.models.customer", "Customer", "code"),
+    "customer": ("apps.master_data.models.customer", "Customer", "code"),
     "master-data-supply-chain-supplier": ("apps.master_data.models.supplier", "Supplier", "code"),
+    "supplier": ("apps.master_data.models.supplier", "Supplier", "code"),
     "DEPARTMENT_CODE": ("core.models.department", "Department", "code"),
     "system-department": ("core.models.department", "Department", "code"),
     "POSITION_CODE": ("core.models.position", "Position", "code"),
@@ -1740,4 +1742,28 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
         "code",
     ),
 }
+
+
+def get_page_config_by_code(page_code: str) -> Optional[CodeRulePageConfig]:
+    """按 page_code 查找页面编码规则静态配置。"""
+    for page in CODE_RULE_PAGES:
+        if page.get("page_code") == page_code:
+            return page
+    return None
+
+
+def get_page_rule_code_candidates(page_code: str) -> List[str]:
+    """
+    同一功能页在库内可能出现的规则 code（canonical + 历史派生码）。
+    解析租户规则时须全部尝试，避免「已保存但 code 不一致」导致规则不生效。
+    """
+    page = get_page_config_by_code(page_code)
+    if not page:
+        return [page_code.upper().replace("-", "_")]
+    candidates: List[str] = []
+    canonical = page.get("rule_code") or page_code.upper().replace("-", "_")
+    for code in (canonical, page_code.upper().replace("-", "_"), page_code):
+        if code and code not in candidates:
+            candidates.append(code)
+    return candidates
 

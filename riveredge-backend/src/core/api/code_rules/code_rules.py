@@ -169,23 +169,18 @@ async def get_page_config(
         )
     page_config["fixed_text_preset"] = PAGE_CODE_TO_FIXED_TEXT_PRESET.get(page_code)
     
-    # 获取规则代码：优先使用配置的 rule_code，否则由 page_code 派生（如 master-data-factory-workshop -> MASTER_DATA_FACTORY_WORKSHOP）
-    rule_code = page_config.get("rule_code") or page_code.upper().replace("-", "_")
-    
-    # 如果配置了编码规则或可派生，尝试从数据库获取规则详情
-    if rule_code:
-        try:
-            rule = await CodeRuleService.get_rule_by_code(tenant_id, rule_code)
-            if rule:
-                page_config["rule_code"] = rule_code
-                page_config["allow_manual_edit"] = rule.allow_manual_edit
-                page_config["auto_generate"] = rule.is_active  # 规则启用时自动生成
-            elif not page_config.get("rule_code"):
-                # 规则不存在且配置中无 rule_code，不添加（保持原样）
-                pass
-        except Exception:
-            # 如果获取规则时出错，保持页面配置的默认值
-            pass
+    canonical_rule_code = page_config.get("rule_code") or page_code.upper().replace("-", "_")
+    page_config["rule_code"] = canonical_rule_code
+
+    rule = await CodeRuleService.resolve_rule_for_page(
+        tenant_id, page_code, active_only=False
+    )
+    if rule:
+        page_config["allow_manual_edit"] = rule.allow_manual_edit
+        page_config["auto_generate"] = rule.is_active
+    else:
+        # 未在库中保存过规则：不沿用静态默认值冒充已启用
+        page_config["auto_generate"] = False
     
     return CodeRulePageConfigResponse(**page_config)
 
@@ -337,7 +332,7 @@ async def generate_code(
             rule_code=request.rule_code,
             context=request.context
         )
-        rule = await CodeRuleService.get_rule_by_code(tenant_id, request.rule_code)
+        rule, _ = await CodeRuleService.resolve_rule_by_code(tenant_id, request.rule_code)
         rule_name = rule.name if rule else request.rule_code
         return CodeGenerationResponse(code=code, rule_name=rule_name)
     except ValidationError as e:
@@ -350,7 +345,7 @@ async def generate_code(
                         rule_code=request.rule_code,
                         context=request.context
                     )
-                    rule = await CodeRuleService.get_rule_by_code(tenant_id, request.rule_code)
+                    rule, _ = await CodeRuleService.resolve_rule_by_code(tenant_id, request.rule_code)
                     rule_name = rule.name if rule else request.rule_code
                     return CodeGenerationResponse(code=code, rule_name=rule_name)
                 except ValidationError:
@@ -416,8 +411,13 @@ async def test_generate_code(
             check_duplicate=request.check_duplicate or False,
             entity_type=request.entity_type
         )
-        rule = await CodeRuleService.get_rule_by_code(tenant_id, request.rule_code)
+        rule, _ = await CodeRuleService.resolve_rule_by_code(tenant_id, request.rule_code)
         rule_name = rule.name if rule else request.rule_code
+        if not (code or "").strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"编码规则 {request.rule_code} 未生成有效编号，请检查规则是否已启用并保存",
+            )
         return CodeGenerationResponse(code=code, rule_name=rule_name)
     except ValidationError as e:
         error_message = str(e)
@@ -432,14 +432,18 @@ async def test_generate_code(
                         check_duplicate=request.check_duplicate or False,
                         entity_type=request.entity_type
                     )
-                    rule = await CodeRuleService.get_rule_by_code(tenant_id, request.rule_code)
+                    rule, _ = await CodeRuleService.resolve_rule_by_code(tenant_id, request.rule_code)
                     rule_name = rule.name if rule else request.rule_code
+                    if not (code or "").strip():
+                        raise HTTPException(
+                            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"编码规则 {request.rule_code} 未生成有效编号，请检查规则是否已启用并保存",
+                        )
                     return CodeGenerationResponse(code=code, rule_name=rule_name)
                 except ValidationError:
                     pass
-            return CodeGenerationResponse(code="", rule_name=request.rule_code)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=error_message
+            detail=error_message,
         )
 

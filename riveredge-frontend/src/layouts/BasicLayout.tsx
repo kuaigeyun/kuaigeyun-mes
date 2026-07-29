@@ -119,7 +119,7 @@ import { getInstalledApplicationList } from '../services/application';
 import { getChatIntegrationStatus } from '../services/deepseekChat';
 import { buildChatIntegrationStatusQueryKey } from '../hooks/useChatIntegrationStatus';
 import { hasPermission, resolveUserForMenuPermission } from '../utils/permission';
-import { getSiteLogoPreview, isSiteLogoUuidKnownMissing } from '../services/file';
+import { getSiteLogoPreview } from '../services/file';
 import Lottie from 'lottie-react';
 import assistAnimation from '../../static/lottie/assist.json';
 import OnboardingGuide from '../components/onboarding-guide';
@@ -1044,9 +1044,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     if (logoValue) {
       if (isUUID(logoValue)) {
-        if (isSiteLogoUuidKnownMissing(logoValue)) {
-          return DEFAULT_SITE_LOGO_URL;
-        }
         // 预览 URL 未就绪时先用极小 SVG，避免先拉 34KB 默认 PNG 再切换
         return SITE_LOGO_FALLBACK_SVG_URL;
       } else {
@@ -1067,11 +1064,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
 
         if (isUUID(siteLogoValue)) {
-          if (isSiteLogoUuidKnownMissing(siteLogoValue)) {
-            clearCachedSiteLogoUrl(siteLogoValue);
-            setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
-            return;
-          }
           const previewInfo = await getSiteLogoPreview(siteLogoValue, { forAvatar: true });
           if (!previewInfo?.preview_url) {
             clearCachedSiteLogoUrl(siteLogoValue);
@@ -5556,7 +5548,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           <RouteTransition>{children}</RouteTransition>
         ) : (
         <UniTabs
-          key={currentUser?.tenant_id ?? getTenantId() ?? 'no-tenant'}
           menuConfig={filteredMenuData}
           isFullscreen={isFullscreen}
           onToggleFullscreen={handleToggleFullscreen}

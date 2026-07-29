@@ -21,6 +21,7 @@ def test_normalize_git_remote_ssh_form():
 
 def test_is_official_git_remote_accepts_gitee_and_github():
     assert is_official_git_remote("https://gitee.com/kuaigeyun/kuaigeyun")
+    assert is_official_git_remote("git@github.com:kuaigeyun/kuaigeyun-mes.git")
     assert is_official_git_remote("git@github.com:kuaigeyun/kuaigeyun.git")
 
 

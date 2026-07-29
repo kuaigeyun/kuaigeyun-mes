@@ -4,7 +4,7 @@
  * 提供多标签页管理功能，支持标签的添加、切换、关闭等操作
  */
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Tabs, Button, Dropdown, MenuProps, theme, Tooltip, message, Popover, Menu } from 'antd';
@@ -17,10 +17,16 @@ import {
   useConfigStore,
   resolveEffectiveHomePath,
   LEGACY_TENANT_DEFAULT_HOME_PATHS,
+  getPersistedConfigs,
 } from '../../stores/configStore';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { getSavedTabs, setSavedTabs, getSavedActiveKey, setSavedActiveKey } from '../../stores/tabsStorage';
+import {
+  getSessionTabs,
+  getSessionActiveKey,
+  setSessionTabs,
+} from '../../stores/sessionTabsCache';
 import { getUserInfo, getTenantId, getToken } from '../../utils/auth';
 import {
   getEffectiveHome,
@@ -90,6 +96,57 @@ function dedupeTabsByPathname(tabList: TabItem[]): TabItem[] {
   });
 
   return result;
+}
+
+/** 合并内存标签与持久化恢复标签，按 pathname 去重（优先保留当前内存中的项） */
+function mergeTabLists(current: TabItem[], restored: TabItem[]): TabItem[] {
+  if (restored.length === 0) return current;
+  if (current.length === 0) return dedupeTabsByPathname(restored);
+  const merged: TabItem[] = [...current];
+  const pathnameSeen = new Set(current.map((tab) => tabPathname(tab.key)));
+  for (const tab of restored) {
+    const pathname = tabPathname(tab.key);
+    if (!pathnameSeen.has(pathname)) {
+      merged.push(tab);
+      pathnameSeen.add(pathname);
+    }
+  }
+  return dedupeTabsByPathname(merged);
+}
+
+function loadPersistedTabs(
+  menuConfig: MenuDataItem[],
+  t: (key: string) => string,
+  tenantHomePath: string,
+): TabItem[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const parsedTabs = getSavedTabs();
+    if (!parsedTabs.length) return null;
+
+    const validTabs = parsedTabs.filter((tab) => {
+      if (!tab || typeof tab !== 'object' || !tab.key || !tab.path || !tab.label) return false;
+      // 租户侧标签栏不恢复纯 infra 页（平台运维独立入口）
+      if (tab.path.startsWith('/infra')) return false;
+      return true;
+    });
+
+    if (validTabs.length === 0) return null;
+    const hasDefault = validTabs.some((tab) => tab.key === tenantHomePath);
+    if (!hasDefault) {
+      const title = findMenuTitleWithTranslation(tenantHomePath, menuConfig, t);
+      validTabs.unshift({
+        key: tenantHomePath,
+        path: tenantHomePath,
+        label: title,
+        closable: false,
+        pinned: false,
+      });
+    }
+    return dedupeTabsByPathname(validTabs);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -185,55 +242,44 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   /** 关闭默认首页标签时尚未拉取自定义首页时，延后跳转避免误落应用中心 */
   const pendingDefaultHomeCloseRef = useRef<string | null>(null);
 
-  // 2. 同步初始化标签列表（直接从本地存储读取并过滤）
+  const tenantIdStrForTabs = getTenantId()?.toString() ?? null;
+
+  // 2. 同步初始化标签列表：会话缓存 > 持久化存储 > 空（等路由同步补当前页）
   const [tabs, setTabs] = useState<TabItem[]>(() => {
     if (typeof window === 'undefined') return [];
-    
-    // 如果未开启持久化，仅返回空（等待后续逻辑添加默认标签）或直接返回默认标签
+
+    const initTenantId = getTenantId();
+    if (initTenantId != null) {
+      const sessionTabs = getSessionTabs(initTenantId);
+      if (sessionTabs?.length) {
+        return dedupeTabsByPathname(sessionTabs);
+      }
+    }
+
     const localPersistence = getInitialPersistence();
     if (!localPersistence) return [];
 
     try {
-      const parsedTabs = getSavedTabs();
-      if (parsedTabs.length > 0) {
-        const isInfraPage = location.pathname.startsWith('/infra');
-           
-        const validTabs = parsedTabs.filter((tab) => {
-          if (!tab || typeof tab !== 'object' || !tab.key || !tab.path || !tab.label) return false;
-          if (isInfraPage) return tab.path.startsWith('/infra');
-          return !tab.path.startsWith('/infra') || tab.path.startsWith('/system');
-        });
-
-        if (validTabs.length > 0) {
-          if (isInfraPage) {
-            const hasOperation = validTabs.some((tab) => tab.key === '/infra/operation');
-            if (!hasOperation) {
-              const opPath = '/infra/operation';
-              const opTitle = findMenuTitleWithTranslation(opPath, menuConfig, t);
-              validTabs.unshift({
-                key: opPath,
-                path: opPath,
-                label: opTitle,
-                closable: false,
-                pinned: false,
-              });
-            }
-          } else {
-            // 首页标签由路由同步 effect 按 tenantHomePath 注入，不在此处写死工作台/应用中心
-          }
-          return dedupeTabsByPathname(validTabs);
-        }
-      }
-    } catch (e) { console.warn('Failed to load tabs from cache', e); }
+      const restored = loadPersistedTabs(
+        menuConfig,
+        t,
+        resolveEffectiveHomePath(undefined, undefined, getPersistedConfigs() ?? {}),
+      );
+      if (restored?.length) return restored;
+    } catch (e) {
+      console.warn('Failed to load tabs from cache', e);
+    }
     return [];
   });
 
   // 3. 同步初始化 activeKey
   const [activeKey, setActiveKey] = useState<string>(() => {
-     // 优先使用当前 URL（这最准确）
-     // 如果当前 URL 是根路径或重定向路径，才考虑恢复上次的
-     // 但实际上 BasicLayout 会处理重定向，这里 location.pathname 已经是准确的
-     return location.pathname + location.search;
+    const initTenantId = getTenantId();
+    if (initTenantId != null) {
+      const sessionActive = getSessionActiveKey(initTenantId);
+      if (sessionActive) return sessionActive;
+    }
+    return location.pathname + location.search;
   });
 
   // 不再需要 isInitialized，因为初始状态就是 initialized
@@ -491,59 +537,84 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   }, [tenantHomePath]);
 
   /**
-   * 从本地存储加载并验证标签（供初始化和异步恢复使用）
+   * 从本地存储加载并验证标签（供持久化异步恢复与租户切换使用）
    */
   const loadTabsFromStorage = useCallback((): TabItem[] | null => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const parsedTabs = getSavedTabs();
-      if (!parsedTabs.length) return null;
-
-      const isInfraPage = location.pathname.startsWith('/infra');
-      const validTabs = parsedTabs.filter((tab) => {
-        if (!tab || typeof tab !== 'object' || !tab.key || !tab.path || !tab.label) return false;
-        if (isInfraPage) return tab.path.startsWith('/infra');
-        return !tab.path.startsWith('/infra') || tab.path.startsWith('/system');
-      });
-
-      if (validTabs.length === 0) return null;
-      const wpPath = isInfraPage ? '/infra/operation' : tenantHomePath;
-      const hasDefault = validTabs.some((tab) => tab.key === wpPath);
-      if (!hasDefault) {
-        const title = findMenuTitleWithTranslation(wpPath, menuConfig, t);
-        validTabs.unshift({
-          key: wpPath,
-          path: wpPath,
-          label: title,
-          closable: false,
-          pinned: false,
-        });
-      }
-      return dedupeTabsByPathname(validTabs);
-    } catch {
-      return null;
-    }
-  }, [location.pathname, menuConfig, t, tenantHomePath]);
+    return loadPersistedTabs(menuConfig, t, tenantHomePath);
+  }, [menuConfig, t, tenantHomePath]);
 
   /** 是否已从异步恢复中加载过标签（避免重复覆盖用户操作） */
   const didRestoreFromSyncRef = useRef(false);
   /** 正在从存储恢复，避免保存 effect 在同周期用错误数据覆盖 */
   const isRestoringRef = useRef(false);
+
+  const prevTenantIdStrRef = useRef<string | null>(tenantIdStrForTabs);
+
+  /** 切换租户时从该租户的会话/持久化恢复标签（替代 UniTabs key remount） */
+  useEffect(() => {
+    const prev = prevTenantIdStrRef.current;
+    if (prev === tenantIdStrForTabs) return;
+    prevTenantIdStrRef.current = tenantIdStrForTabs;
+    didRestoreFromSyncRef.current = false;
+
+    const tenantId = getTenantId();
+    if (tenantId == null) {
+      setTabs([]);
+      return;
+    }
+
+    const sessionTabs = getSessionTabs(tenantId);
+    if (sessionTabs?.length) {
+      setTabs(dedupeTabsByPathname(sessionTabs));
+      const sessionActive = getSessionActiveKey(tenantId);
+      if (sessionActive) setActiveKey(sessionActive);
+      didRestoreFromSyncRef.current = true;
+      return;
+    }
+
+    const restored = loadPersistedTabs(menuConfig, t, tenantHomePath);
+    if (restored?.length) {
+      setTabs(restored);
+      const savedActive = getSavedActiveKey();
+      if (savedActive && restored.some((tab) => tab.key === savedActive)) {
+        setActiveKey(savedActive);
+      }
+    } else {
+      setTabs([]);
+    }
+    didRestoreFromSyncRef.current = true;
+  }, [tenantIdStrForTabs, menuConfig, t, tenantHomePath]);
+
+  /** 会话内实时缓存标签，跨 APP / 组件 remount 不丢 */
+  useLayoutEffect(() => {
+    const tenantId = getTenantId();
+    if (tenantId == null || tabs.length === 0) return;
+    setSessionTabs(tenantId, tabs, activeKey);
+  }, [tabs, activeKey]);
+
   /**
    * 当 tabsPersistence 异步恢复为 true 时（如登出后再次登录），从本地存储恢复标签
    * 解决 clearForLogout 清除 riveredge_tabs_persistence 导致初始化时 tabs=[] 的问题
    */
   useEffect(() => {
     if (!tabsPersistence || didRestoreFromSyncRef.current) return;
+    const tenantId = getTenantId();
+    if (tenantId != null && getSessionTabs(tenantId)?.length) {
+      didRestoreFromSyncRef.current = true;
+      return;
+    }
     const restored = loadTabsFromStorage();
     if (restored && restored.length > 0) {
       didRestoreFromSyncRef.current = true;
       isRestoringRef.current = true;
-      setTabs(restored);
+      setTabs((prev) => mergeTabLists(prev, restored));
       const savedActive = getSavedActiveKey();
       if (savedActive && restored.some((tab) => tab.key === savedActive)) {
         setActiveKey(savedActive);
       }
+      queueMicrotask(() => {
+        isRestoringRef.current = false;
+      });
     }
   }, [tabsPersistence, loadTabsFromStorage]);
 
@@ -553,10 +624,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    */
   useEffect(() => {
     if (!tabsPersistence) return;
-    if (isRestoringRef.current) {
-      isRestoringRef.current = false;
-      return;
-    }
+    if (isRestoringRef.current) return;
     try {
       setSavedTabs(tabs);
       if (activeKey && !activeKey.startsWith('/apps/')) {
@@ -572,15 +640,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    * 注意：如果启用了持久化且正在恢复标签，不要立即添加标签，避免覆盖恢复的标签
    */
   useEffect(() => {
-    // 移除 isInitialized 检查
-    // if (!isInitialized) return;
-
     if (location.pathname) {
       const add = addTabRef.current;
-      // 确保工作台标签始终存在（固定第一个）
-      add(tenantHomePath);
-      // 使用 pathname+search 作为 tabKey，切换回来时保留 query（如 designer?materialId=xxx）
-      // 排除 _refresh 参数，避免右键刷新时因 URL 变化而新建标签
       const searchParams = new URLSearchParams(location.search || '');
       searchParams.delete('_refresh');
       const cleanSearch = searchParams.toString();
@@ -588,7 +649,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       add(tabKey);
       setActiveKey((prev) => (prev === tabKey ? prev : tabKey));
     }
-  }, [location.pathname, location.search, tenantHomePath]);
+  }, [location.pathname, location.search]);
+
+  /** 首页标签仅在 tenantHomePath 变化时注入，避免每次跨 APP 导航重复跑首页合并逻辑 */
+  useEffect(() => {
+    if (!tenantHomePath) return;
+    addTabRef.current(tenantHomePath);
+  }, [tenantHomePath]);
 
   /**
    * 监听自定义事件更新标签标题

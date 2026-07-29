@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useConfigStore } from '../stores/configStore';
-import { getSiteLogoPreview, isSiteLogoUuidKnownMissing } from '../services/file';
+import { getSiteLogoPreview } from '../services/file';
 import { toRelativeIfLocalhost } from '../utils/avatar';
 import { DEFAULT_SITE_LOGO_URL, SITE_LOGO_FALLBACK_SVG_URL } from '../constants/siteAssets';
 
@@ -48,9 +48,6 @@ export function useSiteLogoUrl(): string {
     const logoValue = (useConfigStore.getState().getConfig('site_logo', '') as string)?.trim() || '';
     if (logoValue) {
       if (isUUID(logoValue)) {
-        if (isSiteLogoUuidKnownMissing(logoValue)) {
-          return DEFAULT_SITE_LOGO_URL;
-        }
         return SITE_LOGO_FALLBACK_SVG_URL;
       } else {
         return logoValue;
@@ -66,11 +63,6 @@ export function useSiteLogoUrl(): string {
         return;
       }
       if (isUUID(siteLogoValue)) {
-        if (isSiteLogoUuidKnownMissing(siteLogoValue)) {
-          clearCachedSiteLogoUrl(siteLogoValue);
-          setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
-          return;
-        }
         const previewInfo = await getSiteLogoPreview(siteLogoValue, { forAvatar: true });
         if (!previewInfo?.preview_url) {
           clearCachedSiteLogoUrl(siteLogoValue);

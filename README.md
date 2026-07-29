@@ -155,8 +155,11 @@
 环境要求：Node.js 22+、Python 3.12+（运行时由 uv 锁定 3.11）、PostgreSQL 15+、Caddy（生产）；默认无需 Redis。
 
 ```bash
+# Gitee（国内推荐）
 git clone https://gitee.com/kuaigeyun/kuaigeyun.git
-cd kuaigeyun
+# GitHub
+git clone https://github.com/kuaigeyun/kuaigeyun-mes.git
+cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 
 ./fast-deploy/deploy.sh       # 生产模式（8 阶段向导）
 ./fast-deploy/deploy.sh dev   # 开发模式（Vite 热重载）

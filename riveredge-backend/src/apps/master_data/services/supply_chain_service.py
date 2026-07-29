@@ -240,6 +240,30 @@ def _to_supplier_response(supplier: Supplier) -> SupplierResponse:
     return resp.model_copy(update={"contacts": contact_items})
 
 
+_CUSTOMER_PAGE_CODE = "master-data-supply-chain-customer"
+_SUPPLIER_PAGE_CODE = "master-data-supply-chain-supplier"
+
+
+async def _resolve_partner_create_code(
+    tenant_id: int,
+    page_code: str,
+    code: Optional[str],
+) -> str:
+    """创建客户/供应商时：已启用编码规则且未填编码则由服务端按已保存规则生成。"""
+    from core.services.business.code_generation_service import CodeGenerationService
+    from core.services.business.code_rule_service import CodeRuleService
+
+    trimmed = (code or "").strip()
+    rule = await CodeRuleService.resolve_rule_for_page(tenant_id, page_code, active_only=True)
+    if rule:
+        if not trimmed:
+            return await CodeGenerationService.generate_code(tenant_id, rule.code)
+        return trimmed
+    if not trimmed:
+        raise ValidationError("请填写编码，或在「编码规则」中启用并保存该页面的自动编号")
+    return trimmed
+
+
 class SupplyChainService:
     """供应链数据服务"""
     
@@ -264,17 +288,21 @@ class SupplyChainService:
         Raises:
             ValidationError: 当编码已存在时抛出
         """
+        create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+        create_data["code"] = await _resolve_partner_create_code(
+            tenant_id, _CUSTOMER_PAGE_CODE, create_data.get("code")
+        )
+
         # 检查编码是否已存在
         existing = await Customer.filter(
             tenant_id=tenant_id,
-            code=data.code,
+            code=create_data["code"],
             deleted_at__isnull=True
         ).first()
         
         if existing:
-            raise ValidationError(f"客户编码 {data.code} 已存在")
+            raise ValidationError(f"客户编码 {create_data['code']} 已存在")
         
-        create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
         _strip_customer_pool_managed_fields(create_data)
         salesman_id = create_data.pop("salesman_id", None)
 
@@ -297,7 +325,7 @@ class SupplyChainService:
             )
         except IntegrityError as e:
             if "unique" in str(e).lower() or "duplicate" in str(e).lower():
-                raise ValidationError(f"客户编码 {data.code} 已存在（可能已被软删除，请检查）")
+                raise ValidationError(f"客户编码 {create_data['code']} 已存在（可能已被软删除，请检查）")
             raise
 
         if salesman_id:
@@ -572,18 +600,22 @@ class SupplyChainService:
         Raises:
             ValidationError: 当编码已存在时抛出
         """
+        create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+        create_data["code"] = await _resolve_partner_create_code(
+            tenant_id, _SUPPLIER_PAGE_CODE, create_data.get("code")
+        )
+
         # 检查编码是否已存在
         existing = await Supplier.filter(
             tenant_id=tenant_id,
-            code=data.code,
+            code=create_data["code"],
             deleted_at__isnull=True
         ).first()
         
         if existing:
-            raise ValidationError(f"供应商编码 {data.code} 已存在")
+            raise ValidationError(f"供应商编码 {create_data['code']} 已存在")
         
         # 创建供应商（未传 is_active 时默认为启用）
-        create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
         if create_data.get("is_active") is None:
             create_data["is_active"] = True
         # 自动回填采购员姓名
@@ -603,7 +635,7 @@ class SupplyChainService:
         except IntegrityError as e:
             # 捕获数据库唯一约束错误，提供友好提示
             if "unique" in str(e).lower() or "duplicate" in str(e).lower():
-                raise ValidationError(f"供应商编码 {data.code} 已存在（可能已被软删除，请检查）")
+                raise ValidationError(f"供应商编码 {create_data['code']} 已存在（可能已被软删除，请检查）")
             raise
         
         return _to_supplier_response(supplier)

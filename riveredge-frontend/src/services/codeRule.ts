@@ -328,6 +328,20 @@ export async function enableAllRules(): Promise<{ enabled: number; message: stri
   });
 }
 
+export async function fetchEffectivePageCodeRule(
+  pageCode: string,
+): Promise<{ ruleCode: string; autoGenerate: boolean; allowManualEdit: boolean }> {
+  const page = await apiRequest<CodeRulePageConfigResponse>(`/core/code-rules/pages/${pageCode}`);
+  if (!page.rule_code) {
+    throw new Error(`页面 ${pageCode} 未配置编码规则`);
+  }
+  return {
+    ruleCode: page.rule_code,
+    autoGenerate: !!page.auto_generate,
+    allowManualEdit: page.allow_manual_edit ?? true,
+  };
+}
+
 /**
  * 获取指定页面的编号规则配置
  * 

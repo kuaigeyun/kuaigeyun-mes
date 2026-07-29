@@ -261,8 +261,10 @@ class CodeGenerationService:
         Raises:
             ValidationError: 当规则不存在或未启用时抛出
         """
-        # 获取编码规则；缺失时按 CODE_RULE_PAGES 补建（与 /code-rules/generate 一致）
-        rule = await CodeRuleService.get_rule_by_code(tenant_id, rule_code)
+        # 获取编码规则；按 page 别名解析，避免已保存规则因 code 不一致而不生效
+        rule, effective_rule_code = await CodeRuleService.resolve_rule_by_code(
+            tenant_id, rule_code, active_only=True
+        )
         if not rule:
             from core.config.code_rule_pages import CODE_RULE_PAGES, get_rule_code_to_page_code
             from core.services.default.default_values_service import DefaultValuesService
@@ -278,9 +280,13 @@ class CodeGenerationService:
             )
             if page_code:
                 await DefaultValuesService.ensure_code_rule_for_page(tenant_id, page_code)
-                rule = await CodeRuleService.get_rule_by_code(tenant_id, rule_code)
+                rule, effective_rule_code = await CodeRuleService.resolve_rule_by_code(
+                    tenant_id, rule_code, active_only=True
+                )
         if not rule:
             raise ValidationError(f"编码规则 {rule_code} 不存在或未启用，请在「编码规则」中启用该规则")
+
+        rule_code = effective_rule_code
 
         _rc = (rule_code or "").upper()
         if ("MATERIAL" in _rc or _rc == "MATERIAL_CODE") and context:
@@ -435,10 +441,13 @@ class CodeGenerationService:
         Returns:
             str: 生成的编码（测试用）
         """
-        # 获取编码规则
-        rule = await CodeRuleService.get_rule_by_code(tenant_id, rule_code)
+        # 获取编码规则（含 page 别名回退）
+        rule, effective_rule_code = await CodeRuleService.resolve_rule_by_code(
+            tenant_id, rule_code, active_only=True
+        )
         if not rule:
             raise ValidationError(f"编码规则 {rule_code} 不存在或未启用")
+        rule_code = effective_rule_code
         
         # 获取规则组件配置（优先使用新格式）
         components = rule.get_rule_components()

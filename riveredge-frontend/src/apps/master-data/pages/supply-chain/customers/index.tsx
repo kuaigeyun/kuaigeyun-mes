@@ -179,7 +179,8 @@ const CustomersPage: React.FC = () => {
     const next = new URLSearchParams(searchParams);
     next.delete('uuid');
     setSearchParams(next, { replace: true });
-  }, [openDetailByUuid, searchParams, setSearchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅响应 uuid 入参，避免 searchParams 对象引用变化重复 replace
+  }, [openDetailByUuid, searchParams.get('uuid')]);
 
   const customerImportTemplate = useMemo(
     () =>

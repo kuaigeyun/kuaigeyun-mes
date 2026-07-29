@@ -15,8 +15,7 @@ import {
   FORM_LAYOUT,
 } from '../../../components/layout-templates/constants';
 import { customerApi, getUserOptions, getDictionaryOptions } from '../services/supply-chain';
-import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
-import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
+import { testGenerateCode, generateCode, fetchEffectivePageCodeRule } from '../../../services/codeRule';
 import { useGlobalStore } from '../../../stores/globalStore';
 import type { Customer, CustomerCreate, CustomerUpdate } from '../types/supply-chain';
 import { SchemaFormRenderer } from '../../../components/schema-form';
@@ -64,6 +63,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   const [formLoading, setFormLoading] = useState(false);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
+  const [effectiveAutoGenerate, setEffectiveAutoGenerate] = useState(false);
   const [optionsMap, setOptionsMap] = useState<
     Record<string, Array<{ value: any; label: string }>>
   >({});
@@ -135,6 +135,9 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
 
   useEffect(() => {
     if (!open) return;
+
+    let cancelled = false;
+
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       isActive: true,
@@ -143,62 +146,66 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     });
     setIsPublicMode(true);
     resetFieldValues();
+
     if (!editUuid) {
       (async () => {
-        let ruleCode = getPageRuleCode(PAGE_CODE);
-        let autoGenerate = isAutoGenerateEnabled(PAGE_CODE);
         try {
-          const pageConfig = await getCodeRulePageConfig(PAGE_CODE);
-          if (pageConfig?.ruleCode) {
-            ruleCode = pageConfig.ruleCode;
-            autoGenerate = !!pageConfig.autoGenerate;
-          }
-        } catch {}
-        if (autoGenerate && ruleCode) {
+          const { ruleCode, autoGenerate } = await fetchEffectivePageCodeRule(PAGE_CODE);
+          if (cancelled) return;
           setEffectiveRuleCode(ruleCode);
-          testGenerateCode({ rule_code: ruleCode })
-            .then((res) => {
-              setPreviewCode(res.code);
-              formRef.current?.setFieldsValue({
-                code: res.code,
-                isActive: true,
-                isPublic: true,
-                salesmanId: undefined,
-              });
-            })
-            .catch(() => {
-              setPreviewCode(null);
-              formRef.current?.setFieldsValue({
-                isActive: true,
-                isPublic: true,
-                salesmanId: undefined,
-              });
-            });
-        } else {
-          setPreviewCode(null);
-          setEffectiveRuleCode(null);
+          setEffectiveAutoGenerate(autoGenerate);
+          if (!autoGenerate) {
+            setPreviewCode(null);
+            return;
+          }
+          const res = await testGenerateCode({ rule_code: ruleCode });
+          if (cancelled) return;
+          const code = (res?.code ?? '').trim();
+          if (!code) {
+            messageApi.error(t('app.master-data.codeRulePreviewHint'));
+            setPreviewCode(null);
+            return;
+          }
+          setPreviewCode(code);
           formRef.current?.setFieldsValue({
+            code,
             isActive: true,
             isPublic: true,
             salesmanId: undefined,
           });
+        } catch (err: any) {
+          if (cancelled) return;
+          setPreviewCode(null);
+          setEffectiveRuleCode(null);
+          setEffectiveAutoGenerate(false);
+          messageApi.error(err?.message || t('app.master-data.codeRuleAutoFailed'));
         }
       })();
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
+
     setPreviewCode(null);
     setEffectiveRuleCode(null);
     customerApi
       .get(editUuid)
       .then(async (detail) => {
+        if (cancelled) return;
         formRef.current?.setFieldsValue(customerDetailToFormValues(detail));
         setIsPublicMode(detail.poolStatus === 'pool' || !detail.salesmanId);
         const fieldFormValues = await loadFieldValues(detail.id);
+        if (cancelled) return;
         formRef.current?.setFieldsValue(fieldFormValues);
       })
       .catch((err: any) => {
+        if (cancelled) return;
         messageApi.error(err?.message || t('app.master-data.customers.getDetailFailed'));
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, editUuid]);
 
   const customerBasicTailSchema = useMemo(() => {
@@ -239,18 +246,14 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         await saveCustomFieldValues(updated.id, customData);
         onSuccess(updated);
       } else {
-        const ruleCodeToUse = effectiveRuleCode || getPageRuleCode(PAGE_CODE);
+        const ruleCodeToUse = effectiveRuleCode;
         if (
           ruleCodeToUse &&
-          (isAutoGenerateEnabled(PAGE_CODE) || effectiveRuleCode) &&
+          effectiveAutoGenerate &&
           (standardValues.code === previewCode || !standardValues.code)
         ) {
-          try {
-            const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
-            payload.code = codeResponse.code;
-          } catch {
-            // keep form code
-          }
+          const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
+          payload.code = codeResponse.code;
         }
         if (payload.isActive === undefined) {
           payload.isActive = true;
@@ -345,7 +348,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                     <SchemaFormRenderer
                       schema={customerFormSchemaBasicHead}
                       codeField="code"
-                      codeAutoGenerated={isAutoGenerateEnabled(PAGE_CODE)}
+                      codeAutoGenerated={effectiveAutoGenerate}
                       isEdit={isEdit}
                       optionsMap={optionsMap}
                       dropdownEnhanceMap={{
