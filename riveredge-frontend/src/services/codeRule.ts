@@ -33,6 +33,38 @@ export interface CodeRule {
   updated_at: string;
 }
 
+/** 与后端 get_page_rule_code_candidates 对齐的候选 rule code */
+export function getPageRuleCodeCandidates(
+  pageCode: string,
+  pageConfig?: Pick<CodeRulePageConfig, 'ruleCode'>,
+): string[] {
+  const canonical = pageConfig?.ruleCode || pageCode.toUpperCase().replace(/-/g, '_');
+  const candidates = [canonical, pageCode.toUpperCase().replace(/-/g, '_'), pageCode];
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+/**
+ * 按功能页从规则列表中解析「实际生效」的规则（启用优先，其次最近更新）。
+ * 与后端 resolve_rule_for_page / resolve_rule_by_code 对齐。
+ */
+export function resolveCodeRuleForPage(
+  pageCode: string,
+  pageConfig: Pick<CodeRulePageConfig, 'ruleCode'> | undefined,
+  rules: CodeRule[],
+): CodeRule | undefined {
+  const candidates = getPageRuleCodeCandidates(pageCode, pageConfig);
+  const matched = rules.filter((rule) => candidates.includes(rule.code));
+  if (!matched.length) return undefined;
+  matched.sort((a, b) => {
+    if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+    const tb = new Date(b.updated_at || 0).getTime();
+    const ta = new Date(a.updated_at || 0).getTime();
+    if (tb !== ta) return tb - ta;
+    return b.uuid.localeCompare(a.uuid);
+  });
+  return matched[0];
+}
+
 /**
  * 创建编号规则数据
  */

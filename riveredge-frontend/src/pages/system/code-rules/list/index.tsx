@@ -17,6 +17,7 @@ import {
   restorePresetRules,
   enableAllRules,
   testGenerateCode,
+  resolveCodeRuleForPage,
   CodeRule,
   CreateCodeRuleData,
   UpdateCodeRuleData,
@@ -199,7 +200,7 @@ const CodeRuleListPage: React.FC = () => {
 
     if (ruleCode) {
       try {
-        const rule = currentRules.find(r => r.code === ruleCode);
+        const rule = resolveCodeRuleForPage(pageCode, pageConfig, currentRules);
         if (rule) {
           // 如果规则存在，加载规则数据到表单
           pageRuleFormRef.current?.setFieldsValue({
@@ -407,10 +408,12 @@ const CodeRuleListPage: React.FC = () => {
         pageConfig.ruleCode || selectedPageCode.toUpperCase().replace(/-/g, '_');
       pageRuleFormRef.current?.setFieldValue('code', canonicalRuleCode);
 
-      // 准备保存数据
+      const allRules = await getAllCodeRules();
+      const existingRule = resolveCodeRuleForPage(selectedPageCode, pageConfig, allRules);
+
       const saveData: CreateCodeRuleData | UpdateCodeRuleData = {
         ...values,
-        code: canonicalRuleCode,
+        code: existingRule?.code ?? canonicalRuleCode,
       };
 
       if (ruleComponents.length > 0) {
@@ -422,12 +425,6 @@ const CodeRuleListPage: React.FC = () => {
           saveData.seq_reset_rule = counterComponent.reset_cycle || 'never';
         }
       }
-
-      // 获取所有规则（包括禁用的），用于检查规则是否已存在
-      const allRules = await getAllCodeRules();
-
-      // 检查规则是否已存在（通过规则代码查找，包括所有状态的规则）
-      const existingRule = allRules.find(r => r.code === canonicalRuleCode);
 
       if (existingRule) {
         // 规则已存在，更新现有规则
@@ -457,7 +454,7 @@ const CodeRuleListPage: React.FC = () => {
           if (isDuplicateError) {
             // 重新获取所有规则，可能规则刚刚被创建或之前查询有遗漏
             const reloadRules = await getAllCodeRules();
-            const ruleAfterReload = reloadRules.find(r => r.code === canonicalRuleCode);
+            const ruleAfterReload = resolveCodeRuleForPage(selectedPageCode, pageConfig, reloadRules);
 
             if (ruleAfterReload) {
               // 如果找到了，更新它

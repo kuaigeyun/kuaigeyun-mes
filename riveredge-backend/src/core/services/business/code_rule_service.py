@@ -128,8 +128,8 @@ class CodeRuleService:
         )
         if active_only:
             q = q.filter(is_active=True)
-        # 同 code 若存在多条启用规则（历史脏数据），取最早创建的一条，避免无序号记录的重复规则抢占生成
-        return await q.order_by("id").first()
+        # 同 code 多条时取最近更新，与 resolve_rule_for_page / 编码规则页保存一致
+        return await q.order_by("-updated_at", "-id").first()
 
     @staticmethod
     async def resolve_rule_for_page(
@@ -172,15 +172,9 @@ class CodeRuleService:
         active_only: bool = True,
     ) -> Tuple[Optional[CodeRule], str]:
         """
-        按 rule_code 解析规则；未命中时按 page 别名回退。
-        返回 (规则, 实际用于生成的 rule.code)。
+        按 rule_code 解析规则；优先按功能页聚合 canonical + 历史 alias，
+        取最近更新的启用规则，与编码规则页保存/试生成一致。
         """
-        direct = await CodeRuleService.get_rule_by_code(
-            tenant_id, rule_code, active_only=active_only
-        )
-        if direct:
-            return direct, direct.code
-
         page_code = get_rule_code_to_page_code().get(rule_code)
         if not page_code:
             page_config = next(
@@ -188,6 +182,7 @@ class CodeRuleService:
                 None,
             )
             page_code = page_config["page_code"] if page_config else None
+
         if page_code:
             resolved = await CodeRuleService.resolve_rule_for_page(
                 tenant_id, page_code, active_only=active_only
@@ -200,6 +195,12 @@ class CodeRuleService:
                     else page_code.upper().replace("-", "_")
                 )
                 return resolved, resolved.code or canonical
+
+        direct = await CodeRuleService.get_rule_by_code(
+            tenant_id, rule_code, active_only=active_only
+        )
+        if direct:
+            return direct, direct.code
         return None, rule_code
 
     @staticmethod
