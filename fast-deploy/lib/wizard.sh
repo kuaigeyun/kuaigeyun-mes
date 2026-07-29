@@ -362,7 +362,7 @@ wizard_show_home_panel() {
     wizard_panel_menu_item "3" "更新系统" "拉代码后选择蓝绿/传统更新（默认蓝绿）"
     wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包 / 移动端 H5（私有仓，需凭证）"
     wizard_panel_section "OPS 运维"
-    wizard_panel_menu_short "${WIZARD_CYAN}[5]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[6]${WIZARD_RESET} 服务  ${WIZARD_CYAN}[7]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
+    wizard_panel_menu_short "${WIZARD_CYAN}[5]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[6]${WIZARD_RESET} 服务  ${WIZARD_CYAN}[7]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[9]${WIZARD_RESET} 释放内存  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
     wizard_panel_bot
     echo ""
 }
@@ -401,6 +401,7 @@ wizard_run_quick_action() {
         details) cmd_details ;;
         check) cmd_check ;;
         migrate) cmd_migrate ;;
+        free-memory|free_memory) cmd_free_memory ;;
         *) wizard_say_fail "未知快捷操作: $1"; return 1 ;;
     esac
 }
@@ -992,7 +993,7 @@ wizard_configure_client_repo() {
 
 wizard_prompt_choice() {
     wizard_panel_prefix
-    echo -e "${WIZARD_BOLD}请选择${WIZARD_RESET} ${WIZARD_DIM}[0-8 · 默认 1]${WIZARD_RESET}"
+    echo -e "${WIZARD_BOLD}请选择${WIZARD_RESET} ${WIZARD_DIM}[0-9 · 默认 1]${WIZARD_RESET}"
     wizard_panel_prefix
     read -rp "$(echo -e "${WIZARD_DIM}›${WIZARD_RESET} ")" choice || true
     REPLY="${choice:-1}"
@@ -1058,6 +1059,12 @@ wizard_ask_intent() {
         8|migrate)
             echo ""
             wizard_run_quick_action migrate || true
+            wizard_pause_return_menu
+            return 2
+            ;;
+        9|free-memory|free_memory|mem)
+            echo ""
+            wizard_run_quick_action free-memory || true
             wizard_pause_return_menu
             return 2
             ;;

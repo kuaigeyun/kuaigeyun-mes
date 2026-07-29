@@ -2342,6 +2342,48 @@ cmd_migrate() {
     log_ok "迁移完成"
 }
 
+host_mem_summary() {
+    if command -v free >/dev/null 2>&1; then
+        free -h | awk '/^Mem:/ {printf "已用 %s / 总计 %s (可用 %s)", $3, $2, $7}'
+        return 0
+    fi
+    echo "—"
+}
+
+cmd_free_memory() {
+    local before after
+    before="$(host_mem_summary)"
+    log_info "当前内存: ${before}"
+
+    if is_windows_gitbash; then
+        log_warn "Windows 不支持 Linux 式 drop_caches；可通过菜单 [6] 重启服务释放进程内存"
+        return 0
+    fi
+
+    if [ ! -f /proc/sys/vm/drop_caches ]; then
+        log_error "当前系统不支持 /proc/sys/vm/drop_caches"
+        return 1
+    fi
+
+    sync
+    if [ -w /proc/sys/vm/drop_caches ]; then
+        echo 3 > /proc/sys/vm/drop_caches
+    elif sudo -n true 2>/dev/null; then
+        sudo -n sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches' || {
+            log_error "释放内存失败（sudo drop_caches 未成功）"
+            return 1
+        }
+    else
+        log_warn "需要 root 权限清理 pagecache / dentries / inodes"
+        log_info "请执行: sudo sync && sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'"
+        return 1
+    fi
+
+    after="$(host_mem_summary)"
+    log_info "释放后内存: ${after}"
+    log_ok "内存释放完成（仅清理可回收缓存，不影响运行中进程堆内存）"
+}
+
 ensure_frontend_deps() {
     apply_cn_mirrors
     if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
@@ -4454,6 +4496,7 @@ fd_dispatch() {
             ;;
         configure) cmd_configure ;;
         migrate)   cmd_migrate ;;
+        free-memory|free_memory) cmd_free_memory ;;
         build)     cmd_build ;;
         start)
             if [ "$DEPLOY_MODE" = "dev" ]; then cmd_start_dev; else cmd_start_prod; fi
@@ -4482,7 +4525,7 @@ fd_dispatch() {
         wizard|""|deploy) cmd_wizard ;;
         *)
             log_error "未知命令: $cmd"
-            echo "用法: wizard | check | install | configure | migrate | build | start | stop | status | update | pro-apps [pro|custom|all] | install-custom | install-service | uninstall-service"
+            echo "用法: wizard | check | install | configure | migrate | free-memory | build | start | stop | status | update | pro-apps [pro|custom|all] | install-custom | install-service | uninstall-service"
             exit 1
             ;;
     esac
