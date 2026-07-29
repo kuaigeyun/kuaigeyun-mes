@@ -73,10 +73,7 @@ import { getOutsourceWorkOrderLifecycle, buildOutsourceWorkOrderLifecycleValueEn
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
-import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
-import { materialApi } from '../../../../master-data/services/material';
-import { warehouseApi } from '../../../../master-data/services/warehouse';
-import { operationApi } from '../../../../master-data/services/process';
+import { searchReferenceDisplay, resolveReferenceDisplay, formatReferenceDisplayLabel } from '../../../../../utils/referenceDisplay';
 import dayjs from 'dayjs';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_OUTSOURCE_ORDER_FIELD_RESOURCE as OO } from '../../../constants/fieldPermissionResources';
@@ -107,6 +104,7 @@ import { outsourceWorkOrderPushPercent } from '../../sales-management/shared/pus
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_work_orders';
+const OUTSOURCE_ORDER_HOST_RESOURCE = 'kuaizhizao:outsource-order';
 
 interface OutsourceWorkOrder {
   id?: number;
@@ -172,15 +170,6 @@ interface OutsourceWorkOrder {
   };
 }
 
-function unwrapMaterialList(response: unknown): any[] {
-  if (Array.isArray(response)) return response;
-  if (response && typeof response === 'object') {
-    const r = response as Record<string, unknown>;
-    if (Array.isArray(r.data)) return r.data;
-    if (Array.isArray(r.items)) return r.items;
-  }
-  return [];
-}
 
 function getOutsourceOperationDisplay(
   record: Pick<
@@ -206,11 +195,14 @@ async function resolveOutsourceOperationName(value?: string | null): Promise<str
   if (!raw) return undefined;
   if (!OPERATION_UUID_RE.test(raw)) return raw;
   try {
-    const op = await operationApi.get(raw);
-    const name = String(op?.name ?? '').trim();
-    const code = String(op?.code ?? '').trim();
-    if (name && code) return `${code} - ${name}`;
-    return name || code || raw;
+    const items = await resolveReferenceDisplay({
+      resource: 'master-data:process:operation',
+      recordUuids: [raw],
+      hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+    });
+    const op = items[0];
+    if (!op) return raw;
+    return formatReferenceDisplayLabel(op) || raw;
   } catch {
     return raw;
   }
@@ -318,7 +310,12 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     extractFormValues: extractOwoFormValues,
     saveCustomFieldValues: saveOwoCustomFieldValues,
     resetFieldValues: resetOwoFormFieldValues,
-  } = useCustomFields({ tableName: OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible });
+  } = useCustomFields({
+    tableName: OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE,
+    hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+    loadWhenOpen: true,
+    open: modalVisible,
+  });
 
   const {
     customFields: owoListCustomFields,
@@ -327,7 +324,10 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     customFieldValues: owoDetailCustomFieldValues,
     loadFieldValuesForDetail: loadOwoFieldValuesForDetail,
     resetDetailFieldValues: resetOwoDetailFieldValues,
-  } = useCustomFieldsForList<OutsourceWorkOrder>({ tableName: OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE });
+  } = useCustomFieldsForList<OutsourceWorkOrder>({
+    tableName: OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE,
+    hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+  });
 
   useEffect(() => {
     if (owoListCustomFields.length > 0 && actionRef.current) {
@@ -396,20 +396,44 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const loadFormReferenceData = useCallback(async () => {
     if (formReferenceLoadedRef.current) return;
     const [productsResult, suppliersResult] = await Promise.allSettled([
-      materialApi.list({ isActive: true, limit: 1000 }),
-      supplierApi.list({ isActive: true }),
+      searchReferenceDisplay({
+        resource: 'master-data:material',
+        hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+        pageSize: 1000,
+        sourceType: 'Outsource',
+      }),
+      searchReferenceDisplay({
+        resource: 'master-data:supply-chain:supplier',
+        hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+        pageSize: 1000,
+      }),
     ]);
     let loaded = false;
     if (productsResult.status === 'fulfilled') {
-      const outsourceProducts = unwrapMaterialList(productsResult.value).filter(
-        (p: { sourceType?: string; source_type?: string }) =>
-          p.sourceType === 'Outsource' || p.source_type === 'Outsource',
-      );
+      const outsourceProducts = (productsResult.value.items ?? [])
+        .filter((item) => item.id != null)
+        .map((item) => ({
+          id: item.id,
+          uuid: item.uuid,
+          code: item.code ?? item.extra?.main_code,
+          name: item.name ?? item.label,
+          sourceType: item.extra?.source_type,
+          source_type: item.extra?.source_type,
+        }));
       setProductList(outsourceProducts);
       loaded = true;
     }
     if (suppliersResult.status === 'fulfilled') {
-      setSupplierList(unwrapSupplyPagedList(suppliersResult.value));
+      setSupplierList(
+        (suppliersResult.value.items ?? [])
+          .filter((item) => item.id != null)
+          .map((item) => ({
+            id: item.id,
+            uuid: item.uuid,
+            code: item.code,
+            name: item.name ?? item.label,
+          })),
+      );
       loaded = true;
     }
     if (loaded) {
@@ -656,9 +680,18 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       const selectedMaterial = productList.find(p => p.id === value);
       if (selectedMaterial) {
         try {
-          const materialDetail = await materialApi.get(selectedMaterial.uuid);
-          const sourceType = materialDetail.sourceType || materialDetail.source_type;
-          const sourceConfig = materialDetail.sourceConfig || materialDetail.source_config || {};
+          const items = await resolveReferenceDisplay({
+            resource: 'master-data:material',
+            recordIds: [Number(selectedMaterial.id)],
+            hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+          });
+          const materialDetail = items[0];
+          if (!materialDetail) {
+            setSelectedMaterialSourceInfo(null);
+            return;
+          }
+          const sourceType = materialDetail.extra?.source_type as string | undefined;
+          const sourceConfig = (materialDetail.extra?.source_config ?? {}) as Record<string, unknown>;
 
           const sourceTypeNames: Record<string, string> = {
             Make: getSourceTypeLabel('Make'),

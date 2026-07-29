@@ -19,6 +19,7 @@ from core.schemas.custom_field import (
 )
 from core.services.business.custom_field_service import CustomFieldService
 from core.api.deps.deps import get_current_tenant
+from core.api.deps.custom_field_access import require_custom_field_definitions_read
 from core.api.deps.system_module_access import (
     require_custom_field_create,
     require_custom_field_delete,
@@ -284,8 +285,9 @@ async def list_custom_field_pages(
 async def get_fields_by_table(
     table_name: str,
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
+    host_resource: Optional[str] = Query(None, description="宿主 {app}:{module}，业务页读取字段定义"),
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_custom_field_read),
+    _auth: object = Depends(require_custom_field_definitions_read()),
 ):
     """
     获取指定表的所有自定义字段

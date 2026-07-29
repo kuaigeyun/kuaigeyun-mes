@@ -453,6 +453,36 @@ def _coerce_sales_delivery_item_serials(serial_numbers: Any) -> Any:
     return serial_numbers
 
 
+def _build_production_picking_item_response(item: Any) -> ProductionPickingItemResponse:
+    """统一生产领料明细响应，兼容 serial_numbers JSON 存储格式。"""
+    payload = {
+        "id": int(getattr(item, "id")),
+        "tenant_id": int(getattr(item, "tenant_id")),
+        "picking_id": int(getattr(item, "picking_id")),
+        "material_id": int(getattr(item, "material_id")),
+        "material_code": str(getattr(item, "material_code", "") or ""),
+        "material_name": str(getattr(item, "material_name", "") or ""),
+        "material_spec": getattr(item, "material_spec", None),
+        "material_unit": str(getattr(item, "material_unit", "") or ""),
+        "required_quantity": float(getattr(item, "required_quantity", 0) or 0),
+        "picked_quantity": float(getattr(item, "picked_quantity", 0) or 0),
+        "remaining_quantity": float(getattr(item, "remaining_quantity", 0) or 0),
+        "warehouse_id": int(getattr(item, "warehouse_id")),
+        "warehouse_name": str(getattr(item, "warehouse_name", "") or ""),
+        "location_id": getattr(item, "location_id", None),
+        "location_code": getattr(item, "location_code", None),
+        "status": str(getattr(item, "status", "待领料") or "待领料"),
+        "picking_time": _normalize_optional_datetime(getattr(item, "picking_time", None)),
+        "batch_number": getattr(item, "batch_number", None),
+        "expiry_date": _normalize_optional_datetime(getattr(item, "expiry_date", None)),
+        "serial_numbers": _parse_serial_numbers(getattr(item, "serial_numbers", None)) or None,
+        "notes": getattr(item, "notes", None),
+        "created_at": getattr(item, "created_at"),
+        "updated_at": getattr(item, "updated_at"),
+    }
+    return ProductionPickingItemResponse.model_validate(payload)
+
+
 async def _get_warehouse_policy_flags(tenant_id: int) -> tuple[bool, bool]:
     """读取仓储策略开关（库位管理、自动出库）。库位管理不表示单据必填库位。"""
     cfg = await BusinessConfigService().get_business_config(tenant_id)
@@ -1133,7 +1163,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         items = await ProductionPickingItem.filter(tenant_id=tenant_id, picking_id=picking_id).all()
         resp = ProductionPickingWithItemsResponse.model_validate(picking)
         resp.lifecycle = get_production_picking_lifecycle(picking)
-        resp.items = [ProductionPickingItemResponse.model_validate(i) for i in items]
+        resp.items = [_build_production_picking_item_response(i) for i in items]
         wh_id, wh_name = _aggregate_warehouse_from_picking_item_rows(
             [
                 {
@@ -1403,6 +1433,8 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                             item_update["location_code"] = item_data.location_code or f"库位{item_data.location_id}"
                         if item_data.batch_number:
                             item_update["batch_number"] = item_data.batch_number
+                        if item_data.serial_numbers is not None:
+                            item_update["serial_numbers"] = json.dumps(item_data.serial_numbers)
                         if item_update:
                             await ProductionPickingItem.filter(
                                 tenant_id=tenant_id, id=item_data.item_id, picking_id=picking_id
@@ -1420,6 +1452,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     filter_gi_picking_ids,
                     is_staging_transfer_picking_notes,
                 )
+                from apps.master_data.models.material import Material
 
                 picking_items = await ProductionPickingItem.filter(
                     tenant_id=tenant_id, picking_id=picking_id
@@ -1509,6 +1542,27 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     .get("warehouse", {})
                     .get("fifo", False)
                 )
+                material_ids = list({it.material_id for it in picking_items if getattr(it, "material_id", None)})
+                materials = await Material.filter(
+                    tenant_id=tenant_id,
+                    id__in=material_ids,
+                    deleted_at__isnull=True,
+                ).all() if material_ids else []
+                material_by_id = {m.id: m for m in materials}
+                for item in picking_items:
+                    qty = issue_qty_by_item_id.get(item.id) or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    mat = material_by_id.get(item.material_id)
+                    if mat:
+                        await _validate_batch_serial_policy(
+                            tenant_id=tenant_id,
+                            material=mat,
+                            batch_number=getattr(item, "batch_number", None),
+                            serial_numbers=_parse_serial_numbers(getattr(item, "serial_numbers", None)),
+                            quantity=qty,
+                            scene="生产领料确认",
+                        )
                 for item in picking_items:
                     qty = issue_qty_by_item_id.get(item.id) or Decimal(0)
                     if qty <= 0:
@@ -1919,8 +1973,8 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         created_by: int,
         *,
         work_order_id: int,
-        warehouse_id: int,
-        warehouse_name: str,
+        warehouse_id: Optional[int] = None,
+        warehouse_name: Optional[str] = None,
         picker_name: Optional[str] = None,
         notes: Optional[str] = None,
         lines: List[Any],
@@ -2033,6 +2087,35 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     code = str(getattr(line, "material_code", "") or line.get("material_code", "") or material_id)
                     raise BusinessLogicError(f"领料数量超过可领数量：{code}（可领 {float(max_qty)}）")
 
+                line_wh_id = getattr(line, "warehouse_id", None)
+                if line_wh_id is None and isinstance(line, dict):
+                    line_wh_id = line.get("warehouse_id")
+                if line_wh_id is None or str(line_wh_id).strip() == "":
+                    line_wh_id = warehouse_id
+                if line_wh_id is None or str(line_wh_id).strip() == "":
+                    code = str(getattr(line, "material_code", "") or line.get("material_code", "") or material_id)
+                    raise ValidationError(f"领料明细须指定出库仓库：{code}")
+
+                line_wh_name = getattr(line, "warehouse_name", None)
+                if line_wh_name is None and isinstance(line, dict):
+                    line_wh_name = line.get("warehouse_name")
+                resolved_wh_id, resolved_wh_name = await _resolve_warehouse_identity(
+                    tenant_id,
+                    warehouse_id=line_wh_id,
+                    warehouse_name=line_wh_name or warehouse_name,
+                )
+
+                batch_number = getattr(line, "batch_number", None)
+                if batch_number is None and isinstance(line, dict):
+                    batch_number = line.get("batch_number")
+                batch_number = str(batch_number or "").strip() or None
+
+                serial_raw = getattr(line, "serial_numbers", None)
+                if serial_raw is None and isinstance(line, dict):
+                    serial_raw = line.get("serial_numbers")
+                serial_numbers = _parse_serial_numbers(serial_raw)
+                serial_numbers_json = json.dumps(serial_numbers) if serial_numbers else None
+
                 meta = meta_by_material.get(material_id, {})
                 await ProductionPickingItem.create(
                     tenant_id=tenant_id,
@@ -2044,8 +2127,10 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     required_quantity=issue_qty,
                     picked_quantity=Decimal("0"),
                     remaining_quantity=issue_qty,
-                    warehouse_id=warehouse_id,
-                    warehouse_name=warehouse_name,
+                    warehouse_id=resolved_wh_id,
+                    warehouse_name=resolved_wh_name,
+                    batch_number=batch_number,
+                    serial_numbers=serial_numbers_json,
                     status="待领料",
                 )
 

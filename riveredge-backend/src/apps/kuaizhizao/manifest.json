@@ -2015,6 +2015,11 @@
             "master-data:material",
             "master-data:warehouse:warehouse"
         ],
+        "outsource-order": [
+            "master-data:supply-chain:supplier",
+            "master-data:material",
+            "master-data:process:operation"
+        ],
         "customer-follow-up": [
             "master-data:supply-chain:customer"
         ],

@@ -119,10 +119,17 @@ export async function getCustomFieldList(params?: CustomFieldListParams): Promis
  * @param isActive - 是否只获取启用的字段（可选）
  * @returns 自定义字段列表
  */
-export async function getCustomFieldsByTable(tableName: string, isActive?: boolean): Promise<CustomField[]> {
-  const params: any = {};
+export async function getCustomFieldsByTable(
+  tableName: string,
+  isActive?: boolean,
+  hostResource?: string,
+): Promise<CustomField[]> {
+  const params: Record<string, unknown> = {};
   if (isActive !== undefined) {
     params.is_active = isActive;
+  }
+  if (hostResource) {
+    params.host_resource = hostResource;
   }
   return apiRequest<CustomField[]>(`/core/custom-fields/by-table/${tableName}`, {
     params,

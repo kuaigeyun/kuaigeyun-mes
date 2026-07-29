@@ -31,6 +31,29 @@ def _row(*, id: int, uuid: str | None, code: str | None, name: str | None, **ext
     return {"id": id, "uuid": uuid, "code": code, "name": name, "label": label, **extra}
 
 
+def _flatten_material_source_config(raw: Any) -> dict[str, Any]:
+    """展平 material.source_config 中多余的嵌套 source_config 键（与业务页读取一致）。"""
+    if not raw or not isinstance(raw, dict):
+        return {}
+    if any(
+        key in raw
+        for key in (
+            "default_supplier_id",
+            "outsource_supplier_id",
+            "purchase_lead_time",
+            "production_lead_time",
+            "outsource_lead_time",
+            "source_types",
+            "manufacturing_mode",
+        )
+    ):
+        return raw
+    nested = raw.get("source_config")
+    if isinstance(nested, dict):
+        return nested
+    return raw
+
+
 class _CustomerDisplayProvider:
     resource_key = "master-data:supply-chain:customer"
 
@@ -234,6 +257,7 @@ class _MaterialDisplayProvider:
                 "specification": r.specification,
                 "base_unit": r.base_unit,
                 "source_type": r.source_type,
+                "source_config": _flatten_material_source_config(r.source_config),
                 "main_code": r.main_code,
                 "group_id": r.group_id,
             }

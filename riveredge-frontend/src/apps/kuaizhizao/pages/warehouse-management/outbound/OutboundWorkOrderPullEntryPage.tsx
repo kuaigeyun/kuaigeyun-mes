@@ -12,6 +12,7 @@ import {
   Col,
   Form,
   InputNumber,
+  Modal,
   Row,
   Select,
   Space,
@@ -23,6 +24,7 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   DocumentFormPageLayout,
+  MODAL_CONFIG,
   PAGE_SPACING,
   WAREHOUSE_DETAIL_TABLE_STYLES,
 } from '../../../../../components/layout-templates';
@@ -50,6 +52,18 @@ import {
 } from '../shared/pullEntryFormDraft';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import type { PushPreviewResponse } from '../../../services/sales-order';
+import {
+  loadConfirmPreviewMaterialMeta,
+  type ConfirmPreviewMaterialMeta,
+} from './outboundItemTracking';
+import {
+  isValidOutboundBatchSelection,
+  loadBatchOptionsByMaterialId,
+  loadInStockSerialOptions,
+  resolveOutboundConfirmBatchValue,
+  type InventoryPickOption,
+} from './outboundConfirmInventoryOptions';
+import OutboundSerialPickerField from './OutboundSerialPickerField';
 
 type PickLine = {
   key: number;
@@ -62,6 +76,10 @@ type PickLine = {
   pendingQuantity: number;
   issueQuantity: number;
 };
+
+function lineBatchKey(materialId: number, warehouseId?: number): string {
+  return `${materialId}_${warehouseId ?? 0}`;
+}
 
 const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const { t } = useTranslation();
@@ -79,7 +97,18 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const [workOrder, setWorkOrder] = useState<Record<string, unknown> | null>(null);
   const [previewSummary, setPreviewSummary] = useState<string | null>(null);
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
-  const [warehouseId, setWarehouseId] = useState<number | undefined>();
+  const [defaultWarehouseId, setDefaultWarehouseId] = useState<number | undefined>();
+  const [lineWh, setLineWh] = useState<Record<number, number>>({});
+  const [batchNumbers, setBatchNumbers] = useState<Record<number, string>>({});
+  const [serials, setSerials] = useState<Record<number, string[]>>({});
+  const [materialMeta, setMaterialMeta] = useState<Record<number, ConfirmPreviewMaterialMeta>>({});
+  const [batchOptionsByKey, setBatchOptionsByKey] = useState<Record<string, InventoryPickOption[]>>({});
+  const [batchOptionsLoading, setBatchOptionsLoading] = useState(false);
+  const [serialOptionsByUuid, setSerialOptionsByUuid] = useState<Record<string, InventoryPickOption[]>>({});
+  const [serialOptionsLoading, setSerialOptionsLoading] = useState(false);
+  const [batchWhModalOpen, setBatchWhModalOpen] = useState(false);
+  const [batchWhSelectedId, setBatchWhSelectedId] = useState<number | undefined>();
+  const [batchWhApplying, setBatchWhApplying] = useState(false);
   const [notes, setNotes] = useState('');
   const [pickLines, setPickLines] = useState<PickLine[]>([]);
   const [maxQuantities, setMaxQuantities] = useState<Record<number, number>>({});
@@ -97,6 +126,162 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
     () => pickLines.reduce((sum, line) => sum + Number(line.issueQuantity || 0), 0),
     [pickLines],
   );
+
+  const applyLineWarehouse = useCallback((lineIds: number[], warehouseId: number) => {
+    if (!lineIds.length) return;
+    setLineWh((prev) => {
+      const next = { ...prev };
+      lineIds.forEach((id) => {
+        next[id] = warehouseId;
+      });
+      return next;
+    });
+    setBatchNumbers((prev) => {
+      const next = { ...prev };
+      lineIds.forEach((id) => {
+        delete next[id];
+      });
+      return next;
+    });
+  }, []);
+
+  const handleDefaultWarehouseChange = useCallback(
+    (warehouseId: number) => {
+      const lineIds = pickLines.map((line) => line.materialId);
+      applyLineWarehouse(lineIds, warehouseId);
+      setDefaultWarehouseId(warehouseId);
+    },
+    [applyLineWarehouse, pickLines],
+  );
+
+  const handleBatchApplyWarehouse = useCallback(
+    async (warehouseId: number) => {
+      const lineIds = pickLines.map((line) => line.materialId);
+      if (!lineIds.length) {
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.noLinesToSetWarehouse'));
+        return;
+      }
+      applyLineWarehouse(lineIds, warehouseId);
+      setDefaultWarehouseId(warehouseId);
+      messageApi.success(
+        t('app.kuaizhizao.warehouseOutbound.entry.batchWarehouseApplied', { count: lineIds.length }),
+      );
+    },
+    [applyLineWarehouse, messageApi, pickLines, t],
+  );
+
+  const handleBatchWhModalConfirm = async () => {
+    if (batchWhSelectedId == null || !(batchWhSelectedId > 0)) {
+      messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse'));
+      return;
+    }
+    setBatchWhApplying(true);
+    try {
+      await handleBatchApplyWarehouse(batchWhSelectedId);
+      setBatchWhModalOpen(false);
+    } finally {
+      setBatchWhApplying(false);
+    }
+  };
+
+  useEffect(() => {
+    const pairs = pickLines
+      .map((line) => ({ materialId: line.materialId, warehouseId: lineWh[line.materialId] }))
+      .filter((p) => p.warehouseId != null && p.warehouseId > 0);
+    if (!pairs.length) {
+      setBatchOptionsByKey({});
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      setBatchOptionsLoading(true);
+      try {
+        const next: Record<string, InventoryPickOption[]> = {};
+        await Promise.all(
+          pairs.map(async ({ materialId, warehouseId }) => {
+            const key = lineBatchKey(materialId, warehouseId);
+            const map = await loadBatchOptionsByMaterialId(
+              [materialId],
+              warehouseId,
+              (batch, qty, warehouseName) =>
+                warehouseName
+                  ? t('app.kuaizhizao.warehouseOutbound.confirm.batchAvailableWithWh', {
+                      batch,
+                      qty,
+                      warehouse: warehouseName,
+                    })
+                  : t('app.kuaizhizao.warehouseOutbound.confirm.batchAvailable', { batch, qty }),
+            );
+            next[key] = map[materialId] ?? [];
+          }),
+        );
+        if (!cancelled) setBatchOptionsByKey(next);
+      } catch {
+        if (!cancelled) setBatchOptionsByKey({});
+      } finally {
+        if (!cancelled) setBatchOptionsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [lineWh, pickLines, t]);
+
+  useEffect(() => {
+    const uuids = [
+      ...new Set(
+        pickLines
+          .map((line) => materialMeta[line.materialId]?.materialUuid)
+          .filter((uuid): uuid is string => !!uuid),
+      ),
+    ];
+    if (!uuids.length) {
+      setSerialOptionsByUuid({});
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      setSerialOptionsLoading(true);
+      try {
+        const next: Record<string, InventoryPickOption[]> = {};
+        await Promise.all(
+          uuids.map(async (uuid) => {
+            next[uuid] = await loadInStockSerialOptions(uuid);
+          }),
+        );
+        if (!cancelled) setSerialOptionsByUuid(next);
+      } catch {
+        if (!cancelled) setSerialOptionsByUuid({});
+      } finally {
+        if (!cancelled) setSerialOptionsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pickLines, materialMeta]);
+
+  useEffect(() => {
+    if (!pickLines.length) return;
+    const patches: Record<number, string> = {};
+    for (const line of pickLines) {
+      const meta = materialMeta[line.materialId];
+      if (!meta?.batchManaged) continue;
+      const whId = lineWh[line.materialId];
+      if (!(whId > 0)) continue;
+      const opts = batchOptionsByKey[lineBatchKey(line.materialId, whId)] ?? [];
+      if (!opts.length) continue;
+      const resolved = resolveOutboundConfirmBatchValue(batchNumbers[line.materialId], opts);
+      if (resolved && resolved !== batchNumbers[line.materialId]) {
+        patches[line.materialId] = resolved;
+      }
+    }
+    if (Object.keys(patches).length) {
+      setBatchNumbers((prev) => ({ ...prev, ...patches }));
+    }
+  }, [batchOptionsByKey, batchNumbers, lineWh, materialMeta, pickLines]);
 
   const lineColumns = useMemo(
     () => [
@@ -121,6 +306,94 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         align: 'right' as const,
       },
       {
+        title: (
+          <>
+            {t('app.kuaizhizao.warehouseOutbound.col.warehouseName')}
+            <Typography.Text type="danger"> *</Typography.Text>
+          </>
+        ),
+        key: 'warehouse',
+        width: 160,
+        render: (_: unknown, line: PickLine) => (
+          <Select
+            style={{ width: '100%', minWidth: 140 }}
+            placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
+            showSearch
+            optionFilterProp="label"
+            options={warehouseOptions}
+            value={lineWh[line.materialId]}
+            onChange={(nv) => {
+              const wh = Number(nv);
+              setLineWh((prev) => ({ ...prev, [line.materialId]: wh }));
+              setBatchNumbers((prev) => {
+                const next = { ...prev };
+                delete next[line.materialId];
+                return next;
+              });
+            }}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'),
+        key: 'batch',
+        width: 180,
+        render: (_: unknown, line: PickLine) => {
+          const meta = materialMeta[line.materialId];
+          if (!meta?.batchManaged) return '—';
+          const whId = lineWh[line.materialId];
+          if (!(whId > 0)) return '—';
+          const opts = batchOptionsByKey[lineBatchKey(line.materialId, whId)] ?? [];
+          return (
+            <Select
+              size="small"
+              allowClear
+              showSearch
+              style={{ width: '100%' }}
+              optionFilterProp="label"
+              options={opts}
+              value={batchNumbers[line.materialId] || undefined}
+              placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectBatch')}
+              loading={batchOptionsLoading}
+              notFoundContent={
+                batchOptionsLoading
+                  ? t('app.kuaizhizao.warehouseOutbound.confirm.loadingBatches')
+                  : t('app.kuaizhizao.warehouseOutbound.confirm.noBatchAvailable')
+              }
+              onChange={(v) =>
+                setBatchNumbers((prev) => ({
+                  ...prev,
+                  [line.materialId]: String(v ?? '').trim(),
+                }))
+              }
+            />
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.col.serialNo'),
+        key: 'serial',
+        width: 160,
+        render: (_: unknown, line: PickLine) => {
+          const meta = materialMeta[line.materialId];
+          if (!meta?.serialManaged) return '—';
+          const qty = Number(line.issueQuantity || 0);
+          const uuid = meta.materialUuid;
+          const opts = uuid ? serialOptionsByUuid[uuid] ?? [] : [];
+          const materialLabel = [line.materialCode, line.materialName].filter(Boolean).join(' - ');
+          return (
+            <OutboundSerialPickerField
+              value={serials[line.materialId] ?? []}
+              onChange={(next) => setSerials((prev) => ({ ...prev, [line.materialId]: next }))}
+              options={opts}
+              maxCount={qty > 0 ? qty : undefined}
+              loading={serialOptionsLoading}
+              materialLabel={materialLabel}
+            />
+          );
+        },
+      },
+      {
         title: t('app.kuaizhizao.warehouseOutbound.entry.thisIssue'),
         key: 'issueQuantity',
         width: 140,
@@ -143,7 +416,18 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       },
       { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'unit', width: 60 },
     ],
-    [t],
+    [
+      batchNumbers,
+      batchOptionsByKey,
+      batchOptionsLoading,
+      lineWh,
+      materialMeta,
+      serialOptionsByUuid,
+      serialOptionsLoading,
+      serials,
+      t,
+      warehouseOptions,
+    ],
   );
 
   const leavePage = useCallback(() => {
@@ -153,7 +437,10 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
 
   useEffect(() => {
     bindSnapshot(() => ({
-      warehouseId,
+      defaultWarehouseId,
+      lineWh,
+      batchNumbers,
+      serials,
       notes,
       receiverUuid: operatorHook.receiverUuid,
       receiverName: operatorHook.receiverName,
@@ -162,7 +449,10 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
     }));
     persistNow();
   }, [
-    warehouseId,
+    defaultWarehouseId,
+    lineWh,
+    batchNumbers,
+    serials,
     notes,
     pickLines,
     maxQuantities,
@@ -217,31 +507,49 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         setWarehouseOptions(mapWarehouseSelectOptions(whRes));
         setPreviewSummary(previewRaw.summary ?? null);
         const maxMap: Record<number, number> = {};
-        setPickLines(
-          previewItems.map((row) => {
-            const materialId = Number(row.item_id);
-            const pending = Number(row.max_push_quantity ?? 0);
-            maxMap[materialId] = pending;
-            return {
-              key: materialId,
-              materialId,
-              materialCode: String(row.material_code ?? ''),
-              materialName: String(row.material_name ?? ''),
-              unit: '',
-              requiredQuantity: Number(row.quantity ?? 0),
-              pickedQuantity: Number(row.pushed_quantity ?? 0),
-              pendingQuantity: pending,
-              issueQuantity: 0,
-            };
-          }),
-        );
+        const lines = previewItems.map((row) => {
+          const materialId = Number(row.item_id);
+          const pending = Number(row.max_push_quantity ?? 0);
+          maxMap[materialId] = pending;
+          return {
+            key: materialId,
+            materialId,
+            materialCode: String(row.material_code ?? ''),
+            materialName: String(row.material_name ?? ''),
+            unit: '',
+            requiredQuantity: Number(row.quantity ?? 0),
+            pickedQuantity: Number(row.pushed_quantity ?? 0),
+            pendingQuantity: pending,
+            issueQuantity: 0,
+          };
+        });
+        setPickLines(lines);
         setMaxQuantities(maxMap);
+        const meta = await loadConfirmPreviewMaterialMeta(
+          lines.map((line) => ({
+            id: line.materialId,
+            material_id: line.materialId,
+            material_code: line.materialCode,
+          })),
+        );
+        setMaterialMeta(meta);
         applyDraftOnce((draft) => {
-          const whId = draftOptionalNumber(draft.warehouseId);
-          if (whId != null) setWarehouseId(whId);
+          const whId = draftOptionalNumber(draft.defaultWarehouseId ?? draft.warehouseId);
+          if (whId != null) setDefaultWarehouseId(whId);
           if (typeof draft.notes === 'string') setNotes(draft.notes);
           if (draft.maxQuantities) {
             setMaxQuantities((prev) => mergeRecordMaps(prev, draft.maxQuantities as Record<number, number>));
+          }
+          if (draft.lineWh) {
+            setLineWh(mergeRecordMaps({}, draft.lineWh as Record<number, number>));
+          } else if (whId != null) {
+            setLineWh(Object.fromEntries(lines.map((line) => [line.materialId, whId])));
+          }
+          if (draft.batchNumbers) {
+            setBatchNumbers(mergeRecordMaps({}, draft.batchNumbers as Record<number, string>));
+          }
+          if (draft.serials) {
+            setSerials(mergeRecordMaps({}, draft.serials as Record<number, string[]>));
           }
           operatorHook.restoreReceiver(
             typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
@@ -263,13 +571,6 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   }, [woId, leavePage, messageApi, t, applyDraftOnce, operatorHook.restoreReceiver]);
 
   const submit = async (mode: 'draft' | 'confirm') => {
-    if (!warehouseId || !(warehouseId > 0)) {
-      messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse'));
-      return;
-    }
-    const whOpt = warehouseOptions.find((o) => o.value === warehouseId);
-    if (!whOpt) return;
-
     const activeLines = pickLines.filter((line) => line.issueQuantity > 0);
     if (!activeLines.length) {
       messageApi.warning(t('app.kuaizhizao.warehouseOutbound.entry.fillIssueQty'));
@@ -286,23 +587,66 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         );
         return;
       }
+      const wh = lineWh[line.materialId];
+      if (wh == null || !(wh > 0)) {
+        messageApi.error(
+          t('app.kuaizhizao.salesOrder.pushShipmentSelectLineWarehouse', {
+            material: line.materialCode || line.materialName || line.materialId,
+          }),
+        );
+        return;
+      }
+      const meta = materialMeta[line.materialId];
+      if (mode === 'confirm' && meta?.batchManaged) {
+        const opts = batchOptionsByKey[lineBatchKey(line.materialId, wh)] ?? [];
+        if (!isValidOutboundBatchSelection(batchNumbers[line.materialId], opts)) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+              material: line.materialCode || line.materialName,
+              batches: opts.map((o) => o.value).join('、') || '—',
+            }),
+          );
+          return;
+        }
+      }
+      if (mode === 'confirm' && meta?.serialManaged) {
+        const pickedSerials = serials[line.materialId] ?? [];
+        if (pickedSerials.length !== line.issueQuantity) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseOutbound.entry.serialCountMismatch', {
+              material: line.materialCode || line.materialName,
+              required: line.issueQuantity,
+              actual: pickedSerials.length,
+            }),
+          );
+          return;
+        }
+      }
     }
 
     setSubmitting(true);
     try {
       const created = await warehouseApi.productionPicking.pullFromWorkOrder({
         work_order_id: woId,
-        warehouse_id: warehouseId,
-        warehouse_name: whOpt.name,
         picker_name: operatorHook.receiverName.trim() || undefined,
         notes: notes.trim() || undefined,
-        lines: activeLines.map((line) => ({
-          material_id: line.materialId,
-          material_code: line.materialCode,
-          material_name: line.materialName,
-          material_unit: line.unit || '个',
-          issue_quantity: line.issueQuantity,
-        })),
+        lines: activeLines.map((line) => {
+          const whId = lineWh[line.materialId];
+          const whOpt = warehouseOptions.find((o) => o.value === whId);
+          const batch = String(batchNumbers[line.materialId] ?? '').trim();
+          const lineSerials = serials[line.materialId] ?? [];
+          return {
+            material_id: line.materialId,
+            material_code: line.materialCode,
+            material_name: line.materialName,
+            material_unit: line.unit || '个',
+            issue_quantity: line.issueQuantity,
+            warehouse_id: whId,
+            warehouse_name: whOpt?.name,
+            batch_number: batch || undefined,
+            serial_numbers: lineSerials.length ? lineSerials : undefined,
+          };
+        }),
       });
       if (created?.id == null) {
         messageApi.error(t('app.kuaizhizao.warehouseOutbound.entry.noPickingId'));
@@ -401,17 +745,19 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.field.warehouse')} required>
+                  <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.defaultWarehouse')}>
                     <Select
                       style={{ width: '100%' }}
-                      placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
-                      options={warehouseOptions}
-                      value={warehouseId}
-                      onChange={setWarehouseId}
+                      placeholder={t('app.kuaizhizao.warehouseInbound.field.applyToAllLines')}
                       showSearch
-                      filterOption={(input, opt) =>
-                        (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
-                      }
+                      allowClear
+                      optionFilterProp="label"
+                      value={defaultWarehouseId}
+                      options={warehouseOptions}
+                      onChange={(v) => {
+                        if (v != null) handleDefaultWarehouseChange(Number(v));
+                        else setDefaultWarehouseId(undefined);
+                      }}
                     />
                   </Form.Item>
                 </Col>
@@ -428,12 +774,17 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
             <UniTableDetailHeader
               title={t('app.kuaizhizao.warehouseOutbound.entry.issueDetails')}
               headerExtra={
-                previewSummary ? (
-                  <Typography.Text type="secondary">
-                    {previewSummary}
-                    {totalIssueQty > 0 ? ` / 本次领料 ${totalIssueQty}` : ''}
-                  </Typography.Text>
-                ) : undefined
+                <Space wrap size={8}>
+                  {previewSummary ? (
+                    <Typography.Text type="secondary">
+                      {previewSummary}
+                      {totalIssueQty > 0 ? ` / 本次领料 ${totalIssueQty}` : ''}
+                    </Typography.Text>
+                  ) : null}
+                  <Button size="small" onClick={() => setBatchWhModalOpen(true)} disabled={!pickLines.length}>
+                    {t('app.kuaizhizao.warehouseOutbound.entry.batchSetLineWarehouse')}
+                  </Button>
+                </Space>
               }
             />
             <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
@@ -444,7 +795,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
                   size="small"
                   rowKey="key"
                   pagination={false}
-                  scroll={{ x: 1100 }}
+                  scroll={{ x: 1500 }}
                   dataSource={pickLines}
                   columns={lineColumns}
                   locale={{ emptyText: t('app.kuaizhizao.warehouseOutbound.pull.woPreviewNoLines') }}
@@ -454,6 +805,25 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           </div>
         </Card>
       </Spin>
+      <Modal
+        {...MODAL_CONFIG}
+        title={t('app.kuaizhizao.warehouseOutbound.entry.batchSetLineWarehouse')}
+        open={batchWhModalOpen}
+        onCancel={() => setBatchWhModalOpen(false)}
+        onOk={() => void handleBatchWhModalConfirm()}
+        confirmLoading={batchWhApplying}
+        destroyOnHidden
+      >
+        <Select
+          style={{ width: '100%' }}
+          placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
+          showSearch
+          optionFilterProp="label"
+          options={warehouseOptions}
+          value={batchWhSelectedId}
+          onChange={(v) => setBatchWhSelectedId(Number(v))}
+        />
+      </Modal>
     </DocumentFormPageLayout>
   );
 };

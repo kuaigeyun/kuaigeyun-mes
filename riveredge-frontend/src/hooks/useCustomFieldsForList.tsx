@@ -12,6 +12,8 @@ import type { CustomField } from '../services/customField';
 export interface UseCustomFieldsForListOptions {
   /** 关联表名 */
   tableName: string;
+  /** 宿主 {app}:{module}，无 custom-field:read 时供隐式读取字段定义 */
+  hostResource?: string;
   /** 记录的主键字段名（用于 getFieldValues），默认 'id' */
   recordIdField?: string;
 }
@@ -35,6 +37,7 @@ export interface UseCustomFieldsForListResult<T = any> {
 
 export function useCustomFieldsForList<T extends Record<string, any>>({
   tableName,
+  hostResource,
   recordIdField = 'id',
 }: UseCustomFieldsForListOptions): UseCustomFieldsForListResult<T> {
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -45,7 +48,7 @@ export function useCustomFieldsForList<T extends Record<string, any>>({
     let cancelled = false;
     const load = async () => {
       try {
-        const fields = await getCustomFieldsByTable(tableName, true).catch((err) => {
+        const fields = await getCustomFieldsByTable(tableName, true, hostResource).catch((err) => {
           if (err?.response?.status === 401) return [];
           throw err;
         });
@@ -60,7 +63,7 @@ export function useCustomFieldsForList<T extends Record<string, any>>({
     return () => {
       cancelled = true;
     };
-  }, [tableName]);
+  }, [tableName, hostResource]);
 
   const loadFieldValuesForDetail = useCallback(async (recordId: number) => {
     try {

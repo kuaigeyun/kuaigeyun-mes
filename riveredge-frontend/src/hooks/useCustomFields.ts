@@ -20,6 +20,8 @@ const CUSTOM_PREFIX = 'custom_';
 export interface UseCustomFieldsOptions {
   /** 关联表名（如 master_data_factory_plants） */
   tableName: string;
+  /** 宿主 {app}:{module}，无 custom-field:read 时供隐式读取字段定义 */
+  hostResource?: string;
   /** 是否在 open 时加载，传入 false 则组件挂载时加载 */
   loadWhenOpen?: boolean;
   /** 当前 Modal 是否打开 */
@@ -43,6 +45,7 @@ export interface UseCustomFieldsResult {
 
 export function useCustomFields({
   tableName,
+  hostResource,
   loadWhenOpen = true,
   open = true,
 }: UseCustomFieldsOptions): UseCustomFieldsResult {
@@ -53,7 +56,7 @@ export function useCustomFields({
     if (loadWhenOpen && !open) return;
     const load = async () => {
       try {
-        const fields = await getCustomFieldsByTable(tableName, true).catch((err) => {
+        const fields = await getCustomFieldsByTable(tableName, true, hostResource).catch((err) => {
           if (err?.response?.status === 401) return [];
           throw err;
         });
@@ -63,7 +66,7 @@ export function useCustomFields({
       }
     };
     load();
-  }, [tableName, loadWhenOpen, open]);
+  }, [tableName, hostResource, loadWhenOpen, open]);
 
   const loadFieldValues = useCallback(
     async (recordId: number) => {
@@ -71,7 +74,7 @@ export function useCustomFields({
         const values = await getFieldValues(tableName, recordId);
         let fields = customFields;
         if (fields.length === 0) {
-          fields = await getCustomFieldsByTable(tableName, true).catch(() => []);
+          fields = await getCustomFieldsByTable(tableName, true, hostResource).catch(() => []);
           if (fields.length > 0) setCustomFields(fields);
         }
         const formValues: Record<string, any> = {};
@@ -98,7 +101,7 @@ export function useCustomFields({
         return {};
       }
     },
-    [tableName, customFields]
+    [tableName, hostResource, customFields]
   );
 
   const extractFormValues = useCallback((formValues: Record<string, any>) => {

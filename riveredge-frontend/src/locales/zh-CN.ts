@@ -10939,6 +10939,9 @@ export default {
   'app.kuaizhizao.warehouseOutbound.entry.qtyExceedsPending': '物料 {{material}} 出库数量不能超过待交 {{max}}',
   'app.kuaizhizao.warehouseOutbound.entry.fillOutboundQty': '请至少填写一行出库数量',
   'app.kuaizhizao.warehouseOutbound.entry.fillIssueQty': '请至少填写一行本次发料数量',
+  'app.kuaizhizao.warehouseOutbound.entry.batchSetLineWarehouse': '批量设置出库仓库',
+  'app.kuaizhizao.warehouseOutbound.entry.batchWarehouseApplied': '已将 {{count}} 行出库仓库设置为同一仓库',
+  'app.kuaizhizao.warehouseOutbound.entry.serialCountMismatch': '物料 {{material}} 须选择 {{required}} 个序列号，当前 {{actual}} 个',
   'app.kuaizhizao.warehouseOutbound.entry.outsourceIssueCreated': '委外发料单已创建',
   // other outbound
   'app.kuaizhizao.otherOutbound.title': '其他出库',

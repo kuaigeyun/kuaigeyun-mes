@@ -43,6 +43,7 @@ class ProductionPickingItem(BaseModel):
     # 批次信息（可选）
     batch_number = fields.CharField(max_length=50, null=True, description="批次号")
     expiry_date = fields.DateField(null=True, description="到期日期")
+    serial_numbers = fields.JSONField(null=True, description="序列号列表（JSON格式，存储多个序列号）")
 
     notes = fields.TextField(null=True, description="备注")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")

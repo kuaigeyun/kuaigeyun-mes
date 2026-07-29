@@ -96,13 +96,17 @@ class ProductionPickingPullLineCreate(BaseSchema):
     material_name: str = Field(..., max_length=200, description="物料名称")
     material_unit: str = Field("个", max_length=20, description="物料单位")
     issue_quantity: float = Field(..., gt=0, description="本次领料数量")
+    warehouse_id: Optional[int] = Field(None, description="出库仓库ID（明细行）")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="出库仓库名称（明细行）")
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
 
 
 class ProductionPickingPullFromWorkOrderRequest(BaseSchema):
     """生产领料 — 从工单加载创建（单工单、带明细）"""
     work_order_id: int = Field(..., description="工单ID")
-    warehouse_id: int = Field(..., description="出库仓库ID")
-    warehouse_name: str = Field(..., max_length=100, description="出库仓库名称")
+    warehouse_id: Optional[int] = Field(None, description="出库仓库ID（表头默认，明细未指定时使用）")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="出库仓库名称（表头默认）")
     picker_name: Optional[str] = Field(None, max_length=100, description="领料人姓名")
     notes: Optional[str] = Field(None, description="备注")
     lines: List[ProductionPickingPullLineCreate] = Field(..., min_length=1, description="领料明细")
@@ -128,6 +132,7 @@ class ProductionPickingItemBase(BaseSchema):
     picking_time: Optional[datetime] = Field(None, description="实际领料时间")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
     expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     notes: Optional[str] = Field(None, description="备注")
 
 

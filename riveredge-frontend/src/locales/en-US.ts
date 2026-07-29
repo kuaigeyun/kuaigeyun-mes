@@ -10009,6 +10009,9 @@ export default {
   'app.kuaizhizao.warehouseOutbound.entry.qtyExceedsPending': 'Material {{material}} outbound qty cannot exceed pending {{max}}',
   'app.kuaizhizao.warehouseOutbound.entry.fillOutboundQty': 'Enter outbound qty for at least one line',
   'app.kuaizhizao.warehouseOutbound.entry.fillIssueQty': 'Enter issue qty for at least one line',
+  'app.kuaizhizao.warehouseOutbound.entry.batchSetLineWarehouse': 'Batch set outbound warehouse',
+  'app.kuaizhizao.warehouseOutbound.entry.batchWarehouseApplied': 'Set outbound warehouse for {{count}} lines',
+  'app.kuaizhizao.warehouseOutbound.entry.serialCountMismatch': 'Material {{material}} requires {{required}} serial no(s), currently {{actual}}',
   'app.kuaizhizao.warehouseOutbound.entry.outsourceIssueCreated': 'Outsource issue doc created',
   // other outbound
   'app.kuaizhizao.otherOutbound.title': 'Other Outbound',

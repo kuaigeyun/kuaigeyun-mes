@@ -63,8 +63,8 @@ export const warehouseApi = {
     /** 工单加载创建生产领料单（单条、带明细） */
     pullFromWorkOrder: async (data: {
       work_order_id: number;
-      warehouse_id: number;
-      warehouse_name: string;
+      warehouse_id?: number;
+      warehouse_name?: string;
       picker_name?: string;
       notes?: string;
       lines: Array<{
@@ -73,6 +73,10 @@ export const warehouseApi = {
         material_name: string;
         material_unit: string;
         issue_quantity: number;
+        warehouse_id?: number;
+        warehouse_name?: string;
+        batch_number?: string;
+        serial_numbers?: string[];
       }>;
     }) => apiRequest('/apps/kuaizhizao/production-pickings/pull-from-work-order', { method: 'POST', data }),
     /** 获取仓库主动备料提醒列表 */

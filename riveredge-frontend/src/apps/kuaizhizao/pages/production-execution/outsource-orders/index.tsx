@@ -70,8 +70,7 @@ import { getOutsourceOrderLifecycle, buildOutsourceOrderLifecycleValueEnum, reso
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
-import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
-import { materialApi } from '../../../../master-data/services/material';
+import { searchReferenceDisplay } from '../../../../../utils/referenceDisplay';
 import dayjs from 'dayjs';
 import {formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
@@ -93,6 +92,7 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_orders';
+const OUTSOURCE_ORDER_HOST_RESOURCE = 'kuaizhizao:outsource-order';
 
 
 interface OutsourceOrder {
@@ -216,7 +216,12 @@ export const OutsourceOrdersTable: React.FC = () => {
     extractFormValues: extractOutsourceFormValues,
     saveCustomFieldValues: saveOutsourceCustomFieldValues,
     resetFieldValues: resetOutsourceFormFieldValues,
-  } = useCustomFields({ tableName: OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible });
+  } = useCustomFields({
+    tableName: OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE,
+    hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+    loadWhenOpen: true,
+    open: modalVisible,
+  });
 
   const {
     customFields: outsourceListCustomFields,
@@ -225,7 +230,10 @@ export const OutsourceOrdersTable: React.FC = () => {
     customFieldValues: outsourceDetailCustomFieldValues,
     loadFieldValuesForDetail: loadOutsourceFieldValuesForDetail,
     resetDetailFieldValues: resetOutsourceDetailFieldValues,
-  } = useCustomFieldsForList<OutsourceOrder>({ tableName: OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE });
+  } = useCustomFieldsForList<OutsourceOrder>({
+    tableName: OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE,
+    hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+  });
 
   useEffect(() => {
     if (outsourceListCustomFields.length > 0 && actionRef.current) {
@@ -513,8 +521,21 @@ export const OutsourceOrdersTable: React.FC = () => {
   useEffect(() => {
     const loadSuppliers = async () => {
       try {
-        const suppliers = unwrapSupplyPagedList(await supplierApi.list({ isActive: true }));
-        setSupplierList(suppliers || []);
+        const res = await searchReferenceDisplay({
+          resource: 'master-data:supply-chain:supplier',
+          hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+          pageSize: 1000,
+        });
+        const suppliers: Supplier[] = (res.items ?? [])
+          .filter((item) => item.id != null)
+          .map((item) => ({
+            id: item.id as number,
+            uuid: String(item.uuid ?? ''),
+            code: String(item.code ?? ''),
+            name: String(item.name ?? item.label ?? ''),
+            isActive: true,
+          }));
+        setSupplierList(suppliers);
       } catch (error) {
         window.console.error('获取数据失败:', error);
         messageApi.error(t('app.kuaizhizao.outsourceOrder.fetchDataFailed'));

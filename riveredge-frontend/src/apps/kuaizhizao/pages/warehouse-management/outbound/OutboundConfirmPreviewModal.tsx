@@ -35,6 +35,22 @@ import { formatQuantity } from '../../../../../utils/format';
 
 const OQC_INSPECTION_PATH = '/apps/kuaizhizao/quality-management/oqc-inspection';
 
+function inventoryLookupKey(
+  outboundType: OutboundIssueType | undefined,
+  it: Record<string, unknown>,
+): number {
+  if (outboundType === 'production_picking') return Number(it.id);
+  return Number(it.material_id);
+}
+
+function lineWarehouseId(
+  it: Record<string, unknown>,
+  fallbackWhId: number,
+): number {
+  const lineWh = Number(it.warehouse_id ?? 0);
+  return lineWh > 0 ? lineWh : fallbackWhId;
+}
+
 function renderOqcOutboundTag(
   t: (key: string) => string,
   row: EnsureOqcForSalesDeliveryLineSummary | undefined,
@@ -212,17 +228,26 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         });
         form.setFieldsValue(init);
 
-        const whId = Number(detailData.warehouse_id ?? record?.warehouse_id ?? 0);
-        if (whId > 0) {
-          try {
-            const opts = await fetchStorageLocationsForWarehouse(whId);
-            if (!cancelled) {
-              setLocationOptionsByWh((prev) => ({ ...prev, [whId]: opts }));
-            }
-          } catch {
-            /* optional */
-          }
+        const itemRows = Array.isArray(detailData.items) ? detailData.items as Record<string, unknown>[] : [];
+        const warehouseIds = new Set<number>();
+        const headerWhId = Number(detailData.warehouse_id ?? record?.warehouse_id ?? 0);
+        if (headerWhId > 0) warehouseIds.add(headerWhId);
+        for (const it of itemRows) {
+          const lineWhId = Number(it.warehouse_id ?? 0);
+          if (lineWhId > 0) warehouseIds.add(lineWhId);
         }
+        await Promise.all(
+          [...warehouseIds].map(async (whId) => {
+            try {
+              const opts = await fetchStorageLocationsForWarehouse(whId);
+              if (!cancelled) {
+                setLocationOptionsByWh((prev) => ({ ...prev, [whId]: opts }));
+              }
+            } catch {
+              /* optional */
+            }
+          }),
+        );
 
         if (outboundType === 'sales_delivery') {
           setOqcEnsureLoading(true);
@@ -286,6 +311,42 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       setBatchOptionsLoading(batchMids.length > 0);
       setStockQtyLoading(true);
       try {
+        if (outboundType === 'production_picking') {
+          const batchMap: Record<number, InventoryPickOption[]> = {};
+          const stockMap: Record<number, number> = {};
+          await Promise.all(
+            activeLines.map(async (it) => {
+              const lineId = Number(it.id);
+              const mid = Number(it.material_id);
+              if (!Number.isFinite(lineId) || !Number.isFinite(mid) || mid <= 0) return;
+              const headerWh = Number(detail?.warehouse_id ?? record?.warehouse_id ?? 0);
+              const whFilterRaw = lineWarehouseId(it, headerWh);
+              const whFilter = whFilterRaw > 0 ? whFilterRaw : undefined;
+              const stock = await loadAvailableQtyByMaterialId([mid], whFilter);
+              stockMap[lineId] = stock[mid] ?? 0;
+              if (materialMeta[lineId]?.batchManaged) {
+                const batchByMid = await loadBatchOptionsByMaterialId(
+                  [mid],
+                  whFilter,
+                  (batch, qty, warehouseName) =>
+                    warehouseName
+                      ? t('app.kuaizhizao.warehouseOutbound.confirm.batchAvailableWithWh', {
+                          batch,
+                          qty,
+                          warehouse: warehouseName,
+                        })
+                      : t('app.kuaizhizao.warehouseOutbound.confirm.batchAvailable', { batch, qty }),
+                );
+                batchMap[lineId] = batchByMid[mid] ?? [];
+              }
+            }),
+          );
+          if (cancelled) return;
+          setStockQtyByMaterialId(stockMap);
+          setBatchOptionsByMaterialId(batchMap);
+          return;
+        }
+
         const wid = Number(detail?.warehouse_id ?? record?.warehouse_id ?? 0);
         const whFilter = wid > 0 ? wid : undefined;
         // 库存数量必须与过账扣减一致（仅在库 MaterialBatch）；禁止 summary_only 虚高。
@@ -324,17 +385,17 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     return () => {
       cancelled = true;
     };
-  }, [open, activeLines, materialMeta, detail?.id, detail?.warehouse_id, record?.warehouse_id, t]);
+  }, [open, activeLines, materialMeta, detail?.id, detail?.warehouse_id, record?.warehouse_id, outboundType, t]);
 
   useEffect(() => {
     if (!open || batchOptionsLoading || !activeLines.length) return;
     const patches: Record<string, unknown> = {};
     for (const it of activeLines) {
       const lineId = Number(it.id);
-      const mid = Number(it.material_id);
       const meta = materialMeta[lineId];
       if (!meta?.batchManaged) continue;
-      const opts = batchOptionsByMaterialId[mid] ?? [];
+      const lookupKey = inventoryLookupKey(outboundType, it);
+      const opts = batchOptionsByMaterialId[lookupKey] ?? [];
       if (!opts.length) continue;
       const current = form.getFieldValue(`batch_${lineId}`);
       const resolved = resolveOutboundConfirmBatchValue(current ?? it.batch_number, opts);
@@ -345,7 +406,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     if (Object.keys(patches).length) {
       form.setFieldsValue(patches);
     }
-  }, [open, activeLines, materialMeta, batchOptionsByMaterialId, batchOptionsLoading, form]);
+  }, [open, activeLines, materialMeta, batchOptionsByMaterialId, batchOptionsLoading, form, outboundType]);
 
   useEffect(() => {
     if (!open || !activeLines.length) {
@@ -440,10 +501,11 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         width: 110,
         align: 'right',
         render: (_: unknown, it) => {
+          const lookupKey = inventoryLookupKey(outboundType, it);
           const mid = Number(it.material_id);
           if (!Number.isFinite(mid) || mid <= 0) return '—';
           if (stockQtyLoading) return '…';
-          const stock = stockQtyByMaterialId[mid];
+          const stock = stockQtyByMaterialId[lookupKey];
           if (stock == null) return '—';
           const need = lineOutboundQty(it);
           const unit = String(it.material_unit ?? '').trim();
@@ -470,15 +532,17 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         width: 180,
         render: (_: unknown, it) => {
           const lineId = Number(it.id);
+          const lineWh = lineWarehouseId(it, whId);
+          const lineLocOptions = lineWh > 0 ? locationOptionsByWh[lineWh] ?? [] : locOptions;
           return (
             <Form.Item name={`location_${lineId}`} style={{ marginBottom: 0 }}>
               <Select
                 size="small"
                 allowClear
                 placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectLocationPlaceholder')}
-                options={locOptions.map((o) => ({ value: o.value, label: o.label }))}
+                options={lineLocOptions.map((o) => ({ value: o.value, label: o.label }))}
                 onChange={(v) => {
-                  const picked = locOptions.find((o) => o.value === v);
+                  const picked = lineLocOptions.find((o) => o.value === v);
                   form.setFieldValue(`location_code_${lineId}`, picked?.code ?? '');
                 }}
               />
@@ -494,7 +558,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
           const lineId = Number(it.id);
           const meta = materialMeta[lineId];
           if (!meta?.batchManaged) return '—';
-          const opts = batchOptionsByMaterialId[Number(it.material_id)] ?? [];
+          const opts = batchOptionsByMaterialId[inventoryLookupKey(outboundType, it)] ?? [];
           return (
             <Form.Item name={`batch_${lineId}`} style={{ marginBottom: 0 }}>
               <Select
@@ -590,7 +654,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       batchOptionsByMaterialId,
       batchOptionsLoading,
       form,
-      locOptions,
+      locationOptionsByWh,
       materialMeta,
       navigate,
       oqcByLineId,
@@ -603,6 +667,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       stockQtyByMaterialId,
       stockQtyLoading,
       t,
+      whId,
       whName,
     ],
   );
@@ -619,18 +684,18 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
 
     for (const it of activeLines) {
       const lineId = Number(it.id);
-      const mid = Number(it.material_id);
       const meta = materialMeta[lineId];
+      const lookupKey = inventoryLookupKey(outboundType, it);
       const qty = Number(
         it.delivery_quantity ?? it.picked_quantity ?? it.outbound_quantity ?? it.borrow_quantity ?? 0,
       );
-      const opts = batchOptionsByMaterialId[mid] ?? [];
+      const opts = batchOptionsByMaterialId[lookupKey] ?? [];
 
       if (!meta?.batchManaged) {
         const available =
           opts.length > 0
             ? opts.reduce((sum, o) => sum + (Number(o.quantity) || 0), 0)
-            : Number(stockQtyByMaterialId[mid] ?? 0);
+            : Number(stockQtyByMaterialId[lookupKey] ?? 0);
         if (qty > 0 && !stockQtyLoading && available < qty) {
           messageApi.error(
             t('app.kuaizhizao.warehouseOutbound.confirm.batchQtyInsufficient', {
@@ -651,7 +716,10 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
           messageApi.error(
             t('app.kuaizhizao.warehouseOutbound.confirm.batchNotInStock', {
               material: code,
-              warehouse: whName || t('app.kuaizhizao.warehouseOutbound.field.selectWarehouse'),
+              warehouse:
+                String(it.warehouse_name ?? '').trim() ||
+                whName ||
+                t('app.kuaizhizao.warehouseOutbound.field.selectWarehouse'),
             }),
           );
         } else {

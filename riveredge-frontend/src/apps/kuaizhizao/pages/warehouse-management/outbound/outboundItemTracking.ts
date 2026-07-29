@@ -46,9 +46,14 @@ export function buildOutboundConfirmPayloadFromForm(
       const locId = formValues[`location_${lineId}`];
       const locCode = formValues[`location_code_${lineId}`] ?? it.location_code;
       const serials = formValues[`serial_${lineId}`] ?? it.serial_numbers;
+      const lineWhId = Number(it.warehouse_id);
+      const lineWhName = String(it.warehouse_name ?? '').trim();
       return {
         item_id: lineId,
-        warehouse_id: warehouseId,
+        warehouse_id: Number.isFinite(lineWhId) && lineWhId > 0 ? lineWhId : warehouseId,
+        warehouse_name:
+          lineWhName ||
+          (Number.isFinite(lineWhId) && lineWhId > 0 ? warehouseName : undefined),
         location_id: locId != null && locId !== '' ? Number(locId) : undefined,
         location_code: locCode != null && String(locCode).trim() ? String(locCode).trim() : undefined,
         batch_number: batch || undefined,
