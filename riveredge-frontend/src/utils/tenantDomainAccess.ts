@@ -49,13 +49,22 @@ function normalizeTenantDomain(value: string | null | undefined): string | null 
   return normalized || null;
 }
 
+/** IPv4 / IPv6 主机名不做二级域名租户解析（否则 154.8.214.25 会被误判为 tenant=154） */
+function isIpAddressHostname(host: string): boolean {
+  if (!host) return false;
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
+    return true;
+  }
+  return host.includes(':');
+}
+
 /**
  * 从 hostname 解析二级域名组织代码。
  * 例：default.localhost、default.example.com
  */
 export function resolveTenantDomainFromHostname(hostname?: string): string | null {
   const host = normalizeTenantDomain((hostname || '').split(':')[0]);
-  if (!host || host === 'localhost' || host === '127.0.0.1') {
+  if (!host || host === 'localhost' || host === '127.0.0.1' || isIpAddressHostname(host)) {
     return null;
   }
 
@@ -109,11 +118,18 @@ export function resolveTenantDomainFromUrl(parts: TenantLocationParts = {}): str
   const search = parts.search ?? window.location.search;
   const hostname = parts.hostname ?? window.location.hostname;
 
-  return (
-    resolveTenantDomainFromSearch(search)
-    ?? resolveTenantDomainFromHostname(hostname)
-    ?? resolveTenantDomainFromPathname(pathname)
-  );
+  const fromSearch = resolveTenantDomainFromSearch(search);
+  if (fromSearch) {
+    return fromSearch;
+  }
+
+  const host = normalizeTenantDomain(hostname.split(':')[0]);
+  // IP 直连仅支持路径前缀访问（如 /fsll），勿把 IP 段当租户域名
+  if (host && isIpAddressHostname(host)) {
+    return resolveTenantDomainFromPathname(pathname);
+  }
+
+  return resolveTenantDomainFromHostname(hostname) ?? resolveTenantDomainFromPathname(pathname);
 }
 
 /** @deprecated 使用 resolveTenantDomainFromUrl；保留别名避免遗漏引用 */
