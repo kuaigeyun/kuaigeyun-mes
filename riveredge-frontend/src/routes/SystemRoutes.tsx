@@ -180,6 +180,7 @@ const SystemRoutes: React.FC = () => (
   <Routes>
     <Route path="/" element={<IndexPage />} />
     <Route path="/login" element={withLoginSuspense(LoginPage)} />
+    <Route path="/infra" element={<Navigate to="/infra/login" replace />} />
     <Route path="/infra/login" element={<Suspense fallback={null}><InfraLoginPage /></Suspense>} />
     <Route path="/lock-screen" element={<Suspense fallback={<PageSkeleton />}><LockScreenPage /></Suspense>} />
     <Route path="/init/wizard" element={<Suspense fallback={<PageSkeleton />}><InitWizardPage /></Suspense>} />

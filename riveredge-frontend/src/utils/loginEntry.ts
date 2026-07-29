@@ -4,7 +4,7 @@
 
 import { navigateTo } from './navigation';
 import { buildLoginRedirectPath } from './tenantDomainAccess';
-import { isPlatformAdminTenantDomain } from './reservedTenantDomain';
+import { isPlatformAdminEntryPathname, isPlatformAdminTenantDomain } from './reservedTenantDomain';
 
 const LOGIN_ENTRY_STORAGE_KEY = 'riveredge-login-entry';
 
@@ -47,7 +47,7 @@ function sanitizeLoginUrl(url: URL, kind: LoginEntryKind): LoginEntrySnapshot {
   }
 
   const queryTenantDomain = (url.searchParams.get('tenant_domain') || '').trim().toLowerCase();
-  if (isPlatformAdminTenantDomain(queryTenantDomain)) {
+  if (isPlatformAdminTenantDomain(queryTenantDomain) || isPlatformAdminEntryPathname(url.pathname)) {
     return {
       origin: url.origin,
       pathname: '/infra/login',

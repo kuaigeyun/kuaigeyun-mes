@@ -92,6 +92,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const tenantDomainFromPath = resolveTenantDomainFromUrl({ pathname, search: location.search });
   const isPublicPath = pathname === '/' ||
     pathname.startsWith('/login') ||
+    pathname === '/infra' ||
+    pathname === '/infra/' ||
     pathname === '/infra/login' ||
     pathname.startsWith('/lock-screen') ||
     pathname.startsWith('/init/') ||

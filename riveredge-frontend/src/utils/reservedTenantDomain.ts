@@ -25,6 +25,14 @@ export function isReservedTenantDomain(domain: string | null | undefined): boole
 /** 平台超管专用入口域名 */
 export const PLATFORM_ADMIN_TENANT_DOMAIN = 'infra';
 
+/** 平台超管路径入口（IP 直连或域名根路径访问） */
+export const PLATFORM_ADMIN_ENTRY_PATH = '/infra';
+
+export function isPlatformAdminEntryPathname(pathname: string): boolean {
+  const path = (pathname || '').replace(/\/+$/, '') || '/';
+  return path === PLATFORM_ADMIN_ENTRY_PATH;
+}
+
 export function isPlatformAdminTenantDomain(domain: string | null | undefined): boolean {
   return (domain || '').trim().toLowerCase() === PLATFORM_ADMIN_TENANT_DOMAIN;
 }

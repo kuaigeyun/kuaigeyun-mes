@@ -6,7 +6,7 @@
  */
 
 import { getPersistedConfigs, useConfigStore } from '../stores/configStore';
-import { isPlatformAdminTenantDomain, isReservedTenantDomain } from './reservedTenantDomain';
+import { isPlatformAdminTenantDomain, isPlatformAdminEntryPathname, isReservedTenantDomain } from './reservedTenantDomain';
 
 /** 路径首段保留字：不作为组织域名 */
 export const TENANT_PATH_RESERVED_SEGMENTS = new Set([
@@ -165,17 +165,25 @@ export function resolveTenantDomainForLogout(): string | null {
   return null;
 }
 
-/** 鉴权重定向：仅 URL 有租户信号时带 tenant_domain，否则平台总入口 /login */
-export function buildLoginRedirectPath(): string {
-  const domain = resolveTenantDomainFromUrl();
+/** 鉴权重定向：租户走 /login；平台超管入口 /infra → /infra/login */
+export function buildLoginRedirectPath(parts: TenantLocationParts = {}): string {
+  const pathname = parts.pathname ?? window.location.pathname;
+  if (isPlatformAdminEntryPathname(pathname)) {
+    return '/infra/login';
+  }
+  const domain = resolveTenantDomainFromUrl(parts);
   if (!domain) {
     return '/login';
   }
   return `/login?tenant_domain=${encodeURIComponent(domain)}`;
 }
 
-/** 若 URL 指定保留域名 infra，应进入平台超管登录页 */
+/** 平台超管登录页路径（/infra 路径入口或 tenant_domain=infra） */
 export function resolvePlatformAdminLoginPathFromUrl(parts: TenantLocationParts = {}): string | null {
+  const pathname = parts.pathname ?? window.location.pathname;
+  if (isPlatformAdminEntryPathname(pathname)) {
+    return '/infra/login';
+  }
   const search = parts.search ?? window.location.search;
   try {
     const domain = (new URLSearchParams(search).get('tenant_domain') || '').trim().toLowerCase();
