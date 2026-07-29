@@ -10098,6 +10098,11 @@ export default {
   'app.kuaizhizao.batchingCenter.selectPickingWarehouse': '请选择拣选源仓库',
   'app.kuaizhizao.batchingCenter.targetLineSideWarehouse': '目标线边仓（可选）',
   'app.kuaizhizao.batchingCenter.selectTargetLineSideWarehouse': '请选择目标线边仓',
+  'app.kuaizhizao.batchingCenter.lineSideWarehousePickModalTitle': '选择目标线边仓',
+  'app.kuaizhizao.batchingCenter.lineSideWarehousePickModalHint':
+    '系统未找到默认线边仓，请手动选择备料目标仓库后继续创建。',
+  'app.kuaizhizao.batchingCenter.lineSideWarehousePickModalFallbackHint':
+    '当前暂无线边仓类型仓库，可从下列仓库中选择一个作为目标仓。',
   'app.kuaizhizao.batchingCenter.batchingDate': '备料日期',
   'app.kuaizhizao.batchingCenter.selectBatchingDate': '请选择备料日期',
   'app.kuaizhizao.batchingCenter.detailTitle': '线边备料单详情',

@@ -10408,6 +10408,11 @@ export default {
   'app.kuaizhizao.batchingCenter.selectPickingWarehouse': 'Select source picking warehouse',
   'app.kuaizhizao.batchingCenter.targetLineSideWarehouse': 'Target Line-side WH (optional)',
   'app.kuaizhizao.batchingCenter.selectTargetLineSideWarehouse': 'Select target line-side warehouse',
+  'app.kuaizhizao.batchingCenter.lineSideWarehousePickModalTitle': 'Select Target Line-Side Warehouse',
+  'app.kuaizhizao.batchingCenter.lineSideWarehousePickModalHint':
+    'No default line-side warehouse was found. Select a target warehouse to continue.',
+  'app.kuaizhizao.batchingCenter.lineSideWarehousePickModalFallbackHint':
+    'No line-side warehouse type exists yet. You may select any active warehouse as the target.',
   'app.kuaizhizao.batchingCenter.batchingDate': 'Batching Date',
   'app.kuaizhizao.batchingCenter.selectBatchingDate': 'Select batching date',
   'app.kuaizhizao.batchingCenter.detailTitle': 'Batching Order Details',

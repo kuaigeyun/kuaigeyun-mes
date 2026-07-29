@@ -51,10 +51,14 @@ async def resolve_line_side_warehouse_for_work_order(
 ) -> Tuple[int, str]:
     if explicit_target_id:
         wh = await Warehouse.get_or_none(
-            id=explicit_target_id, tenant_id=tenant_id, deleted_at__isnull=True
+            id=explicit_target_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
         )
-        if wh and wh.warehouse_type == "line_side":
+        if wh:
             return wh.id, wh.name or ""
+        raise BusinessLogicError(f"目标仓库不存在或已停用: {explicit_target_id}")
     ql = Warehouse.filter(
         tenant_id=tenant_id, is_active=True, deleted_at__isnull=True, warehouse_type="line_side"
     )
@@ -80,5 +84,8 @@ async def resolve_line_side_warehouse_for_work_order(
     if not wh:
         wh = await ql.order_by("id").first()
     if not wh:
-        raise BusinessLogicError("未找到线边仓，请维护 warehouse_type=line_side 的仓库")
+        raise BusinessLogicError(
+            "未找到线边仓，请维护 warehouse_type=line_side 的仓库",
+            details={"reason": "line_side_warehouse_not_found"},
+        )
     return wh.id, wh.name or ""

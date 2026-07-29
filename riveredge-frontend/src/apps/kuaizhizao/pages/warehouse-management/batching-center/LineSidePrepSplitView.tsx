@@ -3,15 +3,16 @@
  * - 左：仅备料建议（proactive_prep）；无数据 Empty
  * - 右：线边备料单常驻（batching_draft）
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, Button, Empty, Space, Spin, Tag, Typography } from 'antd'
+import { App, Button, Empty, Spin, Tag } from 'antd'
 import { TwoColumnLayout } from '../../../../../components/layout-templates'
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
 import { batchingOrderApi } from '../../../services/batching-order'
 import { normalizeWarehouseListResponse } from '../../../utils/warehouseListCore'
 import BatchingTaskQueue, { type BatchingTaskRow } from './BatchingTaskQueue'
 import type { MaterialCenterDetailRequest } from './materialCenterDetail'
+import { useBatchingPullFromWorkOrder } from './useBatchingPullFromWorkOrder'
 
 type Props = {
   onCreate?: () => void
@@ -39,7 +40,7 @@ const LineSidePrepSplitView: React.FC<Props> = ({
 
   const [keyword, setKeyword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [generating, setGenerating] = useState(false)
+  const [generatingKey, setGeneratingKey] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<BatchingTaskRow[]>([])
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [listReloadKey, setListReloadKey] = useState(0)
@@ -74,11 +75,6 @@ const LineSidePrepSplitView: React.FC<Props> = ({
     void loadSuggestions()
   }, [loadSuggestions])
 
-  const selected = useMemo(
-    () => (selectedKey ? suggestions.find((r) => itemKey(r) === selectedKey) ?? null : null),
-    [suggestions, selectedKey],
-  )
-
   useEffect(() => {
     if (selectedKey && !suggestions.some((r) => itemKey(r) === selectedKey)) {
       setSelectedKey(null)
@@ -91,22 +87,25 @@ const LineSidePrepSplitView: React.FC<Props> = ({
     onRefreshBatchingList?.()
   }, [keyword, loadSuggestions, onRefreshBatchingList])
 
+  const { pullFromWorkOrder, lineSideWarehouseModal } = useBatchingPullFromWorkOrder({
+    onSuccess: refreshAll,
+  })
+
   const handleGenerate = async (row: BatchingTaskRow) => {
     if (!row.work_order_id) return
-    setGenerating(true)
+    const key = itemKey(row)
+    setGeneratingKey(key)
     try {
-      await batchingOrderApi.pullFromWorkOrder({
+      await pullFromWorkOrder({
         work_order_id: Number(row.work_order_id),
         allow_existing_draft: true,
       })
-      messageApi.success(t('app.kuaizhizao.batchingCenter.generateBatchingSuccess'))
-      await refreshAll()
     } catch (e: unknown) {
       messageApi.error(
         (e as Error)?.message || t('app.kuaizhizao.batchingCenter.generateBatchingFailed'),
       )
     } finally {
-      setGenerating(false)
+      setGeneratingKey((current) => (current === key ? null : current))
     }
   }
 
@@ -132,37 +131,57 @@ const LineSidePrepSplitView: React.FC<Props> = ({
               ? `${Math.round(row.kitting_rate)}%`
               : t('app.kuaizhizao.batchingCenter.taskType.proactivePrep')
           return (
-            <button
+            <div
               key={key}
-              type="button"
-              className={`product-process-material-list__item${
+              className={`product-process-material-list__item product-process-material-list__item--with-action${
                 active ? ' product-process-material-list__item--active' : ''
               }`}
-              onClick={() => setSelectedKey(key)}
             >
-              <div className="product-process-material-list__row">
-                <span className="product-process-material-list__code">{title}</span>
-                <Tag
-                  variant="filled"
-                  color="processing"
-                  className="product-process-material-list__tag"
-                >
-                  {tagText}
-                </Tag>
-              </div>
-              <div className="product-process-material-list__name" title={subtitle}>
-                {subtitle}
-              </div>
-              {row.shortage_summary && row.product_name ? (
-                <div
-                  className="product-process-material-list__name"
-                  style={{ marginTop: 0, whiteSpace: 'normal' }}
-                  title={row.shortage_summary}
-                >
-                  {row.shortage_summary}
+              <div
+                className="product-process-material-list__body"
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedKey(key)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setSelectedKey(key)
+                  }
+                }}
+              >
+                <div className="product-process-material-list__row">
+                  <span className="product-process-material-list__code">{title}</span>
+                  <Tag
+                    variant="filled"
+                    color="processing"
+                    className="product-process-material-list__tag"
+                  >
+                    {tagText}
+                  </Tag>
                 </div>
-              ) : null}
-            </button>
+                <div className="product-process-material-list__name" title={subtitle}>
+                  {subtitle}
+                </div>
+                {row.shortage_summary && row.product_name ? (
+                  <div
+                    className="product-process-material-list__name product-process-material-list__name--wrap"
+                    title={row.shortage_summary}
+                  >
+                    {row.shortage_summary}
+                  </div>
+                ) : null}
+              </div>
+              <Button
+                type="primary"
+                size="small"
+                block
+                className="product-process-material-list__action"
+                loading={generatingKey === key}
+                onClick={() => void handleGenerate(row)}
+              >
+                {pullFromWorkOrderAction.label}
+              </Button>
+            </div>
           )
         })
       )}
@@ -170,57 +189,20 @@ const LineSidePrepSplitView: React.FC<Props> = ({
   )
 
   const rightContent = (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      {selected ? (
-        <div style={{ marginBottom: 12, flexShrink: 0 }}>
-          <Space wrap size={8} style={{ width: '100%', justifyContent: 'space-between' }}>
-            <div style={{ minWidth: 0 }}>
-              <Typography.Text strong style={{ fontSize: 15 }}>
-                {selected.work_order_code || selected.doc_code}
-              </Typography.Text>
-              {selected.product_name ? (
-                <Typography.Paragraph
-                  type="secondary"
-                  style={{ margin: '2px 0 0', marginBottom: 0 }}
-                >
-                  {selected.product_name}
-                </Typography.Paragraph>
-              ) : null}
-              {selected.shortage_summary ? (
-                <Typography.Paragraph
-                  type="secondary"
-                  style={{ margin: '4px 0 0', marginBottom: 0, fontSize: 12 }}
-                >
-                  {selected.shortage_summary}
-                </Typography.Paragraph>
-              ) : null}
-            </div>
-            <Button
-              type="primary"
-              loading={generating}
-              onClick={() => void handleGenerate(selected)}
-            >
-              {pullFromWorkOrderAction.label}
-            </Button>
-          </Space>
-        </div>
-      ) : null}
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <BatchingTaskQueue
-          taskType="batching_draft"
-          onCreate={onCreate}
-          listReloadKey={listReloadKey}
-          onTasksChanged={() => void refreshAll()}
-          onOpenDetail={onOpenDetail}
-          canRead={canRead}
-          onRefreshBatchingList={onRefreshBatchingList}
-        />
-      </div>
-    </div>
+    <BatchingTaskQueue
+      taskType="batching_draft"
+      onCreate={onCreate}
+      listReloadKey={listReloadKey}
+      onTasksChanged={() => void refreshAll()}
+      onOpenDetail={onOpenDetail}
+      canRead={canRead}
+      onRefreshBatchingList={onRefreshBatchingList}
+    />
   )
 
   return (
-    <TwoColumnLayout
+    <>
+      <TwoColumnLayout
       style={{ flex: 1, minHeight: 0, height: '100%' }}
       leftPanel={{
         width: 280,
@@ -239,7 +221,9 @@ const LineSidePrepSplitView: React.FC<Props> = ({
         content: rightContent,
         footer: <span>{suggestions.length}</span>,
       }}
-    />
+      />
+      {lineSideWarehouseModal}
+    </>
   )
 }
 

@@ -40,6 +40,8 @@ import {
   normalizeWarehouseListResponse,
   resolveBatchingCenterTaskListParams,
 } from '../../../utils/warehouseListCore';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { useBatchingPullFromWorkOrder } from './useBatchingPullFromWorkOrder';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import {
@@ -213,6 +215,10 @@ const BatchingTaskQueue: React.FC<Props> = ({
     onTasksChanged?.();
   };
 
+  const { pullFromWorkOrder, lineSideWarehouseModal } = useBatchingPullFromWorkOrder({
+    onSuccess: reload,
+  });
+
   useEffect(() => {
     if (listReloadKey == null || listReloadKey <= 0) return;
     actionRef.current?.reload();
@@ -360,14 +366,14 @@ const BatchingTaskQueue: React.FC<Props> = ({
 
   const handleProactivePrep = async (record: BatchingTaskRow) => {
     try {
-      await batchingOrderApi.pullFromWorkOrder({
+      await pullFromWorkOrder({
         work_order_id: record.work_order_id,
         allow_existing_draft: true,
       });
-      messageApi.success(t('app.kuaizhizao.batchingCenter.generateBatchingSuccess'));
-      reload();
-    } catch (e: any) {
-      messageApi.error(e.message || t('app.kuaizhizao.batchingCenter.generateBatchingFailed'));
+    } catch (e: unknown) {
+      messageApi.error(
+        getApiErrorMessage(e, t('app.kuaizhizao.batchingCenter.generateBatchingFailed')),
+      );
     }
   };
 
@@ -1077,6 +1083,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
         params={{ workOrderCodeFilter: workOrderCodeFilter || '' }}
         skipFuzzyPinyinClientFilter
       />
+      {lineSideWarehouseModal}
     </>
   );
 };
