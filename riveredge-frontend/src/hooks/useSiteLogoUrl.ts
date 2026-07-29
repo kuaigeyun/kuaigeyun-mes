@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useConfigStore } from '../stores/configStore';
-import { getSiteLogoPreview } from '../services/file';
+import { getSiteLogoPreview, normalizeFilePreviewUrl } from '../services/file';
 import { toRelativeIfLocalhost } from '../utils/avatar';
 import { DEFAULT_SITE_LOGO_URL, SITE_LOGO_FALLBACK_SVG_URL } from '../constants/siteAssets';
 
@@ -14,7 +14,7 @@ function getCachedSiteLogoUrl(logoUuid: string): string | undefined {
     const { url, ts } = typeof parsed === 'object' ? parsed : { url: raw, ts: 0 };
     if (!url || typeof url !== 'string') return undefined;
     if (typeof ts === 'number' && Date.now() - ts > SITE_LOGO_CACHE_TTL_MS) return undefined;
-    return toRelativeIfLocalhost(url);
+    return normalizeFilePreviewUrl(toRelativeIfLocalhost(url));
   } catch {
     return undefined;
   }
@@ -69,7 +69,7 @@ export function useSiteLogoUrl(): string {
           setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
           return;
         }
-        const newUrl = toRelativeIfLocalhost(previewInfo.preview_url);
+        const newUrl = normalizeFilePreviewUrl(toRelativeIfLocalhost(previewInfo.preview_url));
         setSiteLogoUrl(newUrl);
         setCachedSiteLogoUrl(siteLogoValue, newUrl);
       } else {

@@ -132,12 +132,17 @@ class FilePreviewService:
         tenant_id: int,
         size: Optional[int] = None,
     ) -> str:
-        base_url = FilePreviewService._browser_safe_public_base_url()
+        """
+        生成浏览器 img/iframe 可用的预览 URL。
+
+        始终返回相对路径，由当前页面 origin 加载；BASE_URL 仅用于服务端 HTTP 出站等场景，
+        拼进预览链会导致与反向代理/局域网访问 origin 不一致时图片 404。
+        """
         token = FilePreviewService._generate_preview_token(file_uuid, tenant_id)
         path = f"/api/v1/core/files/{file_uuid}/download?token={token}"
         if size is not None:
             path += f"&size={size}"
-        return f"{base_url}{path}" if base_url else path
+        return path
 
     @staticmethod
     async def get_preview_info(

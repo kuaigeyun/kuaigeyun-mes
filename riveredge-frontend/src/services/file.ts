@@ -280,7 +280,35 @@ try {
   // ignore
 }
 
-const SITE_LOGO_FILE_CATEGORIES = ['site-logo', 'platform-logo'] as const;
+/** img/src 使用：将 core/files 预览地址规范为相对路径，避免 BASE_URL 与页面 origin 不一致 */
+export function normalizeFilePreviewUrl(url: string): string {
+  if (!url || typeof url !== 'string') return url;
+  const trimmed = url.trim();
+  if (trimmed.startsWith('/api/v1/core/files/')) {
+    return trimmed;
+  }
+  try {
+    const base = typeof window !== 'undefined' ? window.location.origin : 'http://local';
+    const parsed = new URL(trimmed, base);
+    if (parsed.pathname.startsWith('/api/v1/core/files/')) {
+      return parsed.pathname + parsed.search;
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (host === '127.0.0.1' || host === 'localhost' || host === '0.0.0.0' || host === '::1') {
+      return parsed.pathname + parsed.search;
+    }
+  } catch {
+    // keep as-is
+  }
+  return trimmed;
+}
+
+function withNormalizedPreviewUrl(result: FilePreviewResponse): FilePreviewResponse {
+  if (!result.preview_url) return result;
+  return { ...result, preview_url: normalizeFilePreviewUrl(result.preview_url) };
+}
+
+const BRANDING_FILE_CATEGORIES = ['platform-favicon', 'platform-logo', 'site-logo'] as const;
 
 function isHttp404(error: unknown): boolean {
   return Boolean(
@@ -310,16 +338,18 @@ export async function getSiteLogoPreview(
   }
 
   const size = resolvePreviewSize(options);
-  for (const category of SITE_LOGO_FILE_CATEGORIES) {
+  for (const category of BRANDING_FILE_CATEGORIES) {
     try {
       const params = new URLSearchParams({ category });
       if (size != null) {
         params.set('size', String(size));
       }
-      const result = await apiRequest<FilePreviewResponse>(
-        `/core/files/${fileUuid}/preview/public?${params.toString()}`,
+      const result = withNormalizedPreviewUrl(
+        await apiRequest<FilePreviewResponse>(
+          `/core/files/${fileUuid}/preview/public?${params.toString()}`,
+        ),
       );
-      if (result?.preview_url) {
+      if (result.preview_url) {
         previewUrlCache.set(cacheKey, result);
         return result;
       }
@@ -336,15 +366,19 @@ export async function getSiteLogoPreview(
 
 /** 上传或更换站点/平台 Logo 后清除预览缓存，避免 404 负缓存或旧 URL 残留 */
 export function invalidateSiteLogoPreviewCache(fileUuid?: string): void {
-  const shouldPurge = (key: string) =>
+  const shouldPurgeSiteLogo = (key: string) =>
     key.startsWith('site-logo:') && (!fileUuid || key.includes(fileUuid));
   for (const key of missingSiteLogoKeys) {
-    if (shouldPurge(key)) {
+    if (shouldPurgeSiteLogo(key)) {
       missingSiteLogoKeys.delete(key);
     }
   }
-  for (const key of previewUrlCache.keys()) {
-    if (shouldPurge(key)) {
+  for (const key of [...previewUrlCache.keys()]) {
+    if (shouldPurgeSiteLogo(key)) {
+      previewUrlCache.delete(key);
+      continue;
+    }
+    if (fileUuid && key.startsWith(`${fileUuid}_`)) {
       previewUrlCache.delete(key);
     }
   }
@@ -378,7 +412,7 @@ export async function getFilePreview(
     }
     const qs = params.toString();
     const url = qs ? `/core/files/${fileUuid}/preview?${qs}` : `/core/files/${fileUuid}/preview`;
-    const result = await apiRequest<FilePreviewResponse>(url);
+    const result = withNormalizedPreviewUrl(await apiRequest<FilePreviewResponse>(url));
 
     previewUrlCache.set(cacheKey, result);
     return result;

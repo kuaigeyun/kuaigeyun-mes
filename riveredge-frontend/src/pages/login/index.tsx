@@ -65,6 +65,7 @@ import {
 } from '../../utils/wecomAuth';
 import { getLoginClientDownloads } from '../../services/clientRelease';
 import { applyFavicon } from '../../utils/favicon';
+import { normalizeFilePreviewUrl } from '../../services/file';
 // 直连文件，避免 barrel 连带 login-page-editor 其它重模块（如 ReactQuill）
 import LoginDescriptionContent from '../../components/login-page-editor/LoginDescriptionContent';
 import { isLoginVisualLayerEnabled } from '../../utils/loginVisualLayers';
@@ -295,7 +296,7 @@ export default function LoginPage() {
         const parsed = JSON.parse(cachedSettings);
         // 优先使用缓存的LOGO URL
         if (parsed?.platform_logo_url) {
-          return parsed.platform_logo_url;
+          return normalizeFilePreviewUrl(parsed.platform_logo_url);
         }
         if (parsed?.platform_logo) {
           const logoValue = parsed.platform_logo.trim();
@@ -434,8 +435,9 @@ export default function LoginPage() {
         );
         const previewInfo = (await response.json()) as { preview_url?: string };
         if (cancelled || !previewInfo.preview_url) return;
-        setLogoUrl(previewInfo.preview_url);
-        const merged = { ...parsed, platform_logo: pl, platform_logo_url: previewInfo.preview_url };
+        const normalizedUrl = normalizeFilePreviewUrl(previewInfo.preview_url);
+        setLogoUrl(normalizedUrl);
+        const merged = { ...parsed, platform_logo: pl, platform_logo_url: normalizedUrl };
         localStorage.setItem(platformSettingsCacheKey, JSON.stringify(merged));
       } catch {
         /* ignore */
@@ -475,12 +477,13 @@ export default function LoginPage() {
             `/api/v1/core/files/${logoValue}/preview/public?category=platform-logo`
           );
           const previewInfo = await response.json();
-          setLogoUrl(previewInfo.preview_url);
+          const normalizedUrl = normalizeFilePreviewUrl(previewInfo.preview_url);
+          setLogoUrl(normalizedUrl);
           // 更新缓存
           try {
             localStorage.setItem(platformSettingsCacheKey, JSON.stringify({
               platform_logo: logoValue,
-              platform_logo_url: previewInfo.preview_url,
+              platform_logo_url: normalizedUrl,
             }));
           } catch (error) {
             // 忽略存储错误
@@ -527,7 +530,7 @@ export default function LoginPage() {
           `/api/v1/core/files/${rawValue}/preview/public?category=site-logo`
         );
         const previewInfo = await response.json();
-        setDecorationImageUrl(previewInfo?.preview_url || null);
+        setDecorationImageUrl(previewInfo?.preview_url ? normalizeFilePreviewUrl(previewInfo.preview_url) : null);
       } catch {
         setDecorationImageUrl(null);
       }
@@ -558,7 +561,7 @@ export default function LoginPage() {
           `/api/v1/core/files/${rawValue}/preview/public?category=site-logo`
         );
         const previewInfo = await response.json();
-        setBackgroundImageUrl(previewInfo?.preview_url || null);
+        setBackgroundImageUrl(previewInfo?.preview_url ? normalizeFilePreviewUrl(previewInfo.preview_url) : null);
       } catch {
         setBackgroundImageUrl(null);
       }

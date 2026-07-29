@@ -119,7 +119,7 @@ import { getInstalledApplicationList } from '../services/application';
 import { getChatIntegrationStatus } from '../services/deepseekChat';
 import { buildChatIntegrationStatusQueryKey } from '../hooks/useChatIntegrationStatus';
 import { hasPermission, resolveUserForMenuPermission } from '../utils/permission';
-import { getSiteLogoPreview } from '../services/file';
+import { getSiteLogoPreview, normalizeFilePreviewUrl } from '../services/file';
 import Lottie from 'lottie-react';
 import assistAnimation from '../../static/lottie/assist.json';
 import OnboardingGuide from '../components/onboarding-guide';
@@ -137,7 +137,7 @@ function getCachedSiteLogoUrl(logoUuid: string): string | undefined {
     const { url, ts } = typeof parsed === 'object' ? parsed : { url: raw, ts: 0 };
     if (!url || typeof url !== 'string') return undefined;
     if (typeof ts === 'number' && Date.now() - ts > SITE_LOGO_CACHE_TTL_MS) return undefined;
-    return toRelativeIfLocalhost(url);
+    return normalizeFilePreviewUrl(toRelativeIfLocalhost(url));
   } catch {
     return undefined;
   }
@@ -1070,7 +1070,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
             return;
           }
-          const newUrl = toRelativeIfLocalhost(previewInfo.preview_url);
+          const newUrl = normalizeFilePreviewUrl(toRelativeIfLocalhost(previewInfo.preview_url));
           setSiteLogoUrl(newUrl);
           setCachedSiteLogoUrl(siteLogoValue, newUrl);
         } else {

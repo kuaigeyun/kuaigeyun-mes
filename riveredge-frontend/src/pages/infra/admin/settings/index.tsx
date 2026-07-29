@@ -24,7 +24,7 @@ import {
   type PlatformSettingsUpdateRequest,
 } from '../../../../services/platformSettings';
 import { getTenantList, TenantStatus } from '../../../../services/tenant';
-import { uploadFile, getFilePreview, getSiteLogoPreview, FileUploadResponse } from '../../../../services/file';
+import { uploadFile, getSiteLogoPreview, invalidateSiteLogoPreviewCache, FileUploadResponse } from '../../../../services/file';
 import ImageCropper from '../../../../components/image-cropper';
 import { applyFavicon } from '../../../../utils/favicon';
 import {
@@ -170,20 +170,19 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
       return;
     }
     if (isUUID(faviconValue.trim())) {
-      try {
-        const previewInfo = await getFilePreview(faviconValue.trim());
-        setFaviconUrl(previewInfo.preview_url);
-        setFaviconFileList([{
-          uid: faviconValue.trim(),
-          name: 'Favicon',
-          status: 'done',
-          url: previewInfo.preview_url,
-        }]);
-      } catch (error) {
-        console.error('获取 Favicon 预览 URL 失败:', error);
+      const previewInfo = await getSiteLogoPreview(faviconValue.trim());
+      if (!previewInfo?.preview_url) {
         setFaviconUrl(undefined);
         setFaviconFileList([]);
+        return;
       }
+      setFaviconUrl(previewInfo.preview_url);
+      setFaviconFileList([{
+        uid: faviconValue.trim(),
+        name: 'Favicon',
+        status: 'done',
+        url: previewInfo.preview_url,
+      }]);
     } else {
       setFaviconUrl(faviconValue.trim());
       setFaviconFileList([{
@@ -389,7 +388,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
       });
       
       if (response.uuid) {
-        // 更新表单中的platform_logo字段（保存UUID）
+        invalidateSiteLogoPreviewCache(response.uuid);
         form.setFieldsValue({
           platform_logo: response.uuid,
         });
@@ -397,12 +396,14 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         // 获取服务器预览URL
         let previewUrl: string | undefined = undefined;
         try {
-          const previewInfo = await getFilePreview(response.uuid);
-          previewUrl = previewInfo.preview_url;
+          const previewInfo = await getSiteLogoPreview(response.uuid);
+          previewUrl = previewInfo?.preview_url;
           // 释放本地预览URL
           URL.revokeObjectURL(localPreviewUrl);
           // 使用服务器预览URL
-          setLogoUrl(previewUrl);
+          if (previewUrl) {
+            setLogoUrl(previewUrl);
+          }
         } catch (error) {
           // 如果获取预览URL失败，继续使用本地预览URL
           console.error('获取LOGO预览URL失败:', error);
@@ -479,12 +480,13 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         description: t('pages.infra.platform.favicon'),
       });
       if (response.uuid) {
+        invalidateSiteLogoPreviewCache(response.uuid);
         form.setFieldsValue({ favicon: response.uuid });
         let previewUrl: string | undefined;
         try {
-          const previewInfo = await getFilePreview(response.uuid);
+          const previewInfo = await getSiteLogoPreview(response.uuid);
           URL.revokeObjectURL(localPreviewUrl);
-          previewUrl = previewInfo.preview_url;
+          previewUrl = previewInfo?.preview_url;
         } catch {
           console.error('获取 Favicon 预览 URL 失败');
           previewUrl = localPreviewUrl;

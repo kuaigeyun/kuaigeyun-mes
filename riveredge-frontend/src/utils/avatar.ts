@@ -8,7 +8,7 @@
  */
 
 import type { CSSProperties } from 'react';
-import { getFilePreview } from '../services/file';
+import { getFilePreview, normalizeFilePreviewUrl } from '../services/file';
 
 const AVATAR_CACHE_PREFIX = 'avatarUrlCache_';
 const MISSING_AVATAR_UUIDS_STORAGE_KEY = 'missing_avatar_uuids';
@@ -122,7 +122,7 @@ export async function getAvatarUrl(avatarUuid: string | undefined): Promise<stri
         const previewInfo = await getFilePreview(avatarUuid, { forAvatar: true });
         const previewUrl = previewInfo.preview_url;
         if (previewUrl) {
-          const normalized = toRelativeIfLocalhost(previewUrl);
+          const normalized = normalizeFilePreviewUrl(previewUrl);
           setCachedAvatarUrl(avatarUuid, normalized);
           return normalized;
         }
