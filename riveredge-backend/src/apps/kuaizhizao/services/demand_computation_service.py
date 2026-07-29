@@ -73,6 +73,7 @@ from core.utils.timezone_utils import (
     make_aware,
     now_utc,
     resolve_business_datetime,
+    today_site_str,
     to_api_isoformat,
 )
 
@@ -4905,6 +4906,44 @@ class DemandComputationService(AppBaseService):
         except Exception as e:
             logger.error(f"创建委外工单失败: {e}")
             raise BusinessLogicError(f"创建委外工单失败: {str(e)}")
+
+    @staticmethod
+    def _build_fallback_purchase_order_code(
+        today: str,
+        computation_id: int,
+        supplier_id: int,
+        existing_count: int,
+    ) -> str:
+        """编码规则不可用时的补推安全单号（同计算单+供应商分组递增序号）。"""
+        return f"PO-{today}-{computation_id}-{int(supplier_id or 0)}-{existing_count + 1}"
+
+    async def _generate_purchase_order_code(
+        self,
+        tenant_id: int,
+        computation_id: int,
+        supplier_id: int = 0,
+    ) -> str:
+        """生成采购单编码，与 purchase_service 一致使用 PURCHASE_ORDER_CODE 规则。"""
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+        today = today_site_str()
+        try:
+            return await self.generate_code(
+                tenant_id,
+                "PURCHASE_ORDER_CODE",
+                prefix=f"PO{today}",
+            )
+        except Exception:
+            existing_count = await PurchaseOrder.filter(
+                tenant_id=tenant_id,
+                source_type="demand_computation",
+                source_id=computation_id,
+                supplier_id=int(supplier_id or 0),
+                deleted_at__isnull=True,
+            ).count()
+            return self._build_fallback_purchase_order_code(
+                today, computation_id, supplier_id, existing_count
+            )
     
     async def _create_purchase_order_from_item(
         self,
@@ -4929,37 +4968,29 @@ class DemandComputationService(AppBaseService):
         """
         try:
             from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
-            from core.services.business.code_generation_service import CodeGenerationService
-            from datetime import datetime, date, timedelta
+            from datetime import date, timedelta
             from decimal import Decimal
-            
-            # 生成采购订单编码
-            try:
-                order_code = await CodeGenerationService.generate_code(
-                    tenant_id=tenant_id,
-                    rule_code="PURCHASE_ORDER",
-                )
-            except Exception:
-                # 回退到简单编码
-                now = resolve_business_datetime()
-                order_code = f"PO-{now.strftime('%Y%m%d')}-{computation.id}"
-            
+
             # 从物料来源配置获取默认供应商和采购价格（物料来源控制增强）
             supplier_id = None
             supplier_name = "待指定供应商"
             unit_price = Decimal(0)
-            
+
             if item.material_source_type == "Buy" and item.material_source_config:
                 source_config = resolve_computation_item_source_config(item.material_source_config)
                 supplier_id = source_config.get("default_supplier_id")
                 supplier_name = source_config.get("default_supplier_name", "待指定供应商")
                 unit_price = Decimal(str(source_config.get("purchase_price", 0)))
-            
+
             # 如果没有配置，草稿使用待定供应商占位（supplier_id=0）
             if not supplier_id:
                 supplier_id = PURCHASE_ORDER_NO_SUPPLIER_GROUP
                 supplier_name = "待定供应商"
-            
+
+            order_code = await self._generate_purchase_order_code(
+                tenant_id, computation.id, int(supplier_id or 0)
+            )
+
             # 确定交货日期
             delivery_date = item.procurement_completion_date or item.delivery_date
             if not delivery_date:
@@ -5074,17 +5105,10 @@ class DemandComputationService(AppBaseService):
                 else:
                     supplier_name = supplier.name
             
-            # 生成采购订单编码
-            try:
-                order_code = await CodeGenerationService.generate_code(
-                    tenant_id=tenant_id,
-                    rule_code="PURCHASE_ORDER",
-                )
-            except Exception:
-                # 回退到简单编码
-                now = resolve_business_datetime()
-                order_code = f"PO-{now.strftime('%Y%m%d')}-{computation.id}-{supplier_id}"
-            
+            order_code = await self._generate_purchase_order_code(
+                tenant_id, computation.id, int(supplier_id or 0)
+            )
+
             # 确定交货日期（取所有物料中最早的日期）
             delivery_date = None
             for item in items:

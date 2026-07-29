@@ -59,3 +59,14 @@ def test_aggregate_buy_qty_sums_same_material():
     aggregated = DemandComputationService._aggregate_buy_suggested_qty_by_material(items)
     assert aggregated[1] == 100.0
     assert aggregated[2] == 10.0
+
+
+def test_fallback_purchase_order_code_increments_for_same_computation_supplier():
+    first = DemandComputationService._build_fallback_purchase_order_code(
+        "20260729", 1, 0, existing_count=1
+    )
+    second = DemandComputationService._build_fallback_purchase_order_code(
+        "20260729", 1, 0, existing_count=2
+    )
+    assert first == "PO-20260729-1-0-2"
+    assert second == "PO-20260729-1-0-3"
