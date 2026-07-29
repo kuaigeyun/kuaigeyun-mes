@@ -1713,6 +1713,7 @@ wizard_show_summary() {
     wizard_panel_kv "API" "${api_hint}"
     wizard_panel_kv "Database" "$(read_env_value DB_USER || echo postgres)@${db_host}:${db_port}/${db_name}"
     wizard_panel_kv "Admin" "$(read_env_value PLATFORM_SUPERADMIN_USERNAME || echo infra_admin)"
+    wizard_panel_kv "BlueGreen" "$(blue_green_deploy_status_label)"
     wizard_panel_mid
     wizard_panel_section "COMMANDS 常用命令"
     wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh status${WIZARD_RESET}  查看状态"

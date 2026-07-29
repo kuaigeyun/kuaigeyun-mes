@@ -734,6 +734,31 @@ function Invoke-PostgresPasswordSetup {
     }
 }
 
+function Get-BlueGreenDeployStatusLabel {
+    Load-DeployEnv
+    if ($script:BLUE_GREEN_DEPLOY -eq '1') {
+        return "开启 (update 零停机, 槽位 $($script:BACKEND_PORT_BLUE)/$($script:BACKEND_PORT_GREEN))"
+    }
+    return '关闭 (stop→start)'
+}
+
+function Invoke-ConfigureBlueGreen {
+    Load-DeployEnv
+    $cur = if ($script:BLUE_GREEN_DEPLOY) { $script:BLUE_GREEN_DEPLOY } else { '0' }
+    Write-LogInfo "当前蓝绿部署: $(Get-BlueGreenDeployStatusLabel)"
+    Write-Host '  说明: 开启后 update 在新 backend 就绪后再切流量；关闭则沿用先停再起。'
+    $input = Read-Host "蓝绿部署 [1=开启 / 0=关闭，回车保持 $cur]"
+    if (-not [string]::IsNullOrWhiteSpace($input)) {
+        switch -Regex ($input.Trim()) {
+            '^(1|y|Y|yes|Yes|开启|开)$' { Set-DeployEnvValue 'BLUE_GREEN_DEPLOY' '1' }
+            '^(0|n|N|no|No|关闭|关)$' { Set-DeployEnvValue 'BLUE_GREEN_DEPLOY' '0' }
+            default { Write-LogWarn "无效输入，保持 $cur" }
+        }
+    }
+    Load-DeployEnv
+    Write-LogOk "蓝绿部署: $(Get-BlueGreenDeployStatusLabel)"
+}
+
 function Invoke-Configure {
     Write-LogInfo '配置应用环境...'
     Apply-CN-Mirrors
@@ -803,6 +828,9 @@ function Invoke-Configure {
         Load-DeployEnv
     }
 
+    Write-Host ''
+    Invoke-ConfigureBlueGreen
+
     if ($script:DeployMode -eq 'prod') {
         Set-EnvValue 'ENVIRONMENT' 'production'
         Set-EnvValue 'DEBUG' 'false'
@@ -819,6 +847,7 @@ function Invoke-Configure {
     Write-LogOk '配置完成'
     Write-Host "  数据库: ${dbUser}@${dbHost}/${dbName}"
     Write-Host '  超管账号: infra_admin'
+    Write-Host "  蓝绿部署: $(Get-BlueGreenDeployStatusLabel)"
     if ($script:DeployMode -eq 'prod') {
         $webUrl = Resolve-ProdWebUrl $serverIp
         Write-Host "  访问地址: $webUrl"
@@ -1521,6 +1550,7 @@ function Invoke-Status {
     } else {
         if (Test-PortInUse $script:PROXY_PORT) { Write-Host "  端口 $($script:PROXY_PORT): 监听中" } else { Write-Host "  端口 $($script:PROXY_PORT): 空闲" }
     }
+    Write-Host "  蓝绿部署: $(Get-BlueGreenDeployStatusLabel)"
     if (Test-BgEnabled) {
         Write-Host ''
         Write-BgStatus

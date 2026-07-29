@@ -1633,6 +1633,34 @@ apply_app_config() {
     fi
 }
 
+blue_green_deploy_status_label() {
+    load_deploy_env
+    if [ "${BLUE_GREEN_DEPLOY:-0}" = "1" ]; then
+        echo "开启 (update 零停机, 槽位 ${BACKEND_PORT_BLUE}/${BACKEND_PORT_GREEN})"
+    else
+        echo "关闭 (stop→start)"
+    fi
+}
+
+configure_prompt_blue_green() {
+    load_deploy_env
+    local cur="${BLUE_GREEN_DEPLOY:-0}" input
+    log_info "当前蓝绿部署: $(blue_green_deploy_status_label)"
+    echo "  说明: 开启后 update 在新 backend 就绪后再切流量；关闭则沿用先停再起。"
+    read -rp "蓝绿部署 [1=开启 / 0=关闭，回车保持 ${cur}]: " input
+    if [ -n "$input" ]; then
+        case "$input" in
+            1|y|Y|yes|Yes|开启|开) set_deploy_env_value BLUE_GREEN_DEPLOY "1" ;;
+            0|n|N|no|No|关闭|关) set_deploy_env_value BLUE_GREEN_DEPLOY "0" ;;
+            *)
+                log_warn "无效输入，保持 ${cur}"
+                ;;
+        esac
+    fi
+    load_deploy_env
+    log_ok "蓝绿部署: $(blue_green_deploy_status_label)"
+}
+
 print_configure_summary() {
     local db_user db_host db_port db_name server_ip admin_user
     db_user="$(read_env_value DB_USER || echo postgres)"
@@ -1643,6 +1671,7 @@ print_configure_summary() {
     admin_user="$(read_env_value PLATFORM_SUPERADMIN_USERNAME || echo infra_admin)"
     echo "  数据库: ${db_user}@${db_host}:${db_port}/${db_name}"
     echo "  超管账号: ${admin_user}"
+    echo "  蓝绿部署: $(blue_green_deploy_status_label)"
     if [ "$DEPLOY_MODE" = "prod" ]; then
         echo "  访问地址: $(resolve_prod_web_url "$server_ip")"
         if [ -n "$CADDY_DOMAIN" ] && [ "$CADDY_ENABLE_LETSENCRYPT" = "true" ]; then
@@ -1782,6 +1811,9 @@ cmd_configure() {
         echo ""
         collect_prod_domain_https_config || exit 1
     fi
+
+    echo ""
+    configure_prompt_blue_green
 
     apply_app_config
 
@@ -3352,6 +3384,7 @@ cmd_status() {
     else
         check_port "$PROXY_PORT" && echo "  端口 ${PROXY_PORT}: 监听中" || echo "  端口 ${PROXY_PORT}: 空闲"
     fi
+    echo "  蓝绿部署: $(blue_green_deploy_status_label)"
     if bg_enabled; then
         echo ""
         bg_print_status

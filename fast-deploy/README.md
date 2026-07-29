@@ -60,7 +60,16 @@ Node.js 22+ · Python 3.12+（系统）/ 3.11（uv 虚拟环境）· uv · npm �
 
 默认 **关闭**（`BLUE_GREEN_DEPLOY=0`），行为与原先 stop → migrate → start 完全一致。
 
-在 `fast-deploy/config/deploy.env` 中设置 `BLUE_GREEN_DEPLOY=1` 后，`update` 会：
+**在部署脚本里配置（推荐）：**
+
+```bash
+./fast-deploy/deploy.sh configure          # 生产
+./fast-deploy/deploy.sh dev configure      # 开发
+```
+
+向导 **「修改配置」** 同样会询问是否开启蓝绿部署。
+
+也可手动编辑 `fast-deploy/config/deploy.env` 中的 `BLUE_GREEN_DEPLOY=1`。
 
 - **生产**：新 backend 在 inactive 端口就绪 → Caddy reload 切流量 → 原子切换 `dist-live` → 再停旧 backend
 - **开发**：`:8200` dev API 代理固定入口，Vite 无需重启；backend 在 `8201`/`8202` 双槽切换
