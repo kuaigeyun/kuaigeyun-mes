@@ -10,7 +10,7 @@
 """
 
 from typing import Optional, Dict, List, Any
-from datetime import date, datetime
+from datetime import datetime
 import re
 import importlib
 
@@ -24,7 +24,7 @@ from core.services.business.code_rule_service import CodeRuleService
 from core.services.code_rule.code_rule_component_service import CodeRuleComponentService
 from core.config.code_rule_pages import RULE_CODE_ENTITY_FOR_SEQ_SYNC
 from infra.exceptions.exceptions import ValidationError
-from core.utils.timezone_utils import resolve_business_datetime
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 
 # snake_case <-> camelCase 映射（用于 scope_fields 与 context 的兼容）
 _SCOPE_FIELD_ALIASES = {
@@ -360,9 +360,9 @@ class CodeGenerationService:
                         .first()
                     )
 
-            # 检查是否需要重置序号
+            # 检查是否需要重置序号（业务日历日与编码日期组件一致，用站点时区）
             if seq_reset_rule and seq_reset_rule != "never":
-                now = date.today()
+                now = to_site_date(resolve_business_datetime())
                 # 如果 reset_date 为空，初始化它但不重置序号（或者是第一次创建）
                 if not sequence.reset_date:
                     sequence.reset_date = now
@@ -502,9 +502,9 @@ class CodeGenerationService:
             test_seq = seq_start  # 正式生成会创建 seq_start-step 后自增得到 seq_start
         else:
             base_seq = sequence.current_seq
-            # 与 generate_code 相同的重置检查（不写库）
+            # 与 generate_code 相同的重置检查（不写库；站点业务日）
             if seq_reset_rule and seq_reset_rule != "never":
-                now = date.today()
+                now = to_site_date(resolve_business_datetime())
                 if not sequence.reset_date:
                      # 假设 reset_date 会被更新为 now
                      pass
