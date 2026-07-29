@@ -734,31 +734,6 @@ function Invoke-PostgresPasswordSetup {
     }
 }
 
-function Get-BlueGreenDeployStatusLabel {
-    Load-DeployEnv
-    if ($script:BLUE_GREEN_DEPLOY -eq '1') {
-        return "开启 (update 零停机, 槽位 $($script:BACKEND_PORT_BLUE)/$($script:BACKEND_PORT_GREEN))"
-    }
-    return '关闭 (stop→start)'
-}
-
-function Invoke-ConfigureBlueGreen {
-    Load-DeployEnv
-    $cur = if ($script:BLUE_GREEN_DEPLOY) { $script:BLUE_GREEN_DEPLOY } else { '0' }
-    Write-LogInfo "当前蓝绿部署: $(Get-BlueGreenDeployStatusLabel)"
-    Write-Host '  说明: 开启后 update 在新 backend 就绪后再切流量；关闭则沿用先停再起。'
-    $input = Read-Host "蓝绿部署 [1=开启 / 0=关闭，回车保持 $cur]"
-    if (-not [string]::IsNullOrWhiteSpace($input)) {
-        switch -Regex ($input.Trim()) {
-            '^(1|y|Y|yes|Yes|开启|开)$' { Set-DeployEnvValue 'BLUE_GREEN_DEPLOY' '1' }
-            '^(0|n|N|no|No|关闭|关)$' { Set-DeployEnvValue 'BLUE_GREEN_DEPLOY' '0' }
-            default { Write-LogWarn "无效输入，保持 $cur" }
-        }
-    }
-    Load-DeployEnv
-    Write-LogOk "蓝绿部署: $(Get-BlueGreenDeployStatusLabel)"
-}
-
 function Invoke-Configure {
     Write-LogInfo '配置应用环境...'
     Apply-CN-Mirrors
@@ -827,9 +802,6 @@ function Invoke-Configure {
         Collect-ProdDomainHttpsConfig
         Load-DeployEnv
     }
-
-    Write-Host ''
-    Invoke-ConfigureBlueGreen
 
     if ($script:DeployMode -eq 'prod') {
         Set-EnvValue 'ENVIRONMENT' 'production'
@@ -1420,15 +1392,23 @@ function Wait-ForCaddyListening {
 }
 
 function Start-CaddyProd {
+    param([switch]$Force)
     New-Caddyfile
     Load-DeployEnv
     Set-CaddyEnv
     $caddy = Resolve-Caddy
     if (-not $caddy) { throw '未安装 Caddy，请运行 install' }
     $pidf = Join-Path $script:LogsDir 'caddy.pid'
-    if (Test-Path $pidf) {
-        $pid = [int](Get-Content $pidf -Raw).Trim()
-        if (Get-Process -Id $pid -ErrorAction SilentlyContinue) { Write-LogInfo 'Caddy 已在运行'; return }
+    if ((Test-Path $pidf) -and (Test-PidFileAlive $pidf)) {
+        if ($Force) {
+            Write-LogInfo '强制重启 Caddy...'
+            Stop-ServiceByPidFile 'caddy'
+            Get-Process caddy -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Remove-Item $pidf -Force -ErrorAction SilentlyContinue
+        } else {
+            Write-LogInfo 'Caddy 已在运行'
+            return
+        }
     }
     & $caddy validate --config $script:Caddyfile 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
@@ -1684,7 +1664,7 @@ function Sync-GitFromOrigin {
 
 function Invoke-UpdateDev {
     Load-DeployEnv
-    if (Test-BgEnabled) {
+    if (Invoke-PromptUpdateBlueGreen) {
         Invoke-BgUpdateDev
         $fpid = Join-Path $script:LogsDir 'frontend.pid'
         if (-not (Test-PidFileAlive $fpid)) {
@@ -1705,7 +1685,7 @@ function Invoke-UpdateDev {
 
 function Invoke-UpdateProd {
     Load-DeployEnv
-    if (Test-BgEnabled) {
+    if (Invoke-PromptUpdateBlueGreen) {
         Invoke-BgUpdateProd
         Write-LogOk '生产环境已更新'
         return

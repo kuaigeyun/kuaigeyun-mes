@@ -6,7 +6,57 @@ $script:BgDevApiTemplate = Join-Path $script:FastDeployDir 'templates\Caddyfile.
 
 function Test-BgEnabled {
     Load-DeployEnv
+    if (Test-Path $script:BgStateFile) { return $true }
     return ($script:BLUE_GREEN_DEPLOY -eq '1')
+}
+
+function Test-UpdateUseBlueGreen {
+    Load-DeployEnv
+    if ($env:UPDATE_BLUE_GREEN) {
+        switch ($env:UPDATE_BLUE_GREEN) {
+            { $_ -in '1','yes','true','Y','y' } { return $true }
+            default { return $false }
+        }
+    }
+    if ([Console]::IsInputRedirected) {
+        Write-LogInfo '非交互 update，默认启用蓝绿部署（$env:UPDATE_BLUE_GREEN=0 可改为传统 stop-start）'
+        return $true
+    }
+    Write-Host ''
+    Write-LogInfo '更新方式：'
+    Write-Host '  [1] 蓝绿部署（推荐，update 期间尽量不停机）'
+    Write-Host '  [0] 传统 stop → migrate → start（全量停机更新）'
+    $input = Read-Host '请选择 [1/0，回车=1 蓝绿]'
+    if ([string]::IsNullOrWhiteSpace($input)) { $input = '1' }
+    switch ($input.Trim()) {
+        { $_ -in '1','y','Y','yes','蓝绿' } { return $true }
+        { $_ -in '0','n','N','no','传统' } { return $false }
+        default {
+            Write-LogWarn '无效输入，使用默认：蓝绿部署'
+            return $true
+        }
+    }
+}
+
+function Invoke-PromptUpdateBlueGreen {
+    if (Test-UpdateUseBlueGreen) {
+        Write-LogOk '本次更新：蓝绿部署'
+        return $true
+    }
+    Write-LogOk '本次更新：传统 stop-start'
+    return $false
+}
+
+function Get-BlueGreenDeployStatusLabel {
+    Load-DeployEnv
+    if (Test-Path $script:BgStateFile) {
+        $active = Get-BgActiveSlot
+        return "已启用 (active=$active, 槽位 $($script:BACKEND_PORT_BLUE)/$($script:BACKEND_PORT_GREEN))"
+    }
+    if ($script:BLUE_GREEN_DEPLOY -eq '1') {
+        return "配置开启 (槽位 $($script:BACKEND_PORT_BLUE)/$($script:BACKEND_PORT_GREEN))"
+    }
+    return '未启用 (update 时可选蓝绿，默认开启)'
 }
 
 function Initialize-BgDefaults {
@@ -300,17 +350,30 @@ function Invoke-BgRollbackUpdate {
 
 function Reload-CaddyProdConfig {
     New-Caddyfile
+    Load-DeployEnv
+    Set-CaddyEnv
     $caddy = Resolve-Caddy
     if (-not $caddy) { throw '未安装 Caddy' }
-    & $caddy validate --config $script:Caddyfile 2>&1 | Out-Null
+    $config = (Resolve-Path $script:Caddyfile).Path
+    $reloadErr = Join-Path $script:LogsDir 'caddy-reload.err'
+    & $caddy validate --config $config 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Caddyfile 校验失败' }
     $pidFile = Join-Path $script:LogsDir 'caddy.pid'
     if (Test-PidFileAlive $pidFile) {
-        & $caddy reload --config $script:Caddyfile 2>$null
-        if ($LASTEXITCODE -eq 0) { Write-LogOk 'Caddy 已 reload'; return }
-        Write-LogWarn 'Caddy reload 失败，尝试完整重启...'
+        & $caddy reload --config $config 2>$reloadErr
+        if ($LASTEXITCODE -eq 0) {
+            Write-LogOk 'Caddy 已 reload'
+            return
+        }
+        if (Test-Path $reloadErr) {
+            $tail = Get-Content $reloadErr -Tail 3 -ErrorAction SilentlyContinue
+            Write-LogWarn "Caddy reload 失败: $($tail -join ' ')"
+        } else {
+            Write-LogWarn 'Caddy reload 失败'
+        }
     }
-    Start-CaddyProd
+    Write-LogInfo '正在重启 Caddy 以应用配置...'
+    Start-CaddyProd -Force
 }
 
 function Invoke-BgUpdateProd {

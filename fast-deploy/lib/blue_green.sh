@@ -6,7 +6,49 @@ BG_DEV_API_CADDYFILE="${CADDY_DIR}/Caddyfile.dev-api"
 BG_DEV_API_TEMPLATE="${FAST_DEPLOY_DIR}/templates/Caddyfile.dev-api.template"
 
 bg_enabled() {
-    [ "${BLUE_GREEN_DEPLOY:-0}" = "1" ]
+    # 曾用蓝绿 update 后会留下 state；start/stop/status 据此继续走双槽位
+    [ -f "$BG_STATE_FILE" ] && return 0
+    [ "${BLUE_GREEN_DEPLOY:-0}" = "1" ] && return 0
+    return 1
+}
+
+# update 时是否走蓝绿（交互选择；非交互默认开启，可用 UPDATE_BLUE_GREEN=0 关闭）
+update_use_blue_green() {
+    load_deploy_env
+    if [ -n "${UPDATE_BLUE_GREEN:-}" ]; then
+        case "${UPDATE_BLUE_GREEN}" in
+            1|yes|true|Y|y) return 0 ;;
+            *) return 1 ;;
+        esac
+    fi
+    if [ ! -t 0 ]; then
+        log_info "非交互 update，默认启用蓝绿部署（export UPDATE_BLUE_GREEN=0 可改为传统 stop-start）"
+        return 0
+    fi
+    local input
+    echo ""
+    log_info "更新方式："
+    echo "  [1] 蓝绿部署（推荐，update 期间尽量不停机）"
+    echo "  [0] 传统 stop → migrate → start（全量停机更新）"
+    read -rp "请选择 [1/0，回车=1 蓝绿]: " input
+    input="${input:-1}"
+    case "$input" in
+        1|y|Y|yes|蓝绿) return 0 ;;
+        0|n|N|no|传统) return 1 ;;
+        *)
+            log_warn "无效输入，使用默认：蓝绿部署"
+            return 0
+            ;;
+    esac
+}
+
+prompt_update_blue_green() {
+    if update_use_blue_green; then
+        log_ok "本次更新：蓝绿部署"
+        return 0
+    fi
+    log_ok "本次更新：传统 stop-start"
+    return 1
 }
 
 bg_load_deploy_defaults() {
@@ -346,24 +388,7 @@ bg_stop_dev_api_proxy() {
 }
 
 bg_reload_caddy_prod_config() {
-    local caddy_bin caddy_config
-    gen_caddyfile
-    caddy_bin="$(resolve_caddy)"
-    caddy_config="$(caddy_native_path "$CADDYFILE")"
-    if ! "$caddy_bin" validate --config "$caddy_config" >/dev/null 2>&1; then
-        log_error "Caddyfile 校验失败"
-        "$caddy_bin" validate --config "$caddy_config" 2>&1 | tail -20 >&2
-        return 1
-    fi
-    if [ -f "$LOGS_DIR/caddy.pid" ] && kill -0 "$(cat "$LOGS_DIR/caddy.pid")" 2>/dev/null; then
-        if "$caddy_bin" reload --config "$caddy_config" >/dev/null 2>&1; then
-            log_ok "Caddy 已 reload"
-            verify_caddy_serving || return 1
-            return 0
-        fi
-        log_warn "Caddy reload 失败，尝试完整重启..."
-    fi
-    start_caddy_prod
+    reload_caddy_prod_config
 }
 
 bg_stop_scheduler_only() {

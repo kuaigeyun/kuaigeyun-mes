@@ -667,6 +667,17 @@ caddy_native_path() {
     echo "$p"
 }
 
+# reload 与 run 须使用同一绝对路径，否则 caddy reload 找不到进程
+caddy_resolved_config_path() {
+    local p
+    p="$(caddy_native_path "$CADDYFILE")"
+    if command -v realpath >/dev/null 2>&1; then
+        realpath "$p" 2>/dev/null || echo "$p"
+        return
+    fi
+    echo "$p"
+}
+
 check_port() {
     local port=$1
     if is_windows_gitbash; then
@@ -1635,30 +1646,15 @@ apply_app_config() {
 
 blue_green_deploy_status_label() {
     load_deploy_env
+    if [ -f "$BG_STATE_FILE" ]; then
+        echo "已启用 (active=$(bg_active_slot 2>/dev/null || echo ?), 槽位 ${BACKEND_PORT_BLUE}/${BACKEND_PORT_GREEN})"
+        return
+    fi
     if [ "${BLUE_GREEN_DEPLOY:-0}" = "1" ]; then
-        echo "开启 (update 零停机, 槽位 ${BACKEND_PORT_BLUE}/${BACKEND_PORT_GREEN})"
-    else
-        echo "关闭 (stop→start)"
+        echo "配置开启 (槽位 ${BACKEND_PORT_BLUE}/${BACKEND_PORT_GREEN})"
+        return
     fi
-}
-
-configure_prompt_blue_green() {
-    load_deploy_env
-    local cur="${BLUE_GREEN_DEPLOY:-0}" input
-    log_info "当前蓝绿部署: $(blue_green_deploy_status_label)"
-    echo "  说明: 开启后 update 在新 backend 就绪后再切流量；关闭则沿用先停再起。"
-    read -rp "蓝绿部署 [1=开启 / 0=关闭，回车保持 ${cur}]: " input
-    if [ -n "$input" ]; then
-        case "$input" in
-            1|y|Y|yes|Yes|开启|开) set_deploy_env_value BLUE_GREEN_DEPLOY "1" ;;
-            0|n|N|no|No|关闭|关) set_deploy_env_value BLUE_GREEN_DEPLOY "0" ;;
-            *)
-                log_warn "无效输入，保持 ${cur}"
-                ;;
-        esac
-    fi
-    load_deploy_env
-    log_ok "蓝绿部署: $(blue_green_deploy_status_label)"
+    echo "未启用 (update 时可选蓝绿，默认开启)"
 }
 
 print_configure_summary() {
@@ -1811,9 +1807,6 @@ cmd_configure() {
         echo ""
         collect_prod_domain_https_config || exit 1
     fi
-
-    echo ""
-    configure_prompt_blue_green
 
     apply_app_config
 
@@ -2710,6 +2703,41 @@ start_worker_prod() {
     log_ok "Taskiq 已启动"
 }
 
+reload_caddy_prod_config() {
+    ensure_linux_caddy_ready
+    gen_caddyfile
+    load_deploy_env
+    caddy_export_env
+    ensure_caddy_data_migrated
+    local caddy_bin caddy_config reload_err
+    caddy_bin="$(resolve_caddy)"
+    caddy_config="$(caddy_resolved_config_path)"
+    if ! "$caddy_bin" validate --config "$caddy_config" >/dev/null 2>&1; then
+        log_error "Caddyfile 校验失败"
+        "$caddy_bin" validate --config "$caddy_config" 2>&1 | tail -20 >&2
+        return 1
+    fi
+    if [ -f "$LOGS_DIR/caddy.pid" ] && kill -0 "$(cat "$LOGS_DIR/caddy.pid")" 2>/dev/null; then
+        reload_err="$LOGS_DIR/caddy-reload.err"
+        : >"$reload_err"
+        if "$caddy_bin" reload --config "$caddy_config" 2>"$reload_err"; then
+            if verify_caddy_serving; then
+                log_ok "Caddy 已 reload"
+                return 0
+            fi
+            log_warn "Caddy reload 完成但服务校验未通过"
+        else
+            if [ -s "$reload_err" ]; then
+                log_warn "Caddy reload 失败: $(tail -3 "$reload_err" | tr '\n' ' ')"
+            else
+                log_warn "Caddy reload 失败（无 stderr 输出）"
+            fi
+        fi
+    fi
+    log_info "正在重启 Caddy 以应用配置..."
+    CADDY_START_FORCE=1 start_caddy_prod
+}
+
 start_caddy_prod() {
     ensure_linux_caddy_ready
     gen_caddyfile
@@ -2718,12 +2746,19 @@ start_caddy_prod() {
     ensure_caddy_data_migrated
     local caddy_bin caddy_config listen_label
     caddy_bin="$(resolve_caddy)"
-    caddy_config="$(caddy_native_path "$CADDYFILE")"
+    caddy_config="$(caddy_resolved_config_path)"
     listen_label="$(caddy_listen_port_label)"
     if [ -f "$LOGS_DIR/caddy.pid" ] && kill -0 "$(cat "$LOGS_DIR/caddy.pid")" 2>/dev/null; then
-        log_info "Caddy 已在运行"
-        verify_caddy_serving || return 1
-        return 0
+        if [ "${CADDY_START_FORCE:-0}" = "1" ]; then
+            log_info "强制重启 Caddy..."
+            stop_service caddy
+            kill_all_caddy_processes
+            rm -f "$LOGS_DIR/caddy.pid"
+        else
+            log_info "Caddy 已在运行"
+            verify_caddy_serving || return 1
+            return 0
+        fi
     fi
     stop_service caddy
     kill_all_caddy_processes
@@ -4339,7 +4374,7 @@ cmd_install_client_repo() {
 
 run_update_dev() {
     load_deploy_env
-    if bg_enabled; then
+    if prompt_update_blue_green; then
         bg_run_update_dev || return 1
         if ! pidfile_alive "$LOGS_DIR/frontend.pid" 2>/dev/null; then
             start_frontend_dev || return 1
@@ -4362,7 +4397,7 @@ run_update_dev() {
 
 run_update_prod() {
     load_deploy_env
-    if bg_enabled; then
+    if prompt_update_blue_green; then
         bg_run_update_prod || return 1
         return 0
     fi

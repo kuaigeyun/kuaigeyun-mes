@@ -58,18 +58,20 @@ Node.js 22+ · Python 3.12+（系统）/ 3.11（uv 虚拟环境）· uv · npm �
 
 ## 蓝绿部署（可选，`update` 零停机）
 
-默认 **关闭**（`BLUE_GREEN_DEPLOY=0`），行为与原先 stop → migrate → start 完全一致。
-
-**在部署脚本里配置（推荐）：**
+**每次 update 时选择**（默认蓝绿），无需事先写配置：
 
 ```bash
-./fast-deploy/deploy.sh configure          # 生产
-./fast-deploy/deploy.sh dev configure      # 开发
+./fast-deploy/deploy.sh update          # 生产：提示 [1] 蓝绿 / [0] 传统，回车=蓝绿
+./fast-deploy/deploy.sh dev update      # 开发
 ```
 
-向导 **「修改配置」** 同样会询问是否开启蓝绿部署。
+向导 **[3] 更新系统** 同样会先确认模式（dev/prod），再询问更新方式。
 
-也可手动编辑 `fast-deploy/config/deploy.env` 中的 `BLUE_GREEN_DEPLOY=1`。
+非交互脚本默认蓝绿；要传统 stop-start：`UPDATE_BLUE_GREEN=0 ./fast-deploy/deploy.sh update`
+
+**`deploy.env` 的 `BLUE_GREEN_DEPLOY=1`** 仅影响 start/stop/status（无 state 文件时强制双槽位）；日常不必修改。
+
+也可手动编辑 `fast-deploy/config/deploy.env` 中的 `BLUE_GREEN_DEPLOY=1`（高级用法）。
 
 - **生产**：新 backend 在 inactive 端口就绪 → Caddy reload 切流量 → 原子切换 `dist-live` → 再停旧 backend
 - **开发**：`:8200` dev API 代理固定入口，Vite 无需重启；backend 在 `8201`/`8202` 双槽切换
