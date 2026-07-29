@@ -822,11 +822,22 @@ class CoordinationBoardService:
             and float(i.suggested_purchase_order_quantity or 0) > 0
         ]
         po_material_ids: Set[int] = exclusions.get("po_material_ids") or set()
+        remaining_by_material = DemandComputationService._get_purchase_remaining_qty_by_material(
+            items, exclusions
+        )
         unpushed_buy = [
             i
             for i in buy_items
-            if i.material_id not in po_material_ids
+            if i.material_id is not None
+            and remaining_by_material.get(int(i.material_id), 0.0) > 0
         ]
+        # 按物料去重统计待补种类
+        unpushed_material_ids = {
+            int(i.material_id)
+            for i in unpushed_buy
+            if i.material_id is not None
+            and remaining_by_material.get(int(i.material_id), 0.0) > 0
+        }
         no_supplier = [
             i
             for i in unpushed_buy
@@ -851,26 +862,26 @@ class CoordinationBoardService:
             )
         elif pr_count > 0 and po_count == 0:
             pf_status = "partial"
-            pf_summary = f"已下推采购申请×{pr_count}，待转 PO / 补下推 {len(unpushed_buy)} 种"
+            pf_summary = f"已下推采购申请×{pr_count}，待转 PO / 补下推 {len(unpushed_material_ids)} 种"
             pf_blockers = [f"{i.material_code} 待转采购订单" for i in unpushed_buy[:5]]
         elif pr_count > 0 and po_count > 0 and unpushed_buy:
             pf_status = "partial"
             pf_summary = (
                 f"采购申请×{pr_count} - 采购单×{po_count}，"
-                f"待补 {len(unpushed_buy)} 种"
+                f"待补 {len(unpushed_material_ids)} 种"
             )
             pf_blockers = [f"{i.material_code} 待转采购订单" for i in unpushed_buy[:5]]
         elif no_supplier:
             pf_status = "blocked"
-            pf_summary = f"待下推 {len(unpushed_buy)} 种采购物料"
+            pf_summary = f"待下推 {len(unpushed_material_ids)} 种采购物料"
             pf_blockers = [f"{i.material_code} 未配置默认供应商" for i in no_supplier[:5]]
-        elif len(unpushed_buy) < len(buy_items):
+        elif po_count > 0 and unpushed_material_ids:
             pf_status = "partial"
-            pf_summary = f"已下推 PO×{po_count}，待补 {len(unpushed_buy)} 种"
+            pf_summary = f"已下推 PO×{po_count}，待补 {len(unpushed_material_ids)} 种"
             pf_blockers = [f"{i.material_code} 未下推采购" for i in unpushed_buy[:5]]
         else:
             pf_status = "pending"
-            pf_summary = f"待下推 {len(unpushed_buy)} 种采购物料"
+            pf_summary = f"待下推 {len(unpushed_material_ids)} 种采购物料"
             pf_blockers = [f"{i.material_code} 未下推采购" for i in unpushed_buy[:5]]
 
         pr_list = docs.get("purchase_requisitions") or []

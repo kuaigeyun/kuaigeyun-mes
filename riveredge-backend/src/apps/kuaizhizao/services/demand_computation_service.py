@@ -16,7 +16,7 @@ from decimal import Decimal, ROUND_CEILING
 from tortoise.transactions import in_transaction
 from loguru import logger
 
-from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
+from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, DocumentStatus
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
@@ -3063,7 +3063,7 @@ class DemandComputationService(AppBaseService):
         # 获取已下推且仍存在的单据，用于排除重复下推
         exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
         already_pushed_wo_material_ids = exclusions["wo_material_ids"] | exclusions["outsource_material_ids"]
-        already_pushed_po_material_ids = exclusions["po_material_ids"]
+        purchase_remaining_by_material = self._get_purchase_remaining_qty_by_material(items, exclusions)
         
         # #region agent log
         try:
@@ -3146,6 +3146,7 @@ class DemandComputationService(AppBaseService):
             })()
 
         created_wo_material_ids: set = set(already_pushed_wo_material_ids)  # 已创建/已下推工单的物料ID，避免重复
+        created_po_material_ids: set = set()  # 本次循环已加入采购分组的物料，避免重复行
 
         if use_group_by_demand_item and generate_mode in ("all", "work_order_only", "outsource_only"):
             from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
@@ -3235,8 +3236,11 @@ class DemandComputationService(AppBaseService):
                     
             elif source_type == SOURCE_TYPE_BUY:
                 # 采购件：正式下推须配置默认供应商；草稿下推允许无供应商（归入待定分组）
-                # 排除已下推且仍存在的采购单中的物料，避免重复
-                if item.material_id in already_pushed_po_material_ids:
+                # 按剩余可推数量补推，支持部分物料/部分数量已下推后继续下推
+                if item.material_id in created_po_material_ids:
+                    continue
+                remaining_qty = purchase_remaining_by_material.get(int(item.material_id or 0), 0.0)
+                if remaining_qty <= 0:
                     continue
                 if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
                     supplier_id = None
@@ -3249,9 +3253,18 @@ class DemandComputationService(AppBaseService):
                     elif allow_draft:
                         group_key = PURCHASE_ORDER_NO_SUPPLIER_GROUP
                     if group_key is not None:
+                        same_material = [
+                            i
+                            for i in items
+                            if i.material_source_type == SOURCE_TYPE_BUY
+                            and i.material_id == item.material_id
+                            and float(i.suggested_purchase_order_quantity or 0) > 0
+                        ]
+                        agg_item = self._build_aggregated_purchase_item(same_material, remaining_qty)
                         if group_key not in purchase_items_by_supplier:
                             purchase_items_by_supplier[group_key] = []
-                        purchase_items_by_supplier[group_key].append(item)
+                        purchase_items_by_supplier[group_key].append(agg_item)
+                        created_po_material_ids.add(item.material_id)
                     
             elif source_type == SOURCE_TYPE_OUTSOURCE:
                 # 委外件：生成委外工单（按物料聚合，避免重复）
@@ -3315,20 +3328,31 @@ class DemandComputationService(AppBaseService):
                         created_wo_material_ids.add(item.material_id)
                 
                 # 如果有建议采购订单数量：正式下推须默认供应商，草稿下推允许无供应商
-                if item.material_id not in already_pushed_po_material_ids and item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
-                    supplier_id = None
-                    if item.material_source_config:
-                        sc = resolve_computation_item_source_config(item.material_source_config)
-                        supplier_id = sc.get("default_supplier_id")
-                    group_key = None
-                    if supplier_id:
-                        group_key = supplier_id
-                    elif allow_draft:
-                        group_key = PURCHASE_ORDER_NO_SUPPLIER_GROUP
-                    if group_key is not None:
-                        if group_key not in purchase_items_by_supplier:
-                            purchase_items_by_supplier[group_key] = []
-                        purchase_items_by_supplier[group_key].append(item)
+                if item.material_id not in created_po_material_ids:
+                    remaining_qty = purchase_remaining_by_material.get(int(item.material_id or 0), 0.0)
+                    if remaining_qty > 0 and item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
+                        supplier_id = None
+                        if item.material_source_config:
+                            sc = resolve_computation_item_source_config(item.material_source_config)
+                            supplier_id = sc.get("default_supplier_id")
+                        group_key = None
+                        if supplier_id:
+                            group_key = supplier_id
+                        elif allow_draft:
+                            group_key = PURCHASE_ORDER_NO_SUPPLIER_GROUP
+                        if group_key is not None:
+                            same_material = [
+                                i
+                                for i in items
+                                if not i.material_source_type
+                                and i.material_id == item.material_id
+                                and float(i.suggested_purchase_order_quantity or 0) > 0
+                            ]
+                            agg_item = self._build_aggregated_purchase_item(same_material, remaining_qty)
+                            if group_key not in purchase_items_by_supplier:
+                                purchase_items_by_supplier[group_key] = []
+                            purchase_items_by_supplier[group_key].append(agg_item)
+                            created_po_material_ids.add(item.material_id)
             
             else:
                 # #region agent log
@@ -3588,23 +3612,93 @@ class DemandComputationService(AppBaseService):
 
         return {"records": records}
 
+    @staticmethod
+    def _aggregate_buy_suggested_qty_by_material(
+        items: List[DemandComputationItem],
+    ) -> Dict[int, float]:
+        """采购件建议数量按 material_id 汇总。"""
+        out: Dict[int, float] = {}
+        for item in items:
+            if item.material_source_type != SOURCE_TYPE_BUY:
+                continue
+            mid = item.material_id
+            if mid is None:
+                continue
+            qty = float(item.suggested_purchase_order_quantity or 0)
+            if qty <= 0:
+                continue
+            out[int(mid)] = out.get(int(mid), 0.0) + qty
+        return out
+
+    @staticmethod
+    def _get_purchase_remaining_qty_by_material(
+        items: List[DemandComputationItem],
+        exclusions: Dict[str, Any],
+    ) -> Dict[int, float]:
+        """
+        按物料计算剩余可下推采购数量。
+        已下推 = 关联采购订单 ordered_quantity + 关联采购申请占用数量。
+        """
+        suggested = DemandComputationService._aggregate_buy_suggested_qty_by_material(items)
+        po_pushed = exclusions.get("po_pushed_qty_by_material_id") or {}
+        pr_committed = exclusions.get("pr_committed_qty_by_material_id") or {}
+        remaining: Dict[int, float] = {}
+        for mid, sug in suggested.items():
+            pushed = float(po_pushed.get(mid, 0.0)) + float(pr_committed.get(mid, 0.0))
+            rem = max(0.0, sug - pushed)
+            if rem > 0:
+                remaining[mid] = rem
+        return remaining
+
+    @staticmethod
+    def _build_aggregated_purchase_item(
+        group: List[DemandComputationItem],
+        remaining_qty: float,
+    ) -> Any:
+        """同一物料多行合并为一条下推明细，数量取剩余可推。"""
+        first = group[0]
+        start_dates = [g.procurement_start_date for g in group if g.procurement_start_date]
+        end_dates = [
+            g.procurement_completion_date or g.delivery_date
+            for g in group
+            if g.procurement_completion_date or g.delivery_date
+        ]
+        return type("_AggregatedPurchaseItem", (), {
+            "id": first.id,
+            "material_id": first.material_id,
+            "material_code": first.material_code,
+            "material_name": first.material_name,
+            "material_spec": first.material_spec,
+            "material_unit": first.material_unit,
+            "material_source_type": first.material_source_type,
+            "material_source_config": first.material_source_config,
+            "suggested_purchase_order_quantity": Decimal(str(remaining_qty)),
+            "procurement_start_date": min(start_dates) if start_dates else None,
+            "procurement_completion_date": max(end_dates) if end_dates else None,
+            "delivery_date": max(end_dates) if end_dates else getattr(first, "delivery_date", None),
+        })()
+
     async def _get_already_pushed_exclusions(
         self, tenant_id: int, computation_id: int
     ) -> Dict[str, Any]:
         """
-        获取需求计算已下推且仍存在的单据对应的物料ID等排除信息。
-        用于重新下推时避免重复生成。
+        获取需求计算已下推且仍存在的单据对应的排除信息。
+        采购件按已下推数量计（支持部分下推后补推剩余数量）。
         返回: {
-            wo_material_ids: set,  # 已有工单的物料ID
-            outsource_material_ids: set,  # 已有委外工单的物料ID
-            po_material_ids: set,  # 已有采购单包含的物料ID
-            has_purchase_requisition: bool,
+            wo_material_ids, outsource_material_ids,
+            po_material_ids,  # 兼容：仍有剩余可推数量的物料不在此集合
+            po_pushed_qty_by_material_id,
+            pr_committed_qty_by_material_id,
+            has_purchase_requisition,
         }
         """
         from apps.kuaizhizao.models.document_relation import DocumentRelation
         from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
-        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+        from apps.kuaizhizao.models.purchase_requisition import (
+            PurchaseRequisition,
+            PurchaseRequisitionItem,
+        )
         from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
 
         rels = await DocumentRelation.filter(
@@ -3615,7 +3709,8 @@ class DemandComputationService(AppBaseService):
 
         wo_material_ids = set()
         outsource_material_ids = set()
-        po_material_ids = set()
+        po_pushed_qty_by_material_id: Dict[int, float] = {}
+        pr_committed_qty_by_material_id: Dict[int, float] = {}
         has_purchase_requisition = False
 
         for rel in rels:
@@ -3629,20 +3724,49 @@ class DemandComputationService(AppBaseService):
                 if owo:
                     outsource_material_ids.add(owo.product_id)
             elif tt == "purchase_order":
-                po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=tid)
-                if po:
-                    items = await PurchaseOrderItem.filter(order_id=tid).all()
-                    for poi in items:
-                        po_material_ids.add(poi.material_id)
+                po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
+                if po and po.status != DocumentStatus.CANCELLED.value:
+                    po_items = await PurchaseOrderItem.filter(
+                        tenant_id=tenant_id,
+                        order_id=tid,
+                        deleted_at__isnull=True,
+                    ).all()
+                    for poi in po_items:
+                        mid = int(poi.material_id)
+                        qty = float(poi.ordered_quantity or 0)
+                        if qty <= 0:
+                            continue
+                        po_pushed_qty_by_material_id[mid] = (
+                            po_pushed_qty_by_material_id.get(mid, 0.0) + qty
+                        )
             elif tt == "purchase_requisition":
-                req = await PurchaseRequisition.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
-                if req:
+                req = await PurchaseRequisition.get_or_none(
+                    tenant_id=tenant_id, id=tid, deleted_at__isnull=True
+                )
+                if req and req.status != DocumentStatus.CANCELLED.value:
                     has_purchase_requisition = True
+                    req_items = await PurchaseRequisitionItem.filter(
+                        tenant_id=tenant_id,
+                        requisition_id=tid,
+                    ).all()
+                    for pri in req_items:
+                        mid = int(pri.material_id)
+                        qty = float(pri.quantity or 0)
+                        if qty <= 0:
+                            continue
+                        pr_committed_qty_by_material_id[mid] = (
+                            pr_committed_qty_by_material_id.get(mid, 0.0) + qty
+                        )
+
+        # 兼容旧字段：仅当该物料在关联 PO 中出现过且剩余为 0 时视为 fully pushed
+        po_material_ids = set(po_pushed_qty_by_material_id.keys())
 
         return {
             "wo_material_ids": wo_material_ids,
             "outsource_material_ids": outsource_material_ids,
             "po_material_ids": po_material_ids,
+            "po_pushed_qty_by_material_id": po_pushed_qty_by_material_id,
+            "pr_committed_qty_by_material_id": pr_committed_qty_by_material_id,
             "has_purchase_requisition": has_purchase_requisition,
         }
 
@@ -3658,11 +3782,12 @@ class DemandComputationService(AppBaseService):
 
         wo_material_ids = exclusions.get("wo_material_ids") or set()
         outsource_material_ids = exclusions.get("outsource_material_ids") or set()
-        po_material_ids = exclusions.get("po_material_ids") or set()
-        has_purchase_requisition = bool(exclusions.get("has_purchase_requisition"))
+        po_pushed = exclusions.get("po_pushed_qty_by_material_id") or {}
+        pr_committed = exclusions.get("pr_committed_qty_by_material_id") or {}
 
         pushable = 0.0
         pushed = 0.0
+        buy_suggested = self._aggregate_buy_suggested_qty_by_material(items)
         for item in items:
             st = item.material_source_type
             if st == SOURCE_TYPE_PHANTOM:
@@ -3684,13 +3809,12 @@ class DemandComputationService(AppBaseService):
                 pushable += qty
                 if mid in outsource_material_ids:
                     pushed += qty
-            elif st == SOURCE_TYPE_BUY:
-                qty = float(item.suggested_purchase_order_quantity or 0)
-                if qty <= 0:
-                    continue
-                pushable += qty
-                if has_purchase_requisition or mid in po_material_ids:
-                    pushed += qty
+
+        for mid, sug in buy_suggested.items():
+            pushable += sug
+            po_qty = float(po_pushed.get(mid, 0.0))
+            pr_qty = float(pr_committed.get(mid, 0.0))
+            pushed += min(sug, po_qty + pr_qty)
 
         if pushable <= 0:
             return 0.0
@@ -4106,17 +4230,16 @@ class DemandComputationService(AppBaseService):
 
         push_as_confirm = push_mode == "confirm"
         exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
-        already_pushed_po = exclusions["po_material_ids"]
+        remaining_by_material = self._get_purchase_remaining_qty_by_material(items, exclusions)
+        suggested_by_material = self._aggregate_buy_suggested_qty_by_material(items)
+        po_pushed = exclusions.get("po_pushed_qty_by_material_id") or {}
+        pr_committed = exclusions.get("pr_committed_qty_by_material_id") or {}
 
         material_ids = sorted(
             {
-                int(i.material_id)
-                for i in items
-                if i.material_id is not None
-                and i.material_source_type == SOURCE_TYPE_BUY
-                and i.material_id not in already_pushed_po
-                and i.suggested_purchase_order_quantity
-                and float(i.suggested_purchase_order_quantity) > 0
+                int(mid)
+                for mid in remaining_by_material
+                if remaining_by_material[mid] > 0
             }
         )
         material_rows = (
@@ -4128,20 +4251,28 @@ class DemandComputationService(AppBaseService):
 
         preview_items: List[Dict[str, Any]] = []
         skipped_without_supplier = 0
+        seen_material_ids: set = set()
         for item in items:
             if item.material_source_type != SOURCE_TYPE_BUY:
                 continue
-            if item.material_id in already_pushed_po:
+            if item.material_id is None or item.material_id in seen_material_ids:
                 continue
-            qty = float(item.suggested_purchase_order_quantity or 0)
-            if qty <= 0:
+            seen_material_ids.add(item.material_id)
+            mid = int(item.material_id)
+            remaining = remaining_by_material.get(mid, 0.0)
+            if remaining <= 0:
                 continue
+            suggested = suggested_by_material.get(mid, 0.0)
+            pushed_qty = min(
+                suggested,
+                float(po_pushed.get(mid, 0.0)) + float(pr_committed.get(mid, 0.0)),
+            )
             sc = resolve_computation_item_source_config(item.material_source_config)
             supplier_id = sc.get("default_supplier_id")
             if push_as_confirm and not supplier_id:
                 skipped_without_supplier += 1
                 continue
-            material = material_by_id.get(int(item.material_id)) if item.material_id is not None else None
+            material = material_by_id.get(mid)
             material_code = str(item.material_code or "").strip()
             material_name = str(item.material_name or "").strip()
             if material:
@@ -4159,9 +4290,9 @@ class DemandComputationService(AppBaseService):
                     "material_id": item.material_id,
                     "material_code": material_code or f"M{item.material_id}",
                     "material_name": material_name or material_code or f"物料{item.material_id}",
-                    "quantity": qty,
-                    "pushed_quantity": 0.0,
-                    "max_push_quantity": qty,
+                    "quantity": suggested,
+                    "pushed_quantity": pushed_qty,
+                    "max_push_quantity": remaining,
                     "target_document": "purchase_order",
                     "default_supplier_id": supplier_id,
                     "supplier_pending": not bool(supplier_id),
@@ -4290,22 +4421,25 @@ class DemandComputationService(AppBaseService):
             purchase_requisition_count = 1
         elif purchase == "purchase_order":
             exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
-            already_pushed_po = exclusions["po_material_ids"]
+            remaining_by_material = self._get_purchase_remaining_qty_by_material(items, exclusions)
             supplier_ids = set()
             has_no_supplier_group = False
             for item in items:
-                if (
-                    item.material_source_type == SOURCE_TYPE_BUY
-                    and item.suggested_purchase_order_quantity
-                    and item.suggested_purchase_order_quantity > 0
-                    and item.material_id not in already_pushed_po
-                ):
-                    sc = resolve_computation_item_source_config(item.material_source_config)
-                    sid = sc.get("default_supplier_id")
-                    if sid:
-                        supplier_ids.add(sid)
-                    elif resolved_push_mode != "confirm":
-                        has_no_supplier_group = True
+                if item.material_source_type != SOURCE_TYPE_BUY:
+                    continue
+                if item.material_id is None:
+                    continue
+                remaining = remaining_by_material.get(int(item.material_id), 0.0)
+                if remaining <= 0:
+                    continue
+                if not item.suggested_purchase_order_quantity or float(item.suggested_purchase_order_quantity) <= 0:
+                    continue
+                sc = resolve_computation_item_source_config(item.material_source_config)
+                sid = sc.get("default_supplier_id")
+                if sid:
+                    supplier_ids.add(sid)
+                elif resolved_push_mode != "confirm":
+                    has_no_supplier_group = True
             purchase_order_count = len(supplier_ids) + (1 if has_no_supplier_group else 0)
 
         biz_config = BusinessConfigService()
