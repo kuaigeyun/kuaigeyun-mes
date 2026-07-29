@@ -1652,3 +1652,22 @@ def get_canonical_rule_code(page_code: str) -> Optional[str]:
         return None
     return str(rule_code).strip()
 
+
+def get_rule_code_to_page_code() -> Dict[str, str]:
+    """
+    rule_code → page_code（由 CODE_RULE_PAGES 派生，供单据单号生成反查 page_code）。
+    同一 rule_code 出现多次时保留首次映射。
+    """
+    mapping: Dict[str, str] = {}
+    for page in CODE_RULE_PAGES:
+        rule_code = page.get("rule_code")
+        page_code = page.get("page_code")
+        if not rule_code or not page_code:
+            continue
+        rc = str(rule_code).strip()
+        pc = str(page_code).strip()
+        if not rc or not pc or rc in mapping:
+            continue
+        mapping[rc] = pc
+    return mapping
+
