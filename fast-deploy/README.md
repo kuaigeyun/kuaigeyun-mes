@@ -56,6 +56,28 @@ Node.js 22+ · Python 3.12+（系统）/ 3.11（uv 虚拟环境）· uv · npm �
 
 生产向导 / `configure` 会询问：**仅 IP** 或 **域名 + 自动 HTTPS**（写入 `deploy.env` 的 `CADDY_DOMAIN`、`CADDY_ENABLE_LETSENCRYPT`）。
 
+## 蓝绿部署（可选，`update` 零停机）
+
+默认 **关闭**（`BLUE_GREEN_DEPLOY=0`），行为与原先 stop → migrate → start 完全一致。
+
+在 `fast-deploy/config/deploy.env` 中设置 `BLUE_GREEN_DEPLOY=1` 后，`update` 会：
+
+- **生产**：新 backend 在 inactive 端口就绪 → Caddy reload 切流量 → 原子切换 `dist-live` → 再停旧 backend
+- **开发**：`:8200` dev API 代理固定入口，Vite 无需重启；backend 在 `8201`/`8202` 双槽切换
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `BLUE_GREEN_DEPLOY` | `0` | `1` 启用蓝绿 update |
+| `BACKEND_PORT_BLUE` | `8201` | 蓝槽 backend |
+| `BACKEND_PORT_GREEN` | `8202` | 绿槽 backend |
+| `WORKER_DRAIN_TIMEOUT` | `60` | Worker 优雅退出秒数 |
+
+**关闭蓝绿（回到原先部署方式）**：设 `BLUE_GREEN_DEPLOY=0` → `./fast-deploy/deploy.sh stop` → `start`。无需改数据库。
+
+`./fast-deploy/deploy.sh status` 在启用后会显示 active 槽位与健康状态。`launch.dev.sh` 不经过蓝绿逻辑；需蓝绿时请用 `./fast-deploy/deploy.sh dev`。
+
+详细说明与回滚边界见 [部署指南](../docs/部署指南.md#蓝绿部署可选)。
+
 ## Windows 要点
 
 - Git Bash 运行 `./fast-deploy/deploy.sh`；依赖安装走 PowerShell

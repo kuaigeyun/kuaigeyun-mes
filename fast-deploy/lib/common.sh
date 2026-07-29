@@ -130,7 +130,15 @@ load_deploy_env() {
     CADDY_START_TIMEOUT="${CADDY_START_TIMEOUT:-45}"
     GIT_BRANCH="${GIT_BRANCH:-develop}"
     GIT_REMOTE="${GIT_REMOTE:-origin}"
+    BLUE_GREEN_DEPLOY="${BLUE_GREEN_DEPLOY:-0}"
+    BACKEND_PORT_BLUE="${BACKEND_PORT_BLUE:-8201}"
+    BACKEND_PORT_GREEN="${BACKEND_PORT_GREEN:-8202}"
+    WORKER_DRAIN_TIMEOUT="${WORKER_DRAIN_TIMEOUT:-60}"
+    BLUE_GREEN_HEALTH_TIMEOUT="${BLUE_GREEN_HEALTH_TIMEOUT:-120}"
 }
+
+# shellcheck source=lib/blue_green.sh
+source "$FAST_DEPLOY_DIR/lib/blue_green.sh"
 
 is_windows_gitbash() {
     case "$(uname -s)" in
@@ -979,6 +987,9 @@ stop_service() {
             ;;
         scheduler)
             patterns=("taskiq scheduler.*core.tasks.taskiq_app:scheduler")
+            ;;
+        dev-api-proxy)
+            patterns=("caddy run.*Caddyfile.dev-api")
             ;;
     esac
     if [ "${#patterns[@]}" -gt 0 ]; then
@@ -2400,10 +2411,24 @@ gen_caddyfile() {
     [ -f "$CADDY_TEMPLATE" ] || { log_error "缺少模板 $CADDY_TEMPLATE"; exit 1; }
 
     local addr backend_addr frontend_root mobile_web_root
-    backend_addr="127.0.0.1:${BACKEND_PORT}"
-    frontend_root="$(caddy_native_path "$FRONTEND_DIR/dist")"
-    [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/index.html，请先 build"; exit 1; }
-    [ -f "$FRONTEND_DIR/dist/login.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/login.html（登录 MPA），请先 build.web"; exit 1; }
+    if bg_enabled; then
+        bg_init_frontend_slots
+        backend_addr="127.0.0.1:$(bg_active_port)"
+        frontend_root="$(bg_get_frontend_root_for_caddy)"
+        [ -f "$(bg_frontend_live_link)/index.html" ] || [ -f "$FRONTEND_DIR/dist/index.html" ] || {
+            log_error "缺少前端 dist，请先 build"
+            exit 1
+        }
+        [ -f "$(bg_frontend_live_link)/login.html" ] || [ -f "$FRONTEND_DIR/dist/login.html" ] || {
+            log_error "缺少 login.html（登录 MPA），请先 build.web"
+            exit 1
+        }
+    else
+        backend_addr="127.0.0.1:${BACKEND_PORT}"
+        frontend_root="$(caddy_native_path "$FRONTEND_DIR/dist")"
+        [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/index.html，请先 build"; exit 1; }
+        [ -f "$FRONTEND_DIR/dist/login.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/login.html（登录 MPA），请先 build.web"; exit 1; }
+    fi
     ensure_mobile_web_dist
     mobile_web_root="$(caddy_native_path "$MOBILE_WEB_DIR")"
 
@@ -2508,6 +2533,12 @@ ensure_linux_caddy_ready() {
 }
 
 start_backend_dev() {
+    if bg_enabled; then
+        bg_init_state
+        bg_start_backend_slot "$(bg_active_slot)" dev || exit 1
+        bg_start_dev_api_proxy || exit 1
+        return 0
+    fi
     kill_port "$BACKEND_PORT"
     log_info "启动后端 (dev, :${BACKEND_PORT})..."
     (
@@ -2572,6 +2603,11 @@ start_frontend_dev() {
 }
 
 start_backend_prod() {
+    if bg_enabled; then
+        bg_init_state
+        bg_start_backend_slot "$(bg_active_slot)" prod || exit 1
+        return 0
+    fi
     if [ -f "$LOGS_DIR/backend.pid" ] && kill -0 "$(cat "$LOGS_DIR/backend.pid")" 2>/dev/null; then
         log_info "后端已在运行"
         return 0
@@ -2697,10 +2733,17 @@ rollback_partial_prod_start() {
     log_warn "回滚已启动的生产服务..."
     stop_service caddy
     stop_service backend
+    if bg_enabled; then
+        bg_stop_all_backends
+    fi
     stop_service worker
     stop_service scheduler
     kill_all_caddy_processes
     kill_port "$BACKEND_PORT"
+    if bg_enabled; then
+        kill_port "$BACKEND_PORT_BLUE" 2>/dev/null || true
+        kill_port "$BACKEND_PORT_GREEN" 2>/dev/null || true
+    fi
     if caddy_https_enabled; then
         ensure_port_free 80 || true
         ensure_port_free 443 || true
@@ -2795,7 +2838,13 @@ cmd_start_prod() {
 }
 
 cmd_stop_dev() {
-    kill_port "$BACKEND_PORT"
+    load_deploy_env
+    if bg_enabled; then
+        bg_stop_dev_api_proxy
+        bg_stop_all_backends
+    else
+        kill_port "$BACKEND_PORT"
+    fi
     kill_port "$FRONTEND_PORT"
     stop_service worker
     stop_service scheduler
@@ -2808,6 +2857,9 @@ cmd_stop_prod() {
     stop_service worker
     stop_service scheduler
     stop_service backend
+    if bg_enabled; then
+        bg_stop_all_backends
+    fi
     kill_all_caddy_processes
     if caddy_https_enabled; then
         ensure_port_free 80 || true
@@ -2816,6 +2868,10 @@ cmd_stop_prod() {
         ensure_port_free "$PROXY_PORT" || true
     fi
     kill_port "$BACKEND_PORT"
+    if bg_enabled; then
+        kill_port "$BACKEND_PORT_BLUE" 2>/dev/null || true
+        kill_port "$BACKEND_PORT_GREEN" 2>/dev/null || true
+    fi
     log_ok "生产服务已停止"
 }
 
@@ -3295,6 +3351,10 @@ cmd_status() {
         check_port 80 && echo "  端口 80 (HTTP 跳转): 监听中" || echo "  端口 80 (HTTP 跳转): 空闲"
     else
         check_port "$PROXY_PORT" && echo "  端口 ${PROXY_PORT}: 监听中" || echo "  端口 ${PROXY_PORT}: 空闲"
+    fi
+    if bg_enabled; then
+        echo ""
+        bg_print_status
     fi
 }
 
@@ -4245,6 +4305,16 @@ cmd_install_client_repo() {
 }
 
 run_update_dev() {
+    load_deploy_env
+    if bg_enabled; then
+        bg_run_update_dev || return 1
+        if ! pidfile_alive "$LOGS_DIR/frontend.pid" 2>/dev/null; then
+            start_frontend_dev || return 1
+        else
+            log_info "Vite 仍在运行，跳过前端重启（蓝绿 update）"
+        fi
+        return 0
+    fi
     # SKIP_GIT_SYNC=1：调用方已 sync（如向导拉取后 reload 脚本）
     # 私仓拉取仍走菜单 [4]；若已启用则 update 后自动 recompose，避免 clean 掉组装产物
     if [ "${SKIP_GIT_SYNC:-0}" != "1" ]; then
@@ -4258,6 +4328,11 @@ run_update_dev() {
 }
 
 run_update_prod() {
+    load_deploy_env
+    if bg_enabled; then
+        bg_run_update_prod || return 1
+        return 0
+    fi
     # 私仓拉取仍走菜单 [4]；若已启用则 update 后自动 recompose，避免 clean 掉组装产物
     if [ "${SKIP_GIT_SYNC:-0}" != "1" ]; then
         sync_git_from_origin || return 1

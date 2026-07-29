@@ -1,0 +1,36 @@
+# RiverEdge 开发环境 API 稳定入口（蓝绿部署 dev 代理）
+# 占位符：{{LISTEN_PORT}} {{BACKEND_ADDR}}
+
+{
+    admin off
+}
+
+:{{LISTEN_PORT}} {
+    encode gzip
+
+    handle /api/* {
+        reverse_proxy {{BACKEND_ADDR}} {
+            transport http {
+                read_timeout 60s
+                write_timeout 60s
+                response_header_timeout 30s
+                keepalive 30s
+            }
+        }
+    }
+    handle /static/* {
+        reverse_proxy {{BACKEND_ADDR}}
+    }
+    handle /docs* {
+        reverse_proxy {{BACKEND_ADDR}}
+    }
+    handle /redoc* {
+        reverse_proxy {{BACKEND_ADDR}}
+    }
+    handle /openapi.json {
+        reverse_proxy {{BACKEND_ADDR}}
+    }
+    handle /health {
+        reverse_proxy {{BACKEND_ADDR}}
+    }
+}

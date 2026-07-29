@@ -47,6 +47,8 @@ function Ensure-LogsDir {
     if (-not (Test-Path $script:LogsDir)) { New-Item -ItemType Directory -Path $script:LogsDir -Force | Out-Null }
 }
 
+. (Join-Path $PSScriptRoot 'blue_green.ps1')
+
 function Load-DeployEnv {
     if (-not (Test-Path $script:DeployEnvFile)) {
         $example = $script:DeployEnvExample
@@ -86,6 +88,7 @@ function Load-DeployEnv {
     if (-not $script:CADDY_START_TIMEOUT) { $script:CADDY_START_TIMEOUT = 45 }
     if (-not $script:GIT_BRANCH) { $script:GIT_BRANCH = 'develop' }
     if (-not $script:GIT_REMOTE) { $script:GIT_REMOTE = 'origin' }
+    Initialize-BgDefaults
 }
 
 function Apply-CN-Mirrors {
@@ -1149,6 +1152,11 @@ function New-Caddyfile {
 
     $backendAddr = "127.0.0.1:$($script:BACKEND_PORT)"
     $frontendRoot = (Join-Path $script:FrontendDir 'dist') -replace '\\','/'
+    if (Test-BgEnabled) {
+        Initialize-BgFrontendSlots
+        $backendAddr = "127.0.0.1:$(Get-BgSlotPort (Get-BgActiveSlot))"
+        $frontendRoot = Get-BgFrontendRootForCaddy
+    }
     Ensure-MobileWebDist
     $mobileWebRoot = $script:MobileWebDir -replace '\\','/'
 
@@ -1215,6 +1223,12 @@ function Start-ProcessBackground([string]$Name, [string]$FilePath, [string[]]$Ar
 }
 
 function Start-BackendDev {
+    if (Test-BgEnabled) {
+        Initialize-BgState
+        Start-BgBackendSlot (Get-BgActiveSlot) 'dev'
+        Start-BgDevApiProxy
+        return
+    }
     Stop-Port $script:BACKEND_PORT
     Write-LogInfo "启动后端 (dev, :$($script:BACKEND_PORT))..."
     $uv = Resolve-Uv
@@ -1272,6 +1286,11 @@ function Start-FrontendDev {
 }
 
 function Start-BackendProd {
+    if (Test-BgEnabled) {
+        Initialize-BgState
+        Start-BgBackendSlot (Get-BgActiveSlot) 'prod'
+        return
+    }
     $pidf = Join-Path $script:LogsDir 'backend.pid'
     if (Test-Path $pidf) {
         $pid = [int](Get-Content $pidf -Raw).Trim()
@@ -1445,11 +1464,17 @@ function Invoke-StartProd {
 }
 
 function Invoke-StopDev {
-    Stop-Port $script:BACKEND_PORT
+    Load-DeployEnv
+    if (Test-BgEnabled) {
+        Stop-BgDevApiProxy
+        Stop-BgAllBackends
+    } else {
+        Stop-Port $script:BACKEND_PORT
+        Stop-ServiceByPidFile 'backend'
+    }
     Stop-Port $script:FRONTEND_PORT
     Stop-ServiceByPidFile 'worker'
     Stop-ServiceByPidFile 'scheduler'
-    Stop-ServiceByPidFile 'backend'
     Write-LogOk '开发服务已停止'
 }
 
@@ -1459,12 +1484,17 @@ function Invoke-StopProd {
     Stop-ServiceByPidFile 'worker'
     Stop-ServiceByPidFile 'scheduler'
     Stop-ServiceByPidFile 'backend'
+    if (Test-BgEnabled) { Stop-BgAllBackends }
     Get-Process caddy -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     if (Test-CaddyHttpsEnabled) {
         Stop-Port 80
         Stop-Port 443
     } else {
         Stop-Port $script:PROXY_PORT
+    }
+    if (Test-BgEnabled) {
+        Stop-Port $script:BACKEND_PORT_BLUE
+        Stop-Port $script:BACKEND_PORT_GREEN
     }
     Write-LogOk '生产服务已停止'
 }
@@ -1490,6 +1520,10 @@ function Invoke-Status {
         if (Test-PortInUse 80) { Write-Host '  端口 80 (HTTP 跳转): 监听中' } else { Write-Host '  端口 80 (HTTP 跳转): 空闲' }
     } else {
         if (Test-PortInUse $script:PROXY_PORT) { Write-Host "  端口 $($script:PROXY_PORT): 监听中" } else { Write-Host "  端口 $($script:PROXY_PORT): 空闲" }
+    }
+    if (Test-BgEnabled) {
+        Write-Host ''
+        Write-BgStatus
     }
 }
 
@@ -1619,6 +1653,18 @@ function Sync-GitFromOrigin {
 }
 
 function Invoke-UpdateDev {
+    Load-DeployEnv
+    if (Test-BgEnabled) {
+        Invoke-BgUpdateDev
+        $fpid = Join-Path $script:LogsDir 'frontend.pid'
+        if (-not (Test-PidFileAlive $fpid)) {
+            Start-FrontendDev
+        } else {
+            Write-LogInfo 'Vite 仍在运行，跳过前端重启（蓝绿 update）'
+        }
+        Write-LogOk '开发环境已更新'
+        return
+    }
     Sync-GitFromOrigin
     Invoke-StopDev
     Invoke-Migrate
@@ -1628,6 +1674,12 @@ function Invoke-UpdateDev {
 }
 
 function Invoke-UpdateProd {
+    Load-DeployEnv
+    if (Test-BgEnabled) {
+        Invoke-BgUpdateProd
+        Write-LogOk '生产环境已更新'
+        return
+    }
     Sync-GitFromOrigin
     Invoke-StopProd
     Invoke-Migrate
