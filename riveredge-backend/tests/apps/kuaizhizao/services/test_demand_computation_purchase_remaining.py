@@ -45,6 +45,15 @@ def test_remaining_considers_purchase_requisition_commitment():
     assert remaining[1] == 50.0
 
 
+def test_purchase_pushed_qty_for_material_caps_at_suggested():
+    exclusions = {
+        "po_pushed_qty_by_material_id": {1: 900.0},
+        "pr_committed_qty_by_material_id": {},
+    }
+    pushed = DemandComputationService._purchase_pushed_qty_for_material(1, 750.0, exclusions)
+    assert pushed == 750.0
+
+
 def test_aggregate_buy_qty_sums_same_material():
     items = [_buy_item(1, 30.0), _buy_item(1, 70.0), _buy_item(2, 10.0)]
     aggregated = DemandComputationService._aggregate_buy_suggested_qty_by_material(items)

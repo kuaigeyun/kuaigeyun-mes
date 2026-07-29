@@ -3678,6 +3678,42 @@ class DemandComputationService(AppBaseService):
             "delivery_date": max(end_dates) if end_dates else getattr(first, "delivery_date", None),
         })()
 
+    @staticmethod
+    async def _accumulate_po_pushed_qty_from_order(
+        tenant_id: int,
+        order_id: int,
+        po_pushed_qty_by_material_id: Dict[int, float],
+    ) -> None:
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+
+        po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id, deleted_at__isnull=True)
+        if not po or po.status == DocumentStatus.CANCELLED.value:
+            return
+        po_items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            deleted_at__isnull=True,
+        ).all()
+        for poi in po_items:
+            mid = int(poi.material_id)
+            qty = float(poi.ordered_quantity or 0)
+            if qty <= 0:
+                continue
+            po_pushed_qty_by_material_id[mid] = po_pushed_qty_by_material_id.get(mid, 0.0) + qty
+
+    @staticmethod
+    def _purchase_pushed_qty_for_material(
+        material_id: int,
+        suggested: float,
+        exclusions: Dict[str, Any],
+    ) -> float:
+        po_pushed = exclusions.get("po_pushed_qty_by_material_id") or {}
+        pr_committed = exclusions.get("pr_committed_qty_by_material_id") or {}
+        return min(
+            suggested,
+            float(po_pushed.get(material_id, 0.0)) + float(pr_committed.get(material_id, 0.0)),
+        )
+
     async def _get_already_pushed_exclusions(
         self, tenant_id: int, computation_id: int
     ) -> Dict[str, Any]:
@@ -3724,21 +3760,9 @@ class DemandComputationService(AppBaseService):
                 if owo:
                     outsource_material_ids.add(owo.product_id)
             elif tt == "purchase_order":
-                po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
-                if po and po.status != DocumentStatus.CANCELLED.value:
-                    po_items = await PurchaseOrderItem.filter(
-                        tenant_id=tenant_id,
-                        order_id=tid,
-                        deleted_at__isnull=True,
-                    ).all()
-                    for poi in po_items:
-                        mid = int(poi.material_id)
-                        qty = float(poi.ordered_quantity or 0)
-                        if qty <= 0:
-                            continue
-                        po_pushed_qty_by_material_id[mid] = (
-                            po_pushed_qty_by_material_id.get(mid, 0.0) + qty
-                        )
+                await self._accumulate_po_pushed_qty_from_order(
+                    tenant_id, tid, po_pushed_qty_by_material_id
+                )
             elif tt == "purchase_requisition":
                 req = await PurchaseRequisition.get_or_none(
                     tenant_id=tenant_id, id=tid, deleted_at__isnull=True
@@ -3757,6 +3781,20 @@ class DemandComputationService(AppBaseService):
                         pr_committed_qty_by_material_id[mid] = (
                             pr_committed_qty_by_material_id.get(mid, 0.0) + qty
                         )
+
+        linked_po_ids = {rel.target_id for rel in rels if rel.target_type == "purchase_order"}
+        source_pos = await PurchaseOrder.filter(
+            tenant_id=tenant_id,
+            source_type="demand_computation",
+            source_id=computation_id,
+            deleted_at__isnull=True,
+        ).all()
+        for po in source_pos:
+            if po.id in linked_po_ids:
+                continue
+            await self._accumulate_po_pushed_qty_from_order(
+                tenant_id, po.id, po_pushed_qty_by_material_id
+            )
 
         # 兼容旧字段：仅当该物料在关联 PO 中出现过且剩余为 0 时视为 fully pushed
         po_material_ids = set(po_pushed_qty_by_material_id.keys())
@@ -3916,7 +3954,7 @@ class DemandComputationService(AppBaseService):
             raise BusinessLogicError("只能下推已完成的需求计算")
 
         exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
-        already_pushed = exclusions["has_purchase_requisition"]
+        has_existing_pr = exclusions["has_purchase_requisition"]
 
         items = await DemandComputationItem.filter(
             tenant_id=tenant_id,
@@ -3928,6 +3966,8 @@ class DemandComputationService(AppBaseService):
             for i in items
             if i.suggested_purchase_order_quantity and i.suggested_purchase_order_quantity > 0
         ]
+        remaining_by_material = self._get_purchase_remaining_qty_by_material(items, exclusions)
+        suggested_by_material = self._aggregate_buy_suggested_qty_by_material(items)
 
         material_ids = sorted({int(i.material_id) for i in buy_items if i.material_id is not None})
         material_rows = (
@@ -3938,11 +3978,21 @@ class DemandComputationService(AppBaseService):
         material_by_id = {m.id: m for m in material_rows}
 
         preview_items: List[Dict[str, Any]] = []
+        seen_material_ids: set = set()
         for item in buy_items:
-            qty = float(item.suggested_purchase_order_quantity or 0)
-            if qty <= 0:
+            if item.material_id is None or item.material_id in seen_material_ids:
                 continue
-            material = material_by_id.get(int(item.material_id)) if item.material_id is not None else None
+            seen_material_ids.add(item.material_id)
+            mid = int(item.material_id)
+            suggested = suggested_by_material.get(mid, 0.0)
+            if suggested <= 0:
+                continue
+            pushed_qty = self._purchase_pushed_qty_for_material(mid, suggested, exclusions)
+            remaining = 0.0 if has_existing_pr else remaining_by_material.get(mid, 0.0)
+            if has_existing_pr:
+                pushed_qty = suggested
+
+            material = material_by_id.get(mid)
             material_code = str(item.material_code or "").strip()
             material_name = str(item.material_name or "").strip()
             if material:
@@ -3960,9 +4010,9 @@ class DemandComputationService(AppBaseService):
                     "material_id": item.material_id,
                     "material_code": material_code or f"M{item.material_id}",
                     "material_name": material_name or material_code or f"物料{item.material_id}",
-                    "quantity": qty,
-                    "pushed_quantity": qty if already_pushed else 0.0,
-                    "max_push_quantity": 0.0 if already_pushed else qty,
+                    "quantity": suggested,
+                    "pushed_quantity": pushed_qty,
+                    "max_push_quantity": remaining,
                     "required_date": str(item.procurement_completion_date)
                     if item.procurement_completion_date
                     else None,
@@ -3970,16 +4020,16 @@ class DemandComputationService(AppBaseService):
             )
 
         no_purchase_items = len(preview_items) == 0
-        has_blocking = already_pushed or no_purchase_items
-        blocking_reason = None
-        if already_pushed:
-            blocking_reason = "demand_computation.push_purchase_requisition.already_pushed"
-        elif no_purchase_items:
-            blocking_reason = "demand_computation.push_purchase_requisition.no_purchase_items"
-
         pushable_count = sum(
             1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
         )
+        has_blocking = has_existing_pr or pushable_count == 0
+        blocking_reason = None
+        if has_existing_pr:
+            blocking_reason = "demand_computation.push_purchase_requisition.already_pushed"
+        elif no_purchase_items or pushable_count == 0:
+            blocking_reason = "demand_computation.push_purchase_requisition.no_purchase_items"
+
         return {
             "target_type": "purchase_requisition",
             "computation_id": computation_id,
@@ -3989,14 +4039,14 @@ class DemandComputationService(AppBaseService):
                 if not has_blocking
                 else (
                     "该需求计算已下推采购申请且仍存在，请勿重复下推"
-                    if already_pushed
-                    else "需求计算中无采购件，无法下推采购申请"
+                    if has_existing_pr
+                    else "需求计算中无剩余可下推采购件，无法下推采购申请"
                 )
             ),
             "items": preview_items,
             "has_blocking_issues": has_blocking,
             "blocking_reason": blocking_reason,
-            "tip": "确认后将一次性生成采购申请，包含全部可下推采购件明细。",
+            "tip": "确认后将按可下推数量生成采购申请；已通过采购订单下推的物料不会重复纳入。",
         }
 
     async def _build_work_order_pull_preview_items(
@@ -4232,15 +4282,9 @@ class DemandComputationService(AppBaseService):
         exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
         remaining_by_material = self._get_purchase_remaining_qty_by_material(items, exclusions)
         suggested_by_material = self._aggregate_buy_suggested_qty_by_material(items)
-        po_pushed = exclusions.get("po_pushed_qty_by_material_id") or {}
-        pr_committed = exclusions.get("pr_committed_qty_by_material_id") or {}
 
         material_ids = sorted(
-            {
-                int(mid)
-                for mid in remaining_by_material
-                if remaining_by_material[mid] > 0
-            }
+            int(mid) for mid, qty in suggested_by_material.items() if qty > 0
         )
         material_rows = (
             await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
@@ -4259,19 +4303,15 @@ class DemandComputationService(AppBaseService):
                 continue
             seen_material_ids.add(item.material_id)
             mid = int(item.material_id)
-            remaining = remaining_by_material.get(mid, 0.0)
-            if remaining <= 0:
-                continue
             suggested = suggested_by_material.get(mid, 0.0)
-            pushed_qty = min(
-                suggested,
-                float(po_pushed.get(mid, 0.0)) + float(pr_committed.get(mid, 0.0)),
-            )
+            if suggested <= 0:
+                continue
+            remaining = remaining_by_material.get(mid, 0.0)
+            pushed_qty = self._purchase_pushed_qty_for_material(mid, suggested, exclusions)
             sc = resolve_computation_item_source_config(item.material_source_config)
             supplier_id = sc.get("default_supplier_id")
-            if push_as_confirm and not supplier_id:
+            if push_as_confirm and not supplier_id and remaining > 0:
                 skipped_without_supplier += 1
-                continue
             material = material_by_id.get(mid)
             material_code = str(item.material_code or "").strip()
             material_name = str(item.material_name or "").strip()

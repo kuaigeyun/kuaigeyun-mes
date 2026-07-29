@@ -466,6 +466,12 @@ class DocumentPushPullService:
         if not buy_items:
             raise BusinessLogicError("需求计算中无采购件，无法下推采购申请")
 
+        remaining_by_material = self.computation_service._get_purchase_remaining_qty_by_material(
+            items, exclusions
+        )
+        if not any(qty > 0 for qty in remaining_by_material.values()):
+            raise BusinessLogicError("需求计算中无剩余可下推采购件，无法下推采购申请")
+
         material_ids = sorted({int(i.material_id) for i in buy_items if i.material_id is not None})
         material_rows = (
             await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
@@ -475,13 +481,21 @@ class DocumentPushPullService:
         material_by_id = {m.id: m for m in material_rows}
 
         req_items = []
+        seen_material_ids: set = set()
         for item in buy_items:
+            if item.material_id is None or item.material_id in seen_material_ids:
+                continue
+            mid = int(item.material_id)
+            remaining = remaining_by_material.get(mid, 0.0)
+            if remaining <= 0:
+                continue
+            seen_material_ids.add(item.material_id)
             supplier_id = None
             if item.material_source_config:
                 sc = resolve_computation_item_source_config(item.material_source_config)
                 supplier_id = sc.get("default_supplier_id")
 
-            material = material_by_id.get(int(item.material_id)) if item.material_id is not None else None
+            material = material_by_id.get(mid)
             material_code = str(item.material_code or "").strip()
             material_name = str(item.material_name or "").strip()
             material_spec = str(item.material_spec or "").strip()
@@ -506,12 +520,15 @@ class DocumentPushPullService:
                 material_name=material_name or material_code or f"物料{item.material_id}",
                 material_spec=material_spec or None,
                 unit=material_unit or "件",
-                quantity=item.suggested_purchase_order_quantity,
+                quantity=Decimal(str(remaining)),
                 suggested_unit_price=Decimal("0"),
                 required_date=item.procurement_completion_date,
                 demand_computation_item_id=item.id,
                 supplier_id=supplier_id,
             ))
+
+        if not req_items:
+            raise BusinessLogicError("需求计算中无剩余可下推采购件，无法下推采购申请")
 
         dates = [i.procurement_completion_date for i in buy_items if i.procurement_completion_date]
         req_data = PurchaseRequisitionCreate(
