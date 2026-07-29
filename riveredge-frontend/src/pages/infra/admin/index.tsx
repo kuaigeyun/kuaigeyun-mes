@@ -18,6 +18,7 @@ import {
   type InfraSuperAdminUpdateRequest
 } from '../../../services/infraAdmin';
 import { clearAuth } from '../../../utils/auth';
+import { redirectAfterLogout } from '../../../utils/loginEntry';
 import { useNavigate } from 'react-router-dom';
 import { useGlobalStore } from '../../../stores';
 import { useTranslation } from 'react-i18next';
@@ -104,7 +105,7 @@ export default function InfraSuperAdminPage() {
         setCurrentUser(undefined);
         queryClient.clear();
         messageApi.success(t('pages.infra.admin.logoutSuccess'));
-        navigate('/infra/login', { replace: true });
+        redirectAfterLogout(navigate);
       },
     });
   }, [messageApi, navigate, queryClient, setCurrentUser, t]);

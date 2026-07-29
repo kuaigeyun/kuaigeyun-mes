@@ -85,7 +85,7 @@ import TenantSelector from '../components/tenant-selector';
 import TopBarSearch from '../components/TopBarSearch';
 import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
-import { HeaderClientDownloadButton } from '../components/header-client-download';
+import { HeaderClientDownloadButton, HeaderMiniprogramQrButton } from '../components/header-client-download';
 import ThemeEditor from '../components/theme-editor';
 import IterationFloatButton from '../components/iteration-float-button';
 import { RouteTransition } from '../components/route-transition';
@@ -165,6 +165,8 @@ import { getMenuBadgeCounts } from '../services/dashboard';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
 import { getBuildProvenance, registerInstallInstance } from '../services/platformSettings';
 import { useTouchScreen } from '../hooks/useTouchScreen';
+import { buildLoginRedirectPath } from '../utils/tenantDomainAccess';
+import { redirectAfterLogout } from '../utils/loginEntry';
 
 /**
  * 左侧菜单 path → menu-badge-counts 的 key（与后端 get_menu_badge_counts 一致）
@@ -417,7 +419,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (location.pathname.startsWith('/infra')) {
       return <Navigate to="/infra/login" replace />;
     }
-    return <Navigate to="/login" replace />;
+    return <Navigate to={buildLoginRedirectPath()} replace />;
   }
 
   return <>{children}</>;
@@ -977,8 +979,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const performLogout = useCallback(() => {
     clearSessionScopedQueries(queryClient);
     logout();
-    // SPA 内部跳转：dev 下 /login 会映射到 login.html MPA，LoginPage 依赖 QueryClientProvider，全页跳转易白屏
-    navigate('/login', { replace: true });
+    redirectAfterLogout(navigate);
   }, [queryClient, logout, navigate]);
 
   // 站点设置：统一从 configStore 获取（app.tsx 初始化时已 fetchConfigs，site-settings 保存时会 refresh）
@@ -4947,6 +4948,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               />,
             );
           }
+
+          // 顶栏小程序码（开启且已上传图片时显示）- 置于手机客户端下载前
+          actions.push(<HeaderMiniprogramQrButton key="miniprogram-qr" />);
 
           // 租户可下载客户端（扫码安装）- 置于消息铃铛前
           actions.push(<HeaderClientDownloadButton key="client-download" />);

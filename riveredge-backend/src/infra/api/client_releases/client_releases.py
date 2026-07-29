@@ -145,6 +145,69 @@ class ClientPushTestOut(BaseModel):
     hint: str | None = None
 
 
+class HeaderMiniprogramQrOut(BaseModel):
+    enabled: bool = False
+    file_uuid: str | None = None
+    image_url: str | None = None
+
+
+class HeaderMiniprogramQrUpdateIn(BaseModel):
+    enabled: bool = Field(description="是否在顶栏展示小程序码")
+    file_uuid: str | None = Field(
+        default=None,
+        description="小程序码图片文件 UUID；开启时必填；传空字符串可清除",
+    )
+
+
+async def _resolve_miniprogram_qr_image_url(file_uuid: str | None) -> str | None:
+    """解析小程序码公开预览 URL；文件不存在或无效时返回 None。"""
+    uuid = (file_uuid or "").strip()
+    if not uuid:
+        return None
+    from core.models.file import File as FileModel
+    from core.services.file.file_preview_service import FilePreviewService
+
+    file_row = await FileModel.get_or_none(uuid=uuid, category="miniprogram-qr")
+    if not file_row:
+        return None
+    tenant_id = file_row.tenant_id
+    if tenant_id is None:
+        tenant_id = 1
+    try:
+        preview_info = await FilePreviewService.get_preview_info(
+            file_uuid=uuid,
+            tenant_id=tenant_id,
+        )
+        url = (preview_info or {}).get("preview_url")
+        return str(url).strip() if url else None
+    except Exception:
+        return None
+
+
+async def _get_header_miniprogram_qr(*, for_tenant: bool) -> HeaderMiniprogramQrOut:
+    from infra.models.platform_settings import PlatformSettings
+
+    settings = await PlatformSettings.first()
+    if not settings:
+        return HeaderMiniprogramQrOut(enabled=False)
+    enabled = bool(getattr(settings, "header_miniprogram_qr_enabled", False))
+    file_uuid = getattr(settings, "header_miniprogram_qr_uuid", None)
+    file_uuid = str(file_uuid).strip() if file_uuid else None
+    image_url = await _resolve_miniprogram_qr_image_url(file_uuid) if file_uuid else None
+    if for_tenant:
+        visible = enabled and bool(image_url)
+        return HeaderMiniprogramQrOut(
+            enabled=visible,
+            file_uuid=file_uuid if visible else None,
+            image_url=image_url if visible else None,
+        )
+    return HeaderMiniprogramQrOut(
+        enabled=enabled,
+        file_uuid=file_uuid,
+        image_url=image_url,
+    )
+
+
 def _origin(request: Request) -> str:
     return svc.resolve_request_public_origin(
         base_url=str(request.base_url).rstrip("/"),
@@ -221,6 +284,55 @@ async def update_client_product_config(
         jpush_master_secret=body.jpush_master_secret,
     )
     return ClientProductConfigOut.model_validate(data)
+
+
+@router.get(
+    "/miniprogram-qr",
+    response_model=HeaderMiniprogramQrOut,
+    summary="顶栏小程序码配置（超管）",
+)
+async def get_header_miniprogram_qr_admin(
+    _admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+) -> HeaderMiniprogramQrOut:
+    return await _get_header_miniprogram_qr(for_tenant=False)
+
+
+@router.put(
+    "/miniprogram-qr",
+    response_model=HeaderMiniprogramQrOut,
+    summary="更新顶栏小程序码配置（超管）",
+)
+async def update_header_miniprogram_qr_admin(
+    body: HeaderMiniprogramQrUpdateIn,
+    _admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+) -> HeaderMiniprogramQrOut:
+    from core.utils.timezone_utils import now_utc
+    from infra.models.platform_settings import PlatformSettings
+
+    settings = await PlatformSettings.first()
+    if not settings:
+        settings = await PlatformSettings.create(platform_name="RiverEdge SaaS Framework")
+
+    file_uuid: str | None
+    if body.file_uuid is None:
+        file_uuid = getattr(settings, "header_miniprogram_qr_uuid", None)
+        file_uuid = str(file_uuid).strip() if file_uuid else None
+    else:
+        file_uuid = str(body.file_uuid).strip() or None
+
+    if body.enabled and not file_uuid:
+        raise HTTPException(status_code=400, detail="开启顶栏小程序码前请先上传小程序码图片")
+
+    if file_uuid:
+        image_url = await _resolve_miniprogram_qr_image_url(file_uuid)
+        if not image_url:
+            raise HTTPException(status_code=400, detail="小程序码图片无效或不存在，请重新上传")
+
+    settings.header_miniprogram_qr_enabled = bool(body.enabled)
+    settings.header_miniprogram_qr_uuid = file_uuid
+    settings.updated_at = now_utc()
+    await settings.save()
+    return await _get_header_miniprogram_qr(for_tenant=False)
 
 
 async def _ensure_push_configurable_client(client_key: str) -> dict:
@@ -524,6 +636,17 @@ async def get_tenant_client_downloads(
 ) -> list[TenantClientDownloadOut]:
     rows = await svc.resolve_tenant_downloads(tenant_id, _origin(request))
     return [TenantClientDownloadOut.model_validate(r) for r in rows]
+
+
+@tenant_router.get(
+    "/miniprogram-qr",
+    response_model=HeaderMiniprogramQrOut,
+    summary="当前租户顶栏小程序码",
+)
+async def get_tenant_header_miniprogram_qr(
+    _user: User = Depends(get_current_user),
+) -> HeaderMiniprogramQrOut:
+    return await _get_header_miniprogram_qr(for_tenant=True)
 
 
 @tenant_router.get("/by-app/{app_code}", summary="应用关联客户端当前发布（租户只读）")

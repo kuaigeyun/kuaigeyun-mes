@@ -12,6 +12,8 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useGlobalStore } from '../../stores';
 import { getDefaultTenantHomePath } from '../../stores/configStore';
+import { buildLoginRedirectPath } from '../../utils/tenantDomainAccess';
+import { redirectAfterLogout } from '../../utils/loginEntry';
 import { getToken, getUserInfo, setUserInfo, setTenantId } from '../../utils/auth';
 import { login } from '../../services/auth';
 import { infraSuperAdminLogin } from '../../services/infraAdmin';
@@ -87,7 +89,7 @@ export default function LockScreenPage() {
     const password = values.password || realPassword;
     if (!currentUser) {
       message.error(t('pages.lockScreen.userInfoNotFound'));
-      navigate('/login', { replace: true });
+      redirectAfterLogout(navigate);
       return;
     }
 
@@ -177,7 +179,7 @@ export default function LockScreenPage() {
   };
 
   if (!currentUser && !getToken()) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={buildLoginRedirectPath()} replace />;
   }
 
   // 获取用户显示名称

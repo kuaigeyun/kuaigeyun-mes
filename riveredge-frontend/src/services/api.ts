@@ -9,6 +9,7 @@ import { clearAuth, getToken, isInfraSuperAdminUser } from '../utils/auth';
 import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../utils/activityUtils';
 import { handleNetworkError, handleServerError, withRetry } from '../utils/errorRecovery';
 import { navigateTo } from '../utils/navigation';
+import { redirectAfterLogout } from '../utils/loginEntry';
 import { webClientChannelHeaders } from '../utils/clientChannel';
 
 /**
@@ -404,11 +405,7 @@ export async function apiRequest<T = any>(
 
           const currentPath = window.location.pathname;
           if (currentPath !== '/login' && currentPath !== '/infra/login') {
-            if (currentPath.startsWith('/infra')) {
-              navigateTo('/infra/login', { replace: true });
-            } else {
-              navigateTo('/login', { replace: true });
-            }
+            redirectAfterLogout();
           }
 
           const error = new Error('认证已过期，请重新登录') as any;

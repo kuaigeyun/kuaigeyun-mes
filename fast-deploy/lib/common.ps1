@@ -31,6 +31,7 @@ if (-not $env:DEPLOY_MODE) { $env:DEPLOY_MODE = 'prod' }
 $script:DeployMode = $env:DEPLOY_MODE
 $script:UseMirror = ($env:USE_MIRROR -ne '0')
 $script:BackendStartTimeout = 30
+$script:BackendDepsSynced = $false
 
 # Windows 默认 GBK，aerich 读 pyproject.toml（UTF-8）会 UnicodeDecodeError
 if (-not $env:PYTHONUTF8) { $env:PYTHONUTF8 = '1' }
@@ -88,6 +89,7 @@ function Load-DeployEnv {
         $script:CADDY_CONFIG_DIR = Join-Path $script:ProjectRoot '.caddy-config'
     }
     if (-not $script:CADDY_START_TIMEOUT) { $script:CADDY_START_TIMEOUT = 45 }
+    if (-not $script:TASKIQ_START_TIMEOUT) { $script:TASKIQ_START_TIMEOUT = 180 }
     if (-not $script:GIT_BRANCH) { $script:GIT_BRANCH = 'develop' }
     if (-not $script:GIT_REMOTE) { $script:GIT_REMOTE = 'origin' }
     Initialize-BgDefaults
@@ -426,6 +428,48 @@ function Wait-ProcessStable([string]$Name, [string]$PidFile, [string]$LogFile, [
         Start-Sleep -Seconds 1
     }
     return $true
+}
+
+function Wait-TaskiqServiceReady(
+    [string]$Name,
+    [string]$PidFile,
+    [string]$LogFile,
+    [string]$ReadyPattern,
+    [int]$Timeout = 0
+) {
+    Load-DeployEnv
+    if ($Timeout -le 0) { $Timeout = [int]$script:TASKIQ_START_TIMEOUT }
+    $lastProgress = 0
+    for ($i = 0; $i -lt $Timeout; $i++) {
+        if (-not (Test-PidFileAlive $PidFile)) {
+            Write-LogError "$Name 启动后退出，查看日志: $LogFile"
+            if (Test-Path $LogFile) {
+                Get-Content $LogFile -Tail 30 | ForEach-Object { Write-Host $_ }
+            }
+            return $false
+        }
+        if ($ReadyPattern -and (Test-Path $LogFile)) {
+            $hit = Select-String -Path $LogFile -Pattern $ReadyPattern -Quiet -ErrorAction SilentlyContinue
+            if ($hit) { return $true }
+        }
+        if (($i - $lastProgress) -ge 15) {
+            Write-LogInfo "$Name 仍在启动（${i}s / 最多 ${Timeout}s；低内存机可能较慢）..."
+            if (Test-Path $LogFile) {
+                Get-Content $LogFile -Tail 3 | ForEach-Object { Write-LogInfo "  $_" }
+            }
+            $lastProgress = $i
+        }
+        Start-Sleep -Seconds 1
+    }
+    if (Test-PidFileAlive $PidFile) {
+        Write-LogWarn "$Name 在 ${Timeout}s 内未检测到就绪日志，进程仍在运行，继续..."
+        return $true
+    }
+    Write-LogError "$Name 启动超时，查看 $LogFile"
+    if (Test-Path $LogFile) {
+        Get-Content $LogFile -Tail 30 | ForEach-Object { Write-Host $_ }
+    }
+    return $false
 }
 
 function Read-EnvValue([string]$Key) {
@@ -1027,6 +1071,7 @@ function Ensure-PlaywrightChromiumPostInstall {
 }
 
 function Sync-BackendDeps {
+    if ($script:BackendDepsSynced) { return }
     Apply-CN-Mirrors
     Write-LogInfo '同步 Python 依赖...'
     $uv = Resolve-Uv
@@ -1042,6 +1087,7 @@ function Sync-BackendDeps {
         if ($LASTEXITCODE -ne 0) { throw 'uv sync 失败' }
     } finally { Pop-Location }
     Ensure-PyzbarWindowsNative
+    $script:BackendDepsSynced = $true
 }
 
 function Invoke-Migrate {
@@ -1334,13 +1380,18 @@ function Start-WorkerProd {
         Remove-Item $workerPidFile -Force -ErrorAction SilentlyContinue
         Write-LogInfo '启动 Taskiq Worker...'
         Set-PlaywrightEnv
-        $args = @('run','--extra','pdf','taskiq','worker','--app-dir','src','--fs-discover','--workers',"$($script:TASKIQ_WORKERS)",'core.tasks.taskiq_app:broker')
+        $args = @(
+            'run','--extra','pdf','taskiq','worker','--app-dir','src','--fs-discover',
+            '--workers',"$($script:TASKIQ_WORKERS)",
+            'core.tasks.taskiq_app:broker',
+            'core.tasks.taskiq_app','core.tasks.worker_bootstrap','core.tasks.data_backup_handlers'
+        )
         Start-ProcessBackground 'worker' $uv $args @{
             ENVIRONMENT = 'production'; SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
             PYTHONPATH = (Join-Path $script:BackendDir 'src'); PLAYWRIGHT_BROWSERS_PATH = $env:PLAYWRIGHT_BROWSERS_PATH
             WORKDIR = $script:BackendDir
         }
-        if (-not (Wait-ProcessStable 'Worker' $workerPidFile $workerLogFile 12)) { throw 'Worker 启动失败' }
+        if (-not (Wait-TaskiqServiceReady 'Worker' $workerPidFile $workerLogFile 'Taskiq worker 已注册任务|Starting [0-9]+ worker processes')) { throw 'Worker 启动失败' }
     } else {
         Write-LogInfo 'Worker 已在运行'
     }
@@ -1350,13 +1401,16 @@ function Start-WorkerProd {
         Remove-Item $schedulerPidFile -Force -ErrorAction SilentlyContinue
         Write-LogInfo '启动 Taskiq Scheduler...'
         Set-PlaywrightEnv
-        $args = @('run','--extra','pdf','taskiq','scheduler','--app-dir','src','--fs-discover','core.tasks.taskiq_app:scheduler')
+        $args = @(
+            'run','--extra','pdf','taskiq','scheduler','--app-dir','src','--fs-discover',
+            'core.tasks.taskiq_app:scheduler','core.tasks.taskiq_app'
+        )
         Start-ProcessBackground 'scheduler' $uv $args @{
             ENVIRONMENT = 'production'; SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
             PYTHONPATH = (Join-Path $script:BackendDir 'src'); PLAYWRIGHT_BROWSERS_PATH = $env:PLAYWRIGHT_BROWSERS_PATH
             WORKDIR = $script:BackendDir
         }
-        if (-not (Wait-ProcessStable 'Scheduler' $schedulerPidFile $schedulerLogFile 12)) { throw 'Scheduler 启动失败' }
+        if (-not (Wait-TaskiqServiceReady 'Scheduler' $schedulerPidFile $schedulerLogFile 'Startup completed|Starting scheduler')) { throw 'Scheduler 启动失败' }
     } else {
         Write-LogInfo 'Scheduler 已在运行'
     }

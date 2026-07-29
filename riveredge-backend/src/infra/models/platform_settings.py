@@ -177,6 +177,15 @@ class PlatformSettings(Model):
         default=True,
         description="登录页是否显示 Android PDA 安装包下载"
     )
+    header_miniprogram_qr_enabled = fields.BooleanField(
+        default=False,
+        description="是否在主界面顶栏展示小程序码入口",
+    )
+    header_miniprogram_qr_uuid = fields.CharField(
+        max_length=64,
+        null=True,
+        description="小程序码图片文件 UUID（category=miniprogram-qr）",
+    )
     login_quick_enabled = fields.BooleanField(
         default=True,
         description="登录页是否显示快捷登录（社交账号登录）"

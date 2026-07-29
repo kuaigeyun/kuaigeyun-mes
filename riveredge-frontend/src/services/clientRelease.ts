@@ -358,6 +358,37 @@ export async function getClientDownloadQrOrigin(port?: number): Promise<string> 
   return data.origin;
 }
 
+export type HeaderMiniprogramQr = {
+  enabled: boolean;
+  file_uuid?: string | null;
+  image_url?: string | null;
+};
+
+export type HeaderMiniprogramQrUpdateInput = {
+  enabled: boolean;
+  /** 传 null 表示不改 uuid；传 '' 清除 */
+  file_uuid?: string | null;
+};
+
+/** 超管：顶栏小程序码配置 */
+export async function getAdminHeaderMiniprogramQr(): Promise<HeaderMiniprogramQr> {
+  return apiRequest<HeaderMiniprogramQr>(`${ADMIN_BASE}/miniprogram-qr`);
+}
+
+export async function updateAdminHeaderMiniprogramQr(
+  input: HeaderMiniprogramQrUpdateInput,
+): Promise<HeaderMiniprogramQr> {
+  return apiRequest<HeaderMiniprogramQr>(`${ADMIN_BASE}/miniprogram-qr`, {
+    method: 'PUT',
+    data: input,
+  });
+}
+
+/** 租户：顶栏小程序码（未开启或无图时 enabled=false） */
+export async function getTenantHeaderMiniprogramQr(): Promise<HeaderMiniprogramQr> {
+  return apiRequest<HeaderMiniprogramQr>('/core/client-releases/miniprogram-qr');
+}
+
 export async function getLoginClientDownloads(): Promise<LoginClientDownloads> {
   const response = await fetch('/api/v1/infra/clients/login-downloads');
   if (!response.ok) {

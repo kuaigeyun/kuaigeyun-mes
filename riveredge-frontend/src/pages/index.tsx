@@ -11,13 +11,14 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { getToken } from '../utils/auth';
 import { getDefaultTenantHomePath } from '../stores/configStore';
+import { buildLoginRedirectPath } from '../utils/tenantDomainAccess';
 
 export default function IndexPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!getToken()) {
-      navigate('/login', { replace: true });
+      navigate(buildLoginRedirectPath(), { replace: true });
     }
   }, [navigate]);
 

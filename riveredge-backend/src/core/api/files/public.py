@@ -23,6 +23,7 @@ PUBLIC_BRANDING_CATEGORY_ALIASES: dict[str, list[str]] = {
     "platform-favicon": ["platform-favicon", "platform-logo"],
     "platform-logo": ["platform-logo", "site-logo"],
     "site-logo": ["site-logo", "platform-logo"],
+    "miniprogram-qr": ["miniprogram-qr"],
 }
 
 
@@ -61,7 +62,7 @@ async def get_file_preview_public(
     """
     try:
         # 只允许访问公开资源分类
-        allowed_categories = ['platform-logo', 'site-logo', 'platform-favicon']
+        allowed_categories = ['platform-logo', 'site-logo', 'platform-favicon', 'miniprogram-qr']
         if category not in allowed_categories:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

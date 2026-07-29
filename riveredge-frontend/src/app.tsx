@@ -41,6 +41,8 @@ import { useThemeStore } from './stores/themeStore';
 import { updateLastActivity, getLastActivityTime, hasPendingRequests } from './utils/activityUtils';
 import { useTouchScreen } from './hooks/useTouchScreen';
 import { initDocumentStatusCache } from './services/enums';
+import { buildLoginRedirectPath, resolveTenantDomainFromUrl } from './utils/tenantDomainAccess';
+import { redirectAfterLogout } from './utils/loginEntry';
 // 使用 routes 中的路由配置
 import MainRoutes from './routes';
 import ErrorBoundary from './components/error-boundary';
@@ -87,26 +89,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
 
   // 公开页面：根路径、登录、初始化向导等，无需鉴权即可访问
   const pathname = location.pathname;
-  const resolveTenantDomainFromPathname = (path: string): string | null => {
-    const segments = path.split('/').filter(Boolean);
-    if (!segments.length) return null;
-    const reserved = new Set([
-      'login',
-      'infra',
-      'apps',
-      'system',
-      'personal',
-      'init',
-      'lock-screen',
-      'docs',
-      'debug',
-      'qrcode',
-    ]);
-    if (!reserved.has(segments[0])) return segments[0].toLowerCase();
-    if (segments[0] === 'login' && segments[1] && !reserved.has(segments[1])) return segments[1].toLowerCase();
-    return null;
-  };
-  const tenantDomainFromPath = resolveTenantDomainFromPathname(pathname);
+  const tenantDomainFromPath = resolveTenantDomainFromUrl({ pathname, search: location.search });
   const isPublicPath = pathname === '/' ||
     pathname.startsWith('/login') ||
     pathname === '/infra/login' ||
@@ -349,18 +332,12 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     const handleLogout = () => {
       clearAuth();
       setCurrentUser(undefined);
-      
-      // 清除定时器
+
       if (checkTimerRef.current) {
         clearInterval(checkTimerRef.current);
       }
 
-      // SPA 内部跳转登录页（避免 dev 下全页 /login → login.html MPA 缺 Provider 白屏）
-      if (location.pathname.startsWith('/infra')) {
-        navigate('/infra/login', { replace: true });
-      } else {
-        navigate('/login', { replace: true });
-      }
+      redirectAfterLogout(navigate);
     };
 
     let cancelled = false;
@@ -451,7 +428,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
         return '/infra/login';
       }
       if (tenantDomainFromPath) {
-        return `/login?tenant_domain=${encodeURIComponent(tenantDomainFromPath)}`;
+        return buildLoginRedirectPath();
       }
       // 系统级路由重定向到用户登录页
       return '/login';

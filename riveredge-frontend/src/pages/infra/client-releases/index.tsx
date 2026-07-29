@@ -6,7 +6,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../components/uni-action';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Popconfirm, Space, Tag } from 'antd';
-import { DeleteOutlined, DownloadOutlined, EditOutlined, EyeOutlined, SettingOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { DeleteOutlined, DownloadOutlined, EditOutlined, EyeOutlined, QrcodeOutlined, SettingOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
@@ -23,6 +23,7 @@ import {
 import { ClientReleaseUploadModal } from './ClientReleaseUploadModal';
 import { ClientReleaseDetailDrawer } from './ClientReleaseDetailDrawer';
 import { ClientProductConfigDrawer } from './ClientProductConfigDrawer';
+import { ClientMiniprogramQrModal } from './ClientMiniprogramQrModal';
 
 const ClientReleasesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -37,6 +38,7 @@ const ClientReleasesPage: React.FC = () => {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [detailRelease, setDetailRelease] = useState<ClientRelease | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
+  const [miniprogramQrOpen, setMiniprogramQrOpen] = useState(false);
 
   const { data: products } = useQuery({
     queryKey: ['clientProducts'],
@@ -332,6 +334,9 @@ const ClientReleasesPage: React.FC = () => {
           showDeleteButton={false}
           enableRowSelection
           toolBarActionsAfterCreate={[
+            <Button key="miniprogram-qr" icon={<QrcodeOutlined />} onClick={() => setMiniprogramQrOpen(true)}>
+              {t('pages.infra.clientReleases.miniprogramQrButton')}
+            </Button>,
             <Button key="client-config" icon={<SettingOutlined />} onClick={() => setConfigOpen(true)}>
               {t('pages.infra.clientReleases.clientConfigButton')}
             </Button>,
@@ -366,6 +371,8 @@ const ClientReleasesPage: React.FC = () => {
       />
 
       <ClientProductConfigDrawer open={configOpen} onClose={() => setConfigOpen(false)} />
+
+      <ClientMiniprogramQrModal open={miniprogramQrOpen} onClose={() => setMiniprogramQrOpen(false)} />
     </>
   );
 };

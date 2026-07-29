@@ -14,7 +14,7 @@ import { setToken, setUserInfo, setTenantId } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
 import { theme } from 'antd';
 import { getPlatformSettingsPublic } from '../../services/platformSettings';
-import { useTranslation } from 'react-i18next';
+import { captureLoginEntryFromCurrentUrl } from '../../utils/loginEntry';
 
 /**
  * 平台超级管理员登录表单数据
@@ -59,6 +59,7 @@ export default function PlatformLoginPage() {
   const loginMutation = useMutation({
     mutationFn: (data: LoginFormData) => infraSuperAdminLogin(data),
     onSuccess: (response) => {
+      captureLoginEntryFromCurrentUrl('infra');
       // 保存认证信息
       setToken(response.access_token);
 

@@ -17,6 +17,7 @@ import {
   type InfraSuperAdminUpdateRequest
 } from '../../services/infraAdmin';
 import { clearAuth } from '../../utils/auth';
+import { redirectAfterLogout } from '../../utils/loginEntry';
 import { useNavigate } from 'react-router-dom';
 import { useGlobalStore } from '../../stores';
 import { useTranslation } from 'react-i18next';
@@ -90,8 +91,7 @@ export default function InfraSuperAdminPage() {
         // 清除查询缓存
         queryClient.clear();
         messageApi.success(t('pages.infra.admin.logoutSuccess'));
-        // ⚠️ 关键修复：使用 navigate 跳转，避免页面刷新
-        navigate('/infra/login', { replace: true });
+        redirectAfterLogout(navigate);
       },
     });
   };

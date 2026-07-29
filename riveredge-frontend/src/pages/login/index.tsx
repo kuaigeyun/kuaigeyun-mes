@@ -47,6 +47,8 @@ import { setToken, setTenantId, setUserInfo, getTenantId, getToken } from '../..
 import { clearSessionScopedQueries } from '../../utils/clearSessionQueries';
 import { applySessionUserAfterLogin } from '../../utils/restoredUser';
 import { getImmediatePostLoginHomePath, refinePostLoginHomeInBackground } from '../../utils/tenantHomePath';
+import { buildTenantLoginPathForHistoryReplace, resolveTenantDomainFromUrl } from '../../utils/tenantDomainAccess';
+import { captureLoginEntryFromCurrentUrl } from '../../utils/loginEntry';
 const TenantSelectionModal = lazy(() => import('../../components/tenant-selection-modal'));
 const TermsModal = lazy(() => import('../../components/terms-modal'));
 const LongPressVerify = lazy(() => import('../../components/long-press-verify'));
@@ -105,34 +107,8 @@ interface LoginFormData {
 
 const PLATFORM_SETTINGS_CACHE_PREFIX = 'platformSettingsPublic';
 
-function resolveTenantDomain(pathname: string, search: string): string | null {
-  try {
-    const queryDomain = new URLSearchParams(search).get('tenant_domain');
-    const normalized = (queryDomain || '').trim().toLowerCase();
-    if (normalized) return normalized;
-  } catch {
-    /* ignore */
-  }
-
-  const segments = pathname.split('/').filter(Boolean);
-  if (!segments.length) return null;
-  const reserved = new Set([
-    'login',
-    'infra',
-    'apps',
-    'system',
-    'personal',
-    'init',
-    'lock-screen',
-    'm',
-  ]);
-  if (!reserved.has(segments[0])) return segments[0].toLowerCase();
-  if (segments[0] === 'login' && segments[1] && !reserved.has(segments[1])) return segments[1].toLowerCase();
-  return null;
-}
-
 function getPlatformSettingsCacheKey(pathname: string, search: string): string {
-  const tenantDomain = resolveTenantDomain(pathname, search);
+  const tenantDomain = resolveTenantDomainFromUrl({ pathname, search });
   return `${PLATFORM_SETTINGS_CACHE_PREFIX}:${tenantDomain || 'global'}`;
 }
 
@@ -169,6 +145,7 @@ export default function LoginPage() {
 
   /** 登录成功：同步用户态并清理会话级 query，避免 navigate 时 AuthGuard 竞态 */
   const syncUserStateAfterLogin = useCallback((userInfo: Parameters<typeof setUserInfo>[0]) => {
+    captureLoginEntryFromCurrentUrl('tenant');
     applySessionUserAfterLogin(userInfo);
     clearSessionScopedQueries(queryClient);
     void import('../../stores/userPreferenceStore')
@@ -1237,8 +1214,8 @@ export default function LoginPage() {
       return storedTenantId;
     }
     const domainFromQuery = urlParams.get('tenant_domain')?.trim().toLowerCase();
-    const domainFromPath = resolveTenantDomain(window.location.pathname, window.location.search);
-    const domain = domainFromQuery || domainFromPath;
+    const domainFromContext = resolveTenantDomainFromUrl();
+    const domain = domainFromQuery || domainFromContext;
     if (domain) {
       try {
         const check = await checkTenantDomain(domain);
@@ -1325,7 +1302,7 @@ export default function LoginPage() {
       if (savedState !== state) {
         message.error(t('pages.login.wechatVerifyFailed'));
         // 清除 URL 参数，避免重复处理
-        window.history.replaceState({}, '', '/login');
+        window.history.replaceState({}, '', buildTenantLoginPathForHistoryReplace());
         return;
       }
 
@@ -1358,7 +1335,7 @@ export default function LoginPage() {
           
           message.error(errorMessage);
           // 清除 URL 参数
-          window.history.replaceState({}, '', '/login');
+          window.history.replaceState({}, '', buildTenantLoginPathForHistoryReplace());
         }
       };
 
@@ -1369,7 +1346,7 @@ export default function LoginPage() {
     if (provider === 'wecom_work' && code && state) {
       if (!consumeWecomOAuthState(state)) {
         message.error(t('pages.login.wecomVerifyFailed'));
-        window.history.replaceState({}, '', '/login');
+        window.history.replaceState({}, '', buildTenantLoginPathForHistoryReplace());
         return;
       }
 
@@ -1411,7 +1388,7 @@ export default function LoginPage() {
             errorMessage = error.message;
           }
           message.error(errorMessage);
-          window.history.replaceState({}, '', '/login');
+          window.history.replaceState({}, '', buildTenantLoginPathForHistoryReplace());
         }
       };
 

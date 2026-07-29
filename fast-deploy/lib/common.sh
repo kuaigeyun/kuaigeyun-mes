@@ -138,6 +138,8 @@ load_deploy_env() {
     BACKEND_PORT_GREEN="${BACKEND_PORT_GREEN:-8202}"
     WORKER_DRAIN_TIMEOUT="${WORKER_DRAIN_TIMEOUT:-60}"
     BLUE_GREEN_HEALTH_TIMEOUT="${BLUE_GREEN_HEALTH_TIMEOUT:-120}"
+    # Taskiq worker/scheduler 就绪等待（低内存机 import 慢，sleep 也会因 swap 被拉长）
+    TASKIQ_START_TIMEOUT="${TASKIQ_START_TIMEOUT:-180}"
 }
 
 # shellcheck source=lib/blue_green.sh
@@ -983,6 +985,47 @@ wait_process_stable() {
         i=$((i + 1))
     done
     return 0
+}
+
+# Taskiq 就绪检测：低内存机上 pid 存活不等于 import 完成；定期打进度避免误以为卡死
+wait_taskiq_service_ready() {
+    local name="$1"
+    local pidf="$2"
+    local logfile="$3"
+    local ready_pattern="${4:-}"
+    local timeout
+    local i=0
+    local last_progress=0
+    load_deploy_env
+    timeout="${5:-${TASKIQ_START_TIMEOUT:-180}}"
+    while [ "$i" -lt "$timeout" ]; do
+        if ! pidfile_alive "$pidf"; then
+            log_error "${name} 启动后退出，查看 ${logfile}"
+            [ -f "$logfile" ] && tail -30 "$logfile" >&2
+            return 1
+        fi
+        if [ -n "$ready_pattern" ] && [ -f "$logfile" ] && grep -qE "$ready_pattern" "$logfile" 2>/dev/null; then
+            return 0
+        fi
+        if [ $((i - last_progress)) -ge 15 ]; then
+            log_info "${name} 仍在启动（${i}s / 最多 ${timeout}s；低内存机可能较慢）..."
+            if [ -f "$logfile" ]; then
+                tail -3 "$logfile" | while IFS= read -r line; do
+                    [ -n "$line" ] && log_info "  ${line}"
+                done
+            fi
+            last_progress=$i
+        fi
+        sleep 1
+        i=$((i + 1))
+    done
+    if pidfile_alive "$pidf"; then
+        log_warn "${name} 在 ${timeout}s 内未检测到就绪日志，进程仍在运行，继续..."
+        return 0
+    fi
+    log_error "${name} 启动超时，查看 ${logfile}"
+    [ -f "$logfile" ] && tail -30 "$logfile" >&2
+    return 1
 }
 
 stop_service() {
@@ -1844,6 +1887,9 @@ backend_uv_extra_args() {
 }
 
 sync_backend_deps() {
+    if [ "${_BACKEND_DEPS_SYNCED:-0}" = "1" ]; then
+        return 0
+    fi
     apply_cn_mirrors
     log_info "同步 Python 依赖（含发票 OCR：pymupdf + rapidocr）..."
     (
@@ -1859,6 +1905,7 @@ sync_backend_deps() {
     elif [ "$(uname -s)" = "Linux" ]; then
         ensure_linux_invoice_parse_runtime
     fi
+    _BACKEND_DEPS_SYNCED=1
 }
 
 playwright_postinstall_enabled() {
@@ -2736,10 +2783,12 @@ start_worker_prod() {
             nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq worker --app-dir src --fs-discover \
                 --workers "$TASKIQ_WORKERS" \
                 core.tasks.taskiq_app:broker \
+                core.tasks.taskiq_app core.tasks.worker_bootstrap core.tasks.data_backup_handlers \
                 > "$LOGS_DIR/worker.log" 2>&1 &
             echo $! > "$LOGS_DIR/worker.pid"
         )
-        wait_process_stable "Worker" "$LOGS_DIR/worker.pid" "$LOGS_DIR/worker.log" 12 || exit 1
+        wait_taskiq_service_ready "Worker" "$LOGS_DIR/worker.pid" "$LOGS_DIR/worker.log" \
+            'Taskiq worker 已注册任务|Starting [0-9]+ worker processes' || exit 1
     fi
     if pidfile_alive "$LOGS_DIR/scheduler.pid"; then
         log_info "Scheduler 已在运行"
@@ -2752,11 +2801,14 @@ start_worker_prod() {
             export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
             export PYTHONPATH="$BACKEND_DIR/src"
             playwright_export_env
-            nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq scheduler --app-dir src --fs-discover core.tasks.taskiq_app:scheduler \
+            nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq scheduler --app-dir src --fs-discover \
+                core.tasks.taskiq_app:scheduler \
+                core.tasks.taskiq_app \
                 > "$LOGS_DIR/scheduler.log" 2>&1 &
             echo $! > "$LOGS_DIR/scheduler.pid"
         )
-        wait_process_stable "Scheduler" "$LOGS_DIR/scheduler.pid" "$LOGS_DIR/scheduler.log" 12 || exit 1
+        wait_taskiq_service_ready "Scheduler" "$LOGS_DIR/scheduler.pid" "$LOGS_DIR/scheduler.log" \
+            'Startup completed|Starting scheduler' || exit 1
     fi
     log_ok "Taskiq 已启动"
 }
