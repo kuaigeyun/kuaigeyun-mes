@@ -70,7 +70,7 @@ import { getOutsourceOrderLifecycle, buildOutsourceOrderLifecycleValueEnum, reso
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
-import { searchReferenceDisplay } from '../../../../../utils/referenceDisplay';
+import { searchReferenceDisplayAll } from '../../../../../utils/referenceDisplay';
 import dayjs from 'dayjs';
 import {formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
@@ -521,12 +521,11 @@ export const OutsourceOrdersTable: React.FC = () => {
   useEffect(() => {
     const loadSuppliers = async () => {
       try {
-        const res = await searchReferenceDisplay({
+        const items = await searchReferenceDisplayAll({
           resource: 'master-data:supply-chain:supplier',
           hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
-          pageSize: 1000,
         });
-        const suppliers: Supplier[] = (res.items ?? [])
+        const suppliers: Supplier[] = items
           .filter((item) => item.id != null)
           .map((item) => ({
             id: item.id as number,

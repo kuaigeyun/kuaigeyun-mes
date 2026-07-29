@@ -73,7 +73,7 @@ import { getOutsourceWorkOrderLifecycle, buildOutsourceWorkOrderLifecycleValueEn
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
-import { searchReferenceDisplay, resolveReferenceDisplay, formatReferenceDisplayLabel } from '../../../../../utils/referenceDisplay';
+import { searchReferenceDisplayAll, resolveReferenceDisplay, formatReferenceDisplayLabel } from '../../../../../utils/referenceDisplay';
 import dayjs from 'dayjs';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_OUTSOURCE_ORDER_FIELD_RESOURCE as OO } from '../../../constants/fieldPermissionResources';
@@ -396,21 +396,19 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const loadFormReferenceData = useCallback(async () => {
     if (formReferenceLoadedRef.current) return;
     const [productsResult, suppliersResult] = await Promise.allSettled([
-      searchReferenceDisplay({
+      searchReferenceDisplayAll({
         resource: 'master-data:material',
         hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
-        pageSize: 1000,
         sourceType: 'Outsource',
       }),
-      searchReferenceDisplay({
+      searchReferenceDisplayAll({
         resource: 'master-data:supply-chain:supplier',
         hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
-        pageSize: 1000,
       }),
     ]);
     let loaded = false;
     if (productsResult.status === 'fulfilled') {
-      const outsourceProducts = (productsResult.value.items ?? [])
+      const outsourceProducts = productsResult.value
         .filter((item) => item.id != null)
         .map((item) => ({
           id: item.id,
@@ -425,7 +423,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     }
     if (suppliersResult.status === 'fulfilled') {
       setSupplierList(
-        (suppliersResult.value.items ?? [])
+        suppliersResult.value
           .filter((item) => item.id != null)
           .map((item) => ({
             id: item.id,

@@ -24,6 +24,9 @@ export interface ReferenceDisplayListResponse {
 
 export { ReferenceDisplayAccessError };
 
+/** 与后端 display-search page_size 上限一致 */
+export const REFERENCE_DISPLAY_MAX_PAGE_SIZE = 200;
+
 function displayPermissionCodes(resourceKey: string): [string, string] {
   const key = resourceKey.trim().toLowerCase();
   return [`${key}:read`, `${key}:display`];
@@ -71,6 +74,26 @@ export async function searchReferenceDisplay(args: {
       source_type: args.sourceType,
     },
   );
+}
+
+/** 分页拉取引用展示列表（突破单页 200 条上限） */
+export async function searchReferenceDisplayAll(
+  args: Omit<Parameters<typeof searchReferenceDisplay>[0], 'page' | 'pageSize'>,
+  maxItems = 2000,
+): Promise<ReferenceDisplayItem[]> {
+  const pageSize = REFERENCE_DISPLAY_MAX_PAGE_SIZE;
+  const items: ReferenceDisplayItem[] = [];
+  let page = 1;
+  while (items.length < maxItems) {
+    const res = await searchReferenceDisplay({ ...args, page, pageSize });
+    items.push(...(res.items ?? []));
+    const batchLen = res.items?.length ?? 0;
+    if (batchLen < pageSize || items.length >= (res.total ?? items.length)) {
+      break;
+    }
+    page += 1;
+  }
+  return items.slice(0, maxItems);
 }
 
 export async function resolveReferenceDisplay(args: {
