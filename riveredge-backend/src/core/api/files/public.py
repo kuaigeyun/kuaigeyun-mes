@@ -18,11 +18,11 @@ from loguru import logger
 # 创建路由（公开接口，不需要认证）
 router = APIRouter(prefix="/files", tags=["Core - Files (Public)"])
 
-# 平台品牌资源：favicon 常与 logo 共用同一 UUID（历史上传分类为 platform-logo）
+# 登录装饰/背景/Logo 在平台设置(site-logo)与 infra(platform-logo) 两侧上传，公开预览须互认
 PUBLIC_BRANDING_CATEGORY_ALIASES: dict[str, list[str]] = {
     "platform-favicon": ["platform-favicon", "platform-logo"],
-    "platform-logo": ["platform-logo"],
-    "site-logo": ["site-logo"],
+    "platform-logo": ["platform-logo", "site-logo"],
+    "site-logo": ["site-logo", "platform-logo"],
 }
 
 

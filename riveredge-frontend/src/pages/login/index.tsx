@@ -65,7 +65,7 @@ import {
 } from '../../utils/wecomAuth';
 import { getLoginClientDownloads } from '../../services/clientRelease';
 import { applyFavicon } from '../../utils/favicon';
-import { normalizeFilePreviewUrl } from '../../services/file';
+import { normalizeFilePreviewUrl, getSiteLogoPreview } from '../../services/file';
 // 直连文件，避免 barrel 连带 login-page-editor 其它重模块（如 ReactQuill）
 import LoginDescriptionContent from '../../components/login-page-editor/LoginDescriptionContent';
 import { isLoginVisualLayerEnabled } from '../../utils/loginVisualLayers';
@@ -526,11 +526,8 @@ export default function LoginPage() {
         return;
       }
       try {
-        const response = await fetchWithRetry(
-          `/api/v1/core/files/${rawValue}/preview/public?category=site-logo`
-        );
-        const previewInfo = await response.json();
-        setDecorationImageUrl(previewInfo?.preview_url ? normalizeFilePreviewUrl(previewInfo.preview_url) : null);
+        const previewInfo = await getSiteLogoPreview(rawValue);
+        setDecorationImageUrl(previewInfo?.preview_url ?? null);
       } catch {
         setDecorationImageUrl(null);
       }
@@ -557,11 +554,8 @@ export default function LoginPage() {
         return;
       }
       try {
-        const response = await fetchWithRetry(
-          `/api/v1/core/files/${rawValue}/preview/public?category=site-logo`
-        );
-        const previewInfo = await response.json();
-        setBackgroundImageUrl(previewInfo?.preview_url ? normalizeFilePreviewUrl(previewInfo.preview_url) : null);
+        const previewInfo = await getSiteLogoPreview(rawValue);
+        setBackgroundImageUrl(previewInfo?.preview_url ?? null);
       } catch {
         setBackgroundImageUrl(null);
       }
