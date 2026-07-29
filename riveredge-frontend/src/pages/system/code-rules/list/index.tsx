@@ -17,7 +17,7 @@ import {
   restorePresetRules,
   enableAllRules,
   testGenerateCode,
-  resolveCodeRuleForPage,
+  requireCanonicalRuleCode,
   CodeRule,
   CreateCodeRuleData,
   UpdateCodeRuleData,
@@ -162,12 +162,14 @@ const CodeRuleListPage: React.FC = () => {
   const resetPageRuleForm = (pageCode: string, configsList?: CodeRulePageConfig[]) => {
     const currentConfigs = configsList ?? pageConfigs;
     const pageConfig = currentConfigs.find(p => p.pageCode === pageCode);
-    const defaultRuleCode =
-      pageConfig?.ruleCode || pageCode.toUpperCase().replace(/-/g, '_');
+    const ruleCode = pageConfig?.ruleCode;
+    if (!ruleCode) {
+      return;
+    }
     const defaultExpression = '{YYYY}{MM}{DD}-{SEQ:4}';
     pageRuleFormRef.current?.setFieldsValue({
       name: t('pages.system.codeRules.ruleNameTemplate', { pageName: pageConfig?.pageName || '' }),
-      code: defaultRuleCode,
+      code: ruleCode,
       expression: defaultExpression,
       description: t('pages.system.codeRules.ruleDescTemplate', { pageName: pageConfig?.pageName || '' }),
       seq_start: 1,
@@ -196,11 +198,15 @@ const CodeRuleListPage: React.FC = () => {
 
     // 加载该页面对应的编号规则
     const pageConfig = currentConfigs.find(p => p.pageCode === pageCode);
-    const ruleCode = pageConfig?.ruleCode || pageCode.toUpperCase().replace(/-/g, '_');
+    if (!pageConfig?.ruleCode) {
+      resetPageRuleForm(pageCode, currentConfigs);
+      return;
+    }
+    const ruleCode = pageConfig.ruleCode;
 
     if (ruleCode) {
       try {
-        const rule = resolveCodeRuleForPage(pageCode, pageConfig, currentRules);
+        const rule = currentRules.find((r) => r.code === ruleCode);
         if (rule) {
           // 如果规则存在，加载规则数据到表单
           pageRuleFormRef.current?.setFieldsValue({
@@ -404,16 +410,15 @@ const CodeRuleListPage: React.FC = () => {
       const pageConfig = pageConfigs.find(p => p.pageCode === selectedPageCode);
       if (!pageConfig) return;
 
-      const canonicalRuleCode =
-        pageConfig.ruleCode || selectedPageCode.toUpperCase().replace(/-/g, '_');
+      const canonicalRuleCode = requireCanonicalRuleCode(pageConfig);
       pageRuleFormRef.current?.setFieldValue('code', canonicalRuleCode);
 
       const allRules = await getAllCodeRules();
-      const existingRule = resolveCodeRuleForPage(selectedPageCode, pageConfig, allRules);
+      const existingRule = allRules.find((r) => r.code === canonicalRuleCode);
 
       const saveData: CreateCodeRuleData | UpdateCodeRuleData = {
         ...values,
-        code: existingRule?.code ?? canonicalRuleCode,
+        code: canonicalRuleCode,
       };
 
       if (ruleComponents.length > 0) {
@@ -454,7 +459,7 @@ const CodeRuleListPage: React.FC = () => {
           if (isDuplicateError) {
             // 重新获取所有规则，可能规则刚刚被创建或之前查询有遗漏
             const reloadRules = await getAllCodeRules();
-            const ruleAfterReload = resolveCodeRuleForPage(selectedPageCode, pageConfig, reloadRules);
+            const ruleAfterReload = reloadRules.find((r) => r.code === canonicalRuleCode);
 
             if (ruleAfterReload) {
               // 如果找到了，更新它

@@ -9,12 +9,7 @@ from uuid import UUID
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
-from core.config.code_rule_pages import (
-    CODE_RULE_PAGES,
-    get_page_config_by_code,
-    get_page_rule_code_candidates,
-    get_rule_code_to_page_code,
-)
+from core.config.code_rule_pages import get_canonical_rule_code
 from core.models.code_rule import CodeRule
 from core.schemas.code_rule import CodeRuleCreate, CodeRuleUpdate
 from core.utils.timezone_utils import now_utc
@@ -138,31 +133,13 @@ class CodeRuleService:
         *,
         active_only: bool = True,
     ) -> Optional[CodeRule]:
-        """
-        按功能页解析租户内已保存的编码规则（canonical + 历史 alias 均匹配）。
-        多条命中时取最近更新且启用的规则，保证「最后一次保存」生效。
-        """
-        candidates = get_page_rule_code_candidates(page_code)
-        if not candidates:
+        """按 manifest 声明的 rule_code 精确加载租户编码规则（唯一真源）。"""
+        rule_code = get_canonical_rule_code(page_code)
+        if not rule_code:
             return None
-
-        query = CodeRule.filter(
-            tenant_id=tenant_id,
-            code__in=candidates,
-            deleted_at__isnull=True,
+        return await CodeRuleService.get_rule_by_code(
+            tenant_id, rule_code, active_only=active_only
         )
-        if active_only:
-            query = query.filter(is_active=True)
-        rules = await query.order_by("-updated_at", "-id").all()
-        if rules:
-            return rules[0]
-        if active_only:
-            return await CodeRule.filter(
-                tenant_id=tenant_id,
-                code__in=candidates,
-                deleted_at__isnull=True,
-            ).order_by("-updated_at", "-id").first()
-        return None
 
     @staticmethod
     async def resolve_rule_by_code(
@@ -171,36 +148,12 @@ class CodeRuleService:
         *,
         active_only: bool = True,
     ) -> Tuple[Optional[CodeRule], str]:
-        """
-        按 rule_code 解析规则；优先按功能页聚合 canonical + 历史 alias，
-        取最近更新的启用规则，与编码规则页保存/试生成一致。
-        """
-        page_code = get_rule_code_to_page_code().get(rule_code)
-        if not page_code:
-            page_config = next(
-                (p for p in CODE_RULE_PAGES if p.get("rule_code") == rule_code),
-                None,
-            )
-            page_code = page_config["page_code"] if page_config else None
-
-        if page_code:
-            resolved = await CodeRuleService.resolve_rule_for_page(
-                tenant_id, page_code, active_only=active_only
-            )
-            if resolved:
-                page = get_page_config_by_code(page_code)
-                canonical = (
-                    page.get("rule_code")
-                    if page and page.get("rule_code")
-                    else page_code.upper().replace("-", "_")
-                )
-                return resolved, resolved.code or canonical
-
-        direct = await CodeRuleService.get_rule_by_code(
+        """按 manifest rule_code 精确加载规则，不做 alias / 派生码回退。"""
+        rule = await CodeRuleService.get_rule_by_code(
             tenant_id, rule_code, active_only=active_only
         )
-        if direct:
-            return direct, direct.code
+        if rule:
+            return rule, rule.code
         return None, rule_code
 
     @staticmethod

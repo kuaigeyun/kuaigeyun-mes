@@ -250,14 +250,20 @@ async def _resolve_partner_create_code(
     code: Optional[str],
 ) -> str:
     """创建客户/供应商时：已启用编码规则且未填编码则由服务端按已保存规则生成。"""
+    from core.config.code_rule_pages import get_canonical_rule_code
     from core.services.business.code_generation_service import CodeGenerationService
     from core.services.business.code_rule_service import CodeRuleService
 
     trimmed = (code or "").strip()
-    rule = await CodeRuleService.resolve_rule_for_page(tenant_id, page_code, active_only=True)
+    rule_code = get_canonical_rule_code(page_code)
+    if not rule_code:
+        if not trimmed:
+            raise ValidationError("请填写编码")
+        return trimmed
+    rule = await CodeRuleService.get_rule_by_code(tenant_id, rule_code, active_only=True)
     if rule:
         if not trimmed:
-            return await CodeGenerationService.generate_code(tenant_id, rule.code)
+            return await CodeGenerationService.generate_code(tenant_id, rule_code)
         return trimmed
     if not trimmed:
         raise ValidationError("请填写编码，或在「编码规则」中启用并保存该页面的自动编号")

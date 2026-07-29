@@ -1539,24 +1539,6 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
 ]
 
 
-def get_rule_code_to_page_code() -> Dict[str, str]:
-    """
-    规则代码 -> 页面代码映射
-    包含：1) 显式配置的 rule_code  2) 由 page_code 派生的规则代码（如 MASTER_DATA_FACTORY_PLANT）
-    用于覆盖所有可能的规则代码格式（包括自定义/未配置 rule_code 的页面）
-    """
-    mapping: Dict[str, str] = {}
-    for p in CODE_RULE_PAGES:
-        page_code = p["page_code"]
-        # 显式 rule_code
-        if p.get("rule_code"):
-            mapping[p["rule_code"]] = page_code
-        # 派生规则代码（前端无 rule_code 时使用 page_code 转大写+下划线）
-        derived = page_code.upper().replace("-", "_")
-        mapping[derived] = page_code
-    return mapping
-
-
 # 规则代码 -> 实体模型（用于序列号校准：导入数据后从库中取最大序号，使新生成的序号接着往后）
 # 格式: rule_code -> (模块路径, 模型类名, 编码字段名)
 # 仅配置支持“前缀+序号”且可查库的实体，用于 generate_code 时自动校准 current_seq
@@ -1587,9 +1569,7 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     "master-data-material-group": ("apps.master_data.models.material", "MaterialGroup", "code"),
     "MATERIAL_CODE": ("apps.master_data.models.material", "Material", "main_code"),
     "master-data-material": ("apps.master_data.models.material", "Material", "main_code"),
-    "master-data-supply-chain-customer": ("apps.master_data.models.customer", "Customer", "code"),
     "customer": ("apps.master_data.models.customer", "Customer", "code"),
-    "master-data-supply-chain-supplier": ("apps.master_data.models.supplier", "Supplier", "code"),
     "supplier": ("apps.master_data.models.supplier", "Supplier", "code"),
     "DEPARTMENT_CODE": ("core.models.department", "Department", "code"),
     "system-department": ("core.models.department", "Department", "code"),
@@ -1752,18 +1732,16 @@ def get_page_config_by_code(page_code: str) -> Optional[CodeRulePageConfig]:
     return None
 
 
-def get_page_rule_code_candidates(page_code: str) -> List[str]:
+def get_canonical_rule_code(page_code: str) -> Optional[str]:
     """
-    同一功能页在库内可能出现的规则 code（canonical + 历史派生码）。
-    解析租户规则时须全部尝试，避免「已保存但 code 不一致」导致规则不生效。
+    功能页在 manifest 中声明的唯一 rule_code（单据编码规则真源）。
+    未配置 rule_code 的页面返回 None（如仅手填编码的页面）。
     """
     page = get_page_config_by_code(page_code)
     if not page:
-        return [page_code.upper().replace("-", "_")]
-    candidates: List[str] = []
-    canonical = page.get("rule_code") or page_code.upper().replace("-", "_")
-    for code in (canonical, page_code.upper().replace("-", "_"), page_code):
-        if code and code not in candidates:
-            candidates.append(code)
-    return candidates
+        return None
+    rule_code = page.get("rule_code")
+    if not rule_code or not str(rule_code).strip():
+        return None
+    return str(rule_code).strip()
 

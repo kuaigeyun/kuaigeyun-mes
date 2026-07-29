@@ -323,10 +323,9 @@ class DefaultValuesService:
             page_code = page_config.get("page_code")
             page_name = page_config.get("page_name", page_code)
             rule_code = page_config.get("rule_code")
-            
-            # 如果没有指定rule_code，使用page_code作为rule_code
-            if not rule_code:
-                rule_code = page_code.upper().replace("-", "_")
+            if not rule_code or not str(rule_code).strip():
+                continue
+            rule_code = str(rule_code).strip()
             
             # 获取功能缩写
             abbreviation = DefaultValuesService.PAGE_CODE_ABBREVIATIONS.get(page_code)
@@ -388,11 +387,14 @@ class DefaultValuesService:
             True 表示新建了规则，False 表示规则已存在未创建。
         """
         from core.schemas.code_rule import CodeRuleCreate
+        from core.config.code_rule_pages import get_canonical_rule_code
 
         page_config = next((p for p in CODE_RULE_PAGES if p.get("page_code") == page_code), None)
         if not page_config:
             return False
-        rule_code = page_config.get("rule_code") or page_code.upper().replace("-", "_")
+        rule_code = get_canonical_rule_code(page_code)
+        if not rule_code:
+            return False
         existing = await CodeRuleService.get_rule_by_code(tenant_id, rule_code, active_only=False)
         if existing:
             return False
@@ -452,11 +454,14 @@ class DefaultValuesService:
             True 表示创建或更新成功，False 表示页面不存在或失败。
         """
         from core.schemas.code_rule import CodeRuleCreate, CodeRuleUpdate
+        from core.config.code_rule_pages import get_canonical_rule_code
 
         page_config = next((p for p in CODE_RULE_PAGES if p.get("page_code") == page_code), None)
         if not page_config:
             return False
-        rule_code = page_config.get("rule_code") or page_code.upper().replace("-", "_")
+        rule_code = get_canonical_rule_code(page_code)
+        if not rule_code:
+            return False
         page_name = page_config.get("page_name", page_code)
         abbreviation = DefaultValuesService.PAGE_CODE_ABBREVIATIONS.get(
             page_code

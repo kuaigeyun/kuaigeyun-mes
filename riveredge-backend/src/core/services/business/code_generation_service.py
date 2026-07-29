@@ -261,30 +261,12 @@ class CodeGenerationService:
         Raises:
             ValidationError: 当规则不存在或未启用时抛出
         """
-        # 获取编码规则；按 page 别名解析，避免已保存规则因 code 不一致而不生效
+        # 获取编码规则（manifest rule_code 精确匹配）
         rule, effective_rule_code = await CodeRuleService.resolve_rule_by_code(
             tenant_id, rule_code, active_only=True
         )
         if not rule:
-            from core.config.code_rule_pages import CODE_RULE_PAGES, get_rule_code_to_page_code
-            from core.services.default.default_values_service import DefaultValuesService
-
-            page_config = next(
-                (p for p in CODE_RULE_PAGES if p.get("rule_code") == rule_code),
-                None,
-            )
-            page_code = (
-                page_config["page_code"]
-                if page_config
-                else get_rule_code_to_page_code().get(rule_code)
-            )
-            if page_code:
-                await DefaultValuesService.ensure_code_rule_for_page(tenant_id, page_code)
-                rule, effective_rule_code = await CodeRuleService.resolve_rule_by_code(
-                    tenant_id, rule_code, active_only=True
-                )
-        if not rule:
-            raise ValidationError(f"编码规则 {rule_code} 不存在或未启用，请在「编码规则」中启用该规则")
+            raise ValidationError(f"编码规则 {rule_code} 不存在或未启用，请在「编码规则」中启用并保存该规则")
 
         rule_code = effective_rule_code
 

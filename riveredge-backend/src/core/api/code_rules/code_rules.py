@@ -18,7 +18,7 @@ from core.schemas.code_rule import (
 from core.config.code_rule_pages import (
     CODE_RULE_PAGES,
     PAGE_CODE_TO_FIXED_TEXT_PRESET,
-    get_rule_code_to_page_code,
+    get_canonical_rule_code,
 )
 from core.services.business.code_rule_service import CodeRuleService
 from core.services.business.code_generation_service import CodeGenerationService
@@ -168,20 +168,22 @@ async def get_page_config(
             detail=f"页面配置不可用（应用未启用）: {page_code}",
         )
     page_config["fixed_text_preset"] = PAGE_CODE_TO_FIXED_TEXT_PRESET.get(page_code)
-    
-    canonical_rule_code = page_config.get("rule_code") or page_code.upper().replace("-", "_")
+
+    canonical_rule_code = get_canonical_rule_code(page_code)
     page_config["rule_code"] = canonical_rule_code
 
-    rule = await CodeRuleService.resolve_rule_for_page(
-        tenant_id, page_code, active_only=False
-    )
-    if rule:
-        page_config["allow_manual_edit"] = rule.allow_manual_edit
-        page_config["auto_generate"] = rule.is_active
+    if canonical_rule_code:
+        rule = await CodeRuleService.get_rule_by_code(
+            tenant_id, canonical_rule_code, active_only=False
+        )
+        if rule:
+            page_config["allow_manual_edit"] = rule.allow_manual_edit
+            page_config["auto_generate"] = rule.is_active
+        else:
+            page_config["auto_generate"] = False
     else:
-        # 未在库中保存过规则：不沿用静态默认值冒充已启用
         page_config["auto_generate"] = False
-    
+
     return CodeRulePageConfigResponse(**page_config)
 
 
@@ -294,27 +296,6 @@ async def delete_rule(
         )
 
 
-async def _ensure_code_rule_for_rule_code(tenant_id: int, rule_code: str) -> bool:
-    """根据 rule_code 查找对应 page_code 并补建编码规则，返回是否补建成功"""
-    # 1) 优先从显式配置的 rule_code 查找
-    page_config = next(
-        (p for p in CODE_RULE_PAGES if p.get("rule_code") == rule_code),
-        None,
-    )
-    if page_config:
-        from core.services.default.default_values_service import DefaultValuesService
-        return await DefaultValuesService.ensure_code_rule_for_page(
-            tenant_id, page_config["page_code"]
-        )
-    # 2) 支持派生规则代码（如 MASTER_DATA_FACTORY_PLANT 对应 master-data-factory-plant）
-    page_code = get_rule_code_to_page_code().get(rule_code)
-    if page_code:
-        from core.services.default.default_values_service import DefaultValuesService
-        return await DefaultValuesService.ensure_code_rule_for_page(
-            tenant_id, page_code
-        )
-    return False
-
 
 @router.post("/generate", response_model=CodeGenerationResponse)
 async def generate_code(
@@ -322,9 +303,8 @@ async def generate_code(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    生成编码（会更新序号）
-    使用请求中的 rule_code 精确查找规则，与编码规则配置一致。
-    若规则不存在，尝试根据配置补建后重试。
+    生成编码（会更新序号）。
+    仅按 manifest rule_code 精确查找已保存规则。
     """
     try:
         code = await CodeGenerationService.generate_code(
@@ -336,20 +316,6 @@ async def generate_code(
         rule_name = rule.name if rule else request.rule_code
         return CodeGenerationResponse(code=code, rule_name=rule_name)
     except ValidationError as e:
-        if "不存在" in str(e) or "未启用" in str(e):
-            created = await _ensure_code_rule_for_rule_code(tenant_id, request.rule_code)
-            if created:
-                try:
-                    code = await CodeGenerationService.generate_code(
-                        tenant_id=tenant_id,
-                        rule_code=request.rule_code,
-                        context=request.context
-                    )
-                    rule, _ = await CodeRuleService.resolve_rule_by_code(tenant_id, request.rule_code)
-                    rule_name = rule.name if rule else request.rule_code
-                    return CodeGenerationResponse(code=code, rule_name=rule_name)
-                except ValidationError:
-                    pass
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)
@@ -401,7 +367,7 @@ async def test_generate_code(
 ):
     """
     测试生成编码（不更新序号）。
-    使用请求中的 rule_code 精确查找规则；若规则不存在则尝试补建后重试。
+    仅按 manifest rule_code 精确查找已保存规则。
     """
     try:
         code = await CodeGenerationService.test_generate_code(
@@ -420,30 +386,8 @@ async def test_generate_code(
             )
         return CodeGenerationResponse(code=code, rule_name=rule_name)
     except ValidationError as e:
-        error_message = str(e)
-        if "不存在" in error_message or "未启用" in error_message:
-            created = await _ensure_code_rule_for_rule_code(tenant_id, request.rule_code)
-            if created:
-                try:
-                    code = await CodeGenerationService.test_generate_code(
-                        tenant_id=tenant_id,
-                        rule_code=request.rule_code,
-                        context=request.context,
-                        check_duplicate=request.check_duplicate or False,
-                        entity_type=request.entity_type
-                    )
-                    rule, _ = await CodeRuleService.resolve_rule_by_code(tenant_id, request.rule_code)
-                    rule_name = rule.name if rule else request.rule_code
-                    if not (code or "").strip():
-                        raise HTTPException(
-                            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                            detail=f"编码规则 {request.rule_code} 未生成有效编号，请检查规则是否已启用并保存",
-                        )
-                    return CodeGenerationResponse(code=code, rule_name=rule_name)
-                except ValidationError:
-                    pass
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=error_message,
+            detail=str(e),
         )
 
