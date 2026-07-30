@@ -36,6 +36,9 @@ def test_peel_leading_name_and_spec_wrap():
     )
     assert _peel_leading_spec_wrap("头 140度特厚剥线") == ("头", "140度特厚剥线")
     assert _peel_leading_spec_wrap("头140度特厚剥线") == ("头", "140度特厚剥线")
+    # 合规格「接线片12」不得被当成折行残片剥走
+    assert _peel_leading_spec_wrap("接线片12") == ("", "接线片12")
+    assert _peel_leading_spec_wrap("接线片12镍") == ("", "接线片12镍")
     assert _peel_leading_name_wrap("*家用电器配件*温度保护") == (
         "",
         "*家用电器配件*温度保护",
@@ -217,3 +220,179 @@ def test_group_bands_name_overflow_does_not_pollute_spec_or_unit():
     assert items[0][0].endswith("剥头保护器(130°)")
     assert items[0][1] == "030300007"
     assert items[0][2] == "只"
+
+
+def test_parse_magnet_wire_diameter_between_spec_and_unit():
+    """漆包线规格线径单独成格：不得整行丢弃，须并入规格。"""
+    from apps.haoligo.services.finance_einvoice_ocr import _parse_invoice_detail_row
+
+    rows = [
+        (
+            ["*电磁线*漆包线", "ECCA/QA-2/180", "0.11", "千克", "5084.96", "72.8584078235847", "370450.00", "13%", "48158.50"],
+            "ECCA/QA-2/180 0.11",
+            "5084.96",
+        ),
+        (
+            ["*电磁线*漆包线", "QAL-1/155", "0.24", "千克", "10462.95", "34.2669597700136", "358532.61", "13%", "46609.24"],
+            "QAL-1/155 0.24",
+            "10462.95",
+        ),
+        (
+            ["*电磁线*漆包线", "QAL-2/155", "0.22", "千克", "8.64", "34.4159701737135", "297.35", "13%", "38.66"],
+            "QAL-2/155 0.22",
+            "8.64",
+        ),
+        (
+            ["*电磁线*漆包线", "QAL-1/155", "0.24千克", "10462.95", "34.2669597700136", "358532.61", "13%", "46609.24"],
+            "QAL-1/155 0.24",
+            "10462.95",
+        ),
+        (
+            ["*电磁线*漆包线", "QAL-1/155", "千克", "0.24 10462.95", "34.2669597700136", "358532.61", "13%", "46609.24"],
+            "QAL-1/155 0.24",
+            "10462.95",
+        ),
+    ]
+    for cells, expect_spec, expect_qty in rows:
+        parsed = _parse_invoice_detail_row(cells)
+        assert parsed is not None, cells
+        assert parsed["spec"] == expect_spec
+        assert str(parsed["quantity"]) == expect_qty
+        assert parsed["quantity_literal"] == expect_qty
+
+
+def test_group_bands_attaches_diameter_misbucketed_to_quantity():
+    """线径折行误入数量列时，归上一行规格，不得污染下一行导致丢行。"""
+    from apps.haoligo.services.finance_einvoice_ocr import _parse_invoice_detail_row
+
+    bands = [
+        (
+            0,
+            100.0,
+            _band(
+                name=[(100.0, 50.0, "*电磁线*漆包线")],
+                spec=[(100.0, 130.0, "QAL-1/155")],
+                unit=[(100.0, 200.0, "千克")],
+                quantity=[(100.0, 240.0, "10462.95")],
+                price=[(100.0, 300.0, "34.2669597700136")],
+                amount=[(100.0, 380.0, "358532.61")],
+                tax_rate=[(100.0, 450.0, "13%")],
+                tax=[(100.0, 500.0, "46609.24")],
+            ),
+        ),
+        (0, 108.0, _band(quantity=[(108.0, 240.0, "0.24")])),
+        (
+            0,
+            120.0,
+            _band(
+                name=[(120.0, 50.0, "*电磁线*漆包线")],
+                spec=[(120.0, 130.0, "QAL-2/155")],
+                unit=[(120.0, 200.0, "千克")],
+                quantity=[(120.0, 240.0, "8.64")],
+                price=[(120.0, 300.0, "34.4159701737135")],
+                amount=[(120.0, 380.0, "297.35")],
+                tax_rate=[(120.0, 450.0, "13%")],
+                tax=[(120.0, 500.0, "38.66")],
+            ),
+        ),
+        (0, 128.0, _band(quantity=[(128.0, 240.0, "0.22")])),
+        (
+            0,
+            140.0,
+            _band(
+                name=[(140.0, 50.0, "*电磁线*漆包线")],
+                spec=[(140.0, 130.0, "QAL-2/180(AL)")],
+                unit=[(140.0, 200.0, "千克")],
+                quantity=[(140.0, 240.0, "2205.65")],
+                price=[(140.0, 300.0, "34.0853886157581")],
+                amount=[(140.0, 380.0, "75180.88")],
+                tax_rate=[(140.0, 450.0, "13%")],
+                tax=[(140.0, 500.0, "9773.51")],
+            ),
+        ),
+        (0, 148.0, _band(quantity=[(148.0, 240.0, "0.25")])),
+    ]
+    items = _group_bands_into_items(bands)
+    assert len(items) == 3
+    assert items[0][1] == "QAL-1/155 0.24"
+    assert items[1][1] == "QAL-2/155 0.22"
+    assert items[2][1] == "QAL-2/180(AL) 0.25"
+    for cells in items:
+        assert _parse_invoice_detail_row(cells) is not None
+
+
+def test_cluster_words_by_y_merges_near_tokens():
+    """同行数量/单价 y 差 0.5pt 时不得拆成两行（否则单价丢失）。"""
+    from apps.haoligo.services.finance_einvoice_pdf_text import _cluster_words_by_y
+
+    words = [
+        (12.0, 160.2, 100.0, 170.0, "*黑色金属冶炼压延品*硅", 0, 0, 0),
+        (198.0, 160.9, 220.0, 170.0, "吨", 0, 0, 0),
+        (263.0, 160.9, 280.0, 170.0, "44.728", 0, 0, 0),
+        (293.0, 161.4, 340.0, 170.0, "3610.619469026549", 0, 0, 0),
+        (393.0, 160.9, 430.0, 170.0, "161495.79", 0, 0, 0),
+        (12.0, 173.0, 80.0, 180.0, "钢1300", 0, 0, 0),
+    ]
+    clusters = _cluster_words_by_y(words)
+    assert len(clusters) == 2
+    assert len(clusters[0][1]) == 5
+    assert [w[4] for w in clusters[1][1]] == ["钢1300"]
+
+
+def test_parse_glued_qty_and_unit_price_from_same_quantity_cell():
+    from decimal import Decimal
+
+    from apps.haoligo.services.finance_einvoice_ocr import _parse_invoice_detail_row
+
+    cells = [
+        "*黑色金属冶炼压延品*硅钢1300",
+        "",
+        "吨",
+        "44.7283610.619469026549",
+        "",
+        "161495.79",
+        "13%",
+        "20994.45",
+    ]
+    parsed = _parse_invoice_detail_row(cells)
+    assert parsed is not None
+    assert parsed["quantity"] == Decimal("44.728")
+    assert parsed["quantity_literal"] == "44.728"
+    assert parsed["invoice_unit_price_literal"] == "3610.619469026549"
+    assert parsed["material_name"] == "硅钢1300"
+
+
+def test_chinese_and_latin_mixed_spec_not_unit():
+    """加长票常见：规格为「铜垫片」「L型焊接端子短」，不得误判为单位。"""
+    from decimal import Decimal
+
+    from apps.haoligo.services.finance_einvoice_ocr import _looks_like_unit, _parse_invoice_detail_row
+
+    assert _looks_like_unit("铜垫片") is False
+    assert _looks_like_unit("L型焊接端子短") is False
+    assert _looks_like_unit("只") is True
+    assert _looks_like_unit("立方米") is True
+
+    copper = _parse_invoice_detail_row(
+        ["*电力电子元器件*铜垫片", "铜垫片", "只", "50000", "0.0353982300885", "1769.91", "13%", "230.09"]
+    )
+    assert copper is not None
+    assert copper["spec"] == "铜垫片"
+    assert copper["quantity"] == Decimal("50000")
+
+    mixed = _parse_invoice_detail_row(
+        [
+            "*电力电子元器件*焊接端子",
+            "L型焊接端子短",
+            "只",
+            "50000",
+            "0.0442477876106",
+            "2212.39",
+            "13%",
+            "287.61",
+        ]
+    )
+    assert mixed is not None
+    assert mixed["spec"] == "L型焊接端子短"
+    assert mixed["quantity"] == Decimal("50000")
+

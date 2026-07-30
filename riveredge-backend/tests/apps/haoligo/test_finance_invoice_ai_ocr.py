@@ -44,12 +44,14 @@ def test_map_ai_invoice_payload_maps_camel_case_lines():
     assert first["material_code"] == "010300031"
     assert first["material_name"] == "转子成品"
     assert first["quantity"] == Decimal("100")
+    assert first["quantity_literal"] == "100"
     assert first["invoice_unit_price"] == Decimal("1.2500")
     assert first["invoice_unit_price_literal"] == "1.2500"
     assert first["tax_amount"] == Decimal("16.25")
     second = result["lines"][1]
     assert second["material_code"].startswith("*橡胶制品*")
     assert second["quantity"] == Decimal("2.5")
+    assert second["quantity_literal"] == "2.5"
 
 
 def test_map_ai_invoice_payload_rejects_empty_lines():

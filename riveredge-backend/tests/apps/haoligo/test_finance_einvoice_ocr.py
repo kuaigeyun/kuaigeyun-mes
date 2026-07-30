@@ -248,12 +248,34 @@ def test_parse_merged_qty_price_row():
     parsed = _parse_invoice_detail_row(cells)
     assert parsed is not None
     assert parsed["quantity"] == Decimal("39000")
+    assert parsed["quantity_literal"] == "39000"
     assert parsed["invoice_unit_price"] == Decimal("14.6017699115044")
+    assert parsed["invoice_unit_price_literal"] == "14.6017699115044"
     assert parsed["line_amount"] == Decimal("569469.03")
     assert parsed["tax_amount"] == Decimal("74030.97")
     assert parsed["quantity_decimals"] == 0
     assert parsed["invoice_unit_price_decimals"] == 13
     assert parsed["line_amount_decimals"] == 2
+
+
+def test_parse_invoice_detail_row_keeps_quantity_fraction_literal():
+    from apps.haoligo.services.finance_einvoice_ocr import _parse_invoice_detail_row
+
+    cells = [
+        "*塑料制品*测试料",
+        "SPEC-1",
+        "千克",
+        "12.5000",
+        "7.61",
+        "95.125",
+        "13%",
+        "12.37",
+    ]
+    parsed = _parse_invoice_detail_row(cells)
+    assert parsed is not None
+    assert parsed["quantity"] == Decimal("12.5000")
+    assert parsed["quantity_literal"] == "12.5000"
+    assert parsed["quantity_decimals"] == 4
 
 
 def test_parse_invoice_detail_row_accepts_arbitrary_units():
