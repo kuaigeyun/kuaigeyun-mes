@@ -502,6 +502,7 @@ def _material_to_response_data(material) -> Dict[str, Any]:
         "barcode": getattr(material, "barcode", None),
         "shelf_life_managed": getattr(material, "shelf_life_managed", False),
         "shelf_life_days": getattr(material, "shelf_life_days", None),
+        "is_giftable": getattr(material, "is_giftable", False),
         "reference_cost": getattr(material, "reference_cost", None),
         "country_of_origin": getattr(material, "country_of_origin", None),
         "customs_code": getattr(material, "customs_code", None),
@@ -1771,6 +1772,7 @@ class MaterialService:
             default_inspection_plan_id=master_material.default_inspection_plan_id,
             over_report_mode=master_material.over_report_mode,
             over_report_value=master_material.over_report_value,
+            is_giftable=master_material.is_giftable,
         )
         created = await cls.create_material(tenant_id, create_data)
         return MaterialMaterializeVariantResponse(
@@ -1868,6 +1870,7 @@ class MaterialService:
                     default_inspection_plan_id=master_material.default_inspection_plan_id,
                     over_report_mode=master_material.over_report_mode,
                     over_report_value=master_material.over_report_value,
+                    is_giftable=master_material.is_giftable,
                 )
                 created = await cls.create_material(tenant_id, create_data)
                 created_uuids.append(str(created.uuid))

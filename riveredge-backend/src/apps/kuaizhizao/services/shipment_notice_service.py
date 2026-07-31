@@ -1090,6 +1090,12 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                         delivery_quantity=float(item.notice_quantity),
                         unit_price=float(unit_price) if unit_price is not None else 0.0,
                         total_amount=float(total_amount) if total_amount is not None else 0.0,
+                        is_gift=bool(getattr(item, "is_gift", False)),
+                        gift_ref_unit_price=(
+                            float(item.gift_ref_unit_price)
+                            if getattr(item, "gift_ref_unit_price", None) is not None
+                            else None
+                        ),
                         notes=getattr(item, "notes", None),
                     )
                 )

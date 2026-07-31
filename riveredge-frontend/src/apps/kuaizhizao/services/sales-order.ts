@@ -141,6 +141,8 @@ export interface SalesOrderItem {
   /** 税率（%） */
   tax_rate?: number;
   item_amount?: number;
+  is_gift?: boolean;
+  gift_ref_unit_price?: number;
   work_order_id?: number;
   work_order_code?: string;
   /** 属性（配置件专用，如 {"color":"red","size":"M"}） */

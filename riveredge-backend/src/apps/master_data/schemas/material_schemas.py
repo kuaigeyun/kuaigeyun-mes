@@ -185,6 +185,7 @@ class MaterialBase(BaseModel):
     barcode: Optional[str] = Field(None, max_length=100, description="条码/GTIN/EAN")
     shelf_life_managed: bool = Field(False, alias="shelfLifeManaged", description="是否启用保质期管理")
     shelf_life_days: Optional[int] = Field(None, alias="shelfLifeDays", ge=1, description="保质期天数")
+    is_giftable: bool = Field(False, alias="isGiftable", description="是否允许作为销售赠品")
     reference_cost: Optional[Decimal] = Field(None, alias="referenceCost", ge=0, description="参考成本")
     country_of_origin: Optional[str] = Field(
         None, alias="countryOfOrigin", max_length=100, description="原产国"
@@ -299,6 +300,7 @@ class MaterialUpdate(BaseModel):
     barcode: Optional[str] = Field(None, max_length=100, description="条码/GTIN/EAN")
     shelf_life_managed: Optional[bool] = Field(None, alias="shelfLifeManaged", description="是否启用保质期管理")
     shelf_life_days: Optional[int] = Field(None, alias="shelfLifeDays", ge=1, description="保质期天数")
+    is_giftable: Optional[bool] = Field(None, alias="isGiftable", description="是否允许作为销售赠品")
     reference_cost: Optional[Decimal] = Field(None, alias="referenceCost", ge=0, description="参考成本")
     country_of_origin: Optional[str] = Field(None, alias="countryOfOrigin", max_length=100, description="原产国")
     customs_code: Optional[str] = Field(None, alias="customsCode", max_length=50, description="海关编码")

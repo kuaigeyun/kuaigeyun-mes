@@ -311,27 +311,10 @@ import {
   resolveWorkOrderFormQuantity,
 } from '../../../../../utils/materialScenarioUnit'
 import type { Material } from '../../../../master-data/types/material'
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate'
+import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateTimeString } from '../../../../../utils/formDate'
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns'
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar'
 import { resolveDownstreamPushPercent } from '../../sales-management/shared/pushProgress'
-
-const toApiDateTimeString = (value: any): string | undefined => {
-  if (!value) return undefined
-  if (typeof value?.format === 'function') {
-    try {
-      return value.format('YYYY-MM-DD HH:mm:ss')
-    } catch {
-      // fallback to dayjs parse below
-    }
-  }
-  if (value instanceof Date) {
-    const parsed = dayjs(value)
-    return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : undefined
-  }
-  const parsed = dayjs(value)
-  return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : undefined
-}
 
 const getFirstNonEmptyString = (...candidates: Array<unknown>): string | undefined => {
   for (const candidate of candidates) {
@@ -4366,8 +4349,8 @@ const WorkOrdersPage: React.FC = () => {
           group_name: values.group_name,
           production_mode: values.sales_order_id ? 'MTO' : values.production_mode || 'MTS',
           sales_order_id: values.sales_order_id,
-          planned_start_date: values.planned_start_date,
-          planned_end_date: values.planned_end_date,
+          planned_start_date: toApiDateTimeString(values.planned_start_date),
+          planned_end_date: toApiDateTimeString(values.planned_end_date),
           items: items.map(
             (row: {
               product_id: number
@@ -4399,6 +4382,13 @@ const WorkOrdersPage: React.FC = () => {
 
       // 处理附件
       values.attachments = normalizeWorkOrderAttachmentsForSave(values.attachments)
+
+      values.planned_start_date = toApiDateTimeString(values.planned_start_date)
+      values.planned_end_date = toApiDateTimeString(values.planned_end_date)
+      if (!values.planned_start_date || !values.planned_end_date) {
+        messageApi.error(t('app.kuaizhizao.workOrder.formPlannedStartRequired'))
+        throw new Error('计划开始/结束时间必填')
+      }
 
       // 物料来源验证（核心功能，新增）
       if (values.product_id && selectedMaterialSourceInfo) {
@@ -8583,7 +8573,8 @@ const WorkOrdersPage: React.FC = () => {
           required
           rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedStartRequired') }]}
           colProps={{ span: 6 }}
-          fieldProps={{ style: { width: '100%' } }}
+          formItemProps={formDateFormItemProps}
+          fieldProps={{ showTime: true, style: { width: '100%' }, format: 'YYYY-MM-DD HH:mm:ss' }}
         />
         <ProFormDatePicker
           name="planned_end_date"
@@ -8592,12 +8583,13 @@ const WorkOrdersPage: React.FC = () => {
           required
           rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedEndRequired') }]}
           colProps={{ span: 6 }}
+          formItemProps={formDateFormItemProps}
           fieldProps={buildFutureDateShortcutFieldProps({
             getForm: () => formRef.current,
             fieldName: 'planned_end_date',
             baseFieldName: 'planned_start_date',
             t,
-            fieldProps: { style: { width: '100%' } },
+            fieldProps: { showTime: true, style: { width: '100%' }, format: 'YYYY-MM-DD HH:mm:ss' },
           })}
         />
 

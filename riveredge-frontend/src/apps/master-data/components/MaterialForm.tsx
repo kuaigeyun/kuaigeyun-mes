@@ -1096,6 +1096,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         barcode: restValues.barcode?.trim() || undefined,
         shelf_life_managed: Boolean(restValues.shelfLifeManaged),
         shelf_life_days: restValues.shelfLifeManaged ? restValues.shelfLifeDays : null,
+        is_giftable: Boolean(restValues.isGiftable),
         reference_cost: restValues.referenceCost ?? undefined,
         country_of_origin: restValues.countryOfOrigin?.trim() || undefined,
         customs_code: restValues.customsCode?.trim() || undefined,
@@ -2230,7 +2231,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         />
       </div>
       <div className="material-form-basic-grid__cell">
-        <ProFormSwitch name="isActive" label={t('app.master-data.materialForm.isActive')} />
+        <ProFormSwitch name="isGiftable" label={t('app.master-data.materialForm.isGiftable')} />
       </div>
     </div>
     <Row gutter={16} style={{ width: '100%' }}>
@@ -2338,6 +2339,9 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
           placeholder={t('app.master-data.materialForm.descriptionPlaceholder')}
           fieldProps={{ rows: 3, maxLength: 500 }}
         />
+      </Col>
+      <Col span={24}>
+        <ProFormSwitch name="isActive" label={t('app.master-data.materialForm.isActive')} />
       </Col>
     </Row>
     </>

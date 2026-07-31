@@ -4498,18 +4498,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     op.updated_by_name = user_info["name"]
                     await op.save()
 
-            # 重新计算工单计划结束时间（基于所有工序的计划时间）
-            operations = await WorkOrderOperation.filter(
-                tenant_id=tenant_id,
-                work_order_id=work_order_id,
-                deleted_at__isnull=True
-            ).order_by('planned_end_date').all()
-
-            if operations and operations[-1].planned_end_date:
-                work_order.planned_end_date = operations[-1].planned_end_date
-                work_order.updated_by = updated_by
-                work_order.updated_by_name = user_info["name"]
-                await work_order.save()
+            # 工序清单变更不回写工单头计划时间：头表计划开始/结束由工单更新或排程写入。
+            # 若此处用工序计划结束覆盖头表，编辑工单计划时间后会被旧工序时间冲掉。
 
             logger.info(f"工单 {work_order.code} 的工序已更新")
 

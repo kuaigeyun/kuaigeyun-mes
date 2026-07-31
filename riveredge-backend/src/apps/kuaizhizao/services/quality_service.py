@@ -4640,7 +4640,19 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             allow_auto_create=_semi_finished_goods_receipt_allows_fqc_creation(receipt),
         )
 
-    _FGI_PULL_ELIGIBLE_WO_STATUSES = frozenset({"released", "in_progress", "RELEASED", "IN_PROGRESS"})
+    # 与成品入库对齐：工单完成后仍可补建 FQC；末道报工自动建单失败时也可手工加载
+    _FGI_PULL_ELIGIBLE_WO_STATUSES = frozenset({
+        "released",
+        "in_progress",
+        "completed",
+        "RELEASED",
+        "IN_PROGRESS",
+        "COMPLETED",
+        "已下达",
+        "执行中",
+        "进行中",
+        "已完成",
+    })
 
     def _derive_fgi_pull_capability(
         self,

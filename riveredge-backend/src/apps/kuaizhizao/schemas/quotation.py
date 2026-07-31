@@ -32,6 +32,8 @@ class QuotationItemBase(BaseSchema):
     unit_price: Decimal = Field(..., ge=0, description="单价")
     tax_rate: Decimal = Field(Decimal("0"), ge=0, le=100, description="税率（%）")
     total_amount: Optional[Decimal] = Field(None, ge=0, description="金额")
+    is_gift: bool = Field(False, description="是否赠品")
+    gift_ref_unit_price: Optional[Decimal] = Field(None, ge=0, description="赠品参考单价")
     variant_attributes: Optional[Dict[str, Any]] = Field(None, description="属性组合（临时组合）")
     delivery_date: Optional[date] = Field(None, description="预计交货日期")
     notes: Optional[str] = Field(None, description="备注")
@@ -53,6 +55,8 @@ class QuotationItemUpdate(BaseSchema):
     unit_price: Optional[Decimal] = Field(None, ge=0)
     tax_rate: Optional[Decimal] = Field(None, ge=0, le=100)
     total_amount: Optional[Decimal] = Field(None, ge=0)
+    is_gift: Optional[bool] = None
+    gift_ref_unit_price: Optional[Decimal] = Field(None, ge=0)
     variant_attributes: Optional[Dict[str, Any]] = None
     delivery_date: Optional[date] = None
     notes: Optional[str] = None

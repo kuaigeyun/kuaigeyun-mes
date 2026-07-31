@@ -44,6 +44,7 @@ from apps.kuaizhizao.schemas.sales_order import (
 from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_sales_order_capabilities_on_response,
 )
+from apps.kuaizhizao.utils.gift_line_helper import validate_gift_line_rules
 from apps.kuaizhizao.services.document_action_policy.sales_order import (
     assert_sales_order_capability,
 )
@@ -94,6 +95,65 @@ class SalesOrderService:
             user=current_user,
             resource="kuaizhizao:sales-order",
         )
+
+    @staticmethod
+    def _process_sales_order_item_pricing(
+        item_data: SalesOrderItemCreate,
+        material_map: Dict[int, Material],
+        *,
+        money_fn,
+    ) -> Dict[str, Any]:
+        req_qty = item_data.required_quantity
+        tax_r = item_data.tax_rate or Decimal("0")
+        is_gift = bool(getattr(item_data, "is_gift", False))
+        unit_pr = item_data.unit_price or Decimal("0")
+        mat_code, mat_name, mat_spec, mat_unit = SalesOrderService._material_fields_from_master_or_payload(
+            item_data, material_map
+        )
+        unit_pr, item_amt, gift_ref = validate_gift_line_rules(
+            is_gift=is_gift,
+            unit_price=unit_pr,
+            material_id=item_data.material_id or 0,
+            material_map=material_map,
+            material_code=mat_code,
+            material_name=mat_name,
+            gift_ref_unit_price=getattr(item_data, "gift_ref_unit_price", None),
+            line_amount=item_data.item_amount,
+        )
+        if not is_gift:
+            excl_amt = req_qty * unit_pr
+            item_amt = (
+                item_data.item_amount
+                if item_data.item_amount is not None
+                else (excl_amt * (Decimal("1") + tax_r / Decimal("100")))
+            )
+            item_amt = money_fn(item_amt)
+        SalesOrderService._validate_sales_item_non_negative(
+            required_quantity=req_qty,
+            unit_price=unit_pr,
+            tax_rate=tax_r,
+            item_amount=item_amt,
+        )
+        return {
+            "material_id": item_data.material_id or 0,
+            "material_code": mat_code,
+            "material_name": mat_name,
+            "material_spec": mat_spec,
+            "material_unit": mat_unit,
+            "order_quantity": req_qty,
+            "delivered_quantity": Decimal("0"),
+            "remaining_quantity": req_qty,
+            "unit_price": unit_pr,
+            "tax_rate": tax_r,
+            "delivery_date": item_data.delivery_date,
+            "delivery_status": "待交货",
+            "variant_attributes": getattr(item_data, "variant_attributes", None),
+            "configurable_selections": getattr(item_data, "configurable_selections", None),
+            "notes": item_data.notes,
+            "is_gift": is_gift,
+            "gift_ref_unit_price": gift_ref,
+            "_item_amount": item_amt,
+        }
 
     @staticmethod
     def _validate_sales_item_non_negative(
@@ -698,6 +758,8 @@ class SalesOrderService:
                     unit_price=it.unit_price if getattr(it, "unit_price", None) is not None else Decimal("0"),
                     tax_rate=getattr(it, "tax_rate", None) or Decimal("0"),
                     item_amount=it.total_amount if getattr(it, "total_amount", None) is not None else Decimal("0"),
+                    is_gift=bool(getattr(it, "is_gift", False)),
+                    gift_ref_unit_price=getattr(it, "gift_ref_unit_price", None),
                     notes=it.notes,
                     variant_attributes=getattr(it, "variant_attributes", None),
                     configurable_selections=getattr(it, "configurable_selections", None),
@@ -1221,42 +1283,14 @@ class SalesOrderService:
                 [item_data.material_id for item_data in sales_order_data.items],
             )
             for item_data in sales_order_data.items:
-                req_qty = item_data.required_quantity
-                unit_pr = item_data.unit_price or Decimal("0")
-                tax_r = item_data.tax_rate or Decimal("0")
-                self._validate_sales_item_non_negative(
-                    required_quantity=req_qty,
-                    unit_price=unit_pr,
-                    tax_rate=tax_r,
-                    item_amount=item_data.item_amount,
+                row = self._process_sales_order_item_pricing(
+                    item_data,
+                    material_map,
+                    money_fn=self._money,
                 )
-                # 未税金额 = 数量×单价，价税合计 = 未税金额×(1+税率/100)
-                excl_amt = req_qty * unit_pr
-                item_amt = item_data.item_amount if item_data.item_amount is not None else (excl_amt * (Decimal("1") + tax_r / Decimal("100")))
-                item_amt = self._money(item_amt)
-                total_qty += req_qty
-                subtotal += item_amt
-                mat_code, mat_name, mat_spec, mat_unit = self._material_fields_from_master_or_payload(
-                    item_data, material_map
-                )
-                item_rows.append({
-                    "material_id": item_data.material_id or 0,
-                    "material_code": mat_code,
-                    "material_name": mat_name,
-                    "material_spec": mat_spec,
-                    "material_unit": mat_unit,
-                    "order_quantity": req_qty,
-                    "delivered_quantity": Decimal("0"),
-                    "remaining_quantity": req_qty,
-                    "unit_price": unit_pr,
-                    "tax_rate": tax_r,
-                    "delivery_date": item_data.delivery_date,
-                    "delivery_status": "待交货",
-                    "variant_attributes": getattr(item_data, "variant_attributes", None),
-                    "configurable_selections": getattr(item_data, "configurable_selections", None),
-                    "notes": item_data.notes,
-                    "_item_amount": item_amt,
-                })
+                total_qty += row["order_quantity"]
+                subtotal += row["_item_amount"]
+                item_rows.append(row)
 
             discount = Decimal(str(getattr(sales_order_data, "discount_amount", None) or 0))
             # 仅调用方显式传入 total_amount 时才整单覆盖；省略（含旧默认 0）按明细汇总
@@ -1295,6 +1329,8 @@ class SalesOrderService:
                     variant_attributes=row["variant_attributes"],
                     configurable_selections=row["configurable_selections"],
                     notes=row["notes"],
+                    is_gift=row["is_gift"],
+                    gift_ref_unit_price=row["gift_ref_unit_price"],
                 )
             total_amt = sum(allocated_amounts, Decimal("0"))
             await SalesOrder.filter(id=order.id).update(
@@ -1928,41 +1964,14 @@ class SalesOrderService:
                     [item_data.material_id for item_data in sales_order_data.items],
                 )
                 for item_data in sales_order_data.items:
-                    req_qty = item_data.required_quantity
-                    unit_pr = item_data.unit_price or Decimal("0")
-                    tax_r = item_data.tax_rate or Decimal("0")
-                    self._validate_sales_item_non_negative(
-                        required_quantity=req_qty,
-                        unit_price=unit_pr,
-                        tax_rate=tax_r,
-                        item_amount=item_data.item_amount,
+                    row = self._process_sales_order_item_pricing(
+                        item_data,
+                        material_map,
+                        money_fn=self._money,
                     )
-                    excl_amt = req_qty * unit_pr
-                    item_amt = item_data.item_amount if item_data.item_amount is not None else (excl_amt * (Decimal("1") + tax_r / Decimal("100")))
-                    item_amt = self._money(item_amt)
-                    total_qty += req_qty
-                    subtotal += item_amt
-                    mat_code, mat_name, mat_spec, mat_unit = self._material_fields_from_master_or_payload(
-                        item_data, material_map
-                    )
-                    item_rows.append({
-                        "material_id": item_data.material_id or 0,
-                        "material_code": mat_code,
-                        "material_name": mat_name,
-                        "material_spec": mat_spec,
-                        "material_unit": mat_unit,
-                        "order_quantity": req_qty,
-                        "delivered_quantity": Decimal("0"),
-                        "remaining_quantity": req_qty,
-                        "unit_price": unit_pr,
-                        "tax_rate": tax_r,
-                        "delivery_date": item_data.delivery_date,
-                        "delivery_status": "待交货",
-                        "variant_attributes": getattr(item_data, "variant_attributes", None),
-                        "configurable_selections": getattr(item_data, "configurable_selections", None),
-                        "notes": item_data.notes,
-                        "_item_amount": item_amt,
-                    })
+                    total_qty += row["order_quantity"]
+                    subtotal += row["_item_amount"]
+                    item_rows.append(row)
                 discount = Decimal(str(getattr(sales_order_data, "discount_amount", None) or 0))
                 provided_total = (
                     sales_order_data.total_amount
@@ -1999,6 +2008,8 @@ class SalesOrderService:
                         variant_attributes=row["variant_attributes"],
                         configurable_selections=row["configurable_selections"],
                         notes=row["notes"],
+                        is_gift=row["is_gift"],
+                        gift_ref_unit_price=row["gift_ref_unit_price"],
                     )
                 total_amt = sum(allocated_amounts, Decimal("0"))
                 await SalesOrder.filter(id=sales_order_id).update(
@@ -3859,6 +3870,8 @@ class SalesOrderService:
                     notice_quantity=qty,
                     unit_price=it.unit_price or Decimal("0"),
                     total_amount=amt,
+                    is_gift=bool(getattr(it, "is_gift", False)),
+                    gift_ref_unit_price=getattr(it, "gift_ref_unit_price", None),
                     sales_order_item_id=it.id,
                     warehouse_id=line_wh_id,
                     warehouse_name=line_wh_name,
@@ -4112,6 +4125,9 @@ class SalesOrderService:
         ).order_by("id")
         if not items:
             raise BusinessLogicError("销售订单无明细，无法下推销售发票")
+        order_total = Decimal(str(order.total_amount or 0))
+        if order_total <= Decimal("0"):
+            raise BusinessLogicError("订单无计费金额，无法下推销售发票")
 
         material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
         preview_items: List[Dict[str, Any]] = []
@@ -4286,6 +4302,9 @@ class SalesOrderService:
         ).order_by("id")
         if not items:
             raise BusinessLogicError("销售订单无明细，无法下推销售发票")
+        order_total = Decimal(str(order.total_amount or 0))
+        if order_total <= Decimal("0"):
+            raise BusinessLogicError("订单无计费金额，无法下推销售发票")
 
         from apps.kuaicaiwu.services.invoice_service import InvoiceService
         from apps.kuaicaiwu.schemas.invoice import InvoiceCreate, InvoiceItemCreate

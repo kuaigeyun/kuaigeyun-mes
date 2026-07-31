@@ -226,6 +226,7 @@ class Material(BaseModel):
     barcode = fields.CharField(max_length=100, null=True, description="条码/GTIN/EAN")
     shelf_life_managed = fields.BooleanField(default=False, description="是否启用保质期管理")
     shelf_life_days = fields.IntField(null=True, description="保质期天数")
+    is_giftable = fields.BooleanField(default=False, description="是否允许作为销售赠品")
     reference_cost = fields.DecimalField(
         max_digits=12, decimal_places=4, null=True, description="参考成本"
     )

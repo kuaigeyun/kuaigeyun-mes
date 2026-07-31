@@ -118,6 +118,11 @@ import {
 } from '../../../components/document-detail-table/documentDetailTable';
 import { DocumentAmountSummary } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { computeSalesDocumentTotals } from '../../../utils/documentLineAmounts';
+import {
+  applyGiftToggleToLine,
+  mapGiftFieldsForSubmit,
+  resolveMaterialGiftable,
+} from '../../../utils/giftLineUi';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../constants/fieldPermissionResources';
 import { Area } from '@ant-design/charts';
@@ -814,6 +819,8 @@ const SalesOrdersPage: React.FC = () => {
     delivery_date: undefined,
     unit_price: 0,
     tax_rate: 0,
+    is_gift: false,
+    gift_ref_unit_price: undefined,
     variant_attributes: '',
     notes: '',
   };
@@ -940,6 +947,11 @@ const SalesOrdersPage: React.FC = () => {
           required_quantity: Number(item.required_quantity) || 0,
           unit_price: item.unit_price != null ? Number(item.unit_price) : undefined,
           tax_rate: item.tax_rate != null ? Number(item.tax_rate) : 0,
+          is_gift: Boolean((item as any).is_gift),
+          gift_ref_unit_price:
+            (item as any).gift_ref_unit_price != null
+              ? Number((item as any).gift_ref_unit_price)
+              : undefined,
           delivery_date: item.delivery_date ? dayjs(item.delivery_date) : undefined,
           variant_attributes: (() => {
             const va = (item as any).variant_attributes;
@@ -1240,10 +1252,13 @@ const SalesOrdersPage: React.FC = () => {
 
       const mainDeliveryStr = toApiDateString(values.delivery_date);
       values.items = validItems.map((it: SalesOrderItem) => {
-        const line = calcSalesLineAmounts(q(it), p(it), taxR(it), values.price_type);
+        const isGift = Boolean((it as any).is_gift);
+        const unitPrice = isGift ? 0 : p(it);
+        const line = calcSalesLineAmounts(q(it), unitPrice, taxR(it), values.price_type);
         const material = materials.find((m) => m.id === Number((it as any).material_id));
         const conversionFactor = resolveSaleUnitConversionFactor(material, (it as any).material_unit);
         const deliveryDateStr = toApiDateString((it as any).delivery_date) ?? mainDeliveryStr;
+        const giftFields = mapGiftFieldsForSubmit(it as any);
         return {
           material_id: (it as any).material_id,
           material_code: (it as any).material_code ?? '',
@@ -1259,9 +1274,11 @@ const SalesOrdersPage: React.FC = () => {
           conversion_factor: conversionFactor,
           required_quantity: q(it),
           delivery_date: deliveryDateStr ?? mainDeliveryStr,
-          unit_price: p(it),
+          unit_price: giftFields.unit_price,
           tax_rate: taxR(it),
-          item_amount: line.incl,
+          item_amount: isGift ? 0 : line.incl,
+          is_gift: giftFields.is_gift,
+          gift_ref_unit_price: giftFields.gift_ref_unit_price,
           notes: (it as any).notes,
         };
       });
@@ -3730,6 +3747,41 @@ const SalesOrdersPage: React.FC = () => {
                       ),
                     },
                     {
+                      title: t('app.kuaizhizao.sales.isGift'),
+                      dataIndex: 'is_gift',
+                      width: 72,
+                      align: 'center' as const,
+                      render: (_: any, __: any, index: number) => (
+                        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+                          {({ getFieldValue }) => {
+                            const items = normalizeFormListItems<any>(getFieldValue('items'));
+                            const row = items[index] ?? {};
+                            const materialId = row.material_id;
+                            const material = materials.find((m: any) => m.id === Number(materialId));
+                            const giftable = resolveMaterialGiftable(material);
+                            return (
+                              <AntForm.Item name={[index, 'is_gift']} valuePropName="checked" style={{ margin: 0 }}>
+                                <Switch
+                                  size="small"
+                                  disabled={!materialId || !giftable}
+                                  title={
+                                    materialId && !giftable
+                                      ? t('app.kuaizhizao.sales.materialNotGiftable')
+                                      : undefined
+                                  }
+                                  onChange={(checked) => {
+                                    const nextItems = [...items];
+                                    nextItems[index] = applyGiftToggleToLine(row, checked, material);
+                                    formRef.current?.setFieldsValue({ items: nextItems });
+                                  }}
+                                />
+                              </AntForm.Item>
+                            );
+                          }}
+                        </AntForm.Item>
+                      ),
+                    },
+                    {
                       title:
                         priceType === 'tax_inclusive'
                           ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive')
@@ -3738,23 +3790,28 @@ const SalesOrdersPage: React.FC = () => {
                       width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
                       ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: any, __: any, index: number) => (
-                        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
-                          {() => (
-                            <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
-                              <InputNumber
-                                placeholder={
-                                  priceType === 'tax_inclusive'
-                                    ? t('app.kuaizhizao.salesOrder.unitPricePlaceholderTaxInclusive')
-                                    : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
-                                }
-                                min={0}
-                                precision={2}
-                                prefix="¥"
-                                style={{ width: '100%' }}
-                                size={DOCUMENT_DETAIL_CONTROL_SIZE}
-                              />
-                            </AntForm.Item>
-                          )}
+                        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+                          {({ getFieldValue }) => {
+                            const row = normalizeFormListItems<any>(getFieldValue('items'))[index] ?? {};
+                            const isGift = Boolean(row.is_gift);
+                            return (
+                              <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                                <InputNumber
+                                  placeholder={
+                                    priceType === 'tax_inclusive'
+                                      ? t('app.kuaizhizao.salesOrder.unitPricePlaceholderTaxInclusive')
+                                      : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
+                                  }
+                                  min={0}
+                                  precision={2}
+                                  prefix="¥"
+                                  style={{ width: '100%' }}
+                                  size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                                  disabled={isGift}
+                                />
+                              </AntForm.Item>
+                            );
+                          }}
                         </AntForm.Item>
                       ),
                     },

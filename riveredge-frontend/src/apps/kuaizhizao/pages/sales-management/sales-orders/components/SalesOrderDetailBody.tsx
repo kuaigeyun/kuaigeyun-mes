@@ -7,7 +7,7 @@
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { App, Button, Space, Table, Tooltip, Typography, Descriptions } from 'antd';
+import { App, Button, Space, Table, Tooltip, Typography, Descriptions, Tag } from 'antd';
 import { CopyOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { NavigateFunction } from 'react-router-dom';
@@ -538,7 +538,18 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
             style={{ minWidth: 1280 }}
             columns={[
               { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
-              { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 200 },
+              { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 200,
+                render: (val: string, record: SalesOrderItem) => (
+                  <span>
+                    {val}
+                    {(record as any).is_gift ? (
+                      <Tag color="orange" style={{ marginLeft: 8 }}>
+                        {t('app.kuaizhizao.sales.isGift')}
+                      </Tag>
+                    ) : null}
+                  </span>
+                ),
+              },
               { title: t('app.kuaizhizao.salesOrder.materialSpec'), dataIndex: 'material_spec', width: 120 },
               {
                 title: t('app.kuaizhizao.salesOrder.unit'),

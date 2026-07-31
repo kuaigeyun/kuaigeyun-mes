@@ -371,6 +371,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
         variantManaged: true,
         variantAttributes,
         sourceType: base?.sourceType ?? (base as any)?.source_type,
+        isGiftable: base?.isGiftable ?? (base as any)?.is_giftable ?? false,
         isActive,
       };
     },

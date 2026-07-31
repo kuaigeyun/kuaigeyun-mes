@@ -121,6 +121,8 @@ class ShipmentNoticeItemBase(BaseSchema):
     notice_quantity: float = Field(..., gt=0, description="通知数量")
     unit_price: float = Field(0, ge=0, description="单价")
     total_amount: Optional[float] = Field(None, ge=0, description="金额")
+    is_gift: bool = Field(False, description="是否赠品")
+    gift_ref_unit_price: Optional[float] = Field(None, ge=0, description="赠品参考单价")
     sales_order_item_id: Optional[int] = Field(None, description="销售订单明细ID")
     warehouse_id: Optional[int] = Field(None, description="行出库仓库ID")
     warehouse_name: Optional[str] = Field(None, max_length=100, description="行出库仓库名称")

@@ -18,6 +18,7 @@ from apps.kuaizhizao.models.quotation import Quotation
 from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE, normalize_price_type
 from apps.kuaizhizao.models.quotation_item import QuotationItem
 from apps.master_data.models.customer import Customer
+from apps.master_data.models.material import Material
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
 from apps.kuaizhizao.models.sales_contract import SalesContract
@@ -31,6 +32,7 @@ from apps.kuaizhizao.schemas.quotation import (
     QuotationRevisionBody,
 )
 from apps.kuaizhizao.schemas.sales_order import SalesOrderCreate, SalesOrderItemCreate
+from apps.kuaizhizao.utils.gift_line_helper import validate_gift_line_rules
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_PENDING_VALUES
 from apps.kuaizhizao.services.document_lifecycle_service import _is_approved
 from apps.kuaizhizao.services.document_action_policy import (
@@ -243,6 +245,70 @@ class QuotationService:
             logger.warning("报价单状态流转日志写入失败，跳过: %s", e)
 
     @staticmethod
+    async def _load_material_master_map(
+        tenant_id: int,
+        material_ids: List[int],
+    ) -> Dict[int, Material]:
+        ids = sorted({int(i) for i in material_ids if i and int(i) > 0})
+        if not ids:
+            return {}
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=ids,
+            deleted_at__isnull=True,
+        ).all()
+        return {m.id: m for m in materials}
+
+    @staticmethod
+    def _process_quotation_item_pricing(
+        item_data: QuotationItemCreate,
+        material_map: Dict[int, Material],
+        *,
+        price_type: str,
+        line_inclusive_fn,
+    ) -> Dict[str, Any]:
+        qty = item_data.quote_quantity
+        tax_r = item_data.tax_rate if item_data.tax_rate is not None else Decimal("0")
+        is_gift = bool(getattr(item_data, "is_gift", False))
+        unit_pr = item_data.unit_price or Decimal("0")
+        unit_pr, amt, gift_ref = validate_gift_line_rules(
+            is_gift=is_gift,
+            unit_price=unit_pr,
+            material_id=item_data.material_id,
+            material_map=material_map,
+            material_code=item_data.material_code or "",
+            material_name=item_data.material_name or "",
+            gift_ref_unit_price=getattr(item_data, "gift_ref_unit_price", None),
+            line_amount=item_data.total_amount,
+        )
+        if not is_gift:
+            if unit_pr <= Decimal("0"):
+                raise ValidationError("非赠品明细单价须大于0")
+            amt = line_inclusive_fn(qty, unit_pr, tax_r, price_type)
+        QuotationService._validate_quotation_item_non_negative(
+            quote_quantity=qty,
+            unit_price=unit_pr,
+            tax_rate=tax_r,
+            total_amount=amt,
+        )
+        return {
+            "material_id": item_data.material_id,
+            "material_code": (item_data.material_code or "")[:50],
+            "material_name": (item_data.material_name or "")[:200],
+            "material_spec": (item_data.material_spec or "")[:200] or None,
+            "material_unit": (item_data.material_unit or "")[:20],
+            "quote_quantity": qty,
+            "unit_price": unit_pr,
+            "tax_rate": tax_r,
+            "total_amount": amt,
+            "variant_attributes": getattr(item_data, "variant_attributes", None),
+            "delivery_date": item_data.delivery_date,
+            "notes": item_data.notes,
+            "is_gift": is_gift,
+            "gift_ref_unit_price": gift_ref,
+        }
+
+    @staticmethod
     def _validate_quotation_item_non_negative(
         *,
         quote_quantity: Decimal,
@@ -408,6 +474,8 @@ class QuotationService:
                     unit_price=it.unit_price,
                     tax_rate=getattr(it, "tax_rate", None) or Decimal("0"),
                     total_amount=it.total_amount,
+                    is_gift=bool(getattr(it, "is_gift", False)),
+                    gift_ref_unit_price=getattr(it, "gift_ref_unit_price", None),
                     variant_attributes=getattr(it, "variant_attributes", None),
                     delivery_date=it.delivery_date,
                     notes=it.notes,
@@ -607,38 +675,36 @@ class QuotationService:
             total_qty = Decimal("0")
             total_amt = Decimal("0")
             pt = str(q_dict.get("price_type") or DEFAULT_SALES_PRICE_TYPE)
+            material_map = await self._load_material_master_map(
+                tenant_id,
+                [item_data.material_id for item_data in quotation_data.items],
+            )
             for item_data in quotation_data.items:
-                qty = item_data.quote_quantity
-                unit_pr = item_data.unit_price or Decimal("0")
-                tax_r = (
-                    item_data.tax_rate
-                    if item_data.tax_rate is not None
-                    else Decimal("0")
+                row = self._process_quotation_item_pricing(
+                    item_data,
+                    material_map,
+                    price_type=pt,
+                    line_inclusive_fn=self._quotation_line_inclusive_amount,
                 )
-                self._validate_quotation_item_non_negative(
-                    quote_quantity=qty,
-                    unit_price=unit_pr,
-                    tax_rate=tax_r,
-                    total_amount=item_data.total_amount,
-                )
-                amt = self._quotation_line_inclusive_amount(qty, unit_pr, tax_r, pt)
-                total_qty += qty
-                total_amt += amt
+                total_qty += row["quote_quantity"]
+                total_amt += row["total_amount"]
                 await QuotationItem.create(
                     tenant_id=tenant_id,
                     quotation_id=quotation.id,
-                    material_id=item_data.material_id,
-                    material_code=(item_data.material_code or "")[:50],
-                    material_name=(item_data.material_name or "")[:200],
-                    material_spec=(item_data.material_spec or "")[:200] or None,
-                    material_unit=(item_data.material_unit or "")[:20],
-                    quote_quantity=qty,
-                    unit_price=unit_pr,
-                    tax_rate=tax_r,
-                    total_amount=amt,
-                    variant_attributes=getattr(item_data, "variant_attributes", None),
-                    delivery_date=item_data.delivery_date,
-                    notes=item_data.notes,
+                    material_id=row["material_id"],
+                    material_code=row["material_code"],
+                    material_name=row["material_name"],
+                    material_spec=row["material_spec"],
+                    material_unit=row["material_unit"],
+                    quote_quantity=row["quote_quantity"],
+                    unit_price=row["unit_price"],
+                    tax_rate=row["tax_rate"],
+                    total_amount=row["total_amount"],
+                    variant_attributes=row["variant_attributes"],
+                    delivery_date=row["delivery_date"],
+                    notes=row["notes"],
+                    is_gift=row["is_gift"],
+                    gift_ref_unit_price=row["gift_ref_unit_price"],
                 )
 
             discount = Decimal(str(getattr(quotation_data, "discount_amount", None) or 0))
@@ -1462,38 +1528,36 @@ class QuotationService:
                 total_amt = Decimal("0")
                 q_row = await Quotation.get(id=quotation_id)
                 pt = str(getattr(q_row, "price_type", None) or DEFAULT_SALES_PRICE_TYPE)
+                material_map = await self._load_material_master_map(
+                    tenant_id,
+                    [item_data.material_id for item_data in quotation_data.items],
+                )
                 for item_data in quotation_data.items:
-                    qty = item_data.quote_quantity
-                    unit_pr = item_data.unit_price or Decimal("0")
-                    tax_r = (
-                        item_data.tax_rate
-                        if item_data.tax_rate is not None
-                        else Decimal("0")
+                    row = self._process_quotation_item_pricing(
+                        item_data,
+                        material_map,
+                        price_type=pt,
+                        line_inclusive_fn=self._quotation_line_inclusive_amount,
                     )
-                    self._validate_quotation_item_non_negative(
-                        quote_quantity=qty,
-                        unit_price=unit_pr,
-                        tax_rate=tax_r,
-                        total_amount=item_data.total_amount,
-                    )
-                    amt = self._quotation_line_inclusive_amount(qty, unit_pr, tax_r, pt)
-                    total_qty += qty
-                    total_amt += amt
+                    total_qty += row["quote_quantity"]
+                    total_amt += row["total_amount"]
                     await QuotationItem.create(
                         tenant_id=tenant_id,
                         quotation_id=quotation_id,
-                        material_id=item_data.material_id,
-                        material_code=(item_data.material_code or "")[:50],
-                        material_name=(item_data.material_name or "")[:200],
-                        material_spec=(item_data.material_spec or "")[:200] or None,
-                        material_unit=(item_data.material_unit or "")[:20],
-                        quote_quantity=qty,
-                        unit_price=unit_pr,
-                        tax_rate=tax_r,
-                        total_amount=amt,
-                        variant_attributes=getattr(item_data, "variant_attributes", None),
-                        delivery_date=item_data.delivery_date,
-                        notes=item_data.notes,
+                        material_id=row["material_id"],
+                        material_code=row["material_code"],
+                        material_name=row["material_name"],
+                        material_spec=row["material_spec"],
+                        material_unit=row["material_unit"],
+                        quote_quantity=row["quote_quantity"],
+                        unit_price=row["unit_price"],
+                        tax_rate=row["tax_rate"],
+                        total_amount=row["total_amount"],
+                        variant_attributes=row["variant_attributes"],
+                        delivery_date=row["delivery_date"],
+                        notes=row["notes"],
+                        is_gift=row["is_gift"],
+                        gift_ref_unit_price=row["gift_ref_unit_price"],
                     )
                 await self._refresh_quotation_totals(
                     tenant_id,
@@ -1652,6 +1716,8 @@ class QuotationService:
                     ddate = item_data.delivery_date
                     nit = item_data.notes
                     mvar = getattr(item_data, "variant_attributes", None)
+                    is_gift = bool(getattr(item_data, "is_gift", False))
+                    gift_ref = getattr(item_data, "gift_ref_unit_price", None)
                 else:
                     qty = item_data.quote_quantity
                     unit_pr = item_data.unit_price or Decimal("0")
@@ -1677,6 +1743,8 @@ class QuotationService:
                     ddate = item_data.delivery_date
                     nit = item_data.notes
                     mvar = getattr(item_data, "variant_attributes", None)
+                    is_gift = bool(getattr(item_data, "is_gift", False))
+                    gift_ref = getattr(item_data, "gift_ref_unit_price", None)
 
                 total_qty += qty
                 total_amt += amt
@@ -1695,6 +1763,8 @@ class QuotationService:
                     variant_attributes=mvar,
                     delivery_date=ddate,
                     notes=nit,
+                    is_gift=is_gift,
+                    gift_ref_unit_price=gift_ref,
                 )
 
             disc = overrides.get(
@@ -2009,6 +2079,8 @@ class QuotationService:
                 tax_rate=getattr(it, "tax_rate", None) or Decimal("0"),
                 variant_attributes=getattr(it, "variant_attributes", None),
                 item_amount=it.total_amount,
+                is_gift=bool(getattr(it, "is_gift", False)),
+                gift_ref_unit_price=getattr(it, "gift_ref_unit_price", None),
                 notes=it.notes,
             )
             for it in items

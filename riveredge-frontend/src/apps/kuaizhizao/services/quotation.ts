@@ -47,6 +47,8 @@ export interface QuotationItem {
   /** 税率（%），含税模式下录入 */
   tax_rate?: number;
   total_amount?: number;
+  is_gift?: boolean;
+  gift_ref_unit_price?: number;
   delivery_date?: string;
   notes?: string;
   created_at?: string;

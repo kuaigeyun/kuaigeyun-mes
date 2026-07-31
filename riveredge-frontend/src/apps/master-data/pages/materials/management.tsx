@@ -2187,6 +2187,18 @@ const MaterialsManagementPage: React.FC = () => {
         },
       },
       {
+        title: t('app.master-data.materialForm.isGiftable'),
+        dataIndex: 'isGiftable',
+        render: (_, record) => {
+          const giftable = record.isGiftable ?? (record as any).is_giftable ?? false
+          return (
+            <Tag color={giftable ? 'blue' : 'default'} variant="solid">
+              {giftable ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+            </Tag>
+          )
+        },
+      },
+      {
         title: t('app.master-data.materialForm.countryOfOrigin'),
         dataIndex: 'countryOfOrigin',
         render: (_, record) =>
@@ -3583,6 +3595,8 @@ const MaterialsManagementPage: React.FC = () => {
                 countryOfOrigin:
                   currentMaterial.countryOfOrigin ?? (currentMaterial as any).country_of_origin,
                 customsCode: currentMaterial.customsCode ?? (currentMaterial as any).customs_code,
+                isGiftable:
+                  currentMaterial.isGiftable ?? (currentMaterial as any).is_giftable ?? false,
                 isActive: currentMaterial.isActive ?? (currentMaterial as any).is_active,
                 inspectionMode:
                   (currentMaterial as any).inspectionMode ??
@@ -3625,6 +3639,7 @@ const MaterialsManagementPage: React.FC = () => {
                 inspectionStages: stagesFromLegacy('none'),
                 overReportMode: 'none',
                 overReportValue: 0,
+                isGiftable: false,
               }
         }
       />

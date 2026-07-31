@@ -29,6 +29,10 @@ class ShipmentNoticeItem(BaseModel):
     notice_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="通知数量")
     unit_price = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="单价")
     total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="金额")
+    is_gift = fields.BooleanField(default=False, description="是否赠品")
+    gift_ref_unit_price = fields.DecimalField(
+        max_digits=10, decimal_places=2, null=True, description="赠品参考单价"
+    )
 
     sales_order_item_id = fields.IntField(null=True, description="销售订单明细ID（关联）")
 

@@ -35,6 +35,10 @@ class SalesOrderItem(BaseModel):
     unit_price = fields.DecimalField(max_digits=10, decimal_places=2, description="单价（不含税）")
     tax_rate = fields.DecimalField(max_digits=6, decimal_places=2, default=0, description="税率（%）")
     total_amount = fields.DecimalField(max_digits=12, decimal_places=2, description="价税合计")
+    is_gift = fields.BooleanField(default=False, description="是否赠品")
+    gift_ref_unit_price = fields.DecimalField(
+        max_digits=10, decimal_places=2, null=True, description="赠品参考单价"
+    )
 
     # 交货信息
     delivery_date = fields.DateField(description="交货日期")

@@ -133,6 +133,8 @@ export interface Material {
   barcode?: string;
   shelfLifeManaged?: boolean;
   shelf_life_managed?: boolean;
+  isGiftable?: boolean;
+  is_giftable?: boolean;
   shelfLifeDays?: number;
   shelf_life_days?: number;
   referenceCost?: number;

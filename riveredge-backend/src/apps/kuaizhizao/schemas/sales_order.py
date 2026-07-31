@@ -34,6 +34,8 @@ class SalesOrderItemBase(BaseSchema):
     unit_price: Optional[Decimal] = Field(None, ge=0, description="单价（不含税）")
     tax_rate: Optional[Decimal] = Field(None, ge=0, le=100, description="税率（%）")
     item_amount: Optional[Decimal] = Field(None, ge=0, description="价税合计")
+    is_gift: bool = Field(False, description="是否赠品")
+    gift_ref_unit_price: Optional[Decimal] = Field(None, ge=0, description="赠品参考单价")
     variant_attributes: Optional[dict] = Field(None, description="属性（配置件专用，如 {\"color\":\"red\",\"size\":\"M\"}）")
     configurable_selections: Optional[dict] = Field(None, description="配置位选择（BOM配置位，格式 {\"parentMaterialId_configurableGroupId\": componentId}）")
     notes: Optional[str] = Field(None, description="备注")
@@ -57,6 +59,8 @@ class SalesOrderItemUpdate(BaseSchema):
     unit_price: Optional[Decimal] = Field(None, ge=0)
     tax_rate: Optional[Decimal] = Field(None, ge=0, le=100)
     item_amount: Optional[Decimal] = Field(None, ge=0)
+    is_gift: Optional[bool] = None
+    gift_ref_unit_price: Optional[Decimal] = Field(None, ge=0)
     variant_attributes: Optional[dict] = None
     configurable_selections: Optional[dict] = None
     notes: Optional[str] = None

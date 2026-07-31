@@ -4027,6 +4027,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         status=getattr(item_data, 'status', '待出库'),
                         delivery_time=getattr(item_data, 'delivery_time', None),
                         notes=getattr(item_data, 'notes', None),
+                        is_gift=bool(getattr(item_data, "is_gift", False)),
+                        gift_ref_unit_price=getattr(item_data, "gift_ref_unit_price", None),
                     )
 
             # 建立销售订单→销售出库 的 DocumentRelation
@@ -4685,8 +4687,14 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     delivery_quantity=float(delivery_qty),
                     unit_price=float(item.unit_price),
                     total_amount=float(item_total_amount),
-                    demand_id=None,  # 可以后续关联到统一需求表
-                    demand_item_id=None,  # 可以后续关联到需求明细
+                    is_gift=bool(getattr(item, "is_gift", False)),
+                    gift_ref_unit_price=(
+                        float(item.gift_ref_unit_price)
+                        if getattr(item, "gift_ref_unit_price", None) is not None
+                        else None
+                    ),
+                    demand_id=None,
+                    demand_item_id=None,
                 )
             )
             

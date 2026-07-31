@@ -10,7 +10,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import type { DescriptionsProps } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ActionType,
   ProColumns,
@@ -221,6 +221,7 @@ interface FinishedGoodsInspection {
 
 const FinishedGoodsInspectionPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t, i18n } = useTranslation();
   const pushToReworkAction = resolveKuaizhizaoDocumentAction(t, 'rework_order.pull_from_finished_goods_inspection');
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'finished_goods_inspection.pull_from_work_order');
@@ -266,6 +267,9 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const { token } = AntdTheme.useToken();
   const finishedGoodsInspectionDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
+  const urlListFiltersRef = useRef<{ work_order_id?: number }>({});
+  const deepLinkOpenedRef = useRef(false);
+  const deepLinkEnsureTriedRef = useRef(false);
   const tableRowsRef = useRef<FinishedGoodsInspection[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const selectedRecordsForBatch = useMemo(
@@ -420,6 +424,41 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.quality.common.messages.loadDetailFailed'));
     }
   };
+
+  // URL 深链：入库/关联面板带 work_order_id 或 finished_goods_inspection_id
+  useEffect(() => {
+    if (deepLinkOpenedRef.current) return;
+    const woId = searchParams.get('work_order_id');
+    const inspId = searchParams.get('finished_goods_inspection_id');
+
+    if (inspId && /^\d+$/.test(inspId)) {
+      deepLinkOpenedRef.current = true;
+      void (async () => {
+        try {
+          const detail = await qualityApi.finishedGoodsInspection.get(inspId);
+          if (detail.work_order_id != null) {
+            urlListFiltersRef.current = { work_order_id: Number(detail.work_order_id) };
+          }
+          setInspectionDetail(detail);
+          setDetailDrawerVisible(true);
+          setFgiTrackingRefreshKey((k) => k + 1);
+          if (detail.id != null) {
+            await loadInspectionFieldValuesForDetail(detail.id);
+          }
+          actionRef.current?.reload();
+        } catch {
+          messageApi.error(t('app.kuaizhizao.quality.common.messages.loadDetailFailed'));
+        }
+      })();
+      return;
+    }
+
+    if (woId && /^\d+$/.test(woId)) {
+      deepLinkOpenedRef.current = true;
+      urlListFiltersRef.current = { work_order_id: Number(woId) };
+      actionRef.current?.reload();
+    }
+  }, [searchParams, messageApi, t, loadInspectionFieldValuesForDetail]);
 
   // 处理检验
   const handleInspect = async (record: FinishedGoodsInspection) => {
@@ -1155,12 +1194,35 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         request={async (params, sort, _filter, searchFormValues) => {
           try {
             const listParams = resolveQualityInspectionListParams(searchFormValues, sort);
-            const response = await qualityApi.finishedGoodsInspection.list({
-              skip: (params.current! - 1) * params.pageSize!,
-              limit: params.pageSize,
-              ...listParams,
-            });
-            const { data: raw, total } = normalizeQualityInspectionListResponse(response);
+            const listRequest = async () => {
+              const response = await qualityApi.finishedGoodsInspection.list({
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                ...listParams,
+                ...urlListFiltersRef.current,
+              });
+              return normalizeQualityInspectionListResponse(response);
+            };
+
+            let { data: raw, total } = await listRequest();
+
+            // 深链带工单且尚无检验单时补建一次（末道报工自动建单失败后的缺口）
+            const deepLinkWoId = urlListFiltersRef.current.work_order_id;
+            if (
+              total === 0 &&
+              deepLinkWoId != null &&
+              !deepLinkEnsureTriedRef.current &&
+              (params.current === 1 || params.current == null)
+            ) {
+              deepLinkEnsureTriedRef.current = true;
+              try {
+                await qualityApi.finishedGoodsInspection.createFromWorkOrder(String(deepLinkWoId));
+                ({ data: raw, total } = await listRequest());
+              } catch {
+                // 物料无需 FQC / 组织未开启等：保持空列表，由用户手工判断
+              }
+            }
+
             const data = await enrichInspectionRecordsWithCustomFields(raw as FinishedGoodsInspection[]);
             tableRowsRef.current = data;
             return {

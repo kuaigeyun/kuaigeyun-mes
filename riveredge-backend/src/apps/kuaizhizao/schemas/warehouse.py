@@ -618,6 +618,8 @@ class SalesDeliveryItemBase(BaseSchema):
     delivery_quantity: float = Field(..., gt=0, description="出库数量")
     unit_price: float = Field(..., ge=0, description="单价")
     total_amount: float = Field(..., ge=0, description="金额")
+    is_gift: bool = Field(False, description="是否赠品")
+    gift_ref_unit_price: Optional[float] = Field(None, ge=0, description="赠品参考单价")
     location_id: Optional[int] = Field(None, description="库位ID")
     location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
     

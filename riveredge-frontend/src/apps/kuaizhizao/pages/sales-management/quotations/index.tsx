@@ -138,6 +138,12 @@ import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../..
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import {
+  applyGiftToggleToLine,
+  isValidSalesLineForSubmit,
+  mapGiftFieldsForSubmit,
+  resolveMaterialGiftable,
+} from '../../../utils/giftLineUi';
+import {
   DOCUMENT_DETAIL_CONTROL_SIZE,
   DOCUMENT_DETAIL_TABLE_PROPS,
   TaxRateBatchColumnTitle,
@@ -544,6 +550,7 @@ function resolveQuotationLineMaterialFields(
 
 function mapQuotationSubmitItem(it: any, materialList: any[], mainDeliveryStr?: string) {
   const { material_code, material_name } = resolveQuotationLineMaterialFields(it, materialList);
+  const giftFields = mapGiftFieldsForSubmit(it);
   return {
     material_id: it.material_id,
     material_code,
@@ -551,8 +558,10 @@ function mapQuotationSubmitItem(it: any, materialList: any[], mainDeliveryStr?: 
     material_spec: it.material_spec,
     material_unit: it.material_unit,
     quote_quantity: it.quote_quantity,
-    unit_price: it.unit_price,
+    unit_price: giftFields.unit_price,
     tax_rate: it.tax_rate ?? 0,
+    is_gift: giftFields.is_gift,
+    gift_ref_unit_price: giftFields.gift_ref_unit_price,
     variant_attributes: parseVariantAttributesValue(it.variant_attributes) ?? it.variant_attributes,
     delivery_date: toApiDateString(it.delivery_date) ?? mainDeliveryStr,
     notes: it.notes,
@@ -2295,6 +2304,8 @@ const QuotationsPage: React.FC = () => {
     quote_quantity: 1,
     unit_price: undefined,
     tax_rate: 0,
+    is_gift: false,
+    gift_ref_unit_price: undefined,
     variant_attributes: undefined,
     delivery_date: undefined,
     notes: '',
@@ -2404,6 +2415,11 @@ const QuotationsPage: React.FC = () => {
           quote_quantity: Number(it.quote_quantity) || 0,
           unit_price: Number(it.unit_price) || 0,
           tax_rate: Number(it.tax_rate) || 0,
+          is_gift: Boolean((it as any).is_gift),
+          gift_ref_unit_price:
+            (it as any).gift_ref_unit_price != null
+              ? Number((it as any).gift_ref_unit_price)
+              : undefined,
           variant_attributes: parseVariantAttributesValue((it as any).variant_attributes) ?? (it as any).variant_attributes,
           delivery_date: it.delivery_date ? dayjs(it.delivery_date) : undefined,
           notes: it.notes,
@@ -2429,9 +2445,8 @@ const QuotationsPage: React.FC = () => {
   }
 
   const submitCreate = async (values: any, options?: { asDraft?: boolean }) => {
-    const validItems = normalizeFormListItems<any>(values.items).filter(
-      (it: any) =>
-        it.material_id && Number(it.quote_quantity) > 0 && Number(it.unit_price) > 0,
+    const validItems = normalizeFormListItems<any>(values.items).filter((it: any) =>
+      isValidSalesLineForSubmit(it, 'quote_quantity'),
     );
     if (!validItems.length) {
       messageApi.error(t('app.kuaizhizao.quotation.validLineHint'));
@@ -2532,9 +2547,8 @@ const QuotationsPage: React.FC = () => {
 
   const submitEdit = async (values: any) => {
     if (!editingId) return;
-    const validItems = normalizeFormListItems<any>(values.items).filter(
-      (it: any) =>
-        it.material_id && Number(it.quote_quantity) > 0 && Number(it.unit_price) > 0,
+    const validItems = normalizeFormListItems<any>(values.items).filter((it: any) =>
+      isValidSalesLineForSubmit(it, 'quote_quantity'),
     );
     if (!validItems.length) {
       messageApi.error(t('app.kuaizhizao.quotation.validLineHint'));
@@ -3081,6 +3095,42 @@ const QuotationsPage: React.FC = () => {
                         ),
                       },
                       {
+                        title: t('app.kuaizhizao.sales.isGift'),
+                        dataIndex: 'is_gift',
+                        width: 72,
+                        align: 'center' as const,
+                        render: (_: unknown, __: unknown, index: number) => (
+                          <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+                            {({ getFieldValue: gfGift }) => {
+                              const itemsVal = normalizeFormListItems<any>(gfGift('items'));
+                              const row = itemsVal[index] ?? {};
+                              const material = materialList.find(
+                                (m: any) => m.id === Number(row.material_id),
+                              );
+                              const giftable = resolveMaterialGiftable(material);
+                              return (
+                                <Form.Item name={[index, 'is_gift']} valuePropName="checked" style={{ margin: 0 }}>
+                                  <Switch
+                                    size="small"
+                                    disabled={!row.material_id || !giftable}
+                                    title={
+                                      row.material_id && !giftable
+                                        ? t('app.kuaizhizao.sales.materialNotGiftable')
+                                        : undefined
+                                    }
+                                    onChange={(checked) => {
+                                      const nextItems = [...itemsVal];
+                                      nextItems[index] = applyGiftToggleToLine(row, checked, material);
+                                      formRef.current?.setFieldsValue({ items: nextItems });
+                                    }}
+                                  />
+                                </Form.Item>
+                              );
+                            }}
+                          </Form.Item>
+                        ),
+                      },
+                      {
                         title:
                           priceType === 'tax_inclusive'
                             ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive')
@@ -3089,37 +3139,52 @@ const QuotationsPage: React.FC = () => {
                         width: 132,
                         ...QUOTATION_DETAIL_NUM_COL,
                         render: (_: unknown, __: unknown, index: number) => (
-                          <Form.Item
-                            name={[index, 'unit_price']}
-                            style={{ margin: 0 }}
-                            rules={[
-                              { required: true, message: t('app.kuaizhizao.salesOrder.unitPriceRequired') },
-                              {
-                                validator: (_: unknown, value: unknown) => {
-                                  const n = Number(value);
-                                  if (value == null || value === '') {
-                                    return Promise.resolve();
+                          <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+                            {({ getFieldValue: gfPrice }) => {
+                              const row = normalizeFormListItems<any>(gfPrice('items'))[index] ?? {};
+                              const isGift = Boolean(row.is_gift);
+                              return (
+                                <Form.Item
+                                  name={[index, 'unit_price']}
+                                  style={{ margin: 0 }}
+                                  rules={
+                                    isGift
+                                      ? []
+                                      : [
+                                          { required: true, message: t('app.kuaizhizao.salesOrder.unitPriceRequired') },
+                                          {
+                                            validator: (_: unknown, value: unknown) => {
+                                              const n = Number(value);
+                                              if (value == null || value === '') {
+                                                return Promise.resolve();
+                                              }
+                                              if (Number.isNaN(n) || n <= 0) {
+                                                return Promise.reject(
+                                                  new Error(t('app.kuaizhizao.salesOrder.unitPricePositive')),
+                                                );
+                                              }
+                                              return Promise.resolve();
+                                            },
+                                          },
+                                        ]
                                   }
-                                  if (Number.isNaN(n) || n <= 0) {
-                                    return Promise.reject(new Error(t('app.kuaizhizao.salesOrder.unitPricePositive')));
-                                  }
-                                  return Promise.resolve();
-                                },
-                              },
-                            ]}
-                          >
-                            <InputNumber
-                              placeholder={
-                                priceType === 'tax_inclusive'
-                                  ? t('app.kuaizhizao.salesOrder.unitPricePlaceholderTaxInclusive')
-                                  : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
-                              }
-                              min={0}
-                              precision={2}
-                              prefix="¥"
-                              style={{ width: '100%' }}
-                              size={DOCUMENT_DETAIL_CONTROL_SIZE}
-                            />
+                                >
+                                  <InputNumber
+                                    placeholder={
+                                      priceType === 'tax_inclusive'
+                                        ? t('app.kuaizhizao.salesOrder.unitPricePlaceholderTaxInclusive')
+                                        : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
+                                    }
+                                    min={0}
+                                    precision={2}
+                                    prefix="¥"
+                                    style={{ width: '100%' }}
+                                    size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                                    disabled={isGift}
+                                  />
+                                </Form.Item>
+                              );
+                            }}
                           </Form.Item>
                         ),
                       },
