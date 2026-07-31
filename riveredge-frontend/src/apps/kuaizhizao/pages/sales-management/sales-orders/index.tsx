@@ -2716,7 +2716,7 @@ const SalesOrdersPage: React.FC = () => {
     );
     const workOrderDisabledReason = resolvePushReason(
       record.capabilities?.push_work_order,
-      { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
+      { disabled: !salesOrderPerms.canCreate, title: permDeniedTitle },
       !salesNodeEnabled.work_order ? t('app.kuaizhizao.salesOrder.nodeWorkOrderDisabled') : undefined,
     );
     const invoiceDisabledReason = resolvePushReason(

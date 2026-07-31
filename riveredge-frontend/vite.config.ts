@@ -233,7 +233,7 @@ export default defineConfig({
           const base = dep.split('/').pop() || '';
           // 主包形如 vendor-<hash>.js；排除 vendor-univerjs / vendor-three 等按需栈
           if (!/^vendor-[A-Za-z0-9_-]+\.js$/.test(base)) return false;
-          return !/^vendor-(univerjs|three|libredwg|monaco|occt|xlsx|echarts|gantt|pdf|html2canvas)-/.test(
+          return !/^vendor-(univerjs|three|libredwg|altium|monaco|occt|xlsx|echarts|gantt|pdf|html2canvas)-/.test(
             base,
           );
         }),
@@ -256,6 +256,7 @@ export default defineConfig({
             if (id.includes('three') && !id.includes('react-three')) return 'vendor-three';
             if (id.includes('occt-import-js')) return 'vendor-occt';
             if (id.includes('@mlightcad/libredwg-web')) return 'vendor-libredwg';
+            if (id.includes('altium-toolkit') || id.includes('circuitjson-toolkit')) return 'vendor-altium';
             if (id.includes('echarts')) return 'vendor-echarts';
             if (id.includes('xlsx') || id.includes('exceljs')) return 'vendor-xlsx';
             if (id.includes('html2canvas')) return 'vendor-html2canvas';

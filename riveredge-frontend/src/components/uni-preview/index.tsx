@@ -43,7 +43,7 @@ export const PreviewOverlayToolButton: React.FC<PreviewOverlayToolButtonProps> =
 export interface UniPreviewOverlayProps {
   open: boolean;
   onClose: () => void;
-  title?: string;
+  title?: React.ReactNode;
   inset?: number;
   extra?: React.ReactNode;
   children: React.ReactNode;
@@ -107,18 +107,16 @@ export const UniPreviewOverlay: React.FC<UniPreviewOverlayProps> = ({
             flexShrink: 0,
           }}
         >
-          <span
+          <div
             style={{
-              fontSize: 16,
-              fontWeight: 500,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              flex: 1,
+              minWidth: 0,
               marginRight: 12,
+              overflow: 'hidden',
             }}
           >
             {title}
-          </span>
+          </div>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             {extra}
             <span
@@ -153,7 +151,7 @@ export const UniPreviewOverlay: React.FC<UniPreviewOverlayProps> = ({
 export interface UniPdfPreviewProps {
   open: boolean;
   onClose: () => void;
-  title?: string;
+  title?: React.ReactNode;
   src?: string;
   loading?: boolean;
   error?: string;
@@ -162,6 +160,8 @@ export interface UniPdfPreviewProps {
   zIndex?: number;
   onDownload?: () => void;
   onPrint?: () => void;
+  /** iframe 无障碍标题（顶栏可为 ReactNode） */
+  a11yTitle?: string;
 }
 
 export const UniPdfPreview: React.FC<UniPdfPreviewProps> = ({
@@ -176,6 +176,7 @@ export const UniPdfPreview: React.FC<UniPdfPreviewProps> = ({
   zIndex,
   onDownload,
   onPrint,
+  a11yTitle = 'PDF preview',
 }) => {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
@@ -256,7 +257,7 @@ export const UniPdfPreview: React.FC<UniPdfPreviewProps> = ({
         <iframe
           ref={iframeRef}
           src={src}
-          title={title}
+          title={a11yTitle}
           style={{
             width: '100%',
             height: '100%',

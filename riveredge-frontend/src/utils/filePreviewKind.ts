@@ -1,6 +1,8 @@
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico']);
 const STEP_EXTENSIONS = new Set(['stp', 'step']);
 const CAD2D_EXTENSIONS = new Set(['dwg', 'dxf']);
+const PCB_DOC_EXTENSIONS = new Set(['pcbdoc']);
+const SCH_DOC_EXTENSIONS = new Set(['schdoc']);
 const TEXT_EXTENSIONS = new Set([
   'txt', 'log', 'md', 'markdown', 'xml', 'yaml', 'yml', 'ini', 'cfg', 'conf',
   'sql', 'json', 'properties', 'bat', 'sh', 'py', 'js', 'ts', 'jsx', 'tsx',
@@ -23,6 +25,20 @@ export function getFileExt(source: FilePreviewSource): string {
   if (name?.includes('.')) return name.split('.').pop()!.toLowerCase();
   const mime = source.fileType ?? (source as { file_type?: string }).file_type;
   if (mime?.includes('/')) return mime.split('/').pop()!.toLowerCase();
+  return '';
+}
+
+/** 预览顶栏类型徽章文案（扩展名优先，如 PCBDOC、PDF） */
+export function getFileTypeBadgeLabel(source: FilePreviewSource): string {
+  const ext = getFileExt(source);
+  if (ext) return ext.toUpperCase();
+  const mime = (source.fileType ?? (source as { file_type?: string }).file_type ?? '').toLowerCase();
+  if (mime.startsWith('image/')) return 'IMAGE';
+  if (mime === 'application/pdf') return 'PDF';
+  if (mime.includes('spreadsheet') || mime.includes('excel')) return 'XLSX';
+  if (mime.startsWith('video/')) return 'VIDEO';
+  if (mime.startsWith('audio/')) return 'AUDIO';
+  if (mime.startsWith('text/')) return 'TEXT';
   return '';
 }
 
@@ -73,6 +89,23 @@ export function isCad2dFile(source: FilePreviewSource): boolean {
     isDwgFile(source) ||
     isDxfFile(source)
   );
+}
+
+export function isPcbDocFile(source: FilePreviewSource): boolean {
+  const ext = getFileExt(source);
+  const name = (source.fileName ?? (source as { original_name?: string }).original_name ?? '').toLowerCase();
+  return PCB_DOC_EXTENSIONS.has(ext) || /\.pcbdoc$/i.test(name);
+}
+
+export function isSchDocFile(source: FilePreviewSource): boolean {
+  const ext = getFileExt(source);
+  const name = (source.fileName ?? (source as { original_name?: string }).original_name ?? '').toLowerCase();
+  return SCH_DOC_EXTENSIONS.has(ext) || /\.schdoc$/i.test(name);
+}
+
+/** Altium 原生文档（浏览器端 altium-toolkit 解析） */
+export function isAltiumEdaFile(source: FilePreviewSource): boolean {
+  return isPcbDocFile(source) || isSchDocFile(source);
 }
 
 function getMime(source: FilePreviewSource): string {

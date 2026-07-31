@@ -30,17 +30,12 @@ function parseSvgViewBox(svg: string): { x: number; y: number; width: number; he
   return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] };
 }
 
-function computePreviewStrokeWidth(vb: { width: number; height: number } | null): number {
-  if (!vb) return 0.5;
-  const maxDim = Math.max(vb.width, vb.height);
-  // 按图幅比例，缩放到预览区时约 0.35px
-  return Math.max(maxDim * 0.001, 0.05);
-}
+/** libredwg SVG 与 DXF 回退路径共用的相对线宽（与 @mlightcad/libredwg-web 一致） */
+const CAD2D_NATIVE_STROKE_WIDTH = '0.1%';
 
-/** 提升浏览器预览可见性：背景、线宽、浅色描边修正 */
+/** 浏览器预览：保留 libredwg 原生线宽，仅修正颜色/viewBox/背景 */
 function enhanceCadSvgForPreview(svg: string): string {
   const vb = parseSvgViewBox(svg);
-  const strokeW = computePreviewStrokeWidth(vb);
 
   let out = svg
     .replace(/stroke=["']rgb\(\s*undefined\s*,\s*undefined\s*,\s*undefined\s*\)["']/gi, 'stroke="#222222"')
@@ -52,9 +47,7 @@ function enhanceCadSvgForPreview(svg: string): string {
       return match;
     })
     .replace(/stroke=["']#fff(?:fff)?["']/gi, 'stroke="#333333"')
-    .replace(/fill=["']rgb\(\s*255\s*,\s*255\s*,\s*255\s*\)["']/gi, 'fill="none"')
-    .replace(/\svector-effect=["'][^"']*["']/gi, '')
-    .replace(/\sstroke-width=["'][^"']*["']/gi, '');
+    .replace(/fill=["']rgb\(\s*255\s*,\s*255\s*,\s*255\s*\)["']/gi, 'fill="none"');
 
   const paperBg = vb
     ? `<rect x="${vb.x}" y="${vb.y}" width="${vb.width}" height="${vb.height}" fill="#fffef5"/>`
@@ -64,11 +57,6 @@ polyline,path[fill="none"]{stroke-linejoin:round;stroke-miterlimit:2.5}
 path:not([fill="none"]){stroke:none}
 text,tspan{fill:#1a1a1a!important;stroke:none;font-family:sans-serif}
 ]]></style>`;
-
-  out = out.replace(
-    /(<g[^>]*transform="matrix\(1,0,0,-1,0,0\)"[^>]*)(>)/gi,
-    `$1 stroke-width="${strokeW}" stroke-linecap="butt" stroke-linejoin="round" stroke-miterlimit="2.5"$2`,
-  );
 
   if (!out.includes('fill="#fffef5"') && paperBg) {
     out = out.replace(/(<svg\b[^>]*>)/i, `$1${style}${paperBg}`);
@@ -299,9 +287,7 @@ function parseDxfText(text: string): string {
   const vbW = maxX - minX + pad * 2;
   const vbH = maxY - minY + pad * 2;
 
-  const strokeW = computePreviewStrokeWidth({ x: vbX, y: vbY, width: vbW, height: vbH });
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vbX} ${vbY} ${vbW} ${vbH}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet"><g stroke-width="${strokeW}" stroke-linecap="butt" stroke-linejoin="round" stroke-miterlimit="2.5">${shapes.join('')}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vbX} ${vbY} ${vbW} ${vbH}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet"><g stroke="#000000" stroke-width="${CAD2D_NATIVE_STROKE_WIDTH}" fill="none" stroke-linecap="butt" stroke-linejoin="round" stroke-miterlimit="2.5" transform="matrix(1,0,0,-1,0,0)">${shapes.join('')}</g></svg>`;
 }
 
 export async function parseCad2dFromBuffer(buffer: ArrayBuffer, ext: 'dwg' | 'dxf'): Promise<Cad2dParseResult> {

@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Empty, Image, Spin, theme } from 'antd';
 import { CadPreviewLoading } from '../../../components/cad-preview/CadPreviewLoading';
 import { getFileByUuid, getFilePreview } from '../../../services/file';
-import { getFileExt, isCad2dFile, isImageFile, isPdfFile, isStepFile, type FilePreviewSource } from '../../../utils/filePreviewKind';
+import { getFileExt, isCad2dFile, isImageFile, isPdfFile, isAltiumEdaFile, isPcbDocFile, isSchDocFile, isStepFile, type FilePreviewSource } from '../../../utils/filePreviewKind';
 import { preloadStepOcctModule } from '../../../utils/stepFileLoader';
 
 const StepPreviewPane = lazy(() =>
@@ -15,6 +15,12 @@ const StepPreviewPane = lazy(() =>
 );
 const DwgPreviewPane = lazy(() =>
   import('../../../components/dwg-preview/DwgPreviewPane').then((m) => ({ default: m.DwgPreviewPane })),
+);
+const PcbPreviewPane = lazy(() =>
+  import('../../../components/pcb-preview/PcbPreviewPane').then((m) => ({ default: m.PcbPreviewPane })),
+);
+const SchPreviewPane = lazy(() =>
+  import('../../../components/sch-preview/SchPreviewPane').then((m) => ({ default: m.SchPreviewPane })),
 );
 
 export interface DrawingInlinePreviewProps {
@@ -81,13 +87,16 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
   const isPdf = isPdfFile(fileSource);
   const isStep = isStepFile(fileSource);
   const isCad2d = isCad2dFile(fileSource);
+  const isPcbDoc = isPcbDocFile(fileSource);
+  const isSchDoc = isSchDocFile(fileSource);
+  const isAltiumEda = isAltiumEdaFile(fileSource);
 
   useEffect(() => {
     if (fileUuid && isStep) preloadStepOcctModule();
   }, [fileUuid, isStep]);
 
   useEffect(() => {
-    if (!fileUuid || isStep || isCad2d) {
+    if (!fileUuid || isStep || isCad2d || isAltiumEda) {
       setPreviewUrl('');
       setError('');
       return;
@@ -117,7 +126,7 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [fileUuid, isStep, isCad2d, t]);
+  }, [fileUuid, isStep, isCad2d, isAltiumEda, t]);
 
   const boxStyle: React.CSSProperties = chromeless
     ? {
@@ -196,6 +205,38 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
           fileUuid={fileUuid}
           fileName={fileSource.fileName}
           fileExtension={fileSource.fileExtension}
+          height="100%"
+        />
+      </Suspense>,
+    );
+  }
+
+  if (isSchDoc) {
+    return wrapPreview(
+      <Suspense
+        fallback={
+          renderLoadingState(t('app.master-data.drawings.schPreviewLoading'))
+        }
+      >
+        <SchPreviewPane
+          fileUuid={fileUuid}
+          fileName={fileSource.fileName}
+          height="100%"
+        />
+      </Suspense>,
+    );
+  }
+
+  if (isPcbDoc) {
+    return wrapPreview(
+      <Suspense
+        fallback={
+          renderLoadingState(t('app.master-data.drawings.pcbPreviewLoading'))
+        }
+      >
+        <PcbPreviewPane
+          fileUuid={fileUuid}
+          fileName={fileSource.fileName}
           height="100%"
         />
       </Suspense>,

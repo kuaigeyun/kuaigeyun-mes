@@ -40,6 +40,7 @@ class PlatformSettingsBase(BaseSchema):
         description="平台默认登录租户 ID（私有单体部署时可跳过选组织直接企微扫码）",
     )
     float_button_enabled: Optional[bool] = Field(True, description="是否显示右下角悬浮按钮")
+    copyright_menu_enabled: Optional[bool] = Field(True, description="是否显示顶栏用户菜单中的版权声明入口")
     login_guest_enabled: Optional[bool] = Field(True, description="登录页是否显示免注册体验登录")
     login_client_win_enabled: Optional[bool] = Field(True, description="登录页是否显示 Windows 工位机安装包下载")
     login_client_android_enabled: Optional[bool] = Field(True, description="登录页是否显示 Android PDA 安装包下载")
@@ -79,6 +80,7 @@ class PlatformSettingsUpdate(BaseSchema):
         description="平台默认登录租户 ID；传 null 清除。私有单体部署时可跳过选组织直接企微扫码",
     )
     float_button_enabled: Optional[bool] = Field(None, description="是否显示右下角悬浮按钮")
+    copyright_menu_enabled: Optional[bool] = Field(None, description="是否显示顶栏用户菜单中的版权声明入口")
     login_guest_enabled: Optional[bool] = Field(None, description="登录页是否显示免注册体验登录")
     login_client_win_enabled: Optional[bool] = Field(None, description="登录页是否显示 Windows 工位机安装包下载")
     login_client_android_enabled: Optional[bool] = Field(None, description="登录页是否显示 Android PDA 安装包下载")

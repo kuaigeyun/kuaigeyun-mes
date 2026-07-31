@@ -203,6 +203,7 @@ TORTOISE_ORM = {
                 "core.models.tenant_backend_home",
                 "core.models.integration_config",
                 "core.models.file",
+                "core.models.file_preview_markup",
                 "core.models.api",
                 "core.models.dataset",
                 "core.models.page_metric_config",

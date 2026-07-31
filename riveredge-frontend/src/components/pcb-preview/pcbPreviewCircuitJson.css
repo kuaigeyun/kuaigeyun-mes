@@ -1,0 +1,52 @@
+/**
+ * CircuitJSON PCB SVG 样式补全
+ * altium-toolkit 的 PcbSvgRenderer 输出 flat primitive（pcb-pad / pcb-board），
+ * 与 altium-renderers.css 中 legacy 嵌套结构（pcb-pad__ring）不完全匹配。
+ */
+
+.pcb2d-svg-host .pcb-svg--circuitjson {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.pcb2d-svg-host .pcb-svg--circuitjson .pcb-board {
+  fill: var(--pcb-board-fill, #d8e8e4);
+  stroke: var(--pcb-board-stroke, #0f746c);
+  stroke-width: 0.12;
+  stroke-linejoin: round;
+}
+
+.pcb2d-svg-host .pcb-svg--circuitjson .pcb-pad.pcb-smd-pad,
+.pcb2d-svg-host .pcb-svg--circuitjson .pcb-pad.pcb-smd-pad.pcb-pad--circle,
+.pcb2d-svg-host .pcb-svg--circuitjson .pcb-pad.pcb-smd-pad.pcb-pad--rect,
+.pcb2d-svg-host .pcb-svg--circuitjson .pcb-pad.pcb-smd-pad.pcb-pad--polygon {
+  fill: var(--pcb-copper-solid-fill, rgba(196, 118, 70, 0.78));
+  stroke: none;
+}
+
+.pcb2d-svg-host .pcb-svg--circuitjson .pcb-via.pcb-via--circle {
+  fill: var(--pcb-via-ring-fill, rgba(232, 236, 233, 0.92));
+  stroke: none;
+}
+
+.pcb2d-svg-host .pcb-svg--circuitjson .pcb-via__hole,
+.pcb2d-svg-host .pcb-svg--circuitjson .pcb-via-hole--circle {
+  fill: var(--pcb-via-hole-fill, #0f746c);
+  stroke: none;
+}
+
+.pcb2d-svg-host .pcb-svg--circuitjson .pcb-footprint-text,
+.pcb2d-svg-host .pcb-svg--circuitjson .pcb-label,
+.pcb2d-svg-host .pcb-svg--circuitjson .pcb-silkscreen-text {
+  fill: var(--pcb-footprint-track-color, rgba(237, 172, 36, 1));
+  font-family: Arial, sans-serif;
+  font-size: 1.05px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+/* 走线长度标注数量极大，预览默认隐藏 */
+.pcb2d-svg-host .pcb-trace-lengths {
+  display: none;
+}

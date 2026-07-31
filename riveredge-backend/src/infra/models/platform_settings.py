@@ -165,6 +165,12 @@ class PlatformSettings(Model):
         description="是否显示右下角悬浮按钮：包含系统迭代提示与意见反馈入口"
     )
 
+    # 顶栏用户菜单「版权声明」
+    copyright_menu_enabled = fields.BooleanField(
+        default=True,
+        description="是否显示顶栏用户菜单中的版权声明入口"
+    )
+
     login_guest_enabled = fields.BooleanField(
         default=True,
         description="登录页是否显示免注册体验登录"

@@ -19,7 +19,12 @@ from core.schemas.file import (
 )
 from core.services.file.file_service import FileService
 from core.services.file.file_preview_service import FilePreviewService
+from core.services.file.file_preview_markup_service import FilePreviewMarkupService
 from core.services.file.image_tier_service import ImageTierService, IMAGE_TIER_THUMB_SIZE
+from core.schemas.file_preview_markup import (
+    FilePreviewMarkupResponse,
+    FilePreviewMarkupSaveRequest,
+)
 from core.api.deps.deps import get_current_tenant
 from core.api.deps.access import AuthContext, require_access
 from core.api.deps.file_upload_access import require_file_upload_access
@@ -520,6 +525,51 @@ async def get_file_preview(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
+
+
+@router.get("/{uuid}/preview-markup", response_model=FilePreviewMarkupResponse)
+async def get_file_preview_markup(
+    uuid: str,
+    scope: str = Query("default", description="批注视图范围：default / top / bottom"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取文件预览批注（与源 CAD/PCB 文件分离存储）。"""
+    try:
+        result = await FilePreviewMarkupService.get_markup(
+            tenant_id=tenant_id,
+            file_uuid=uuid,
+            scope=scope,
+        )
+        return FilePreviewMarkupResponse(**result)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.put("/{uuid}/preview-markup", response_model=FilePreviewMarkupResponse)
+async def save_file_preview_markup(
+    uuid: str,
+    data: FilePreviewMarkupSaveRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """保存文件预览批注（不修改源文件二进制）。"""
+    try:
+        payload = data.payload.model_dump(by_alias=True)
+        result = await FilePreviewMarkupService.save_markup(
+            tenant_id=tenant_id,
+            file_uuid=uuid,
+            payload=payload,
+            scope=data.scope,
+            updated_by=current_user.id,
+        )
+        return FilePreviewMarkupResponse(**result)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.put("/{uuid}", response_model=FileResponse)

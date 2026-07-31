@@ -79,8 +79,8 @@ class FilePreviewService:
     _PREVIEW_EXTENSIONS = frozenset({
         "txt", "log", "md", "markdown", "csv", "json", "xml", "yaml", "yml",
         "ini", "cfg", "conf", "html", "htm", "sql", "xls", "xlsx", "ods",
-        # CAD：浏览器端解析（STEP→occt / DWG→libredwg），预览 URL 仍走鉴权下载
-        "step", "stp", "dwg", "dxf",
+        # CAD：浏览器端解析（STEP→occt / DWG→libredwg / PcbDoc→altium-toolkit），预览 URL 仍走鉴权下载
+        "step", "stp", "dwg", "dxf", "pcbdoc", "schdoc",
     })
 
     _SPREADSHEET_MIMES = frozenset({

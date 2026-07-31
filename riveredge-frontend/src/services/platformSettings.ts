@@ -37,6 +37,8 @@ export interface PlatformSettings {
   /** 平台默认登录租户（私有单体部署可跳过企微选组织） */
   default_tenant_id?: number | null;
   float_button_enabled?: boolean;
+  /** 是否显示顶栏用户菜单中的版权声明入口 */
+  copyright_menu_enabled?: boolean;
   login_guest_enabled?: boolean;
   login_client_win_enabled?: boolean;
   login_client_android_enabled?: boolean;
@@ -69,6 +71,8 @@ export interface PlatformSettingsUpdateRequest {
   tenant_auto_approve?: boolean;
   default_tenant_id?: number | null;
   float_button_enabled?: boolean;
+  /** 是否显示顶栏用户菜单中的版权声明入口 */
+  copyright_menu_enabled?: boolean;
   login_guest_enabled?: boolean;
   login_client_win_enabled?: boolean;
   login_client_android_enabled?: boolean;

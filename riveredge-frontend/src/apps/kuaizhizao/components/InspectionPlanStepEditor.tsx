@@ -29,6 +29,7 @@ import {
   formatAcceptanceCriteriaPreview,
   formatSamplingCriteriaPreview,
   getSamplingSpec,
+  normalizeSamplingSpec,
   normalizeValueType,
   stepSpecIsCritical,
   stepSpecIsDerived,
@@ -43,6 +44,13 @@ export type { InspectionPlanStepItem } from '../types/inspectionStepSpec';
 
 function stepRowId(step: InspectionPlanStepItem, index: number): string {
   return step.step_key || `step-${index}`;
+}
+
+function newStepKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `step-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function SortableStepTableRow({
@@ -194,6 +202,7 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
       value_type: 'boolean',
       value_spec: defaultValueSpec('boolean', t),
       sampling_type: 'full',
+      sampling_spec: normalizeSamplingSpec(undefined),
     });
     setStepModalVisible(true);
   };
@@ -211,7 +220,7 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
       value_type: vt,
       value_spec: { ...defaultValueSpec(vt, t), ...(step.value_spec || {}) },
       sampling_type: step.sampling_type || 'full',
-      sampling_spec: getSamplingSpec(step),
+      sampling_spec: getSamplingSpec(step) ?? normalizeSamplingSpec(undefined),
       remarks: step.remarks,
     });
     setStepModalVisible(true);
@@ -231,7 +240,7 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
     const criteria = (vals.acceptance_criteria as string)?.trim() || autoCriteria || undefined;
     return {
       sequence: existing?.sequence ?? steps.length,
-      step_key: existing?.step_key || crypto.randomUUID(),
+      step_key: existing?.step_key || newStepKey(),
       inspection_item: vals.inspection_item as string,
       inspection_method: vals.inspection_method as string | undefined,
       acceptance_criteria: criteria,
@@ -243,8 +252,9 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
     };
   };
 
-  const handleSaveStep = () => {
-    stepForm.validateFields().then((vals) => {
+  const handleSaveStep = async () => {
+    try {
+      const vals = await stepForm.validateFields();
       if (editingIndex !== null) {
         const next = steps.map((s, i) =>
           i === editingIndex ? { ...buildStepFromForm(vals, s), sequence: i } : s,
@@ -258,7 +268,12 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
         message.success(t('app.kuaizhizao.quality.plans.stepEditor.addSuccess'));
       }
       closeStepModal();
-    });
+    } catch (err: unknown) {
+      const errorFields = (err as { errorFields?: Array<{ errors?: string[] }> })?.errorFields;
+      const first = errorFields?.[0]?.errors?.filter(Boolean)[0];
+      message.error(first || t('components.layoutTemplates.formModal.checkFormHint'));
+      throw err;
+    }
   };
 
   const handleRemove = (index: number) => {
@@ -486,6 +501,7 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
         onCancel={closeStepModal}
         destroyOnHidden
         width={560}
+        zIndex={token.zIndexPopupBase + 100}
         maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
         wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
       >
@@ -538,7 +554,19 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
             <Input.TextArea rows={2} placeholder={t('app.kuaizhizao.quality.plans.stepEditor.placeholder.acceptanceCriteriaAuto')} />
           </Form.Item>
           <Form.Item name="sampling_type" label={t('app.kuaizhizao.quality.plans.step.samplingType')}>
-            <Select options={samplingTypeOptions} placeholder={t('app.kuaizhizao.quality.plans.stepEditor.placeholder.selectSamplingType')} />
+            <Select
+              options={samplingTypeOptions}
+              placeholder={t('app.kuaizhizao.quality.plans.stepEditor.placeholder.selectSamplingType')}
+              onChange={(nextType: 'full' | 'sampling') => {
+                if (nextType === 'sampling') {
+                  stepForm.setFieldsValue({
+                    sampling_spec: normalizeSamplingSpec(stepForm.getFieldValue('sampling_spec')),
+                  });
+                } else {
+                  stepForm.setFieldsValue({ sampling_spec: undefined });
+                }
+              }}
+            />
           </Form.Item>
           {watchedSamplingType === 'sampling' && (
             <Form.Item

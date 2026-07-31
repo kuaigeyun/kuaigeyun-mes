@@ -2392,7 +2392,7 @@ def get_production_picking_lifecycle(
             PRODUCTION_PICKING_MAIN_STAGES, key, is_exception=(key == "cancelled")
         ),
         "sub_stages": None,
-        "next_step_suggestions": ["确认出库"] if key == "pending_picking" else [],
+        "next_step_suggestions": ["确认领料"] if key == "pending_picking" else [],
         "milestones": milestones,
     }
 

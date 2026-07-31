@@ -136,6 +136,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         tenant_auto_approve: data.tenant_auto_approve ?? false,
         default_tenant_id: data.default_tenant_id ?? null,
         float_button_enabled: data.float_button_enabled ?? true,
+        copyright_menu_enabled: data.copyright_menu_enabled ?? true,
         login_guest_enabled: data.login_guest_enabled ?? true,
         login_client_win_enabled: data.login_client_win_enabled ?? true,
         login_client_android_enabled: data.login_client_android_enabled ?? true,
@@ -329,6 +330,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         tenant_auto_approve: settings.tenant_auto_approve ?? false,
         default_tenant_id: settings.default_tenant_id ?? null,
         float_button_enabled: settings.float_button_enabled ?? true,
+        copyright_menu_enabled: settings.copyright_menu_enabled ?? true,
         login_guest_enabled: settings.login_guest_enabled ?? true,
         login_client_win_enabled: settings.login_client_win_enabled ?? true,
         login_client_android_enabled: settings.login_client_android_enabled ?? true,
@@ -833,6 +835,16 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                       placeholder={t('pages.infra.platform.defaultTenantPlaceholder')}
                       options={defaultTenantOptions}
                     />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="copyright_menu_enabled"
+                    label={t('pages.infra.platform.copyrightMenuEnabled')}
+                    tooltip={t('pages.infra.platform.copyrightMenuEnabledTooltip')}
+                    valuePropName="checked"
+                  >
+                    <Switch />
                   </Form.Item>
                 </Col>
               </Row>

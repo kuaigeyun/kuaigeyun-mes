@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Form, InputNumber, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { normalizeSamplingSpec, type SamplingSpec } from '../types/inspectionStepSpec';
@@ -11,6 +11,12 @@ type Props = {
 export const InspectionSamplingSpecFields: React.FC<Props> = ({ value, onChange }) => {
   const { t } = useTranslation();
   const spec = normalizeSamplingSpec(value);
+
+  useEffect(() => {
+    onChange?.(normalizeSamplingSpec(value));
+    // 挂载时将默认 n/Ac/Re 写入 Form，避免仅展示默认值却未注册字段
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅首次挂载同步
+  }, []);
 
   const patch = (partial: Partial<SamplingSpec>) => {
     onChange?.({ ...spec, ...partial });

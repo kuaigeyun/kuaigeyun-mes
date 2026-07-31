@@ -1,22 +1,27 @@
 /**
- * CAD 2D SVG / 缩略图预览（平移 / 缩放）
+ * Altium PCB SVG 预览（平移 / 缩放）
  */
 
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import 'altium-toolkit/styles/renderers.css';
+import 'altium-toolkit/extensions/styles/altium-renderers.css';
+import './pcbPreviewCircuitJson.css';
 import { parseSvgViewBox } from '../../utils/previewMarkupTypes';
 import { usePreviewMarkup } from '../preview-markup/PreviewMarkupContext';
 import { PreviewMarkupLayer } from '../preview-markup/PreviewMarkupLayer';
 
-export type DwgSvgViewerRef = {
+export type PcbSvgViewerRef = {
   zoomIn: () => void;
   zoomOut: () => void;
   fitToView: () => void;
 };
 
-export interface DwgSvgViewerProps {
-  svg?: string;
-  imageDataUrl?: string;
+export interface PcbSvgViewerProps {
+  svg: string;
   height?: number | string;
+  /** SVG 宿主 class，PCB 默认 pcb2d-svg-host，原理图可用 sch2d-svg-host */
+  svgHostClassName?: string;
+  background?: string;
 }
 
 const MIN_SCALE = 0.05;
@@ -29,8 +34,8 @@ function getSvgIntrinsicSize(svg: string): { width: number; height: number; view
   return { width: parsed.width, height: parsed.height, viewBox: parsed.viewBox };
 }
 
-export const DwgSvgViewer = forwardRef<DwgSvgViewerRef, DwgSvgViewerProps>(function DwgSvgViewer(
-  { svg, imageDataUrl, height = '100%' },
+export const PcbSvgViewer = forwardRef<PcbSvgViewerRef, PcbSvgViewerProps>(function PcbSvgViewer(
+  { svg, height = '100%', svgHostClassName = 'pcb2d-svg-host', background = '#fffaf5' },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -106,7 +111,7 @@ export const DwgSvgViewer = forwardRef<DwgSvgViewerRef, DwgSvgViewerProps>(funct
     const observer = new ResizeObserver(runFit);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [svg, imageDataUrl, fitToView]);
+  }, [svg, fitToView]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -133,10 +138,9 @@ export const DwgSvgViewer = forwardRef<DwgSvgViewerRef, DwgSvgViewerProps>(funct
   }, []);
 
   useEffect(() => {
-    if (!svg || imageDataUrl) return;
     const parsed = parseSvgViewBox(svg);
     markup?.setViewBox(parsed?.viewBox ?? null);
-  }, [svg, imageDataUrl, markup]);
+  }, [svg, markup]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (!panMode) return;
@@ -157,7 +161,7 @@ export const DwgSvgViewer = forwardRef<DwgSvgViewerRef, DwgSvgViewerProps>(funct
     setDragging(false);
   };
 
-  const svgSize = svg ? getSvgIntrinsicSize(svg) : null;
+  const svgSize = getSvgIntrinsicSize(svg);
 
   return (
     <div
@@ -168,7 +172,7 @@ export const DwgSvgViewer = forwardRef<DwgSvgViewerRef, DwgSvgViewerProps>(funct
         height,
         minHeight: 280,
         overflow: 'hidden',
-        background: '#fffef5',
+        background,
         cursor: panMode ? (dragging ? 'grabbing' : 'grab') : 'default',
         touchAction: 'none',
         position: 'relative',
@@ -189,35 +193,26 @@ export const DwgSvgViewer = forwardRef<DwgSvgViewerRef, DwgSvgViewerProps>(funct
           transformOrigin: '0 0',
         }}
       >
-        {imageDataUrl ? (
-          <img
-            src={imageDataUrl}
-            alt="cad preview"
-            draggable={false}
-            style={{ display: 'block', maxWidth: 'none' }}
+        <div style={{ position: 'relative', width: svgSize?.width, height: svgSize?.height }}>
+          <div
+            className={svgHostClassName}
+            style={{
+              display: 'block',
+              lineHeight: 0,
+              width: svgSize?.width,
+              height: svgSize?.height,
+            }}
+            // eslint-disable-next-line react/no-danger
+            dangerouslySetInnerHTML={{ __html: svg }}
           />
-        ) : (
-          <div style={{ position: 'relative', width: svgSize?.width, height: svgSize?.height }}>
-            <div
-              className="cad2d-svg-host"
-              style={{
-                display: 'block',
-                lineHeight: 0,
-                width: svgSize?.width,
-                height: svgSize?.height,
-              }}
-              // eslint-disable-next-line react/no-danger
-              dangerouslySetInnerHTML={{ __html: svg ?? '' }}
+          {svgSize ? (
+            <PreviewMarkupLayer
+              viewBox={svgSize.viewBox}
+              width={svgSize.width}
+              height={svgSize.height}
             />
-            {svgSize ? (
-              <PreviewMarkupLayer
-                viewBox={svgSize.viewBox}
-                width={svgSize.width}
-                height={svgSize.height}
-              />
-            ) : null}
-          </div>
-        )}
+          ) : null}
+        </div>
       </div>
     </div>
   );

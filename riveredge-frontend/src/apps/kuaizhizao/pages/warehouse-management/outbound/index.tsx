@@ -188,6 +188,7 @@ const OutboundPage: React.FC = () => {
 
   const [executionConfig, setExecutionConfig] = useState<any>(null);
   const outboundPerms = useResourcePermissions('kuaizhizao:outbound');
+  const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
   const currentUser = useGlobalStore((s) => s.currentUser);
   const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
 
@@ -353,6 +354,35 @@ const OutboundPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const outboundRowKey = (record: OutboundOrder) => `${record.outbound_type}::${record.id}`;
+
+  const getOutboundConfirmLabel = (record: OutboundOrder) =>
+    record.outbound_type === 'production_picking'
+      ? t('app.kuaizhizao.warehouseOutbound.action.confirmPicking')
+      : t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound');
+
+  const canRunOutboundConfirm = (record: OutboundOrder): boolean => {
+    if (record.outbound_type === 'production_picking') {
+      return inboundPerms.canAction?.('execute') ?? false;
+    }
+    if (record.outbound_type === 'sales_delivery') {
+      return outboundPerms.canAction?.('execute') ?? false;
+    }
+    return outboundPerms.canAction?.('execute') ?? outboundPerms.canUpdate;
+  };
+
+  const getOutboundConfirmBlockedReason = (record: OutboundOrder): string | undefined => {
+    if (
+      record.outbound_type === 'production_picking' &&
+      executionConfig &&
+      executionConfig.current_user_can_confirm_picking === false
+    ) {
+      return t('app.kuaizhizao.warehouseOutbound.msg.noConfirmPickingPermission');
+    }
+    if (!canRunOutboundConfirm(record)) {
+      return t('app.kuaizhizao.warehouseOutbound.msg.noConfirmExecutePermission');
+    }
+    return undefined;
+  };
 
   const isOutboundDeletable = (record: OutboundOrder) =>
     isOutboundConfirmable(record) &&
@@ -654,26 +684,15 @@ const OutboundPage: React.FC = () => {
             </Button>
           )}
           {isOutboundConfirmable(record) && record.outbound_type !== 'outsource_issue' && (
-            <Tooltip
-              title={
-                record.outbound_type === 'production_picking' &&
-                executionConfig &&
-                executionConfig.current_user_can_confirm_picking === false
-                  ? t('app.kuaizhizao.warehouseOutbound.msg.noConfirmPickingPermission')
-                  : undefined
-              }
-            >
+            <Tooltip title={getOutboundConfirmBlockedReason(record)}>
               <Button
                 {...rowActionKind('execute')}
                 {...rowActionLabelKeep()}
+                type={record.outbound_type === 'production_picking' ? 'primary' : undefined}
                 onClick={() => void handleConfirm(record)}
-                disabled={
-                  record.outbound_type === 'production_picking' &&
-                  executionConfig &&
-                  executionConfig.current_user_can_confirm_picking === false
-                }
+                disabled={!!getOutboundConfirmBlockedReason(record)}
               >
-                {t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound')}
+                {getOutboundConfirmLabel(record)}
               </Button>
             </Tooltip>
           )}
@@ -697,7 +716,11 @@ const OutboundPage: React.FC = () => {
       handleWithdraw,
       handleDelete,
       navigate,
+      inboundPerms,
       outboundPerms,
+      getOutboundConfirmBlockedReason,
+      getOutboundConfirmLabel,
+      canRunOutboundConfirm,
       packingBindingPerms.canRead,
       salesDeliveryCustomFieldColumns,
       productionPickingCustomFieldColumns,
@@ -715,7 +738,6 @@ const OutboundPage: React.FC = () => {
         status={lifecycle.status}
         showLabels
         nextStepSuggestions={lifecycle.nextStepSuggestions}
-        hideNextStepSuggestions
       />
     );
   }, [currentOrder, t]);
@@ -950,18 +972,16 @@ const OutboundPage: React.FC = () => {
           currentOrder ? (
             <Space>
               {isOutboundConfirmable(currentOrder) && currentOrder.outbound_type !== 'outsource_issue' && (
-                <Button
-                  type="primary"
-                  icon={<CheckCircleOutlined />}
-                  onClick={() => void handleConfirm(currentOrder)}
-                  disabled={
-                    currentOrder.outbound_type === 'production_picking' &&
-                    executionConfig &&
-                    executionConfig.current_user_can_confirm_picking === false
-                  }
-                >
-                  {t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound')}
-                </Button>
+                <Tooltip title={getOutboundConfirmBlockedReason(currentOrder)}>
+                  <Button
+                    type="primary"
+                    icon={<CheckCircleOutlined />}
+                    onClick={() => void handleConfirm(currentOrder)}
+                    disabled={!!getOutboundConfirmBlockedReason(currentOrder)}
+                  >
+                    {getOutboundConfirmLabel(currentOrder)}
+                  </Button>
+                </Tooltip>
               )}
               {isOutboundWithdrawable(currentOrder) && currentOrder.outbound_type !== 'outsource_issue' && (
                 <Button danger icon={<RollbackOutlined />} onClick={() => handleWithdraw(currentOrder)}>

@@ -27,7 +27,7 @@ import { CustomFieldsFormSection } from '../../../components/custom-fields';
 
 const PAGE_CODE = 'master-data-process-drawing';
 const CUSTOM_FIELD_TABLE = 'apps_master_data_engineering_drawings';
-const DRAWING_ACCEPT = '.pdf,.dwg,.dxf,.step,.stp,.png,.jpg,.jpeg';
+const DRAWING_ACCEPT = '.pdf,.dwg,.dxf,.step,.stp,.png,.jpg,.jpeg,.pcbdoc,.schdoc';
 const DRAWING_CATEGORY = 'engineering_drawing';
 
 function extractUploadUuids(fileList: UploadFile[] | undefined): string[] {

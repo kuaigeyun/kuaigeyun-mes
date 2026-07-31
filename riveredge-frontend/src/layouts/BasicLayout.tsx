@@ -163,7 +163,7 @@ import { useConfigStore, resolveEffectiveHomePath, getDefaultTenantHomePath } fr
 import { useThemeStore } from '../stores/themeStore';
 import { getMenuBadgeCounts } from '../services/dashboard';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
-import { getBuildProvenance, registerInstallInstance } from '../services/platformSettings';
+import { getBuildProvenance, getPlatformSettingsPublic, registerInstallInstance } from '../services/platformSettings';
 import { useTouchScreen } from '../hooks/useTouchScreen';
 import { buildLoginRedirectPath } from '../utils/tenantDomainAccess';
 import { isPlatformAdminLoginPathname, isPlatformInfraPath } from '../utils/platformScope';
@@ -975,6 +975,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
 
   const queryClient = useQueryClient();
+
+  const { data: platformSettingsPublic } = useQuery({
+    queryKey: ['platformSettingsPublic'],
+    queryFn: getPlatformSettingsPublic,
+    staleTime: 60 * 1000,
+  });
+  const copyrightMenuEnabled = platformSettingsPublic?.copyright_menu_enabled !== false;
 
   /** 登出前清理租户相关 Query 缓存，避免重新登录后仍显示旧侧边栏菜单（applicationMenus staleTime 内不 refetch） */
   const performLogout = useCallback(() => {
@@ -2090,34 +2097,41 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   /**
    * 用户菜单项
    */
-  const getUserMenuItems = (t: (key: string) => string): MenuProps['items'] => [
-    {
-      key: 'profile',
-      icon: <UserOutlined />,
-      label: t('ui.user.profile'),
-    },
-    {
-      key: 'copyright',
-      icon: <FileTextOutlined />,
-      label: t('ui.copyright'),
-    },
-    {
-      key: 'clear-menu-cache',
-      icon: <DeleteOutlined />,
-      label: t('ui.clearCache'),
-    },
-    {
-      key: 'lock-screen',
-      icon: <LockOutlined />,
-      label: t('ui.lock.screen'),
-      onClick: handleLockScreen,
-    },
-    {
-      key: 'logout',
-      icon: <LogoutOutlined />,
-      label: t('ui.logout'),
-    },
-  ];
+  const getUserMenuItems = (t: (key: string) => string): MenuProps['items'] => {
+    const items: NonNullable<MenuProps['items']> = [
+      {
+        key: 'profile',
+        icon: <UserOutlined />,
+        label: t('ui.user.profile'),
+      },
+    ];
+    if (copyrightMenuEnabled) {
+      items.push({
+        key: 'copyright',
+        icon: <FileTextOutlined />,
+        label: t('ui.copyright'),
+      });
+    }
+    items.push(
+      {
+        key: 'clear-menu-cache',
+        icon: <DeleteOutlined />,
+        label: t('ui.clearCache'),
+      },
+      {
+        key: 'lock-screen',
+        icon: <LockOutlined />,
+        label: t('ui.lock.screen'),
+        onClick: handleLockScreen,
+      },
+      {
+        key: 'logout',
+        icon: <LogoutOutlined />,
+        label: t('ui.logout'),
+      },
+    );
+    return items;
+  };
 
   // 处理用户菜单点击
   const handleUserMenuClick: MenuProps['onClick'] = ({ key }) => {

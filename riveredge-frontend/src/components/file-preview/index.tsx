@@ -9,9 +9,14 @@ import {
 import { useTranslation } from 'react-i18next';
 import { getFileByUuid, getFilePreview, getFileDownloadUrlWithToken, FILE_IMAGE_SIZE_MEDIUM } from '../../services/file';
 import { PreviewOverlayToolButton, UniPdfPreview, UniPreviewOverlay } from '../uni-preview';
-import { getFileExt, isCad2dFile, isImageFile, isInlineDocumentPreview, isPdfFile, isStepFile, type FilePreviewSource } from '../../utils/filePreviewKind';
+import { getFileExt, isCad2dFile, isImageFile, isInlineDocumentPreview, isAltiumEdaFile, isPcbDocFile, isSchDocFile, isPdfFile, isStepFile, type FilePreviewSource } from '../../utils/filePreviewKind';
+import { FilePreviewHeaderTitle } from './FilePreviewHeaderTitle';
 import type { DwgSvgViewerRef } from '../dwg-preview/DwgSvgViewer';
+import type { PcbSvgViewerRef } from '../pcb-preview/PcbSvgViewer';
 import type { StepModelViewerRef } from '../step-preview/StepModelViewer';
+import { PreviewMarkupProvider } from '../preview-markup/PreviewMarkupContext';
+import { PreviewMarkupTextDialog } from '../preview-markup/PreviewMarkupTextDialog';
+import { PreviewMarkupToolbar } from '../preview-markup/PreviewMarkupToolbar';
 import { CadPreviewLoading } from '../cad-preview/CadPreviewLoading';
 
 const StepPreviewPane = lazy(() =>
@@ -19,6 +24,12 @@ const StepPreviewPane = lazy(() =>
 );
 const DwgPreviewPane = lazy(() =>
   import('../dwg-preview/DwgPreviewPane').then((m) => ({ default: m.DwgPreviewPane })),
+);
+const PcbPreviewPane = lazy(() =>
+  import('../pcb-preview/PcbPreviewPane').then((m) => ({ default: m.PcbPreviewPane })),
+);
+const SchPreviewPane = lazy(() =>
+  import('../sch-preview/SchPreviewPane').then((m) => ({ default: m.SchPreviewPane })),
 );
 const DocumentPreviewPane = lazy(() =>
   import('./DocumentPreviewPane').then((m) => ({ default: m.DocumentPreviewPane })),
@@ -60,8 +71,11 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [stepShowEdges, setStepShowEdges] = useState(true);
+  const [pcbSide, setPcbSide] = useState<'top' | 'bottom'>('top');
   const stepViewerRef = useRef<StepModelViewerRef>(null);
   const dwgViewerRef = useRef<DwgSvgViewerRef>(null);
+  const pcbViewerRef = useRef<PcbSvgViewerRef>(null);
+  const schViewerRef = useRef<PcbSvgViewerRef>(null);
 
   const initialSource = useMemo<FilePreviewSource>(
     () => ({ fileName, fileType, fileExtension }),
@@ -97,10 +111,37 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const isPdf = isPdfFile(fileSource);
   const isStep = isStepFile(fileSource);
   const isCad2d = isCad2dFile(fileSource);
+  const isPcbDoc = isPcbDocFile(fileSource);
+  const isSchDoc = isSchDocFile(fileSource);
+  const isAltiumEda = isAltiumEdaFile(fileSource);
   const isDocument = isInlineDocumentPreview(fileSource);
 
+  const previewFallbackTitle = title || t('pages.system.files.previewModalTitle');
+  const previewHeaderTitle = useMemo(
+    () => (
+      <FilePreviewHeaderTitle
+        fileSource={fileSource}
+        fallbackTitle={previewFallbackTitle}
+        variant="dark"
+      />
+    ),
+    [fileSource, previewFallbackTitle],
+  );
+  const previewHeaderTitleLight = useMemo(
+    () => (
+      <FilePreviewHeaderTitle
+        fileSource={fileSource}
+        fallbackTitle={previewFallbackTitle}
+        variant="light"
+      />
+    ),
+    [fileSource, previewFallbackTitle],
+  );
+  const previewAccessibleName =
+    (fileSource.fileName ?? '').trim() || previewFallbackTitle;
+
   useEffect(() => {
-    if (!open || isStep || isCad2d) return;
+    if (!open || isStep || isCad2d || isAltiumEda) return;
     let cancelled = false;
 
     const run = async () => {
@@ -141,7 +182,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, fileUuid, url, isStep, isCad2d, t]);
+  }, [open, fileUuid, url, isStep, isCad2d, isAltiumEda, t]);
 
   useEffect(() => {
     if (!open || !previewUrl || !isPdf) {
@@ -261,12 +302,74 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     </>
   );
 
+  const schToolbar = (
+    <>
+      <PreviewOverlayToolButton
+        title={t('app.master-data.drawings.previewZoomOut')}
+        onClick={() => schViewerRef.current?.zoomOut()}
+      >
+        <ZoomOutOutlined />
+      </PreviewOverlayToolButton>
+      <PreviewOverlayToolButton
+        title={t('app.master-data.drawings.previewFitView')}
+        onClick={() => schViewerRef.current?.fitToView()}
+      >
+        <CompressOutlined />
+        {t('app.master-data.drawings.previewFitView')}
+      </PreviewOverlayToolButton>
+      <PreviewOverlayToolButton
+        title={t('app.master-data.drawings.previewZoomIn')}
+        onClick={() => schViewerRef.current?.zoomIn()}
+      >
+        <ZoomInOutlined />
+      </PreviewOverlayToolButton>
+    </>
+  );
+
+  const pcbToolbar = (
+    <>
+      <PreviewOverlayToolButton
+        title={t('app.master-data.drawings.pcbSideTop')}
+        active={pcbSide === 'top'}
+        onClick={() => setPcbSide('top')}
+      >
+        {t('app.master-data.drawings.pcbSideTop')}
+      </PreviewOverlayToolButton>
+      <PreviewOverlayToolButton
+        title={t('app.master-data.drawings.pcbSideBottom')}
+        active={pcbSide === 'bottom'}
+        onClick={() => setPcbSide('bottom')}
+      >
+        {t('app.master-data.drawings.pcbSideBottom')}
+      </PreviewOverlayToolButton>
+      <PreviewOverlayToolButton
+        title={t('app.master-data.drawings.previewZoomOut')}
+        onClick={() => pcbViewerRef.current?.zoomOut()}
+      >
+        <ZoomOutOutlined />
+      </PreviewOverlayToolButton>
+      <PreviewOverlayToolButton
+        title={t('app.master-data.drawings.previewFitView')}
+        onClick={() => pcbViewerRef.current?.fitToView()}
+      >
+        <CompressOutlined />
+        {t('app.master-data.drawings.previewFitView')}
+      </PreviewOverlayToolButton>
+      <PreviewOverlayToolButton
+        title={t('app.master-data.drawings.previewZoomIn')}
+        onClick={() => pcbViewerRef.current?.zoomIn()}
+      >
+        <ZoomInOutlined />
+      </PreviewOverlayToolButton>
+    </>
+  );
+
   if (open && isStep) {
     return (
       <UniPreviewOverlay
         open={open}
         onClose={onClose}
-        title={title || fileName || t('app.master-data.drawings.preview')}
+        title={previewHeaderTitle}
         inset={16}
         zIndex={overlayZIndex}
         extra={stepToolbar}
@@ -297,14 +400,21 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
   if (open && isCad2d) {
     return (
-      <UniPreviewOverlay
-        open={open}
-        onClose={onClose}
-        title={title || fileName || t('app.master-data.drawings.preview')}
-        inset={16}
-        zIndex={overlayZIndex}
-        extra={dwgToolbar}
-      >
+      <PreviewMarkupProvider fileUuid={fileUuid} scope="default">
+        <PreviewMarkupTextDialog />
+        <UniPreviewOverlay
+          open={open}
+          onClose={onClose}
+          title={previewHeaderTitle}
+          inset={16}
+          zIndex={overlayZIndex}
+          extra={
+            <>
+              {fileUuid ? <PreviewMarkupToolbar /> : null}
+              {dwgToolbar}
+            </>
+          }
+        >
         <Suspense
           fallback={
             <CadPreviewLoading
@@ -325,6 +435,89 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           />
         </Suspense>
       </UniPreviewOverlay>
+      </PreviewMarkupProvider>
+    );
+  }
+
+  if (open && isSchDoc) {
+    return (
+      <PreviewMarkupProvider fileUuid={fileUuid} scope="default">
+        <PreviewMarkupTextDialog />
+        <UniPreviewOverlay
+          open={open}
+          onClose={onClose}
+          title={previewHeaderTitle}
+          inset={16}
+          zIndex={overlayZIndex}
+          extra={
+            <>
+              {fileUuid ? <PreviewMarkupToolbar /> : null}
+              {schToolbar}
+            </>
+          }
+        >
+          <Suspense
+            fallback={
+              <CadPreviewLoading
+                text={t('app.master-data.drawings.schPreviewLoading')}
+                tone="light"
+                minHeight="100%"
+              />
+            }
+          >
+            <SchPreviewPane
+              fileUuid={fileUuid}
+              fileUrl={url}
+              fileName={fileSource.fileName}
+              height="100%"
+              viewerRef={schViewerRef}
+              darkChrome
+            />
+          </Suspense>
+        </UniPreviewOverlay>
+      </PreviewMarkupProvider>
+    );
+  }
+
+  if (open && isPcbDoc) {
+    return (
+      <PreviewMarkupProvider fileUuid={fileUuid} scope={pcbSide}>
+        <PreviewMarkupTextDialog />
+        <UniPreviewOverlay
+          open={open}
+          onClose={onClose}
+          title={previewHeaderTitle}
+          inset={16}
+          zIndex={overlayZIndex}
+          extra={
+            <>
+              {fileUuid ? <PreviewMarkupToolbar /> : null}
+              {pcbToolbar}
+            </>
+          }
+        >
+        <Suspense
+          fallback={
+            <CadPreviewLoading
+              text={t('app.master-data.drawings.pcbPreviewLoading')}
+              tone="light"
+              minHeight="100%"
+            />
+          }
+        >
+          <PcbPreviewPane
+            fileUuid={fileUuid}
+            fileUrl={url}
+            fileName={fileSource.fileName}
+            side={pcbSide}
+            height="100%"
+            viewerRef={pcbViewerRef}
+            darkChrome
+            showSideToggle={false}
+          />
+        </Suspense>
+      </UniPreviewOverlay>
+      </PreviewMarkupProvider>
     );
   }
 
@@ -374,7 +567,8 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         <UniPdfPreview
           open={open}
           onClose={onClose}
-          title={title || fileName || t('app.master-data.drawings.preview')}
+          title={previewHeaderTitle}
+          a11yTitle={previewAccessibleName}
           src={appendPdfViewerParams(pdfBlobUrl || previewUrl)}
           loading={loading || pdfLoading}
           error={error}
@@ -386,8 +580,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
       {!isImage && !isPdf ? (
         <Modal
-          title={title || fileName || t('app.master-data.drawings.preview')}
-          open={open}
+          title={previewHeaderTitleLight}
           onCancel={onClose}
           footer={null}
           width={width}
@@ -436,13 +629,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           ) : previewUrl ? (
             <iframe
               src={previewUrl}
-              title={title || fileName || t('app.master-data.drawings.preview')}
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 'none',
-                display: 'block',
-              }}
+              title={previewAccessibleName}
             />
           ) : (
             <Alert

@@ -61,6 +61,7 @@
         "@univerjs/ui": "^0.12.4",
         "@wecom/jssdk": "^2.4.2",
         "ahooks": "^3.9.6",
+        "altium-toolkit": "^1.4.3",
         "antd": "^6.4.4",
         "browser-image-compression": "^2.0.2",
         "cfb": "~1.2.2",
