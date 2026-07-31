@@ -718,6 +718,8 @@ class RoleService:
             "outbound",
             "kuaizhizao:pricing",
             "kuaizhizao:warehouse",
+            "kuaizhizao:inbound",
+            "kuaizhizao:outbound",
         ],
         "WAREHOUSE_OPERATOR": [
             "warehouse",
@@ -727,6 +729,8 @@ class RoleService:
             "outbound",
             "kuaizhizao:pricing",
             "kuaizhizao:warehouse",
+            "kuaizhizao:inbound",
+            "kuaizhizao:outbound",
         ],
         "FINANCE_MANAGER": ["receivable", "payable", "receipt", "payment", "invoice", "cost_", "kuaizhizao:pricing"],
         "FINANCE_OPERATOR": ["receivable", "payable", "receipt", "payment", "invoice", "kuaizhizao:pricing"],

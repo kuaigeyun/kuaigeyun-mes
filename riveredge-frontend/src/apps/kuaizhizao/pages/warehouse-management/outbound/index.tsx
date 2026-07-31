@@ -686,7 +686,7 @@ const OutboundPage: React.FC = () => {
           {isOutboundConfirmable(record) && record.outbound_type !== 'outsource_issue' && (
             <Tooltip title={getOutboundConfirmBlockedReason(record)}>
               <Button
-                {...rowActionKind('execute')}
+                {...rowActionKind('skip')}
                 {...rowActionLabelKeep()}
                 type={record.outbound_type === 'production_picking' ? 'primary' : undefined}
                 onClick={() => void handleConfirm(record)}
