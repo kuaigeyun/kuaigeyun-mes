@@ -362,7 +362,10 @@ const OutboundPage: React.FC = () => {
 
   const canRunOutboundConfirm = (record: OutboundOrder): boolean => {
     if (record.outbound_type === 'production_picking') {
-      return inboundPerms.canAction?.('execute') ?? false;
+      return (
+        (inboundPerms.canAction?.('execute') ?? false) ||
+        (outboundPerms.canAction?.('execute') ?? false)
+      );
     }
     if (record.outbound_type === 'sales_delivery') {
       return outboundPerms.canAction?.('execute') ?? false;
@@ -684,7 +687,10 @@ const OutboundPage: React.FC = () => {
             </Button>
           )}
           {isOutboundConfirmable(record) && record.outbound_type !== 'outsource_issue' && (
-            <Tooltip title={getOutboundConfirmBlockedReason(record)}>
+            <Tooltip
+              title={getOutboundConfirmBlockedReason(record)}
+              data-row-action-visible-when-disabled={true}
+            >
               <Button
                 {...rowActionKind('skip')}
                 {...rowActionLabelKeep()}

@@ -376,6 +376,16 @@ def require_kuaizhizao_warehouse_execution_access(
             and action == "create"
         ):
             required = list(collection_create_permissions)
+        elif (
+            (request.method or "").upper() == "POST"
+            and "/production-pickings/" in (request.url.path or "").lower()
+            and "/confirm" in (request.url.path or "").lower()
+            and action == "execute"
+        ):
+            required = [
+                build_permission_code("kuaizhizao", "inbound", "execute"),
+                build_permission_code("kuaizhizao", "outbound", "execute"),
+            ]
         else:
             required = [build_permission_code("kuaizhizao", module_code, action)]
         await ensure_permission_codes(

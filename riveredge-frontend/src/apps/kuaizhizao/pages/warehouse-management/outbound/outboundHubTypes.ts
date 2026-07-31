@@ -119,7 +119,11 @@ export const OUTBOUND_ISSUE_TYPE_LABELS: Record<OutboundIssueType, string> = {
 };
 
 export function isOutboundConfirmable(record: OutboundHubOrder): boolean {
-  return record.capabilities?.confirm?.allowed === true;
+  if (record.capabilities?.confirm != null) {
+    return record.capabilities.confirm.allowed === true;
+  }
+  if (record.outbound_type === 'outsource_issue') return false;
+  return OUTBOUND_PENDING_STATUSES.has(String(record.status || '').trim());
 }
 
 export function isOutboundWithdrawable(record: OutboundHubOrder): boolean {
