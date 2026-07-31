@@ -1,12 +1,12 @@
 import { formatQuantity } from '../../../../../utils/format';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { App, Card, Col, Popover, Row, Select, Space, Statistic, Tag, Typography } from 'antd';
+import { App, Popover, Select, Space, Tag, Typography } from 'antd';
 import { WarningOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -14,6 +14,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { apiRequest } from '../../../../../services/api';
+import { warehouseApi } from '../../../../master-data/services/warehouse';
 import { resolveInventoryBatchLineListParams } from '../../../utils/warehouseListCore';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
@@ -48,6 +49,11 @@ interface BatchInventoryItem {
   status: string;
   warehouse_id: number | null;
   warehouse_name: string | null;
+}
+
+interface WarehouseOption {
+  id: number;
+  name: string;
 }
 
 function InTransitPopoverContent({
@@ -133,17 +139,18 @@ const BatchInventoryQuery: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [includeExpired, setIncludeExpired] = useState(false);
   const [includeZeroStock, setIncludeZeroStock] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'in_stock' | 'zero' | 'expired'>('all');
   const [agingBucket, setAgingBucket] = useState<'all' | 'expired' | '0-30' | '31-90' | '90+'>('all');
+  const [warehouseFilter, setWarehouseFilter] = useState<'all' | number>('all');
+  const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   // setState 后立刻 reload 时闭包仍是旧值；用 ref 保证请求参数与开关一致
   const includeExpiredRef = useRef(false);
   const includeZeroStockRef = useRef(true);
-  const statusFilterRef = useRef(statusFilter);
   const agingBucketRef = useRef(agingBucket);
+  const warehouseFilterRef = useRef(warehouseFilter);
   includeExpiredRef.current = includeExpired;
   includeZeroStockRef.current = includeZeroStock;
-  statusFilterRef.current = statusFilter;
   agingBucketRef.current = agingBucket;
+  warehouseFilterRef.current = warehouseFilter;
   const lastQueryRef = useRef<Record<string, any>>({});
   const actionRef = useRef<any>(null);
   const [summary, setSummary] = useState({
@@ -154,6 +161,33 @@ const BatchInventoryQuery: React.FC = () => {
     expired_count: 0,
     near_expiry_count: 0,
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    warehouseApi
+      .list({ limit: 1000, is_active: true })
+      .then((res: any) => {
+        if (cancelled) return;
+        const items = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+        setWarehouses(
+          items
+            .map((w: any) => ({
+              id: Number(w.id ?? w.warehouse_id),
+              name: String(w.name || '').trim(),
+            }))
+            .filter((w: WarehouseOption) => Number.isFinite(w.id) && w.id > 0 && w.name)
+            .sort((a: WarehouseOption, b: WarehouseOption) => a.name.localeCompare(b.name, 'zh-CN')),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          messageApi.error(t('app.kuaizhizao.warehouseInventory.loadWarehousesFailed'));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [messageApi, t]);
 
   const escapeCsv = (v: unknown) => {
     const s = String(v ?? '');
@@ -167,6 +201,14 @@ const BatchInventoryQuery: React.FC = () => {
     const s = String(v ?? '').trim();
     return s || '—';
   };
+
+  const warehouseSelectOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.warehouseCommon.allWarehouses'), value: 'all' },
+      ...warehouses.map((w) => ({ label: w.name, value: String(w.id) })),
+    ],
+    [t, warehouses],
+  );
 
   const tableHeaderActions = useMemo(
     () => (
@@ -200,17 +242,15 @@ const BatchInventoryQuery: React.FC = () => {
           }}
         />
         <Select
-          value={statusFilter}
-          style={{ width: 160 }}
-          options={[
-            { label: t('app.kuaizhizao.warehouseCommon.allStatus'), value: 'all' },
-            { label: t('app.kuaizhizao.warehouseCommon.inStockOnly'), value: 'in_stock' },
-            { label: t('app.kuaizhizao.warehouseCommon.zeroStockOnly'), value: 'zero' },
-            { label: t('app.kuaizhizao.warehouseCommon.expiredOnly'), value: 'expired' },
-          ]}
+          value={warehouseFilter === 'all' ? 'all' : String(warehouseFilter)}
+          style={{ width: 200 }}
+          showSearch
+          optionFilterProp="label"
+          options={warehouseSelectOptions}
           onChange={(v) => {
-            statusFilterRef.current = v;
-            setStatusFilter(v);
+            const next: 'all' | number = v === 'all' ? 'all' : Number(v);
+            warehouseFilterRef.current = next;
+            setWarehouseFilter(next);
             actionRef.current?.reload();
           }}
         />
@@ -232,7 +272,7 @@ const BatchInventoryQuery: React.FC = () => {
         />
       </Space>
     ),
-    [t, includeExpired, includeZeroStock, statusFilter, agingBucket]
+    [t, includeExpired, includeZeroStock, warehouseFilter, warehouseSelectOptions, agingBucket]
   );
 
   const columns: ProColumns<BatchInventoryItem>[] = useMemo(
@@ -387,14 +427,14 @@ const BatchInventoryQuery: React.FC = () => {
   const fetchBatchInventory = async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
     const listParams = resolveInventoryBatchLineListParams(searchFormValues, sort);
     const aging = agingBucketRef.current;
-    const status = statusFilterRef.current;
+    const warehouse = warehouseFilterRef.current;
     const apiParams = {
       ...listParams,
       material_id: listParams.material_id ?? params.material_id,
       include_expired: includeExpiredRef.current,
       include_zero_stock: includeZeroStockRef.current,
       aging_bucket: aging === 'all' ? undefined : aging,
-      status_filter: status === 'all' ? undefined : status,
+      warehouse_id: warehouse === 'all' ? undefined : warehouse,
     };
     lastQueryRef.current = apiParams;
     try {
@@ -514,19 +554,27 @@ const BatchInventoryQuery: React.FC = () => {
     }
   };
 
-  return (
-    <ListPageTemplate>
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Row gutter={12}>
-          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statRecords')} value={summary.total_records} /></Col>
-          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statTotalQty')} value={summary.total_quantity} precision={2} /></Col>
-          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statInStock')} value={summary.in_stock_count} /></Col>
-          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statZeroStock')} value={summary.zero_stock_count} /></Col>
-          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statNearExpiry')} value={summary.near_expiry_count} /></Col>
-          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statExpired')} value={summary.expired_count} /></Col>
-        </Row>
-      </Card>
+  const statCards: StatCard[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseCommon.statRecords'), value: summary.total_records },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.statTotalQty'),
+        value: summary.total_quantity,
+        precision: 2,
+      },
+      { title: t('app.kuaizhizao.warehouseCommon.statInStock'), value: summary.in_stock_count },
+      { title: t('app.kuaizhizao.warehouseCommon.statZeroStock'), value: summary.zero_stock_count },
+      { title: t('app.kuaizhizao.warehouseCommon.statNearExpiry'), value: summary.near_expiry_count },
+      { title: t('app.kuaizhizao.warehouseCommon.statExpired'), value: summary.expired_count },
+    ],
+    [summary, t],
+  );
 
+  return (
+    <ListPageTemplate
+      statCards={statCards}
+      statCardsPreferenceKey="apps.kuaizhizao.pages.warehouse-management.batch-inventory-query"
+    >
       <UniTable<BatchInventoryItem>
         headerActions={tableHeaderActions}
         actionRef={actionRef}
@@ -542,7 +590,10 @@ const BatchInventoryQuery: React.FC = () => {
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         scroll={{ x: 2100 }}
-        params={{ material_id: searchParams.get('material_id') || undefined }}
+        params={{
+          material_id: searchParams.get('material_id') || undefined,
+          warehouse_id: warehouseFilter === 'all' ? undefined : warehouseFilter,
+        }}
       />
     </ListPageTemplate>
   );

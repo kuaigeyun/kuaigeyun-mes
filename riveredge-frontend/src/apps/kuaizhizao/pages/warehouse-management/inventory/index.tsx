@@ -1,9 +1,9 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { App, Card, Col, Popover, Row, Select, Space, Statistic, Tag, Typography } from 'antd';
+import { App, Popover, Select, Space, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { formatQuantity } from '../../../../../utils/format';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -11,6 +11,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { apiRequest } from '../../../../../services/api';
+import { warehouseApi } from '../../../../master-data/services/warehouse';
 import { resolveInventoryMaterialBalanceListParams } from '../../../utils/warehouseListCore';
 
 interface InTransitBreakdown {
@@ -37,6 +38,7 @@ interface InventoryItem {
   alert_label?: string | null;
   alert_message?: string | null;
   status: string;
+  warehouse_id?: number | null;
   warehouse_name: string | null;
 }
 
@@ -47,6 +49,11 @@ interface InventorySummary {
   zero_stock_count: number;
   expired_count: number;
   near_expiry_count: number;
+}
+
+interface WarehouseOption {
+  id: number;
+  name: string;
 }
 
 function InTransitPopoverContent({
@@ -133,12 +140,13 @@ const InventoryPage: React.FC = () => {
   const lastQueryRef = useRef<Record<string, any>>({});
 
   const [includeZeroStock, setIncludeZeroStock] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'in_stock' | 'zero'>('all');
+  const [warehouseFilter, setWarehouseFilter] = useState<'all' | number>('all');
+  const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   // setState 后立刻 reload 时闭包仍是旧值；用 ref 保证请求参数与开关一致
   const includeZeroStockRef = useRef(true);
-  const statusFilterRef = useRef(statusFilter);
+  const warehouseFilterRef = useRef(warehouseFilter);
   includeZeroStockRef.current = includeZeroStock;
-  statusFilterRef.current = statusFilter;
+  warehouseFilterRef.current = warehouseFilter;
   const [summary, setSummary] = useState<InventorySummary>({
     total_records: 0,
     total_quantity: 0,
@@ -147,6 +155,33 @@ const InventoryPage: React.FC = () => {
     expired_count: 0,
     near_expiry_count: 0,
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    warehouseApi
+      .list({ limit: 1000, is_active: true })
+      .then((res: any) => {
+        if (cancelled) return;
+        const items = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+        setWarehouses(
+          items
+            .map((w: any) => ({
+              id: Number(w.id ?? w.warehouse_id),
+              name: String(w.name || '').trim(),
+            }))
+            .filter((w: WarehouseOption) => Number.isFinite(w.id) && w.id > 0 && w.name)
+            .sort((a: WarehouseOption, b: WarehouseOption) => a.name.localeCompare(b.name, 'zh-CN')),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          messageApi.error(t('app.kuaizhizao.warehouseInventory.loadWarehousesFailed'));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [messageApi, t]);
 
   const escapeCsv = (v: unknown) => {
     const s = String(v ?? '');
@@ -202,6 +237,14 @@ const InventoryPage: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const warehouseSelectOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.warehouseCommon.allWarehouses'), value: 'all' },
+      ...warehouses.map((w) => ({ label: w.name, value: String(w.id) })),
+    ],
+    [t, warehouses],
+  );
+
   const tableHeaderActions = useMemo(
     () => (
       <Space wrap>
@@ -220,22 +263,21 @@ const InventoryPage: React.FC = () => {
           }}
         />
         <Select
-          value={statusFilter}
-          style={{ width: 140 }}
-          options={[
-            { label: t('app.kuaizhizao.warehouseCommon.allStatus'), value: 'all' },
-            { label: t('app.kuaizhizao.warehouseCommon.inStockOnly'), value: 'in_stock' },
-            { label: t('app.kuaizhizao.warehouseCommon.zeroStockOnly'), value: 'zero' },
-          ]}
+          value={warehouseFilter === 'all' ? 'all' : String(warehouseFilter)}
+          style={{ width: 200 }}
+          showSearch
+          optionFilterProp="label"
+          options={warehouseSelectOptions}
           onChange={(v) => {
-            statusFilterRef.current = v;
-            setStatusFilter(v);
+            const next: 'all' | number = v === 'all' ? 'all' : Number(v);
+            warehouseFilterRef.current = next;
+            setWarehouseFilter(next);
             actionRef.current?.reload();
           }}
         />
       </Space>
     ),
-    [t, includeZeroStock, statusFilter]
+    [t, includeZeroStock, warehouseFilter, warehouseSelectOptions]
   );
 
   const columns: ProColumns<InventoryItem>[] = useMemo(
@@ -350,11 +392,11 @@ const InventoryPage: React.FC = () => {
   const fetchInventory = async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
     const listParams = resolveInventoryMaterialBalanceListParams(searchFormValues, sort);
     const zeroStock = includeZeroStockRef.current;
-    const status = statusFilterRef.current;
+    const warehouse = warehouseFilterRef.current;
     const baseQuery = {
       ...listParams,
       include_zero_stock: zeroStock,
-      status_filter: status === 'all' ? undefined : status,
+      warehouse_id: warehouse === 'all' ? undefined : warehouse,
     };
     lastQueryRef.current = baseQuery;
     try {
@@ -417,25 +459,34 @@ const InventoryPage: React.FC = () => {
     }
   };
 
-  return (
-    <ListPageTemplate>
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Row gutter={12}>
-          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statRecords')} value={summary.total_records} /></Col>
-          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statTotalQty')} value={summary.total_quantity} precision={2} /></Col>
-          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statInStock')} value={summary.in_stock_count} /></Col>
-          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statZeroStock')} value={summary.zero_stock_count} /></Col>
-          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statNearExpiry')} value={summary.near_expiry_count} /></Col>
-          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statExpired')} value={summary.expired_count} /></Col>
-        </Row>
-      </Card>
+  const statCards: StatCard[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseCommon.statRecords'), value: summary.total_records },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.statTotalQty'),
+        value: summary.total_quantity,
+        precision: 2,
+      },
+      { title: t('app.kuaizhizao.warehouseCommon.statInStock'), value: summary.in_stock_count },
+      { title: t('app.kuaizhizao.warehouseCommon.statZeroStock'), value: summary.zero_stock_count },
+      { title: t('app.kuaizhizao.warehouseCommon.statNearExpiry'), value: summary.near_expiry_count },
+      { title: t('app.kuaizhizao.warehouseCommon.statExpired'), value: summary.expired_count },
+    ],
+    [summary, t],
+  );
 
+  return (
+    <ListPageTemplate
+      statCards={statCards}
+      statCardsPreferenceKey="apps.kuaizhizao.pages.warehouse-management.inventory"
+    >
       <UniTable<InventoryItem>
         headerActions={tableHeaderActions}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory"
         actionRef={actionRef}
         columns={columns}
         request={fetchInventory}
+        params={{ warehouse_id: warehouseFilter === 'all' ? undefined : warehouseFilter }}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         showExportButton

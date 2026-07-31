@@ -67,7 +67,10 @@ async def create_batch_rule(
         )
         return BatchRuleResponse.model_validate(rule)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=getattr(e, "message", None) or str(e),
+        )
 
 
 @router.get("/batch-rules", response_model=BatchRuleListResponse, summary="List batch number rules")
@@ -139,7 +142,10 @@ async def update_batch_rule(
     except NotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="批号规则不存在")
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=getattr(e, "message", None) or str(e),
+        )
 
 
 @router.delete("/batch-rules/{rule_uuid}", summary="Delete batch number rule")
@@ -155,7 +161,10 @@ async def delete_batch_rule(
     except NotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="批号规则不存在")
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=getattr(e, "message", None) or str(e),
+        )
 
 
 # ==================== 序列号规则 ====================
@@ -173,7 +182,10 @@ async def create_serial_rule(
         )
         return SerialRuleResponse.model_validate(rule)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=getattr(e, "message", None) or str(e),
+        )
 
 
 @router.get("/serial-rules", response_model=SerialRuleListResponse, summary="List serial number rules")
@@ -245,7 +257,10 @@ async def update_serial_rule(
     except NotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="序列号规则不存在")
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=getattr(e, "message", None) or str(e),
+        )
 
 
 @router.delete("/serial-rules/{rule_uuid}", summary="Delete serial number rule")
@@ -261,4 +276,7 @@ async def delete_serial_rule(
     except NotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="序列号规则不存在")
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=getattr(e, "message", None) or str(e),
+        )

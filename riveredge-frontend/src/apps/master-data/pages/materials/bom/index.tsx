@@ -67,6 +67,7 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { masterCrudCreatedUpdatedColumns } from '../../../utils/materialListCore';
+import { isVariantSkuMaterial } from '../../../components/MaterialVariantCombinationsTable';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
@@ -536,6 +537,8 @@ const BOMPage: React.FC = () => {
     () =>
       materials
         .filter((m) => {
+          // BOM 挂在主物料上；变体 SKU 行不作为主物料候选
+          if (isVariantSkuMaterial(m)) return false;
           if (mainMaterialScope === 'all') return true;
           const sourceType = String((m as any).sourceType ?? (m as any).source_type ?? '');
           return sourceType === 'Make';

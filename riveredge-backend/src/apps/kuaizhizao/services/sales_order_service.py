@@ -1198,6 +1198,9 @@ class SalesOrderService:
             order_dict["created_by_name"] = operator_name
             order_dict["updated_by"] = created_by
             order_dict["updated_by_name"] = operator_name
+            # 表字段非空；总额在明细分配后回写，此处占位
+            if order_dict.get("total_amount") is None:
+                order_dict["total_amount"] = Decimal("0")
 
             # 自动带出归属业务员
             if not order_dict.get("salesman_id") and order_dict.get("customer_id"):
@@ -1256,8 +1259,17 @@ class SalesOrderService:
                 })
 
             discount = Decimal(str(getattr(sales_order_data, "discount_amount", None) or 0))
-            provided_total = getattr(sales_order_data, "total_amount", None)
-            target_total = Decimal(str(provided_total)) if provided_total is not None else max(Decimal("0"), subtotal - discount)
+            # 仅调用方显式传入 total_amount 时才整单覆盖；省略（含旧默认 0）按明细汇总
+            provided_total = (
+                sales_order_data.total_amount
+                if "total_amount" in sales_order_data.model_fields_set
+                else None
+            )
+            target_total = (
+                Decimal(str(provided_total))
+                if provided_total is not None
+                else max(Decimal("0"), subtotal - discount)
+            )
             target_total = self._money(target_total)
             allocated_amounts = self._allocate_total_amount_with_proration(
                 source_amounts=[row["_item_amount"] for row in item_rows],
@@ -1952,8 +1964,16 @@ class SalesOrderService:
                         "_item_amount": item_amt,
                     })
                 discount = Decimal(str(getattr(sales_order_data, "discount_amount", None) or 0))
-                provided_total = getattr(sales_order_data, "total_amount", None)
-                target_total = Decimal(str(provided_total)) if provided_total is not None else max(Decimal("0"), subtotal - discount)
+                provided_total = (
+                    sales_order_data.total_amount
+                    if "total_amount" in sales_order_data.model_fields_set
+                    else None
+                )
+                target_total = (
+                    Decimal(str(provided_total))
+                    if provided_total is not None
+                    else max(Decimal("0"), subtotal - discount)
+                )
                 target_total = self._money(target_total)
                 allocated_amounts = self._allocate_total_amount_with_proration(
                     source_amounts=[row["_item_amount"] for row in item_rows],

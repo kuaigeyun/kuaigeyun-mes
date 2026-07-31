@@ -309,7 +309,26 @@ const BatchRulesPage: React.FC = () => {
         grid={true}
       >
         <ProFormText name="name" label={t('app.master-data.seqRules.ruleName')} rules={[{ required: true }]} colProps={{ span: 12 }} />
-        <ProFormText name="code" label={t('app.master-data.seqRules.ruleCode')} rules={[{ required: true }]} colProps={{ span: 12 }} />
+        <ProFormText
+          name="code"
+          label={t('app.master-data.seqRules.ruleCode')}
+          colProps={{ span: 12 }}
+          placeholder={t('app.master-data.seqRules.ruleCodePlaceholder')}
+          rules={[
+            { required: true },
+            {
+              validator: async (_, value) => {
+                const code = String(value ?? '').trim();
+                if (code === 'BATCH_DEFAULT') {
+                  return Promise.reject(
+                    new Error(t('app.master-data.seqRules.batchDefaultCodeReserved')),
+                  );
+                }
+                return Promise.resolve();
+              },
+            },
+          ]}
+        />
         <ProFormDigit name="seqStart" label={t('app.master-data.seqRules.seqStart')} initialValue={1} colProps={{ span: 8 }} />
         <ProFormDigit name="seqStep" label={t('app.master-data.seqRules.seqStep')} initialValue={1} colProps={{ span: 8 }} />
         <ProFormSelect

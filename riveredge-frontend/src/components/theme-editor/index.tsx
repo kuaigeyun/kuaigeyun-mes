@@ -9,11 +9,10 @@ import { Drawer, Form, Input, ColorPicker, Switch, Button, Space, Divider, messa
 import { SaveOutlined, ReloadOutlined, SunOutlined, MoonOutlined, DesktopOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { theme } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { getSiteSetting, updateSiteSetting } from '../../services/siteSetting';
+import { getSiteSetting } from '../../services/siteSetting';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { getToken } from '../../utils/auth';
-import { useThemeStore, resolveThemeFromCloud, type ThemeStyle } from '../../stores/themeStore';
-import { useConfigStore } from '../../stores/configStore';
+import { useThemeStore, resolveThemeFromCloud, normalizeThemeConfig, type ThemeStyle } from '../../stores/themeStore';
 import { clearTabsData } from '../../stores/tabsStorage';
 import { getDrawerFloatingWrapperStyle } from '../layout-templates/drawerFloatingChrome';
 import { clampBorderRadius, readBorderRadius } from '../../utils/themeBorderRadius';
@@ -81,7 +80,7 @@ function buildThemeConfigFromForm(
 
   return {
     themeMode,
-    themeConfigForPreference: {
+    themeConfigForPreference: normalizeThemeConfig({
       colorPrimary: colorPrimaryValue,
       borderRadius: readBorderRadius(values.borderRadius),
       fontSize: readFontSize(values.fontSize),
@@ -90,7 +89,7 @@ function buildThemeConfigFromForm(
       siderBgColor: savingPlain || !isLight ? '' : siderBgColorValue || '',
       headerBgColor: savingPlain ? '' : headerBgColorValue || '',
       tabsBgColor: savingPlain ? '' : tabsBgColorValue || '',
-    },
+    }),
   };
 }
 
@@ -405,7 +404,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       if (siteSettings) {
         useThemeStore.setState({ siteThemeSettings: siteSettings });
       }
-      useThemeStore.getState().applyTheme(userThemeMode, applied, { persist: false });
+      useThemeStore.getState().applyTheme(userThemeMode, applied);
 
       setColorMode(userThemeMode);
 
@@ -542,15 +541,25 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       allValues,
       (allValues.colorMode as 'light' | 'dark' | 'auto') || colorMode,
     );
-    useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference, {
-      persist: Boolean(changedValues.themeStyle && getToken()),
-    });
+    useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference);
+
+    if (changedValues.themeStyle && getToken()) {
+      void useUserPreferenceStore
+        .getState()
+        .updatePreferences({
+          theme: themeMode,
+          theme_config: themeConfigForPreference,
+        })
+        .catch((err) => {
+          message.error(err?.message || t('components.themeEditor.message.saveFailed'));
+        });
+    }
 
     applyPreviewTheme(allValues, themeMode);
   };
 
   /**
-   * 处理颜色模式切换（立即保存）
+   * 处理颜色模式切换（立即写入用户偏好 preferences.theme）
    */
   const handleColorModeChange = async (mode: 'light' | 'dark' | 'auto') => {
     try {
@@ -558,8 +567,18 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       setColorMode(mode);
       applyPreviewTheme(form.getFieldsValue(), mode);
 
-      // applyTheme 会更新 themeStore 并持久化到 userPreferenceStore
-      useThemeStore.getState().applyTheme(mode, useThemeStore.getState().config, { persist: true });
+      const themeConfigForPreference = normalizeThemeConfig(
+        useThemeStore.getState().config,
+      );
+      useThemeStore.getState().applyTheme(mode, themeConfigForPreference);
+
+      if (!getToken()) {
+        throw new Error(t('components.themeEditor.message.saveFailed'));
+      }
+      await useUserPreferenceStore.getState().updatePreferences({
+        theme: mode,
+        theme_config: themeConfigForPreference,
+      });
 
       message.success(t('components.themeEditor.message.colorModeSwitched'));
     } catch (error: any) {
@@ -582,103 +601,60 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       mergedValues,
       (mergedValues.colorMode as 'light' | 'dark' | 'auto') || colorMode,
     );
-    useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference, { persist: false });
+    useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference);
     applyPreviewTheme(mergedValues, themeMode);
   };
 
   /**
-   * 处理保存
+   * 处理保存：颜色模式与配色只写入用户偏好（preferences.theme / theme_config）
    */
   const handleSave = async () => {
     try {
       setSaving(true);
 
-      // 获取表单的最终值（用户选择的结果）
       const values = await form.validateFields();
       values.colorPrimary = colorFieldToHex(
         form.getFieldValue('colorPrimary') ?? values.colorPrimary,
         '#1890ff',
       );
+      const resolvedColorMode =
+        (form.getFieldValue('colorMode') as 'light' | 'dark' | 'auto' | undefined) ||
+        colorMode ||
+        'light';
+      values.colorMode = resolvedColorMode;
 
-
-      // 重要：在 validateFields 之后，直接从表单获取当前值
-      // 因为 Switch 组件的值可能在 validateFields 时丢失
       const tabsPersistenceValue = Boolean(form.getFieldValue('tabsPersistence'));
 
-      const { themeMode, themeConfigForPreference } = buildThemeConfigFromForm(values, colorMode);
+      const { themeMode, themeConfigForPreference } = buildThemeConfigFromForm(
+        values,
+        resolvedColorMode,
+      );
+      const cleanedThemeConfig = normalizeThemeConfig(themeConfigForPreference);
 
-      const themeConfig: Record<string, unknown> = {
-        ...themeConfigForPreference,
-        layoutMode: 'mix',
+      if (!getToken()) {
+        throw new Error(t('components.themeEditor.message.saveFailed'));
+      }
+
+      await useUserPreferenceStore.getState().updatePreferences({
         theme: themeMode,
-      };
-      const hasToken = !!getToken();
-      if (hasToken) {
-        // 用户已登录：通过 updatePreferences 持久化，app 内订阅会同步 themeStore
-        try {
-          await useUserPreferenceStore.getState().updatePreferences({
-            theme: themeMode,
-            theme_config: themeConfigForPreference,
-            tabs_persistence: tabsPersistenceValue,
-          });
-        } catch (prefError: any) {
-          // 新建租户等场景下偏好接口可能 404（当前用户无法创建偏好设置），仍应用主题到当前会话
-          const isPreferenceUnavailable =
-            prefError?.response?.status === 404 ||
-            (typeof prefError?.message === 'string' && (
-              prefError.message.includes('无法创建偏好设置') ||
-              prefError.message.includes('非租户用户') ||
-              prefError.message.includes('404')
-            ));
-          if (isPreferenceUnavailable) {
-            const current = JSON.parse(
-              JSON.stringify(useUserPreferenceStore.getState().preferences)
-            );
-            current.theme = themeMode;
-            current.theme_config = themeConfigForPreference;
-            current.tabs_persistence = tabsPersistenceValue;
-            useUserPreferenceStore.setState({ preferences: current });
-            useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference, { persist: false });
-            message.warning(t('components.themeEditor.message.appliedButNotSaved'));
-          } else {
-            throw prefError;
-          }
-        }
-      }
+        theme_config: cleanedThemeConfig,
+        tabs_persistence: tabsPersistenceValue,
+      });
 
-      useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference, { persist: false });
-
-      // 保存站点主题配置
-      const settings: Record<string, any> = {
-        theme_config: themeConfig,
-      };
-
-      try {
-        const updatedSiteSetting = await updateSiteSetting({ settings });
-        if (updatedSiteSetting?.settings) {
-          useThemeStore.setState({ siteThemeSettings: updatedSiteSetting.settings });
-          useConfigStore.getState().hydrateFromSettings(updatedSiteSetting.settings);
-        }
-      } catch (error) {
-        // 站点设置保存失败（如无权限或无租户上下文），仅记录日志，不阻断流程
-        console.warn('Failed to save site theme settings:', error);
-      }
-
-      if (hasToken) {
-        await useUserPreferenceStore.getState().fetchPreferences({ force: true });
-        useThemeStore.getState().syncFromPreferences(
-          useUserPreferenceStore.getState().preferences || {},
-        );
-      }
+      useThemeStore.getState().applyTheme(themeMode, cleanedThemeConfig);
+      useThemeStore.getState().syncFromPreferences(
+        useUserPreferenceStore.getState().preferences || {},
+      );
 
       message.success(t('components.themeEditor.message.applied'));
 
-      // 调用回调
       if (onThemeUpdate) {
-        onThemeUpdate(themeConfig);
+        onThemeUpdate({
+          ...cleanedThemeConfig,
+          theme: themeMode,
+        });
       }
 
-      // 关闭面板
       onClose();
     } catch (error: any) {
       console.error('Theme save error:', error);
@@ -695,18 +671,16 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     try {
       setLoading(true);
 
-      // 1. 设置默认值
-      const defaultThemeConfig = {
+      const defaultThemeConfig = normalizeThemeConfig({
         colorPrimary: '#1890ff',
         borderRadius: 6,
         fontSize: 14,
         siderBgColor: '',
         headerBgColor: '',
         tabsBgColor: '',
-        themeStyle: 'vivid' as ThemeStyle,
-      };
+        themeStyle: 'vivid',
+      });
 
-      // 2. 更新本地表单和状态
       setTabsPersistenceValue(true);
       setColorMode('light');
       setColorPrimaryValue('#1890ff');
@@ -723,43 +697,30 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         themeStyle: 'vivid',
       });
 
-      // 3. 清除相关本地存储
-      const THEME_CONFIG_STORAGE_KEY = 'riveredge_theme_config';
-      localStorage.removeItem(THEME_CONFIG_STORAGE_KEY);
+      localStorage.removeItem('riveredge_theme_config');
       clearTabsData();
 
-      // 4. 更新服务器配置（如果已登录）
-      const token = getToken();
-      if (token) {
-        await Promise.all([
-          useUserPreferenceStore.getState().updatePreferences({
-            theme: 'light',
-            tabs_persistence: true,
-            theme_config: defaultThemeConfig,
-          }).catch(err => console.warn('Failed to reset user preferences:', err)),
-          updateSiteSetting({
-            settings: {
-              theme_config: defaultThemeConfig
-            }
-          }).catch(err => console.warn('Failed to reset site settings:', err))
-        ]);
+      if (!getToken()) {
+        throw new Error(t('components.themeEditor.message.resetFailed'));
       }
 
-      // 5. 应用主题到 store
-      useThemeStore.getState().applyTheme('light', defaultThemeConfig, { persist: false });
+      await useUserPreferenceStore.getState().updatePreferences({
+        theme: 'light',
+        tabs_persistence: true,
+        theme_config: defaultThemeConfig,
+      });
 
-      // 6. 应用本地预览
+      useThemeStore.getState().applyTheme('light', defaultThemeConfig);
       applyPreviewTheme(defaultThemeConfig, 'light');
 
       message.success(t('components.themeEditor.message.resetDone'));
 
-      // 7. 关闭面板（根据用户需求：点击恢复默认后关闭抽屉）
       if (onClose) {
         onClose();
       }
     } catch (error: any) {
       console.error('Reset failed:', error);
-      message.error(t('components.themeEditor.message.resetFailed'));
+      message.error(error?.message || t('components.themeEditor.message.resetFailed'));
     } finally {
       setLoading(false);
     }

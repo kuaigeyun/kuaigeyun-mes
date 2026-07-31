@@ -10,7 +10,8 @@ import { Popover, Space, App } from 'antd';
 import { theme } from 'antd';
 import { getSiteSetting, updateSiteSetting } from '../../services/siteSetting';
 import { getToken } from '../../utils/auth';
-import { useThemeStore } from '../../stores/themeStore';
+import { useThemeStore, normalizeThemeConfig } from '../../stores/themeStore';
+import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 
 /**
  * 简化版主题颜色编辑器组件属性
@@ -134,28 +135,26 @@ const ThemeColorEditor: React.FC<ThemeColorEditorProps> = ({ children, onThemeUp
             useThemeStore.setState({ siteThemeSettings: updatedSiteSetting.settings });
           }
 
-          const currentConfig = useThemeStore.getState().config;
-          useThemeStore.getState().applyTheme(
-            useThemeStore.getState().theme,
-            { ...currentConfig, colorPrimary: colorPrimaryValue },
-            { persist: true },
-          );
+          const nextConfig = normalizeThemeConfig({
+            ...useThemeStore.getState().config,
+            colorPrimary: colorPrimaryValue,
+          });
+          const themeMode = useThemeStore.getState().theme;
+          useThemeStore.getState().applyTheme(themeMode, nextConfig);
+          await useUserPreferenceStore.getState().updatePreferences({
+            theme: themeMode,
+            theme_config: nextConfig,
+          });
 
           message.success('主题颜色已更新');
         } catch (error: any) {
-          localStorage.setItem(THEME_COLOR_STORAGE_KEY, colorPrimaryValue);
-          const currentConfig = useThemeStore.getState().config;
-          useThemeStore.getState().applyTheme(
-            useThemeStore.getState().theme,
-            { ...currentConfig, colorPrimary: colorPrimaryValue },
-            { persist: true },
-          );
-          message.warning('主题颜色已保存为预览（登录后将同步到服务器）');
+          message.error(error?.message || '保存失败');
+          return;
         }
       } else {
         // 未登录：保存到 localStorage 并应用主题到 store（预览）
         localStorage.setItem(THEME_COLOR_STORAGE_KEY, colorPrimaryValue);
-        useThemeStore.getState().applyTheme('light', { colorPrimary: colorPrimaryValue }, { persist: false });
+        useThemeStore.getState().applyTheme('light', { colorPrimary: colorPrimaryValue });
       }
       
       setSelectedColor(colorPrimaryValue);

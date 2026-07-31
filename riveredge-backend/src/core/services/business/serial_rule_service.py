@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 
 from tortoise.expressions import Q
+from tortoise.exceptions import IntegrityError
 
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from core.models.serial_rule import SerialRule
@@ -105,8 +106,23 @@ class SerialRuleService:
         获取或创建系统默认序列号规则。
         格式：物料编码-YYYYMMDD-序号（6位，每日重置）
         """
-        rule = await SerialRuleService.get_rule_by_code(tenant_id, SerialRuleService.SYSTEM_DEFAULT_CODE)
+        rule = await SerialRule.filter(
+            tenant_id=tenant_id,
+            code=SerialRuleService.SYSTEM_DEFAULT_CODE,
+        ).first()
         if rule:
+            dirty = False
+            if rule.deleted_at is not None:
+                rule.deleted_at = None
+                dirty = True
+            if not rule.is_active:
+                rule.is_active = True
+                dirty = True
+            if not rule.is_system:
+                rule.is_system = True
+                dirty = True
+            if dirty:
+                await rule.save()
             return rule
         default_components = [
             {"type": "form_field", "order": 0, "field_name": "material_code"},
@@ -130,25 +146,64 @@ class SerialRuleService:
         return rule
 
     @staticmethod
+    async def _assert_code_available(
+        tenant_id: int,
+        code: str,
+        *,
+        exclude_uuid: Optional[str] = None,
+        allow_system_reserved: bool = False,
+    ) -> str:
+        normalized = (code or "").strip()
+        if not normalized:
+            raise ValidationError("规则代码不能为空")
+        if (
+            normalized == SerialRuleService.SYSTEM_DEFAULT_CODE
+            and not allow_system_reserved
+        ):
+            raise ValidationError(
+                f"规则代码 {SerialRuleService.SYSTEM_DEFAULT_CODE} 为系统保留，请使用其他代码"
+            )
+        qs = SerialRule.filter(tenant_id=tenant_id, code=normalized)
+        if exclude_uuid:
+            qs = qs.exclude(uuid=exclude_uuid)
+        existing = await qs.first()
+        if existing:
+            if existing.deleted_at is None:
+                raise ValidationError(f"规则代码 {normalized} 已存在")
+            raise ValidationError(
+                f"规则代码 {normalized} 已被占用（含已删除记录），请使用其他代码"
+            )
+        return normalized
+
+    @staticmethod
     async def create_rule(
         tenant_id: int,
         data: dict,
         current_user: Optional[User] = None,
     ) -> SerialRule:
         """创建序列号规则"""
+        is_system = bool(data.get("is_system", False))
+        code = await SerialRuleService._assert_code_available(
+            tenant_id,
+            data.get("code", ""),
+            allow_system_reserved=is_system,
+        )
         create_payload = {
             "name": data["name"],
-            "code": data["code"],
+            "code": code,
             "rule_components": data.get("rule_components"),
             "description": data.get("description"),
             "seq_start": data.get("seq_start", 1),
             "seq_step": data.get("seq_step", 1),
             "seq_reset_rule": data.get("seq_reset_rule"),
-            "is_system": data.get("is_system", False),
+            "is_system": is_system,
             "is_active": data.get("is_active", True),
         }
         apply_create_audit(create_payload, current_user)
-        rule = await SerialRule.create(tenant_id=tenant_id, **create_payload)
+        try:
+            rule = await SerialRule.create(tenant_id=tenant_id, **create_payload)
+        except IntegrityError:
+            raise ValidationError(f"规则代码 {code} 已存在")
         return rule
 
     @staticmethod
@@ -165,12 +220,23 @@ class SerialRuleService:
         if not rule:
             raise NotFoundError("序列号规则", rule_uuid)
         if rule.is_system:
-            raise ValidationError("系统规则不可删除")
-        for k, v in data.items():
+            raise ValidationError("系统规则不可修改")
+        update_data = dict(data)
+        if "code" in update_data and update_data["code"] is not None:
+            update_data["code"] = await SerialRuleService._assert_code_available(
+                tenant_id,
+                update_data["code"],
+                exclude_uuid=rule_uuid,
+                allow_system_reserved=False,
+            )
+        for k, v in update_data.items():
             if v is not None and hasattr(rule, k):
                 setattr(rule, k, v)
         apply_update_audit(rule, current_user)
-        await rule.save()
+        try:
+            await rule.save()
+        except IntegrityError:
+            raise ValidationError(f"规则代码 {getattr(rule, 'code', '')} 已存在")
         return rule
 
     @staticmethod

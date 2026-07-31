@@ -170,6 +170,34 @@ interface UserPreferenceState {
 /** theme / i18n 并行 init 时共用同一次拉取，后来者 await 而非直接 return */
 let fetchPreferencesInFlight: Promise<void> | null = null;
 
+/** 将 updatePreferences 入参展开为纯 patch（可含点号路径），禁止附带整包本地 preferences */
+function buildPreferencesPatch(newPrefs: Record<string, any>): Record<string, any> {
+  const patch: Record<string, any> = {};
+
+  const setDeep = (obj: Record<string, any>, path: string, value: any) => {
+    const keys = path.split('.');
+    let current = obj;
+    for (let i = 0; i < keys.length - 1; i++) {
+      const k = keys[i];
+      if (!current[k] || typeof current[k] !== 'object' || Array.isArray(current[k])) {
+        current[k] = {};
+      }
+      current = current[k];
+    }
+    current[keys[keys.length - 1]] = value;
+  };
+
+  Object.keys(newPrefs).forEach((key) => {
+    if (key.includes('.')) {
+      setDeep(patch, key, newPrefs[key]);
+    } else {
+      patch[key] = newPrefs[key];
+    }
+  });
+
+  return patch;
+}
+
 export const useUserPreferenceStore = create<UserPreferenceState>()(
   persist(
     (set, get) => ({
@@ -241,48 +269,22 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
       updatePreferences: async (newPrefs) => {
         set({ loading: true });
         try {
-          // 深拷贝当前偏好，避免直接修改状态
-          const currentPrefs = JSON.parse(JSON.stringify(get().preferences));
-          
-          // 辅助函数：处理点号路径赋值
-          const setDeep = (obj: any, path: string, value: any) => {
-             const keys = path.split('.');
-             let current = obj;
-             for (let i = 0; i < keys.length - 1; i++) {
-               // 如果路径不存在或不是对象，创建一个新对象
-               if (!current[keys[i]] || typeof current[keys[i]] !== 'object') {
-                 current[keys[i]] = {};
-               }
-               current = current[keys[i]];
-             }
-             current[keys[keys.length - 1]] = value;
-          };
+          const patch = buildPreferencesPatch(newPrefs);
+          if (Object.keys(patch).length === 0) {
+            set({ loading: false });
+            throw new Error('preferences patch is empty');
+          }
 
-          // 遍历新偏好设置
-          Object.keys(newPrefs).forEach(key => {
-             if (key.includes('.')) {
-                 // 如果键包含点号，使用深度赋值
-                 setDeep(currentPrefs, key, newPrefs[key]);
-             } else if (typeof newPrefs[key] === 'object' && newPrefs[key] !== null && !Array.isArray(newPrefs[key]) && currentPrefs[key]) {
-                 // 如果是对象且当前也存在，进行浅层合并 (支持一级嵌套更新，如 { ui: { ... } })
-                 // 为了更安全，这里也应该递归合并，但目前一级合并通常够用
-                 // 实际上，为了完全安全，建议尽量使用点号路径更新单个值
-                 currentPrefs[key] = { ...currentPrefs[key], ...newPrefs[key] };
-             } else {
-                 // 其他情况直接赋值
-                 currentPrefs[key] = newPrefs[key];
-             }
+          const saved = await updateUserPreference({ preferences: patch });
+          if (!saved?.preferences || typeof saved.preferences !== 'object') {
+            throw new Error('用户偏好更新响应缺少 preferences');
+          }
+
+          set({
+            preferences: saved.preferences,
+            loading: false,
           });
-          
-          // 调用 API 更新
-          await updateUserPreference({ preferences: currentPrefs });
-          
-          set({ 
-            preferences: currentPrefs, 
-            loading: false 
-          });
-          syncTableColumnsToLocalStorage(currentPrefs);
-          
+          syncTableColumnsToLocalStorage(saved.preferences);
         } catch (error) {
           console.error('Failed to update user preferences:', error);
           set({ loading: false });

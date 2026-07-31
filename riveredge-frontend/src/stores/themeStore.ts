@@ -63,35 +63,59 @@ export function normalizeThemeStyle(value: unknown): ThemeStyle {
   return value === 'plain' ? 'plain' : 'vivid';
 }
 
+export function normalizeThemeMode(value: unknown): ThemeMode {
+  if (value === 'dark' || value === 'auto' || value === 'light') return value;
+  return 'light';
+}
+
 /** 接口/缓存可能返回字符串数字，Ant Design token 需要 number */
 function clampFinite(n: number, min: number, max: number, fallback: number): number {
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, n));
 }
 
-function normalizeThemeConfig(c: ThemeConfig): ThemeConfig {
-  const fs = typeof c.fontSize === 'number' ? c.fontSize : Number(c.fontSize);
-  const br = typeof c.borderRadius === 'number' ? c.borderRadius : Number(c.borderRadius);
+/** 只保留 ThemeConfig 已知字段，剔除误写入的 theme/layoutMode 等污染键 */
+export function normalizeThemeConfig(c: Partial<ThemeConfig> | Record<string, unknown> | null | undefined): ThemeConfig {
+  const src = c && typeof c === 'object' ? c : {};
+  const fs = typeof src.fontSize === 'number' ? src.fontSize : Number(src.fontSize);
+  const br = typeof src.borderRadius === 'number' ? src.borderRadius : Number(src.borderRadius);
   return {
-    ...c,
-    compact: false,
-    themeStyle: normalizeThemeStyle(c.themeStyle),
-    fontSize: clampFinite(fs, 10, 22, DEFAULT_CONFIG.fontSize),
+    colorPrimary:
+      typeof src.colorPrimary === 'string' && src.colorPrimary.trim()
+        ? src.colorPrimary.trim()
+        : DEFAULT_CONFIG.colorPrimary,
     borderRadius: clampFinite(br, 0, 24, DEFAULT_CONFIG.borderRadius),
+    fontSize: clampFinite(fs, 10, 22, DEFAULT_CONFIG.fontSize),
+    compact: false,
+    themeStyle: normalizeThemeStyle(src.themeStyle),
+    siderBgColor: typeof src.siderBgColor === 'string' ? src.siderBgColor : '',
+    headerBgColor: typeof src.headerBgColor === 'string' ? src.headerBgColor : '',
+    tabsBgColor: typeof src.tabsBgColor === 'string' ? src.tabsBgColor : '',
   };
 }
 
-/** 用户是否已在云端保存过主题配置（theme_config 非空） */
+/** 用户是否已在云端保存过主题配置（仅计 ThemeConfig 字段） */
 export function hasCloudThemeConfig(cfg: Partial<ThemeConfig> | null | undefined): boolean {
   if (!cfg || typeof cfg !== 'object') return false;
-  return Object.keys(cfg).some((k) => {
-    const v = cfg[k as keyof ThemeConfig];
+  const keys: (keyof ThemeConfig)[] = [
+    'colorPrimary',
+    'borderRadius',
+    'fontSize',
+    'siderBgColor',
+    'headerBgColor',
+    'tabsBgColor',
+    'themeStyle',
+  ];
+  return keys.some((k) => {
+    const v = cfg[k];
     return v !== undefined && v !== null && v !== '';
   });
 }
 
 function buildSiteThemeConfig(site: Record<string, unknown>): Partial<ThemeConfig> {
-  const siteThemeConfig = (site.theme_config || {}) as Partial<ThemeConfig>;
+  const raw = (site.theme_config || {}) as Record<string, unknown>;
+  // 站点 theme_config 可能含历史误写入的 theme（颜色模式），不得进入配色合并
+  const { theme: _ignoredMode, layoutMode: _ignoredLayout, ...siteThemeConfig } = raw;
   const legacyThemeColor = site.theme_color;
   if (
     typeof legacyThemeColor === 'string' &&
@@ -103,13 +127,13 @@ function buildSiteThemeConfig(site: Record<string, unknown>): Partial<ThemeConfi
   return siteThemeConfig;
 }
 
-/** 从云端解析主题：用户偏好 theme_config 优先，其次站点 theme_config / theme_color */
+/** 从云端解析主题：颜色模式仅 preferences.theme；配色 theme_config 用户优先于站点 */
 export function resolveThemeFromCloud(
   userPreferences: Record<string, unknown> | null | undefined,
   siteSettings?: Record<string, unknown> | null | undefined,
 ): { theme: ThemeMode; config: ThemeConfig } {
   const prefs = userPreferences && typeof userPreferences === 'object' ? userPreferences : {};
-  const userTheme = (prefs.theme as ThemeMode) || 'light';
+  const userTheme = normalizeThemeMode(prefs.theme);
   const userConfig = (prefs.theme_config || {}) as Partial<ThemeConfig>;
   const site = siteSettings && typeof siteSettings === 'object' ? siteSettings : {};
   const siteConfig = buildSiteThemeConfig(site);
@@ -127,7 +151,7 @@ export function resolveThemeFromCloud(
     return { theme: userTheme, config: mergeConfig({}, siteConfig) };
   }
 
-  return { theme: 'light', config: normalizeThemeConfig({ ...DEFAULT_CONFIG }) };
+  return { theme: userTheme, config: normalizeThemeConfig({ ...DEFAULT_CONFIG }) };
 }
 
 /** @deprecated 请使用 resolveThemeFromCloud；保留别名供既有调用方使用 */
@@ -196,7 +220,7 @@ interface ThemeState {
   /** 最近一次从站点设置 API 拉取的 settings，供偏好无 theme_config 时回退 */
   siteThemeSettings: Record<string, unknown> | null;
   initFromApi: () => Promise<void>;
-  applyTheme: (themeMode: ThemeMode, config?: Partial<ThemeConfig>, options?: { persist?: boolean }) => void;
+  applyTheme: (themeMode: ThemeMode, config?: Partial<ThemeConfig>) => void;
   /** 偏好变更时按云端 theme_config 应用；无个人配置时回退站点云端主题 */
   syncFromPreferences: (preferences: Record<string, any>) => void;
   subscribeToSystemTheme: () => () => void;
@@ -327,19 +351,8 @@ export const useThemeStore = create<ThemeState>((set, get) => {
       }
     },
 
-    applyTheme: (themeMode: ThemeMode, configOverride?: Partial<ThemeConfig>, options?: { persist?: boolean }) => {
+    applyTheme: (themeMode: ThemeMode, configOverride?: Partial<ThemeConfig>) => {
       doApplyTheme(themeMode, configOverride);
-
-      if (options?.persist && getToken()) {
-        const persisted = get().config;
-        useUserPreferenceStore
-          .getState()
-          .updatePreferences({
-            theme: themeMode,
-            theme_config: persisted,
-          })
-          .catch((err) => console.warn('Failed to persist theme:', err));
-      }
     },
 
     syncFromPreferences,

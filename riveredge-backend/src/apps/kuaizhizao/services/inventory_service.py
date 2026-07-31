@@ -4,10 +4,10 @@
 为领料、退料、入库、出库、盘点、调拨、组装、拆解等业务提供统一的库存增减接口。
 
 业务逻辑：
-- 主仓（normal/wip，如原材料仓、成品仓）：使用 MaterialBatch
+- 主仓（normal/wip，如原材料仓、成品仓）：使用 MaterialBatch（按 warehouse_id 拆分余额）
 - 线边仓（line_side）：使用 LineSideInventory，仅发料/配料时写入
 
-采购入库、成品入库等入库操作 → 主仓 MaterialBatch
+采购入库、成品入库等入库操作 → 主仓 MaterialBatch（写入单据仓库）
 发料/配料到线边仓 → LineSideInventory
 
 Author: RiverEdge Team
@@ -169,26 +169,56 @@ class InventoryService:
         return Q(batch_no=bn)
 
     @staticmethod
+    def _normalize_main_warehouse_id(warehouse_id: Optional[int]) -> int:
+        """主仓余额键：未传仓记为 0（报表展示为未配置仓库）。"""
+        try:
+            wid = int(warehouse_id) if warehouse_id is not None else 0
+        except (TypeError, ValueError):
+            return 0
+        return wid if wid > 0 else 0
+
+    @staticmethod
+    def _main_warehouse_balance_q(warehouse_id: Optional[int]):
+        """主仓扣减/查找：精确仓 + 历史未归属(0)。"""
+        from tortoise.expressions import Q
+
+        wh_id = InventoryService._normalize_main_warehouse_id(warehouse_id)
+        if wh_id > 0:
+            return Q(warehouse_id=wh_id) | Q(warehouse_id=0)
+        return Q(warehouse_id=0)
+
+    @staticmethod
     async def _find_in_stock_material_batch(
         tenant_id: int,
         material_id: int,
         batch_no: Optional[str],
         ownership_type: Optional[str] = None,
         customer_id: Optional[int] = None,
+        warehouse_id: Optional[int] = None,
         *,
         for_update: bool = False,
+        include_unassigned: bool = False,
     ):
         from apps.master_data.models.material_batch import MaterialBatch
 
         own = InventoryService._ownership_filter(ownership_type, customer_id)
         q = InventoryService._material_batch_no_lookup_q(batch_no)
-        query = MaterialBatch.filter(
+        filters = dict(
             tenant_id=tenant_id,
             material_id=material_id,
             deleted_at__isnull=True,
             status="in_stock",
             **own,
-        ).filter(q)
+        )
+        query = MaterialBatch.filter(**filters).filter(q)
+        if warehouse_id is not None:
+            wh_id = InventoryService._normalize_main_warehouse_id(warehouse_id)
+            if include_unassigned and wh_id > 0:
+                query = query.filter(InventoryService._main_warehouse_balance_q(wh_id))
+            else:
+                query = query.filter(warehouse_id=wh_id)
+            # 优先精确仓，再历史未归属
+            query = query.order_by("-warehouse_id")
         if for_update:
             query = query.select_for_update()
         return await query.first()
@@ -200,6 +230,7 @@ class InventoryService:
         batch_no: Optional[str],
         ownership_type: Optional[str] = None,
         customer_id: Optional[int] = None,
+        warehouse_id: Optional[int] = None,
     ) -> Optional[date]:
         """
         出库撤回等回冲场景：未显式传入入库日期时，从既有批次台账读取 production_date。
@@ -214,12 +245,15 @@ class InventoryService:
 
         own = InventoryService._ownership_filter(ownership_type, customer_id)
         q = InventoryService._material_batch_no_lookup_q(batch_no)
-        batch = await MaterialBatch.filter(
+        filters = dict(
             tenant_id=tenant_id,
             material_id=material_id,
             deleted_at__isnull=True,
             **own,
-        ).filter(q).first()
+        )
+        if warehouse_id is not None:
+            filters["warehouse_id"] = InventoryService._normalize_main_warehouse_id(warehouse_id)
+        batch = await MaterialBatch.filter(**filters).filter(q).first()
         if batch and batch.production_date is not None:
             return batch.production_date
         return None
@@ -236,26 +270,48 @@ class InventoryService:
         source_doc_id: Optional[int] = None,
         source_doc_code: Optional[str] = None,
         ledger_production_date: Optional[date] = None,
+        warehouse_id: Optional[int] = None,
+        warehouse_name: Optional[str] = None,
     ) -> None:
         """
-        主仓批次数量增加。包含软删行：若 (tenant, material, batch_no) 已存在但 deleted_at 有值，
-        仅查未删行会误判为不存在，insert 会撞唯一约束 uid_apps_master_batch_tenant_material_batch。
+        主仓批次数量增加（按 warehouse_id 拆分）。包含软删行：若唯一键已存在但 deleted_at 有值，
+        仅查未删行会误判为不存在，insert 会撞唯一约束。
         """
         from apps.master_data.models.material_batch import MaterialBatch
 
         bn = InventoryService._normalize_batch_no_for_ledger(batch_no)
         own = InventoryService._ownership_filter(ownership_type, customer_id)
+        wh_id = InventoryService._normalize_main_warehouse_id(warehouse_id)
+        wh_name = (str(warehouse_name or "").strip() or None)
+        if wh_id > 0 and not wh_name:
+            wh_name = await InventoryService._resolve_warehouse_name(wh_id)
+
         batch = await MaterialBatch.filter(
             tenant_id=tenant_id,
             material_id=material_id,
             batch_no=bn,
+            warehouse_id=wh_id,
             **own,
         ).select_for_update().first()
+        # 历史未归属行（warehouse_id=0）：首次带仓入库时认领，避免同批双行
+        if not batch and wh_id > 0:
+            batch = await MaterialBatch.filter(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                batch_no=bn,
+                warehouse_id=0,
+                **own,
+            ).select_for_update().first()
+            if batch:
+                batch.warehouse_id = wh_id
+                batch.warehouse_name = wh_name
         if batch:
             if batch.deleted_at is not None:
                 batch.deleted_at = None
             batch.quantity = (batch.quantity or Decimal(0)) + quantity
             batch.status = "in_stock"
+            if wh_name and not str(batch.warehouse_name or "").strip():
+                batch.warehouse_name = wh_name
             if customer_name:
                 batch.customer_name = customer_name
             if source_doc_id:
@@ -279,12 +335,15 @@ class InventoryService:
                 customer_name=customer_name,
                 source_doc_id=source_doc_id,
                 source_doc_code=source_doc_code,
+                warehouse_id=wh_id,
+                warehouse_name=wh_name,
             )
         except IntegrityError:
             batch = await MaterialBatch.filter(
                 tenant_id=tenant_id,
                 material_id=material_id,
                 batch_no=bn,
+                warehouse_id=wh_id,
                 **own,
             ).select_for_update().first()
             if not batch:
@@ -294,6 +353,7 @@ class InventoryService:
                     tenant_id=tenant_id,
                     material_id=material_id,
                     batch_no=bn,
+                    warehouse_id=wh_id,
                     deleted_at__isnull=True,
                 ).first()
                 if legacy and (
@@ -306,13 +366,15 @@ class InventoryService:
                         f"{f'，客户 {legacy.customer_name}' if legacy.customer_name else ''}；"
                         f"本次：{own['ownership_type']}）。"
                         f"自购入库与客供库存请分别记账；若系统仍报唯一约束冲突，"
-                        f"请执行数据库迁移 396（修复批次归属唯一索引）。"
+                        f"请执行数据库迁移 396/490（批次归属与仓库唯一索引）。"
                     )
                 raise
             if batch.deleted_at is not None:
                 batch.deleted_at = None
             batch.quantity = (batch.quantity or Decimal(0)) + quantity
             batch.status = "in_stock"
+            if wh_name and not str(batch.warehouse_name or "").strip():
+                batch.warehouse_name = wh_name
             if ledger_production_date is not None and batch.production_date is None:
                 batch.production_date = ledger_production_date
             await batch.save()
@@ -323,21 +385,30 @@ class InventoryService:
         material_id: int,
         batch_no: str,
         quantity: Decimal,
+        warehouse_id: Optional[int] = None,
+        warehouse_name: Optional[str] = None,
     ) -> None:
         """盘点等场景直接设定批次数量；与 increase 相同需处理软删行与并发 insert。"""
         from apps.master_data.models.material_batch import MaterialBatch
 
         bn = InventoryService._normalize_batch_no_for_ledger(batch_no)
+        wh_id = InventoryService._normalize_main_warehouse_id(warehouse_id)
+        wh_name = (str(warehouse_name or "").strip() or None)
+        if wh_id > 0 and not wh_name:
+            wh_name = await InventoryService._resolve_warehouse_name(wh_id)
         batch = await MaterialBatch.filter(
             tenant_id=tenant_id,
             material_id=material_id,
             batch_no=bn,
+            warehouse_id=wh_id,
         ).select_for_update().first()
         if batch:
             if batch.deleted_at is not None:
                 batch.deleted_at = None
             batch.quantity = quantity
             batch.status = "in_stock" if quantity > 0 else "out_stock"
+            if wh_name and not str(batch.warehouse_name or "").strip():
+                batch.warehouse_name = wh_name
             await batch.save()
             return
         try:
@@ -348,12 +419,15 @@ class InventoryService:
                     batch_no=bn,
                     quantity=quantity,
                     status="in_stock" if quantity > 0 else "out_stock",
+                    warehouse_id=wh_id,
+                    warehouse_name=wh_name,
                 )
         except IntegrityError:
             batch = await MaterialBatch.filter(
                 tenant_id=tenant_id,
                 material_id=material_id,
                 batch_no=bn,
+                warehouse_id=wh_id,
             ).select_for_update().first()
             if not batch:
                 raise
@@ -361,6 +435,8 @@ class InventoryService:
                 batch.deleted_at = None
             batch.quantity = quantity
             batch.status = "in_stock" if quantity > 0 else "out_stock"
+            if wh_name and not str(batch.warehouse_name or "").strip():
+                batch.warehouse_name = wh_name
             await batch.save()
 
     @staticmethod
@@ -429,6 +505,7 @@ class InventoryService:
                     batch_no=batch_no,
                     ownership_type=ownership_type,
                     customer_id=customer_id,
+                    warehouse_id=warehouse_id,
                 )
 
             if not use_line_side:
@@ -459,6 +536,10 @@ class InventoryService:
                 if serial_nos and ledger_production_date is None:
                     raise BusinessLogicError("序列号入库必须提供入库日期（来自入库单确认时间）")
 
+                main_wh_id = InventoryService._normalize_main_warehouse_id(warehouse_id)
+                main_wh_name = to_wh_name or await InventoryService._resolve_warehouse_name(
+                    main_wh_id if main_wh_id > 0 else None
+                )
                 logger.info(f"Adding stock for material_id={material_id}, batch_no={batch_no}, qty={quantity}")
                 bn_norm = InventoryService._normalize_batch_no_for_ledger(batch_no or "DEFAULT")
                 existing_batch = await InventoryService._find_in_stock_material_batch(
@@ -467,6 +548,7 @@ class InventoryService:
                     batch_no=bn_norm,
                     ownership_type=ownership_type,
                     customer_id=customer_id,
+                    warehouse_id=main_wh_id,
                     for_update=True,
                 )
                 qty_before = Decimal(str(existing_batch.quantity or 0)) if existing_batch else Decimal(0)
@@ -481,6 +563,8 @@ class InventoryService:
                     source_doc_id=source_doc_id,
                     source_doc_code=source_doc_code,
                     ledger_production_date=ledger_production_date,
+                    warehouse_id=main_wh_id,
+                    warehouse_name=main_wh_name,
                 )
                 qty_after = qty_before + quantity
                 await InventoryService._record_stock_movement(
@@ -493,9 +577,9 @@ class InventoryService:
                     movement_type=movement_type,
                     from_warehouse_id=from_wh_id,
                     from_warehouse_name=from_wh_name,
-                    to_warehouse_id=to_wh_id,
-                    to_warehouse_name=to_wh_name,
-                    balance_warehouse_id=warehouse_id,
+                    to_warehouse_id=to_wh_id if to_wh_id is not None else (main_wh_id or None),
+                    to_warehouse_name=to_wh_name or main_wh_name,
+                    balance_warehouse_id=main_wh_id or warehouse_id,
                     source_type=source_type,
                     source_doc_id=source_doc_id,
                     source_doc_code=source_doc_code,
@@ -759,6 +843,7 @@ class InventoryService:
                     )
 
                 own = InventoryService._ownership_filter(ownership_type, customer_id)
+                main_wh_id = InventoryService._normalize_main_warehouse_id(warehouse_id)
                 # 非批号管理物料：空批号或 DEFAULT 表示未指定，按 FIFO/LIFO 跨批扣减。
                 # 禁止把 DEFAULT 当成真实批号去查（前端曾把空串 normalize 成 DEFAULT 导致误报库存不足）。
                 ledger_bn = InventoryService._normalize_batch_no_for_ledger(raw_batch) if raw_batch else ""
@@ -772,8 +857,16 @@ class InventoryService:
                         batch_no=raw_batch,
                         ownership_type=ownership_type,
                         customer_id=customer_id,
+                        warehouse_id=main_wh_id,
                         for_update=True,
+                        include_unassigned=True,
                     )
+                    if batch and int(getattr(batch, "warehouse_id", 0) or 0) == 0 and main_wh_id > 0:
+                        batch.warehouse_id = main_wh_id
+                        batch.warehouse_name = (
+                            from_wh_name
+                            or await InventoryService._resolve_warehouse_name(main_wh_id)
+                        )
                     if not batch or (batch.quantity or 0) < quantity:
                         available_rows = await MaterialBatch.filter(
                             tenant_id=tenant_id,
@@ -782,6 +875,8 @@ class InventoryService:
                             status="in_stock",
                             quantity__gt=0,
                             **own,
+                        ).filter(
+                            InventoryService._main_warehouse_balance_q(main_wh_id)
                         ).values_list("batch_no", "quantity")
                         available_hint = "、".join(
                             f"{InventoryService._normalize_batch_no_for_ledger(str(bn))}({qty})"
@@ -802,6 +897,8 @@ class InventoryService:
                             status="in_stock",
                             quantity__gt=0,
                             id__lt=batch.id
+                        ).filter(
+                            InventoryService._main_warehouse_balance_q(main_wh_id)
                         ).order_by("id").first()
                         if older_batch:
                             raise BusinessLogicError(
@@ -818,6 +915,8 @@ class InventoryService:
                             status="in_stock",
                             quantity__gt=0,
                             id__gt=batch.id,
+                        ).filter(
+                            InventoryService._main_warehouse_balance_q(main_wh_id)
                         ).order_by("-id").first()
                         if newer_batch:
                             raise BusinessLogicError(
@@ -848,7 +947,7 @@ class InventoryService:
                         from_warehouse_name=from_wh_name,
                         to_warehouse_id=to_wh_id,
                         to_warehouse_name=to_wh_name,
-                        balance_warehouse_id=warehouse_id,
+                        balance_warehouse_id=main_wh_id or warehouse_id,
                         source_type=source_type,
                         source_doc_id=source_doc_id,
                         source_doc_code=source_doc_code,
@@ -861,7 +960,12 @@ class InventoryService:
                     )
                 else:
                     # 默认 FIFO；若开启 LIFO 且未开启 FIFO，则按最新批次扣减
-                    order_key = "-id" if (lifo_enabled and not enforce_fifo) else "id"
+                    # 同仓优先于历史未归属(warehouse_id=0)
+                    order_keys = (
+                        ("-warehouse_id", "-id")
+                        if (lifo_enabled and not enforce_fifo)
+                        else ("-warehouse_id", "id")
+                    )
                     batches = (
                         await MaterialBatch.filter(
                             tenant_id=tenant_id,
@@ -871,8 +975,9 @@ class InventoryService:
                             quantity__gt=0,
                             **own,
                         )
+                        .filter(InventoryService._main_warehouse_balance_q(main_wh_id))
                         .select_for_update()
-                        .order_by(order_key)
+                        .order_by(*order_keys)
                         .all()
                     )
                     remaining = quantity
@@ -885,6 +990,12 @@ class InventoryService:
                     for b in batches:
                         if remaining <= 0:
                             break
+                        if int(getattr(b, "warehouse_id", 0) or 0) == 0 and main_wh_id > 0:
+                            b.warehouse_id = main_wh_id
+                            b.warehouse_name = (
+                                from_wh_name
+                                or await InventoryService._resolve_warehouse_name(main_wh_id)
+                            )
                         deduct = min(remaining, b.quantity or Decimal(0))
                         if deduct > 0:
                             qty_before = Decimal(str(b.quantity or 0))
@@ -909,7 +1020,7 @@ class InventoryService:
                                 from_warehouse_name=from_wh_name,
                                 to_warehouse_id=to_wh_id,
                                 to_warehouse_name=to_wh_name,
-                                balance_warehouse_id=warehouse_id,
+                                balance_warehouse_id=main_wh_id or warehouse_id,
                                 source_type=source_type,
                                 source_doc_id=source_doc_id,
                                 source_doc_code=source_doc_code,
@@ -1116,10 +1227,11 @@ class InventoryService:
                     material_id=material_id,
                     batch_no=batch_no or "DEFAULT",
                     quantity=quantity,
+                    warehouse_id=warehouse_id,
                 )
                 logger.info(
                     f"InventoryService.adjust_inventory: tenant={tenant_id} "
-                    f"material={material_id} qty={quantity} reason={reason}"
+                    f"material={material_id} qty={quantity} warehouse={warehouse_id} reason={reason}"
                 )
             else:
                 from apps.kuaizhizao.models.line_side_inventory import LineSideInventory

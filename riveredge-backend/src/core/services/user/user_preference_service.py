@@ -1,148 +1,115 @@
 """
 用户偏好管理服务模块
 
-提供用户偏好的 CRUD 操作和缓存功能。
+提供用户偏好的 CRUD。写入语义：请求体为 patch，与库内 preferences 深合并；
+theme_config 整段替换。不经二级缓存——与业务同库，缓存只会引入陈旧读。
 """
 
-from typing import Optional, Dict, Any
-from uuid import UUID
+from __future__ import annotations
+
+from typing import Any, Dict, FrozenSet
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
 
 from core.models.user_preference import UserPreference
 from core.schemas.user_preference import UserPreferenceUpdate, UserPreferenceResponse
 from infra.exceptions.exceptions import NotFoundError
-from infra.infrastructure.cache.cache import cache
+
+# 出现在 patch 顶层时整段替换（不清空未提交的兄弟键，如 ui.tables）
+_REPLACE_TOP_LEVEL_KEYS: FrozenSet[str] = frozenset({"theme_config"})
+
+
+def merge_preferences_patch(
+    existing: Dict[str, Any] | None,
+    patch: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    """
+    将客户端 patch 合并进已有 preferences。
+
+    - 普通对象：递归深合并（并发写不同子树互不覆盖）
+    - theme_config：整段替换（需能清空 siderBgColor 等字段）
+    - 标量：直接覆盖
+    """
+    out: Dict[str, Any] = dict(existing or {})
+    if not patch:
+        return out
+
+    for key, value in patch.items():
+        if key in _REPLACE_TOP_LEVEL_KEYS:
+            out[key] = value
+        elif isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = merge_preferences_patch(out.get(key), value)
+        else:
+            out[key] = value
+    return out
 
 
 class UserPreferenceService:
-    """
-    用户偏好管理服务类
-    
-    提供用户偏好的 CRUD 操作和缓存功能。
-    """
-    
-    @staticmethod
-    def _get_cache_key(tenant_id: int, user_id: int) -> str:
-        """生成缓存键"""
-        return f"user_preference:{tenant_id}:{user_id}"
-    
+    """用户偏好 CRUD（直读直写数据库）。"""
+
     @staticmethod
     async def get_user_preference(
         tenant_id: int,
         user_id: int,
-        use_cache: bool = True
+        use_cache: bool = True,
     ) -> UserPreferenceResponse:
         """
-        获取用户偏好
-        
-        Args:
-            tenant_id: 组织ID
-            user_id: 用户ID
-            use_cache: 是否使用缓存
-            
-        Returns:
-            UserPreferenceResponse: 用户偏好对象
-            
-        Raises:
-            NotFoundError: 当用户偏好不存在时抛出
+        获取用户偏好。
+
+        use_cache 保留参数以兼容旧调用方，已无缓存实现，始终读库。
         """
-        cache_key = UserPreferenceService._get_cache_key(tenant_id, user_id)
-        
-        # 尝试从缓存获取
-        if use_cache:
-            try:
-                cached = await cache.get(cache_key)
-                if cached:
-                    import json
-                    # cache.get 返回的是字符串，需要解析
-                    cached_data = json.loads(cached)
-                    return UserPreferenceResponse.model_validate(cached_data)
-            except Exception:
-                # 缓存失败不影响主流程，静默处理
-                pass
-        
-        # 从数据库获取
+        del use_cache  # 显式忽略：偏好不以缓存为真源
+
         try:
             user_preference = await UserPreference.get(
                 tenant_id=tenant_id,
-                user_id=user_id
+                user_id=user_id,
             )
         except DoesNotExist:
-            # 如果不存在，创建默认偏好设置
             try:
                 user_preference = await UserPreference.create(
                     tenant_id=tenant_id,
                     user_id=user_id,
-                    preferences={}
+                    preferences={},
                 )
             except IntegrityError:
-                # 可能是平台超级管理员等不在 core_users 表中的用户
                 raise NotFoundError("当前用户无法创建偏好设置（可能非租户用户）")
-        
-        result = UserPreferenceResponse.model_validate(user_preference)
-        
-        # 缓存结果
-        if use_cache:
-            try:
-                import json
-                await cache.set(cache_key, json.dumps(result.model_dump(mode='json'), ensure_ascii=False), expire=3600)  # 缓存1小时
-            except Exception:
-                # 缓存失败不影响主流程，静默处理
-                pass
-        
-        return result
-    
+
+        return UserPreferenceResponse.model_validate(user_preference)
+
     @staticmethod
     async def update_user_preference(
         tenant_id: int,
         user_id: int,
-        data: UserPreferenceUpdate
+        data: UserPreferenceUpdate,
     ) -> UserPreferenceResponse:
         """
-        更新用户偏好
-        
-        Args:
-            tenant_id: 组织ID
-            user_id: 用户ID
-            data: 用户偏好更新数据
-            
-        Returns:
-            UserPreferenceResponse: 更新后的用户偏好对象
-            
-        Raises:
-            NotFoundError: 当用户偏好不存在时抛出
+        更新用户偏好（patch 合并，非整包替换）。
         """
+        patch = data.preferences
+        if patch is None:
+            raise ValueError("preferences patch is required")
+
         try:
             user_preference = await UserPreference.get(
                 tenant_id=tenant_id,
-                user_id=user_id
+                user_id=user_id,
             )
         except DoesNotExist:
-            # 如果不存在，创建新的偏好设置
             try:
                 user_preference = await UserPreference.create(
                     tenant_id=tenant_id,
                     user_id=user_id,
-                    preferences=data.preferences or {}
+                    preferences=dict(patch),
                 )
             except IntegrityError:
                 raise NotFoundError("当前用户无法创建偏好设置（可能非租户用户）")
         else:
-            # 更新偏好设置（合并）；须赋新 dict，避免 JSONField 原地修改导致 save 未落库
-            if data.preferences:
-                merged = dict(user_preference.preferences or {})
-                merged.update(data.preferences)
-                user_preference.preferences = merged
-                await user_preference.save(update_fields=["preferences", "updated_at"])
-        
-        # 清除缓存
-        cache_key = UserPreferenceService._get_cache_key(tenant_id, user_id)
-        try:
-            await cache.delete(cache_key)
-        except Exception:
-            # 缓存失败不影响主流程，静默处理
-            pass
-        
-        return UserPreferenceResponse.model_validate(user_preference)
+            # 须赋新 dict，避免 JSONField 原地修改导致 save 未落库
+            user_preference.preferences = merge_preferences_patch(
+                user_preference.preferences,
+                patch,
+            )
+            await user_preference.save(update_fields=["preferences", "updated_at"])
 
+        return UserPreferenceResponse.model_validate(user_preference)

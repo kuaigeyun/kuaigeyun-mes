@@ -125,11 +125,11 @@ class ReportService:
         resolved_wh_id: Optional[int],
         main_warehouse_filter_id: Optional[int],
     ) -> bool:
-        """主仓批次未配置默认仓库时不应被出库仓库筛选误排除。"""
+        """主仓按 warehouse_id 筛选；未归属行仅在未指定仓库时计入。"""
         if main_warehouse_filter_id is None:
             return True
         if resolved_wh_id is None:
-            return True
+            return False
         return resolved_wh_id == main_warehouse_filter_id
 
     async def _scoped_sales_order_query(self, tenant_id: int, current_user: Optional[Any] = None):
@@ -1763,6 +1763,45 @@ class ReportService:
         cache[material_id] = resolved
         return resolved
 
+    async def _resolve_material_batch_warehouse_for_report(
+        self,
+        tenant_id: int,
+        batch: Any,
+        material: Any,
+        cache: Dict[int, Optional[Tuple[int, str]]],
+        wh_name_cache: Dict[int, str],
+    ) -> Tuple[Optional[int], str]:
+        """
+        主仓批次仓库真源：MaterialBatch.warehouse_id。
+        warehouse_id=0 时回退物料默认仓（仅历史未归属行）；仍无则「未配置仓库」。
+        """
+        batch_wh_id = int(getattr(batch, "warehouse_id", 0) or 0)
+        if batch_wh_id > 0:
+            name = str(getattr(batch, "warehouse_name", None) or "").strip()
+            if not name:
+                if batch_wh_id in wh_name_cache:
+                    name = wh_name_cache[batch_wh_id]
+                else:
+                    from apps.master_data.models.warehouse import Warehouse
+
+                    wh = await Warehouse.get_or_none(
+                        tenant_id=tenant_id,
+                        id=batch_wh_id,
+                        deleted_at__isnull=True,
+                    )
+                    name = (wh.name if wh else "") or ""
+                    wh_name_cache[batch_wh_id] = name
+            return batch_wh_id, self._normalize_warehouse_display_name(name or None)
+
+        resolved = await self._resolve_material_default_warehouse_for_report(
+            tenant_id=tenant_id,
+            material=material,
+            cache=cache,
+        )
+        if resolved:
+            return int(resolved[0]), self._normalize_warehouse_display_name(resolved[1])
+        return None, self._normalize_warehouse_display_name(None)
+
     async def _load_inventory_rows(
         self,
         tenant_id: int,
@@ -1820,16 +1859,15 @@ class ReportService:
 
         rows: List[Dict[str, Any]] = []
         main_wh_cache: Dict[int, Optional[Tuple[int, str]]] = {}
+        wh_name_cache: Dict[int, str] = {}
         if include_main_batches:
             for b in batches:
-                resolved_wh = await self._resolve_material_default_warehouse_for_report(
+                resolved_wh_id, resolved_wh_name = await self._resolve_material_batch_warehouse_for_report(
                     tenant_id=tenant_id,
+                    batch=b,
                     material=getattr(b, "material", None),
                     cache=main_wh_cache,
-                )
-                resolved_wh_id = int(resolved_wh[0]) if resolved_wh else None
-                resolved_wh_name = self._normalize_warehouse_display_name(
-                    resolved_wh[1] if resolved_wh else None
+                    wh_name_cache=wh_name_cache,
                 )
                 if not self._material_batch_matches_warehouse_filter(resolved_wh_id, main_warehouse_filter_id):
                     continue
@@ -2189,16 +2227,24 @@ class ReportService:
         grouped: Dict[tuple, Dict[str, Any]] = {}
         for it in rows:
             warehouse_name = self._normalize_warehouse_display_name(it.get("warehouse_name"))
-            key = (it.get("material_id"), warehouse_name)
+            wh_id_raw = it.get("warehouse_id")
+            try:
+                warehouse_id_key = int(wh_id_raw) if wh_id_raw is not None else 0
+            except (TypeError, ValueError):
+                warehouse_id_key = 0
+            if warehouse_id_key < 0:
+                warehouse_id_key = 0
+            key = (it.get("material_id"), warehouse_id_key, warehouse_name)
             if key not in grouped:
                 grouped[key] = {
-                    "id": int(it.get("material_id") or 0) * 100000 + (abs(hash(str(key[1]))) % 10000),
+                    "id": int(it.get("material_id") or 0) * 100000 + (abs(hash(str(key[1:]) )) % 10000),
                     "material_id": it.get("material_id"),
                     "material_code": it.get("material_code"),
                     "material_name": it.get("material_name"),
                     "material_unit": it.get("material_unit"),
                     "quantity": 0.0,
                     "status": "无库存",
+                    "warehouse_id": warehouse_id_key if warehouse_id_key > 0 else None,
                     "warehouse_name": warehouse_name,
                 }
             grouped[key]["quantity"] += float(it.get("quantity") or 0)
@@ -2353,17 +2399,16 @@ class ReportService:
             return {"material_totals": totals}
         items = []
         main_wh_cache: Dict[int, Optional[Tuple[int, str]]] = {}
+        wh_name_cache: Dict[int, str] = {}
         for b in batches:
             if not include_main_batches:
                 continue
-            resolved_wh = await self._resolve_material_default_warehouse_for_report(
+            resolved_wh_id, resolved_wh_name = await self._resolve_material_batch_warehouse_for_report(
                 tenant_id=tenant_id,
+                batch=b,
                 material=getattr(b, "material", None),
                 cache=main_wh_cache,
-            )
-            resolved_wh_id = int(resolved_wh[0]) if resolved_wh else None
-            resolved_wh_name = self._normalize_warehouse_display_name(
-                resolved_wh[1] if resolved_wh else None
+                wh_name_cache=wh_name_cache,
             )
             if not self._material_batch_matches_warehouse_filter(resolved_wh_id, main_warehouse_filter_id):
                 continue

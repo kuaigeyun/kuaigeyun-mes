@@ -11,11 +11,21 @@ from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_user
 from apps.kuaicaiwu.services.finance_service import AccountSettlementService
 from apps.kuaicaiwu.services.settlement_gate_service import SettlementGateService
-from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 
 router = APIRouter(prefix="/settlement", tags=["App - Kuaicaiwu - Settlement & Reconciliation"])
 service = AccountSettlementService()
 settlement_gate_service = SettlementGateService()
+
+_SETTLEMENTS_TABLE_MISSING_HINT = (
+    "核销表 apps_kuaicaiwu_settlements 不存在（数据库未完成迁移）。"
+    "请在 riveredge-backend 目录执行：PYTHONPATH=src uv run aerich upgrade，并重启 API 服务。"
+)
+
+
+def _is_settlements_table_missing(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "apps_kuaicaiwu_settlements" in msg and "does not exist" in msg
 
 
 def _http_exception_with_trace(
@@ -101,8 +111,22 @@ async def settle_receivable(
             invoice_exchange_rate=invoice_exchange_rate,
             payment_exchange_rate=payment_exchange_rate,
         )
-    except BusinessLogicError as e:
-        raise _http_exception_with_trace(422, str(e), "/settlement/receivable", current_user.tenant_id) from e
+    except (BusinessLogicError, ValidationError, NotFoundError) as e:
+        code = 404 if isinstance(e, NotFoundError) else 422
+        raise _http_exception_with_trace(code, str(e), "/settlement/receivable", current_user.tenant_id) from e
+    except Exception as e:
+        if _is_settlements_table_missing(e):
+            logger.exception(
+                "settle_receivable missing settlements table tenant_id={}",
+                current_user.tenant_id,
+            )
+            raise _http_exception_with_trace(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                _SETTLEMENTS_TABLE_MISSING_HINT,
+                "/settlement/receivable",
+                current_user.tenant_id,
+            ) from e
+        raise
 
 
 @router.post("/payable", summary="Settle payable")
@@ -133,8 +157,22 @@ async def settle_payable(
             invoice_exchange_rate=invoice_exchange_rate,
             payment_exchange_rate=payment_exchange_rate,
         )
-    except BusinessLogicError as e:
-        raise _http_exception_with_trace(422, str(e), "/settlement/payable", current_user.tenant_id) from e
+    except (BusinessLogicError, ValidationError, NotFoundError) as e:
+        code = 404 if isinstance(e, NotFoundError) else 422
+        raise _http_exception_with_trace(code, str(e), "/settlement/payable", current_user.tenant_id) from e
+    except Exception as e:
+        if _is_settlements_table_missing(e):
+            logger.exception(
+                "settle_payable missing settlements table tenant_id={}",
+                current_user.tenant_id,
+            )
+            raise _http_exception_with_trace(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                _SETTLEMENTS_TABLE_MISSING_HINT,
+                "/settlement/payable",
+                current_user.tenant_id,
+            ) from e
+        raise
 
 
 @router.post("/fx-revaluation/period-end", summary="Period-end FX revaluation (draft exchange entries)")

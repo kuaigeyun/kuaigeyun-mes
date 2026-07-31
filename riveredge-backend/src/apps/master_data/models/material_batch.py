@@ -18,12 +18,14 @@ class MaterialBatch(BaseModel):
     
     用于管理物料的批号信息，支持批号生成、追溯、有效期管理等功能。
     
-    Attributes:
+        Attributes:
         id: 批号ID（主键，自增ID，内部使用）
         uuid: 业务ID（UUID，对外暴露，安全且唯一）
         tenant_id: 组织ID（用于多组织数据隔离）
         material_id: 物料ID（外键，关联物料）
         batch_no: 批号（必填，同一物料下唯一）
+        warehouse_id: 主仓仓库ID（0=未归属）
+        warehouse_name: 主仓仓库名称（冗余）
         production_date: 生产日期（可选）
         expiry_date: 有效期（可选，用于有保质期的物料）
         supplier_batch_no: 供应商批号（可选，记录供应商的批号）
@@ -33,7 +35,7 @@ class MaterialBatch(BaseModel):
         created_at: 创建时间
         updated_at: 更新时间
     """
-    
+
     class Meta:
         """
         模型元数据
@@ -44,10 +46,13 @@ class MaterialBatch(BaseModel):
             ("tenant_id",),
             ("material_id",),
             ("batch_no",),
+            ("warehouse_id",),
             ("status",),
             ("expiry_date",),
         ]
-        unique_together = [("tenant_id", "material_id", "batch_no", "ownership_type", "customer_id")]
+        unique_together = [
+            ("tenant_id", "material_id", "batch_no", "ownership_type", "customer_id", "warehouse_id")
+        ]
     
     # 主键
     id = fields.IntField(pk=True, description="批号ID（主键，自增ID，内部使用）")
@@ -64,6 +69,10 @@ class MaterialBatch(BaseModel):
     production_date = fields.DateField(null=True, description="生产日期（可选）")
     expiry_date = fields.DateField(null=True, description="有效期（可选，用于有保质期的物料）")
     supplier_batch_no = fields.CharField(max_length=100, null=True, description="供应商批号（可选）")
+
+    # 主仓仓库（与线边仓 LineSideInventory.warehouse_id 对齐；0=历史未归属）
+    warehouse_id = fields.IntField(default=0, description="主仓仓库ID（0=未归属）")
+    warehouse_name = fields.CharField(max_length=200, null=True, description="主仓仓库名称（冗余）")
 
     ownership_type = fields.CharField(
         max_length=20,
