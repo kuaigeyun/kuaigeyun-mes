@@ -32,6 +32,8 @@ import {
 } from './outboundConfirmInventoryOptions';
 import OutboundSerialPickerField from './OutboundSerialPickerField';
 import { formatQuantity } from '../../../../../utils/format';
+import { useGlobalStore } from '../../../../../stores';
+import { isAdminBypass } from '../../../../../utils/permission';
 
 const OQC_INSPECTION_PATH = '/apps/kuaizhizao/quality-management/oqc-inspection';
 
@@ -115,6 +117,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -176,13 +179,14 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       !open ||
       outboundType !== 'production_picking' ||
       !executionConfig ||
-      executionConfig.current_user_can_confirm_picking !== false
+      executionConfig.current_user_can_confirm_picking !== false ||
+      isAdminBypass(currentUser)
     ) {
       return;
     }
     messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.noConfirmPickingPermission'));
     onCloseRef.current();
-  }, [open, outboundType, executionConfig, messageApi, t]);
+  }, [open, outboundType, executionConfig, currentUser, messageApi, t]);
 
   useEffect(() => {
     if (!open || recordId == null || !outboundType) {

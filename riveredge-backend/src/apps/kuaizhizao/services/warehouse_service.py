@@ -1071,6 +1071,14 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 role_codes.add(str(code).strip().upper())
         return role_codes
 
+    async def _user_bypasses_picking_confirm_role_policy(self, tenant_id: int, user_id: int) -> bool:
+        from core.services.authorization.user_permission_service import UserPermissionService
+
+        user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
+        if not user:
+            return False
+        return await UserPermissionService.is_admin_bypass(user, tenant_id)
+
     def _picking_confirm_allowed_by_role_policy(
         self,
         policy: Dict[str, Any],
@@ -1087,6 +1095,8 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         return bool(user_role_codes & allowed_role_codes)
 
     async def _assert_can_confirm_picking(self, tenant_id: int, user_id: int) -> None:
+        if await self._user_bypasses_picking_confirm_role_policy(tenant_id, user_id):
+            return
         policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
         user_role_codes = await self._get_user_role_codes(user_id)
 
@@ -1099,8 +1109,10 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             raise BusinessLogicError(f"无权限确认领料：{mode_text}")
 
     async def can_user_confirm_picking(self, tenant_id: int, user_id: int) -> tuple[bool, set[str]]:
-        policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
         user_role_codes = await self._get_user_role_codes(user_id)
+        if await self._user_bypasses_picking_confirm_role_policy(tenant_id, user_id):
+            return True, user_role_codes
+        policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
         return self._picking_confirm_allowed_by_role_policy(policy, user_role_codes), user_role_codes
 
     async def create_production_picking(self, tenant_id: int, picking_data: ProductionPickingCreate, created_by: int) -> ProductionPickingResponse:

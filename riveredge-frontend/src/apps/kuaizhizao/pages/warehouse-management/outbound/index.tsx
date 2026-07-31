@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Tooltip, Typography, Spin, Empty, Select, Descriptions, theme as AntdTheme } from 'antd';
-import { CheckCircleOutlined, RollbackOutlined, PrinterOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, PlayCircleOutlined, RollbackOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
@@ -59,6 +59,7 @@ import {
 import { fetchOutboundHubList } from './outboundListAggregate';
 import { withdrawOutboundDocument, deleteOutboundDocument } from './outboundHubWithdraw';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { isAdminBypass } from '../../../../../utils/permission';
 import { useGlobalStore } from '../../../../../stores';
 import {
   type OutboundHubOrder,
@@ -377,7 +378,8 @@ const OutboundPage: React.FC = () => {
     if (
       record.outbound_type === 'production_picking' &&
       executionConfig &&
-      executionConfig.current_user_can_confirm_picking === false
+      executionConfig.current_user_can_confirm_picking === false &&
+      !isAdminBypass(currentUser)
     ) {
       return t('app.kuaizhizao.warehouseOutbound.msg.noConfirmPickingPermission');
     }
@@ -694,6 +696,14 @@ const OutboundPage: React.FC = () => {
               <Button
                 {...rowActionKind('skip')}
                 {...rowActionLabelKeep()}
+                className="ant-btn-row-action ant-btn-row-action-success"
+                icon={
+                  record.outbound_type === 'production_picking' ? (
+                    <CheckCircleOutlined />
+                  ) : (
+                    <PlayCircleOutlined />
+                  )
+                }
                 type={record.outbound_type === 'production_picking' ? 'primary' : undefined}
                 onClick={() => void handleConfirm(record)}
                 disabled={!!getOutboundConfirmBlockedReason(record)}
@@ -728,6 +738,7 @@ const OutboundPage: React.FC = () => {
       getOutboundConfirmLabel,
       canRunOutboundConfirm,
       packingBindingPerms.canRead,
+      currentUser,
       salesDeliveryCustomFieldColumns,
       productionPickingCustomFieldColumns,
     ],
