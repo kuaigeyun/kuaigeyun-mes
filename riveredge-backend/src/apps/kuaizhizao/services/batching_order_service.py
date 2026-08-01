@@ -722,6 +722,34 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
 
             return BatchingOrderResponse.model_validate(order)
 
+    async def void_open_batching_orders_for_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+    ) -> int:
+        """工单删除/撤回/取消时，软删除关联的进行中线边备料单。"""
+        order_ids = await BatchingOrder.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            status__in=["draft", "picking"],
+            deleted_at__isnull=True,
+        ).values_list("id", flat=True)
+        pid_list = [int(x) for x in order_ids if x is not None]
+        if not pid_list:
+            return 0
+
+        now = resolve_business_datetime()
+        await BatchingOrder.filter(
+            tenant_id=tenant_id,
+            id__in=pid_list,
+        ).update(deleted_at=now)
+        await BatchingOrderItem.filter(
+            tenant_id=tenant_id,
+            batching_order_id__in=pid_list,
+            deleted_at__isnull=True,
+        ).update(deleted_at=now)
+        return len(pid_list)
+
     async def delete_batching_order(self, tenant_id: int, order_id: int) -> bool:
         order = await BatchingOrder.get_or_none(
             id=order_id,

@@ -10,6 +10,7 @@ export type SalesInvoicePullPreview = DocumentPushPreview & {
   customer_name?: string;
   sales_order_id?: number | null;
   sales_order_code?: string | null;
+  price_type?: 'tax_inclusive' | 'tax_exclusive' | string;
 };
 
 export type SalesInvoicePullCandidate = {

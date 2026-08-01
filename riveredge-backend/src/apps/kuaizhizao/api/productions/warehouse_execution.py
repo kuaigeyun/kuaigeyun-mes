@@ -3367,6 +3367,7 @@ async def list_sales_deliveries(
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     status: Optional[str] = Query(None, description="出库状态"),
     sales_order_id: Optional[int] = Query(None, description="销售订单ID"),
+    customer_id: Optional[int] = Query(None, description="客户ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> List[SalesDeliveryResponse]:
@@ -3381,6 +3382,7 @@ async def list_sales_deliveries(
         limit=limit,
         status=status,
         sales_order_id=sales_order_id,
+        customer_id=customer_id,
     )
 
 

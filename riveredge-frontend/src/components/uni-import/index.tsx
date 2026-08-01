@@ -42,6 +42,17 @@ import { getImportDataRows } from './import-preview-utils';
 import { translatePathTitle } from '../../utils/menuTranslation';
 import { resolveSystemFieldKey } from './apply-import-mapping';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
+import ErrorBoundary from '../error-boundary';
+
+/** Univer dispose / 上传重建竞态：内部异步仍可能访问已卸载 workbook */
+function isUniverImportDisposeRaceError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '');
+  return (
+    msg.includes('getSheetBySheetId') ||
+    msg.includes('workbook is null') ||
+    msg.includes("Failed to execute 'removeChild' on 'Node'")
+  );
+}
 
 /**
  * UniImport 导入弹窗。
@@ -415,6 +426,35 @@ export const UniImport: React.FC<UniImportProps> = ({
     setPrecheckResult(null);
     setPrecheckLoading(false);
   }, [open, visible, relationDefaultEntities, relationDefaultWriteStrategy]);
+
+  // 弹窗打开时拦截 Univer dispose 竞态的全局 error，避免冒泡到 AppErrorBoundary 整页崩溃
+  useEffect(() => {
+    if (!(open ?? visible)) return;
+
+    const suppressIfRace = (error: unknown) => {
+      if (!isUniverImportDisposeRaceError(error)) return false;
+      console.warn('[UniImport] suppressed Univer dispose race:', error);
+      return true;
+    };
+
+    const onWindowError = (event: ErrorEvent) => {
+      if (!suppressIfRace(event.error ?? event.message)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      if (!suppressIfRace(event.reason)) return;
+      event.preventDefault();
+    };
+
+    window.addEventListener('error', onWindowError, true);
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+    return () => {
+      window.removeEventListener('error', onWindowError, true);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    };
+  }, [open, visible]);
 
   useEffect(() => {
     if (!(open ?? visible)) return;
@@ -1071,7 +1111,14 @@ export const UniImport: React.FC<UniImportProps> = ({
         }}
       >
         <div style={{ flex: 1, minHeight: 0, minWidth: 0, width: '100%', position: 'relative' }}>
-          <UniImportSheetHost
+          <ErrorBoundary
+            fallback={
+              <div style={{ padding: 24, textAlign: 'center' }}>
+                {t('components.uniImport.sheetLoadFailed', { message: t('common.unknownError') })}
+              </div>
+            }
+          >
+            <UniImportSheetHost
             isDark={isDark}
             uploadedSheetRows={uploadedSheetRows}
             headers={headersRef.current}
@@ -1087,6 +1134,7 @@ export const UniImport: React.FC<UniImportProps> = ({
               uploadedSheetRowsRef.current = rows;
             }}
           />
+          </ErrorBoundary>
         </div>
       </Modal>
       {showMappingImport && headers && headers.length > 0 && (

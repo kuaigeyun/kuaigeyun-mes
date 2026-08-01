@@ -132,7 +132,10 @@ export interface SalesOrderItem {
   material_unit?: string;
   /** 单位换算因子（业务单位 -> 基础单位） */
   conversion_factor?: number;
+  /** 响应字段：与 order_quantity 同源（后端 schema 名 required_quantity） */
   required_quantity?: number;
+  /** 订单数量（ORM 字段 order_quantity） */
+  order_quantity?: number;
   delivery_date?: string;
   delivered_quantity?: number;
   remaining_quantity?: number;
@@ -174,8 +177,10 @@ export interface SalesOrderListParams {
   include_items?: boolean;
   /** 仅可加载建单；需配合 pull_target */
   pullable_only?: boolean;
-  /** 加载目标：sales_order_change */
-  pull_target?: 'sales_order_change';
+  /** 加载目标：sales_order_change / after_sales_ticket / sales_return */
+  pull_target?: 'sales_order_change' | 'after_sales_ticket' | 'sales_return';
+  /** options=选单轻量列表（跳过进度/capabilities；可配合 include_items） */
+  view?: 'options';
 }
 
 /**
@@ -245,13 +250,27 @@ export async function listSalesOrders(params: SalesOrderListParams = {}): Promis
   });
 }
 
+export type SalesOrderGetOptions = {
+  /** options=选单轻量详情（跳过里程碑/账款/capabilities） */
+  view?: 'options';
+};
+
 /**
  * 获取销售订单详情
  */
-export async function getSalesOrder(id: number, includeItems: boolean = false, includeDuration: boolean = false): Promise<SalesOrder> {
+export async function getSalesOrder(
+  id: number,
+  includeItems: boolean = false,
+  includeDuration: boolean = false,
+  options: SalesOrderGetOptions = {},
+): Promise<SalesOrder> {
   return apiRequest<SalesOrder>(`/apps/kuaizhizao/sales-orders/${id}`, {
     method: 'GET',
-    params: { include_items: includeItems, include_duration: includeDuration },
+    params: {
+      include_items: includeItems,
+      include_duration: includeDuration,
+      ...(options.view ? { view: options.view } : {}),
+    },
   });
 }
 

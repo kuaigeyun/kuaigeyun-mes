@@ -1748,7 +1748,7 @@ apply_app_config() {
     else
         set_env_value HOST "0.0.0.0"
         # PC 前端 / Expo Web / 工位 Vite：loopback + 局域网 IP
-        set_env_value CORS_ORIGINS "http://${server_ip}:${FRONTEND_PORT},http://127.0.0.1:${FRONTEND_PORT},http://localhost:${FRONTEND_PORT},http://${server_ip}:8081,http://127.0.0.1:8081,http://localhost:8081,http://${server_ip}:8300,http://127.0.0.1:8300,http://localhost:8300"
+        set_env_value CORS_ORIGINS "http://${server_ip}:${FRONTEND_PORT},http://127.0.0.1:${FRONTEND_PORT},http://localhost:${FRONTEND_PORT},http://${server_ip}:8098,http://127.0.0.1:8098,http://localhost:8098,http://${server_ip}:8081,http://127.0.0.1:8081,http://localhost:8081,http://${server_ip}:8300,http://127.0.0.1:8300,http://localhost:8300"
     fi
 }
 

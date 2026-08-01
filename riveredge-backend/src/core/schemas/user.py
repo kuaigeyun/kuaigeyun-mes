@@ -42,6 +42,13 @@ class UserCreateRequest(BaseModel):
     is_active: bool = Field(default=True, description="是否激活")
     is_tenant_admin: bool = Field(default=False, description="是否为组织管理员")
 
+    @field_validator("username")
+    @classmethod
+    def validate_username_not_reserved(cls, v: str) -> str:
+        from infra.domain.security.reserved_username import assert_tenant_user_username_allowed
+
+        return assert_tenant_user_username_allowed(v)
+
 
 class UserCreate(SoilUserCreate):
     """
@@ -69,6 +76,19 @@ class UserUpdate(SoilUserUpdate):
     department_uuid: Optional[str] = Field(None, description="所属部门UUID（可选，可以修改）")
     position_uuid: Optional[str] = Field(None, description="所属职位UUID（可选，可以修改）")
     role_uuids: Optional[List[str]] = Field(None, description="角色UUID列表（可选，可以修改）")
+
+
+class UserUpdateRequest(UserUpdate):
+    """用户更新请求 Schema（前端 PUT 请求体）。"""
+
+    @field_validator("username")
+    @classmethod
+    def validate_username_not_reserved(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        from infra.domain.security.reserved_username import assert_tenant_user_username_allowed
+
+        return assert_tenant_user_username_allowed(v)
 
 
 class UserResponse(SoilUserResponse):

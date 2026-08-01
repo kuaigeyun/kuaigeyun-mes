@@ -65,6 +65,53 @@ def _strip_customer_pool_managed_fields(data: Dict[str, Any]) -> None:
         data.pop(key, None)
 
 
+def _normalize_partner_name(name: Optional[str]) -> str:
+    """客户/供应商名称：去首尾空白。"""
+    return str(name or "").strip()
+
+
+async def _assert_customer_name_unique(
+    tenant_id: int,
+    name: str,
+    *,
+    exclude_uuid: Optional[str] = None,
+) -> None:
+    normalized = _normalize_partner_name(name)
+    if not normalized:
+        raise ValidationError("客户名称不能为空")
+    query = Customer.filter(
+        tenant_id=tenant_id,
+        name=normalized,
+        deleted_at__isnull=True,
+    )
+    if exclude_uuid:
+        query = query.exclude(uuid=exclude_uuid)
+    existing = await query.first()
+    if existing:
+        raise ValidationError(f"客户名称「{normalized}」已存在（编码 {existing.code}）")
+
+
+async def _assert_supplier_name_unique(
+    tenant_id: int,
+    name: str,
+    *,
+    exclude_uuid: Optional[str] = None,
+) -> None:
+    normalized = _normalize_partner_name(name)
+    if not normalized:
+        raise ValidationError("供应商名称不能为空")
+    query = Supplier.filter(
+        tenant_id=tenant_id,
+        name=normalized,
+        deleted_at__isnull=True,
+    )
+    if exclude_uuid:
+        query = query.exclude(uuid=exclude_uuid)
+    existing = await query.first()
+    if existing:
+        raise ValidationError(f"供应商名称「{normalized}」已存在（编码 {existing.code}）")
+
+
 async def _summarize_customer_blocking_documents(
     tenant_id: int,
     customer_id: int,
@@ -298,6 +345,7 @@ class SupplyChainService:
         create_data["code"] = await _resolve_partner_create_code(
             tenant_id, _CUSTOMER_PAGE_CODE, create_data.get("code")
         )
+        create_data["name"] = _normalize_partner_name(create_data.get("name"))
 
         # 检查编码是否已存在
         existing = await Customer.filter(
@@ -308,6 +356,8 @@ class SupplyChainService:
         
         if existing:
             raise ValidationError(f"客户编码 {create_data['code']} 已存在")
+
+        await _assert_customer_name_unique(tenant_id, create_data["name"])
         
         _strip_customer_pool_managed_fields(create_data)
         salesman_id = create_data.pop("salesman_id", None)
@@ -503,6 +553,15 @@ class SupplyChainService:
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         _strip_customer_pool_managed_fields(update_data)
 
+        if "name" in update_data:
+            update_data["name"] = _normalize_partner_name(update_data.get("name"))
+            if update_data["name"] != _normalize_partner_name(customer.name):
+                await _assert_customer_name_unique(
+                    tenant_id,
+                    update_data["name"],
+                    exclude_uuid=customer.uuid,
+                )
+
         salesman_field_present = "salesman_id" in update_data
         salesman_change = update_data.pop("salesman_id", None) if salesman_field_present else None
         salesman_changed = salesman_field_present and salesman_change != customer.salesman_id
@@ -610,6 +669,7 @@ class SupplyChainService:
         create_data["code"] = await _resolve_partner_create_code(
             tenant_id, _SUPPLIER_PAGE_CODE, create_data.get("code")
         )
+        create_data["name"] = _normalize_partner_name(create_data.get("name"))
 
         # 检查编码是否已存在
         existing = await Supplier.filter(
@@ -620,6 +680,8 @@ class SupplyChainService:
         
         if existing:
             raise ValidationError(f"供应商编码 {create_data['code']} 已存在")
+
+        await _assert_supplier_name_unique(tenant_id, create_data["name"])
         
         # 创建供应商（未传 is_active 时默认为启用）
         if create_data.get("is_active") is None:
@@ -800,6 +862,15 @@ class SupplyChainService:
         
         # 更新字段（by_alias=False 得到 snake_case 供 ORM 使用）
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
+
+        if "name" in update_data:
+            update_data["name"] = _normalize_partner_name(update_data.get("name"))
+            if update_data["name"] != _normalize_partner_name(supplier.name):
+                await _assert_supplier_name_unique(
+                    tenant_id,
+                    update_data["name"],
+                    exclude_uuid=supplier.uuid,
+                )
 
         _apply_partner_contacts_payload(update_data)
 

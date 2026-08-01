@@ -218,6 +218,15 @@ class UserProfileService:
             new_username = update_data.get('username')
             if new_username and new_username.strip():
                 new_username = new_username.strip()
+                from infra.domain.security.reserved_username import assert_tenant_user_username_mutation_allowed
+
+                try:
+                    assert_tenant_user_username_mutation_allowed(
+                        current_username=user.username,
+                        new_username=new_username,
+                    )
+                except ValueError as exc:
+                    raise ValidationError(str(exc)) from exc
                 # 检查同一租户内是否已有其他用户使用该用户名
                 existing_user = await User.filter(
                     tenant_id=user.tenant_id,

@@ -4202,6 +4202,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             query = query.filter(status=filters['status'])
         if filters.get('sales_order_id'):
             query = query.filter(sales_order_id=filters['sales_order_id'])
+        if filters.get('customer_id'):
+            query = query.filter(customer_id=filters['customer_id'])
         if filters.get("scoped_sales_order_ids") is not None:
             query = query.filter(
                 Q(sales_order_id__isnull=True)

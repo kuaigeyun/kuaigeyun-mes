@@ -252,7 +252,7 @@ const SalesOrderChangesPage: React.FC = () => {
   };
 
   const openCreateFromOrder = async (orderId: number, reason: string) => {
-    const order = await getSalesOrder(orderId, true);
+    const order = await getSalesOrder(orderId, true, false, { view: 'options' });
     setEditingId(null);
     setCreatingSourceOrderId(orderId);
     setEditItems(
@@ -321,6 +321,7 @@ const SalesOrderChangesPage: React.FC = () => {
           include_items: false,
           pullable_only: scope === 'pullable',
           pull_target: 'sales_order_change',
+          view: 'options',
         });
         const rows = mapPullSalesOrderRows(result.data || []);
         return {

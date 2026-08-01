@@ -31,8 +31,6 @@ import { UniCapabilityBatchButton, UniAuditBatchMenuButton, createUniAuditBatchH
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
-  filterByPullScope,
-  paginatePullRows,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { salesOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
@@ -783,11 +781,6 @@ const SalesReturnsPage: React.FC = () => {
     }
   };
 
-  const isPullSalesReturnOrderSelectable = useCallback(
-    (record: PullSalesOrderCandidate) => record.capabilities?.push_sales_return?.allowed === true,
-    [],
-  );
-
   const pullFromSalesOrderScopeOptions = useMemo(
     () => [
       { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
@@ -801,43 +794,38 @@ const SalesReturnsPage: React.FC = () => {
     selectionType: 'radio',
     scopeOptions: pullFromSalesOrderScopeOptions,
     defaultScope: 'pullable',
-    isRowDisabled: (record) => !isPullSalesReturnOrderSelectable(record),
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await listSalesOrders({
-          skip: 0,
-          limit: 200,
+          skip: ((page || 1) - 1) * (pageSize || 20),
+          limit: pageSize || 20,
           keyword: keyword.trim() || undefined,
+          view: 'options',
+          ...(scope === 'pullable'
+            ? { pullable_only: true, pull_target: 'sales_return' as const }
+            : {}),
         });
         const orders = Array.isArray((res as any)?.data) ? (res as any).data : [];
-        const candidates = orders.map((order: any) => ({
-          id: Number(order.id),
-          order_code: order.order_code,
-          customer_name: order.customer_name,
-          status: order.status,
-          delivery_date: order.delivery_date,
-          updated_at: order.updated_at,
-          capabilities: order.capabilities,
-        }));
-        const filtered = filterByPullScope(candidates, scope, isPullSalesReturnOrderSelectable);
-        return paginatePullRows(filtered, page, pageSize);
+        const candidates = orders
+          .map((order: any) => ({
+            id: Number(order.id),
+            order_code: order.order_code,
+            customer_name: order.customer_name,
+            status: order.status,
+            delivery_date: order.delivery_date,
+            updated_at: order.updated_at,
+          }))
+          .filter((o: PullSalesOrderCandidate) => Number.isFinite(o.id) && o.id > 0);
+        return { data: candidates, total: Number((res as any)?.total ?? candidates.length) };
       } catch (error: any) {
         messageApi.error(error?.message || t('app.kuaizhizao.salesReturn.loadSalesOrdersFailed'));
         return { data: [], total: 0 };
       }
     },
-    onConfirm: async (keys, rows) => {
+    onConfirm: async (keys) => {
       const selectedId = Number(keys[0]);
       if (!selectedId || selectedId <= 0) {
         messageApi.warning(t('app.kuaizhizao.salesReturn.selectSalesOrder'));
-        return;
-      }
-      const selected = rows[0];
-      if (selected && !isPullSalesReturnOrderSelectable(selected)) {
-        messageApi.warning(
-          salesOrderCapabilityReasonMessage(selected.capabilities?.push_sales_return?.reason, t) ||
-            t('app.kuaizhizao.salesReturn.selectSalesOrder'),
-        );
         return;
       }
       pullFromSalesOrderQuery.closeModal();

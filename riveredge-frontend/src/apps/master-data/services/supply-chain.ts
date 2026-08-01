@@ -11,6 +11,7 @@ import {
   getDictionaryItemsCached,
   getDictionaryItemsSync,
 } from '../../../services/dataDictionaryCache';
+import { dedupeDictionaryOptionsByValue } from '../../../utils/dictionaryQuickCreate';
 import type {
   Customer,
   CustomerCreate,
@@ -133,7 +134,9 @@ export const getUserOptions = async () => {
 export const getDictionaryOptions = async (dictionaryCode: string) => {
   try {
     const items = await getDictionaryItemsCached(dictionaryCode);
-    return items.map((item) => ({ label: item.label, value: item.value, color: item.color }));
+    return dedupeDictionaryOptionsByValue(
+      items.map((item) => ({ label: item.label, value: item.value, color: item.color })),
+    );
   } catch {
     return [];
   }

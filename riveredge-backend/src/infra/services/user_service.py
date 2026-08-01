@@ -31,7 +31,9 @@ class UserService:
     async def create_user(
         self,
         data: UserCreate,
-        tenant_id: Optional[int] = None
+        tenant_id: Optional[int] = None,
+        *,
+        system_bootstrap: bool = False,
     ) -> User:
         """
         创建用户
@@ -74,6 +76,16 @@ class UserService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="该组织下用户名已被使用"
             )
+
+        from infra.domain.security.reserved_username import assert_tenant_user_username_allowed
+
+        try:
+            assert_tenant_user_username_allowed(data.username, system_bootstrap=system_bootstrap)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
 
         if data.is_active:
             await TenantService().assert_shared_user_quota_capacity(
@@ -228,6 +240,18 @@ class UserService:
         
         # 检查用户名是否冲突（如果更新用户名）
         if data.username and data.username != user.username:
+            from infra.domain.security.reserved_username import assert_tenant_user_username_mutation_allowed
+
+            try:
+                assert_tenant_user_username_mutation_allowed(
+                    current_username=user.username,
+                    new_username=data.username,
+                )
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=str(exc),
+                ) from exc
             existing_username = await User.get_or_none(
                 tenant_id=tenant_id,
                 username=data.username

@@ -750,13 +750,20 @@ const CustomerPoolPage: React.FC = () => {
           if (row.pool_status === 'pool') {
           } else {
             actions.push(
-              <Button {...rowActionKind('create')} key="follow-up" onClick={() => openFollowUp(row.id)}>
-                {t('app.kuaizhizao.customerPool.newFollowUp')}
-              </Button>
+              <Button
+                {...rowActionKind('create')}
+                key="quote"
+                type="link"
+                size="small"
+                data-action-priority={15}
+                onClick={() => toQuotation(row.id)}
+              >
+                {t('app.kuaizhizao.customerPool.goToQuotation')}
+              </Button>,
             );
             actions.push(
-              <Button {...rowActionKind('create')} key="quote" onClick={() => toQuotation(row.id)}>
-                {t('app.kuaizhizao.customerPool.goToQuotation')}
+              <Button {...rowActionKind('create')} key="follow-up" onClick={() => openFollowUp(row.id)}>
+                {t('app.kuaizhizao.customerPool.newFollowUp')}
               </Button>
             );
             if (canManageCollaborators(row)) {
@@ -782,6 +789,7 @@ const CustomerPoolPage: React.FC = () => {
                 type="link"
                 size="small"
                 icon={<HistoryOutlined />}
+                data-action-priority={500}
                 onClick={() => {
                   void openPoolLogsModal(row);
                 }}
@@ -1056,6 +1064,20 @@ const CustomerPoolPage: React.FC = () => {
     downloadFile(blob, t('app.kuaizhizao.customerPool.exportFileName', { date: formatDateTime(new Date(), 'YYYY-MM-DD') }));
     message.success(t('common.exportSuccess', { count: exportData.length }));
   }, [message, t]);
+
+  const customerPoolCollaboratorSupport = useMemo(
+    () => ({
+      maxCount: 10,
+      load: async (customerId: number) => {
+        const rows = await customerPoolApi.getCollaborators(customerId);
+        return rows.map((item) => item.user_id);
+      },
+      save: async (customerId: number, userIds: number[]) => {
+        await customerPoolApi.setCollaborators(customerId, userIds);
+      },
+    }),
+    [],
+  );
 
   return (
     <>
@@ -1349,6 +1371,7 @@ const CustomerPoolPage: React.FC = () => {
       <CustomerFormModal
         open={editOpen}
         editUuid={editUuid}
+        collaboratorSupport={customerPoolCollaboratorSupport}
         onClose={() => {
           setEditOpen(false);
           setEditUuid(null);

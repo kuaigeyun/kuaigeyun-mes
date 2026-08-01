@@ -114,6 +114,7 @@ async def resolve_customer_salesman_pool(ctx: ScopeResolveContext) -> Q:
 
 async def resolve_customer_owned_only(ctx: ScopeResolveContext) -> Q:
     """客户归属业务员或协作人（非公海），用于跟进/商机父客户校验。"""
+    from apps.kuaizhizao.services.customer_pool_list_core import customer_pool_effective_owned_q
     from apps.kuaizhizao.services.customer_pool_service import list_collaborator_customer_ids
 
     field = ctx.profile.applicant_user_id_field or "salesman_id"
@@ -121,11 +122,12 @@ async def resolve_customer_owned_only(ctx: ScopeResolveContext) -> Q:
     owned_clause = Q(**{field: ctx.user_id})
     if collab_ids:
         owned_clause |= Q(id__in=collab_ids)
-    return owned_clause & Q(pool_status="owned")
+    return owned_clause & customer_pool_effective_owned_q()
 
 
 async def resolve_customer_owned_via_customer_id(ctx: ScopeResolveContext) -> Q:
     """子表通过 customer_id 关联 owned 客户（负责人或协作人）。"""
+    from apps.kuaizhizao.services.customer_pool_list_core import customer_pool_effective_owned_q
     from apps.master_data.models.customer import Customer
     from apps.kuaizhizao.services.customer_pool_service import list_collaborator_customer_ids
 
@@ -133,8 +135,9 @@ async def resolve_customer_owned_via_customer_id(ctx: ScopeResolveContext) -> Q:
     customer_query = Customer.filter(
         tenant_id=ctx.tenant_id,
         deleted_at__isnull=True,
-        pool_status="owned",
-    ).filter(Q(salesman_id=ctx.user_id) | Q(id__in=collab_ids) if collab_ids else Q(salesman_id=ctx.user_id))
+    ).filter(customer_pool_effective_owned_q()).filter(
+        Q(salesman_id=ctx.user_id) | Q(id__in=collab_ids) if collab_ids else Q(salesman_id=ctx.user_id)
+    )
     ids = await customer_query.values_list("id", flat=True)
     if not ids:
         return Q(id=-1)

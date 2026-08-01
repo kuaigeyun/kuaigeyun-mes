@@ -168,23 +168,117 @@ class PermissionPolicyService:
         return out
 
     @classmethod
+    def _resource_keys_from_permission_codes(cls, codes: Iterable[str]) -> set[str]:
+        keys: set[str] = set()
+        for code in codes:
+            key = cls._permission_code_to_resource_key(code)
+            if key:
+                keys.add(cls._normalize_resource(key))
+        return keys
+
+    @classmethod
     async def _collect_role_granted_function_resources(
         cls, tenant_id: int, role_uuid: str
     ) -> set[str]:
-        """角色功能权限树中已勾选页面对应的 app:resource（与数据/字段权限页展示一致）。"""
-        from core.services.authorization.role_permission_matrix_service import (
-            RolePermissionMatrixService,
-        )
+        """
+        角色已授予功能权限对应的 app:resource（与数据/字段权限页范围一致）。
 
-        grants = await RolePermissionMatrixService.get_function_grants(
-            tenant_id, role_uuid
+        由已授功能码直接映射资源键，避免为每次字段脱敏重建整棵功能权限菜单树。
+        """
+        from core.services.authorization.menu_resource_resolver import (
+            normalize_permission_code,
         )
-        allowed = await cls._collect_allowed_function_resources(tenant_id)
-        keys = RolePermissionMatrixService.collect_granted_resource_keys_from_tree(
-            grants.tree,
-            set(grants.granted_codes or []),
+        from core.services.authorization.role_service import RoleService
+
+        role = await Role.filter(
+            uuid=role_uuid,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not role:
+            return set()
+
+        defs = await PermissionRegistryService.collect_definitions(tenant_id=tenant_id)
+        allowed = cls._resource_keys_from_permission_codes(defs.keys())
+        if RoleService._is_admin_system_role(role):
+            return allowed
+
+        role_permissions = await RolePermission.filter(role_id=role.id).all()
+        permission_ids = [rp.permission_id for rp in role_permissions]
+        if not permission_ids:
+            return set()
+
+        perms = await Permission.filter(
+            id__in=permission_ids,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            deprecated_at__isnull=True,
+            permission_type=PermissionType.FUNCTION,
+        ).only("code")
+        # 与功能矩阵一致：仅保留 manifest 真源池内的功能码
+        pool_codes = set(defs.keys())
+        granted_codes = {
+            normalize_permission_code(p.code or "")
+            for p in perms
+            if p.code and normalize_permission_code(p.code) in pool_codes
+        }
+        return cls._resource_keys_from_permission_codes(granted_codes) & allowed
+
+    @classmethod
+    async def _user_has_granted_function_resource(
+        cls,
+        tenant_id: int,
+        role_uuids: Iterable[str],
+        resource: str,
+    ) -> bool:
+        """当前用户任一角色是否已授予指定 app:resource 的功能权限（列表脱敏快路径）。"""
+        from core.services.authorization.menu_resource_resolver import (
+            normalize_permission_code,
         )
-        return keys & allowed
+        from core.services.authorization.role_service import RoleService
+
+        normalized = cls._normalize_resource(resource)
+        if not normalized:
+            return False
+
+        defs = await PermissionRegistryService.collect_definitions(tenant_id=tenant_id)
+        allowed = cls._resource_keys_from_permission_codes(defs.keys())
+        if normalized not in allowed:
+            return False
+
+        roles = await Role.filter(
+            uuid__in=list(role_uuids),
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).all()
+        if not roles:
+            return False
+
+        if any(RoleService._is_admin_system_role(role) for role in roles):
+            return True
+
+        role_ids = [role.id for role in roles]
+        role_permissions = await RolePermission.filter(role_id__in=role_ids).all()
+        permission_ids = list({rp.permission_id for rp in role_permissions})
+        if not permission_ids:
+            return False
+
+        pool_codes = set(defs.keys())
+        perms = await Permission.filter(
+            id__in=permission_ids,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            deprecated_at__isnull=True,
+            permission_type=PermissionType.FUNCTION,
+        ).only("code")
+        for perm in perms:
+            code = normalize_permission_code(perm.code or "")
+            if not code or code not in pool_codes:
+                continue
+            key = cls._permission_code_to_resource_key(code)
+            if key and cls._normalize_resource(key) == normalized:
+                return True
+        return False
 
     @classmethod
     async def list_data_policies(cls, tenant_id: int, role_uuid: str) -> list[DataPermissionPolicyResponse]:
@@ -776,13 +870,15 @@ class PermissionPolicyService:
         if not role_uuids:
             return {}
         alias_map = await cls._load_tenant_field_alias_map(tenant_id=tenant_id)
-        user_resources = await cls._collect_user_granted_field_policy_resources(
-            tenant_id, role_uuids
-        )
         if resource:
             normalized_filter = cls._normalize_resource(resource)
-            user_resources = (
-                {normalized_filter} if normalized_filter in user_resources else set()
+            has_resource = await cls._user_has_granted_function_resource(
+                tenant_id, role_uuids, normalized_filter
+            )
+            user_resources = {normalized_filter} if has_resource else set()
+        else:
+            user_resources = await cls._collect_user_granted_field_policy_resources(
+                tenant_id, role_uuids
             )
 
         nested: dict[str, dict[str, str]] = {}

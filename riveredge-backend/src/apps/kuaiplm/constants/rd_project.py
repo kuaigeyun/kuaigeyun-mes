@@ -75,6 +75,10 @@ DEFAULT_NPI_GATES: List[Dict[str, Any]] = [
     {"gate_key": "prototype", "gate_name": "样机阶段", "sort_order": 3},
     {"gate_key": "pilot", "gate_name": "试产阶段", "sort_order": 4},
     {"gate_key": "release", "gate_name": "量产发布", "sort_order": 5},
+    {"gate_key": "ramp", "gate_name": "量产爬坡", "sort_order": 6},
+    {"gate_key": "first_delivery", "gate_name": "首批交付", "sort_order": 7},
+    {"gate_key": "stable_production", "gate_name": "稳定量产", "sort_order": 8},
+    {"gate_key": "service_handover", "gate_name": "售后移交", "sort_order": 9},
 ]
 
 # 各阶段门默认交付物（新建项目时预置，可删改）
@@ -100,6 +104,22 @@ DEFAULT_GATE_DELIVERABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "量产 EBOM", "deliverable_type": "bom"},
         {"name": "作业指导书包", "deliverable_type": "sop"},
         {"name": "量产移交清单", "deliverable_type": "document"},
+    ],
+    "ramp": [
+        {"name": "量产爬坡计划", "deliverable_type": "document"},
+        {"name": "产能爬坡报告", "deliverable_type": "document"},
+    ],
+    "first_delivery": [
+        {"name": "首批出货检验记录", "deliverable_type": "quality"},
+        {"name": "首批交付签收单", "deliverable_type": "document"},
+    ],
+    "stable_production": [
+        {"name": "产能达成报告", "deliverable_type": "document"},
+        {"name": "质量稳定报告", "deliverable_type": "quality"},
+    ],
+    "service_handover": [
+        {"name": "售后移交清单", "deliverable_type": "document"},
+        {"name": "备件与维保方案", "deliverable_type": "document"},
     ],
 }
 

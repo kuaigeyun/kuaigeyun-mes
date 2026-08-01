@@ -255,26 +255,27 @@ async def create_sales_invoice(
 ):
     """创建销售发票"""
     try:
+        from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
+
+        _, tax_amount, total_amount = compute_tax_from_excluding(
+            Decimal(data.invoice_amount),
+            Decimal(data.tax_rate),
+        )
+
         pull_preview: Optional[Dict[str, Any]] = None
         if data.source_type and data.source_id:
             pull_preview = await sales_invoice_service.assert_pull_create_allowed(
                 tenant_id=tenant_id,
                 source_type=str(data.source_type).strip(),
                 source_id=int(data.source_id),
-                total_amount=Decimal(data.total_amount),
+                total_amount=total_amount,
             )
 
         source_document_code = data.sales_order_code
         if pull_preview:
             source_document_code = str(pull_preview.get("source_code") or source_document_code or "")
 
-        from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
-
         code = await _generate_sales_invoice_code(tenant_id)
-        _, tax_amount, total_amount = compute_tax_from_excluding(
-            Decimal(data.invoice_amount),
-            Decimal(data.tax_rate),
-        )
         create_payload = {
             "tenant_id": tenant_id,
             "invoice_code": code,

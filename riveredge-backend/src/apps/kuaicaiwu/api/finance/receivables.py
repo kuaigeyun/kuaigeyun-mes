@@ -14,6 +14,10 @@ from apps.kuaicaiwu.schemas.finance import (
 )
 from apps.kuaicaiwu.services.finance_service import ReceivableService
 from apps.kuaicaiwu.services.receivable_pull_service import ReceivablePullService
+from apps.kuaicaiwu.utils.settlement_db_guard import (
+    SETTLEMENTS_TABLE_MISSING_HINT,
+    is_settlements_table_missing,
+)
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
@@ -267,8 +271,24 @@ async def record_receipt(
     try:
         receivable = await receivable_service.record_receipt(tenant_id, id, data, current_user.id)
         return receivable
-    except BusinessLogicError as e:
-        raise _http_exception_with_trace(400, str(e), "/receivables/{id}/receipt", tenant_id)
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/receivables/{id}/receipt", tenant_id) from e
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(400, str(e), "/receivables/{id}/receipt", tenant_id) from e
+    except Exception as e:
+        if is_settlements_table_missing(e):
+            logger.exception(
+                "record_receipt missing settlements table tenant_id={} receivable_id={}",
+                tenant_id,
+                id,
+            )
+            raise _http_exception_with_trace(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                SETTLEMENTS_TABLE_MISSING_HINT,
+                "/receivables/{id}/receipt",
+                tenant_id,
+            ) from e
+        raise
 
 
 @router.post("/{id}/approve", response_model=ReceivableResponse)

@@ -13,6 +13,7 @@ import {
   createUser,
   replaceUserDataScopeBindings,
   updateUser,
+  checkUserFullNameCollision,
   CreateUserData,
   UpdateUserData,
 } from '../../../../services/user';
@@ -23,6 +24,7 @@ import {
   type UserFormSelectOption,
   type UserFormRoleMeta,
 } from '../userFormReferenceOptions';
+import { validateTenantUsernameInput } from '../../../../utils/reservedUsername';
 
 /** 账户用户名：2-50 字符，支持中文、字母、数字、下划线、连字符 */
 const USERNAME_PATTERN = /^[\u4e00-\u9fa5a-zA-Z0-9_-]+$/;
@@ -337,6 +339,17 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
           { min: 2, message: t('field.user.usernameMin') },
           { max: 50, message: t('field.user.usernameMax') },
           { pattern: USERNAME_PATTERN, message: t('field.user.usernamePattern') },
+          {
+            validator: async (_, value) => {
+              const issue = validateTenantUsernameInput(String(value ?? ''));
+              if (issue === 'platformSuperadminReserved') {
+                throw new Error(t('field.user.errorUsernamePlatformReserved'));
+              }
+              if (issue === 'reserved') {
+                throw new Error(t('field.user.errorUsernameReserved'));
+              }
+            },
+          },
         ]}
         placeholder={t('field.user.usernamePlaceholder')}
         fieldProps={{
@@ -349,6 +362,22 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         label={t('field.user.fullName')}
         rules={[
           { max: 100, message: t('field.user.fullNameMax') },
+          {
+            warningOnly: true,
+            validator: async (_, value) => {
+              const name = String(value ?? '').trim();
+              if (!name) return;
+              const result = await checkUserFullNameCollision(name, editUuid);
+              if (!result.collision) return;
+              const accounts = result.users.map((user) => user.username).join('、');
+              throw new Error(
+                t('field.user.fullNameDuplicateWarning', {
+                  count: result.users.length,
+                  accounts,
+                }),
+              );
+            },
+          },
         ]}
         placeholder={t('field.user.fullNamePlaceholder')}
         colProps={{ span: 12 }}

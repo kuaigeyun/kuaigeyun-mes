@@ -33,6 +33,7 @@ from infra.domain.security.security import (
     hash_password,
 )
 from infra.domain.tenant_context import set_current_tenant_id
+from infra.domain.tenant.guest_tenant_admin import guest_may_be_tenant_admin
 from infra.services.tenant_service import TenantService
 from core.services.authorization.user_permission_service import UserPermissionService
 from core.services.authorization.permission_version_service import PermissionVersionService
@@ -54,6 +55,10 @@ class AuthService:
     def _is_default_tenant(tenant: Tenant) -> bool:
         """是否为系统默认组织（domain=default）。"""
         return (tenant.domain or "").strip().lower() == "default"
+
+    @staticmethod
+    def _guest_may_be_tenant_admin(tenant: Tenant) -> bool:
+        return guest_may_be_tenant_admin(tenant_domain=tenant.domain)
 
     @staticmethod
     async def _ensure_user_has_guest_role(user_id: int, tenant_id: int) -> None:
@@ -1162,9 +1167,13 @@ class AuthService:
                     tenant_id=default_tenant.id,
                     is_active=True,  # 体验账户直接激活
                     is_infra_admin=False,
-                    is_tenant_admin=False,  # 体验账户不是组织管理员
+                    is_tenant_admin=self._guest_may_be_tenant_admin(default_tenant),
                 )
-                guest_user = await user_service.create_user(user_data, tenant_id=default_tenant.id)
+                guest_user = await user_service.create_user(
+                    user_data,
+                    tenant_id=default_tenant.id,
+                    system_bootstrap=True,
+                )
                 logger.info(f"体验账户创建结果: {guest_user.id if guest_user else 'None'}")
 
             # 验证 guest_user 是否创建成功
@@ -1172,6 +1181,15 @@ class AuthService:
                 raise ValueError("创建体验账户失败：user_service.create_user 返回 None")
 
             await self._ensure_user_has_guest_role(guest_user.id, default_tenant.id)
+
+            guest_should_be_tenant_admin = self._guest_may_be_tenant_admin(default_tenant)
+            if guest_user.is_tenant_admin != guest_should_be_tenant_admin:
+                guest_user.is_tenant_admin = guest_should_be_tenant_admin
+                await guest_user.save(update_fields=["is_tenant_admin"])
+                await PermissionVersionService.bump(
+                    tenant_id=default_tenant.id,
+                    user_id=guest_user.id,
+                )
             
             # 3. 生成 Token（包含 tenant_id）
             logger.info(f"开始生成 Token: user_id={guest_user.id}, username={guest_user.username}, tenant_id={default_tenant.id}")

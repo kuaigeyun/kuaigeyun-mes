@@ -126,6 +126,12 @@ from .shipment_notice_item import ShipmentNoticeItem
 from .receipt_notice import ReceiptNotice
 from .receipt_notice_item import ReceiptNoticeItem
 from .customer_follow_up import CustomerFollowUp
+from .after_sales_ticket import AfterSalesTicket
+from .after_sales_ticket_item import AfterSalesTicketItem
+from .install_execution_job import InstallExecutionJob
+from .install_execution_stage import InstallExecutionStage
+from .install_execution_cost import InstallExecutionCost
+from .install_execution_task import InstallExecutionTask
 from .sales_opportunity import SalesOpportunity
 from .customer_pool_log import CustomerPoolLog
 from .customer_pool_rule import CustomerPoolRule
@@ -331,6 +337,8 @@ __all__ = [
     'ReceiptNotice',
     'ReceiptNoticeItem',
     'CustomerFollowUp',
+    'AfterSalesTicket',
+    'AfterSalesTicketItem',
     'SalesOpportunity',
     'CustomerPoolLog',
     'CustomerPoolRule',

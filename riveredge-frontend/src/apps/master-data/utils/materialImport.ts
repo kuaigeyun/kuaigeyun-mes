@@ -1,38 +1,21 @@
 /**
- * 物料 Excel 导入：主物料 + 属性 SKU 行
+ * 物料 Excel 导入：仅主物料（属性 SKU 请在物料详情「属性组合」中导入）
  */
 
 import type { TFunction } from 'i18next';
 
-import type { Material, MaterialCreate } from '../types/material';
-import { materialApi } from '../services/material';
-import { isVariantMasterMaterial } from '../components/MaterialVariantCombinationsTable';
-import {
-  isSkuImportRowType,
-  parseImportBool,
-  parseVariantAttributesImport,
-} from './parseVariantAttributesImport';
-import { DEFAULT_MATERIAL_BASE_UNIT } from '../constants/materialDefaults';
+import type { MaterialCreate } from '../types/material';
+import { parseImportBool } from './parseVariantAttributesImport';
 import { parseMaterialSourceTypeImport } from './materialSourceType';
 import { resolveFactoryImportHeaderIndexMap } from '../../../utils/spreadsheetImportTemplate';
-
-export type MaterialImportRowKind = 'master' | 'sku';
 
 export interface MaterialMasterImportItem {
   kind: 'master';
   rowNum: number;
   data: MaterialCreate;
-  mainCodeHint?: string;
 }
 
-export interface MaterialSkuImportItem {
-  kind: 'sku';
-  rowNum: number;
-  masterMainCode: string;
-  variantAttributes: Record<string, unknown>;
-}
-
-export type MaterialImportItem = MaterialMasterImportItem | MaterialSkuImportItem;
+export type MaterialImportItem = MaterialMasterImportItem;
 
 export interface MaterialImportColumnIndex {
   code: number;
@@ -41,13 +24,32 @@ export interface MaterialImportColumnIndex {
   spec: number;
   type: number;
   group: number;
-  rowType: number;
-  masterMainCode: number;
-  variantAttrs: number;
   variantManaged: number;
   isActive: number;
   batchManaged: number;
   serialManaged: number;
+}
+
+/** 旧模板遗留列名：物料导入不再支持，检测到时明确报错 */
+const REMOVED_SKU_IMPORT_HEADERS = new Set([
+  '行类型',
+  '主编码',
+  '属性组合',
+  'row type',
+  'rowtype',
+  'master code',
+  'mastercode',
+  'variant attributes',
+  'variantattributes',
+]);
+
+export function materialImportHasRemovedSkuColumns(headers: string[]): string[] {
+  return headers
+    .map((h) => String(h || '').trim())
+    .filter((h) => {
+      if (!h) return false;
+      return REMOVED_SKU_IMPORT_HEADERS.has(h) || REMOVED_SKU_IMPORT_HEADERS.has(h.toLowerCase());
+    });
 }
 
 export function buildMaterialImportColumnIndex(
@@ -63,9 +65,6 @@ export function buildMaterialImportColumnIndex(
     spec: idx('specification'),
     type: idx('sourceType'),
     group: idx('groupCode'),
-    rowType: idx('rowType'),
-    masterMainCode: idx('masterMainCode'),
-    variantAttrs: idx('variantAttributes'),
     variantManaged: idx('variantManaged'),
     isActive: idx('isActive'),
     batchManaged: idx('batchManaged'),
@@ -90,35 +89,6 @@ export function parseMaterialImportRows(
 
   rows.forEach((row, i) => {
     const rowNum = i + rowOffset;
-    const rowTypeRaw = cell(row, idx.rowType);
-    const masterMainCode = cell(row, idx.masterMainCode);
-    const variantAttrsRaw = cell(row, idx.variantAttrs);
-    const isSku =
-      isSkuImportRowType(rowTypeRaw) ||
-      (!rowTypeRaw && !!masterMainCode && !!variantAttrsRaw);
-
-    if (isSku) {
-      if (!masterMainCode) {
-        errors.push({ row: rowNum, message: 'SKU 行须填写主编码（对应主物料编号）' });
-        return;
-      }
-      try {
-        const variantAttributes = parseVariantAttributesImport(variantAttrsRaw);
-        items.push({
-          kind: 'sku',
-          rowNum,
-          masterMainCode,
-          variantAttributes,
-        });
-      } catch (e: unknown) {
-        errors.push({
-          row: rowNum,
-          message: e instanceof Error ? e.message : '属性组合解析失败',
-        });
-      }
-      return;
-    }
-
     const name = cell(row, idx.name);
     const unit = cell(row, idx.unit);
     if (!name) {
@@ -132,6 +102,20 @@ export function parseMaterialImportRows(
 
     const code = cell(row, idx.code) || undefined;
     const groupCode = cell(row, idx.group);
+    let groupId: number | undefined;
+    if (groupCode) {
+      const resolvedGroupId = resolveGroupId(groupCode);
+      if (resolvedGroupId == null) {
+        errors.push({
+          row: rowNum,
+          message:
+            t?.('app.master-data.materials.importGroupNotFound', { value: groupCode }) ??
+            `未找到物料分组：${groupCode}`,
+        });
+        return;
+      }
+      groupId = resolvedGroupId;
+    }
     const variantManaged =
       idx.variantManaged >= 0 ? parseImportBool(row[idx.variantManaged]) : false;
     const isActiveRaw = cell(row, idx.isActive);
@@ -144,14 +128,13 @@ export function parseMaterialImportRows(
     items.push({
       kind: 'master',
       rowNum,
-      mainCodeHint: code,
       data: {
         mainCode: code,
         name,
         baseUnit: unit,
         specification: cell(row, idx.spec) || undefined,
         sourceType: parseMaterialSourceTypeImport(cell(row, idx.type), t),
-        groupId: groupCode ? resolveGroupId(groupCode) : undefined,
+        groupId,
         variantManaged,
         ...(variantManaged ? { variantAttributes: undefined } : {}),
         isActive,
@@ -162,61 +145,4 @@ export function parseMaterialImportRows(
   });
 
   return { items, errors };
-}
-
-function pickMainCode(m: Material): string {
-  return (m.mainCode ?? (m as { main_code?: string }).main_code ?? m.code ?? '').trim();
-}
-
-function isMasterRowMaterial(m: Material): boolean {
-  if (isVariantMasterMaterial(m)) return true;
-  const attrs = m.variantAttributes ?? (m as { variant_attributes?: Record<string, unknown> }).variant_attributes;
-  return !!m.variantManaged && (!attrs || Object.keys(attrs).length === 0);
-}
-
-export async function resolveMasterMaterialForImport(
-  mainCode: string,
-  cache: Map<string, Material>,
-): Promise<Material | null> {
-  const key = mainCode.trim();
-  if (!key) return null;
-  const cached = cache.get(key);
-  if (cached) return cached;
-
-  const { items } = await materialApi.list({ code: key, limit: 20 });
-  const master = (items ?? []).find((m) => pickMainCode(m) === key && isMasterRowMaterial(m));
-  if (master) {
-    cache.set(key, master);
-  }
-  return master ?? null;
-}
-
-export function materialToSkuCreatePayload(
-  master: Material,
-  variantAttributes: Record<string, unknown>,
-): MaterialCreate {
-  return {
-    mainCode: pickMainCode(master),
-    name: master.name,
-    baseUnit: master.baseUnit ?? (master as { base_unit?: string }).base_unit ?? DEFAULT_MATERIAL_BASE_UNIT,
-    groupId: master.groupId ?? (master as { group_id?: number }).group_id,
-    specification: master.specification,
-    sourceType: master.sourceType ?? (master as { source_type?: string }).source_type,
-    variantManaged: true,
-    variantAttributes,
-    isActive: master.isActive ?? true,
-  };
-}
-
-export async function ensureMasterVariantManaged(master: Material): Promise<Material> {
-  if (master.variantManaged && isMasterRowMaterial(master)) {
-    return master;
-  }
-  const uuid = master.uuid;
-  await materialApi.update(uuid, {
-    variantManaged: true,
-    variantAttributes: null,
-  } as MaterialCreate);
-  const updated = await materialApi.get(uuid);
-  return updated;
 }

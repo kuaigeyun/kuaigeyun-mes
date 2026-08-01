@@ -5,13 +5,17 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormInstance } from '@ant-design/pro-components';
-import { App, Input, Tabs, Row, Col, Button, Space } from 'antd';
+import { App, Input, Tabs, Row, Col } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
-import { MODAL_CONFIG, FORM_LAYOUT } from '../../../components/layout-templates/constants';
+import { MODAL_CONFIG, FORM_LAYOUT, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { supplierApi, getUserOptions, getDictionaryOptions } from '../services/supply-chain';
 import { testGenerateCode, generateCode, fetchEffectivePageCodeRule } from '../../../services/codeRule';
 import type { Supplier, SupplierCreate, SupplierUpdate } from '../types/supply-chain';
 import { SchemaFormRenderer } from '../../../components/schema-form';
+import {
+  CompanyNameAsciiParenHint,
+  SUPPLIER_FORM_SMART_ANCHOR,
+} from './CompanyNameAsciiParenHint';
 import {
   supplierFormSchemaBasicHead,
   supplierFormSchemaBasicTail,
@@ -19,7 +23,12 @@ import {
   supplierFormSchemaExtended,
 } from '../schemas/supplier';
 import { getDataDictionaryByCode, createDictionaryItem } from '../../../services/dataDictionary';
-import { QuickCreateAnchorPopover } from '../../../components/uni-dropdown';
+import {
+  dedupeDictionaryOptionsByValue,
+  dictionaryQuickCreateValueFromLabel,
+  findExistingDictionaryOption,
+} from '../../../utils/dictionaryQuickCreate';
+import { QuickCreateModal } from '../../../components/uni-dropdown';
 import { normalizePartnerContactsForSubmit, supplierDetailToFormValues } from '../utils/partner-form-map';
 import { SupplierContactsFormTable } from './SupplierContactsFormTable';
 import { useCustomFields } from '../../../hooks/useCustomFields';
@@ -61,7 +70,6 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
     label: string;
   } | null>(null);
   const [quickCreateName, setQuickCreateName] = useState('');
-  const [quickCreateAnchorEl, setQuickCreateAnchorEl] = useState<HTMLElement | null>(null);
   const [quickCreateLoading, setQuickCreateLoading] = useState(false);
 
   const {
@@ -213,21 +221,28 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
       messageApi.warning('请填写新选项');
       return;
     }
+    const value = dictionaryQuickCreateValueFromLabel(label);
     try {
       setQuickCreateLoading(true);
+      const existingOptions = dedupeDictionaryOptionsByValue(
+        await getDictionaryOptions(quickCreateTarget.dictionaryCode),
+      );
+      if (findExistingDictionaryOption(existingOptions, { label, value })) {
+        messageApi.warning(t('components.dictionarySelect.valueExists'));
+        return;
+      }
       const dict = await getDataDictionaryByCode(quickCreateTarget.dictionaryCode);
       await createDictionaryItem(dict.uuid, {
         label,
-        value: label,
+        value,
         is_active: true,
       });
       await loadOptions();
       if (quickCreateTarget.field !== 'contactTitle') {
-        formRef.current?.setFieldsValue({ [quickCreateTarget.field]: label });
+        formRef.current?.setFieldsValue({ [quickCreateTarget.field]: value });
       }
       messageApi.success(t('common.createSuccess'));
       setQuickCreateTarget(null);
-      setQuickCreateAnchorEl(null);
       setQuickCreateName('');
     } catch (error: any) {
       messageApi.error(error?.message || '新增字典项失败');
@@ -251,7 +266,11 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
         layout="vertical"
         grid
         zIndex={zIndex}
+        modalRender={(modal) => (
+          <div data-smart-suggestion-anchor="supplier-form">{modal}</div>
+        )}
       >
+        <CompanyNameAsciiParenHint open={open} anchorSelector={SUPPLIER_FORM_SMART_ANCHOR} />
         <Col span={24}>
           <Tabs
             destroyInactiveTabPane={false}
@@ -273,8 +292,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
                         category: {
                           quickCreate: {
                             label: '快速新增',
-                            onClick: (anchor) => {
-                              setQuickCreateAnchorEl(anchor ?? null);
+                            onClick: () => {
                               setQuickCreateTarget({
                                 field: 'category',
                                 dictionaryCode: 'CUSTOMER_CATEGORY',
@@ -293,8 +311,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
                     <Col span={24}>
                       <SupplierContactsFormTable
                         contactTitleOptions={optionsMap.contactTitle ?? []}
-                        onQuickCreateContactTitle={(anchor) => {
-                          setQuickCreateAnchorEl(anchor ?? null);
+                        onQuickCreateContactTitle={() => {
                           setQuickCreateTarget({
                             field: 'contactTitle',
                             dictionaryCode: 'CONTACT_TITLE',
@@ -333,8 +350,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
                         industryCode: {
                           quickCreate: {
                             label: '快速新增',
-                            onClick: (anchor) => {
-                              setQuickCreateAnchorEl(anchor ?? null);
+                            onClick: () => {
                               setQuickCreateTarget({
                                 field: 'industryCode',
                                 dictionaryCode: 'INDUSTRY_SECTOR',
@@ -346,8 +362,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
                         sourceChannelCode: {
                           quickCreate: {
                             label: '快速新增',
-                            onClick: (anchor) => {
-                              setQuickCreateAnchorEl(anchor ?? null);
+                            onClick: () => {
                               setQuickCreateTarget({
                                 field: 'sourceChannelCode',
                                 dictionaryCode: 'PARTNER_SOURCE_CHANNEL',
@@ -365,40 +380,25 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
           />
         </Col>
       </FormModalTemplate>
-      <QuickCreateAnchorPopover
+      <QuickCreateModal
         open={!!quickCreateTarget}
-        anchorEl={quickCreateAnchorEl}
         title={quickCreateTarget ? `快速新增${quickCreateTarget.label}` : '快速新增'}
+        zIndex={zIndex != null ? zIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET : undefined}
+        confirmLoading={quickCreateLoading}
         onClose={() => {
           setQuickCreateTarget(null);
-          setQuickCreateAnchorEl(null);
           setQuickCreateName('');
         }}
+        onConfirm={handleQuickCreateSubmit}
       >
-        <>
-          <Input
-            placeholder="请输入新选项"
-            value={quickCreateName}
-            onChange={(e) => setQuickCreateName(e.target.value)}
-            maxLength={100}
-            autoFocus
-          />
-          <Space style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
-            <Button
-              onClick={() => {
-                setQuickCreateTarget(null);
-                setQuickCreateAnchorEl(null);
-                setQuickCreateName('');
-              }}
-            >
-              取消
-            </Button>
-            <Button type="primary" loading={quickCreateLoading} onClick={() => void handleQuickCreateSubmit()}>
-              确定
-            </Button>
-          </Space>
-        </>
-      </QuickCreateAnchorPopover>
+        <Input
+          placeholder="请输入新选项"
+          value={quickCreateName}
+          onChange={(e) => setQuickCreateName(e.target.value)}
+          maxLength={100}
+          autoFocus
+        />
+      </QuickCreateModal>
     </>
   );
 };

@@ -642,16 +642,18 @@ const BatchingTaskQueue: React.FC<Props> = ({
         const st = record.status === 'picking' ? 'processing' : record.status;
         const keyPrefix = `material-center-${record.task_type}-${record.task_id}`;
         if (record.task_type === 'proactive_prep') {
-          actions.push(
-            <Button
-              key="create-batching"
-              {...rowActionKind('execute')}
-              size="small"
-              onClick={() => handleProactivePrep(record)}
-            >
-              {pullFromWorkOrderAction.label}
-            </Button>,
-          );
+          if ((record.kitting_rate ?? 0) > 0) {
+            actions.push(
+              <Button
+                key="create-batching"
+                {...rowActionKind('execute')}
+                size="small"
+                onClick={() => handleProactivePrep(record)}
+              >
+                {pullFromWorkOrderAction.label}
+              </Button>,
+            );
+          }
           return renderRowActionsOverflow(actions, { keyPrefix });
         }
         if (record.task_type === 'material_call') {

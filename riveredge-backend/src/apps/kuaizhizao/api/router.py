@@ -40,6 +40,8 @@ from .delivery_notices.delivery_notices import router as delivery_notice_router
 from .shipment_notices.shipment_notices import router as shipment_notice_router
 from .receipt_notices.receipt_notices import router as receipt_notice_router
 from .customer_follow_ups.customer_follow_ups import router as customer_follow_up_router
+from .after_sales_tickets.after_sales_tickets import router as after_sales_ticket_router
+from .install_executions.install_executions import router as install_execution_router
 from .sales_opportunities.sales_opportunities import router as sales_opportunity_router
 from .customer_pool.customer_pool import router as customer_pool_router
 from .state_transitions.state_transitions import router as state_transition_router
@@ -101,6 +103,8 @@ router.include_router(config_router)  # 消息提醒规则预设等
 router.include_router(shipment_notice_router)  # 发货通知单管理
 router.include_router(receipt_notice_router)  # 收货通知单管理
 router.include_router(customer_follow_up_router)  # 客户跟进（销售极简 CRM）
+router.include_router(after_sales_ticket_router)  # 售后服务工单
+router.include_router(install_execution_router)  # 安装执行
 router.include_router(sales_opportunity_router)  # 销售商机
 router.include_router(customer_pool_router)  # 客户池（公海管理）
 router.include_router(exceptions_router)

@@ -12,7 +12,8 @@ cd "$PROJECT_ROOT" || exit 1
 # 环境参数
 BACKEND_PORT=8200
 FRONTEND_PORT=8100
-MOBILE_PORT=8081
+# 8081 常落在 Windows Hyper-V 保留段 7998-8097 内，Node 无法 bind；Expo 非交互模式会直接 Skip
+MOBILE_PORT=8098
 MOBILE_APP_DIR="$PROJECT_ROOT/riveredge-app/mobile"
 BACKEND_START_TIMEOUT=90
 PORT_KILL_MAX_ROUNDS=6
@@ -88,10 +89,16 @@ powershell_stop_port_listeners() {
     local port=$1
     command -v powershell.exe >/dev/null 2>&1 || return 0
     powershell.exe -NoProfile -Command "
-        Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue |
-          Select-Object -ExpandProperty OwningProcess -Unique |
-          Where-Object { \$_ -gt 0 } |
-          ForEach-Object { Stop-Process -Id \$_ -Force -ErrorAction SilentlyContinue }
+        \$port = ${port}
+        \$pids = @(
+            Get-NetTCPConnection -LocalPort \$port -State Listen -ErrorAction SilentlyContinue |
+                Select-Object -ExpandProperty OwningProcess -Unique |
+                Where-Object { \$_ -gt 0 }
+        )
+        foreach (\$pid in \$pids) {
+            Stop-Process -Id \$pid -Force -ErrorAction SilentlyContinue
+            cmd /c \"taskkill /F /PID \$pid /T\" 2>\$null | Out-Null
+        }
     " 2>/dev/null || true
 }
 
@@ -258,6 +265,101 @@ kill_uvicorn_reload_tree() {
 
 kill_backend_by_command_line() {
     kill_uvicorn_reload_tree "${BACKEND_PORT}"
+}
+
+# Windows：清理 Expo / Metro 整棵树（mobile.pid 仅为 nohup bash，8081 监听常在 node 子进程）
+kill_expo_mobile_tree() {
+    command -v powershell.exe >/dev/null 2>&1 || return 0
+    powershell_stop_port_listeners "${MOBILE_PORT}"
+    local mobile_dir_ps
+    mobile_dir_ps="${MOBILE_APP_DIR//\\/\\\\}"
+    powershell.exe -NoProfile -Command "
+        \$mobilePath = '${mobile_dir_ps}'.Replace('/', [char]92)
+        \$mobilePort = '${MOBILE_PORT}'
+        \$killed = @()
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
+            \$cmd = \$_.CommandLine
+            if (-not \$cmd) { return }
+            \$id = \$_.ProcessId
+            \$name = \$_.Name
+            \$shouldKill = \$false
+
+            if (\$cmd -like \"*\$mobilePath*\" -and (\$cmd -match 'expo|@expo/cli|metro|react-native')) {
+                \$shouldKill = \$true
+            }
+            if (-not \$shouldKill -and \$name -match '^(node|npm)(\.exe)?$') {
+                if (\$cmd -match '@expo/cli|\\\\expo\\\\|metro|react-native') {
+                    if ((\$cmd -match 'expo start') -or (\$cmd -match ('--port[\\s=]' + \$mobilePort)) -or (\$cmd -like \"*\$mobilePath*\")) {
+                        \$shouldKill = \$true
+                    }
+                }
+            }
+            if (-not \$shouldKill -and \$name -match 'bash') {
+                if ((\$cmd -match 'expo start|npx expo') -and ((\$cmd -match 'riveredge-app[\\\\/]mobile') -or (\$cmd -match ('--port[\\s=]' + \$mobilePort)))) {
+                    \$shouldKill = \$true
+                }
+            }
+
+            if (\$shouldKill) {
+                Stop-Process -Id \$id -Force -ErrorAction SilentlyContinue
+                cmd /c \"taskkill /F /PID \$id /T\" 2>\$null | Out-Null
+                \$killed += \$id
+            }
+        }
+        if (\$killed.Count -gt 0) {
+            Write-Output ('killed expo: ' + (\$killed -join ', '))
+        }
+    " 2>/dev/null || true
+    sleep 2
+}
+
+mobile_port_has_live_listener() {
+    [ -n "$(get_listening_pids "${MOBILE_PORT}")" ]
+}
+
+# Node freeport-async：检测端口是否可 bind（Windows Hyper-V 保留段内即使用 netstat 无监听也会失败）
+verify_mobile_port_bindable() {
+    ensure_nodejs_path || return 1
+    local rc=1
+    (
+        cd "${MOBILE_APP_DIR}" || exit 1
+        node -e "
+const freeport = require('freeport-async');
+freeport.availableAsync(${MOBILE_PORT}, { hostnames: [null] })
+  .then((ok) => process.exit(ok ? 0 : 1))
+  .catch(() => process.exit(1));
+" >/dev/null 2>&1
+    ) && rc=0
+    if [ "$rc" -ne 0 ]; then
+        log_error "端口 ${MOBILE_PORT} 在本机不可绑定（常见于 Windows Hyper-V 保留段 7998-8097 含旧默认 8081）"
+        log_error "请改用: MOBILE_PORT=8098 ./fast-deploy/launch.dev.sh me"
+        return 1
+    fi
+    return 0
+}
+
+ensure_mobile_port_free() {
+    local round=0
+    local listeners=""
+    while [ "$round" -lt "$PORT_KILL_MAX_ROUNDS" ]; do
+        kill_expo_mobile_tree
+        if ! kill_port "${MOBILE_PORT}"; then
+            log_warn "端口 ${MOBILE_PORT} kill_port 未完全成功（第 $((round + 1)) 轮）"
+        fi
+        listeners="$(get_listening_pids "${MOBILE_PORT}")"
+        if [ -z "$listeners" ]; then
+            sleep 1
+            listeners="$(get_listening_pids "${MOBILE_PORT}")"
+            [ -z "$listeners" ] && return 0
+        fi
+        log_warn "端口 ${MOBILE_PORT} 仍被占用: ${listeners}（第 $((round + 1)) 轮）"
+        round=$((round + 1))
+        sleep 1
+    done
+    log_error "端口 ${MOBILE_PORT} 仍被占用，无法启动手机 H5"
+    log_error "占用进程: $(get_listening_pids "${MOBILE_PORT}" | tr '\n' ' ')"
+    log_error "请执行: ./fast-deploy/launch.dev.sh stop  或手动结束占用 ${MOBILE_PORT} 的 node/expo 进程"
+    return 1
 }
 
 # Windows：清理 taskiq worker / scheduler 整棵树（uv run / taskiq.exe 会 fork，仅杀 pidfile 会残留占 PG 连接的子进程）
@@ -450,22 +552,25 @@ start_mobile() {
         return 1
     fi
     log_info "正在拉起手机 Expo Web (${MOBILE_PORT})..."
-    kill_port "${MOBILE_PORT}" || true
-    if [ -f ".logs/mobile.pid" ]; then
-        local old_pid
-        old_pid="$(cat .logs/mobile.pid 2>/dev/null)"
-        [ -n "$old_pid" ] && graceful_kill_pid "$old_pid"
-        rm -f .logs/mobile.pid
+    stop_mobile
+    ensure_mobile_port_free || return 1
+    verify_mobile_port_bindable || return 1
+    if mobile_port_has_live_listener; then
+        log_error "端口 ${MOBILE_PORT} 启动前仍被占用: $(get_listening_pids "${MOBILE_PORT}" | tr '\n' ' ')"
+        return 1
     fi
     cd "${MOBILE_APP_DIR}"
     if [ ! -d node_modules ]; then
         log_info "手机端首次安装依赖..."
         npm install || { cd "$PROJECT_ROOT"; return 1; }
     fi
-    # 开发模式默认打本机后端；勿自动弹浏览器（CI=1 替代已弃用的 --non-interactive）
+    # nohup 无 TTY → Expo 始终非交互，端口不可 bind 时不会自动换端口；须确保 MOBILE_PORT 可绑定
+    # 勿设 CI=1：Expo 在 CI 下端口冲突会直接退出
+    unset CI EXPO_CI 2>/dev/null || true
+    export CI=false
     export BROWSER=none
     export EXPO_NO_TELEMETRY=1
-    export CI=1
+    : > "${PROJECT_ROOT}/.logs/mobile.log"
     nohup npx expo start --web --port "${MOBILE_PORT}" \
         > "${PROJECT_ROOT}/.logs/mobile.log" 2>&1 &
     echo $! > "${PROJECT_ROOT}/.logs/mobile.pid"
@@ -481,7 +586,12 @@ start_mobile() {
             local launcher
             launcher="$(cat .logs/mobile.pid 2>/dev/null)"
             if [ -n "$launcher" ] && ! pid_is_alive "$launcher"; then
-                log_error "手机端进程已退出，请查看 .logs/mobile.log"
+                if grep -q "Port ${MOBILE_PORT} is being used" .logs/mobile.log 2>/dev/null \
+                    || grep -q "Skipping dev server" .logs/mobile.log 2>/dev/null; then
+                    log_error "手机端端口 ${MOBILE_PORT} 冲突（Expo 已跳过启动），请执行: ./fast-deploy/launch.dev.sh stop 后再试"
+                else
+                    log_error "手机端进程已退出，请查看 .logs/mobile.log"
+                fi
                 return 1
             fi
         fi
@@ -499,6 +609,7 @@ stop_mobile() {
         [ -n "$pid" ] && graceful_kill_pid "$pid"
         rm -f .logs/mobile.pid
     fi
+    kill_expo_mobile_tree
     kill_port "${MOBILE_PORT}" || true
 }
 

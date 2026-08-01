@@ -135,21 +135,8 @@ class RdProjectService(AppBaseService[RdProject]):
         except ValueError as e:
             raise BusinessLogicError(str(e))
 
-        if project_type == RdProjectType.DELIVERY.value:
-            gate_defs = [
-                {**g, "milestone_role": GateMilestoneRole.NONE.value}
-                for g in DEFAULT_DELIVERY_GATES
-            ]
-            return None, gate_defs, DEFAULT_DELIVERY_DELIVERABLES
         gate_defs = [
-            {
-                **g,
-                "milestone_role": (
-                    GateMilestoneRole.SPAWN_DELIVERY.value
-                    if g["gate_key"] == "release"
-                    else GateMilestoneRole.NONE.value
-                ),
-            }
+            {**g, "milestone_role": GateMilestoneRole.NONE.value}
             for g in DEFAULT_NPI_GATES
         ]
         return None, gate_defs, DEFAULT_GATE_DELIVERABLES
@@ -427,17 +414,12 @@ class RdProjectService(AppBaseService[RdProject]):
         self, tenant_id: int, data: RdProjectCreate, created_by: int
     ) -> RdProjectResponse:
         project_type = data.project_type or RdProjectType.RD.value
-        if project_type not in (RdProjectType.RD.value, RdProjectType.DELIVERY.value):
-            raise BusinessLogicError(f"不支持的项目类型: {project_type}")
+        if project_type != RdProjectType.RD.value:
+            raise BusinessLogicError("仅支持创建研发项目，交付阶段请使用研发项目后续门禁")
 
         async with in_transaction():
-            inherit_from: Optional[RdProject] = None
             if data.source_project_id:
-                inherit_from = await self._get_project_or_404(tenant_id, data.source_project_id)
-                if inherit_from.project_type != RdProjectType.RD.value:
-                    raise BusinessLogicError("来源项目必须是研发项目")
-                if project_type != RdProjectType.DELIVERY.value:
-                    raise BusinessLogicError("仅交付项目可指定来源研发项目")
+                raise BusinessLogicError("新建研发项目不可指定来源项目")
 
             code = data.project_code or await self._generate_project_code(tenant_id, project_type)
             owner_id = data.owner_id or created_by
@@ -448,10 +430,6 @@ class RdProjectService(AppBaseService[RdProject]):
             material_code = data.material_code
             material_name = data.material_name
             material_id = data.material_id
-            if inherit_from and not material_id and not material_code:
-                material_id = inherit_from.material_id
-                material_code = inherit_from.material_code
-                material_name = inherit_from.material_name
             if material_id and not material_code:
                 mat = await Material.get_or_none(tenant_id=tenant_id, id=material_id, deleted_at__isnull=True)
                 if mat:
@@ -473,9 +451,9 @@ class RdProjectService(AppBaseService[RdProject]):
                 planned_start_date=data.planned_start_date,
                 planned_end_date=data.planned_end_date,
                 notes=data.notes,
-                source_project_id=data.source_project_id,
+                source_project_id=None,
                 created_by=created_by,
-                inherit_links_from=inherit_from,
+                inherit_links_from=None,
                 gate_template_id=data.gate_template_id,
             )
             source_codes = await self._load_source_project_codes(tenant_id, [project])
@@ -488,54 +466,9 @@ class RdProjectService(AppBaseService[RdProject]):
         data: SpawnDeliveryProjectRequest,
         created_by: int,
     ) -> RdProjectResponse:
-        source = await self._get_project_or_404(tenant_id, source_project_id)
-        if source.project_type != RdProjectType.RD.value:
-            raise BusinessLogicError("仅研发项目可下推交付项目")
-
-        spawn_gate = await RdProjectGate.get_or_none(
-            tenant_id=tenant_id,
-            project_id=source_project_id,
-            milestone_role=GateMilestoneRole.SPAWN_DELIVERY.value,
+        raise BusinessLogicError(
+            "交付项目已并入研发项目后续门禁，请直接在研发项目中继续量产爬坡及后续阶段"
         )
-        if not spawn_gate or spawn_gate.status != RdGateStatus.PASSED.value:
-            status_label = spawn_gate.status if spawn_gate else "未找到"
-            gate_label = spawn_gate.gate_name if spawn_gate else "下推交付里程碑"
-            raise BusinessLogicError(
-                f"研发项目「{gate_label}」阶段门尚未通过（当前: {status_label}），无法创建交付项目"
-            )
-
-        async with in_transaction():
-            owner_id = data.owner_id or source.owner_id or created_by
-            owner_name = data.owner_name or source.owner_name
-            if owner_id and not owner_name:
-                owner_name = await self.get_user_name(owner_id)
-
-            project_name = data.project_name or f"{source.project_name} - 交付"
-            code = data.project_code or await self._generate_project_code(
-                tenant_id, RdProjectType.DELIVERY.value
-            )
-
-            project = await self._create_project_with_gates(
-                tenant_id,
-                project_type=RdProjectType.DELIVERY.value,
-                project_code=code,
-                project_name=project_name,
-                description=source.description,
-                material_id=source.material_id,
-                material_code=source.material_code,
-                material_name=source.material_name,
-                owner_id=owner_id,
-                owner_name=owner_name,
-                priority=source.priority,
-                planned_start_date=source.planned_start_date,
-                planned_end_date=source.planned_end_date,
-                notes=source.notes,
-                source_project_id=source.id,
-                created_by=created_by,
-                inherit_links_from=source,
-            )
-            source_codes = await self._load_source_project_codes(tenant_id, [project])
-            return self._to_project_response(project, source_codes)
 
     async def update_project(
         self, tenant_id: int, project_id: int, data: RdProjectUpdate, updated_by: int

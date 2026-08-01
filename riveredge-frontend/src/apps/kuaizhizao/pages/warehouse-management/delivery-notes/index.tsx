@@ -922,6 +922,7 @@ const DeliveryNotesPage: React.FC = () => {
                   limit: 100,
                   skip: 0,
                   keyword: keyWords || undefined,
+                  view: 'options',
                 });
                 return (r.data || []).map((o: any) => ({
                   label: `${o.order_code || o.id}${o.customer_name ? ' - ' + o.customer_name : ''}`,

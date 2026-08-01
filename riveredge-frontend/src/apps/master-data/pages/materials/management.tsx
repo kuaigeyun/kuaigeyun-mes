@@ -6,7 +6,7 @@ import { rowActionKind } from '../../../../components/uni-action';
  * 参考文件管理页面的左右两栏布局
  */
 
-import React, { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
+import React, { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import {
@@ -95,6 +95,10 @@ function renderMaterialGroupFolderIcon(props: { expanded: boolean; isLeaf: boole
 // 导入现有组件
 import SafeProFormSelect from '../../../../components/safe-pro-form-select'
 import { UniTable } from '../../../../components/uni-table'
+import { UniImportMenuButton } from '../../../../components/uni-import/UniImportMenuButton'
+import type { ImportPrecheckResult } from '../../../../components/uni-import/uni-import-preview-modal'
+import { usePagePermissionResource } from '../../../../hooks/usePagePermissionResource'
+import { useResourcePermissions } from '../../../../hooks/useResourcePermissions'
 import { UniBatchSplitToolbar } from '../../../../components/uni-batch'
 import { TwoColumnLayout, FormModalTemplate, flushDrawerOpen } from '../../../../components/layout-templates'
 import {
@@ -108,7 +112,11 @@ import { MaterialGroupFormModal } from '../../components/MaterialGroupFormModal'
 import { DEFAULT_MATERIAL_BASE_UNIT } from '../../constants/materialDefaults'
 import { normalizeStagesInput, stagesFromLegacy } from '../../components/InspectionStagesEditor'
 import { MaterialVariantSkusPanel } from '../../components/MaterialVariantSkusPanel'
-import { isVariantSkuMaterial, isVariantMasterMaterial, formatVariantAttributesLine } from '../../components/MaterialVariantCombinationsTable'
+import {
+  isVariantSkuMaterial,
+  isVariantMasterMaterial,
+  formatVariantAttributesLine,
+} from '../../components/MaterialVariantCombinationsTable'
 import { variantAttributeApi } from '../../services/variant-attribute'
 import type { VariantAttributeDefinition } from '../../types/variant-attribute'
 import FabricationRawMaterialWizard from '../../components/FabricationRawMaterialWizard'
@@ -127,6 +135,10 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../components/uni-table/stackedPrimaryColumn'
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+
+const LazyUniImport = lazy(() => import('../../../../components/uni-import'))
+
+type MaterialSplitImportKind = 'master' | 'sku' | 'units' | 'customerCodes' | 'defaults'
 
 /** SKU 子行列表单元格：不重复展示主物料字段 */
 function renderMasterCell(record: Material, node: React.ReactNode): React.ReactNode {
@@ -234,6 +246,8 @@ function MaterialListStackedCell({
 
 // 导入服务和类型
 import { materialApi, materialGroupApi } from '../../services/material'
+import { customerApi, unwrapSupplyPagedList } from '../../services/supply-chain'
+import type { Customer } from '../../types/supply-chain'
 import { drawingApi, type EngineeringDrawing } from '../../services/drawing'
 import {
   buildMaterialSourceTypeImportOptions,
@@ -272,11 +286,32 @@ import { getFileByUuid, getFileDownloadUrlWithToken } from '../../../../services
 import { batchImport } from '../../../../utils/batchOperations'
 import {
   buildMaterialImportColumnIndex,
-  ensureMasterVariantManaged,
-  materialToSkuCreatePayload,
+  materialImportHasRemovedSkuColumns,
   parseMaterialImportRows,
-  resolveMasterMaterialForImport,
 } from '../../utils/materialImport'
+import {
+  buildMaterialGroupImportOptions,
+  resolveMaterialGroupForImport,
+} from '../../utils/materialGroupImport'
+import {
+  buildMaterialSkuImportColumnIndex,
+  parseMaterialSkuImportRows,
+} from '../../utils/materialSkuImport'
+import {
+  buildMaterialUnitsImportColumnIndex,
+  mergeMaterialUnits,
+  parseMaterialUnitsImportRows,
+} from '../../utils/materialUnitsImport'
+import {
+  buildMaterialCustomerCodeImportColumnIndex,
+  extractCustomerCodesFromMaterial,
+  mergeCustomerCodes,
+  parseMaterialCustomerCodeImportRows,
+} from '../../utils/materialCustomerCodeImport'
+import {
+  buildMaterialDefaultsImportColumnIndex,
+  parseMaterialDefaultsImportRows,
+} from '../../utils/materialDefaultsImport'
 import { buildFactoryImportTemplate } from '../../utils/factoryImportTemplate'
 import { downloadFile } from '../../../../utils'
 import { formatDateTimeBySiteSetting } from '../../../../utils/format'
@@ -454,6 +489,8 @@ const MaterialsManagementPage: React.FC = () => {
   const { token } = theme.useToken()
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
+  const pagePermissionResource = usePagePermissionResource(location.pathname)
+  const { canImport } = useResourcePermissions(pagePermissionResource)
 
   // 左侧分组树状态
   const [groupTreeData, setGroupTreeData] = useState<DataNode[]>([])
@@ -466,6 +503,8 @@ const MaterialsManagementPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null)
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({})
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  const [activeImportKind, setActiveImportKind] = useState<MaterialSplitImportKind | null>(null)
+  const [importModalVisible, setImportModalVisible] = useState(false)
 
   const materialActiveValueEnum = useMemo(
     () => buildMasterCrudActiveValueEnum(t, 'app.master-data.materials.enabled', 'app.master-data.materials.disabled'),
@@ -1668,6 +1707,11 @@ const MaterialsManagementPage: React.FC = () => {
     [t, i18n.language],
   )
 
+  const materialGroupImportOptions = useMemo(
+    () => buildMaterialGroupImportOptions(materialGroups),
+    [materialGroups],
+  )
+
   const materialImportTemplate = useMemo(
     () =>
       buildFactoryImportTemplate(
@@ -1691,18 +1735,8 @@ const MaterialsManagementPage: React.FC = () => {
           {
             field: 'groupCode',
             labelKey: 'app.master-data.materials.materialGroup',
-            aliases: ['分组编号', '分组'],
-          },
-          { field: 'rowType', labelKey: 'app.master-data.materials.importRowType', aliases: ['行类型'], options: ['主物料', 'SKU'] },
-          {
-            field: 'masterMainCode',
-            labelKey: 'app.master-data.materials.importMasterMainCode',
-            aliases: ['主编码'],
-          },
-          {
-            field: 'variantAttributes',
-            labelKey: 'app.master-data.materials.importVariantAttrs',
-            aliases: ['属性组合'],
+            aliases: ['分组编号', '分组', '分类', '物料分类', '分组名称'],
+            options: materialGroupImportOptions,
           },
           {
             field: 'variantManaged',
@@ -1741,17 +1775,358 @@ const MaterialsManagementPage: React.FC = () => {
             materialSourceTypeImportOptions,
             t('app.master-data.materialForm.sourceMake'),
           ),
-          t('app.master-data.materials.importExample.groupCode'),
-          t('app.master-data.materials.importExample.rowType'),
-          '',
-          '',
+          materialGroupImportOptions[0] ?? t('app.master-data.materials.importExample.groupCode'),
           t('app.master-data.materials.importExample.variantManaged'),
           '是',
           '否',
           '否',
         ],
       ),
-    [t, i18n.language, baseUnitOptions, materialSourceTypeImportOptions],
+    [t, i18n.language, baseUnitOptions, materialSourceTypeImportOptions, materialGroupImportOptions],
+  )
+
+  const materialSkuImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'mainCode',
+            required: true,
+            labelKey: 'app.master-data.materials.materialCode',
+            aliases: ['主编码', '物料编号', '编号'],
+          },
+          {
+            field: 'variantAttributes',
+            required: true,
+            labelKey: 'app.master-data.materials.importSku.variantAttributes',
+            aliases: ['属性组合'],
+          },
+          {
+            field: 'isActive',
+            labelKey: 'app.master-data.materials.enabledStatus',
+            aliases: ['是否启用', '启用状态', '启用'],
+            options: [...IMPORT_YES_NO_OPTIONS],
+          },
+        ],
+        [
+          t('app.master-data.materials.importExample.code'),
+          t('app.master-data.materials.importSku.exampleVariantAttrs'),
+          '是',
+        ],
+      ),
+    [t, i18n.language],
+  )
+
+  const materialUnitsImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'mainCode',
+            required: true,
+            labelKey: 'app.master-data.materials.materialCode',
+            aliases: ['主编码', '物料编号', '编号'],
+          },
+          {
+            field: 'unit',
+            required: true,
+            labelKey: 'app.master-data.materials.importUnits.unit',
+            aliases: ['辅助单位', '单位'],
+          },
+          {
+            field: 'numerator',
+            required: true,
+            labelKey: 'app.master-data.materials.importUnits.numerator',
+            aliases: ['换算分子'],
+          },
+          {
+            field: 'denominator',
+            required: true,
+            labelKey: 'app.master-data.materials.importUnits.denominator',
+            aliases: ['换算分母'],
+          },
+          {
+            field: 'purchaseUnit',
+            labelKey: 'app.master-data.materials.importUnits.purchaseUnit',
+            aliases: ['采购单位'],
+          },
+          {
+            field: 'saleUnit',
+            labelKey: 'app.master-data.materials.importUnits.saleUnit',
+            aliases: ['销售单位'],
+          },
+          {
+            field: 'productionUnit',
+            labelKey: 'app.master-data.materials.importUnits.productionUnit',
+            aliases: ['生产单位'],
+          },
+          {
+            field: 'inventoryUnit',
+            labelKey: 'app.master-data.materials.importUnits.inventoryUnit',
+            aliases: ['库存单位'],
+          },
+        ],
+        ['M001', '箱', '12', '1', '', '', '', ''],
+      ),
+    [t, i18n.language],
+  )
+
+  const materialCustomerCodeImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'mainCode',
+            required: true,
+            labelKey: 'app.master-data.materials.materialCode',
+            aliases: ['主编码', '物料编号', '编号'],
+          },
+          {
+            field: 'customerCode',
+            labelKey: 'app.master-data.codeMapping.customerCode',
+            aliases: ['客户编码'],
+          },
+          {
+            field: 'customerName',
+            labelKey: 'app.master-data.codeMapping.customerLabel',
+            aliases: ['客户名称'],
+          },
+          {
+            field: 'customerPartCode',
+            required: true,
+            labelKey: 'app.master-data.materials.importCustomerCodes.partCode',
+            aliases: ['客户料号'],
+          },
+          {
+            field: 'customerPartName',
+            labelKey: 'app.master-data.materials.importCustomerCodes.partName',
+            aliases: ['客户物料名称'],
+          },
+          {
+            field: 'description',
+            labelKey: 'app.master-data.codeMapping.description',
+            aliases: ['描述'],
+          },
+        ],
+        ['M001', 'C001', '', 'CUST-PART-001', '客户品名', ''],
+      ),
+    [t, i18n.language],
+  )
+
+  const materialDefaultsImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'mainCode',
+            required: true,
+            labelKey: 'app.master-data.materials.materialCode',
+            aliases: ['主编码', '物料编号', '编号'],
+          },
+          {
+            field: 'defaultTaxRate',
+            labelKey: 'app.master-data.defaults.defaultTaxRate',
+            aliases: ['默认税率', '税率'],
+          },
+          {
+            field: 'defaultWarehouseCodes',
+            labelKey: 'app.master-data.materials.importDefaults.defaultWarehouseCodes',
+            aliases: ['默认仓库编码', '默认仓库'],
+          },
+          {
+            field: 'safetyStock',
+            labelKey: 'app.master-data.defaults.safetyStock',
+            aliases: ['安全库存'],
+          },
+          {
+            field: 'maxStock',
+            labelKey: 'app.master-data.defaults.maxStock',
+            aliases: ['最高库存', '最大库存'],
+          },
+          {
+            field: 'defaultSalePrice',
+            labelKey: 'app.master-data.defaults.defaultSalePrice',
+            aliases: ['默认销售价', '默认销售价格'],
+          },
+          {
+            field: 'defaultLocation',
+            labelKey: 'app.master-data.materials.importDefaults.defaultLocation',
+            aliases: ['默认库位', '库位'],
+          },
+        ],
+        ['M001', '13', 'WH01', '100', '1000', '99.9', 'A-01-01'],
+      ),
+    [t, i18n.language],
+  )
+
+  const activeImportTemplate = useMemo(() => {
+    switch (activeImportKind) {
+      case 'sku':
+        return materialSkuImportTemplate
+      case 'units':
+        return materialUnitsImportTemplate
+      case 'customerCodes':
+        return materialCustomerCodeImportTemplate
+      case 'defaults':
+        return materialDefaultsImportTemplate
+      case 'master':
+      default:
+        return materialImportTemplate
+    }
+  }, [
+    activeImportKind,
+    materialImportTemplate,
+    materialSkuImportTemplate,
+    materialUnitsImportTemplate,
+    materialCustomerCodeImportTemplate,
+    materialDefaultsImportTemplate,
+  ])
+
+  const activeImportTitle = useMemo(() => {
+    switch (activeImportKind) {
+      case 'sku':
+        return t('app.master-data.materials.importMenu.skuTitle')
+      case 'units':
+        return t('app.master-data.materials.importMenu.unitsTitle')
+      case 'customerCodes':
+        return t('app.master-data.materials.importMenu.customerCodesTitle')
+      case 'defaults':
+        return t('app.master-data.materials.importMenu.defaultsTitle')
+      case 'master':
+      default:
+        return t('app.master-data.materials.importMenu.masterTitle')
+    }
+  }, [activeImportKind, t])
+
+  const openMaterialImport = useCallback((kind: MaterialSplitImportKind) => {
+    setActiveImportKind(kind)
+    setImportModalVisible(true)
+  }, [])
+
+  const materialImportMenuButton = useMemo(() => {
+    if (!canImport) return null
+    return (
+      <UniImportMenuButton
+        key="material-import-menu"
+        items={[
+          {
+            key: 'master',
+            label: t('app.master-data.materials.importMenu.master'),
+            onClick: () => openMaterialImport('master'),
+          },
+          {
+            key: 'sku',
+            label: t('app.master-data.materials.importMenu.sku'),
+            onClick: () => openMaterialImport('sku'),
+          },
+          {
+            key: 'units',
+            label: t('app.master-data.materials.importMenu.units'),
+            onClick: () => openMaterialImport('units'),
+          },
+          {
+            key: 'customerCodes',
+            label: t('app.master-data.materials.importMenu.customerCodes'),
+            onClick: () => openMaterialImport('customerCodes'),
+          },
+          {
+            key: 'defaults',
+            label: t('app.master-data.materials.importMenu.defaults'),
+            onClick: () => openMaterialImport('defaults'),
+          },
+        ]}
+      />
+    )
+  }, [canImport, openMaterialImport, t])
+
+  const showImportValidationErrors = useCallback(
+    (errors: Array<{ row: number; message: string }>) => {
+      Modal.warning({
+        title: t('app.master-data.dataValidationFailed'),
+        width: 600,
+        content: (
+          <div>
+            <p>{t('app.master-data.validationFailedIntro')}</p>
+            <List
+              size="small"
+              dataSource={errors}
+              renderItem={(e) => (
+                <List.Item>
+                  <Typography.Text type="danger">
+                    {t('app.master-data.rowError', { row: e.row, message: e.message })}
+                  </Typography.Text>
+                </List.Item>
+              )}
+            />
+          </div>
+        ),
+      })
+    },
+    [t],
+  )
+
+  const showImportPartialErrors = useCallback(
+    (successCount: number, importErrors: Array<{ row: number; error: string }>) => {
+      Modal.warning({
+        title: t('app.master-data.importPartialResultTitle'),
+        width: 600,
+        content: (
+          <div>
+            <p>
+              <strong>
+                {t('app.master-data.importPartialResultIntro', {
+                  success: successCount,
+                  failure: importErrors.length,
+                })}
+              </strong>
+            </p>
+            <List
+              size="small"
+              dataSource={importErrors}
+              renderItem={(e) => (
+                <List.Item>
+                  <Typography.Text type="danger">
+                    {t('app.master-data.rowError', { row: e.row, message: e.error })}
+                  </Typography.Text>
+                </List.Item>
+              )}
+            />
+          </div>
+        ),
+      })
+    },
+    [t],
+  )
+
+  const ensureMasterVariantManaged = useCallback(async (master: Material) => {
+    if (isVariantMasterMaterial(master)) return master
+    await materialApi.update(master.uuid, {
+      variantManaged: true,
+      variantAttributes: null,
+    } as MaterialUpdate)
+    return materialApi.get(master.uuid)
+  }, [])
+
+  const clearGroupFilterAfterImport = useCallback(
+    (importedGroupIds: number[]) => {
+      const currentFilter = selectedGroupIdRef.current
+      if (currentFilter == null || currentFilter === -1 || importedGroupIds.length === 0) {
+        return false
+      }
+      if (importedGroupIds.includes(currentFilter)) {
+        return false
+      }
+      selectedGroupIdRef.current = null
+      setSelectedGroupId(null)
+      setSelectedGroupKeys(['all'])
+      messageApi.info(t('app.master-data.materials.importSwitchedToAll'))
+      return true
+    },
+    [messageApi, t],
   )
 
   const handleMaterialImport = async (data: any[][]) => {
@@ -1766,13 +2141,21 @@ const MaterialsManagementPage: React.FC = () => {
       return
     }
 
+    const removedSkuCols = materialImportHasRemovedSkuColumns(headers)
+    if (removedSkuCols.length > 0) {
+      messageApi.error(
+        t('app.master-data.materials.importSkuColumnsRemoved', {
+          columns: removedSkuCols.join('、'),
+        }),
+      )
+      return
+    }
+
     const idx = buildMaterialImportColumnIndex(headers, materialImportTemplate.importHeaderMap)
-    const hasMasterCols = idx.name >= 0 && idx.unit >= 0
-    const hasSkuCols = idx.masterMainCode >= 0 && idx.variantAttrs >= 0
-    if (!hasMasterCols && !hasSkuCols) {
+    if (idx.name < 0 || idx.unit < 0) {
       messageApi.error(
         t('app.master-data.importMissingField', {
-          field: '主物料：物料名称、基础单位；SKU：主编码、属性组合',
+          field: t('app.master-data.materials.importMasterRequiredFields'),
           headers: headers.join(', '),
         }),
       )
@@ -1781,7 +2164,7 @@ const MaterialsManagementPage: React.FC = () => {
 
     const groups = await materialGroupApi.list({ limit: 1000 })
     const groupList = Array.isArray(groups) ? groups : []
-    const { items: parsedItems, errors } = parseMaterialImportRows(
+    const { items: masterItems, errors } = parseMaterialImportRows(
       rows.map((row) => {
         if (idx.unit < 0) return row;
         const copy = [...row];
@@ -1792,7 +2175,10 @@ const MaterialsManagementPage: React.FC = () => {
         return copy;
       }),
       idx,
-      (groupCode) => groupList.find((x: any) => (x.code || '').trim() === groupCode.trim())?.id,
+      (groupCode) => {
+        const group = resolveMaterialGroupForImport(groupList, groupCode)
+        return group?.id
+      },
       3,
       t,
     )
@@ -1821,102 +2207,28 @@ const MaterialsManagementPage: React.FC = () => {
       return
     }
 
-    if (parsedItems.length === 0) {
+    if (masterItems.length === 0) {
       messageApi.warning(t('app.master-data.importAllEmpty'))
       return
     }
 
-    const masterItems = parsedItems.filter((x) => x.kind === 'master')
-    const skuItems = parsedItems.filter((x) => x.kind === 'sku')
-    const masterCache = new Map<string, Material>()
     const importErrors: Array<{ row: number; error: string }> = []
     let successCount = 0
 
     try {
-      if (masterItems.length > 0) {
-        const masterResult = await batchImport({
-          items: masterItems,
-          importFn: async (item) => materialApi.create(item.data),
-          title: t('app.master-data.materials.importTitle', { defaultValue: '正在导入物料' }),
-          concurrency: 5,
-        })
-        successCount += masterResult.successCount
-        importErrors.push(
-          ...masterResult.errors.map((e) => ({
-            row: masterItems[e.row - 1]?.rowNum ?? e.row,
-            error: e.error,
-          })),
-        )
-        for (const created of masterResult.successItems) {
-          const mc =
-            created?.mainCode ??
-            (created as any)?.main_code ??
-            (created as any)?.code
-          if (mc) {
-            masterCache.set(String(mc).trim(), created as Material)
-          }
-        }
-        for (const item of masterItems) {
-          const hint = item.mainCodeHint?.trim()
-          if (hint && masterCache.has(hint)) continue
-          const created = masterResult.successItems.find((m: Material) => {
-            const mc = m?.mainCode ?? (m as any)?.main_code
-            return hint && mc === hint
-          })
-          if (created && hint) {
-            masterCache.set(hint, created as Material)
-          }
-        }
-      }
-
-      if (skuItems.length > 0) {
-        const skuPayloads: Array<{ rowNum: number; data: MaterialCreate }> = []
-        for (const sku of skuItems) {
-          let master = await resolveMasterMaterialForImport(sku.masterMainCode, masterCache)
-          if (!master) {
-            importErrors.push({
-              row: sku.rowNum,
-              error: `未找到主编码为 ${sku.masterMainCode} 的主物料，请先导入主物料或确认已启用属性管理`,
-            })
-            continue
-          }
-          if (!master.variantManaged || !isVariantMasterMaterial(master)) {
-            try {
-              master = await ensureMasterVariantManaged(master)
-              masterCache.set(sku.masterMainCode.trim(), master)
-            } catch (e: unknown) {
-              importErrors.push({
-                row: sku.rowNum,
-                error: e instanceof Error ? e.message : '主物料启用属性管理失败',
-              })
-              continue
-            }
-          }
-          skuPayloads.push({
-            rowNum: sku.rowNum,
-            data: materialToSkuCreatePayload(master, sku.variantAttributes),
-          })
-        }
-
-        if (skuPayloads.length > 0) {
-          const skuResult = await batchImport({
-            items: skuPayloads,
-            importFn: async (item) => materialApi.create(item.data),
-            title: t('app.master-data.materials.importSkuTitle', { defaultValue: '正在导入属性 SKU' }),
-            concurrency: 5,
-          })
-          successCount += skuResult.successCount
-          importErrors.push(
-            ...skuResult.errors.map((e, i) => ({
-              row:
-                (skuResult.failureItems[i] as { rowNum?: number })?.rowNum ??
-                skuPayloads[e.row - 1]?.rowNum ??
-                e.row,
-              error: e.error,
-            })),
-          )
-        }
-      }
+      const masterResult = await batchImport({
+        items: masterItems,
+        importFn: async (item) => materialApi.create(item.data),
+        title: t('app.master-data.materials.importTitle', { defaultValue: '正在导入物料' }),
+        concurrency: 5,
+      })
+      successCount += masterResult.successCount
+      importErrors.push(
+        ...masterResult.errors.map((e) => ({
+          row: masterItems[e.row - 1]?.rowNum ?? e.row,
+          error: e.error,
+        })),
+      )
 
       const failureCount = importErrors.length
       if (failureCount > 0) {
@@ -1954,13 +2266,592 @@ const MaterialsManagementPage: React.FC = () => {
       }
 
       if (successCount > 0) {
+        const importedGroupIds = [
+          ...new Set(
+            masterItems
+              .map((item) => item.data.groupId)
+              .filter((id): id is number => typeof id === 'number' && id > 0),
+          ),
+        ]
+        clearGroupFilterAfterImport(importedGroupIds)
+        await loadMaterialGroups()
         actionRef.current?.reload()
-        loadMaterialGroups()
       }
     } catch (error: any) {
       messageApi.error(error?.message || t('app.master-data.importFailed', { defaultValue: '导入失败' }))
     }
   }
+
+  const handleMaterialSkuImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning(t('app.master-data.importEmpty'))
+      return
+    }
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim())
+    const rows = data.slice(2).filter((row: any[]) => row?.some((c: any) => c != null && String(c).trim() !== ''))
+    if (rows.length === 0) {
+      messageApi.warning(t('app.master-data.importNoRows'))
+      return
+    }
+
+    const idx = buildMaterialSkuImportColumnIndex(headers, materialSkuImportTemplate.importHeaderMap)
+    if (idx.mainCode < 0 || idx.variantAttributes < 0) {
+      messageApi.error(
+        t('app.master-data.importMissingField', {
+          field: t('app.master-data.materials.importSku.requiredFields'),
+          headers: headers.join(', '),
+        }),
+      )
+      return
+    }
+
+    const { items, errors } = parseMaterialSkuImportRows(rows, idx, 3, t)
+    if (errors.length > 0) {
+      showImportValidationErrors(errors)
+      return
+    }
+    if (items.length === 0) {
+      messageApi.warning(t('app.master-data.importAllEmpty'))
+      return
+    }
+
+    for (const row of items) {
+      for (const [attrName, attrValue] of Object.entries(row.variantAttributes)) {
+        const result = await variantAttributeApi.validate({
+          attribute_name: attrName,
+          attribute_value: attrValue,
+        })
+        if (!result.is_valid) {
+          showImportValidationErrors([
+            {
+              row: row.rowNum,
+              message: result.error_message || attrName,
+            },
+          ])
+          return
+        }
+      }
+    }
+
+    const masterCache = new Map<string, Material>()
+    const importErrors: Array<{ row: number; error: string }> = []
+    let successCount = 0
+
+    try {
+      const result = await batchImport({
+        items,
+        importFn: async (row) => {
+          let master = await resolveMasterByMainCode(row.mainCode, masterCache)
+          if (!master) {
+            throw new Error(
+              t('app.master-data.materials.importSku.masterNotFound', { code: row.mainCode }),
+            )
+          }
+          master = await ensureMasterVariantManaged(master)
+          masterCache.set(pickMaterialMainCode(master).toUpperCase(), master)
+          const materialized = await materialApi.materializeVariant({
+            mainCode: pickMaterialMainCode(master),
+            variantAttributes: row.variantAttributes,
+            createIfMissing: true,
+          })
+          if (!row.isActive && materialized.material?.uuid) {
+            await materialApi.update(materialized.material.uuid, { isActive: false })
+          }
+        },
+        title: t('app.master-data.materials.importMenu.skuTitle'),
+        concurrency: 3,
+      })
+      successCount = result.successCount
+      importErrors.push(
+        ...result.errors.map((e) => ({
+          row: items[e.row - 1]?.rowNum ?? e.row,
+          error: e.error,
+        })),
+      )
+
+      if (importErrors.length > 0) {
+        showImportPartialErrors(successCount, importErrors)
+      } else {
+        messageApi.success(t('app.master-data.importSuccess', { count: successCount }))
+      }
+      if (successCount > 0) {
+        actionRef.current?.reload()
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.importFailed', { defaultValue: '导入失败' }))
+    }
+  }
+
+  const handleMaterialUnitsImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning(t('app.master-data.importEmpty'))
+      return
+    }
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim())
+    const rows = data.slice(2).filter((row: any[]) => row?.some((c: any) => c != null && String(c).trim() !== ''))
+    if (rows.length === 0) {
+      messageApi.warning(t('app.master-data.importNoRows'))
+      return
+    }
+
+    const idx = buildMaterialUnitsImportColumnIndex(headers, materialUnitsImportTemplate.importHeaderMap)
+    if (idx.mainCode < 0 || idx.unit < 0 || idx.numerator < 0 || idx.denominator < 0) {
+      messageApi.error(
+        t('app.master-data.importMissingField', {
+          field: t('app.master-data.materials.importUnits.requiredFields'),
+          headers: headers.join(', '),
+        }),
+      )
+      return
+    }
+
+    const { groups, errors } = parseMaterialUnitsImportRows(rows, idx, 3, t)
+    if (errors.length > 0) {
+      showImportValidationErrors(errors)
+      return
+    }
+    if (groups.length === 0) {
+      messageApi.warning(t('app.master-data.importAllEmpty'))
+      return
+    }
+
+    const masterCache = new Map<string, Material>()
+    const importErrors: Array<{ row: number; error: string }> = []
+    let successCount = 0
+
+    try {
+      for (const group of groups) {
+        try {
+          const master = await resolveMasterByMainCode(group.mainCode, masterCache)
+          if (!master) {
+            throw new Error(
+              t('app.master-data.materials.importUnits.masterNotFound', { code: group.mainCode }),
+            )
+          }
+          const full = await materialApi.get(master.uuid)
+          const mergedUnits = mergeMaterialUnits(full.units, group)
+          await materialApi.update(master.uuid, { units: mergedUnits })
+          successCount += 1
+        } catch (error: any) {
+          for (const rowNum of group.rowNums) {
+            importErrors.push({ row: rowNum, error: error?.message || String(error) })
+          }
+        }
+      }
+
+      if (importErrors.length > 0) {
+        showImportPartialErrors(successCount, importErrors)
+      } else {
+        messageApi.success(t('app.master-data.importSuccess', { count: successCount }))
+      }
+      if (successCount > 0) {
+        actionRef.current?.reload()
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.importFailed', { defaultValue: '导入失败' }))
+    }
+  }
+
+  const handleMaterialCustomerCodesImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning(t('app.master-data.importEmpty'))
+      return
+    }
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim())
+    const rows = data.slice(2).filter((row: any[]) => row?.some((c: any) => c != null && String(c).trim() !== ''))
+    if (rows.length === 0) {
+      messageApi.warning(t('app.master-data.importNoRows'))
+      return
+    }
+
+    const idx = buildMaterialCustomerCodeImportColumnIndex(
+      headers,
+      materialCustomerCodeImportTemplate.importHeaderMap,
+    )
+    if (idx.mainCode < 0 || idx.customerPartCode < 0) {
+      messageApi.error(
+        t('app.master-data.importMissingField', {
+          field: t('app.master-data.materials.importCustomerCodes.requiredFields'),
+          headers: headers.join(', '),
+        }),
+      )
+      return
+    }
+
+    let customers: Customer[] = []
+    try {
+      const result = await customerApi.list({ limit: 1000, isActive: true })
+      customers = unwrapSupplyPagedList(result)
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.materialForm.fetchCustomersFailed'))
+      return
+    }
+
+    const { groups, errors } = parseMaterialCustomerCodeImportRows(rows, idx, customers, 3, t)
+    if (errors.length > 0) {
+      showImportValidationErrors(errors)
+      return
+    }
+    if (groups.length === 0) {
+      messageApi.warning(t('app.master-data.importAllEmpty'))
+      return
+    }
+
+    const masterCache = new Map<string, Material>()
+    const importErrors: Array<{ row: number; error: string }> = []
+    let successCount = 0
+
+    try {
+      for (const group of groups) {
+        try {
+          const master = await resolveMasterByMainCode(group.mainCode, masterCache)
+          if (!master) {
+            throw new Error(
+              t('app.master-data.materials.importCustomerCodes.masterNotFound', {
+                code: group.mainCode,
+              }),
+            )
+          }
+          const full = await materialApi.get(master.uuid)
+          const existing = extractCustomerCodesFromMaterial(full)
+          const merged = mergeCustomerCodes(existing, group.customerCodes)
+          await materialApi.update(master.uuid, {
+            customer_codes: merged
+              .filter((code) => code.customerId > 0)
+              .map((code) => ({
+                customer_id: code.customerId,
+                code: code.code,
+                name: code.name,
+                description: code.description,
+              })),
+          } as MaterialUpdate)
+          successCount += 1
+        } catch (error: any) {
+          for (const rowNum of group.rowNums) {
+            importErrors.push({ row: rowNum, error: error?.message || String(error) })
+          }
+        }
+      }
+
+      if (importErrors.length > 0) {
+        showImportPartialErrors(successCount, importErrors)
+      } else {
+        messageApi.success(t('app.master-data.importSuccess', { count: successCount }))
+      }
+      if (successCount > 0) {
+        actionRef.current?.reload()
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.importFailed', { defaultValue: '导入失败' }))
+    }
+  }
+
+  const handleMaterialDefaultsImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning(t('app.master-data.importEmpty'))
+      return
+    }
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim())
+    const rows = data.slice(2).filter((row: any[]) => row?.some((c: any) => c != null && String(c).trim() !== ''))
+    if (rows.length === 0) {
+      messageApi.warning(t('app.master-data.importNoRows'))
+      return
+    }
+
+    const idx = buildMaterialDefaultsImportColumnIndex(
+      headers,
+      materialDefaultsImportTemplate.importHeaderMap,
+    )
+    if (idx.mainCode < 0) {
+      messageApi.error(
+        t('app.master-data.importMissingField', {
+          field: t('app.master-data.materials.materialCode'),
+          headers: headers.join(', '),
+        }),
+      )
+      return
+    }
+
+    let warehouses: Warehouse[] = []
+    try {
+      const result = await warehouseApi.list({ limit: 1000, is_active: true })
+      warehouses = result.items ?? []
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.materialForm.fetchWarehousesFailed'))
+      return
+    }
+
+    const { items, errors } = parseMaterialDefaultsImportRows(rows, idx, warehouses, 3, t)
+    if (errors.length > 0) {
+      showImportValidationErrors(errors)
+      return
+    }
+    if (items.length === 0) {
+      messageApi.warning(t('app.master-data.importAllEmpty'))
+      return
+    }
+
+    const masterCache = new Map<string, Material>()
+    const importErrors: Array<{ row: number; error: string }> = []
+    let successCount = 0
+
+    try {
+      for (const item of items) {
+        try {
+          const master = await resolveMasterByMainCode(item.mainCode, masterCache)
+          if (!master) {
+            throw new Error(
+              t('app.master-data.materials.importDefaults.masterNotFound', { code: item.mainCode }),
+            )
+          }
+          await materialApi.bulkPatchDefaults({
+            material_uuids: [master.uuid],
+            ...item.patch,
+          })
+          successCount += 1
+        } catch (error: any) {
+          importErrors.push({ row: item.rowNum, error: error?.message || String(error) })
+        }
+      }
+
+      if (importErrors.length > 0) {
+        showImportPartialErrors(successCount, importErrors)
+      } else {
+        messageApi.success(t('app.master-data.importSuccess', { count: successCount }))
+      }
+      if (successCount > 0) {
+        actionRef.current?.reload()
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.importFailed', { defaultValue: '导入失败' }))
+    }
+  }
+
+  const runActiveMaterialImport = async (data: any[][]) => {
+    switch (activeImportKind) {
+      case 'sku':
+        return handleMaterialSkuImport(data)
+      case 'units':
+        return handleMaterialUnitsImport(data)
+      case 'customerCodes':
+        return handleMaterialCustomerCodesImport(data)
+      case 'defaults':
+        return handleMaterialDefaultsImport(data)
+      case 'master':
+      default:
+        return handleMaterialImport(data)
+    }
+  }
+
+  const handleMaterialImportPrecheck = useCallback(
+    async (data: any[][]): Promise<ImportPrecheckResult> => {
+      const rowErrorsToPrecheck = (errors: Array<{ row: number; message: string }>) => ({
+        canImport: false,
+        errors: errors.map((e) =>
+          t('app.master-data.rowError', { row: e.row, message: e.message }),
+        ),
+      })
+
+      if (!data || data.length < 2) {
+        return { canImport: false, errors: [t('app.master-data.importEmpty')] }
+      }
+      const headers = (data[0] || []).map((h: any) => String(h || '').trim())
+      const rows = data
+        .slice(2)
+        .filter((row: any[]) => row?.some((c: any) => c != null && String(c).trim() !== ''))
+      if (rows.length === 0) {
+        return { canImport: false, errors: [t('app.master-data.importNoRows')] }
+      }
+
+      const kind = activeImportKind ?? 'master'
+
+      if (kind === 'master') {
+        const removedSkuCols = materialImportHasRemovedSkuColumns(headers)
+        if (removedSkuCols.length > 0) {
+          return {
+            canImport: false,
+            errors: [
+              t('app.master-data.materials.importSkuColumnsRemoved', {
+                columns: removedSkuCols.join('、'),
+              }),
+            ],
+          }
+        }
+        const idx = buildMaterialImportColumnIndex(headers, materialImportTemplate.importHeaderMap)
+        if (idx.name < 0 || idx.unit < 0) {
+          return {
+            canImport: false,
+            errors: [
+              t('app.master-data.importMissingField', {
+                field: t('app.master-data.materials.importMasterRequiredFields'),
+                headers: headers.join(', '),
+              }),
+            ],
+          }
+        }
+        const groups = await materialGroupApi.list({ limit: 1000 })
+        const groupList = Array.isArray(groups) ? groups : []
+        const { items, errors } = parseMaterialImportRows(
+          rows.map((row) => {
+            if (idx.unit < 0) return row
+            const copy = [...row]
+            const raw = String(copy[idx.unit] ?? '').trim()
+            if (raw) {
+              copy[idx.unit] = parseImportOptionCell(raw, baseUnitOptions) ?? raw
+            }
+            return copy
+          }),
+          idx,
+          (groupCode) => resolveMaterialGroupForImport(groupList, groupCode)?.id,
+          3,
+          t,
+        )
+        if (errors.length > 0) return rowErrorsToPrecheck(errors)
+        if (items.length === 0) {
+          return { canImport: false, errors: [t('app.master-data.importAllEmpty')] }
+        }
+        return { canImport: true }
+      }
+
+      if (kind === 'sku') {
+        const idx = buildMaterialSkuImportColumnIndex(headers, materialSkuImportTemplate.importHeaderMap)
+        if (idx.mainCode < 0 || idx.variantAttributes < 0) {
+          return {
+            canImport: false,
+            errors: [
+              t('app.master-data.importMissingField', {
+                field: t('app.master-data.materials.importSku.requiredFields'),
+                headers: headers.join(', '),
+              }),
+            ],
+          }
+        }
+        const { items, errors } = parseMaterialSkuImportRows(rows, idx, 3, t)
+        if (errors.length > 0) return rowErrorsToPrecheck(errors)
+        if (items.length === 0) {
+          return { canImport: false, errors: [t('app.master-data.importAllEmpty')] }
+        }
+        for (const row of items) {
+          for (const [attrName, attrValue] of Object.entries(row.variantAttributes)) {
+            const result = await variantAttributeApi.validate({
+              attribute_name: attrName,
+              attribute_value: attrValue,
+            })
+            if (!result.is_valid) {
+              return rowErrorsToPrecheck([
+                {
+                  row: row.rowNum,
+                  message: result.error_message || attrName,
+                },
+              ])
+            }
+          }
+        }
+        return { canImport: true }
+      }
+
+      if (kind === 'units') {
+        const idx = buildMaterialUnitsImportColumnIndex(headers, materialUnitsImportTemplate.importHeaderMap)
+        if (idx.mainCode < 0 || idx.unit < 0 || idx.numerator < 0 || idx.denominator < 0) {
+          return {
+            canImport: false,
+            errors: [
+              t('app.master-data.importMissingField', {
+                field: t('app.master-data.materials.importUnits.requiredFields'),
+                headers: headers.join(', '),
+              }),
+            ],
+          }
+        }
+        const { groups, errors } = parseMaterialUnitsImportRows(rows, idx, 3, t)
+        if (errors.length > 0) return rowErrorsToPrecheck(errors)
+        if (groups.length === 0) {
+          return { canImport: false, errors: [t('app.master-data.importAllEmpty')] }
+        }
+        return { canImport: true }
+      }
+
+      if (kind === 'customerCodes') {
+        const idx = buildMaterialCustomerCodeImportColumnIndex(
+          headers,
+          materialCustomerCodeImportTemplate.importHeaderMap,
+        )
+        if (idx.mainCode < 0 || idx.customerPartCode < 0) {
+          return {
+            canImport: false,
+            errors: [
+              t('app.master-data.importMissingField', {
+                field: t('app.master-data.materials.importCustomerCodes.requiredFields'),
+                headers: headers.join(', '),
+              }),
+            ],
+          }
+        }
+        let customers: Customer[] = []
+        try {
+          const result = await customerApi.list({ limit: 1000, isActive: true })
+          customers = unwrapSupplyPagedList(result)
+        } catch (error: any) {
+          return {
+            canImport: false,
+            errors: [error?.message || t('app.master-data.materialForm.fetchCustomersFailed')],
+          }
+        }
+        const { groups, errors } = parseMaterialCustomerCodeImportRows(rows, idx, customers, 3, t)
+        if (errors.length > 0) return rowErrorsToPrecheck(errors)
+        if (groups.length === 0) {
+          return { canImport: false, errors: [t('app.master-data.importAllEmpty')] }
+        }
+        return { canImport: true }
+      }
+
+      if (kind === 'defaults') {
+        const idx = buildMaterialDefaultsImportColumnIndex(
+          headers,
+          materialDefaultsImportTemplate.importHeaderMap,
+        )
+        if (idx.mainCode < 0) {
+          return {
+            canImport: false,
+            errors: [
+              t('app.master-data.importMissingField', {
+                field: t('app.master-data.materials.materialCode'),
+                headers: headers.join(', '),
+              }),
+            ],
+          }
+        }
+        let warehouses: Warehouse[] = []
+        try {
+          const result = await warehouseApi.list({ limit: 1000, is_active: true })
+          warehouses = result.items ?? []
+        } catch (error: any) {
+          return {
+            canImport: false,
+            errors: [error?.message || t('app.master-data.materialForm.fetchWarehousesFailed')],
+          }
+        }
+        const { items, errors } = parseMaterialDefaultsImportRows(rows, idx, warehouses, 3, t)
+        if (errors.length > 0) return rowErrorsToPrecheck(errors)
+        if (items.length === 0) {
+          return { canImport: false, errors: [t('app.master-data.importAllEmpty')] }
+        }
+        return { canImport: true }
+      }
+
+      return { canImport: true }
+    },
+    [
+      activeImportKind,
+      t,
+      materialImportTemplate.importHeaderMap,
+      materialSkuImportTemplate.importHeaderMap,
+      materialUnitsImportTemplate.importHeaderMap,
+      materialCustomerCodeImportTemplate.importHeaderMap,
+      materialDefaultsImportTemplate.importHeaderMap,
+      baseUnitOptions,
+    ],
+  )
 
   const handleMaterialExport = async (type: 'selected' | 'currentPage' | 'all', selectedRowKeys?: React.Key[], currentPageData?: Material[]) => {
     try {
@@ -2262,8 +3153,8 @@ const MaterialsManagementPage: React.FC = () => {
     () => [
       {
         title: t('app.master-data.materials.colMaterialPrimary'),
-        key: 'name',
-        dataIndex: 'name',
+        key: 'mainCode',
+        dataIndex: 'mainCode',
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
         sorter: true,
@@ -2735,12 +3626,8 @@ const MaterialsManagementPage: React.FC = () => {
                   selectedRowKeys,
                   onChange: setSelectedRowKeys,
                 }}
-                showImportButton={true}
-                onImport={handleMaterialImport}
-                importHeaders={materialImportTemplate.importHeaders}
-                importExampleRow={materialImportTemplate.importExampleRow}
-                importColumnOptions={materialImportTemplate.importColumnOptions}
-                importFieldMap={materialImportTemplate.importHeaderMap}
+                showImportButton={false}
+                rightToolBarActionsBeforeExport={materialImportMenuButton ? [materialImportMenuButton] : undefined}
                 showExportButton={true}
                 onExport={handleMaterialExport}
               />
@@ -3846,6 +4733,36 @@ const MaterialsManagementPage: React.FC = () => {
           actionRef.current?.reload()
         }}
       />
+
+      {canImport && importModalVisible && activeImportKind && (
+        <Suspense fallback={null}>
+          <LazyUniImport
+            visible={importModalVisible}
+            title={activeImportTitle}
+            onCancel={() => {
+              setImportModalVisible(false)
+              setActiveImportKind(null)
+            }}
+            onConfirm={async (data) => {
+              const result = await Promise.resolve(runActiveMaterialImport(data))
+              if (result === false) return false
+              setImportModalVisible(false)
+              setActiveImportKind(null)
+              actionRef.current?.reload()
+              return undefined
+            }}
+            headers={activeImportTemplate.importHeaders}
+            exampleRow={activeImportTemplate.importExampleRow}
+            columnOptions={activeImportTemplate.importColumnOptions}
+            importFieldMap={activeImportTemplate.importHeaderMap}
+            enableXlsxTemplate
+            enableMappingImport
+            enableImportPreview
+            onImportPrecheck={handleMaterialImportPrecheck}
+            templateDocumentName={t('app.master-data.materials.importMenu.templateDocumentName')}
+          />
+        </Suspense>
+      )}
 
     </>
   )

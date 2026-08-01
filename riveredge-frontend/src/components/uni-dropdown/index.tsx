@@ -207,10 +207,7 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
         color: token.colorTextSecondary,
       };
       const runQuickCreate = (cfg: QuickCreateConfig) => {
-        innerSelectRef.current?.blur?.();
-        requestAnimationFrame(() => {
-          cfg.onClick(anchorWrapRef.current ?? undefined);
-        });
+        cfg.onClick();
       };
       return (
         <>
@@ -300,4 +297,4 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
 
 export type { QuickCreateConfig, QuickEditConfig, AdvancedSearchConfig, AdvancedSearchField } from './types';
 export { AdvancedSearchModal } from './AdvancedSearchModal';
-export { QuickCreateAnchorPopover } from './QuickCreateAnchorPopover';
+export { QuickCreateModal } from './QuickCreateModal';

@@ -34,7 +34,7 @@ import { workOrderApi } from '../../../services/work-order';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
-import { formatDateBySiteSetting } from '../../../../../utils/format';
+import { formatDateBySiteSetting, formatQuantity } from '../../../../../utils/format';
 import {
   OutboundEntryOperatorField,
   OutboundEntryRemarksSection,
@@ -61,6 +61,7 @@ import {
   loadBatchOptionsByMaterialId,
   loadInStockSerialOptions,
   resolveOutboundConfirmBatchValue,
+  sumInventoryPickOptionQty,
   type InventoryPickOption,
 } from './outboundConfirmInventoryOptions';
 import OutboundSerialPickerField from './OutboundSerialPickerField';
@@ -304,6 +305,27 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         dataIndex: 'pendingQuantity',
         width: 100,
         align: 'right' as const,
+        render: (value: number) => formatQuantity(value),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.pull.colCurrentStock'),
+        key: 'currentStock',
+        width: 100,
+        align: 'right' as const,
+        render: (_: unknown, line: PickLine) => {
+          const whId = lineWh[line.materialId];
+          if (!(whId > 0)) return '—';
+          if (batchOptionsLoading) return '…';
+          const stock = sumInventoryPickOptionQty(
+            batchOptionsByKey[lineBatchKey(line.materialId, whId)],
+          );
+          const insufficient = stock < line.pendingQuantity;
+          return (
+            <Typography.Text type={insufficient ? 'danger' : undefined}>
+              {formatQuantity(stock)}
+            </Typography.Text>
+          );
+        },
       },
       {
         title: (
@@ -795,7 +817,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
                   size="small"
                   rowKey="key"
                   pagination={false}
-                  scroll={{ x: 1500 }}
+                  scroll={{ x: 1600 }}
                   dataSource={pickLines}
                   columns={lineColumns}
                   locale={{ emptyText: t('app.kuaizhizao.warehouseOutbound.pull.woPreviewNoLines') }}

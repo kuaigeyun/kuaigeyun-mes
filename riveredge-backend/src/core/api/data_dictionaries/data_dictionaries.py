@@ -103,6 +103,7 @@ async def list_dictionaries(
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
     name: Optional[str] = Query(None, description="字典名称（模糊搜索）"),
     code: Optional[str] = Query(None, description="字典代码（模糊搜索）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（名称/代码/备注）"),
     tenant_id: int = Depends(get_current_tenant),
     _auth: object = Depends(require_data_dictionary_read),
 ):
@@ -117,6 +118,7 @@ async def list_dictionaries(
         is_active: 是否启用（可选）
         name: 字典名称（模糊搜索，可选）
         code: 字典代码（模糊搜索，可选）
+        keyword: 顶栏模糊搜索（名称/代码/备注 OR，可选）
         tenant_id: 当前组织ID（依赖注入）
         
     Returns:
@@ -129,6 +131,7 @@ async def list_dictionaries(
         is_active=is_active,
         name=name,
         code=code,
+        keyword=keyword,
         installed_app_codes=await get_installed_application_codes(tenant_id),
     )
     return DataDictionaryListResponse(

@@ -115,6 +115,22 @@ class SalesReturnCapabilities(BaseModel):
     revoke_approval: ActionCapability
 
 
+class AfterSalesTicketCapabilities(BaseModel):
+    update: ActionCapability
+    delete: ActionCapability
+    close: ActionCapability
+    push_sales_return: ActionCapability
+
+
+class InstallExecutionCapabilities(BaseModel):
+    update: ActionCapability
+    delete: ActionCapability
+    close: ActionCapability
+    assign_task: ActionCapability
+    advance_stage: ActionCapability
+    register_cost: ActionCapability
+
+
 class DemandComputationCapabilities(BaseModel):
     execute: ActionCapability
     recompute: ActionCapability
@@ -653,4 +669,21 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "nonconforming_ledger.update.closed": "已处理或已取消的台账不可更新处置",
     "nonconforming_ledger.start_8d.closed": "已处理或已取消的台账不可发起 8D",
     "nonconforming_ledger.start_8d.already_linked": "该台账已关联 8D 报告",
+    "after_sales_ticket.update.closed": "已关闭的售后服务工单不可编辑",
+    "after_sales_ticket.close.already_closed": "售后服务工单已关闭",
+    "after_sales_ticket.push_sales_return.not_allowed": "当前售后服务工单不可下推销售退货单",
+    "after_sales_ticket.push_sales_return.closed": "已关闭的售后服务工单不可下推",
+    "after_sales_ticket.push_sales_return.request_type": "仅退货或换货诉求可下推销售退货单",
+    "after_sales_ticket.push_sales_return.no_sales_order": "请先关联销售订单后再下推销售退货单",
+    "after_sales_ticket.push_sales_return.already_pushed": "该售后服务工单已下推销售退货单",
+    "after_sales_ticket.push_sales_return.no_items": "售后服务工单无明细，无法下推销售退货单",
+    "after_sales_ticket.push_sales_return.no_returnable": "关联销售订单当前无可退货数量",
+    "install_execution.update.closed": "已关闭的安装执行单不可编辑",
+    "install_execution.delete.closed": "已关闭的安装执行单不可删除",
+    "install_execution.close.already_closed": "安装执行单已关闭",
+    "install_execution.assign_task.closed": "已关闭的安装执行单不可登记任务",
+    "install_execution.advance_stage.closed": "已关闭的安装执行单不可推进阶段",
+    "install_execution.advance_stage.no_pending": "所有安装阶段均已完成，无需推进",
+    "install_execution.advance_stage.no_stages": "未配置安装阶段，无法推进",
+    "install_execution.register_cost.closed": "已关闭的安装执行单不可登记费用",
 }

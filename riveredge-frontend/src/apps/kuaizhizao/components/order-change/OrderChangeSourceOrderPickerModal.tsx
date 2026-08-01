@@ -46,6 +46,7 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
             keyword: kw,
             pullable_only: true,
             pull_target: 'sales_order_change',
+            view: 'options',
           });
           const rows = (res.data ?? [])
             .filter((o) => isSourceOrderEligibleForChange(o.status, o.review_status))

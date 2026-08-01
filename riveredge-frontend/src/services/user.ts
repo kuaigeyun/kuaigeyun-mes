@@ -402,6 +402,28 @@ export async function generateUserQRCode(userUuid: string, username: string, ful
   });
 }
 
+export interface UserFullNameCollisionResponse {
+  collision: boolean;
+  users: Array<{
+    id: number;
+    uuid: string;
+    username: string;
+    full_name?: string | null;
+  }>;
+}
+
+/** 检查组织内是否存在同名用户（仅提示，不阻止保存） */
+export async function checkUserFullNameCollision(
+  fullName: string,
+  excludeUserUuid?: string | null,
+): Promise<UserFullNameCollisionResponse> {
+  const params = new URLSearchParams({ full_name: fullName.trim() });
+  if (excludeUserUuid?.trim()) {
+    params.set('exclude_user_uuid', excludeUserUuid.trim());
+  }
+  return apiRequest<UserFullNameCollisionResponse>(`/core/users/full-name-collision-check?${params.toString()}`);
+}
+
 /** 人员展示项（选人/回显，非人员管理全量读） */
 export interface UserDisplayRoleItem {
   uuid: string;

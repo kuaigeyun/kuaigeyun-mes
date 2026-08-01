@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Sequence
 
 from tortoise.expressions import Q
 
@@ -31,6 +31,43 @@ CUSTOMER_POOL_SORTABLE_FIELDS = frozenset({
 CUSTOMER_POOL_KEYWORD_FIELDS = ["code", "name", "short_name", "contact_person", "phone"]
 
 DEFAULT_CUSTOMER_POOL_ORDER = "-code"
+
+_STANDARD_POOL_STATUSES = ("pool", "owned")
+
+
+def resolve_customer_pool_status_display(
+    pool_status: Optional[str],
+    salesman_id: Optional[int],
+) -> str:
+    """与 _to_customer_pool_item 展示逻辑一致：pool / owned。"""
+    raw_pool_status = str(pool_status or "").strip().lower()
+    if raw_pool_status in _STANDARD_POOL_STATUSES:
+        return raw_pool_status
+    if salesman_id:
+        return "owned"
+    return "pool"
+
+
+def customer_pool_effective_owned_q() -> Q:
+    """DB 条件：resolve_customer_pool_status_display(...) == 'owned'。"""
+    return Q(pool_status="owned") | (
+        Q(salesman_id__isnull=False) & ~Q(pool_status__in=list(_STANDARD_POOL_STATUSES))
+    )
+
+
+def customer_pool_effective_public_q() -> Q:
+    """DB 条件：resolve_customer_pool_status_display(...) == 'pool'。"""
+    return Q(pool_status="pool") | (
+        Q(salesman_id__isnull=True) & ~Q(pool_status__in=list(_STANDARD_POOL_STATUSES))
+    )
+
+
+def customer_pool_mine_scope_q(*, current_user_id: int, collaborator_customer_ids: Sequence[int]) -> Q:
+    """私有客户 tab：归属本人或协作客户（以 salesman_id 为准，不依赖 pool_status 脏数据）。"""
+    clause = Q(salesman_id=current_user_id)
+    if collaborator_customer_ids:
+        clause |= Q(id__in=list(collaborator_customer_ids))
+    return clause
 
 
 def apply_customer_pool_search_filters(

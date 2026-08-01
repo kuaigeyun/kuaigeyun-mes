@@ -171,3 +171,55 @@ class UserDisplayService:
         dept_ids = {u.department_id for u in users if u.department_id}
         dept_uuid_by_id = await UserDisplayService._department_uuid_map(tenant_id, dept_ids)
         return [UserDisplayService._to_item(u, dept_uuid_by_id) for u in users]
+
+    @staticmethod
+    async def build_label_map(*, tenant_id: int, user_ids: set[int] | list[int]) -> dict[int, str]:
+        ids = sorted({int(i) for i in user_ids if i})
+        if not ids:
+            return {}
+        users = await User.filter(
+            tenant_id=tenant_id,
+            id__in=ids,
+            deleted_at__isnull=True,
+        ).all()
+        return {
+            user.id: UserDisplayService.format_label(
+                full_name=user.full_name,
+                username=user.username,
+                user_id=user.id,
+            )
+            for user in users
+        }
+
+    @staticmethod
+    async def find_full_name_collisions(
+        *,
+        tenant_id: int,
+        full_name: str,
+        exclude_user_id: Optional[int] = None,
+    ) -> list[UserDisplayItem]:
+        normalized = (full_name or "").strip()
+        if not normalized:
+            return []
+        query = User.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            full_name__iexact=normalized,
+        )
+        if exclude_user_id is not None:
+            query = query.exclude(id=exclude_user_id)
+        users = await query.order_by("username").all()
+        return [
+            UserDisplayItem(
+                id=user.id,
+                uuid=str(user.uuid),
+                username=user.username,
+                full_name=user.full_name,
+                label=UserDisplayService.format_label(
+                    full_name=user.full_name,
+                    username=user.username,
+                    user_id=user.id,
+                ),
+            )
+            for user in users
+        ]

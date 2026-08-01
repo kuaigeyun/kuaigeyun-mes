@@ -86,6 +86,7 @@ const LEGACY_ENGLISH_HEADERS: Record<string, string[]> = {
   planType: ['plan_type', 'planType'],
   startDate: ['start_date', 'startDate'],
   endDate: ['end_date', 'endDate'],
+  groupCode: ['groupCode', 'group_code', 'group code', 'materialGroup', 'material_group'],
   specification: ['specification', 'spec', '产品型号', '规格型号', '规格'],
   materialName: ['materialName', 'material_name', 'material name', '产品名称', '物料名称'],
   baseUnit: ['baseUnit', 'base_unit', 'base unit'],

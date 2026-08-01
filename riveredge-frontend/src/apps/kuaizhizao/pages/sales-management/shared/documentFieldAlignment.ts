@@ -138,6 +138,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   salesman_id: 40.6,
   salesmanName: 40.5,
   salesmanId: 40.6,
+  collaborators: 40.55,
   // 业务分类与金额
   forecast_period: 50,
   period: 50,

@@ -62,6 +62,8 @@ export interface DataDictionaryListParams {
   is_active?: boolean;
   name?: string;
   code?: string;
+  /** 顶栏模糊搜索：名称 / 代码 / 备注 */
+  keyword?: string;
 }
 
 /**

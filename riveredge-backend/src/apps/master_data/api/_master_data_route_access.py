@@ -17,6 +17,9 @@ _PATH_MODULE_RULES: tuple[tuple[str, str], ...] = (
     ("/routes", "process:route"),
     ("/product-process", "process:route"),
     ("/sop", "process:sop"),
+    # BOM / 工程变更：manifest 为 process:engineering-bom（须先于泛化 /materials）
+    ("/bom-change-records", "process:engineering-bom"),
+    ("/materials/bom", "process:engineering-bom"),
     ("/warehouses", "warehouse:warehouse"),
     ("/storage-areas", "warehouse:storage-area"),
     ("/storage-locations", "warehouse:storage-location"),
@@ -31,6 +34,7 @@ _PATH_MODULE_RULES: tuple[tuple[str, str], ...] = (
 # manifest 无 :approve、审核走 :audit 的模块
 _AUDIT_APPROVE_MODULES = frozenset({
     "material",
+    "process:engineering-bom",
 })
 
 
@@ -59,8 +63,11 @@ def resolve_master_data_module_action(
     if "/release" in p:
         return "release"
     if "/obsolete" in p:
+        # engineering-bom 无 obsolete 码，失效走 update
+        if module_code == "process:engineering-bom":
+            return "update"
         return "obsolete"
-    if "/approve" in p:
+    if "/approve" in p or "/batch-approve" in p:
         if module_code in _AUDIT_APPROVE_MODULES:
             return "audit"
         return "approve"

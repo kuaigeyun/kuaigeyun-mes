@@ -900,6 +900,32 @@ export interface BOMQuantityResult {
  */
 export interface BOMCycleDetectionResult {
   hasCycle: boolean; // 是否会导致循环依赖
+  path?: number[]; // 环路径（物料 ID）
+}
+
+export interface BOMWhereUsedItem {
+  bomId: number;
+  bomUuid: string;
+  materialId: number;
+  materialCode?: string | null;
+  materialName?: string | null;
+  componentId: number;
+  version: string;
+  quantity: number;
+  unit?: string | null;
+  approvalStatus?: string;
+  isDefault?: boolean;
+  isObsolete?: boolean;
+  bomCode?: string | null;
+}
+
+export interface BOMWhereUsedResult {
+  componentId: number;
+  componentCode?: string | null;
+  componentName?: string | null;
+  recursive: boolean;
+  items: BOMWhereUsedItem[];
+  total: number;
 }
 
 

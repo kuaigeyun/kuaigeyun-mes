@@ -512,7 +512,11 @@ async def list_sales_orders(
     ),
     pull_target: Optional[str] = Query(
         None,
-        description="加载目标：sales_order_change；与 pullable_only 组合使用",
+        description="加载目标：sales_order_change / after_sales_ticket / sales_return；与 pullable_only 组合使用",
+    ),
+    view: Optional[str] = Query(
+        None,
+        description="响应视图：options=选单轻量列表（跳过进度/capabilities；可配合 include_items）",
     ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -550,6 +554,7 @@ async def list_sales_orders(
             list_scope=list_scope,
             pullable_only=pullable_only,
             pull_target=pull_target,
+            view=view,
             current_user=current_user,
         )
         payloads = [row.model_dump() for row in result.data]
@@ -630,6 +635,10 @@ async def get_sales_order(
     sales_order_id: int = Path(..., description="销售订单ID"),
     include_items: bool = Query(False, description="是否包含订单明细"),
     include_duration: bool = Query(False, description="是否包含耗时统计"),
+    view: Optional[str] = Query(
+        None,
+        description="响应视图：options=选单轻量详情（跳过里程碑/账款/capabilities）",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -638,6 +647,7 @@ async def get_sales_order(
     
     - **include_items**: 是否包含订单明细
     - **include_duration**: 是否包含耗时统计信息
+    - **view**: options 时仅返回选单所需字段
     """
     try:
         result = await sales_order_service.get_sales_order_by_id(
@@ -645,6 +655,7 @@ async def get_sales_order(
             sales_order_id=sales_order_id,
             include_items=include_items,
             include_duration=include_duration,
+            view=view,
             current_user=current_user,
         )
         masked_payload = await _mask_sales_order_payload(

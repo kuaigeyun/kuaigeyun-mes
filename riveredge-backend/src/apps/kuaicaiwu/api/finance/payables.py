@@ -14,6 +14,10 @@ from apps.kuaicaiwu.schemas.finance import (
 )
 from apps.kuaicaiwu.services.finance_service import PayableService
 from apps.kuaicaiwu.services.payable_pull_service import PayablePullService
+from apps.kuaicaiwu.utils.settlement_db_guard import (
+    SETTLEMENTS_TABLE_MISSING_HINT,
+    is_settlements_table_missing,
+)
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
@@ -268,9 +272,23 @@ async def record_payment(
         payable = await payable_service.record_payment(tenant_id, id, data, current_user.id)
         return payable
     except NotFoundError as e:
-        raise _http_exception_with_trace(404, str(e), "/payables/{id}/payment", tenant_id)
+        raise _http_exception_with_trace(404, str(e), "/payables/{id}/payment", tenant_id) from e
     except (BusinessLogicError, ValidationError) as e:
-        raise _http_exception_with_trace(400, str(e), "/payables/{id}/payment", tenant_id)
+        raise _http_exception_with_trace(400, str(e), "/payables/{id}/payment", tenant_id) from e
+    except Exception as e:
+        if is_settlements_table_missing(e):
+            logger.exception(
+                "record_payment missing settlements table tenant_id={} payable_id={}",
+                tenant_id,
+                id,
+            )
+            raise _http_exception_with_trace(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                SETTLEMENTS_TABLE_MISSING_HINT,
+                "/payables/{id}/payment",
+                tenant_id,
+            ) from e
+        raise
 
 
 @router.post("/{id}/approve", response_model=PayableResponse)

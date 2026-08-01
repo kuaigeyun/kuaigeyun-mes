@@ -7,7 +7,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormInstance } from '@ant-design/pro-components';
-import { App, Input, Tabs, Row, Col, Button, Space } from 'antd';
+import { App, Input, Tabs, Row, Col } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import {
   MODAL_CONFIG,
@@ -15,10 +15,15 @@ import {
   FORM_LAYOUT,
 } from '../../../components/layout-templates/constants';
 import { customerApi, getUserOptions, getDictionaryOptions } from '../services/supply-chain';
+import { getDataDictionaryByCode, createDictionaryItem } from '../../../services/dataDictionary';
 import { testGenerateCode, generateCode, fetchEffectivePageCodeRule } from '../../../services/codeRule';
 import { useGlobalStore } from '../../../stores/globalStore';
 import type { Customer, CustomerCreate, CustomerUpdate } from '../types/supply-chain';
 import { SchemaFormRenderer } from '../../../components/schema-form';
+import {
+  CompanyNameAsciiParenHint,
+  CUSTOMER_FORM_SMART_ANCHOR,
+} from './CompanyNameAsciiParenHint';
 import {
   customerFormSchemaBasicHead,
   customerFormSchemaBasicTail,
@@ -26,8 +31,12 @@ import {
   customerFormSchemaInvoice,
   customerFormSchemaExtended,
 } from '../schemas/customer';
-import { getDataDictionaryByCode, createDictionaryItem } from '../../../services/dataDictionary';
-import { QuickCreateAnchorPopover } from '../../../components/uni-dropdown';
+import {
+  dedupeDictionaryOptionsByValue,
+  dictionaryQuickCreateValueFromLabel,
+  findExistingDictionaryOption,
+} from '../../../utils/dictionaryQuickCreate';
+import { QuickCreateModal } from '../../../components/uni-dropdown';
 import {
   customerDetailToFormValues,
   normalizeCustomerContactsForSubmit,
@@ -48,7 +57,18 @@ export interface CustomerFormModalProps {
   onSuccess: (customer: Customer) => void;
   /** 与详情抽屉、追溯浮层或已抬升的表单 Modal 同屏时使用 */
   zIndex?: number;
+  /**
+   * 客户池协作人：传入后在「归属业务员」后展示多选，并在保存后同步协作人。
+   * 主数据客户页可不传。
+   */
+  collaboratorSupport?: {
+    load: (customerId: number) => Promise<number[]>;
+    save: (customerId: number, userIds: number[]) => Promise<void>;
+    maxCount?: number;
+  };
 }
+
+const MAX_COLLABORATORS_DEFAULT = 10;
 
 export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   open,
@@ -56,6 +76,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   editUuid,
   onSuccess,
   zIndex,
+  collaboratorSupport,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -73,7 +94,6 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     label: string;
   } | null>(null);
   const [quickCreateName, setQuickCreateName] = useState('');
-  const [quickCreateAnchorEl, setQuickCreateAnchorEl] = useState<HTMLElement | null>(null);
   const [quickCreateLoading, setQuickCreateLoading] = useState(false);
   const [isPublicMode, setIsPublicMode] = useState(true);
 
@@ -87,12 +107,14 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   } = useCustomFields({ tableName: CUSTOM_FIELD_TABLE, loadWhenOpen: true, open });
 
   const isEdit = Boolean(editUuid);
+  const collaboratorSupportRef = useRef(collaboratorSupport);
+  collaboratorSupportRef.current = collaboratorSupport;
 
   const syncSalesmanWithVisibility = useCallback((isPublic: boolean | undefined) => {
     setIsPublicMode(isPublic !== false);
     const currentUser = useGlobalStore.getState().currentUser;
     if (isPublic === true) {
-      formRef.current?.setFieldsValue({ salesmanId: undefined });
+      formRef.current?.setFieldsValue({ salesmanId: undefined, collaboratorIds: [] });
       return;
     }
     if (isPublic === false && currentUser?.id) {
@@ -114,6 +136,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     ]);
     setOptionsMap({
       salesmanId: users,
+      collaboratorIds: users,
       industryCode: industry,
       customerLevelCode: level,
       leadSourceCode: lead,
@@ -143,6 +166,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
       isActive: true,
       isPublic: true,
       salesmanId: undefined,
+      collaboratorIds: [],
     });
     setIsPublicMode(true);
     resetFieldValues();
@@ -172,6 +196,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
             isActive: true,
             isPublic: true,
             salesmanId: undefined,
+            collaboratorIds: [],
           });
         } catch (err: any) {
           if (cancelled) return;
@@ -192,11 +217,27 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
       .get(editUuid)
       .then(async (detail) => {
         if (cancelled) return;
-        formRef.current?.setFieldsValue(customerDetailToFormValues(detail));
-        setIsPublicMode(detail.poolStatus === 'pool' || !detail.salesmanId);
+        const isPublic = detail.poolStatus === 'pool' || !detail.salesmanId;
+        formRef.current?.setFieldsValue({
+          ...customerDetailToFormValues(detail),
+          collaboratorIds: [],
+        });
+        setIsPublicMode(isPublic);
         const fieldFormValues = await loadFieldValues(detail.id);
         if (cancelled) return;
         formRef.current?.setFieldsValue(fieldFormValues);
+        const collabSupport = collaboratorSupportRef.current;
+        if (collabSupport && !isPublic && detail.id) {
+          try {
+            const ids = await collabSupport.load(detail.id);
+            if (cancelled) return;
+            formRef.current?.setFieldsValue({ collaboratorIds: ids });
+          } catch {
+            if (!cancelled) {
+              formRef.current?.setFieldsValue({ collaboratorIds: [] });
+            }
+          }
+        }
       })
       .catch((err: any) => {
         if (cancelled) return;
@@ -206,29 +247,43 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, editUuid]);
+  }, [open, editUuid, loadFieldValues, messageApi, resetFieldValues, t]);
 
   const customerBasicTailSchema = useMemo(() => {
     const source = isEdit ? customerFormSchemaBasicTailEdit : customerFormSchemaBasicTail;
-    return source.map((field) =>
-      field.name === 'salesmanId'
-        ? {
+    const maxCount = collaboratorSupport?.maxCount ?? MAX_COLLABORATORS_DEFAULT;
+    return source
+      .filter((field) => field.name !== 'collaboratorIds' || Boolean(collaboratorSupport))
+      .map((field) => {
+        if (field.name === 'salesmanId') {
+          return {
             ...field,
             fieldProps: {
               ...(field.fieldProps || {}),
               disabled: isPublicMode,
             },
-          }
-        : field,
-    );
-  }, [isEdit, isPublicMode]);
+          };
+        }
+        if (field.name === 'collaboratorIds') {
+          return {
+            ...field,
+            fieldProps: {
+              ...(field.fieldProps || {}),
+              disabled: isPublicMode,
+              maxCount,
+            },
+          };
+        }
+        return field;
+      });
+  }, [isEdit, isPublicMode, collaboratorSupport]);
 
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
       const currentUser = useGlobalStore.getState().currentUser;
       const { customData, standardValues } = extractFormValues(values);
-      const { isPublic: _isPublic, ...restValues } = standardValues;
+      const { isPublic: _isPublic, collaboratorIds: rawCollaboratorIds, ...restValues } = standardValues;
       const payload: Record<string, unknown> = {
         ...restValues,
         contacts: normalizeCustomerContactsForSubmit(standardValues.contacts ?? values.contacts),
@@ -239,12 +294,24 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
       } else if (!payload.salesmanId && currentUser?.id) {
         payload.salesmanId = currentUser.id;
       }
+
+      const salesmanIdNum = payload.salesmanId != null ? Number(payload.salesmanId) : null;
+      const collaboratorIds = Array.isArray(rawCollaboratorIds)
+        ? (rawCollaboratorIds as unknown[])
+            .map((id) => Number(id))
+            .filter((id) => Number.isFinite(id) && id > 0 && id !== salesmanIdNum)
+        : [];
+      const maxCount = collaboratorSupport?.maxCount ?? MAX_COLLABORATORS_DEFAULT;
+      if (collaboratorSupport && collaboratorIds.length > maxCount) {
+        messageApi.error(t('field.customer.collaboratorsMax', { max: maxCount }));
+        throw new Error('collaborators max');
+      }
+
+      let saved: Customer;
       if (isEdit && editUuid) {
         await customerApi.update(editUuid, payload as CustomerUpdate);
-        messageApi.success(t('common.updateSuccess'));
-        const updated = await customerApi.get(editUuid);
-        await saveCustomFieldValues(updated.id, customData);
-        onSuccess(updated);
+        saved = await customerApi.get(editUuid);
+        await saveCustomFieldValues(saved.id, customData);
       } else {
         const ruleCodeToUse = effectiveRuleCode;
         if (
@@ -258,16 +325,38 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         if (payload.isActive === undefined) {
           payload.isActive = true;
         }
-        const created = await customerApi.create(payload as CustomerCreate);
-        await saveCustomFieldValues(created.id, customData);
-        messageApi.success(t('common.createSuccess'));
-        onSuccess(created);
+        saved = await customerApi.create(payload as CustomerCreate);
+        await saveCustomFieldValues(saved.id, customData);
       }
+
+      let collaboratorsFailed = false;
+      if (collaboratorSupport) {
+        const owned = standardValues.isPublic !== true && salesmanIdNum != null;
+        try {
+          await collaboratorSupport.save(saved.id, owned ? collaboratorIds : []);
+        } catch (collabError: any) {
+          collaboratorsFailed = true;
+          messageApi.error(
+            collabError?.message || t('app.kuaizhizao.customerPool.collaboratorsSaveFailed'),
+          );
+        }
+      }
+
+      messageApi.success(
+        collaboratorsFailed
+          ? t('field.customer.savedButCollaboratorsFailed')
+          : t(isEdit ? 'common.updateSuccess' : 'common.createSuccess'),
+      );
+
+      onSuccess(saved);
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
       resetFieldValues();
     } catch (error: any) {
+      if (error?.message === 'collaborators max') {
+        return;
+      }
       messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
@@ -288,21 +377,28 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
       messageApi.warning('请填写新选项');
       return;
     }
+    const value = dictionaryQuickCreateValueFromLabel(label);
     try {
       setQuickCreateLoading(true);
+      const existingOptions = dedupeDictionaryOptionsByValue(
+        await getDictionaryOptions(quickCreateTarget.dictionaryCode),
+      );
+      if (findExistingDictionaryOption(existingOptions, { label, value })) {
+        messageApi.warning(t('components.dictionarySelect.valueExists'));
+        return;
+      }
       const dict = await getDataDictionaryByCode(quickCreateTarget.dictionaryCode);
       await createDictionaryItem(dict.uuid, {
         label,
-        value: label,
+        value,
         is_active: true,
       });
       await loadOptions();
       if (quickCreateTarget.field !== 'contactTitle') {
-        formRef.current?.setFieldsValue({ [quickCreateTarget.field]: label });
+        formRef.current?.setFieldsValue({ [quickCreateTarget.field]: value });
       }
       messageApi.success(t('common.createSuccess'));
       setQuickCreateTarget(null);
-      setQuickCreateAnchorEl(null);
       setQuickCreateName('');
     } catch (error: any) {
       messageApi.error(error?.message || '新增字典项失败');
@@ -325,12 +421,25 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         layout="vertical"
         grid
         zIndex={zIndex}
-        onValuesChange={(changed) => {
+        modalRender={(modal) => (
+          <div data-smart-suggestion-anchor="customer-form">{modal}</div>
+        )}
+        onValuesChange={(changed, all) => {
           if ('isPublic' in changed) {
             syncSalesmanWithVisibility(changed.isPublic);
           }
+          if ('salesmanId' in changed) {
+            const ownerId = Number(changed.salesmanId);
+            const currentIds = Array.isArray(all?.collaboratorIds) ? all.collaboratorIds : [];
+            if (Number.isFinite(ownerId) && ownerId > 0 && currentIds.some((id: unknown) => Number(id) === ownerId)) {
+              formRef.current?.setFieldsValue({
+                collaboratorIds: currentIds.filter((id: unknown) => Number(id) !== ownerId),
+              });
+            }
+          }
         }}
       >
+        <CompanyNameAsciiParenHint open={open} anchorSelector={CUSTOMER_FORM_SMART_ANCHOR} />
         {/*
          * ProForm grid 只给「直接子级」包一层 Row；若唯一子节点是 Tabs，表单项的 Col 在 Tab 内，
          * 不在这层 Row 下会导致整表挤成窄列。用 Col span=24 占满外排行，Tab 内再用 Row 承接各字段的 Col。
@@ -355,8 +464,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                         category: {
                           quickCreate: {
                             label: '快速新增',
-                            onClick: (anchor) => {
-                              setQuickCreateAnchorEl(anchor ?? null);
+                            onClick: () => {
                               setQuickCreateTarget({
                                 field: 'category',
                                 dictionaryCode: 'CUSTOMER_CATEGORY',
@@ -375,8 +483,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                     <Col span={24}>
                       <CustomerContactsFormTable
                         contactTitleOptions={optionsMap.contactTitle ?? []}
-                        onQuickCreateContactTitle={(anchor) => {
-                          setQuickCreateAnchorEl(anchor ?? null);
+                        onQuickCreateContactTitle={() => {
                           setQuickCreateTarget({
                             field: 'contactTitle',
                             dictionaryCode: 'CONTACT_TITLE',
@@ -415,8 +522,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                         industryCode: {
                           quickCreate: {
                             label: '快速新增',
-                            onClick: (anchor) => {
-                              setQuickCreateAnchorEl(anchor ?? null);
+                            onClick: () => {
                               setQuickCreateTarget({
                                 field: 'industryCode',
                                 dictionaryCode: 'INDUSTRY_SECTOR',
@@ -428,8 +534,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                         customerLevelCode: {
                           quickCreate: {
                             label: '快速新增',
-                            onClick: (anchor) => {
-                              setQuickCreateAnchorEl(anchor ?? null);
+                            onClick: () => {
                               setQuickCreateTarget({
                                 field: 'customerLevelCode',
                                 dictionaryCode: 'CUSTOMER_LEVEL',
@@ -441,8 +546,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                         leadSourceCode: {
                           quickCreate: {
                             label: '快速新增',
-                            onClick: (anchor) => {
-                              setQuickCreateAnchorEl(anchor ?? null);
+                            onClick: () => {
                               setQuickCreateTarget({
                                 field: 'leadSourceCode',
                                 dictionaryCode: 'PARTNER_SOURCE_CHANNEL',
@@ -460,41 +564,25 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
           />
         </Col>
       </FormModalTemplate>
-      <QuickCreateAnchorPopover
+      <QuickCreateModal
         open={!!quickCreateTarget}
-        anchorEl={quickCreateAnchorEl}
         title={quickCreateTarget ? `快速新增${quickCreateTarget.label}` : '快速新增'}
         zIndex={zIndex != null ? zIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET : undefined}
+        confirmLoading={quickCreateLoading}
         onClose={() => {
           setQuickCreateTarget(null);
-          setQuickCreateAnchorEl(null);
           setQuickCreateName('');
         }}
+        onConfirm={handleQuickCreateSubmit}
       >
-        <>
-          <Input
-            placeholder="请输入新选项"
-            value={quickCreateName}
-            onChange={(e) => setQuickCreateName(e.target.value)}
-            maxLength={100}
-            autoFocus
-          />
-          <Space style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
-            <Button
-              onClick={() => {
-                setQuickCreateTarget(null);
-                setQuickCreateAnchorEl(null);
-                setQuickCreateName('');
-              }}
-            >
-              取消
-            </Button>
-            <Button type="primary" loading={quickCreateLoading} onClick={() => void handleQuickCreateSubmit()}>
-              确定
-            </Button>
-          </Space>
-        </>
-      </QuickCreateAnchorPopover>
+        <Input
+          placeholder="请输入新选项"
+          value={quickCreateName}
+          onChange={(e) => setQuickCreateName(e.target.value)}
+          maxLength={100}
+          autoFocus
+        />
+      </QuickCreateModal>
     </>
   );
 };

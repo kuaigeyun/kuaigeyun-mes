@@ -213,7 +213,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
       try {
         const [qRes, oRes] = await Promise.all([
           listQuotations({ limit: 500 }),
-          listSalesOrders({ limit: 500 }),
+          listSalesOrders({ limit: 500, view: 'options' }),
         ]);
         if (cancelled) return;
         setQuotationList(Array.isArray(qRes.data) ? qRes.data : []);

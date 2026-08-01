@@ -9,9 +9,9 @@
 
 import React, { useState, useEffect, useMemo, useCallback, forwardRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Input, Form, App, Button, Space, Col } from 'antd';
+import { Input, Form, App, Col } from 'antd';
 import { ProForm, ProFormSelect } from '@ant-design/pro-components';
-import { UniDropdown, QuickCreateAnchorPopover } from '../uni-dropdown';
+import { UniDropdown, QuickCreateModal } from '../uni-dropdown';
 import { useProFormReadonlyMode } from '../../utils/proFormReadonly';
 import {
   getDataDictionaryByCode,
@@ -24,6 +24,10 @@ import {
   formatMultiselectStoredValue,
   parseMultiselectStoredValue,
 } from '../../utils/multiselectStoredValue';
+import {
+  dedupeDictionaryOptionsByValue,
+  findExistingDictionaryOption,
+} from '../../utils/dictionaryQuickCreate';
 
 type DictionaryOption = { label: string; value: string };
 
@@ -168,8 +172,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   const isReadonlyMode = useProFormReadonlyMode(readonly);
   const [options, setOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [loading, setLoading] = useState(false);
-  const [createPopoverOpen, setCreatePopoverOpen] = useState(false);
-  const [createAnchorEl, setCreateAnchorEl] = useState<HTMLElement | null>(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createForm] = Form.useForm<{ displayLabel: string; storedValue?: string; description?: string }>();
   const [creating, setCreating] = useState(false);
   const [dictionaryUuid, setDictionaryUuid] = useState<string>('');
@@ -184,12 +187,13 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       const dictionary = await getDataDictionaryByCode(dictionaryCode, loadOpts);
       setDictionaryUuid(dictionary.uuid);
       const items = await getDictionaryItemList(dictionary.uuid, true, loadOpts);
-      const optionsList = mapSystemDictionaryItemOptions(dictionaryCode, items, t)
-        .sort((a, b) => {
+      const optionsList = dedupeDictionaryOptionsByValue(
+        mapSystemDictionaryItemOptions(dictionaryCode, items, t).sort((a, b) => {
           const orderA = items.find((i) => i.value === a.value)?.sort_order ?? 0;
           const orderB = items.find((i) => i.value === b.value)?.sort_order ?? 0;
           return orderA - orderB;
-        });
+        }),
+      );
       setOptions(optionsList);
     } catch (error: any) {
       console.error(`加载字典项失败 (${dictionaryCode}):`, error);
@@ -242,8 +246,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       return;
     }
 
-    const exists = options.some(option => option.value === trimmedValue);
-    if (exists) {
+    if (findExistingDictionaryOption(options, { label: trimmedLabel, value: trimmedValue })) {
       messageApi.warning(t('components.dictionarySelect.valueExists'));
       return;
     }
@@ -263,8 +266,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       });
 
       messageApi.success(t('common.createSuccess'));
-      setCreatePopoverOpen(false);
-      setCreateAnchorEl(null);
+      setCreateModalOpen(false);
       createForm.resetFields();
 
       await loadDictionaryItems();
@@ -373,10 +375,9 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       : {}),
     quickCreate: {
       label: simpleQuickCreate ? '快速新建' : '创建新项',
-      onClick: (anchor: HTMLElement | null | undefined) => {
+      onClick: () => {
         createForm.resetFields();
-        setCreateAnchorEl(anchor ?? null);
-        setCreatePopoverOpen(true);
+        setCreateModalOpen(true);
       },
     },
   };
@@ -390,19 +391,20 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
     />
   );
 
-  const createPopoverZ = quickCreatePopoverZIndex ?? 2000;
+  const createModalZ = quickCreatePopoverZIndex ?? 2000;
 
-  const createPopover = (
-    <QuickCreateAnchorPopover
-      open={createPopoverOpen}
-      anchorEl={createAnchorEl}
+  const createModal = (
+    <QuickCreateModal
+      open={createModalOpen}
       title={simpleQuickCreate ? `快速新增${label}` : `创建新的${label}项`}
-      zIndex={createPopoverZ}
+      zIndex={createModalZ}
+      confirmLoading={creating}
+      okText={simpleQuickCreate ? '确定' : '创建'}
       onClose={() => {
-        setCreatePopoverOpen(false);
-        setCreateAnchorEl(null);
+        setCreateModalOpen(false);
         createForm.resetFields();
       }}
+      onConfirm={handleCreateItem}
     >
       <Form form={createForm} layout="vertical" preserve={false}>
         {simpleQuickCreate ? (
@@ -474,29 +476,15 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
             </Form.Item>
           </>
         )}
-        <Space style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
-          <Button
-            onClick={() => {
-              setCreatePopoverOpen(false);
-              setCreateAnchorEl(null);
-              createForm.resetFields();
-            }}
-          >
-            取消
-          </Button>
-          <Button type="primary" loading={creating} onClick={() => void handleCreateItem()}>
-            {simpleQuickCreate ? '确定' : '创建'}
-          </Button>
-        </Space>
       </Form>
-    </QuickCreateAnchorPopover>
+    </QuickCreateModal>
   );
 
   if (noStyle) {
     return (
       <>
         {dropdown}
-        {createPopover}
+        {createModal}
       </>
     );
   }
@@ -517,7 +505,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   return (
     <>
       {colProps ? <Col {...colProps}>{itemNode}</Col> : itemNode}
-      {createPopover}
+      {createModal}
     </>
   );
 };

@@ -36,7 +36,7 @@ export const MobileQRCode: React.FC = () => {
         const port = window.location.port;
         const targetIp = ip || hostname;
 
-        // 生产：同域 /mobile/；开发：仅换端口根路径（8081/，不带 /mobile）
+        // 生产：同域 /mobile/；开发：仅换端口根路径（8098/，不带 /mobile）
         const isLoopback = hostname === 'localhost' || hostname === '127.0.0.1';
         const isDevPcPort = port === '8100' || port === '5173';
 
@@ -44,7 +44,7 @@ export const MobileQRCode: React.FC = () => {
             const portPart = port ? `:${port}` : '';
             return `${protocol}//${targetIp}${portPart}/mobile/`;
         }
-        const mobilePort = import.meta.env.VITE_MOBILE_DEV_PORT || '8081';
+        const mobilePort = import.meta.env.VITE_MOBILE_DEV_PORT || '8098';
         return `${protocol}//${targetIp}:${mobilePort}/`;
     };
 

@@ -275,7 +275,11 @@ const ShipmentNoticesPage: React.FC = () => {
       try {
         const [cust, ordersRes] = await Promise.all([
           customerApi.list({ limit: 1000, isActive: true }),
-          listSalesOrders({ limit: 500 }).catch(() => ({ data: [], total: 0, success: false })),
+          listSalesOrders({ limit: 500, view: 'options' }).catch(() => ({
+            data: [],
+            total: 0,
+            success: false,
+          })),
         ]);
         setCustomerList(Array.isArray(cust) ? cust : (cust as any)?.data || (cust as any)?.items || []);
         setSalesOrderList(ordersRes?.data || []);
@@ -941,7 +945,7 @@ const ShipmentNoticesPage: React.FC = () => {
     let order = salesOrderList.find((o: any) => (o.id ?? o.sales_order_id) === orderId);
     if (!order) return;
     try {
-      const detail = await getSalesOrder(orderId, true);
+      const detail = await getSalesOrder(orderId, true, false, { view: 'options' });
       order = detail;
     } catch {
       // use list data

@@ -41,18 +41,18 @@ class _BatchingShortageLine:
 class BatchingCenterService:
     """配料中心任务队列"""
 
-    # 与 batching_order_service._ALLOWED_WO_STATUSES、工单列表「未完成」口径一致
-    _ACTIVE_WO_STATUSES = (
-        "draft",
+    # 主动备料建议：仅已下达/执行中工单（草稿/已取消不参与线边备料）
+    _PREP_SUGGESTION_WO_STATUSES = (
         "released",
         "dispatched",
         "confirmed",
         "in_progress",
-        "草稿",
         "已下达",
         "已确认",
         "执行中",
     )
+    # 线边备料单列表：关联工单须仍为有效备料对象（排除草稿/已取消/已删除）
+    _OPEN_BATCHING_WO_STATUSES = _PREP_SUGGESTION_WO_STATUSES
     _TERMINAL_WO = ("completed", "cancelled", "已完工", "已取消")
     # 主动备料仅扫描计划开工最近的工单，避免全量活跃工单齐套分析
     _PROACTIVE_PREP_WO_LIMIT = 40
@@ -412,7 +412,7 @@ class BatchingCenterService:
 
         wo_query = WorkOrder.filter(
             tenant_id=tenant_id,
-            status__in=self._ACTIVE_WO_STATUSES,
+            status__in=self._PREP_SUGGESTION_WO_STATUSES,
             deleted_at__isnull=True,
         ).exclude(status__in=self._TERMINAL_WO)
         if work_order_code:
@@ -638,6 +638,16 @@ class BatchingCenterService:
             query = query.filter(status__in=["draft", "picking", "completed"])
         else:
             query = query.filter(status__in=["draft", "picking"])
+
+        eligible_wo_ids = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status__in=self._OPEN_BATCHING_WO_STATUSES,
+        ).values_list("id", flat=True)
+        eligible_ids = [int(x) for x in eligible_wo_ids if x is not None]
+        if not eligible_ids:
+            return [], 0
+        query = query.filter(work_order_id__in=eligible_ids)
 
         if work_order_code:
             query = query.filter(work_order_code__icontains=work_order_code.strip())

@@ -45,6 +45,7 @@ import type {
   BOMVersionCompare,
   BOMVersionCompareResult,
   BOMCycleDetectionResult,
+  BOMWhereUsedResult,
   MaterialCodeMapping,
   MaterialCodeMappingCreate,
   MaterialCodeMappingUpdate,
@@ -78,6 +79,9 @@ function normalizeMaterialRow(item: Material): Material {
   if (processRouteId !== undefined) row.processRouteId = processRouteId
   if (row.variantManaged === undefined && row.variant_managed !== undefined) {
     row.variantManaged = row.variant_managed
+  }
+  if (row.groupId === undefined && row.group_id !== undefined) {
+    row.groupId = row.group_id
   }
   if (row.variantAttributes === undefined && row.variant_attributes !== undefined) {
     row.variantAttributes = row.variant_attributes
@@ -305,8 +309,9 @@ export const materialApi = {
       // 按 ID 查询时一次取齐本批，避免默认 limit=100 截断
       backendParams.limit = clampMaterialListLimit(Math.max(limit ?? 0, ids.length)) ?? ids.length;
     }
-    if (sortBy != null && sortBy !== '') backendParams.sort_by = sortBy;
-    if (sortOrder != null && sortOrder !== '') backendParams.sort_order = sortOrder;
+    // 列表接口 Query 使用 alias=sortBy/sortOrder；传 sort_by 会被 FastAPI 忽略
+    if (sortBy != null && sortBy !== '') backendParams.sortBy = sortBy;
+    if (sortOrder != null && sortOrder !== '') backendParams.sortOrder = sortOrder;
     if (treeView) backendParams.treeView = true;
     if (mastersOnly) backendParams.mastersOnly = true;
     return unwrap(await api.get('/apps/master-data/materials', { params: backendParams }));
@@ -838,7 +843,57 @@ export const bomApi = {
     materialId: number,
     data: BOMVersionCompare
   ): Promise<BOMVersionCompareResult> => {
-    return api.post(`/apps/master-data/materials/bom/material/${materialId}/compare-versions`, data);
+    const raw = await api.post<Record<string, unknown>>(
+      `/apps/master-data/materials/bom/material/${materialId}/compare-versions`,
+      data,
+    );
+    const src = (raw ?? {}) as Record<string, any>;
+    const mapItem = (item: any) => ({
+      componentId: item.component_id ?? item.componentId,
+      componentCode: item.component_code ?? item.componentCode,
+      componentName: item.component_name ?? item.componentName,
+      quantity: item.quantity,
+      unit: item.unit,
+      wasteRate: item.waste_rate ?? item.wasteRate ?? 0,
+      isConfigurable: item.is_configurable ?? item.isConfigurable,
+      configurableGroupId: item.configurable_group_id ?? item.configurableGroupId,
+      isDefaultConfigurable: item.is_default_configurable ?? item.isDefaultConfigurable,
+      isAlternative: item.is_alternative ?? item.isAlternative,
+      alternativeGroupId: item.alternative_group_id ?? item.alternativeGroupId,
+      priority: item.priority ?? 0,
+    });
+    const mapModified = (item: any) => {
+      const v1 = item.version1 ?? {};
+      const v2 = item.version2 ?? {};
+      const mapSide = (side: any) => ({
+        quantity: side.quantity,
+        unit: side.unit,
+        wasteRate: side.waste_rate ?? side.wasteRate ?? 0,
+        isRequired: side.is_required ?? side.isRequired,
+        isConfigurable: side.is_configurable ?? side.isConfigurable,
+        configurableGroupId: side.configurable_group_id ?? side.configurableGroupId,
+        isDefaultConfigurable: side.is_default_configurable ?? side.isDefaultConfigurable,
+        isAlternative: side.is_alternative ?? side.isAlternative,
+        alternativeGroupId: side.alternative_group_id ?? side.alternativeGroupId,
+        priority: side.priority ?? 0,
+      });
+      return {
+        ...mapItem(item),
+        version1: mapSide(v1),
+        version2: mapSide(v2),
+      };
+    };
+    const added = (src.added ?? src.added_items ?? []).map(mapItem);
+    const removed = (src.removed ?? src.removed_items ?? []).map(mapItem);
+    const modified = (src.modified ?? src.modified_items ?? []).map(mapModified);
+    return {
+      materialId: src.material_id ?? src.materialId,
+      version1: src.version1,
+      version2: src.version2,
+      added,
+      removed,
+      modified,
+    };
   },
   
   /**
@@ -850,9 +905,88 @@ export const bomApi = {
     materialId: number,
     componentId: number
   ): Promise<BOMCycleDetectionResult> => {
-    return api.get('/apps/master-data/materials/bom/detect-cycle', {
+    const raw = await api.get<Record<string, unknown>>('/apps/master-data/materials/bom/detect-cycle', {
       params: { material_id: materialId, component_id: componentId },
     });
+    return {
+      hasCycle: !!(raw?.has_cycle ?? raw?.hasCycle),
+      path: (raw?.path as number[] | undefined) ?? [],
+    };
+  },
+
+  /**
+   * 原子替换指定物料+版本的 BOM 明细
+   */
+  replaceVersionItems: async (
+    materialId: number,
+    version: string,
+    data: BOMBatchCreate | Record<string, unknown>,
+  ): Promise<BOM[]> => {
+    const raw = await api.put<unknown[]>(
+      `/apps/master-data/materials/bom/material/${materialId}/version/${encodeURIComponent(version)}/items`,
+      data,
+    );
+    const arr = Array.isArray(raw) ? raw : [];
+    return arr.map((item) => mapBomFromApi((item ?? {}) as Record<string, unknown>));
+  },
+
+  /**
+   * 反查用途（Where-Used）
+   */
+  whereUsed: async (
+    materialId: number,
+    options?: { recursive?: boolean; includeObsolete?: boolean },
+  ): Promise<BOMWhereUsedResult> => {
+    const raw = await api.get<Record<string, any>>(
+      `/apps/master-data/materials/bom/component/${materialId}/where-used`,
+      {
+        params: {
+          recursive: options?.recursive ?? false,
+          include_obsolete: options?.includeObsolete ?? false,
+        },
+      },
+    );
+    const items = Array.isArray(raw?.items) ? raw.items : [];
+    return {
+      componentId: raw?.component_id ?? raw?.componentId ?? materialId,
+      componentCode: raw?.component_code ?? raw?.componentCode,
+      componentName: raw?.component_name ?? raw?.componentName,
+      recursive: !!(raw?.recursive),
+      total: raw?.total ?? items.length,
+      items: items.map((item: any) => ({
+        bomId: item.bom_id ?? item.bomId,
+        bomUuid: item.bom_uuid ?? item.bomUuid,
+        materialId: item.material_id ?? item.materialId,
+        materialCode: item.material_code ?? item.materialCode,
+        materialName: item.material_name ?? item.materialName,
+        componentId: item.component_id ?? item.componentId,
+        version: item.version,
+        quantity: item.quantity,
+        unit: item.unit,
+        approvalStatus: item.approval_status ?? item.approvalStatus,
+        isDefault: !!(item.is_default ?? item.isDefault),
+        isObsolete: !!(item.is_obsolete ?? item.isObsolete),
+        bomCode: item.bom_code ?? item.bomCode,
+      })),
+    };
+  },
+
+  /**
+   * 打印工程 BOM（返回 HTML content）
+   */
+  print: async (
+    materialId: number,
+    version?: string,
+  ): Promise<{ content: string; version?: string; message?: string }> => {
+    const raw = await api.post<Record<string, any>>(
+      `/apps/master-data/materials/bom/material/${materialId}/print`,
+      { version: version || undefined },
+    );
+    return {
+      content: String(raw?.content ?? ''),
+      version: raw?.version,
+      message: raw?.message,
+    };
   },
 };
 

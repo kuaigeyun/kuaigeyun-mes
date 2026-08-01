@@ -899,7 +899,7 @@ function Invoke-Configure {
         Set-EnvValue 'CORS_ORIGINS' $prodCors.Cors
     } else {
         Set-EnvValue 'HOST' '0.0.0.0'
-        Set-EnvValue 'CORS_ORIGINS' "http://${serverIp}:$($script:FRONTEND_PORT),http://127.0.0.1:$($script:FRONTEND_PORT),http://localhost:$($script:FRONTEND_PORT),http://${serverIp}:8081,http://127.0.0.1:8081,http://localhost:8081,http://${serverIp}:8300,http://127.0.0.1:8300,http://localhost:8300"
+        Set-EnvValue 'CORS_ORIGINS' "http://${serverIp}:$($script:FRONTEND_PORT),http://127.0.0.1:$($script:FRONTEND_PORT),http://localhost:$($script:FRONTEND_PORT),http://${serverIp}:8098,http://127.0.0.1:8098,http://localhost:8098,http://${serverIp}:8081,http://127.0.0.1:8081,http://localhost:8081,http://${serverIp}:8300,http://127.0.0.1:8300,http://localhost:8300"
     }
 
     Write-LogInfo '测试数据库连接...'

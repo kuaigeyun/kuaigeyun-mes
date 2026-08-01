@@ -8,6 +8,7 @@ from typing import List, Optional, Dict, Any, Tuple, Set
 from functools import lru_cache
 from uuid import UUID
 from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
 import json
 
 from core.models.data_dictionary import DataDictionary
@@ -21,6 +22,29 @@ from core.schemas.dictionary_item import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache_manager import cache_manager
 from core.utils.timezone_utils import now_utc
+
+
+def normalize_dictionary_item_token(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def dictionary_item_duplicate_message(
+    *,
+    candidate_value: str,
+    candidate_label: str,
+    existing_value: str,
+    existing_label: str,
+) -> Optional[str]:
+    """同字典项 value/label（去空白）冲突时返回错误文案，否则 None。"""
+    cv = normalize_dictionary_item_token(candidate_value)
+    cl = normalize_dictionary_item_token(candidate_label)
+    ev = normalize_dictionary_item_token(existing_value)
+    el = normalize_dictionary_item_token(existing_label)
+    if cv and cv == ev:
+        return f"字典项值 {cv} 已存在"
+    if cl and cl == el:
+        return f"字典项标签 {cl} 已存在"
+    return None
 
 
 class DataDictionaryService:
@@ -218,6 +242,7 @@ class DataDictionaryService:
         is_active: Optional[bool] = None,
         name: Optional[str] = None,
         code: Optional[str] = None,
+        keyword: Optional[str] = None,
         installed_app_codes: Optional[Set[str]] = None,
     ) -> tuple[List[DataDictionary], int]:
         """
@@ -230,6 +255,7 @@ class DataDictionaryService:
             is_active: 是否启用（可选）
             name: 字典名称（模糊搜索，可选）
             code: 字典代码（模糊搜索，可选）
+            keyword: 顶栏模糊搜索（名称/代码/备注 OR，可选）
             installed_app_codes: 已安装应用；传入时按字典归属应用过滤系统字典列表
             
         Returns:
@@ -250,14 +276,20 @@ class DataDictionaryService:
         # 启用状态筛选
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        
-        # 名称模糊搜索
-        if name:
-            query = query.filter(name__icontains=name)
-        
-        # 代码模糊搜索
-        if code:
-            query = query.filter(code__icontains=code)
+
+        keyword_text = (keyword or "").strip()
+        if keyword_text:
+            query = query.filter(
+                Q(name__icontains=keyword_text)
+                | Q(code__icontains=keyword_text)
+                | Q(description__icontains=keyword_text)
+            )
+        else:
+            # 高级搜索：名称、代码独立模糊条件
+            if name:
+                query = query.filter(name__icontains=name)
+            if code:
+                query = query.filter(code__icontains=code)
         
         # 获取总数
         total = await query.count()
@@ -459,6 +491,35 @@ class DataDictionaryService:
         return update_data
 
     @staticmethod
+    async def _assert_dictionary_item_unique(
+        tenant_id: int,
+        dictionary_id: int,
+        *,
+        value: str,
+        label: str,
+        exclude_item_id: Optional[int] = None,
+    ) -> None:
+        """同字典内 value / label（去空白）不可重复。"""
+        value = str(value or "").strip()
+        label = str(label or "").strip()
+        query = DictionaryItem.filter(
+            tenant_id=tenant_id,
+            dictionary_id=dictionary_id,
+            deleted_at__isnull=True,
+        )
+        if exclude_item_id is not None:
+            query = query.exclude(id=exclude_item_id)
+        for item in await query.all():
+            message = dictionary_item_duplicate_message(
+                candidate_value=value,
+                candidate_label=label,
+                existing_value=item.value,
+                existing_label=item.label,
+            )
+            if message:
+                raise ValidationError(message)
+
+    @staticmethod
     async def create_item(
         tenant_id: int,
         data: DictionaryItemCreate
@@ -480,16 +541,31 @@ class DataDictionaryService:
         dictionary = await DataDictionaryService.get_dictionary_by_uuid(
             tenant_id, data.dictionary_uuid
         )
-        
+
+        payload = {k: v for k, v in data.model_dump().items() if k != "dictionary_uuid"}
+        payload["value"] = str(payload.get("value") or "").strip()
+        payload["label"] = str(payload.get("label") or "").strip()
+        if not payload["value"]:
+            raise ValidationError("字典项值不能为空")
+        if not payload["label"]:
+            raise ValidationError("字典项标签不能为空")
+
+        await DataDictionaryService._assert_dictionary_item_unique(
+            tenant_id,
+            int(dictionary.id),
+            value=payload["value"],
+            label=payload["label"],
+        )
+
         try:
             item = await DictionaryItem.create(
                 tenant_id=tenant_id,
                 dictionary_id=dictionary.id,
-                **{k: v for k, v in data.model_dump().items() if k != "dictionary_uuid"}
+                **payload
             )
             return item
         except IntegrityError:
-            raise ValidationError(f"字典项值 {data.value} 已存在")
+            raise ValidationError(f"字典项值 {payload['value']} 已存在")
     
     @staticmethod
     async def get_item_by_uuid(

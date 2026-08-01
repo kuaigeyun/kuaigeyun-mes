@@ -49,7 +49,6 @@ import { ListPageTemplate, FormModalTemplate } from '../../../../components/layo
 import {
   getRdProjectWorkbench,
   pushTrialWorkOrder,
-  spawnDeliveryProject,
   updateRdProject,
   createRdProjectLink,
   deleteRdProjectLink,
@@ -638,10 +637,6 @@ const RdProjectDetailPage: React.FC = () => {
   const projectId = project.id ?? id;
   const projectType = (project.project_type ?? 'RD') as ProjectType;
   const isRdProject = projectType === 'RD';
-  const spawnDeliveryGate = gates.find(
-    (g) => g.milestone_role === 'spawn_delivery' || (!g.milestone_role && g.gate_key === 'release'),
-  );
-  const spawnDeliveryPassed = spawnDeliveryGate?.status === 'PASSED';
 
   const collaborationItems = isRdProject
     ? [
@@ -719,25 +714,6 @@ const RdProjectDetailPage: React.FC = () => {
               }}
             >
               {t('app.kuaiplm.rdProjects.detail.startConfirmTitle').replace('?', '')}
-            </Button>
-          ) : null}
-          {isRdProject && spawnDeliveryPassed ? (
-            <Button
-              type="primary"
-              icon={<RocketOutlined />}
-              onClick={() => {
-                modalApi.confirm({
-                  title: t('app.kuaiplm.rdProjects.detail.createDeliveryTitle'),
-                  content: t('app.kuaiplm.rdProjects.detail.createDeliveryContent'),
-                  onOk: async () => {
-                    const created = await spawnDeliveryProject(projectId);
-                    messageApi.success(t('app.kuaiplm.rdProjects.detail.createDeliverySuccess'));
-                    navigate(`/apps/kuaiplm/rd-projects/detail/${created.id}`);
-                  },
-                });
-              }}
-            >
-              {t('app.kuaiplm.rdProjects.detail.createDeliveryTitle').replace('?', '')}
             </Button>
           ) : null}
           {isRdProject ? (

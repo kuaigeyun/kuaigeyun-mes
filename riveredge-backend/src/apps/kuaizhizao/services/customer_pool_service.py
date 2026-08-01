@@ -11,7 +11,13 @@ from tortoise import timezone
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
-from apps.kuaizhizao.services.customer_pool_list_core import apply_customer_pool_list_filters
+from apps.kuaizhizao.services.customer_pool_list_core import (
+    apply_customer_pool_list_filters,
+    customer_pool_effective_owned_q,
+    customer_pool_effective_public_q,
+    customer_pool_mine_scope_q,
+    resolve_customer_pool_status_display,
+)
 
 from apps.kuaizhizao.models.customer_collaborator import CustomerCollaborator
 from apps.kuaizhizao.models.customer_pool_log import CustomerPoolLog
@@ -31,6 +37,7 @@ from apps.kuaizhizao.schemas.customer_pool import (
 from apps.master_data.models.customer import Customer
 from core.services.authorization.data_scope_service import DataScopeService
 from core.services.authorization.user_permission_service import UserPermissionService
+from core.services.user.user_display_service import UserDisplayService
 from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
@@ -52,15 +59,17 @@ async def list_collaborator_customer_ids(tenant_id: int, user_id: int) -> List[i
 def _to_customer_pool_item(
     row: Customer,
     collaborators: Optional[Sequence[CustomerPoolCollaboratorItem]] = None,
+    salesman_labels: Optional[Dict[int, str]] = None,
 ) -> CustomerPoolItem:
     """列表响应：显式映射字段，兼容 pool_status 历史脏数据。"""
-    raw_pool_status = str(getattr(row, "pool_status", None) or "").strip().lower()
-    if raw_pool_status in ("pool", "owned"):
-        pool_status = raw_pool_status
-    elif getattr(row, "salesman_id", None):
-        pool_status = "owned"
-    else:
-        pool_status = "pool"
+    pool_status = resolve_customer_pool_status_display(
+        getattr(row, "pool_status", None),
+        getattr(row, "salesman_id", None),
+    )
+    salesman_id = getattr(row, "salesman_id", None)
+    salesman_name = getattr(row, "salesman_name", None)
+    if salesman_id and salesman_labels and salesman_id in salesman_labels:
+        salesman_name = salesman_labels[salesman_id]
     return CustomerPoolItem(
         id=int(row.id),
         uuid=str(row.uuid),
@@ -69,8 +78,8 @@ def _to_customer_pool_item(
         short_name=getattr(row, "short_name", None),
         contact_person=getattr(row, "contact_person", None),
         phone=getattr(row, "phone", None),
-        salesman_id=getattr(row, "salesman_id", None),
-        salesman_name=getattr(row, "salesman_name", None),
+        salesman_id=salesman_id,
+        salesman_name=salesman_name,
         pool_status=pool_status,
         assigned_at=getattr(row, "assigned_at", None),
         last_follow_up_at=getattr(row, "last_follow_up_at", None),
@@ -199,7 +208,11 @@ class CustomerPoolService:
         now = timezone.now()
         from_salesman = customer.salesman_id
         customer.salesman_id = target_user.id
-        customer.salesman_name = target_user.full_name or target_user.username
+        customer.salesman_name = UserDisplayService.format_label(
+            full_name=target_user.full_name,
+            username=target_user.username,
+            user_id=target_user.id,
+        )
         customer.pool_status = "owned"
         customer.assigned_at = now
         customer.updated_by = operator.id
@@ -359,9 +372,9 @@ class CustomerPoolService:
             tenant_id=tenant_id,
             customer_id__in=list(customer_ids),
             deleted_at__isnull=True,
-        ).order_by("id")
+        ).order_by("id").all()
         mapping: Dict[int, List[CustomerPoolCollaboratorItem]] = {}
-        for row in await rows:
+        for row in rows:
             mapping.setdefault(row.customer_id, []).append(
                 CustomerPoolCollaboratorItem(user_id=row.user_id, user_name=row.user_name)
             )
@@ -582,10 +595,10 @@ class CustomerPoolService:
             if log.operator_user_id:
                 user_ids.add(log.operator_user_id)
 
-        name_map: Dict[int, str] = {}
-        if user_ids:
-            for user in await User.filter(id__in=list(user_ids), tenant_id=tenant_id).all():
-                name_map[user.id] = user.full_name or user.username
+        name_map: Dict[int, str] = await UserDisplayService.build_label_map(
+            tenant_id=tenant_id,
+            user_ids=user_ids,
+        )
 
         items: List[CustomerPoolLogItem] = []
         for log in log_rows:
@@ -637,16 +650,20 @@ class CustomerPoolService:
         normalized_scope = (scope or "pool").strip().lower()
         if normalized_scope == "mine":
             collab_ids = await list_collaborator_customer_ids(tenant_id, current_user.id)
-            owned_clause = Q(salesman_id=current_user.id)
-            if collab_ids:
-                owned_clause |= Q(id__in=collab_ids)
-            query = query.filter(pool_status="owned").filter(owned_clause)
+            query = query.filter(
+                customer_pool_mine_scope_q(
+                    current_user_id=current_user.id,
+                    collaborator_customer_ids=collab_ids,
+                )
+            )
         elif normalized_scope == "pool":
-            query = query.filter(pool_status="pool")
+            query = query.filter(customer_pool_effective_public_q())
 
         normalized_pool_status = (pool_status or "").strip().lower()
-        if normalized_pool_status in ("pool", "owned"):
-            query = query.filter(pool_status=normalized_pool_status)
+        if normalized_pool_status == "owned":
+            query = query.filter(customer_pool_effective_owned_q())
+        elif normalized_pool_status == "pool":
+            query = query.filter(customer_pool_effective_public_q())
 
         if salesman_id is not None:
             query = query.filter(salesman_id=salesman_id)
@@ -680,9 +697,13 @@ class CustomerPoolService:
 
         total = await query.count()
         rows = await query.order_by(primary_order, secondary_order).offset(skip).limit(limit)
+        salesman_labels = await UserDisplayService.build_label_map(
+            tenant_id=tenant_id,
+            user_ids={row.salesman_id for row in rows if row.salesman_id},
+        )
         collab_map = await cls._load_collaborators_map(tenant_id, [row.id for row in rows])
         items = [
-            _to_customer_pool_item(r, collab_map.get(r.id, []))
+            _to_customer_pool_item(r, collab_map.get(r.id, []), salesman_labels)
             for r in rows
         ]
         return CustomerPoolListEnvelope(items=items, total=total)

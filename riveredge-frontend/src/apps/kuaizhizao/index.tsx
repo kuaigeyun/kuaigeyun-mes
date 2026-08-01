@@ -64,6 +64,7 @@ const SalesOrderChangesPage = lazy(() => import('./pages/sales-management/sales-
 const DeliveryNotesPage = lazy(() => import('./pages/warehouse-management/delivery-notes'));
 const ShipmentNoticesPage = lazy(() => import('./pages/sales-management/shipment-notices'));
 const CustomerFollowUpsPage = lazy(() => import('./pages/sales-management/customer-follow-ups'));
+const AfterSalesTicketsPage = lazy(() => import('./pages/sales-management/after-sales-tickets'));
 const SalesReturnsPage = lazy(() => import('./pages/sales-management/sales-returns'));
 
 // 质量管理页面
@@ -171,6 +172,7 @@ const MaterialCallsPage = lazy(() => import('./pages/warehouse-management/materi
 const DisassemblyOrdersPage = lazy(() => import('./pages/warehouse-management/disassembly-orders'));
 const InventoryAlertPage = lazy(() => import('./pages/warehouse-management/inventory-alert'));
 const PackingBindingPage = lazy(() => import('./pages/production-execution/packing-binding'));
+const InstallExecutionPage = lazy(() => import('./pages/production-execution/install-execution'));
 
 // 绩效管理页面
 const HolidaysPage = lazy(() => import('./pages/performance/holidays'));
@@ -305,6 +307,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/rework-orders" element={withPageSuspense(ReworkOrdersPage)} />
       <Route path="production-execution/outsource-management" element={withPageSuspense(OutsourceManagementPage)} />
       <Route path="production-execution/packing-binding" element={withPageSuspense(PackingBindingPage)} />
+      <Route path="production-execution/install-execution" element={withPageSuspense(InstallExecutionPage)} />
       <Route path="production-execution/material-shortage-exceptions" element={withPageSuspense(MaterialShortageExceptionsPage)} />
       <Route path="production-execution/delivery-delay-exceptions" element={withPageSuspense(DeliveryDelayExceptionsPage)} />
       <Route path="production-execution/quality-exceptions" element={withPageSuspense(QualityExceptionsPage)} />
@@ -326,6 +329,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="sales-management/sales-orders/new" element={withPageSuspense(SalesOrdersPage)} />
       <Route path="sales-management/sales-orders/:id/edit" element={withPageSuspense(SalesOrdersPage)} />
       <Route path="sales-management/sales-orders" element={withPageSuspense(SalesOrdersPage)} />
+      <Route path="sales-management/after-sales-tickets" element={withPageSuspense(AfterSalesTicketsPage)} />
       <Route path="sales-management/sales-order-changes" element={withPageSuspense(SalesOrderChangesPage)} />
       <Route path="sales-management/shipment-notices" element={withPageSuspense(ShipmentNoticesPage)} />
       <Route path="sales-management/customer-follow-ups" element={withPageSuspense(CustomerFollowUpsPage)} />

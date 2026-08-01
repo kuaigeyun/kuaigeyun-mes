@@ -95,9 +95,19 @@
                         "permission": "kuaizhizao:sales-order:read"
                     },
                     {
+                        "title": "app.kuaizhizao.menu.sales-management.after-sales-tickets",
+                        "path": "/apps/kuaizhizao/sales-management/after-sales-tickets",
+                        "sort_order": 7,
+                        "meta": {
+                            "node": "after_sales_ticket",
+                            "module": "sales"
+                        },
+                        "permission": "kuaizhizao:after-sales-ticket:read"
+                    },
+                    {
                         "title": "app.kuaizhizao.menu.sales-management.sales-order-changes",
                         "path": "/apps/kuaizhizao/sales-management/sales-order-changes",
-                        "sort_order": 7,
+                        "sort_order": 8,
                         "meta": {
                             "node": "sales_order_change",
                             "module": "sales"
@@ -107,7 +117,7 @@
                     {
                         "title": "app.kuaizhizao.menu.sales-management.shipment-notices",
                         "path": "/apps/kuaizhizao/sales-management/shipment-notices",
-                        "sort_order": 8,
+                        "sort_order": 9,
                         "meta": {
                             "module": "sales",
                             "node": "shipment_notice"
@@ -117,7 +127,7 @@
                     {
                         "title": "app.kuaizhizao.menu.sales-management.sales-returns",
                         "path": "/apps/kuaizhizao/sales-management/sales-returns",
-                        "sort_order": 9,
+                        "sort_order": 10,
                         "meta": {
                             "module": "sales",
                             "node": "sales_return"
@@ -127,7 +137,7 @@
                     {
                         "title": "app.kuaizhizao.menu.sales-management.reports",
                         "icon": "fileText",
-                        "sort_order": 10,
+                        "sort_order": 11,
                         "children": [
                             {
                                 "title": "app.kuaizhizao.menu.reports.sales-order-query",
@@ -471,9 +481,19 @@
                         "permission": "kuaizhizao:production-execution-packing-binding:read"
                     },
                     {
+                        "title": "app.kuaizhizao.menu.production-execution.install-execution",
+                        "path": "/apps/kuaizhizao/production-execution/install-execution",
+                        "sort_order": 7,
+                        "meta": {
+                            "module": "production",
+                            "node": "install_execution"
+                        },
+                        "permission": "kuaizhizao:production-execution-install-execution:read"
+                    },
+                    {
                         "title": "app.kuaizhizao.menu.production-execution.reporting.statistics",
                         "path": "/apps/kuaizhizao/production-execution/reporting/statistics",
-                        "sort_order": 7,
+                        "sort_order": 8,
                         "meta": {
                             "module": "production"
                         },
@@ -482,7 +502,7 @@
                     {
                         "title": "app.kuaizhizao.menu.production-execution.exception-management",
                         "icon": "alert-circle",
-                        "sort_order": 8,
+                        "sort_order": 9,
                         "meta": {
                             "module": "production"
                         },
@@ -1829,6 +1849,28 @@
             ],
             "data_scope_key": "kuaizhizao:sales-return"
         },
+        "after-sales-ticket": {
+            "permission_prefix": "kuaizhizao:after-sales-ticket",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": "kuaizhizao:after-sales-ticket"
+        },
+        "production-execution-install-execution": {
+            "permission_prefix": "kuaizhizao:production-execution-install-execution",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": "kuaizhizao:production-execution-install-execution"
+        },
         "plan-management-rolling-scheduling": {
             "permission_prefix": "kuaizhizao:plan-management-rolling-scheduling",
             "display_fields": [
@@ -2003,6 +2045,13 @@
         "sales-return": [
             "master-data:supply-chain:customer",
             "master-data:material"
+        ],
+        "after-sales-ticket": [
+            "master-data:supply-chain:customer",
+            "master-data:material"
+        ],
+        "production-execution-install-execution": [
+            "master-data:supply-chain:customer"
         ],
         "purchase-receipt": [
             "master-data:supply-chain:supplier",
@@ -2731,6 +2780,15 @@
         "kuaizhizao:production-execution-packing-binding:revoke",
         "kuaizhizao:production-execution-packing-binding:submit",
         "kuaizhizao:production-execution-packing-binding:update",
+        "kuaizhizao:production-execution-install-execution:close",
+        "kuaizhizao:production-execution-install-execution:create",
+        "kuaizhizao:production-execution-install-execution:delete",
+        "kuaizhizao:production-execution-install-execution:export",
+        "kuaizhizao:production-execution-install-execution:print",
+        "kuaizhizao:production-execution-install-execution:read",
+        "kuaizhizao:production-execution-install-execution:update",
+        "kuaizhizao:production-execution-install-execution:assign",
+        "kuaizhizao:production-execution-install-execution:execute",
         "kuaizhizao:production-execution-quality-exceptions:print",
         "kuaizhizao:production-execution-quality-exceptions:create",
         "kuaizhizao:production-execution-quality-exceptions:update",
@@ -3118,6 +3176,13 @@
         "kuaizhizao:sales-order:revoke",
         "kuaizhizao:sales-order:submit",
         "kuaizhizao:sales-order:update",
+        "kuaizhizao:after-sales-ticket:close",
+        "kuaizhizao:after-sales-ticket:create",
+        "kuaizhizao:after-sales-ticket:delete",
+        "kuaizhizao:after-sales-ticket:export",
+        "kuaizhizao:after-sales-ticket:print",
+        "kuaizhizao:after-sales-ticket:read",
+        "kuaizhizao:after-sales-ticket:update",
         "kuaizhizao:sales-return:approve",
         "kuaizhizao:sales-return:audit",
         "kuaizhizao:sales-return:create",
@@ -4357,6 +4422,15 @@
             "module_icon": "tool"
         },
         {
+            "page_code": "kuaizhizao-after-sales-ticket",
+            "page_name": "售后服务",
+            "page_path": "/apps/kuaizhizao/sales-management/after-sales-tickets",
+            "table_name": "apps_kuaizhizao_after_sales_tickets",
+            "table_name_label": "售后服务工单表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
             "page_code": "kuaizhizao-sales-contract",
             "page_name": "销售合同",
             "page_path": "/apps/kuaizhizao/sales-management/sales-contracts",
@@ -4533,6 +4607,15 @@
             "page_path": "/apps/kuaizhizao/production-execution/packing-binding",
             "table_name": "apps_kuaizhizao_packing_bindings",
             "table_name_label": "装箱绑定表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-production-install-execution",
+            "page_name": "安装执行",
+            "page_path": "/apps/kuaizhizao/production-execution/install-execution",
+            "table_name": "apps_kuaizhizao_install_execution_jobs",
+            "table_name_label": "安装执行单",
             "module": "快制造",
             "module_icon": "tool"
         },

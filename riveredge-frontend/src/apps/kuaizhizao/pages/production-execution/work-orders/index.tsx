@@ -169,7 +169,6 @@ import {
 import { UniDropdown } from '../../../../../components/uni-dropdown'
 import { listSalesOrders } from '../../../services/sales'
 import {
-  getSalesOrder,
   listSalesOrders as listSalesOrdersForPull,
   previewPushSalesOrderToWorkOrder,
   pushSalesOrderToWorkOrder,
@@ -1825,16 +1824,19 @@ const WorkOrdersPage: React.FC = () => {
       try {
         const keyword = productSourceKeyword.trim()
         if (productSourceModalType === 'sales_order') {
-          const res: any = await listSalesOrders({ limit: 50, ...(keyword ? { keyword } : {}) })
+          const res = await listSalesOrdersForPull({
+            limit: 50,
+            include_items: true,
+            view: 'options',
+            ...(keyword ? { keyword } : {}),
+          })
           const orders = Array.isArray(res) ? res : (res?.data ?? [])
-          const ordersWithItems = await Promise.all(
-            orders.map((o: any) => getSalesOrder(o.id, true))
-          )
           const flat: any[] = []
-          ordersWithItems.forEach((ord: any) => {
+          orders.forEach((ord: any) => {
             ;(ord?.items ?? []).forEach((it: any, idx: number) => {
               flat.push({
                 ...it,
+                order_quantity: it.order_quantity ?? it.required_quantity,
                 _doc_id: ord.id,
                 _order_code: ord.order_code,
                 _customer_name: ord.customer_name,

@@ -954,16 +954,6 @@ class BOMUpdate(BaseModel):
     obsoleted_at: Optional[datetime] = Field(None, description="失效时间")
     obsolete_reason: Optional[str] = Field(None, max_length=500, description="失效原因")
     
-    # 审核管理
-    approval_status: Optional[str] = Field(
-        None,
-        max_length=20,
-        description="审核状态：draft(草稿), pending(待审核), approved(已审核), rejected(已拒绝)"
-    )
-    approved_by: Optional[int] = Field(None, description="审核人ID")
-    approved_at: Optional[datetime] = Field(None, description="审核时间")
-    approval_comment: Optional[str] = Field(None, description="审核意见")
-    
     # 替代料管理
     is_alternative: Optional[bool] = Field(None, description="是否为替代料")
     alternative_group_id: Optional[int] = Field(None, description="替代料组ID")
@@ -992,15 +982,6 @@ class BOMUpdate(BaseModel):
         if v is not None and (not v or not v.strip()):
             raise ValueError("单位不能为空")
         return v.strip() if v else None
-    
-    @validator("approval_status")
-    def validate_approval_status(cls, v):
-        """验证审核状态"""
-        if v is not None:
-            allowed_statuses = ["draft", "pending", "approved", "rejected"]
-            if v not in allowed_statuses:
-                raise ValueError(f"审核状态必须是: {', '.join(allowed_statuses)}")
-        return v
     
     @validator("expiry_date")
     def validate_expiry_date(cls, v, values):
@@ -1161,13 +1142,6 @@ class BOMBatchCreate(BaseModel):
     effective_date: Optional[datetime] = Field(None, description="生效日期")
     expiry_date: Optional[datetime] = Field(None, description="失效日期")
     
-    # 审核管理
-    approval_status: str = Field(
-        "draft",
-        max_length=20,
-        description="审核状态：draft(草稿), pending(待审核), approved(已审核), rejected(已拒绝)"
-    )
-    
     # 扩展信息
     description: Optional[str] = Field(None, description="描述")
     remark: Optional[str] = Field(None, description="备注")
@@ -1185,14 +1159,6 @@ class BOMBatchCreate(BaseModel):
         if len(component_ids) != len(set(component_ids)):
             raise ValueError("子物料不能重复（替代料除外）")
         
-        return v
-    
-    @validator("approval_status")
-    def validate_approval_status(cls, v):
-        """验证审核状态"""
-        allowed_statuses = ["draft", "pending", "approved", "rejected"]
-        if v not in allowed_statuses:
-            raise ValueError(f"审核状态必须是: {', '.join(allowed_statuses)}")
         return v
     
     @validator("expiry_date")

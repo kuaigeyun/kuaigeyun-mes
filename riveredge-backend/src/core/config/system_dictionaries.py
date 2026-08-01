@@ -563,6 +563,18 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         ],
     },
     {
+        "code": "INSTALL_EXECUTION_STAGE",
+        "name": "安装执行阶段",
+        "description": "安装执行单进度阶段，可在系统数据字典中维护",
+        "items": [
+            {"label": "到货确认", "value": "arrival_confirm", "description": "设备物料到场确认", "sort_order": 1},
+            {"label": "就位安装", "value": "installation", "description": "现场就位与安装", "sort_order": 2},
+            {"label": "联调", "value": "commissioning", "description": "系统联调", "sort_order": 3},
+            {"label": "试运行", "value": "trial_run", "description": "试运行验证", "sort_order": 4},
+            {"label": "客户验收", "value": "customer_acceptance", "description": "客户验收签字", "sort_order": 5},
+        ],
+    },
+    {
         "code": "WORK_ORDER_PRIORITY",
         "name": "工单优先级",
         "description": "生产工单、委外工单等业务单据的优先级",

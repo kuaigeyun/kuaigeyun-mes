@@ -61,10 +61,21 @@ def resolve_kuaizhizao_module_action(
     if "/cancel-customer-confirm" in p:
         return "execute"
     if "/close" in p:
+        if module_code in {"after-sales-ticket", "production-execution-install-execution"}:
+            return "close"
         return "execute"
+    if module_code == "after-sales-ticket" and "/push-to-" in p:
+        return "update"
     if "/conduct" in p:
         return "update"
     m = (method or "").upper()
+    if module_code == "production-execution-install-execution":
+        if "/tasks" in p and m == "POST":
+            return "assign"
+        if "/advance-stage" in p and m == "POST":
+            return "execute"
+        if "/costs" in p and m == "POST":
+            return "update"
     if m == "GET":
         return "read"
     if m in {"PUT", "PATCH"}:

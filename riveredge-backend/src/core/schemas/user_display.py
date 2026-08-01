@@ -37,3 +37,15 @@ class UserDisplayResolveRequest(BaseModel):
 
 class UserDisplayResolveResponse(BaseModel):
     items: list[UserDisplayItem]
+
+
+class UserFullNameCollisionItem(BaseModel):
+    id: int
+    uuid: str
+    username: str
+    full_name: Optional[str] = None
+
+
+class UserFullNameCollisionResponse(BaseModel):
+    collision: bool = Field(..., description="是否存在同名用户")
+    users: list[UserFullNameCollisionItem] = Field(default_factory=list)

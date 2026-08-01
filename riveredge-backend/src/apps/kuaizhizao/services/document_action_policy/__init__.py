@@ -98,11 +98,16 @@ from apps.kuaizhizao.services.document_action_policy.types import (
     SalesForecastCapabilities,
     ShipmentNoticeCapabilities,
     SalesReturnCapabilities,
+    AfterSalesTicketCapabilities,
 
     SalesOrderCapabilities,
 
     SalesOrderChangeCapabilities,
 
+)
+from apps.kuaizhizao.services.document_action_policy.after_sales_ticket import (
+    assert_after_sales_ticket_capability,
+    derive_after_sales_ticket_capabilities,
 )
 
 
@@ -124,8 +129,11 @@ __all__ = [
     "SalesForecastCapabilities",
     "ShipmentNoticeCapabilities",
     "SalesReturnCapabilities",
+    "AfterSalesTicketCapabilities",
 
     "derive_quotation_capabilities",
+    "derive_after_sales_ticket_capabilities",
+    "assert_after_sales_ticket_capability",
 
     "assert_quotation_capability",
 

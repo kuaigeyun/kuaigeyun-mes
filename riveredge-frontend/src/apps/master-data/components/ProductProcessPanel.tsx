@@ -5,7 +5,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Select, Space, Typography, App } from 'antd';
-import { EditOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
+import { EditOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import type { Material } from '../types/material';
 import type { ProcessRoute } from '../types/process';
 import { processRouteApi, operationApi, unwrapProcessPagedList } from '../services/process';
@@ -17,6 +17,7 @@ import type { ProductProcessLine } from '../types/productProcess';
 import {
   enrichLineFromOperation,
   linesFromProcessRoute,
+  mergeProductProcessLinesWithRouteTemplate,
   snapshotProductProcessState,
 } from '../utils/productProcessLineUtils';
 import { productProcessLineFromApi, productProcessLineToApi } from '../utils/manufacturingTimeUnits';
@@ -79,6 +80,7 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
   const [lines, setLines] = useState<ProductProcessLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reloadingRoute, setReloadingRoute] = useState(false);
   const [routeFormOpen, setRouteFormOpen] = useState(false);
   const [routeFormEditUuid, setRouteFormEditUuid] = useState<string | null>(null);
   const [auditHint, setAuditHint] = useState<{ operator: string; time: string } | null>(null);
@@ -149,19 +151,20 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
     }
   }, []);
 
-  const importLinesFromRoute = useCallback(
-    async (uuid: string) => {
+  const fetchRouteTemplateLines = useCallback(
+    async (uuid: string): Promise<{ allowOperationJump: boolean; lines: ProductProcessLine[] }> => {
       try {
         const template = await processRouteApi.getOperationTemplate(uuid);
-        setAllowOperationJump(Boolean(template.allowOperationJump));
-        setLines((template.lines ?? []).map((ln) => productProcessLineFromApi(ln)));
-        return;
+        return {
+          allowOperationJump: Boolean(template.allowOperationJump),
+          lines: (template.lines ?? []).map((ln) => productProcessLineFromApi(ln)),
+        };
       } catch {
         // 旧版后端无 operation-template 时回退客户端解析
       }
 
       const detail = await resolveProcessRouteDetail(uuid);
-      const jump = Boolean(
+      const allowOperationJump = Boolean(
         (detail as { allow_operation_jump?: boolean }).allow_operation_jump ??
           (detail as { allowOperationJump?: boolean }).allowOperationJump,
       );
@@ -171,15 +174,23 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
         (detail as { operationSequence?: unknown }).operationSequence;
       const nextLines = await linesFromProcessRoute(
         operationSequence,
-        jump,
+        allowOperationJump,
         t,
         loadAllOperations,
         userIdToUuid,
       );
+      return { allowOperationJump, lines: nextLines };
+    },
+    [buildUserIdToUuidMap, loadAllOperations, resolveProcessRouteDetail, t],
+  );
+
+  const importLinesFromRoute = useCallback(
+    async (uuid: string) => {
+      const { allowOperationJump: jump, lines: nextLines } = await fetchRouteTemplateLines(uuid);
       setAllowOperationJump(jump);
       setLines(nextLines);
     },
-    [buildUserIdToUuidMap, loadAllOperations, resolveProcessRouteDetail, t],
+    [fetchRouteTemplateLines],
   );
 
   const loadConfig = useCallback(async (options?: { force?: boolean }) => {
@@ -235,6 +246,32 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
       messageApi.warning(t('app.master-data.productProcess.routeImportFailed'));
     });
   }, [routeUuid, lines.length, importLinesFromRoute, messageApi, t]);
+
+  const handleReloadRoute = async () => {
+    if (!routeUuid || loading || reloadingRoute) return;
+    setReloadingRoute(true);
+    try {
+      const { lines: routeLines } = await fetchRouteTemplateLines(routeUuid);
+      if (routeLines.length === 0) {
+        messageApi.warning(t('app.master-data.routes.operationRequired'));
+        return;
+      }
+      const merged = mergeProductProcessLinesWithRouteTemplate(lines, routeLines);
+      const addedCount = merged.length - lines.length;
+      if (addedCount <= 0) {
+        messageApi.info(t('app.master-data.productProcess.reloadRouteAlreadyComplete'));
+        return;
+      }
+      setLines(merged);
+      messageApi.success(
+        t('app.master-data.productProcess.reloadRouteAdded', { count: addedCount }),
+      );
+    } catch {
+      messageApi.warning(t('app.master-data.productProcess.routeImportFailed'));
+    } finally {
+      setReloadingRoute(false);
+    }
+  };
 
   const handleRouteSelect = (uuid: string | undefined) => {
     routeImportRef.current = '';
@@ -346,6 +383,14 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
                 onClick={openEditRouteModal}
               >
                 {t('app.master-data.manufacturing.editRoute')}
+              </Button>
+              <Button
+                icon={<ReloadOutlined />}
+                loading={reloadingRoute}
+                disabled={!routeUuid || loading || reloadingRoute}
+                onClick={() => void handleReloadRoute()}
+              >
+                {t('app.master-data.productProcess.reloadRoute')}
               </Button>
             </Space>
           </Space>

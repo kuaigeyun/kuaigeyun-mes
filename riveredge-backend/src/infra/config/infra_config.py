@@ -217,7 +217,8 @@ class InfraSettings(BaseSettings):
         ports = sorted(
             {
                 int(self.FRONTEND_PORT),
-                8081,  # Expo Web
+                8098,  # Expo Web（launch.dev.sh 默认；8081 在部分 Windows Hyper-V 保留段内不可 bind）
+                8081,  # Expo Web 旧默认
                 8101,  # 前端备用端口
                 8300,  # riveredge-app/station Vite
             }

@@ -25,6 +25,18 @@ function itemKey(row: BatchingTaskRow): string {
   return `${row.task_type}-${row.task_id}`
 }
 
+function sortByKittingRateDesc(rows: BatchingTaskRow[]): BatchingTaskRow[] {
+  return [...rows].sort((a, b) => {
+    const rateA = a.kitting_rate ?? -1
+    const rateB = b.kitting_rate ?? -1
+    return rateB - rateA
+  })
+}
+
+function canPullBatchingFromSuggestion(row: BatchingTaskRow): boolean {
+  return (row.kitting_rate ?? 0) > 0
+}
+
 const LineSidePrepSplitView: React.FC<Props> = ({
   onCreate,
   onOpenDetail,
@@ -57,8 +69,10 @@ const LineSidePrepSplitView: React.FC<Props> = ({
           ...(kw ? { keyword: kw } : {}),
         })
         const { data } = normalizeWarehouseListResponse(res)
-        const rows = ((data as BatchingTaskRow[]) || []).filter(
-          (r) => r.task_type === 'proactive_prep',
+        const rows = sortByKittingRateDesc(
+          ((data as BatchingTaskRow[]) || []).filter(
+            (r) => r.task_type === 'proactive_prep',
+          ),
         )
         setSuggestions(rows)
       } catch (e: unknown) {
@@ -130,12 +144,13 @@ const LineSidePrepSplitView: React.FC<Props> = ({
             row.kitting_rate != null
               ? `${Math.round(row.kitting_rate)}%`
               : t('app.kuaizhizao.batchingCenter.taskType.proactivePrep')
+          const showPullAction = canPullBatchingFromSuggestion(row)
           return (
             <div
               key={key}
-              className={`product-process-material-list__item product-process-material-list__item--with-action${
-                active ? ' product-process-material-list__item--active' : ''
-              }`}
+              className={`product-process-material-list__item${
+                showPullAction ? ' product-process-material-list__item--with-action' : ''
+              }${active ? ' product-process-material-list__item--active' : ''}`}
             >
               <div
                 className="product-process-material-list__body"
@@ -171,16 +186,18 @@ const LineSidePrepSplitView: React.FC<Props> = ({
                   </div>
                 ) : null}
               </div>
-              <Button
-                type="primary"
-                size="small"
-                block
-                className="product-process-material-list__action"
-                loading={generatingKey === key}
-                onClick={() => void handleGenerate(row)}
-              >
-                {pullFromWorkOrderAction.label}
-              </Button>
+              {showPullAction ? (
+                <Button
+                  type="primary"
+                  size="small"
+                  block
+                  className="product-process-material-list__action"
+                  loading={generatingKey === key}
+                  onClick={() => void handleGenerate(row)}
+                >
+                  {pullFromWorkOrderAction.label}
+                </Button>
+              ) : null}
             </div>
           )
         })

@@ -63,6 +63,22 @@ export const customerFormSchemaBasicTail: FieldConfig[] = [
     allowClear: true,
   },
   {
+    name: 'collaboratorIds',
+    type: 'select',
+    labelKey: 'field.customer.collaborators',
+    placeholderKey: 'field.customer.collaboratorsPlaceholder',
+    extraKey: 'field.customer.collaboratorsHint',
+    extraAsTooltip: true,
+    colSpan: 12,
+    allowClear: true,
+    mode: 'multiple',
+    fieldProps: {
+      maxTagCount: 'responsive',
+      optionFilterProp: 'label',
+      showSearch: true,
+    },
+  },
+  {
     name: 'isPublic',
     type: 'segmented',
     labelKey: 'field.customer.visibility',

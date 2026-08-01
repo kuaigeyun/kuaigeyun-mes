@@ -589,6 +589,87 @@ class SalesOrderService:
         except Exception as e:
             logger.warning("写入状态流转日志失败（表可能未创建），跳过: %s", e)
 
+    @staticmethod
+    def _item_to_options_response(it: SalesOrderItem) -> SalesOrderItemResponse:
+        """选单/关联明细轻量行：仅物料与数量字段，不做库存/账款计算。"""
+        order_qty = (
+            it.order_quantity
+            if getattr(it, "order_quantity", None) is not None
+            else Decimal("0")
+        )
+        return SalesOrderItemResponse.model_validate(
+            {
+                "id": it.id,
+                "uuid": str(it.uuid),
+                "tenant_id": it.tenant_id,
+                "sales_order_id": it.sales_order_id,
+                "material_id": it.material_id,
+                "material_code": (it.material_code or "")[:100],
+                "material_name": (it.material_name or "")[:200],
+                "material_spec": (getattr(it, "material_spec", None) or None),
+                "material_unit": (getattr(it, "material_unit", None) or None),
+                "required_quantity": order_qty,
+                "delivery_date": getattr(it, "delivery_date", None) or date.today(),
+                "unit_price": getattr(it, "unit_price", None) or Decimal("0"),
+                "tax_rate": getattr(it, "tax_rate", None) or Decimal("0"),
+                "item_amount": getattr(it, "total_amount", None) or Decimal("0"),
+                "is_gift": bool(getattr(it, "is_gift", False)),
+                "delivered_quantity": (
+                    it.delivered_quantity
+                    if getattr(it, "delivered_quantity", None) is not None
+                    else Decimal("0")
+                ),
+                "remaining_quantity": (
+                    it.remaining_quantity
+                    if getattr(it, "remaining_quantity", None) is not None
+                    else Decimal("0")
+                ),
+                "delivery_status": getattr(it, "delivery_status", None),
+                "created_at": it.created_at,
+                "updated_at": it.updated_at,
+            }
+        )
+
+    @classmethod
+    def _order_to_options_response(
+        cls,
+        order: SalesOrder,
+        items: Optional[List[SalesOrderItem]] = None,
+    ) -> SalesOrderResponse:
+        """选单/关联轻量响应：表头必要字段（可选明细），跳过进度/capabilities/里程碑。"""
+        raw_review_status = getattr(order, "review_status", None)
+        normalized_review_status = (
+            raw_review_status
+            if str(raw_review_status or "").strip()
+            else ReviewStatus.PENDING
+        )
+        payload: Dict[str, Any] = {
+            "id": order.id,
+            "uuid": str(order.uuid),
+            "tenant_id": order.tenant_id,
+            "order_code": order.order_code,
+            "order_name": getattr(order, "order_name", None) or order.order_code,
+            "order_date": order.order_date,
+            "delivery_date": order.delivery_date,
+            "customer_id": order.customer_id,
+            "customer_name": order.customer_name,
+            "customer_contact": getattr(order, "customer_contact", None),
+            "customer_phone": getattr(order, "customer_phone", None),
+            "total_quantity": order.total_quantity if order.total_quantity is not None else Decimal("0"),
+            "total_amount": order.total_amount if order.total_amount is not None else Decimal("0"),
+            "status": order.status,
+            "review_status": normalized_review_status,
+            "salesman_id": getattr(order, "salesman_id", None),
+            "salesman_name": getattr(order, "salesman_name", None),
+            "shipping_address": getattr(order, "shipping_address", None),
+            "is_active": order.is_active,
+            "created_at": order.created_at,
+            "updated_at": order.updated_at,
+        }
+        if items is not None:
+            payload["items"] = [cls._item_to_options_response(it) for it in items]
+        return SalesOrderResponse.model_validate(payload)
+
     def _order_to_response(
         self,
         order: SalesOrder,
@@ -1382,9 +1463,13 @@ class SalesOrderService:
         sales_order_id: int,
         include_items: bool = False,
         include_duration: bool = False,
+        view: Optional[str] = None,
         current_user: Optional["User"] = None,
     ) -> SalesOrderResponse:
-        """获取销售订单详情"""
+        """获取销售订单详情。
+
+        view=options：选单/关联轻量详情，跳过里程碑/账款/可发货/capabilities。
+        """
         order = await SalesOrder.get_or_none(
             tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
         )
@@ -1397,6 +1482,15 @@ class SalesOrderService:
                 user=current_user,
                 resource="kuaizhizao:sales-order",
             )
+
+        if (view or "").strip().lower() == "options":
+            option_items: Optional[List[SalesOrderItem]] = None
+            if include_items:
+                option_items = await SalesOrderItem.filter(
+                    tenant_id=tenant_id, sales_order_id=sales_order_id
+                ).order_by("id").all()
+            return self._order_to_options_response(order, items=option_items)
+
         # 不同步时自动修复
         if self._is_review_approved(order.review_status) and not self._is_audited(order.status):
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(status=DemandStatus.AUDITED)
@@ -1584,9 +1678,13 @@ class SalesOrderService:
         list_scope: Optional[str] = None,
         pullable_only: Optional[bool] = None,
         pull_target: Optional[str] = None,
+        view: Optional[str] = None,
         current_user: Optional["User"] = None,
     ) -> SalesOrderListResponse:
-        """获取销售订单列表。order_by 如 order_code、-created_at（前缀-表示降序）"""
+        """获取销售订单列表。order_by 如 order_code、-created_at（前缀-表示降序）
+
+        view=options：仅返回下拉关联所需轻量字段，跳过账款/进度/capabilities 等重计算。
+        """
         from tortoise.expressions import Q
 
         query = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -1624,7 +1722,8 @@ class SalesOrderService:
                 | Q(contract_code__icontains=kw)
             )
         # 加载建销售变更：与 is_source_order_locked_for_direct_edit / 前端 isSourceOrderEligibleForChange 对齐
-        if pullable_only and (pull_target or "").strip().lower() == "sales_order_change":
+        pull_target_norm = (pull_target or "").strip().lower()
+        if pullable_only and pull_target_norm == "sales_order_change":
             change_eligible_statuses = (
                 "AUDITED",
                 "CONFIRMED",
@@ -1657,6 +1756,46 @@ class SalesOrderService:
                     & ~Q(status__in=excluded_for_review_gate)
                 )
             )
+        # 加载建售后服务：仅已出库（已发货）的销售订单
+        if pullable_only and pull_target_norm == "after_sales_ticket":
+            shipped_order_ids = await SalesDelivery.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                status="已出库",
+                sales_order_id__isnull=False,
+            ).distinct().values_list("sales_order_id", flat=True)
+            query = query.filter(id__in=list({int(oid) for oid in shipped_order_ids if oid}))
+
+        # 加载建销售退货：已审核且存在已交货数量（与 push_sales_return 门禁一致）
+        if pullable_only and pull_target_norm == "sales_return":
+            returnable_order_ids = await SalesOrderItem.filter(
+                tenant_id=tenant_id,
+                delivered_quantity__gt=0,
+            ).distinct().values_list("sales_order_id", flat=True)
+            approved_review = ("APPROVED", "已通过", "审核通过", "通过", "已审核")
+            audited_statuses = (
+                "AUDITED",
+                "CONFIRMED",
+                "IN_PROGRESS",
+                "COMPLETED",
+                "CLOSED",
+                "RELEASED",
+                "已审核",
+                "审核通过",
+                "已确认",
+                "执行中",
+                "进行中",
+                "已完成",
+                "已关闭",
+                "已下达",
+            )
+            query = query.filter(
+                id__in=list({int(oid) for oid in returnable_order_ids if oid}),
+            ).filter(
+                Q(status__in=audited_statuses)
+                | Q(review_status__in=approved_review)
+            )
+
         order_clause = order_by if order_by else "-created_at"
 
         if lifecycle_filter:
@@ -1674,6 +1813,30 @@ class SalesOrderService:
 
         if not orders:
             return SalesOrderListResponse(data=[], total=total, success=True)
+
+        # 选单/关联：轻量表头（可选明细），跳过账款/进度/capabilities
+        if (view or "").strip().lower() == "options":
+            option_items_by_order: Dict[int, List[SalesOrderItem]] = {}
+            if include_items:
+                option_order_ids = [o.id for o in orders]
+                if option_order_ids:
+                    option_all_items = await SalesOrderItem.filter(
+                        tenant_id=tenant_id,
+                        sales_order_id__in=option_order_ids,
+                    ).order_by("sales_order_id", "id").all()
+                    for it in option_all_items:
+                        option_items_by_order.setdefault(it.sales_order_id, []).append(it)
+            return SalesOrderListResponse(
+                data=[
+                    self._order_to_options_response(
+                        o,
+                        items=option_items_by_order.get(o.id, []) if include_items else None,
+                    )
+                    for o in orders
+                ],
+                total=total,
+                success=True,
+            )
 
         order_ids = [o.id for o in orders]
 
@@ -4314,6 +4477,9 @@ class SalesOrderService:
         def _q_money(v: Decimal) -> Decimal:
             return v.quantize(money_q, rounding=ROUND_HALF_UP)
 
+        from apps.kuaizhizao.utils.sales_price_amount import calc_sales_line_amounts
+
+        price_type = getattr(order, "price_type", None) or DEFAULT_SALES_PRICE_TYPE
         total_excl = Decimal("0")
         total_tax = Decimal("0")
         total_incl = Decimal("0")
@@ -4322,11 +4488,10 @@ class SalesOrderService:
             qty = it.order_quantity or Decimal("0")
             price = it.unit_price or Decimal("0")
             traw = it.tax_rate or Decimal("0")
-            # 订单明细税率为「百分比」数值（如 13）；兼容异常录入为小数形式（≤1 视为已为小数税率）
+            excl, tax, incl = calc_sales_line_amounts(qty, price, traw, price_type)
+            # 发票明细 tax_rate 落库为小数（0.13）
             rate = traw / Decimal("100") if traw > Decimal("1") else traw
-            excl = _q_money(qty * price)
-            tax = _q_money(excl * rate)
-            incl = _q_money(excl + tax)
+            line_unit_excl = _q_money(excl / qty) if qty > Decimal("0") else Decimal("0")
             total_excl += excl
             total_tax += tax
             total_incl += incl
@@ -4339,7 +4504,7 @@ class SalesOrderService:
                     spec_model=spec,
                     unit=(it.material_unit or "")[:20] if it.material_unit else None,
                     quantity=qty,
-                    unit_price=price,
+                    unit_price=line_unit_excl,
                     amount=excl,
                     tax_rate=rate,
                     tax_amount=tax,

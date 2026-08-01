@@ -22,3 +22,15 @@ def compute_tax_from_excluding(
     tax = (excl * rate).quantize(_MONEY_SCALE)
     total = (excl + tax).quantize(_MONEY_SCALE)
     return excl, tax, total
+
+
+def compute_tax_from_including(
+    amount_incl: Decimal,
+    tax_rate_percent: Decimal,
+) -> tuple[Decimal, Decimal, Decimal]:
+    """按价税合计与税率（百分比 0–100）反算未税金额与税额。"""
+    total = Decimal(amount_incl).quantize(_MONEY_SCALE)
+    factor = Decimal("1") + Decimal(tax_rate_percent) / Decimal("100")
+    excl = (total / factor).quantize(_MONEY_SCALE)
+    tax = (total - excl).quantize(_MONEY_SCALE)
+    return excl, tax, total

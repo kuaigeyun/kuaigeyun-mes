@@ -242,10 +242,10 @@ def _merge_stored_lines_with_route(
     route_row_dicts: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
     """
-    以当前路线工序为基准合并已存产品工艺行：
-    - 顺序与路线一致
+    以已存产品工艺行为准合并路线工序模板：
+    - 仅返回 stored_lines 中仍保留的工序（用户在产品工艺页删除的不恢复）
+    - 顺序优先跟随路线；路线中无对应项的已存行保留在末尾
     - 已存字段覆盖路线默认值
-    - 路线中已删除的工序不再返回
     """
     stored_by_uuid: Dict[str, Dict[str, Any]] = {}
     for ln in stored_lines:
@@ -257,19 +257,27 @@ def _merge_stored_lines_with_route(
             stored_by_uuid[uid] = d
 
     merged: List[Dict[str, Any]] = []
+    seen: set[str] = set()
     for d in route_row_dicts:
         uid = _operation_uuid_from_row(d)
-        if not uid:
+        if not uid or uid not in stored_by_uuid:
             continue
-        if uid in stored_by_uuid:
-            stored = stored_by_uuid[uid]
-            merged.append(
-                _normalize_line_time_fields(
-                    {**d, **stored, "uuid": uid, "operation_uuid": uid}
-                )
+        seen.add(uid)
+        stored = stored_by_uuid[uid]
+        merged.append(
+            _normalize_line_time_fields(
+                {**d, **stored, "uuid": uid, "operation_uuid": uid}
             )
-        else:
-            merged.append(_normalize_line_time_fields(dict(d)))
+        )
+
+    for uid, stored in stored_by_uuid.items():
+        if uid in seen:
+            continue
+        merged.append(
+            _normalize_line_time_fields(
+                {**stored, "uuid": uid, "operation_uuid": uid}
+            )
+        )
     return merged
 
 
@@ -736,10 +744,22 @@ class MaterialProductProcessService:
             deleted_at__isnull=True,
         ).all()
         updated = 0
+        route_uuids = {
+            uid
+            for d in route_row_dicts
+            if (uid := _operation_uuid_from_row(d))
+        }
         for record in records:
             if not record.lines:
                 continue
-            merged = _merge_stored_lines_with_route(record.lines, route_row_dicts)
+            filtered_lines = [
+                ln
+                for ln in record.lines
+                if (d := _stored_line_to_dict(ln))
+                and (uid := _operation_uuid_from_row(d))
+                and uid in route_uuids
+            ]
+            merged = _merge_stored_lines_with_route(filtered_lines, route_row_dicts)
             if merged != record.lines:
                 record.lines = merged
                 await record.save(update_fields=["lines", "updated_at"])

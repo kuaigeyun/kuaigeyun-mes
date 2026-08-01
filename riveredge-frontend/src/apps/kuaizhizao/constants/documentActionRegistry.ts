@@ -15,6 +15,8 @@ export type KuaizhizaoDocumentActionKey =
   | 'sales_invoice.pull_from_sales_order'
   | 'sales_delivery.pull_from_sales_order'
   | 'sales_return.pull_from_sales_order'
+  | 'after_sales_ticket.pull_from_sales_order'
+  | 'after_sales_ticket.pull_from_sales_delivery'
   | 'receipt_notice.pull_from_purchase_order'
   | 'purchase_receipt.pull_from_purchase_order'
   | 'purchase_invoice.pull_from_purchase_order'
@@ -196,6 +198,22 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('sales_return.pull_from_sales_order', 'label'),
     sourceLabelKey: documentActionI18n('sales_return.pull_from_sales_order', 'source'),
     targetLabelKey: documentActionI18n('sales_return.pull_from_sales_order', 'target'),
+  },
+  'after_sales_ticket.pull_from_sales_order': {
+    key: 'after_sales_ticket.pull_from_sales_order',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('after_sales_ticket.pull_from_sales_order', 'label'),
+    sourceLabelKey: documentActionI18n('after_sales_ticket.pull_from_sales_order', 'source'),
+    targetLabelKey: documentActionI18n('after_sales_ticket.pull_from_sales_order', 'target'),
+  },
+  'after_sales_ticket.pull_from_sales_delivery': {
+    key: 'after_sales_ticket.pull_from_sales_delivery',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('after_sales_ticket.pull_from_sales_delivery', 'label'),
+    sourceLabelKey: documentActionI18n('after_sales_ticket.pull_from_sales_delivery', 'source'),
+    targetLabelKey: documentActionI18n('after_sales_ticket.pull_from_sales_delivery', 'target'),
   },
   'receipt_notice.pull_from_purchase_order': {
     key: 'receipt_notice.pull_from_purchase_order',

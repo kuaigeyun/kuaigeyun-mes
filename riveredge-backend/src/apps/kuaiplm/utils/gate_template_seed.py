@@ -25,13 +25,7 @@ from infra.models.user import User
 
 
 def _npi_stage_defs() -> List[Dict[str, Any]]:
-    stages = []
-    for gate in DEFAULT_NPI_GATES:
-        milestone = GateMilestoneRole.NONE.value
-        if gate["gate_key"] == "release":
-            milestone = GateMilestoneRole.SPAWN_DELIVERY.value
-        stages.append({**gate, "milestone_role": milestone})
-    return stages
+    return [{**gate, "milestone_role": GateMilestoneRole.NONE.value} for gate in DEFAULT_NPI_GATES]
 
 
 SYSTEM_TEMPLATE_SPECS: List[Dict[str, Any]] = [
@@ -41,13 +35,6 @@ SYSTEM_TEMPLATE_SPECS: List[Dict[str, Any]] = [
         "template_name": "NPI 标准",
         "stages": _npi_stage_defs(),
         "deliverables": DEFAULT_GATE_DELIVERABLES,
-    },
-    {
-        "project_type": RdProjectType.DELIVERY.value,
-        "template_code": "delivery_standard",
-        "template_name": "交付标准",
-        "stages": [{**g, "milestone_role": GateMilestoneRole.NONE.value} for g in DEFAULT_DELIVERY_GATES],
-        "deliverables": DEFAULT_DELIVERY_DELIVERABLES,
     },
 ]
 

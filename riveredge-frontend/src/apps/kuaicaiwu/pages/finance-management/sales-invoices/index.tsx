@@ -68,6 +68,23 @@ const TAX_RATE_OPTIONS = [
   { label: '0%', value: 0 },
 ];
 
+function resolveInvoiceExclFromSourceTotal(
+  sourceTotal: number,
+  taxRate: number,
+  priceType?: string,
+): number | undefined {
+  if (!(sourceTotal > 0)) return undefined;
+  if (priceType === 'tax_exclusive') return Number(sourceTotal.toFixed(2));
+  return Number((sourceTotal / (1 + taxRate / 100)).toFixed(2));
+}
+
+function resolveInvoiceTotalFromExcl(
+  invoiceAmount: number,
+  taxRate: number,
+): number {
+  return Number((invoiceAmount * (1 + taxRate / 100)).toFixed(2));
+}
+
 const P = 'app.kuaicaiwu.salesInvoice';
 const SALES_INVOICE_RESOURCE = 'kuaicaiwu:sales-invoice';
 
@@ -273,7 +290,7 @@ const SalesInvoicesPage: React.FC = () => {
       return false;
     }
     const taxRate = Number(values.tax_rate) || 13;
-    const estimatedTotal = Number((invoiceAmount * (1 + taxRate / 100)).toFixed(2));
+    const estimatedTotal = resolveInvoiceTotalFromExcl(invoiceAmount, taxRate);
     if (estimatedTotal > maxPush) {
       messageApi.warning(t(`${P}.pullExceedMax`, { max: maxPush.toFixed(2) }));
       return false;
@@ -632,7 +649,11 @@ const SalesInvoicesPage: React.FC = () => {
     if (!pullPreviewData || !pullPreviewKind) return undefined;
     const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
     const taxRate = 13;
-    const defaultExcl = maxPush > 0 ? Number((maxPush / (1 + taxRate / 100)).toFixed(2)) : undefined;
+    const defaultExcl = resolveInvoiceExclFromSourceTotal(
+      maxPush,
+      taxRate,
+      pullPreviewData.price_type,
+    );
     const sourceLabel =
       pullPreviewKind === 'sales_order'
         ? pullFromSalesOrderAction.sourceLabel

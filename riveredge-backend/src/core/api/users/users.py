@@ -21,6 +21,7 @@ from core.schemas.user_display import (
     UserDisplayListResponse,
     UserDisplayResolveRequest,
     UserDisplayResolveResponse,
+    UserFullNameCollisionResponse,
 )
 from core.services.user.user_display_service import UserDisplayService
 from core.services.user.user_service import UserService
@@ -230,6 +231,47 @@ async def resolve_users_for_display(
         user_uuids=body.user_uuids,
     )
     return UserDisplayResolveResponse(items=items)
+
+
+@router.get("/full-name-collision-check", response_model=UserFullNameCollisionResponse)
+async def check_user_full_name_collision(
+    full_name: str = Query(..., min_length=1, max_length=100, description="待检查的姓名"),
+    exclude_user_uuid: Optional[str] = Query(None, description="编辑时排除的用户 UUID"),
+    _auth: object = Depends(require_access("system:user", "read")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    检查组织内是否存在同名用户（仅提示，不阻止保存）。
+
+    用于人员表单引导管理员使用可区分的姓名，避免客户池等业务场景误判归属。
+    """
+    exclude_user_id: Optional[int] = None
+    if exclude_user_uuid and str(exclude_user_uuid).strip():
+        existing = await User.filter(
+            uuid=str(exclude_user_uuid).strip(),
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if existing:
+            exclude_user_id = existing.id
+
+    collisions = await UserDisplayService.find_full_name_collisions(
+        tenant_id=tenant_id,
+        full_name=full_name,
+        exclude_user_id=exclude_user_id,
+    )
+    return UserFullNameCollisionResponse(
+        collision=bool(collisions),
+        users=[
+            {
+                "id": item.id,
+                "uuid": item.uuid,
+                "username": item.username,
+                "full_name": item.full_name,
+            }
+            for item in collisions
+        ],
+    )
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

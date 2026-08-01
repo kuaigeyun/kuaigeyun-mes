@@ -32,7 +32,7 @@ export const EMPTY_CUSTOMER_CONTACT_ROW: CustomerContact = {
 
 export interface CustomerContactsFormTableProps {
   contactTitleOptions: Array<{ value: string; label: string }>;
-  onQuickCreateContactTitle?: (anchor: HTMLElement | null) => void;
+  onQuickCreateContactTitle?: () => void;
 }
 
 export const CustomerContactsFormTable: React.FC<CustomerContactsFormTableProps> = ({
@@ -84,7 +84,7 @@ export const CustomerContactsFormTable: React.FC<CustomerContactsFormTableProps>
                       <div style={{ padding: '4px 8px 8px', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
                         <a
                           onMouseDown={(e) => e.preventDefault()}
-                          onClick={(e) => onQuickCreateContactTitle(e.currentTarget as HTMLElement)}
+                          onClick={() => onQuickCreateContactTitle?.()}
                         >
                           快速新增
                         </a>

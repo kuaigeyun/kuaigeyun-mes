@@ -666,7 +666,7 @@ const CustomersPage: React.FC = () => {
         t('field.customer.contactTitle'),
         t('field.customer.phone'),
         t('field.customer.email'),
-        t('field.customer.address'),
+        t('field.partner.deliveryAddress'),
         t('field.customer.salesman'),
         t('app.master-data.warehouses.status'),
         t('common.createdAt'),
@@ -687,7 +687,7 @@ const CustomersPage: React.FC = () => {
             : '',
           item.phone || '',
           item.email || '',
-          item.address || '',
+          item.deliveryAddress || '',
           item.salesmanName || '',
           (item.isActive ?? (item as any)?.is_active) ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
@@ -776,8 +776,8 @@ const CustomersPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('field.customer.address'),
-      dataIndex: 'address',
+      title: t('field.partner.deliveryAddress'),
+      dataIndex: 'deliveryAddress',
       width: 220,
       hideInSearch: true,
       ellipsis: true,
@@ -898,7 +898,6 @@ const CustomersPage: React.FC = () => {
       dataIndex: 'lastFollowUpAt',
       valueType: 'dateTime',
     },
-    { title: t('field.customer.address'), dataIndex: 'address', span: 2 },
     {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
@@ -994,7 +993,7 @@ const CustomersPage: React.FC = () => {
     <>
       <ListPageTemplate>
       <UniTable<Customer>
-        columnPersistenceId="apps.master-data.pages.supply-chain.customers.status-v2"
+        columnPersistenceId="apps.master-data.pages.supply-chain.customers.delivery-address-v3"
         actionRef={actionRef}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, __filter, searchFormValues) => {

@@ -272,6 +272,34 @@ export function operationItemsToLines(
   });
 }
 
+/** 按工艺路线模板顺序补齐缺失工序；已存在行保留，路线外自定义行保留在末尾 */
+export function mergeProductProcessLinesWithRouteTemplate(
+  currentLines: ProductProcessLine[],
+  routeLines: ProductProcessLine[],
+): ProductProcessLine[] {
+  const currentByUuid = new Map(
+    currentLines.filter((ln) => ln.operationUuid).map((ln) => [ln.operationUuid, ln]),
+  );
+  const merged: ProductProcessLine[] = [];
+  const seen = new Set<string>();
+
+  for (const routeLine of routeLines) {
+    const uid = routeLine.operationUuid;
+    if (!uid) continue;
+    seen.add(uid);
+    merged.push(currentByUuid.get(uid) ?? routeLine);
+  }
+
+  for (const line of currentLines) {
+    const uid = line.operationUuid;
+    if (uid && !seen.has(uid)) {
+      merged.push(line);
+    }
+  }
+
+  return merged;
+}
+
 export async function linesFromProcessRoute(
   operationSequence: unknown,
   allowOperationJump: boolean,

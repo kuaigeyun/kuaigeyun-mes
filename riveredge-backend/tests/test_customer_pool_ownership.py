@@ -6,6 +6,8 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from tortoise.expressions import Q
+
 from apps.kuaizhizao.services.customer_pool_service import CustomerPoolService
 from apps.master_data.schemas.supply_chain_schemas import CustomerUpdate
 from apps.master_data.services import supply_chain_service as scs
@@ -204,11 +206,14 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
                         )
 
         pool_status_filter = any(
-            call.kwargs.get("pool_status") == "owned" for call in mock_query.filter.call_args_list
+            "pool_status" in call.kwargs and call.kwargs.get("pool_status") == "owned"
+            for call in mock_query.filter.call_args_list
         )
-        self.assertTrue(pool_status_filter)
-        owned_q_filters = [call for call in mock_query.filter.call_args_list if call.args]
-        self.assertTrue(owned_q_filters)
+        mine_scope_filter = any(
+            call.args and isinstance(call.args[0], Q) for call in mock_query.filter.call_args_list
+        )
+        self.assertFalse(pool_status_filter)
+        self.assertTrue(mine_scope_filter)
 
     async def test_list_customer_pool_all_applies_data_scope(self):
         user = User(id=5, tenant_id=1, username="sales5", full_name="销售五")
@@ -263,14 +268,18 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
 
         salesman_filter = None
         pool_status_filter = None
+        effective_owned_filter = False
         for call in mock_query.filter.call_args_list:
             kwargs = call.kwargs
             if kwargs.get("salesman_id") == 9:
                 salesman_filter = kwargs
             if kwargs.get("pool_status") == "owned":
                 pool_status_filter = kwargs
+            if call.args and isinstance(call.args[0], Q):
+                effective_owned_filter = True
         self.assertIsNotNone(salesman_filter)
-        self.assertIsNotNone(pool_status_filter)
+        self.assertIsNone(pool_status_filter)
+        self.assertTrue(effective_owned_filter)
 
 
 class CustomerPoolCollaboratorTests(unittest.IsolatedAsyncioTestCase):
@@ -377,6 +386,42 @@ class CustomerPoolScopeResolverTests(unittest.IsolatedAsyncioTestCase):
             clause = await resolve_customer_owned_only(ctx)
 
         self.assertIsNotNone(clause)
+
+
+class CustomerPoolStatusFilterTests(unittest.TestCase):
+    def test_resolve_customer_pool_status_display(self):
+        from apps.kuaizhizao.services.customer_pool_list_core import resolve_customer_pool_status_display
+
+        self.assertEqual(resolve_customer_pool_status_display("pool", 9), "pool")
+        self.assertEqual(resolve_customer_pool_status_display("owned", None), "owned")
+        self.assertEqual(resolve_customer_pool_status_display("", 9), "owned")
+        self.assertEqual(resolve_customer_pool_status_display("legacy", None), "pool")
+
+    def test_customer_pool_mine_scope_q(self):
+        from apps.kuaizhizao.services.customer_pool_list_core import customer_pool_mine_scope_q
+
+        q = customer_pool_mine_scope_q(current_user_id=5, collaborator_customer_ids=[88, 89])
+        self.assertIsInstance(q, Q)
+        q_solo = customer_pool_mine_scope_q(current_user_id=5, collaborator_customer_ids=[])
+        self.assertIsInstance(q_solo, Q)
+
+    def test_effective_status_display_pairs(self):
+        from apps.kuaizhizao.services.customer_pool_list_core import resolve_customer_pool_status_display
+
+        owned_cases = [("", 3), ("owned", 3), ("owned", None)]
+        public_cases = [("pool", None), ("pool", 3), ("legacy", None)]
+        for pool_status, salesman_id in owned_cases:
+            self.assertEqual(
+                resolve_customer_pool_status_display(pool_status, salesman_id),
+                "owned",
+                (pool_status, salesman_id),
+            )
+        for pool_status, salesman_id in public_cases:
+            self.assertEqual(
+                resolve_customer_pool_status_display(pool_status, salesman_id),
+                "pool",
+                (pool_status, salesman_id),
+            )
 
 
 class CustomerPoolPermissionContractTests(unittest.TestCase):

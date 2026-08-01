@@ -2323,6 +2323,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 **update_data
             )
 
+            if update_data.get("status") == "cancelled":
+                from apps.kuaizhizao.services.batching_order_service import BatchingOrderService
+
+                await BatchingOrderService().void_open_batching_orders_for_work_order(
+                    tenant_id, work_order_id
+                )
+
             response = WorkOrderResponse.model_validate(work_order)
             response = response.model_copy(
                 update=WorkOrderTrackingService.tracking_fields_for_response(work_order)
@@ -3066,6 +3073,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 raise ValidationError("工单存在相关的报工记录，不允许删除")
 
             now = now_utc()
+
+            from apps.kuaizhizao.services.batching_order_service import BatchingOrderService
+
+            await BatchingOrderService().void_open_batching_orders_for_work_order(
+                tenant_id, work_order_id
+            )
 
             # 级联软删除工单工序
             await WorkOrderOperation.filter(
@@ -5946,6 +5959,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             except Exception as e:
                 # 节点时间记录失败不影响主流程，记录日志
                 logger.warning(f"记录工单撤回节点时间失败: {e}")
+
+            from apps.kuaizhizao.services.batching_order_service import BatchingOrderService
+
+            await BatchingOrderService().void_open_batching_orders_for_work_order(
+                tenant_id, work_order_id
+            )
 
             logger.info(f"工单 {work_order.code} 已撤回为草稿状态")
             return WorkOrderResponse.model_validate(work_order)

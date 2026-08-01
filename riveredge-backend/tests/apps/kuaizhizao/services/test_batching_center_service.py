@@ -36,3 +36,12 @@ def test_sort_tasks_handles_aware_created_at_without_type_error():
     ]
     BatchingCenterService._sort_tasks(tasks)
     assert [t.task_id for t in tasks] == [1, 2, 3]
+
+
+def test_prep_suggestion_statuses_exclude_draft_and_cancelled():
+    statuses = BatchingCenterService._PREP_SUGGESTION_WO_STATUSES
+    assert "draft" not in statuses
+    assert "草稿" not in statuses
+    assert "cancelled" not in statuses
+    assert "released" in statuses
+    assert "in_progress" in statuses

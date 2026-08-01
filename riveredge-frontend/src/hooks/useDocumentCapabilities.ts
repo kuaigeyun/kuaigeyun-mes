@@ -257,6 +257,30 @@ export function salesOrderCapabilityReasonMessage(
   return fallbackMap[code] ?? code;
 }
 
+/** 与后端 CAPABILITY_REASON_MESSAGES 对齐（售后服务工单） */
+export const AFTER_SALES_TICKET_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
+  'after_sales_ticket.push_sales_return.not_allowed': '当前售后服务工单不可下推销售退货单',
+  'after_sales_ticket.push_sales_return.closed': '已关闭的售后服务工单不可下推',
+  'after_sales_ticket.push_sales_return.request_type': '仅退货或换货诉求可下推销售退货单',
+  'after_sales_ticket.push_sales_return.no_sales_order': '请先关联销售订单后再下推销售退货单',
+  'after_sales_ticket.push_sales_return.already_pushed': '该售后服务工单已下推销售退货单',
+  'after_sales_ticket.push_sales_return.no_items': '售后服务工单无明细，无法下推销售退货单',
+  'after_sales_ticket.push_sales_return.no_returnable': '关联销售订单当前无可退货数量',
+};
+
+export function afterSalesTicketCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `app.kuaizhizao.afterSalesTicket.capability.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return AFTER_SALES_TICKET_CAPABILITY_REASON_MESSAGES[code] ?? code;
+}
+
 export function useSalesOrderCapabilities(
   record: SalesOrder | null | undefined,
   salesOrderPerms: ResourcePermissionGates,

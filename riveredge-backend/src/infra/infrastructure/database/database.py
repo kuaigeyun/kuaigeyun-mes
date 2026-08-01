@@ -268,6 +268,9 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.semi_finished_goods_receipt",  # 半成品入库模型
                 "apps.kuaizhizao.models.semi_finished_goods_receipt_item",  # 半成品入库明细模型
                 "apps.kuaizhizao.models.packing_binding",  # 装箱绑定模型
+                "apps.kuaizhizao.models.install_execution_job",  # 安装执行单
+                "apps.kuaizhizao.models.install_execution_stage",  # 安装执行阶段
+                "apps.kuaizhizao.models.install_execution_cost",  # 安装执行费用
                 "apps.kuaizhizao.models.sales_delivery",  # 销售发货模型
                 "apps.kuaizhizao.models.sales_delivery_item",  # 销售发货明细模型
                 "apps.kuaizhizao.models.sales_return",  # 销售退货模型

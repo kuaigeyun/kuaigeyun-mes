@@ -5,14 +5,20 @@
 """
 
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body, Request, status
 from typing import List, Optional, Annotated, Dict, Any
 from loguru import logger
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from core.api.deps.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_permission_codes
+from core.api.deps.access import (
+    AuthContext,
+    ensure_permission_codes,
+    get_auth_context,
+    require_permission_codes,
+)
 from apps.master_data.api._master_data_route_access import require_master_data_module_access
+from core.config.permission_contract import build_permission_code
 from infra.models.user import User
 from apps.master_data.services.material_service import MaterialService
 from apps.master_data.services.material_code_mapping_service import MaterialCodeMappingService
@@ -66,13 +72,15 @@ from apps.master_data.schemas.bom_change_schemas import (
     BOMChangeResponse,
     BOMChangeListResponse,
 )
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import ConflictError, NotFoundError, ValidationError
 
 router = APIRouter(
     prefix="/materials",
     tags=["App - Master Data - Materials"],
     dependencies=[Depends(require_master_data_module_access("material"))],
 )
+
+_BOM_MODULE = "process:engineering-bom"
 
 
 def _http_error(
@@ -516,6 +524,51 @@ async def execute_bom_change(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@router.get("/bom/detect-cycle", summary="Detect BOM cycles")
+async def detect_bom_cycle(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    material_id: int = Query(..., description="主物料ID（父件）"),
+    component_id: int = Query(..., description="子物料ID（子件）")
+):
+    """检测BOM循环依赖；须注册在 /bom/{bom_uuid} 之前。"""
+    try:
+        detail = await MaterialService.detect_bom_cycle_detail(
+            tenant_id, material_id, component_id
+        )
+        return {
+            "has_cycle": bool(detail.get("has_cycle")),
+            "path": detail.get("path") or [],
+        }
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/bom/component/{material_id}/where-used",
+    summary="BOM where-used (reverse lookup)",
+)
+async def list_bom_where_used(
+    material_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    recursive: bool = Query(False, description="是否递归追溯到顶层成品"),
+    include_obsolete: bool = Query(False, description="是否包含已失效版本"),
+):
+    """反查使用该物料作为子件的父物料 BOM。"""
+    try:
+        return await MaterialService.list_bom_where_used(
+            tenant_id,
+            material_id,
+            recursive=recursive,
+            include_obsolete=include_obsolete,
+        )
+    except NotFoundError as e:
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.delete("/bom/changes/{change_uuid}", summary="Delete BOM change record")
 async def delete_bom_change(
     change_uuid: str,
@@ -592,6 +645,10 @@ async def delete_bom(
         return {"message": "BOM删除成功"}
     except NotFoundError as e:
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ConflictError as e:
+        raise _http_error(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/bom/{bom_uuid}/approve", response_model=BOMResponse, summary="Approve BOM")
@@ -625,13 +682,15 @@ async def approve_bom(
 
 @router.post("/bom/batch-approve", response_model=List[BOMResponse], summary="Batch approve BOMs")
 async def batch_approve_bom(
+    request: Request,
     bom_uuids: List[str] = Body(..., description="BOM UUID列表"),
     approved: bool = Body(True, description="是否通过审核"),
     recursive: bool = Body(False, description="是否递归处理子BOM"),
     is_reverse: bool = Body(False, description="是否撤销审核（重置为草稿）"),
     approval_comment: Optional[str] = Body(None, description="审核意见"),
     current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
     批量审核BOM
@@ -639,7 +698,16 @@ async def batch_approve_bom(
     - **bom_uuids**: BOM UUID列表
     - **approved**: 是否通过（true=通过，false=拒绝）
     - **approval_comment**: 审核意见（可选）
+    - **is_reverse**: 撤销审核时需 revoke 权限
     """
+    action = "revoke" if is_reverse else "audit"
+    await ensure_permission_codes(
+        auth,
+        tenant_id,
+        request,
+        [build_permission_code("master-data", _BOM_MODULE, action)],
+        check_abac=True,
+    )
     try:
         return await MaterialService.batch_approve_bom(
             tenant_id=tenant_id,
@@ -650,6 +718,8 @@ async def batch_approve_bom(
             recursive=recursive,
             is_reverse=is_reverse
         )
+    except ConflictError as e:
+        raise _http_error(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -974,26 +1044,46 @@ async def compare_bom_versions(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/bom/detect-cycle", summary="Detect BOM cycles")
-async def detect_bom_cycle(
-    tenant_id: Annotated[int, Depends(get_current_tenant)],
+@router.put(
+    "/bom/material/{material_id}/version/{version}/items",
+    response_model=List[BOMResponse],
+    summary="Replace BOM version items atomically",
+)
+async def replace_bom_version_items(
+    material_id: int,
+    version: str,
+    data: BOMBatchCreate,
     current_user: Annotated[User, Depends(get_current_user)],
-    material_id: int = Query(..., description="主物料ID（父件）"),
-    component_id: int = Query(..., description="子物料ID（子件）")
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
-    """
-    检测BOM循环依赖
-    
-    根据《工艺路线和标准作业流程优化设计规范.md》设计。
-    
-    - **material_id**: 主物料ID（父件）
-    - **component_id**: 子物料ID（子件）
-    
-    返回是否会导致循环依赖（true：会形成循环，false：不会形成循环）。
-    """
+    """事务内全量替换指定物料+版本的 BOM 明细。"""
     try:
-        has_cycle = await MaterialService.detect_bom_cycle(tenant_id, material_id, component_id)
-        return {"has_cycle": has_cycle}
+        return await MaterialService.replace_bom_version_items(
+            tenant_id, material_id, version, data, current_user=current_user
+        )
+    except NotFoundError as e:
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/bom/material/{material_id}/print",
+    summary="Print engineering BOM",
+)
+async def print_engineering_bom(
+    material_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    version: Optional[str] = Body(None, embed=True, description="BOM 版本（可选）"),
+):
+    """组装多阶 BOM 并渲染默认打印 HTML。"""
+    try:
+        return await MaterialService.print_engineering_bom(
+            tenant_id, material_id, version=version
+        )
+    except NotFoundError as e:
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

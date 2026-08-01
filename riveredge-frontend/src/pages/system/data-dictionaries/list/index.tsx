@@ -42,6 +42,7 @@ import {
   initializeSystemDictionaries,
   DataDictionary,
   DictionaryItem,
+  DataDictionaryListParams,
   CreateDictionaryItemData,
   UpdateDictionaryItemData,
 } from '../../../../services/dataDictionary';
@@ -553,22 +554,28 @@ const DataDictionaryListPage: React.FC = () => {
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
           // 处理搜索参数
-          const apiParams: any = {
+          const apiParams: DataDictionaryListParams = {
             page: params.current || 1,
             page_size: params.pageSize || 20,
           };
           
           // 状态筛选
           if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-            apiParams.is_active = searchFormValues.is_active;
+            apiParams.is_active = searchFormValues.is_active === true || searchFormValues.is_active === 'true';
           }
-          
-          // 搜索条件处理：name 和 code 使用模糊搜索
-          if (searchFormValues?.name) {
-            apiParams.name = searchFormValues.name as string;
-          }
-          if (searchFormValues?.code) {
-            apiParams.code = searchFormValues.code as string;
+
+          const keyword = String(searchFormValues?.keyword ?? '').trim();
+          if (keyword) {
+            // UniTable 顶栏模糊搜索走 keyword（名称/代码/备注 OR）
+            apiParams.keyword = keyword;
+          } else {
+            // 高级搜索：名称、代码独立模糊
+            if (searchFormValues?.name) {
+              apiParams.name = searchFormValues.name as string;
+            }
+            if (searchFormValues?.code) {
+              apiParams.code = searchFormValues.code as string;
+            }
           }
           
           try {
@@ -590,6 +597,7 @@ const DataDictionaryListPage: React.FC = () => {
         }}
         rowKey="uuid"
         showAdvancedSearch={true}
+        skipFuzzyPinyinClientFilter
         showCreateButton
         createButtonText={t('field.dataDictionary.createTitle')}
         onCreate={handleCreate}

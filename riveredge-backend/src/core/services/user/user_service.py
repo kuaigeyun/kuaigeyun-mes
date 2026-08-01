@@ -77,6 +77,13 @@ class UserService:
         if existing_user:
             raise ValidationError(f"用户名 '{data.username}' 已被使用，请选择其他用户名")
 
+        from infra.domain.security.reserved_username import assert_tenant_user_username_allowed
+
+        try:
+            assert_tenant_user_username_allowed(data.username)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+
         # 验证部门（如果提供）
         department_id = None
         if data.department_uuid:
@@ -367,6 +374,15 @@ class UserService:
             raise NotFoundError(f"用户不存在: {user_uuid}")
         
         if data.username is not None and data.username != user.username:
+            from infra.domain.security.reserved_username import assert_tenant_user_username_mutation_allowed
+
+            try:
+                assert_tenant_user_username_mutation_allowed(
+                    current_username=user.username,
+                    new_username=data.username,
+                )
+            except ValueError as exc:
+                raise ValidationError(str(exc)) from exc
             existing_user = await User.filter(
                 tenant_id=tenant_id,
                 username=data.username,
@@ -870,6 +886,18 @@ class UserService:
                     errors.append({
                         "row": row_idx,
                         "error": f"用户名 {user_data['username']} 已存在"
+                    })
+                    failure_count += 1
+                    continue
+
+                from infra.domain.security.reserved_username import assert_tenant_user_username_allowed
+
+                try:
+                    assert_tenant_user_username_allowed(str(user_data["username"]))
+                except ValueError as exc:
+                    errors.append({
+                        "row": row_idx,
+                        "error": str(exc),
                     })
                     failure_count += 1
                     continue

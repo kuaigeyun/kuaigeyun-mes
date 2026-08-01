@@ -69,6 +69,13 @@ class UserCreate(UserBase):
     password: str = Field(..., min_length=8, description="密码（至少8个字符）")
     tenant_id: int = Field(..., description="组织 ID（用于多组织隔离）")
 
+    @field_validator("username")
+    @classmethod
+    def validate_username_not_reserved(cls, v: str) -> str:
+        from infra.domain.security.reserved_username import assert_tenant_user_username_allowed
+
+        return assert_tenant_user_username_allowed(v)
+
 
 class UserUpdate(BaseModel):
     """
@@ -94,6 +101,15 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = Field(None, description="是否激活")
     is_infra_admin: Optional[bool] = Field(None, description="是否为平台管理（系统级超级管理员，需 tenant_id=None）")
     is_tenant_admin: Optional[bool] = Field(None, description="是否为组织管理员")
+
+    @field_validator("username")
+    @classmethod
+    def validate_username_not_reserved(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        from infra.domain.security.reserved_username import assert_tenant_user_username_allowed
+
+        return assert_tenant_user_username_allowed(v)
 
     @field_validator('phone')
     @classmethod

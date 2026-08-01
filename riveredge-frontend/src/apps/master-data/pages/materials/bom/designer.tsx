@@ -72,6 +72,9 @@ import {
 import type { FabricationMaterialRef } from '../../../utils/fabricationRawMaterial';
 import { RouteFormModal } from '../../../components/RouteFormModal';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+
+const BOM_RESOURCE = 'master-data:process:engineering-bom';
 
 /** 现代化配色：主色（根节点/选中） */
 const BOM_COLORS = {
@@ -308,6 +311,7 @@ const SOURCE_TYPE_I18N_KEYS: Record<string, string> = {
 const BOMDesignerPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const bomPerms = useResourcePermissions(BOM_RESOURCE);
   const getSourceTypeLabel = (key: string) => (SOURCE_TYPE_I18N_KEYS[key] ? t(SOURCE_TYPE_I18N_KEYS[key]) : key);
   const issueMethodOptions = useMemo(
     () => [
@@ -418,6 +422,26 @@ const BOMDesignerPage: React.FC = () => {
   const closeFabricationWizard = useCallback(() => {
     setFabricationWizardState({ open: false, material: null });
   }, []);
+  const pendingFabricationWizardRef = useRef<{ material: Material; nodeId?: string } | null>(null);
+
+  const formatCyclePath = useCallback((path: number[]) =>
+    path.map((id) => {
+      const m = materials.find((x) => x.id === id);
+      const code = (m as any)?.mainCode ?? (m as any)?.main_code ?? m?.code ?? '';
+      return m ? `${code} - ${m.name}` : String(id);
+    }).join(' → '), [materials]);
+
+  const detectRootChildCycles = useCallback(async (rootMaterialId: number, tree: MindMapNode): Promise<string | null> => {
+    if (!tree.children?.length) return null;
+    for (const child of tree.children) {
+      if (!child.componentId) continue;
+      const result = await bomApi.detectCycle(rootMaterialId, child.componentId);
+      if (result.hasCycle) {
+        return formatCyclePath(result.path ?? []);
+      }
+    }
+    return null;
+  }, [formatCyclePath]);
   const convertMindMapToBOMItems = useCallback((data: MindMapNode, parentMaterial: Material): any[] => {
     const items: any[] = [];
     const parentCode = (parentMaterial as any).mainCode ?? (parentMaterial as any).main_code ?? parentMaterial.code ?? '';
@@ -761,12 +785,6 @@ const BOMDesignerPage: React.FC = () => {
       // 刷新版本列表（便于切换版本下拉与刷新后一致）
       loadVersionList().catch(() => {});
 
-      console.log('BOM设计器 - 加载完成:', {
-        rootMaterial: material,
-        hierarchyItems: hierarchy.items?.length || 0,
-        mindMapData: data,
-      });
-
       if (
         isFabricationMaterial(material) &&
         (!hierarchy.items || hierarchy.items.length === 0)
@@ -774,7 +792,7 @@ const BOMDesignerPage: React.FC = () => {
         const promptKey = `root-${material.id}`;
         if (!fabricationWizardPromptedRef.current.has(promptKey)) {
           fabricationWizardPromptedRef.current.add(promptKey);
-          setTimeout(() => openFabricationWizard(material, 'root'), 400);
+          pendingFabricationWizardRef.current = { material, nodeId: 'root' };
         }
       }
     } catch (error: any) {
@@ -795,6 +813,14 @@ const BOMDesignerPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (loading) return;
+    const pending = pendingFabricationWizardRef.current;
+    if (!pending) return;
+    pendingFabricationWizardRef.current = null;
+    openFabricationWizard(pending.material, pending.nodeId);
+  }, [loading, openFabricationWizard]);
 
   /**
    * 加载当前物料的版本列表（用于版本切换下拉）
@@ -1137,18 +1163,31 @@ const BOMDesignerPage: React.FC = () => {
   );
 
   /**
-   * 删除节点
+   * 删除节点（需确认）
    */
   const handleDeleteNodeCallback = useCallback((nodeId: string) => {
-    handleDeleteNode(
-      nodeId,
-      mindMapDataRef,
-      handleUpdateBOM,
-      setSelectedNodeId as any,
-      messageApi,
-      t
-    );
-  }, [messageApi, t]);
+    if (nodeId === 'root') {
+      messageApi.warning(t('app.master-data.bom.cannotDeleteRoot'));
+      return;
+    }
+    Modal.confirm({
+      title: t('app.master-data.bom.deleteNode'),
+      content: t('app.master-data.bom.deleteNodeConfirm'),
+      okType: 'danger',
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      onOk: () => {
+        handleDeleteNode(
+          nodeId,
+          mindMapDataRef,
+          handleUpdateBOM,
+          setSelectedNodeId as any,
+          messageApi,
+          t
+        );
+      },
+    });
+  }, [messageApi, t, handleUpdateBOM]);
 
   /**
    * 从已拉取的 BOM 列表中解析版本：默认版本优先，否则最新已审核，否则最新版本
@@ -1451,6 +1490,11 @@ const BOMDesignerPage: React.FC = () => {
         messageApi.warning(t('app.master-data.bom.addAtLeastOneChildMaterial'));
         return;
       }
+      const cyclePath = await detectRootChildCycles(Number(materialId), mindMapData as MindMapNode);
+      if (cyclePath) {
+        messageApi.error(t('app.master-data.bom.cycleDetected', { path: cyclePath }));
+        return;
+      }
       const targetVersion = resolvedVersion ?? '1.0';
       await bomApi.batchImport({ items, version: targetVersion, baseQuantity: bomBaseQuantity, bomName });
       messageApi.success(t('app.master-data.bom.designSaved'));
@@ -1477,6 +1521,11 @@ const BOMDesignerPage: React.FC = () => {
       const items = convertMindMapToBOMItems(mindMapData as MindMapNode, rootMaterial);
       if (items.length === 0) {
         messageApi.warning(t('app.master-data.bom.addAtLeastOneChildMaterial'));
+        return;
+      }
+      const cyclePath = await detectRootChildCycles(Number(materialId), mindMapData as MindMapNode);
+      if (cyclePath) {
+        messageApi.error(t('app.master-data.bom.cycleDetected', { path: cyclePath }));
         return;
       }
       const targetVersion = resolvedVersion ?? '1.0';
@@ -1538,6 +1587,12 @@ const BOMDesignerPage: React.FC = () => {
     const items = getRootLevelBOMItems(latestTree as MindMapNode, rootMaterial);
     if (items.length === 0) {
       messageApi.warning(t('app.master-data.bom.addAtLeastOneChildMaterial'));
+      return;
+    }
+
+    const cyclePath = await detectRootChildCycles(materialIdNum, latestTree as MindMapNode);
+    if (cyclePath) {
+      messageApi.error(t('app.master-data.bom.cycleDetected', { path: cyclePath }));
       return;
     }
 
@@ -2682,16 +2737,16 @@ const BOMDesignerPage: React.FC = () => {
 
   if (loading || materialsLoading) {
     return (
-      <div style={{ padding: PAGE_SPACING.PADDING, textAlign: 'center' }}>加载中...</div>
+      <div style={{ padding: PAGE_SPACING.PADDING, textAlign: 'center' }}>{t('app.master-data.bom.loadingPage')}</div>
     );
   }
 
   if (!materialId) {
     return (
       <div style={{ padding: PAGE_SPACING.PADDING, textAlign: 'center' }}>
-        <p>缺少物料ID参数</p>
+        <p>{t('app.master-data.bom.missingMaterialId')}</p>
         <Button onClick={() => navigate('/apps/master-data/process/engineering-bom', { state: { closeTab: location.pathname + (location.search || '') } })}>
-          返回列表
+          {t('app.master-data.bom.backToList')}
         </Button>
       </div>
     );
@@ -2700,9 +2755,9 @@ const BOMDesignerPage: React.FC = () => {
   if (!rootMaterial || !mindMapData) {
     return (
       <div style={{ padding: PAGE_SPACING.PADDING, textAlign: 'center' }}>
-        <p>物料数据不存在或正在加载...</p>
+        <p>{t('app.master-data.bom.materialDataLoading')}</p>
         <Button onClick={() => navigate('/apps/master-data/process/engineering-bom', { state: { closeTab: location.pathname + (location.search || '') } })}>
-          返回列表
+          {t('app.master-data.bom.backToList')}
         </Button>
       </div>
     );
@@ -2712,7 +2767,7 @@ const BOMDesignerPage: React.FC = () => {
     <>
     <style>{`.bom-alternative-list .ant-list-item-main, .bom-configurable-list .ant-list-item-main { min-width: 0; }`}</style>
     <CanvasPageTemplate
-      functionalTitle="BOM设计"
+      functionalTitle={t('app.master-data.bom.designerPageTitle')}
       style={{
         height: getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.BOM_DESIGNER_PX, {
           compensateHeaderInFullscreen: true,
@@ -2770,6 +2825,7 @@ const BOMDesignerPage: React.FC = () => {
           />
           {isReadOnly ? (
             <>
+              {bomPerms.canUpdate ? (
               <Button
                 type="primary"
                 icon={<SaveOutlined />}
@@ -2779,6 +2835,8 @@ const BOMDesignerPage: React.FC = () => {
               >
                 {t('app.master-data.bom.saveAsNewVersionBtn')}
               </Button>
+              ) : null}
+              {bomPerms.canUpdate ? (
               <Button
                 icon={<CloseCircleOutlined />}
                 onClick={handleOpenSetObsolete}
@@ -2786,9 +2844,11 @@ const BOMDesignerPage: React.FC = () => {
               >
                 {t('app.master-data.bom.setObsolete')}
               </Button>
+              ) : null}
             </>
           ) : (
             <>
+              {bomPerms.canUpdate ? (
               <Button
                 icon={<SaveOutlined />}
                 loading={saving}
@@ -2797,6 +2857,8 @@ const BOMDesignerPage: React.FC = () => {
               >
                 {t('app.master-data.bom.saveDraft')}
               </Button>
+              ) : null}
+              {bomPerms.canUpdate && bomPerms.canAction?.('audit') ? (
               <Button
                 type="primary"
                 icon={<SaveOutlined />}
@@ -2806,6 +2868,7 @@ const BOMDesignerPage: React.FC = () => {
               >
                 {t('app.master-data.bom.saveAndPublish')}
               </Button>
+              ) : null}
             </>
           )}
           <Button
@@ -2840,10 +2903,6 @@ const BOMDesignerPage: React.FC = () => {
           tabIndex={-1} // Allow div to be focused
           style={{ width: '100%', height: '100%', position: 'relative', outline: 'none', ...CANVAS_GRID_STYLE }}
         >
-          {/* 调试标示：如果能看到这个文字和背景色变化，说明代码已更新 */}
-          <div style={{ position: 'absolute', right: 12, top: 12, color: BOM_COLORS.root, fontSize: 10, opacity: 0.5, zIndex: 100 }}>
-            Render Mode: High-Performance Optimized
-          </div>
           {/* 画板左上角：常用键盘快捷键（可收起/展开） */}
           {guideExpanded ? (
             <div
@@ -3033,6 +3092,7 @@ const BOMDesignerPage: React.FC = () => {
                 >
                   {t('app.master-data.bom.addChildMaterial')}
                 </Button>
+                {bomPerms.canUpdate && !isReadOnly ? (
                 <Button
                   size="small"
                   danger
@@ -3041,6 +3101,7 @@ const BOMDesignerPage: React.FC = () => {
                 >
                   {t('app.master-data.bom.deleteNode')}
                 </Button>
+                ) : null}
               </Space>
             </div>
           )
@@ -3144,7 +3205,7 @@ const BOMDesignerPage: React.FC = () => {
                       issueMethod: resolveIssueMethodForNode(null, material),
                     });
                     if (nodeConfigForm.getFieldValue('isConfigurable') || nodeConfigForm.getFieldValue('isAlternative')) {
-                      setTimeout(() => handleSaveNodeConfig(), 0);
+                      handleSaveNodeConfig();
                     }
                   }
                 }}
@@ -3265,7 +3326,7 @@ const BOMDesignerPage: React.FC = () => {
                           ...(checked ? { isAlternative: false, alternativeGroupId: null } : {}),
                         });
                         if (checked && nodeConfigForm.getFieldValue('materialId')) {
-                          setTimeout(() => handleSaveNodeConfig(), 0);
+                          handleSaveNodeConfig();
                         }
                       }}
                     />
@@ -3289,7 +3350,7 @@ const BOMDesignerPage: React.FC = () => {
                             : {}),
                         });
                         if (checked && nodeConfigForm.getFieldValue('materialId')) {
-                          setTimeout(() => handleSaveNodeConfig(), 0);
+                          handleSaveNodeConfig();
                         }
                       }}
                     />

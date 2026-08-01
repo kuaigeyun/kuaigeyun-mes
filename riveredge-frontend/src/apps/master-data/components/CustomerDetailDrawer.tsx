@@ -159,7 +159,6 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
         dataIndex: 'lastFollowUpAt',
         valueType: 'dateTime',
       },
-      { title: t('field.customer.address'), dataIndex: 'address', span: 2 },
       {
         title: t('app.master-data.warehouses.status'),
         dataIndex: 'isActive',

@@ -21,7 +21,6 @@ import {
   listRdProjects,
   createRdProject,
   deleteRdProject,
-  spawnDeliveryProject,
   pushTrialWorkOrder,
   updateRdProject,
   type ProjectType,
@@ -49,7 +48,6 @@ import { formatDateTime } from '../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const PAGE_CODE_RD = 'kuaiplm-rd-project';
-const PAGE_CODE_DELIVERY = 'kuaiplm-delivery-project';
 
 const RdProjectsListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -59,13 +57,12 @@ const RdProjectsListPage: React.FC = () => {
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [createProjectType, setCreateProjectType] = useState<ProjectType>('RD');
   const [gateTemplateOptions, setGateTemplateOptions] = useState<{ label: string; value: number }[]>([]);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const createFormRef = useRef<any>(null);
   const selectedOwnerRef = useRef<{ id: number; name: string } | null>(null);
 
-  const activePageCode = createProjectType === 'DELIVERY' ? PAGE_CODE_DELIVERY : PAGE_CODE_RD;
+  const activePageCode = PAGE_CODE_RD;
   const lifecycleValueEnum = useMemo(() => buildRdProjectLifecycleValueEnum(t), [t]);
   const projectStatusValueEnum = useMemo(() => buildKuaiplmProjectStatusValueEnum(t), [t]);
 
@@ -90,7 +87,7 @@ const RdProjectsListPage: React.FC = () => {
       }
 
       try {
-        const res = await listGateTemplates({ project_type: createProjectType, is_active: true });
+        const res = await listGateTemplates({ project_type: 'RD', is_active: true });
         const options = res.items.map((tpl) => ({
           label: tpl.is_default ? `${tpl.template_name} (${t('app.kuaiplm.gateTemplates.defaultBadge')})` : tpl.template_name,
           value: tpl.id,
@@ -104,7 +101,7 @@ const RdProjectsListPage: React.FC = () => {
         setGateTemplateOptions([]);
       }
     })();
-  }, [createOpen, activePageCode, createProjectType, t]);
+  }, [createOpen, activePageCode, t]);
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
   useNewShortcut(handleCreate);
@@ -134,29 +131,6 @@ const RdProjectsListPage: React.FC = () => {
       return;
     }
     messageApi.error(t('app.kuaiplm.common.messages.batchDeleteFailed'));
-  };
-
-  const handleBatchSpawnDelivery = async () => {
-    const ids = toProjectIds(selectedRowKeys);
-    if (!ids.length) {
-      messageApi.warning(t('app.kuaiplm.common.messages.selectFirst'));
-      return;
-    }
-    let successCount = 0;
-    for (const id of ids) {
-      try {
-        await spawnDeliveryProject(id);
-        successCount += 1;
-      } catch {
-        // continue processing remaining rows
-      }
-    }
-    if (successCount > 0) {
-      messageApi.success(t('app.kuaiplm.common.messages.batchExecuteSuccess', { count: successCount }));
-      actionRef.current?.reload();
-      return;
-    }
-    messageApi.error(t('app.kuaiplm.rdProjects.messages.pushDeliveryFailed'));
   };
 
   const handleBatchPushTrialWorkOrder = async () => {
@@ -365,15 +339,6 @@ const RdProjectsListPage: React.FC = () => {
             selectedRowKeys={selectedRowKeys}
             menuItems={[
               {
-                key: 'batch-spawn-delivery',
-                label: t('app.kuaiplm.rdProjects.batch.pushDelivery'),
-                requireConfirm: true,
-                confirmTitle: (count) => `${t('app.kuaiplm.rdProjects.batch.pushDelivery')} (${count})`,
-                onClick: () => {
-                  void handleBatchSpawnDelivery();
-                },
-              },
-              {
                 key: 'batch-push-trial-work-order',
                 label: t('app.kuaiplm.rdProjects.batch.pushTrialWo'),
                 requireConfirm: true,
@@ -442,7 +407,6 @@ const RdProjectsListPage: React.FC = () => {
         grid
         onClose={() => {
           setCreateOpen(false);
-          setCreateProjectType('RD');
           selectedOwnerRef.current = null;
         }}
         formRef={createFormRef}
@@ -450,8 +414,7 @@ const RdProjectsListPage: React.FC = () => {
           await createRdProject({
             project_code: values.project_code,
             project_name: values.project_name,
-            project_type: values.project_type ?? 'RD',
-            source_project_id: values.source_project_id ? Number(values.source_project_id) : undefined,
+            project_type: 'RD',
             gate_template_id: values.gate_template_id ? Number(values.gate_template_id) : undefined,
             owner_id: selectedOwnerRef.current?.id,
             owner_name: selectedOwnerRef.current?.name,
@@ -465,48 +428,10 @@ const RdProjectsListPage: React.FC = () => {
           });
           messageApi.success(t('app.kuaiplm.common.messages.createSuccess'));
           setCreateOpen(false);
-          setCreateProjectType('RD');
           selectedOwnerRef.current = null;
           actionRef.current?.reload();
         }}
       >
-        <ProFormSelect
-          name="project_type"
-          label={t('app.kuaiplm.rdProjects.form.projectType')}
-          initialValue="RD"
-          rules={[{ required: true }]}
-          colProps={{ span: 24 }}
-          options={[
-            { label: getKuaiplmProjectTypeText(t, 'RD'), value: 'RD' },
-            { label: getKuaiplmProjectTypeText(t, 'DELIVERY'), value: 'DELIVERY' },
-          ]}
-          fieldProps={{
-            onChange: (val: ProjectType) => {
-              setCreateProjectType(val);
-              createFormRef.current?.setFieldsValue({
-                project_code: undefined,
-                source_project_id: undefined,
-                gate_template_id: undefined,
-              });
-            },
-          }}
-        />
-        {createProjectType === 'DELIVERY' ? (
-          <ProFormSelect
-            name="source_project_id"
-            label={t('app.kuaiplm.rdProjects.form.sourceProject')}
-            placeholder={t('app.kuaiplm.rdProjects.form.sourceProjectHint')}
-            colProps={{ span: 24 }}
-            showSearch
-            request={async () => {
-              const res = await listRdProjects({ project_type: 'RD', limit: 100 });
-              return res.items.map((p) => ({
-                label: `${p.project_code} - ${p.project_name}`,
-                value: p.id,
-              }));
-            }}
-          />
-        ) : null}
         <ProFormSelect
           name="gate_template_id"
           label={t('app.kuaiplm.rdProjects.form.gateTemplate')}

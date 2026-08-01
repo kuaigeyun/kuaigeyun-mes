@@ -145,6 +145,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
     }
 
     let active = true;
+    const mountToken = ++mountSeqRef.current;
     onLoadingChangeRef.current(true);
 
     safeClearContainer(containerEl);
@@ -154,7 +155,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
     mountEl.style.minWidth = '0';
     mountEl.style.height = '100%';
     mountEl.style.boxSizing = 'border-box';
-    const containerId = `univer-sheet-import-${Date.now()}-${mountSeqRef.current++}`;
+    const containerId = `univer-sheet-import-${Date.now()}-${mountToken}`;
     mountEl.id = containerId;
     containerEl.appendChild(mountEl);
 
@@ -207,7 +208,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
     };
 
     runAfterUniverSheetsRenderServiceInit(() => {
-      if (!active || !pendingInstance) {
+      if (!active || mountSeqRef.current !== mountToken || !pendingInstance) {
         safeDisposeUniver(pendingInstance);
         return;
       }
@@ -239,8 +240,8 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
           },
         });
 
-        // 关窗与 microtask 竞态：createWorkbook 后若已 inactive，禁止再碰 sheet / DV
-        if (!active) {
+        // 关窗 / 上传重建与 microtask 竞态：createWorkbook 后若 token 已失效，禁止再碰 sheet / DV
+        if (!active || mountSeqRef.current !== mountToken) {
           safeDisposeUniver(instance);
           return;
         }
@@ -254,7 +255,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
           sheet,
         );
 
-        if (!active) {
+        if (!active || mountSeqRef.current !== mountToken) {
           safeDisposeUniver(instance);
           return;
         }
@@ -299,6 +300,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
         if (containerForResize) {
           resizeObserverRef.current?.disconnect();
           const observer = new ResizeObserver(() => {
+            if (mountSeqRef.current !== mountToken) return;
             const current = instanceRef.current;
             if (current) {
               relayoutUniverSheet(current, containerRef.current);
@@ -398,6 +400,9 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
 
     return () => {
       active = false;
+      if (mountSeqRef.current === mountToken) {
+        mountSeqRef.current += 1;
+      }
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
       eventDisposableRef.current?.dispose?.();
@@ -429,8 +434,10 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
   }, [sheetSeedKey, instanceRef]);
 
   // 下拉选项异步到位时只重打 DV，不 dispose 整表
+  // 下拉选项异步到位时只重打 DV，不 dispose 整表
   useLayoutEffect(() => {
     const instance = instanceRef.current;
+    const mountToken = mountSeqRef.current;
     if (!instance?.univerAPI || loading) return;
     const rowCount = rowCountRef.current;
     if (rowCount < 2) return;
@@ -438,7 +445,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
       const workbook = instance.univerAPI.getActiveWorkbook?.() ?? null;
       if (!workbook) return;
       // 再次确认未被 cleanup 摘掉（dispose 竞态）
-      if (instanceRef.current !== instance) return;
+      if (instanceRef.current !== instance || mountSeqRef.current !== mountToken) return;
       const sheet = workbook.getSheetBySheetId?.('sheet-1') ?? workbook.getActiveSheet?.() ?? null;
       applyImportColumnDropdowns(instance.univerAPI as any, columnOptions, rowCount, sheet);
     } catch {

@@ -13,7 +13,7 @@ import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntFo
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
-import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, HighlightOutlined, MoreOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined, CopyOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, HighlightOutlined, MoreOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined, CopyOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -27,12 +27,14 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { openPrintHtmlWindow } from '../../../../../utils/printResponseHelpers';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { formatQuantity } from '../../../../../utils/format';
+import { formatQuantity, formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { ListPageTemplate, FormModalTemplate, flushDrawerOpen, MODAL_CONFIG, DRAWER_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { bomApi, materialApi } from '../../../services/material';
-import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent, BOMRelationImportEntity, BOMRelationImportWriteStrategy } from '../../../types/material';
+import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent, BOMRelationImportEntity, BOMRelationImportWriteStrategy, BOMWhereUsedResult } from '../../../types/material';
 import { testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { batchSetFieldValues } from '../../../../../services/customField';
 
@@ -72,6 +74,19 @@ import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
+const BOM_RESOURCE = 'master-data:process:engineering-bom';
+
+interface BOMVersionHistoryRow {
+  version: string;
+  materialId: number;
+  approvalStatus: BOM['approvalStatus'];
+  itemCount: number;
+  effectiveDate?: string;
+  createdByName?: string;
+  createdAt?: string;
+  isDefault?: boolean;
+  isObsolete?: boolean;
+}
 
 /** ProTable 操作列可传 UniTable 扩展：控制溢出菜单 directMax 等 */
 type MaterialBOMProColumn = ProColumns<MaterialBOMRow> & {
@@ -303,6 +318,7 @@ function orderBomDetailBasicColumns(cols: ProDescriptionsItemProps<BOM>[]): ProD
  */
 const BOMPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const bomPerms = useResourcePermissions(BOM_RESOURCE);
   const bomIssueMethodOptions = useMemo(
     () =>
       BOM_ISSUE_METHOD_VALUES.map((value) => ({
@@ -344,8 +360,10 @@ const BOMPage: React.FC = () => {
   const [copySourceSubmitting, setCopySourceSubmitting] = useState(false);
   const [copySourceOptions, setCopySourceOptions] = useState<BomCopySourceOption[]>([]);
   const [selectedCopySource, setSelectedCopySource] = useState<string>();
-  /** 编辑时：按主料+版本定位整份 BOM，保存时先删后批量创建 */
+  /** 编辑时：按主料+版本定位整份 BOM，保存时 replaceVersionItems */
   const [editContext, setEditContext] = useState<{ materialId: number; version: string; uuidsToReplace: string[] } | null>(null);
+  const [editFormInitialValues, setEditFormInitialValues] = useState<Record<string, unknown> | null>(null);
+  const [editFormHeaderId, setEditFormHeaderId] = useState<number | null>(null);
   const bomNameTouchedRef = useRef(false);
 
   const {
@@ -368,9 +386,16 @@ const BOMPage: React.FC = () => {
 
   useEffect(() => {
     if (bomListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
+      actionRef.current?.reload();
     }
   }, [bomListCustomFields.length]);
+
+  useEffect(() => {
+    if (!modalVisible || !isEdit || editFormHeaderId == null) return;
+    loadBomFormFieldValues(editFormHeaderId).then((fieldFormValues) => {
+      formRef.current?.setFieldsValue(fieldFormValues);
+    });
+  }, [modalVisible, isEdit, editFormHeaderId, loadBomFormFieldValues]);
   
   // 审核Modal状态
   const [approvalModalVisible, setApprovalModalVisible] = useState(false);
@@ -499,9 +524,15 @@ const BOMPage: React.FC = () => {
   // 单条撤销审核的递归选项Ref
   const recursiveUnapproveRef = useRef<boolean>(false);
   const [versionLoading, setVersionLoading] = useState(false);
-  const [versionList, setVersionList] = useState<BOM[]>([]);
+  const [versionList, setVersionList] = useState<BOMVersionHistoryRow[]>([]);
   const [selectedVersions, setSelectedVersions] = useState<{ version1: string; version2: string } | null>(null);
-  const [versionCompareResult, setVersionCompareResult] = useState<any>(null);
+  const [versionCompareResult, setVersionCompareResult] = useState<BOMVersionCompareResult | null>(null);
+
+  const [whereUsedModalVisible, setWhereUsedModalVisible] = useState(false);
+  const [whereUsedLoading, setWhereUsedLoading] = useState(false);
+  const [whereUsedResult, setWhereUsedResult] = useState<BOMWhereUsedResult | null>(null);
+  const [whereUsedRecursive, setWhereUsedRecursive] = useState(false);
+  const [whereUsedMaterialId, setWhereUsedMaterialId] = useState<number | null>(null);
   
   // 层级结构状态（整合到详情中）
   const [hierarchyLoading, setHierarchyLoading] = useState(false);
@@ -782,6 +813,8 @@ const BOMPage: React.FC = () => {
   const handleCreate = async () => {
     setIsEdit(false);
     setEditContext(null);
+    setEditFormInitialValues(null);
+    setEditFormHeaderId(null);
     setCurrentBOMUuid(null);
     bomNameTouchedRef.current = false;
     setModalVisible(true);
@@ -814,12 +847,6 @@ const BOMPage: React.FC = () => {
         return;
       }
       const first = list[0]!;
-      console.log('编辑BOM - 获取到的数据:', { 
-        bomCode: first.bomCode, 
-        materialId: first.materialId, 
-        version: first.version,
-        allBomCodes: list.map(b => b.bomCode)
-      });
       // 先按子件/主件 ID 补齐物料主数据，供下拉展示与来源回填（不依赖前 1000 条缓存）
       await ensureMaterialsByIds([
         first.materialId,
@@ -832,7 +859,6 @@ const BOMPage: React.FC = () => {
         version: first.version ?? '1.0',
         uuidsToReplace: list.map((b) => b.uuid),
       });
-      // 确保 BOM 编号正确设置：优先使用第一个记录的 bomCode，如果不存在则尝试从其他记录中获取
       const bomCodeValue = first.bomCode ?? list.find(b => b.bomCode)?.bomCode ?? '';
       const itemsData = list.map((b) => {
         const compMaterial = materialsRef.current.find((m) => m.id === b.componentId);
@@ -852,34 +878,22 @@ const BOMPage: React.FC = () => {
           sourceType: materialSource || undefined,
         };
       });
-      
+      setEditFormHeaderId(first.id ?? null);
+      setEditFormInitialValues({
+        materialId: first.materialId,
+        version: first.version ?? '1.0',
+        baseQuantity: first.baseQuantity ?? 1,
+        bomName: first.bomName ?? undefined,
+        bomCode: bomCodeValue,
+        effectiveDate: first.effectiveDate,
+        expiryDate: first.expiryDate,
+        approvalStatus: first.approvalStatus,
+        description: first.description,
+        remark: first.remark,
+        isActive: first.isActive,
+        items: itemsData,
+      });
       setModalVisible(true);
-      // 使用 setTimeout 确保 Modal 和表单完全渲染后再设置值
-      // 对于 AntForm.List，需要更长的延迟确保组件已完全初始化
-      setTimeout(() => {
-        if (formRef.current) {
-          formRef.current.setFieldsValue({
-            materialId: first.materialId,
-            version: first.version ?? '1.0',
-            baseQuantity: first.baseQuantity ?? 1,
-            bomName: first.bomName ?? undefined,
-            bomCode: bomCodeValue,
-            effectiveDate: first.effectiveDate,
-            expiryDate: first.expiryDate,
-            approvalStatus: first.approvalStatus,
-            description: first.description,
-            remark: first.remark,
-            isActive: first.isActive,
-          });
-          // 单独设置 items，确保 AntForm.List 能正确接收数据
-          setTimeout(() => {
-            formRef.current?.setFieldValue('items', itemsData);
-            loadBomFormFieldValues(first.id).then((fieldFormValues) => {
-              formRef.current?.setFieldsValue(fieldFormValues);
-            });
-          }, 50);
-        }
-      }, 150);
     } catch (error: any) {
       messageApi.error(error?.message || t('app.master-data.bom.getFailed'));
     }
@@ -1230,8 +1244,6 @@ const BOMPage: React.FC = () => {
       
       // 处理层级结构数据
       if (hierarchy) {
-        console.log('层级结构原始数据:', hierarchy);
-        console.log('层级结构items:', hierarchy.items);
         setHierarchyData(hierarchy);
         
         // 转换为Tree组件需要的格式
@@ -1338,9 +1350,26 @@ const BOMPage: React.FC = () => {
     return { ...result, data };
   };
 
+  const formatCyclePath = (path: number[]) =>
+    path.map((id) => getMaterialName(id)).join(' → ');
+
+  const detectBomItemCycles = async (materialId: number, items: Array<{ componentId?: number }>) => {
+    for (const item of items) {
+      if (!item.componentId) continue;
+      const result = await bomApi.detectCycle(materialId, item.componentId);
+      if (result.hasCycle) {
+        throw new Error(
+          t('app.master-data.bom.cycleDetected', {
+            path: formatCyclePath(result.path ?? []),
+          }),
+        );
+      }
+    }
+  };
+
   /**
    * 处理提交表单（创建/更新BOM）
-   * 编辑时：先删除原主料+版本下全部 BOM 记录，再按表单批量创建，形成完整主料–子件关系
+   * 编辑时：replaceVersionItems 原子替换指定版本明细
    */
   const handleSubmit = async (values: any) => {
     try {
@@ -1354,6 +1383,8 @@ const BOMPage: React.FC = () => {
         messageApi.error(t('app.master-data.bom.selectMainMaterial'));
         return;
       }
+
+      await detectBomItemCycles(standardValues.materialId, standardValues.items);
 
       const buildBatch = () => {
         return {
@@ -1386,7 +1417,6 @@ const BOMPage: React.FC = () => {
           bom_code: standardValues.bomCode,
           effective_date: standardValues.effectiveDate,
           expiry_date: standardValues.expiryDate,
-          approval_status: standardValues.approvalStatus || 'draft',
           description: standardValues.description,
           remark: standardValues.remark,
           is_active: standardValues.isActive !== false,
@@ -1395,13 +1425,16 @@ const BOMPage: React.FC = () => {
 
       let createdList: BOM[] = [];
       if (isEdit && editContext) {
-        for (const uuid of editContext.uuidsToReplace) {
-          await bomApi.delete(uuid);
-        }
         const batchData = buildBatch();
-        createdList = await bomApi.create(batchData as any);
+        createdList = await bomApi.replaceVersionItems(
+          editContext.materialId,
+          editContext.version,
+          batchData as BOMBatchCreate,
+        );
         messageApi.success(t('app.master-data.bom.structureUpdated', { count: batchData.items.length }));
         setEditContext(null);
+        setEditFormInitialValues(null);
+        setEditFormHeaderId(null);
       } else {
         const batchData = buildBatch();
         createdList = await bomApi.create(batchData as any);
@@ -1432,6 +1465,8 @@ const BOMPage: React.FC = () => {
   const handleCloseModal = () => {
     setModalVisible(false);
     setEditContext(null);
+    setEditFormInitialValues(null);
+    setEditFormHeaderId(null);
     setMaterialPickerOpen(false);
     setCopySourceModalVisible(false);
     setSelectedCopySource(undefined);
@@ -2281,29 +2316,96 @@ const BOMPage: React.FC = () => {
   const handleViewVersionHistory = async (record: BOM) => {
     try {
       setCurrentMaterialId(record.materialId);
-      // 获取该物料的所有BOM版本（含失效版本）
       const versions = await bomApi.getByMaterial(record.materialId, undefined, false, true);
-      // 按版本号排序（降序）
-      const sortedVersions = versions.sort((a, b) => {
+      const byVersion = new Map<string, BOM[]>();
+      for (const bom of versions) {
+        const key = bom.version;
+        if (!byVersion.has(key)) byVersion.set(key, []);
+        byVersion.get(key)!.push(bom);
+      }
+      const aggregated: BOMVersionHistoryRow[] = Array.from(byVersion.entries()).map(([version, items]) => {
+        const first = items[0]!;
+        return {
+          version,
+          materialId: first.materialId,
+          approvalStatus: first.approvalStatus,
+          itemCount: items.length,
+          effectiveDate: first.effectiveDate,
+          createdByName: first.createdByName ?? first.updatedByName,
+          createdAt: first.createdAt,
+          isDefault: first.isDefault,
+          isObsolete: first.isObsolete,
+        };
+      });
+      aggregated.sort((a, b) => {
         const aMatch = a.version.match(/v?(\d+)\.(\d+)/);
         const bMatch = b.version.match(/v?(\d+)\.(\d+)/);
         if (aMatch && bMatch) {
-          const aMajor = parseInt(aMatch[1]);
-          const aMinor = parseInt(aMatch[2]);
-          const bMajor = parseInt(bMatch[1]);
-          const bMinor = parseInt(bMatch[2]);
-          if (aMajor !== bMajor) {
-            return bMajor - aMajor;
-          }
+          const aMajor = parseInt(aMatch[1], 10);
+          const aMinor = parseInt(aMatch[2], 10);
+          const bMajor = parseInt(bMatch[1], 10);
+          const bMinor = parseInt(bMatch[2], 10);
+          if (aMajor !== bMajor) return bMajor - aMajor;
           return bMinor - aMinor;
         }
         return b.version.localeCompare(a.version);
       });
-      setVersionList(sortedVersions);
+      setVersionList(aggregated);
       setVersionHistoryModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.bom.getVersionHistoryFailed'));
     }
+  };
+
+  const handlePrintBom = async (materialId: number, version?: string) => {
+    try {
+      const result = await bomApi.print(materialId, version);
+      if (!result.content?.trim()) {
+        messageApi.error(result.message || t('app.master-data.bom.printFailed'));
+        return;
+      }
+      const win = openPrintHtmlWindow(result.content, t('app.master-data.bom.printBom'));
+      if (!win) {
+        messageApi.error(t('app.master-data.bom.printFailed'));
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.bom.printFailed'));
+    }
+  };
+
+  const loadWhereUsed = async (materialId: number, recursive: boolean) => {
+    setWhereUsedLoading(true);
+    try {
+      const result = await bomApi.whereUsed(materialId, { recursive });
+      setWhereUsedResult(result);
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.bom.getFailed'));
+      setWhereUsedResult(null);
+    } finally {
+      setWhereUsedLoading(false);
+    }
+  };
+
+  const handleOpenWhereUsed = async (materialId: number) => {
+    setWhereUsedMaterialId(materialId);
+    setWhereUsedRecursive(false);
+    setWhereUsedModalVisible(true);
+    await loadWhereUsed(materialId, false);
+  };
+
+  const handleWhereUsedRecursiveChange = async (checked: boolean) => {
+    setWhereUsedRecursive(checked);
+    if (whereUsedMaterialId != null) {
+      await loadWhereUsed(whereUsedMaterialId, checked);
+    }
+  };
+
+  const navigateToParentBom = (item: BOMWhereUsedResult['items'][number]) => {
+    const p = new URLSearchParams();
+    p.set('materialId', String(item.materialId));
+    if (item.version) p.set('version', item.version);
+    navigate(`/apps/master-data/process/engineering-bom/designer?${p}`);
+    setWhereUsedModalVisible(false);
   };
 
   /**
@@ -2598,7 +2700,7 @@ const BOMPage: React.FC = () => {
       width: 300,
       fixed: 'right',
       /** 主行含「详情 + 编辑 + 设计 + 审核 + 分组更多」共 5 项，提高 directMax 避免自定义 Dropdown 被塞进二级溢出 */
-      uniActionRenderOptions: { directMax: 6 },
+      uniActionRenderOptions: { directMax: 5 },
       render: (_, record: any) => {
         if (isBomItemRow(record)) return null;
         const r = record.selectedVersion?.firstItem ?? record.firstItem;
@@ -2616,6 +2718,7 @@ const BOMPage: React.FC = () => {
             label: t('app.master-data.bom.view'),
             children: [
               { key: 'calculateQuantity', icon: <CalculatorOutlined />, label: t('app.master-data.bom.calculateQuantity'), onClick: () => handleCalculateQuantity(r) },
+              { key: 'whereUsed', label: t('app.master-data.bom.whereUsed'), onClick: () => handleOpenWhereUsed(r.materialId) },
             ],
           },
           {
@@ -2628,15 +2731,15 @@ const BOMPage: React.FC = () => {
               { key: 'setObsolete', icon: <CloseCircleOutlined />, label: t('app.master-data.bom.setObsolete'), onClick: () => handleOpenSetObsolete(r), disabled: r.isObsolete },
             ],
           },
-          { type: 'divider' },
-          {
+          ...(bomPerms.canDelete ? [{ type: 'divider' as const }] : []),
+          ...(bomPerms.canDelete ? [{
             key: 'delete',
             icon: <DeleteOutlined />,
             label: t('app.master-data.bom.delete'),
             danger: true,
             onClick: () => handleDeleteGroup(record),
             disabled: isApproved,
-          },
+          }] : []),
         ];
         /** 返回数组，交给 UniTable → renderUniTableOperationCell → normalizeActionTree；顺序：详情 → 编辑 → … */
         return [
@@ -2651,6 +2754,7 @@ const BOMPage: React.FC = () => {
           >
             {t('app.master-data.bom.detail')}
           </Button>,
+          bomPerms.canUpdate ? (
           <Button
             key="edit"
             {...rowActionKind('update')}
@@ -2664,7 +2768,9 @@ const BOMPage: React.FC = () => {
             {...(isApproved ? { 'data-row-action-visible-when-disabled': true } : {})}
           >
             {t('app.master-data.bom.editTitle')}
-          </Button>,
+          </Button>
+          ) : null,
+          bomPerms.canUpdate ? (
           <Button
             key="design"
             {...rowActionKind('update')}
@@ -2676,8 +2782,10 @@ const BOMPage: React.FC = () => {
             data-action-priority={2}
           >
             {t('app.master-data.bom.design')}
-          </Button>,
+          </Button>
+          ) : null,
           r.approvalStatus !== 'approved' ? (
+            bomPerms.canAction?.('audit') ? (
             <Button
               key="approve"
               {...rowActionKind('audit')}
@@ -2690,7 +2798,9 @@ const BOMPage: React.FC = () => {
             >
               {t('app.master-data.bom.approve')}
             </Button>
+            ) : null
           ) : (
+            bomPerms.canAction?.('revoke') ? (
             <Button
               key="unapprove"
               {...rowActionKind('revoke')}
@@ -2703,13 +2813,14 @@ const BOMPage: React.FC = () => {
             >
               {t('app.master-data.bom.unapprove')}
             </Button>
+            ) : null
           ),
           <Dropdown key="more" {...rowActionKind('skip')} menu={{ items: moreItems }} trigger={['click']} data-action-priority={4}>
             <Button type="text" className="ant-btn-row-action" icon={<MoreOutlined />}>
               {t('app.master-data.bom.more')}
             </Button>
           </Dropdown>,
-        ];
+        ].filter(Boolean);
 
       },
     },
@@ -3010,6 +3121,7 @@ const BOMPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MaterialBOMRow>
+        permissionResource={BOM_RESOURCE}
         columnPersistenceId="apps.master-data.pages.materials.bom.stacked-v2"
         actionRef={actionRef}
         columns={groupColumns}
@@ -3029,50 +3141,11 @@ const BOMPage: React.FC = () => {
         }}
         request={async (params, sort, _filter, searchFormValues) => {
           const includeObsolete = searchFormValues?.includeObsolete === true;
-          const is404 = (e: any) =>
-            e?.response?.status === 404 ||
-            (typeof e?.message === 'string' && (e.message.includes('404') || e.message.includes('不存在')));
           try {
-            // 1) 拉取分组摘要 + 作为子件出现的物料 ID（区分成品/半成品），无 limit 问题
-            let groups: Array<{ material_id: number; version: string; bom_code?: string; approval_status: string; is_default: boolean; is_obsolete: boolean }>;
-            let componentIds: number[];
-            try {
-              const [g, c] = await Promise.all([
-                bomApi.getGroups(includeObsolete),
-                bomApi.getComponentIds(includeObsolete),
-              ]);
-              groups = g;
-              componentIds = c;
-            } catch (apiErr: any) {
-              if (is404(apiErr)) {
-                // 后端未提供 groups/component-ids 接口时回退：用 list 全量拉取再分组
-                const listResult = await fetchAllListItems((p) => bomApi.list({ ...p, includeObsolete }));
-                const { groupRows, keyToUuids } = groupBomsByCode(listResult);
-                let filteredGroupRows = groupRows;
-                if (bomViewTypeRef.current === 'productBom') {
-                  filteredGroupRows = filterToProductBomView(groupRows, listResult);
-                } else if (bomViewTypeRef.current === 'semiProductBom') {
-                  filteredGroupRows = filterToSemiProductBomView(groupRows, listResult);
-                }
-                if (searchFormValues?.materialId !== undefined && searchFormValues.materialId !== '' && searchFormValues.materialId != null) {
-                  const mid = Number(searchFormValues.materialId);
-                  if (!Number.isNaN(mid)) filteredGroupRows = filteredGroupRows.filter((r) => r.materialId === mid);
-                }
-                if (searchFormValues?.approvalStatus !== undefined && searchFormValues.approvalStatus !== '' && searchFormValues.approvalStatus != null) {
-                  filteredGroupRows = filteredGroupRows.filter((r) => r.approvalStatus === searchFormValues.approvalStatus);
-                }
-                groupKeyToUuidsRef.current = keyToUuids;
-                // 传入完整 groupRows 作为 allGroupRows，否则成品下的半成品无法展开
-                const resolvedMaterials = await ensureMaterialsByIds(
-                  collectBomMaterialIds([...filteredGroupRows, ...groupRows]),
-                );
-                const materialRows = groupBomsByMaterial(filteredGroupRows, selectedVersionByMaterial, groupRows);
-                return enrichBomListPage(
-                  pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, resolvedMaterials)
-                );
-              }
-              throw apiErr;
-            }
+            const [groups, componentIds] = await Promise.all([
+              bomApi.getGroups(includeObsolete),
+              bomApi.getComponentIds(includeObsolete),
+            ]);
             const componentIdSet = new Set(componentIds);
             // 按视图过滤：成品 = material_id 不在 componentIdSet；半成品 = 在
             let filteredGroups = groups;
@@ -3097,40 +3170,10 @@ const BOMPage: React.FC = () => {
               return { data: [], success: true, total: 0 };
             }
             // 2) 批量拉取所有分组对应的 BOM 子件明细，一次请求构建完整树
-            let batchItems: Record<string, BOM[]>;
-            try {
-              batchItems = await bomApi.getBatchItems(
-                filteredGroups.map((g) => ({ material_id: g.material_id, version: g.version })),
-                includeObsolete
-              );
-            } catch (batchErr: any) {
-              if (is404(batchErr)) {
-                const listResult = await fetchAllListItems((p) => bomApi.list({ ...p, includeObsolete }));
-                const { groupRows, keyToUuids } = groupBomsByCode(listResult);
-                let filteredGroupRows = groupRows;
-                if (bomViewTypeRef.current === 'productBom') {
-                  filteredGroupRows = filterToProductBomView(groupRows, listResult);
-                } else if (bomViewTypeRef.current === 'semiProductBom') {
-                  filteredGroupRows = filterToSemiProductBomView(groupRows, listResult);
-                }
-                if (searchFormValues?.materialId !== undefined && searchFormValues.materialId !== '' && searchFormValues.materialId != null) {
-                  const mid = Number(searchFormValues.materialId);
-                  if (!Number.isNaN(mid)) filteredGroupRows = filteredGroupRows.filter((r) => r.materialId === mid);
-                }
-                if (searchFormValues?.approvalStatus !== undefined && searchFormValues.approvalStatus !== '' && searchFormValues.approvalStatus != null) {
-                  filteredGroupRows = filteredGroupRows.filter((r) => r.approvalStatus === searchFormValues.approvalStatus);
-                }
-                groupKeyToUuidsRef.current = keyToUuids;
-                const resolvedMaterials = await ensureMaterialsByIds(
-                  collectBomMaterialIds([...filteredGroupRows, ...groupRows]),
-                );
-                const materialRows = groupBomsByMaterial(filteredGroupRows, selectedVersionByMaterial, groupRows);
-                return enrichBomListPage(
-                  pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, resolvedMaterials)
-                );
-              }
-              throw batchErr;
-            }
+            const batchItems = await bomApi.getBatchItems(
+              filteredGroups.map((g) => ({ material_id: g.material_id, version: g.version })),
+              includeObsolete
+            );
             // 3) 将摘要 + 明细组装成 BOMGroupRow[]（与 groupBomsByCode 产出结构一致）
             const keyToUuids = new Map<string, string[]>();
             const buildGroupRow = (
@@ -3242,7 +3285,9 @@ const BOMPage: React.FC = () => {
             return { data: [], success: false, total: 0 };
           }
         }}
-        rowKey={(record: any) => record.groupKey ?? record.key ?? record.uuid ?? String(Math.random())}
+        rowKey={(record: any) =>
+          record.groupKey ?? record.key ?? record.uuid ?? `row-${record.materialId ?? 'x'}-${record.version ?? 'v'}`
+        }
         defaultExpandAllRows={true}
         showAdvancedSearch={true}
         pagination={{
@@ -3259,25 +3304,27 @@ const BOMPage: React.FC = () => {
           t('app.master-data.bom.batchDeleteConfirmContent', { count })
         }
         toolBarActionsAfterDelete={[
+          ...(bomPerms.canAction?.('audit') || bomPerms.canAction?.('revoke') ? [
           <UniBatchMenuButton
             key="bom-batch-actions"
             selectedRowKeys={selectedRowKeys}
             buttonText={t('components.uniBatch.batchActions')}
             menuItems={[
-              {
+              ...(bomPerms.canAction?.('audit') ? [{
                 key: 'batch-approve',
                 label: t('app.master-data.bom.batchApproveBtn'),
                 onClick: handleBatchApprove,
                 icon: <CheckCircleOutlined />,
-              },
-              {
+              }] : []),
+              ...(bomPerms.canAction?.('revoke') ? [{
                 key: 'batch-unapprove',
                 label: t('app.master-data.bom.batchUnapproveBtn'),
                 onClick: handleBatchUnapprove,
                 icon: <UndoOutlined />,
-              },
+              }] : []),
             ]}
           />,
+          ] : []),
         ]}
         showImportButton={true}
         onImport={handleBatchImportConfirm}
@@ -3300,6 +3347,25 @@ const BOMPage: React.FC = () => {
         importColumnOptions={bomImportTemplate.importColumnOptions}
         importFieldMap={bomImportTemplate.importHeaderMap}
         showExportButton={true}
+        showPrintButton={bomPerms.canPrint}
+        onPrint={(keys, pageData) => {
+          if (keys.length !== 1 || !pageData?.length) {
+            messageApi.warning(t('app.master-data.bom.selectToOperate'));
+            return;
+          }
+          const row = pageData.find((r: any) => (r.groupKey ?? r.key) === keys[0]);
+          if (!row || isBomItemRow(row)) {
+            messageApi.warning(t('app.master-data.bom.selectToOperate'));
+            return;
+          }
+          const item = (row as MaterialBOMRow).selectedVersion?.firstItem
+            ?? (row as BOMGroupRow).firstItem;
+          if (!item?.materialId) {
+            messageApi.warning(t('app.master-data.bom.selectToOperate'));
+            return;
+          }
+          void handlePrintBom(item.materialId, item.version);
+        }}
         onExport={async (type, selectedRowKeys, currentPageData) => {
           try {
             let toExport: (BOMGroupRow | MaterialBOMRow)[] = [];
@@ -3348,6 +3414,27 @@ const BOMPage: React.FC = () => {
         onClose={handleCloseDetail}
         loading={detailLoading}
         width={DRAWER_CONFIG.HALF_WIDTH}
+        extra={
+          bomDetail ? (
+            <Space>
+              <Button
+                size="small"
+                onClick={() => handleOpenWhereUsed(bomDetail.materialId)}
+              >
+                {t('app.master-data.bom.whereUsed')}
+              </Button>
+              {bomPerms.canPrint ? (
+                <Button
+                  size="small"
+                  icon={<PrinterOutlined />}
+                  onClick={() => handlePrintBom(bomDetail.materialId, bomDetail.version)}
+                >
+                  {t('app.master-data.bom.printBom')}
+                </Button>
+              ) : null}
+            </Space>
+          ) : null
+        }
         basic={
           bomDetail ? (
             <Descriptions
@@ -3432,6 +3519,7 @@ const BOMPage: React.FC = () => {
 
       {/* 创建/编辑BOM Modal - 两栏网格：基础字段每行两列，子物料列表通栏 */}
       <FormModalTemplate
+        key={isEdit && editContext ? `edit-${editContext.materialId}-${editContext.version}` : 'create-bom'}
         title={(isEdit ? t('app.master-data.bom.editBom') : t('app.master-data.bom.createBom')).replace(/\s*[（(][^）)]*[）)]\s*$/u, '')}
         open={modalVisible}
         onClose={handleCloseModal}
@@ -3442,13 +3530,17 @@ const BOMPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={true}
         formRef={formRef}
-        initialValues={isEdit ? undefined : {
-          isActive: true,
-          version: '1.0',
-          baseQuantity: 1,
-          approvalStatus: 'draft',
-          items: [buildDefaultBomItem()],
-        }}
+        initialValues={
+          isEdit && editFormInitialValues
+            ? editFormInitialValues
+            : {
+                isActive: true,
+                version: '1.0',
+                baseQuantity: 1,
+                approvalStatus: 'draft',
+                items: [buildDefaultBomItem()],
+              }
+        }
         className="bom-form-modal"
       >
         <style>{`
@@ -4126,9 +4218,9 @@ const BOMPage: React.FC = () => {
             </div>
           ) : (
             <Space orientation="vertical" style={{ width: '100%' }} size="middle">
-              {versionList.map((bom, index) => (
+              {versionList.map((row, index) => (
                 <div
-                  key={bom.uuid}
+                  key={`${row.materialId}-${row.version}`}
                   style={{
                     padding: '12px',
                     border: '1px solid var(--river-border-color)',
@@ -4136,16 +4228,25 @@ const BOMPage: React.FC = () => {
                     backgroundColor: index === 0 ? '#f0f9ff' : '#fff',
                   }}
                 >
-                  <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                  <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
                     <div>
-                      <Tag color={index === 0 ? 'blue' : 'default'}>{bom.version}</Tag>
-                      {bom.isObsolete && <Tag color="default">{t('app.master-data.bom.obsoleteTag')}</Tag>}
-                      <span style={{ marginLeft: 8 }}>
-                        {getMaterialName(bom.materialId)} → {getMaterialName(bom.componentId)}
+                      <Tag color={index === 0 ? 'blue' : 'default'}>{row.version}</Tag>
+                      {row.isDefault && <Tag color="gold">{t('app.master-data.bom.defaultTag')}</Tag>}
+                      {row.isObsolete && <Tag color="default">{t('app.master-data.bom.obsoleteTag')}</Tag>}
+                      {getApprovalStatusTag(row.approvalStatus)}
+                      <span style={{ marginLeft: 8, color: '#666' }}>
+                        {t('app.master-data.bom.versionHistoryItemCount')}: {row.itemCount}
                       </span>
-                      <span style={{ marginLeft: 8, color: '#999' }}>
-                        {bom.quantity} {bom.unit || ''}
-                      </span>
+                      {row.effectiveDate && (
+                        <span style={{ marginLeft: 8, color: '#999' }}>
+                          {t('app.master-data.bom.effectiveDateLabel')}: {formatDateTimeBySiteSetting(row.effectiveDate)}
+                        </span>
+                      )}
+                      {row.createdByName && (
+                        <span style={{ marginLeft: 8, color: '#999' }}>
+                          {t('app.master-data.bom.versionHistoryOperator')}: {row.createdByName}
+                        </span>
+                      )}
                     </div>
                     <Space>
                       {index < versionList.length - 1 && (
@@ -4153,14 +4254,16 @@ const BOMPage: React.FC = () => {
                           type="link"
                           size="small"
                           icon={<DiffOutlined />}
-                          onClick={() => handleCompareVersions(versionList[index + 1].version, bom.version)}
+                          onClick={() => handleCompareVersions(versionList[index + 1]!.version, row.version)}
                         >
                           {t('app.master-data.bom.versionCompareDo')}
                         </Button>
                       )}
-                      <span style={{ color: '#999', fontSize: '12px' }}>
-                        {new Date(bom.createdAt).toLocaleString()}
-                      </span>
+                      {row.createdAt && (
+                        <span style={{ color: '#999', fontSize: '12px' }}>
+                          {formatDateTimeBySiteSetting(row.createdAt)}
+                        </span>
+                      )}
                     </Space>
                   </Space>
                 </div>
@@ -4225,16 +4328,15 @@ const BOMPage: React.FC = () => {
       >
         {versionCompareResult && (
           <div style={{ marginTop: 16 }}>
-            {/* 新增的子件 */}
-            {versionCompareResult.added_items && versionCompareResult.added_items.length > 0 && (
+            {versionCompareResult.added && versionCompareResult.added.length > 0 && (
               <div style={{ marginBottom: 24 }}>
                 <h4 style={{ color: '#52c41a', marginBottom: 12 }}>
                   {t('app.master-data.bom.versionCompareAddedSection', {
-                    count: versionCompareResult.added_items.length,
+                    count: versionCompareResult.added.length,
                   })}
                 </h4>
                 <Space orientation="vertical" style={{ width: '100%' }} size="small">
-                  {versionCompareResult.added_items.map((item: any, index: number) => (
+                  {versionCompareResult.added.map((item, index) => (
                     <div
                       key={index}
                       style={{
@@ -4259,16 +4361,15 @@ const BOMPage: React.FC = () => {
               </div>
             )}
 
-            {/* 删除的子件 */}
-            {versionCompareResult.removed_items && versionCompareResult.removed_items.length > 0 && (
+            {versionCompareResult.removed && versionCompareResult.removed.length > 0 && (
               <div style={{ marginBottom: 24 }}>
                 <h4 style={{ color: '#ff4d4f', marginBottom: 12 }}>
                   {t('app.master-data.bom.versionCompareRemovedSection', {
-                    count: versionCompareResult.removed_items.length,
+                    count: versionCompareResult.removed.length,
                   })}
                 </h4>
                 <Space orientation="vertical" style={{ width: '100%' }} size="small">
-                  {versionCompareResult.removed_items.map((item: any, index: number) => (
+                  {versionCompareResult.removed.map((item, index) => (
                     <div
                       key={index}
                       style={{
@@ -4293,53 +4394,78 @@ const BOMPage: React.FC = () => {
               </div>
             )}
 
-            {/* 修改的子件 */}
-            {versionCompareResult.modified_items && versionCompareResult.modified_items.length > 0 && (
+            {versionCompareResult.modified && versionCompareResult.modified.length > 0 && (
               <div style={{ marginBottom: 24 }}>
                 <h4 style={{ color: '#1890ff', marginBottom: 12 }}>
                   {t('app.master-data.bom.versionCompareModifiedSection', {
-                    count: versionCompareResult.modified_items.length,
+                    count: versionCompareResult.modified.length,
                   })}
                 </h4>
                 <Space orientation="vertical" style={{ width: '100%' }} size="small">
-                  {versionCompareResult.modified_items.map((item: any, index: number) => (
-                    <div
-                      key={index}
-                      style={{
-                        padding: '12px',
-                        backgroundColor: '#e6f7ff',
-                        border: '1px solid #91d5ff',
-                        borderRadius: '4px',
-                      }}
-                    >
-                      <div style={{ marginBottom: 8 }}>
-                        <strong>{getMaterialName(item.item.componentId)}</strong>
+                  {versionCompareResult.modified.map((item, index) => {
+                    const v1 = item.version1 ?? {};
+                    const v2 = item.version2 ?? {};
+                    return (
+                      <div
+                        key={index}
+                        style={{
+                          padding: '12px',
+                          backgroundColor: '#e6f7ff',
+                          border: '1px solid #91d5ff',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        <div style={{ marginBottom: 8 }}>
+                          <strong>{getMaterialName(item.componentId)}</strong>
+                        </div>
+                        <Space orientation="vertical" size={4} style={{ width: '100%' }}>
+                          {v1.quantity !== v2.quantity && (
+                            <div style={{ paddingLeft: 16 }}>
+                              {t('app.master-data.bom.quantityTitle')}：
+                              <span style={{ textDecoration: 'line-through', color: '#ff4d4f', marginLeft: 8 }}>{v1.quantity}</span>
+                              {' → '}
+                              <span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.quantity}</span>
+                            </div>
+                          )}
+                          {v1.unit !== v2.unit && (
+                            <div style={{ paddingLeft: 16 }}>
+                              {t('app.master-data.bom.unitTitle')}：
+                              <span style={{ textDecoration: 'line-through', color: '#ff4d4f', marginLeft: 8 }}>{v1.unit ?? '-'}</span>
+                              {' → '}
+                              <span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.unit ?? '-'}</span>
+                            </div>
+                          )}
+                          {(v1.wasteRate ?? 0) !== (v2.wasteRate ?? 0) && (
+                            <div style={{ paddingLeft: 16 }}>
+                              {t('app.master-data.bom.wasteRateTitle')}：
+                              <span style={{ textDecoration: 'line-through', color: '#ff4d4f', marginLeft: 8 }}>{v1.wasteRate ?? 0}%</span>
+                              {' → '}
+                              <span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.wasteRate ?? 0}%</span>
+                            </div>
+                          )}
+                          {v1.isRequired !== v2.isRequired && (
+                            <div style={{ paddingLeft: 16 }}>
+                              {t('app.master-data.bom.isRequiredTitle')}：
+                              <span style={{ textDecoration: 'line-through', color: '#ff4d4f', marginLeft: 8 }}>
+                                {v1.isRequired ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+                              </span>
+                              {' → '}
+                              <span style={{ color: '#52c41a', fontWeight: 500 }}>
+                                {v2.isRequired ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+                              </span>
+                            </div>
+                          )}
+                        </Space>
                       </div>
-                      <Space orientation="vertical" size="small" style={{ width: '100%' }}>
-                        {Object.entries(item.changes || {}).map(([field, change]: [string, any]) => (
-                          <div key={field} style={{ paddingLeft: 16 }}>
-                            <span style={{ fontWeight: 500 }}>{field === 'quantity' ? t('app.master-data.bom.quantityTitle') : field === 'unit' ? t('app.master-data.bom.unitTitle') : field === 'wasteRate' ? t('app.master-data.bom.wasteRateTitle') : field === 'isRequired' ? t('app.master-data.bom.isRequiredTitle') : field}</span>
-                            {'：'}
-                            <span style={{ textDecoration: 'line-through', color: '#ff4d4f', marginLeft: 8 }}>
-                              {field === 'isRequired' ? (change.old ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')) : change.old}
-                            </span>
-                            {' → '}
-                            <span style={{ color: '#52c41a', fontWeight: 500 }}>
-                              {field === 'isRequired' ? (change.new ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')) : change.new}
-                            </span>
-                          </div>
-                        ))}
-                      </Space>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </Space>
               </div>
             )}
 
-            {/* 无差异提示 */}
-            {(!versionCompareResult.added_items || versionCompareResult.added_items.length === 0) &&
-              (!versionCompareResult.removed_items || versionCompareResult.removed_items.length === 0) &&
-              (!versionCompareResult.modified_items || versionCompareResult.modified_items.length === 0) && (
+            {(!versionCompareResult.added || versionCompareResult.added.length === 0) &&
+              (!versionCompareResult.removed || versionCompareResult.removed.length === 0) &&
+              (!versionCompareResult.modified || versionCompareResult.modified.length === 0) && (
                 <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
                   {t('app.master-data.bom.noVersionDiff')}
                 </div>
@@ -4507,6 +4633,89 @@ const BOMPage: React.FC = () => {
             )}
           </div>
         )}
+      </Modal>
+
+      <Modal
+        title={t('app.master-data.bom.whereUsedTitle')}
+        open={whereUsedModalVisible}
+        onCancel={() => {
+          setWhereUsedModalVisible(false);
+          setWhereUsedResult(null);
+          setWhereUsedMaterialId(null);
+        }}
+        footer={[
+          <Button {...rowActionKind('close')} key="close" onClick={() => {
+            setWhereUsedModalVisible(false);
+            setWhereUsedResult(null);
+            setWhereUsedMaterialId(null);
+          }}>
+            {t('common.close')}
+          </Button>,
+        ]}
+        width={900}
+      >
+        <div style={{ marginBottom: 12 }}>
+          <Checkbox
+            checked={whereUsedRecursive}
+            onChange={(e) => void handleWhereUsedRecursiveChange(e.target.checked)}
+          >
+            {t('app.master-data.bom.whereUsedRecursive')}
+          </Checkbox>
+        </div>
+        <Spin spinning={whereUsedLoading}>
+          {!whereUsedLoading && (!whereUsedResult?.items || whereUsedResult.items.length === 0) ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
+              {t('app.master-data.bom.whereUsedEmpty')}
+            </div>
+          ) : (
+            <Table
+              dataSource={whereUsedResult?.items ?? []}
+              rowKey={(row) => `${row.bomUuid}-${row.materialId}-${row.version}`}
+              pagination={false}
+              size="small"
+              columns={[
+                {
+                  title: t('app.master-data.bom.mainMaterialTitle'),
+                  render: (_, row) =>
+                    row.materialCode && row.materialName
+                      ? `${row.materialCode} - ${row.materialName}`
+                      : getMaterialName(row.materialId),
+                },
+                {
+                  title: t('app.master-data.bom.versionTitle'),
+                  dataIndex: 'version',
+                  width: 100,
+                },
+                {
+                  title: t('app.master-data.bom.bomCode'),
+                  dataIndex: 'bomCode',
+                  width: 120,
+                  render: (v) => v || '-',
+                },
+                {
+                  title: t('app.master-data.bom.quantityTitle'),
+                  width: 100,
+                  render: (_, row) => `${row.quantity} ${row.unit || ''}`.trim(),
+                },
+                {
+                  title: t('app.master-data.bom.approvalStatusTitle'),
+                  dataIndex: 'approvalStatus',
+                  width: 100,
+                  render: (status) => (status ? getApprovalStatusTag(String(status)) : '-'),
+                },
+                {
+                  title: t('app.master-data.bom.actionTitle'),
+                  width: 80,
+                  render: (_, row) => (
+                    <Button type="link" size="small" onClick={() => navigateToParentBom(row)}>
+                      {t('app.master-data.bom.design')}
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          )}
+        </Spin>
       </Modal>
     </>
   );

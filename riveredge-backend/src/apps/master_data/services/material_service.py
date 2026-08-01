@@ -52,9 +52,15 @@ from apps.master_data.schemas.material_schemas import (
 )
 from core.services.business.code_generation_service import CodeGenerationService
 from core.config.code_rule_pages import CODE_RULE_PAGES
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import ConflictError, NotFoundError, ValidationError
 from loguru import logger
 from core.utils.timezone_utils import now_utc, resolve_business_datetime, today_site_str
+
+_BOM_APPROVE_ALLOWED_FROM = frozenset({"draft", "pending"})
+_BOM_REVOKE_ALLOWED_FROM = frozenset({"approved", "rejected"})
+_ACTIVE_WORK_ORDER_STATUSES = frozenset(
+    {"draft", "released", "dispatched", "confirmed", "in_progress", "草稿", "已下达", "已确认", "执行中"}
+)
 
 # source_type -> 编码回退用 type_code 映射（Buy->RAW, Make/Outsource->SEMI, Phantom->SEMI, Service->SVC，已移除 Configure）
 _SOURCE_TYPE_TO_TYPE_CODE = {
@@ -3481,10 +3487,14 @@ class MaterialService:
                 f"添加子物料 {data.component_id} 将导致 BOM 循环依赖，请检查层级关系"
             )
         
-        # 显式设置层级：直接子件 level 1，path 父/子
-        payload = data.dict()
+        # 显式设置层级：直接子件 level 1，path 父/子；审批一律 draft
+        payload = data.dict() if hasattr(data, "dict") else data.model_dump()
         payload["level"] = 1
         payload["path"] = f"{data.material_id}/{data.component_id}"
+        payload["approval_status"] = "draft"
+        payload.pop("approved_by", None)
+        payload.pop("approved_at", None)
+        payload.pop("approval_comment", None)
         apply_create_audit(payload, current_user)
         bom = await BOM.create(tenant_id=tenant_id, **payload)
         return BOMResponse.model_validate(bom)
@@ -3723,6 +3733,7 @@ class MaterialService:
                 data.bom_code = f"BOM-{material_code}-{timestamp}"
         
         # 批量创建BOM（PLM 层级：根主料 level 0，直接子件 level 1；path 为 父/子 路径）
+        # 审批状态一律 draft，禁止创建时直写 approved
         bom_list = []
         version_base_qty = data.base_quantity or Decimal("1")
         version_bom_name = MaterialService.resolve_version_bom_name(
@@ -3731,39 +3742,40 @@ class MaterialService:
             data.bom_code,
             data.version or "1.0",
         )
-        for item in data.items:
-            bom_payload = {
-                "tenant_id": tenant_id,
-                "material_id": data.material_id,
-                "component_id": item.component_id,
-                "quantity": item.quantity,
-                "base_quantity": version_base_qty,
-                "unit": item.unit,
-                "waste_rate": item.waste_rate if hasattr(item, 'waste_rate') else Decimal("0.00"),
-                "is_required": item.is_required if hasattr(item, 'is_required') else True,
-                "issue_method": getattr(item, 'issue_method', None) or "pick",
-                "level": 1,  # 直接子件深度 1（根主料为 0）
-                "path": f"{data.material_id}/{item.component_id}",
-                "version": data.version,
-                "bom_code": data.bom_code,
-                "bom_name": version_bom_name,
-                "effective_date": data.effective_date,
-                "expiry_date": data.expiry_date,
-                "approval_status": data.approval_status,
-                "is_alternative": item.is_alternative,
-                "alternative_group_id": item.alternative_group_id,
-                "priority": item.priority,
-                "is_configurable": item.is_configurable,
-                "configurable_group_id": item.configurable_group_id,
-                "is_default_configurable": item.is_default_configurable,
-                "description": data.description,
-                "remark": item.remark or data.remark,
-                "is_active": data.is_active,
-            }
-            apply_create_audit(bom_payload, current_user)
-            bom = await BOM.create(**bom_payload)
-            bom_list.append(bom)
-        
+        async with in_transaction():
+            for item in data.items:
+                bom_payload = {
+                    "tenant_id": tenant_id,
+                    "material_id": data.material_id,
+                    "component_id": item.component_id,
+                    "quantity": item.quantity,
+                    "base_quantity": version_base_qty,
+                    "unit": item.unit,
+                    "waste_rate": item.waste_rate if hasattr(item, 'waste_rate') else Decimal("0.00"),
+                    "is_required": item.is_required if hasattr(item, 'is_required') else True,
+                    "issue_method": getattr(item, 'issue_method', None) or "pick",
+                    "level": 1,  # 直接子件深度 1（根主料为 0）
+                    "path": f"{data.material_id}/{item.component_id}",
+                    "version": data.version,
+                    "bom_code": data.bom_code,
+                    "bom_name": version_bom_name,
+                    "effective_date": data.effective_date,
+                    "expiry_date": data.expiry_date,
+                    "approval_status": "draft",
+                    "is_alternative": item.is_alternative,
+                    "alternative_group_id": item.alternative_group_id,
+                    "priority": item.priority,
+                    "is_configurable": item.is_configurable,
+                    "configurable_group_id": item.configurable_group_id,
+                    "is_default_configurable": item.is_default_configurable,
+                    "description": data.description,
+                    "remark": item.remark or data.remark,
+                    "is_active": data.is_active,
+                }
+                apply_create_audit(bom_payload, current_user)
+                bom = await BOM.create(**bom_payload)
+                bom_list.append(bom)
+
         return [BOMResponse.model_validate(bom) for bom in bom_list]
     
     @staticmethod
@@ -4065,6 +4077,9 @@ class MaterialService:
         # 前端可能传 isDefault (camelCase)，统一转为 is_default
         if "isDefault" in update_data and "is_default" not in update_data:
             update_data["is_default"] = update_data.pop("isDefault")
+        # 禁止通过 PUT 直改审批字段（须走 approve/batch-approve）
+        for forbidden in ("approval_status", "approved_by", "approved_at", "approval_comment"):
+            update_data.pop(forbidden, None)
         # 检查BOM状态：已审核的BOM不可编辑（但允许仅更新 is_default 设为默认版本）
         if bom.approval_status == 'approved':
             only_set_default = (
@@ -4102,6 +4117,19 @@ class MaterialService:
         
         if material_id == component_id:
             raise ValidationError("主物料和子物料不能相同")
+
+        component_changed = bool(data.component_id and data.component_id != bom.component_id)
+        material_changed = bool(data.material_id and data.material_id != bom.material_id)
+        if component_changed or material_changed:
+            cycle = await MaterialService.detect_bom_cycle_detail(
+                tenant_id,
+                int(material_id),
+                int(component_id),
+                exclude_bom_ids={int(bom.id)},
+            )
+            if cycle.get("has_cycle"):
+                path = " → ".join(str(x) for x in (cycle.get("path") or []))
+                raise ValidationError(f"修改子件将导致 BOM 循环依赖：{path or '成环'}")
         
         # 更新字段
         is_default_updated = "is_default" in update_data and update_data["is_default"] is True
@@ -4157,10 +4185,15 @@ class MaterialService:
         # 检查BOM状态：已审核的BOM不可删除
         if bom.approval_status == 'approved':
             raise ValidationError(f"BOM {bom.bom_code} (版本 {bom.version}) 已审核通过，禁止删除。请先撤销审核。")
-        
-        # 软删除
-        from tortoise import timezone
-        bom.deleted_at = timezone.now()
+
+        await MaterialService._assert_bom_version_not_referenced(
+            tenant_id,
+            int(bom.material_id),
+            str(bom.version),
+            action_label="删除",
+        )
+
+        bom.deleted_at = now_utc()
         await bom.save()
     
     @staticmethod
@@ -4196,6 +4229,12 @@ class MaterialService:
         if not bom:
             raise NotFoundError(f"BOM {bom_uuid} 不存在")
 
+        current = str(bom.approval_status or "").strip()
+        if current not in _BOM_APPROVE_ALLOWED_FROM:
+            raise ValidationError(
+                f"当前状态 {current or '-'} 不可审核，仅草稿/待审核可审核"
+            )
+
         if approved:
             await MaterialService._assert_bom_version_components_have_source_type(
                 tenant_id,
@@ -4203,10 +4242,9 @@ class MaterialService:
                 bom.version,
             )
         
-        from tortoise import timezone
         bom.approval_status = "approved" if approved else "rejected"
         bom.approved_by = approved_by
-        bom.approved_at = timezone.now()
+        bom.approved_at = now_utc()
         bom.approval_comment = approval_comment
         
         await bom.save()
@@ -4240,51 +4278,45 @@ class MaterialService:
         """
         if not bom_uuids:
             return []
-            
-        from tortoise import timezone
-        
+
         # 查找所有BOM
         boms = await BOM.filter(
             tenant_id=tenant_id,
             uuid__in=bom_uuids,
             deleted_at__isnull=True
         ).all()
-        
+
         target_ids = set(b.id for b in boms)
-        
+
         # 递归查找子BOM
         if recursive:
             ids_to_process = list(target_ids)
-            processed_materials = set() # 防止无限循环（虽然有循环检测，但防万一）
-            
+            processed_materials = set()
+
             while ids_to_process:
                 current_batch_ids = ids_to_process
                 ids_to_process = []
-                
-                # 获取当前批次BOM的子物料和版本
+
                 current_boms = await BOM.filter(id__in=current_batch_ids).all()
-                
+
                 for b in current_boms:
-                    # key = (material_id, version)
-                    # 查找以该component为父件的BOM（且版本一致）
                     if b.component_id in processed_materials:
                         continue
-                    
-                    # 查找子BOM
+
                     child_boms = await BOM.filter(
                         tenant_id=tenant_id,
                         material_id=b.component_id,
-                        version=b.version, # 假设版本同步
+                        version=b.version,
                         deleted_at__isnull=True
                     ).all()
-                    
+
                     if child_boms:
                         processed_materials.add(b.component_id)
                         for child in child_boms:
                             if child.id not in target_ids:
                                 target_ids.add(child.id)
                                 ids_to_process.append(child.id)
-        
+
         # 确定新状态
         new_status = "approved"
         if is_reverse:
@@ -4293,37 +4325,57 @@ class MaterialService:
             new_status = "rejected"
 
         if target_ids:
-            if approved and not is_reverse:
-                version_pairs = {(b.material_id, b.version) for b in boms}
+            all_targets = await BOM.filter(id__in=list(target_ids)).all()
+            if is_reverse:
+                invalid = [
+                    b for b in all_targets
+                    if str(b.approval_status or "").strip() not in _BOM_REVOKE_ALLOWED_FROM
+                ]
+                if invalid:
+                    raise ValidationError("仅已审核/已拒绝状态可撤销为草稿")
+                version_pairs = {(b.material_id, b.version) for b in all_targets}
                 for material_id, version in version_pairs:
-                    await MaterialService._assert_bom_version_components_have_source_type(
+                    await MaterialService._assert_bom_version_not_referenced(
                         tenant_id,
-                        material_id,
-                        version,
+                        int(material_id),
+                        str(version),
+                        action_label="撤销审核",
                     )
+            else:
+                invalid = [
+                    b for b in all_targets
+                    if str(b.approval_status or "").strip() not in _BOM_APPROVE_ALLOWED_FROM
+                ]
+                if invalid:
+                    raise ValidationError("仅草稿/待审核状态可审核")
+                if approved:
+                    version_pairs = {(b.material_id, b.version) for b in all_targets}
+                    for material_id, version in version_pairs:
+                        await MaterialService._assert_bom_version_components_have_source_type(
+                            tenant_id,
+                            material_id,
+                            version,
+                        )
 
-            # Prepare for bulk update
             update_data = {
                 "approval_status": new_status,
                 "approved_by": approved_by,
-                "approved_at": timezone.now(),
+                "approved_at": now_utc(),
             }
-            
+
             if approval_comment is not None:
-                 update_data["approval_comment"] = approval_comment
-                 
+                update_data["approval_comment"] = approval_comment
+
             await BOM.filter(
                id__in=list(target_ids)
             ).update(**update_data)
-            
-            # Re-fetch updated records to return
-            # 只返回最初请求的BOM
+
             result = await BOM.filter(
                uuid__in=bom_uuids,
                deleted_at__isnull=True
             ).all()
             return [BOMResponse.model_validate(b) for b in result]
-        
+
         return []
     
     @staticmethod
@@ -4346,7 +4398,8 @@ class MaterialService:
         """
         bom = await BOM.filter(
             tenant_id=tenant_id,
-            uuid=bom_uuid
+            uuid=bom_uuid,
+            deleted_at__isnull=True,
         ).first()
         
         if not bom:
@@ -4354,38 +4407,32 @@ class MaterialService:
         
         # 1. 自动计算新版本号
         if not new_version:
-             # 简单的版本自增逻辑：X.Y -> X.Y+1
-             # 这里假设版本号格式为 numeric.numeric
              try:
                 major, minor = bom.version.split('.')
                 new_version = f"{major}.{int(minor) + 1}"
              except ValueError:
-                 # 如果不是标准格式，使用后缀
                  new_version = f"{bom.version}_rev1"
-                 
-             # 检查新版本号是否已存在
-             exists = await BOM.filter(
-                 tenant_id=tenant_id,
-                 material_id=bom.material_id,
-                 version=new_version,
-                 deleted_at__isnull=True
-             ).exists()
-             
-             if exists:
-                 raise ValidationError(f"新版本 {new_version} 已存在")
+
+        exists = await BOM.filter(
+            tenant_id=tenant_id,
+            material_id=bom.material_id,
+            version=new_version,
+            deleted_at__isnull=True
+        ).exists()
+        if exists:
+            raise ValidationError(f"新版本 {new_version} 已存在")
         
-        # 2. 查找源BOM的所有组成部分（同一 material_id + version，仅当前主件，不包含子件自己的BOM）
+        # 2. 查找源BOM的所有组成部分（同一 material_id + version，仅当前主件）
         source_boms = await BOM.filter(
             tenant_id=tenant_id,
             material_id=bom.material_id,
             version=bom.version,
             deleted_at__isnull=True
         ).all()
+        if not source_boms:
+            raise NotFoundError(f"BOM {bom_uuid} 源版本无可复制行")
         
-        from tortoise import timezone
-        from datetime import datetime
-        
-        # 3. 升版时 BOM 编码随版本更新（如 BOM-EBK0002-1.0 -> BOM-EBK0002-1.1）
+        # 3. 升版时 BOM 编码随版本更新
         parent_material = await Material.get(id=bom.material_id)
         new_bom_code = None
         try:
@@ -4402,39 +4449,47 @@ class MaterialService:
         except Exception as e:
             logger.warning(f"BOM编码生成失败，使用降级方案: {e}")
         if not new_bom_code:
-            # 降级：物料编码 + 新版本号
             new_bom_code = f"BOM-{parent_material.main_code}-{new_version}"
         
-        # 4. 创建新版本BOM列表
+        # 4. 创建新版本BOM列表（含发料方式/替代料/配置位）
         new_boms = []
-        for source in source_boms:
-             new_bom = BOM(
-                 tenant_id=tenant_id,
-                 material_id=source.material_id,
-                 component_id=source.component_id,
-                 quantity=source.quantity,
-                 base_quantity=source.base_quantity or Decimal("1"),
-                 unit=source.unit,
-                 waste_rate=source.waste_rate,
-                 is_required=source.is_required,
-                 level=source.level,
-                 path=source.path,
-                 version=new_version,
-                 bom_code=new_bom_code,  # 升版时 BOM 编码随版本更新
-                 bom_name=source.bom_name,
-                 effective_date=timezone.now(), # 生效日期更新为当前
-                 description=source.description,
-                 remark=version_remark if version_remark else source.remark,
-                 is_active=True,
-                 approval_status="draft", # 重置为草稿
-                 approved_by=None,
-                 approved_at=None,
-                 approval_comment=None
-             )
-             await new_bom.save()
-             new_boms.append(new_bom)
-             
-        return BOMResponse.model_validate(new_boms[0] if new_boms else bom)
+        async with in_transaction():
+            for source in source_boms:
+                new_bom = BOM(
+                    tenant_id=tenant_id,
+                    material_id=source.material_id,
+                    component_id=source.component_id,
+                    quantity=source.quantity,
+                    base_quantity=source.base_quantity or Decimal("1"),
+                    unit=source.unit,
+                    waste_rate=source.waste_rate,
+                    is_required=source.is_required,
+                    issue_method=getattr(source, "issue_method", None) or "pick",
+                    level=source.level,
+                    path=source.path,
+                    version=new_version,
+                    bom_code=new_bom_code,
+                    bom_name=source.bom_name,
+                    is_default=False,
+                    effective_date=now_utc(),
+                    description=source.description,
+                    remark=version_remark if version_remark else source.remark,
+                    is_active=True,
+                    approval_status="draft",
+                    approved_by=None,
+                    approved_at=None,
+                    approval_comment=None,
+                    is_alternative=bool(source.is_alternative),
+                    alternative_group_id=source.alternative_group_id,
+                    priority=int(source.priority or 0),
+                    is_configurable=bool(getattr(source, "is_configurable", False)),
+                    configurable_group_id=getattr(source, "configurable_group_id", None),
+                    is_default_configurable=bool(getattr(source, "is_default_configurable", False)),
+                )
+                await new_bom.save()
+                new_boms.append(new_bom)
+
+        return BOMResponse.model_validate(new_boms[0])
         
     @staticmethod
     async def revise_bom(
@@ -4774,56 +4829,72 @@ class MaterialService:
             if not is_cfg and not is_alt:
                 parent_component_map[parent_id].add(component_id)
         
-        # 步骤4：检测循环依赖
-        # 构建物料依赖图
-        dependency_graph = defaultdict(set)  # 物料ID -> 依赖的物料ID集合
+        # 步骤4：检测循环依赖（批次边 + 库内有效 BOM，父→子）
+        # 先解析各父件目标版本，仅剔除将被全量替换的 (parent, version) 边
+        parent_items_map_cycle: Dict[int, List[Any]] = defaultdict(list)
+        for item in data.items:
+            parent_items_map_cycle[code_to_material[item.parent_code]].append(item)
+        replace_keys: Set[Tuple[int, str]] = set()
+        for parent_id, items in parent_items_map_cycle.items():
+            parent_material = await Material.get(id=parent_id)
+            parent_label = material_id_to_code.get(parent_id, str(parent_id))
+            target_version, _, _, _ = MaterialService._resolve_parent_bom_import_meta(
+                items, data, parent_material, parent_label
+            )
+            replace_keys.add((int(parent_id), str(target_version)))
+
+        dependency_graph = defaultdict(set)
+        existing_boms = await BOM.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+            is_obsolete=False,
+        ).all()
+        for bom in existing_boms:
+            if (int(bom.material_id), str(bom.version)) in replace_keys:
+                continue
+            dependency_graph[int(bom.material_id)].add(int(bom.component_id))
         for item in data.items:
             parent_id = code_to_material[item.parent_code]
             component_id = code_to_material[item.component_code]
             dependency_graph[parent_id].add(component_id)
-        
-        # 检测循环依赖（使用DFS）
+
         def has_cycle(node: int, visited: set, rec_stack: set) -> bool:
-            """检测从node开始的路径是否有循环"""
             visited.add(node)
             rec_stack.add(node)
-            
             for neighbor in dependency_graph.get(node, set()):
                 if neighbor not in visited:
                     if has_cycle(neighbor, visited, rec_stack):
                         return True
                 elif neighbor in rec_stack:
-                    # 找到循环
                     return True
-            
             rec_stack.remove(node)
             return False
-        
-        # 检查所有节点是否有循环
+
         all_nodes = set(dependency_graph.keys()) | set(
             component_id for components in dependency_graph.values() for component_id in components
         )
-        visited = set()
+        visited: Set[int] = set()
         for node in all_nodes:
             if node not in visited:
                 if has_cycle(node, visited, set()):
-                    # 找到循环，构建循环路径用于提示
-                    cycle_path = []
-                    rec_stack = set()
-                    def find_cycle_path(node: int, path: list):
-                        if node in rec_stack:
-                            # 找到循环起点
-                            cycle_start = path.index(node)
-                            cycle_path.extend(path[cycle_start:] + [node])
+                    cycle_path: List[int] = []
+                    rec_stack: Set[int] = set()
+
+                    def find_cycle_path(n: int, path: list) -> bool:
+                        if n in rec_stack:
+                            cycle_start = path.index(n)
+                            cycle_path.extend(path[cycle_start:] + [n])
                             return True
-                        rec_stack.add(node)
-                        path.append(node)
-                        for neighbor in dependency_graph.get(node, set()):
+                        rec_stack.add(n)
+                        path.append(n)
+                        for neighbor in dependency_graph.get(n, set()):
                             if find_cycle_path(neighbor, path):
                                 return True
                         path.pop()
-                        rec_stack.remove(node)
+                        rec_stack.remove(n)
                         return False
+
                     find_cycle_path(node, [])
                     cycle_codes = [material_id_to_code.get(nid, str(nid)) for nid in cycle_path]
                     raise ValidationError(
@@ -4874,133 +4945,112 @@ class MaterialService:
                     f"父件 {parent_label} 的版本 {target_version} 已审核通过，禁止直接修改。请先升版或使用「另存为新版本」。"
                 )
         
-        # 步骤6：创建BOM数据 (Refactored: Clean Replace & Auto-Numbering)
-        # 版本策略：请求中的每个 parent_id 都会按 target_version 做全量替换。
-        # 设计器「另存为新版本」时应只传当前主件的直接子件（根级），避免未改动的半成品被误升版。
-        from tortoise import timezone
-        from datetime import datetime
-        
+        # 步骤6：创建BOM数据（Clean Replace，事务内）
         bom_list = []
-        # 按父件ID分组处理
         parent_items_map = defaultdict(list)
         for item in data.items:
             parent_id = code_to_material[item.parent_code]
             parent_items_map[parent_id].append(item)
-            
-        for parent_id, items in parent_items_map.items():
-            parent_material = await Material.get(id=parent_id)
-            parent_label = material_id_to_code.get(parent_id, str(parent_id))
-            target_version, bom_code_hint, parent_bom_name, parent_base_qty = (
-                MaterialService._resolve_parent_bom_import_meta(
-                    items, data, parent_material, parent_label
-                )
-            )
-            # 2. 确定 BOM 编码 (Auto-Numbering)
-            bom_code = bom_code_hint
-            
-            # 如果请求未指定，尝试查找该父件该版本的现有编码
-            if not bom_code:
-                existing_version_bom = await BOM.filter(
-                    tenant_id=tenant_id,
-                    material_id=parent_id,
-                    version=target_version,
-                    deleted_at__isnull=True
-                ).first()
-                if existing_version_bom:
-                    bom_code = existing_version_bom.bom_code
-            
-            # 如果当前版本没有（如新版本），尝试查找该父件的其他版本以继承 BOM 编码
-            # 根据模型定义：同一主物料的不同版本使用相同编码
-            if not bom_code:
-                any_existing_bom = await BOM.filter(
-                    tenant_id=tenant_id,
-                    material_id=parent_id,
-                    deleted_at__isnull=True
-                ).first()
-                if any_existing_bom:
-                    bom_code = any_existing_bom.bom_code
 
-            # 如果仍无编码，生成新编码
-            if not bom_code:
-                try:
-                    parent_material = await Material.get(id=parent_id)
-                    context = {
-                        "date": today_site_str(),
-                        "material_code": parent_material.main_code,
-                        "version": target_version
-                    }
-                    bom_code = await CodeGenerationService.generate_code(
-                        tenant_id=tenant_id,
-                        rule_code="ENGINEERING_BOM_CODE",
-                        context=context
+        async with in_transaction():
+            for parent_id, items in parent_items_map.items():
+                parent_material = await Material.get(id=parent_id)
+                parent_label = material_id_to_code.get(parent_id, str(parent_id))
+                target_version, bom_code_hint, parent_bom_name, parent_base_qty = (
+                    MaterialService._resolve_parent_bom_import_meta(
+                        items, data, parent_material, parent_label
                     )
-                except Exception as e:
-                    # 降级方案：使用时间戳
-                    logger.warning(f"BOM编码生成失败，使用降级方案: {e}")
-                    # 重新获父物料信息（如果上面try块失败）
-                    parent_material = await Material.get(id=parent_id)
-                    timestamp = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
-                    bom_code = f"BOM-{parent_material.main_code}-{timestamp}"
+                )
+                bom_code = bom_code_hint
 
-            # 3. 全量替换 (Clean Replace)
-            # 软删除当前父件+当前版本的所有现有BOM行
-            # 注意：这会删除旧的结构，用新的结构完全替代
-            await BOM.filter(
-                tenant_id=tenant_id,
-                material_id=parent_id,
-                version=target_version,
-                deleted_at__isnull=True
-            ).update(deleted_at=timezone.now())
+                if not bom_code:
+                    existing_version_bom = await BOM.filter(
+                        tenant_id=tenant_id,
+                        material_id=parent_id,
+                        version=target_version,
+                        deleted_at__isnull=True
+                    ).first()
+                    if existing_version_bom:
+                        bom_code = existing_version_bom.bom_code
 
-            # 4. 创建新条目
-            for item in items:
-                component_id = code_to_material[item.component_code]
-                
-                # 检查主物料和子物料不能相同
-                if parent_id == component_id:
-                     # 理论上前面检查过了，这里双重保险或忽略
-                    continue
+                if not bom_code:
+                    any_existing_bom = await BOM.filter(
+                        tenant_id=tenant_id,
+                        material_id=parent_id,
+                        deleted_at__isnull=True
+                    ).first()
+                    if any_existing_bom:
+                        bom_code = any_existing_bom.bom_code
 
-                level = 1
-                path = f"{parent_id}/{component_id}"
+                if not bom_code:
+                    try:
+                        context = {
+                            "date": today_site_str(),
+                            "material_code": parent_material.main_code,
+                            "version": target_version
+                        }
+                        bom_code = await CodeGenerationService.generate_code(
+                            tenant_id=tenant_id,
+                            rule_code="ENGINEERING_BOM_CODE",
+                            context=context
+                        )
+                    except Exception as e:
+                        logger.warning(f"BOM编码生成失败，使用降级方案: {e}")
+                        timestamp = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
+                        bom_code = f"BOM-{parent_material.main_code}-{timestamp}"
 
-                is_cfg = getattr(item, "is_configurable", False) or False
-                cfg_group_id = getattr(item, "configurable_group_id", None)
-                is_default_cfg = getattr(item, "is_default_configurable", False) or False
-                is_alt = getattr(item, "is_alternative", False) or False
-                alt_group_id = getattr(item, "alternative_group_id", None)
-                prio = getattr(item, "priority", 0) or 0
-                row_remark = getattr(data, "version_remark", None) or item.remark
-                bom = await BOM.create(
+                await BOM.filter(
                     tenant_id=tenant_id,
                     material_id=parent_id,
-                    component_id=component_id,
-                    quantity=item.quantity,
-                    base_quantity=parent_base_qty,
-                    unit=item.unit,
-                    waste_rate=item.waste_rate or Decimal("0.00"),
-                    is_required=item.is_required if item.is_required is not None else True,
-                    level=level,
-                    path=path,
                     version=target_version,
-                    bom_code=bom_code,
-                    bom_name=parent_bom_name,
-                    effective_date=data.effective_date,
-                    description=data.description,
-                    remark=row_remark,
-                    is_active=item.is_active if item.is_active is not None else True,
-                    is_configurable=is_cfg,
-                    configurable_group_id=cfg_group_id if is_cfg else None,
-                    is_default_configurable=is_default_cfg if is_cfg else False,
-                    is_alternative=is_alt,
-                    alternative_group_id=alt_group_id if is_alt else None,
-                    priority=prio,
-                    issue_method=getattr(item, "issue_method", None) or "pick",
-                )
-                bom_list.append(bom)
-        
+                    deleted_at__isnull=True
+                ).update(deleted_at=now_utc())
+
+                for item in items:
+                    component_id = code_to_material[item.component_code]
+                    if parent_id == component_id:
+                        continue
+
+                    level = 1
+                    path = f"{parent_id}/{component_id}"
+                    is_cfg = getattr(item, "is_configurable", False) or False
+                    cfg_group_id = getattr(item, "configurable_group_id", None)
+                    is_default_cfg = getattr(item, "is_default_configurable", False) or False
+                    is_alt = getattr(item, "is_alternative", False) or False
+                    alt_group_id = getattr(item, "alternative_group_id", None)
+                    prio = getattr(item, "priority", 0) or 0
+                    row_remark = getattr(data, "version_remark", None) or item.remark
+                    bom = await BOM.create(
+                        tenant_id=tenant_id,
+                        material_id=parent_id,
+                        component_id=component_id,
+                        quantity=item.quantity,
+                        base_quantity=parent_base_qty,
+                        unit=item.unit,
+                        waste_rate=item.waste_rate or Decimal("0.00"),
+                        is_required=item.is_required if item.is_required is not None else True,
+                        level=level,
+                        path=path,
+                        version=target_version,
+                        bom_code=bom_code,
+                        bom_name=parent_bom_name,
+                        effective_date=data.effective_date,
+                        description=data.description,
+                        remark=row_remark,
+                        is_active=item.is_active if item.is_active is not None else True,
+                        approval_status="draft",
+                        is_configurable=is_cfg,
+                        configurable_group_id=cfg_group_id if is_cfg else None,
+                        is_default_configurable=is_default_cfg if is_cfg else False,
+                        is_alternative=is_alt,
+                        alternative_group_id=alt_group_id if is_alt else None,
+                        priority=prio,
+                        issue_method=getattr(item, "issue_method", None) or "pick",
+                    )
+                    bom_list.append(bom)
+
         logger.info(f"批量导入BOM成功 (Clean Replace)，共创建 {len(bom_list)} 条BOM记录")
-        
+
         return [BOMResponse.model_validate(bom) for bom in bom_list]
 
     @staticmethod
@@ -5797,52 +5847,116 @@ class MaterialService:
     async def detect_bom_cycle(
         tenant_id: int,
         material_id: int,
-        component_id: int
+        component_id: int,
+        *,
+        extra_edges: Optional[List[Tuple[int, int]]] = None,
+        exclude_bom_ids: Optional[Set[int]] = None,
     ) -> bool:
         """
-        检测BOM循环依赖
-        
-        根据《工艺路线和标准作业流程优化设计规范.md》设计。
-        
-        Args:
-            tenant_id: 租户ID
-            material_id: 主物料ID（父件）
-            component_id: 子物料ID（子件）
-            
-        Returns:
-            bool: 如果添加该BOM关系会导致循环依赖，返回True
+        检测 BOM 循环依赖。
+
+        图方向：父件 → 子件。添加 material_id→component_id 会成环，当且仅当
+        从 component_id 沿子件展开能到达 material_id（含自引用）。
         """
-        from collections import defaultdict
-        
-        # 构建依赖图：component_id -> 它作为父件时的所有子件ID集合
-        dependency_graph = defaultdict(set)
-        
-        # 查询所有BOM关系
-        all_boms = await BOM.filter(
+        result = await MaterialService.detect_bom_cycle_detail(
+            tenant_id,
+            material_id,
+            component_id,
+            extra_edges=extra_edges,
+            exclude_bom_ids=exclude_bom_ids,
+        )
+        return bool(result.get("has_cycle"))
+
+    @staticmethod
+    async def detect_bom_cycle_detail(
+        tenant_id: int,
+        material_id: int,
+        component_id: int,
+        *,
+        extra_edges: Optional[List[Tuple[int, int]]] = None,
+        exclude_bom_ids: Optional[Set[int]] = None,
+    ) -> Dict[str, Any]:
+        """返回 {has_cycle, path: [material_ids...]}。"""
+        if material_id == component_id:
+            return {"has_cycle": True, "path": [material_id, component_id]}
+
+        dependency_graph: Dict[int, Set[int]] = defaultdict(set)
+        query = BOM.filter(
             tenant_id=tenant_id,
-            deleted_at__isnull=True
-        ).all()
-        
+            deleted_at__isnull=True,
+            is_active=True,
+            is_obsolete=False,
+        )
+        if exclude_bom_ids:
+            query = query.exclude(id__in=list(exclude_bom_ids))
+        all_boms = await query.all()
         for bom in all_boms:
-            dependency_graph[bom.component_id].add(bom.material_id)
-        
-        # 检查添加 material_id -> component_id 是否会导致循环
-        # 即检查从 component_id 开始，是否能到达 material_id
-        def can_reach(start: int, target: int, visited: set) -> bool:
-            """检查从start是否能到达target"""
-            if start == target:
-                return True
-            
-            visited.add(start)
-            for neighbor in dependency_graph.get(start, set()):
-                if neighbor not in visited:
-                    if can_reach(neighbor, target, visited):
-                        return True
-            return False
-        
-        # 检查从component_id是否能到达material_id
-        # 如果能到达，说明添加 material_id -> component_id 会形成循环
-        return can_reach(component_id, material_id, set())
+            dependency_graph[int(bom.material_id)].add(int(bom.component_id))
+        for parent_id, child_id in extra_edges or []:
+            dependency_graph[int(parent_id)].add(int(child_id))
+        # 拟新增边
+        dependency_graph[int(material_id)].add(int(component_id))
+
+        def find_path(start: int, target: int) -> Optional[List[int]]:
+            stack = [(start, [start])]
+            visited: Set[int] = set()
+            while stack:
+                node, path = stack.pop()
+                if node in visited:
+                    continue
+                visited.add(node)
+                for neighbor in dependency_graph.get(node, set()):
+                    next_path = path + [neighbor]
+                    if neighbor == target:
+                        return next_path
+                    if neighbor not in visited:
+                        stack.append((neighbor, next_path))
+            return None
+
+        # 从拟加子件向下展开，若能回到父件则成环
+        path = find_path(int(component_id), int(material_id))
+        if path:
+            return {"has_cycle": True, "path": [int(material_id)] + path}
+        return {"has_cycle": False, "path": []}
+
+    @staticmethod
+    async def _assert_bom_version_not_referenced(
+        tenant_id: int,
+        material_id: int,
+        version: str,
+        *,
+        action_label: str,
+    ) -> None:
+        """删除/撤销审核前：未完成工单或需求计算明细引用则 409。"""
+        try:
+            from apps.kuaizhizao.models.work_order import WorkOrder
+            from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
+        except Exception:
+            WorkOrder = None  # type: ignore
+            DemandComputationItem = None  # type: ignore
+
+        if WorkOrder is not None:
+            wo_count = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                product_id=material_id,
+                status__in=list(_ACTIVE_WORK_ORDER_STATUSES),
+                deleted_at__isnull=True,
+            ).count()
+            if wo_count > 0:
+                raise ConflictError(
+                    f"物料 {material_id} 版本 {version} 仍被 {wo_count} 张未完成工单引用，无法{action_label}"
+                )
+
+        if DemandComputationItem is not None:
+            dc_count = await DemandComputationItem.filter(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                bom_version=version,
+            ).count()
+            if dc_count > 0:
+                raise ConflictError(
+                    f"物料 {material_id} 版本 {version} 仍被 {dc_count} 条需求计算明细引用，无法{action_label}"
+                )
     
     @staticmethod
     async def generate_bom_hierarchy(
@@ -6171,6 +6285,15 @@ class MaterialService:
         
         if not current_boms:
             raise NotFoundError(f"物料 {material_id} 的BOM不存在")
+
+        exists = await BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            version=data.version,
+            deleted_at__isnull=True,
+        ).exists()
+        if exists:
+            raise ValidationError(f"版本 {data.version} 已存在")
         
         # 获取当前版本号
         current_version = current_boms[0].version
@@ -6178,36 +6301,39 @@ class MaterialService:
         
         # 创建新版本的BOM（复制当前版本）
         new_bom_list = []
-        for bom in current_boms:
-            if bom.version == current_version:
-                new_bom = await BOM.create(
-                    tenant_id=tenant_id,
-                    material_id=bom.material_id,
-                    component_id=bom.component_id,
-                    quantity=bom.quantity,
-                    base_quantity=bom.base_quantity or Decimal("1"),
-                    unit=bom.unit,
-                    waste_rate=bom.waste_rate,
-                    is_required=bom.is_required,
-                    level=bom.level,
-                    path=bom.path,
-                    version=data.version,
-                    bom_code=current_bom_code,  # 使用相同的BOM编码
-                    bom_name=bom.bom_name,
-                    effective_date=data.effective_date or bom.effective_date,
-                    expiry_date=bom.expiry_date,
-                    approval_status="draft",  # 新版本默认为草稿
-                    is_alternative=bom.is_alternative,
-                    alternative_group_id=bom.alternative_group_id,
-                    priority=bom.priority,
-                    is_configurable=getattr(bom, "is_configurable", False),
-                    configurable_group_id=getattr(bom, "configurable_group_id", None),
-                    is_default_configurable=getattr(bom, "is_default_configurable", False),
-                    description=data.version_description or bom.description,
-                    remark=bom.remark,
-                    is_active=bom.is_active,
-                )
-                new_bom_list.append(new_bom)
+        async with in_transaction():
+            for bom in current_boms:
+                if bom.version == current_version:
+                    new_bom = await BOM.create(
+                        tenant_id=tenant_id,
+                        material_id=bom.material_id,
+                        component_id=bom.component_id,
+                        quantity=bom.quantity,
+                        base_quantity=bom.base_quantity or Decimal("1"),
+                        unit=bom.unit,
+                        waste_rate=bom.waste_rate,
+                        is_required=bom.is_required,
+                        issue_method=getattr(bom, "issue_method", None) or "pick",
+                        level=bom.level,
+                        path=bom.path,
+                        version=data.version,
+                        bom_code=current_bom_code,
+                        bom_name=bom.bom_name,
+                        is_default=False,
+                        effective_date=data.effective_date or bom.effective_date,
+                        expiry_date=bom.expiry_date,
+                        approval_status="draft",
+                        is_alternative=bom.is_alternative,
+                        alternative_group_id=bom.alternative_group_id,
+                        priority=bom.priority,
+                        is_configurable=getattr(bom, "is_configurable", False),
+                        configurable_group_id=getattr(bom, "configurable_group_id", None),
+                        is_default_configurable=getattr(bom, "is_default_configurable", False),
+                        description=data.version_description or bom.description,
+                        remark=bom.remark,
+                        is_active=bom.is_active,
+                    )
+                    new_bom_list.append(new_bom)
         
         logger.info(
             f"创建BOM新版本成功：物料 {material_id}，"
@@ -6356,6 +6482,313 @@ class MaterialService:
             "version2": data.version2,
             "added": added,
             "removed": removed,
-            "modified": modified
+            "modified": modified,
+            # 兼容列表页旧字段名
+            "added_items": added,
+            "removed_items": removed,
+            "modified_items": modified,
+        }
+
+    @staticmethod
+    async def replace_bom_version_items(
+        tenant_id: int,
+        material_id: int,
+        version: str,
+        data: BOMBatchCreate,
+        current_user: Optional[User] = None,
+    ) -> List[BOMResponse]:
+        """事务内全量替换指定物料+版本的 BOM 明细（编辑原子端点）。"""
+        if int(data.material_id) != int(material_id):
+            raise ValidationError("请求体 material_id 与路径不一致")
+        data.version = version
+
+        material = await Material.filter(
+            tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
+        ).first()
+        if not material:
+            raise ValidationError(f"主物料 {material_id} 不存在")
+
+        existing = await BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            version=version,
+            deleted_at__isnull=True,
+        ).all()
+        if existing and any(str(b.approval_status or "") == "approved" for b in existing):
+            raise ValidationError(
+                f"版本 {version} 已审核通过，禁止直接修改。请先撤销审核或创建新版本。"
+            )
+
+        component_ids = [item.component_id for item in data.items]
+        if material_id in component_ids:
+            raise ValidationError("主物料和子物料不能相同")
+        components = await Material.filter(
+            tenant_id=tenant_id, id__in=component_ids, deleted_at__isnull=True
+        ).all()
+        found = {c.id for c in components}
+        missing = set(component_ids) - found
+        if missing:
+            raise ValidationError(f"子物料 {missing} 不存在")
+        MaterialService._assert_bom_components_have_source_type(list(components))
+
+        exclude_ids = {int(b.id) for b in existing}
+        for item in data.items:
+            cycle = await MaterialService.detect_bom_cycle_detail(
+                tenant_id,
+                material_id,
+                int(item.component_id),
+                exclude_bom_ids=exclude_ids,
+            )
+            if cycle.get("has_cycle"):
+                path = " → ".join(str(x) for x in (cycle.get("path") or []))
+                raise ValidationError(f"添加子物料将导致 BOM 循环依赖：{path or '成环'}")
+
+        bom_code = data.bom_code
+        if not bom_code and existing:
+            bom_code = existing[0].bom_code
+        if not bom_code:
+            try:
+                bom_code = await CodeGenerationService.generate_code(
+                    tenant_id=tenant_id,
+                    rule_code="ENGINEERING_BOM_CODE",
+                    context={
+                        "version": version,
+                        "material_code": material.main_code or material.code,
+                        "material_name": material.name,
+                    },
+                )
+            except Exception:
+                bom_code = f"BOM-{(material.main_code or material.code or material_id)}-{version}"
+
+        version_base_qty = data.base_quantity or Decimal("1")
+        version_bom_name = MaterialService.resolve_version_bom_name(
+            data.bom_name, material, bom_code, version
+        )
+        bom_list: List[BOM] = []
+        async with in_transaction():
+            if existing:
+                await BOM.filter(
+                    tenant_id=tenant_id,
+                    material_id=material_id,
+                    version=version,
+                    deleted_at__isnull=True,
+                ).update(deleted_at=now_utc())
+            for item in data.items:
+                payload = {
+                    "tenant_id": tenant_id,
+                    "material_id": material_id,
+                    "component_id": item.component_id,
+                    "quantity": item.quantity,
+                    "base_quantity": version_base_qty,
+                    "unit": item.unit,
+                    "waste_rate": getattr(item, "waste_rate", None) or Decimal("0.00"),
+                    "is_required": getattr(item, "is_required", True),
+                    "issue_method": getattr(item, "issue_method", None) or "pick",
+                    "level": 1,
+                    "path": f"{material_id}/{item.component_id}",
+                    "version": version,
+                    "bom_code": bom_code,
+                    "bom_name": version_bom_name,
+                    "effective_date": data.effective_date,
+                    "expiry_date": data.expiry_date,
+                    "approval_status": "draft",
+                    "is_alternative": item.is_alternative,
+                    "alternative_group_id": item.alternative_group_id,
+                    "priority": item.priority,
+                    "is_configurable": item.is_configurable,
+                    "configurable_group_id": item.configurable_group_id,
+                    "is_default_configurable": item.is_default_configurable,
+                    "description": data.description,
+                    "remark": item.remark or data.remark,
+                    "is_active": data.is_active,
+                }
+                apply_create_audit(payload, current_user)
+                bom_list.append(await BOM.create(**payload))
+        return [BOMResponse.model_validate(b) for b in bom_list]
+
+    @staticmethod
+    async def list_bom_where_used(
+        tenant_id: int,
+        component_id: int,
+        *,
+        recursive: bool = False,
+        include_obsolete: bool = False,
+    ) -> Dict[str, Any]:
+        """反查：物料被哪些 BOM 作为子件使用。"""
+        component = await Material.filter(
+            tenant_id=tenant_id, id=component_id, deleted_at__isnull=True
+        ).first()
+        if not component:
+            raise NotFoundError(f"物料 {component_id} 不存在")
+
+        visited: Set[int] = set()
+        frontier = [component_id]
+        rows: List[Dict[str, Any]] = []
+
+        while frontier:
+            current_ids = [mid for mid in frontier if mid not in visited]
+            if not current_ids:
+                break
+            for mid in current_ids:
+                visited.add(mid)
+
+            query = BOM.filter(
+                tenant_id=tenant_id,
+                component_id__in=current_ids,
+                deleted_at__isnull=True,
+                is_active=True,
+            )
+            if not include_obsolete:
+                query = query.filter(is_obsolete=False)
+            matches = await query.all()
+            if not matches:
+                break
+
+            parent_ids = list({int(b.material_id) for b in matches})
+            parents = await Material.filter(
+                tenant_id=tenant_id, id__in=parent_ids, deleted_at__isnull=True
+            ).all()
+            parent_map = {int(p.id): p for p in parents}
+
+            next_frontier: List[int] = []
+            for bom in matches:
+                parent = parent_map.get(int(bom.material_id))
+                rows.append(
+                    {
+                        "bom_id": bom.id,
+                        "bom_uuid": bom.uuid,
+                        "material_id": bom.material_id,
+                        "material_code": (parent.main_code or parent.code) if parent else None,
+                        "material_name": parent.name if parent else None,
+                        "component_id": bom.component_id,
+                        "version": bom.version,
+                        "quantity": float(bom.quantity or 0),
+                        "unit": bom.unit,
+                        "approval_status": bom.approval_status,
+                        "is_default": bool(bom.is_default),
+                        "is_obsolete": bool(bom.is_obsolete),
+                        "bom_code": bom.bom_code,
+                    }
+                )
+                if recursive and int(bom.material_id) not in visited:
+                    next_frontier.append(int(bom.material_id))
+            frontier = next_frontier if recursive else []
+
+        return {
+            "component_id": component_id,
+            "component_code": component.main_code or component.code,
+            "component_name": component.name,
+            "recursive": recursive,
+            "items": rows,
+            "total": len(rows),
+        }
+
+    @staticmethod
+    async def print_engineering_bom(
+        tenant_id: int,
+        material_id: int,
+        version: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """组装多阶 BOM 打印数据并渲染默认 HTML。"""
+        material = await Material.filter(
+            tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
+        ).first()
+        if not material:
+            raise NotFoundError(f"物料 {material_id} 不存在")
+
+        hierarchy = await MaterialService.generate_bom_hierarchy(
+            tenant_id, material_id, version=version
+        )
+        resolved_version = hierarchy.get("version") or version or "1.0"
+        header = await BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            version=resolved_version,
+            deleted_at__isnull=True,
+        ).first()
+        approval_status = header.approval_status if header else "-"
+        bom_code = header.bom_code if header else "-"
+        bom_name = (header.bom_name if header else None) or MaterialService.build_default_bom_name(
+            material, bom_code if bom_code != "-" else None
+        )
+
+        def _render_items(items: List[Dict[str, Any]], depth: int = 0) -> str:
+            parts: List[str] = []
+            for item in items or []:
+                indent = "&nbsp;" * (depth * 4)
+                code = item.get("component_code") or item.get("component_id") or ""
+                name = item.get("component_name") or ""
+                qty = item.get("quantity", "")
+                unit = item.get("unit") or ""
+                waste = item.get("waste_rate", 0)
+                parts.append(
+                    "<tr>"
+                    f"<td>{indent}{depth + 1}</td>"
+                    f"<td>{code}</td>"
+                    f"<td>{name}</td>"
+                    f"<td style='text-align:right'>{qty}</td>"
+                    f"<td>{unit}</td>"
+                    f"<td style='text-align:right'>{waste}</td>"
+                    "</tr>"
+                )
+                parts.append(_render_items(item.get("children") or [], depth + 1))
+            return "".join(parts)
+
+        material_code = material.main_code or material.code or str(material_id)
+        body_rows = _render_items(hierarchy.get("items") or [])
+        if not body_rows:
+            body_rows = "<tr><td colspan='6' style='text-align:center'>无明细</td></tr>"
+
+        html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><title>BOM {material_code}</title>
+<style>
+body{{font-family:sans-serif;font-size:12px;color:#111;margin:24px}}
+h1{{font-size:18px;margin:0 0 12px}}
+.meta{{margin-bottom:16px;line-height:1.6}}
+table{{width:100%;border-collapse:collapse}}
+th,td{{border:1px solid #ccc;padding:6px 8px;vertical-align:top}}
+th{{background:#f5f5f5;text-align:left}}
+</style></head><body>
+<h1>物料清单 BOM</h1>
+<div class="meta">
+<div>主物料：{material_code} {material.name or ''}</div>
+<div>BOM编号：{bom_code}　名称：{bom_name or '-'}</div>
+<div>版本：{resolved_version}　状态：{approval_status}</div>
+</div>
+<table>
+<thead><tr><th>层级</th><th>子件编码</th><th>子件名称</th><th>用量</th><th>单位</th><th>损耗%</th></tr></thead>
+<tbody>{body_rows}</tbody>
+</table>
+</body></html>"""
+
+        # 尽量注册/复用系统模板编码，便于打印中心检索
+        try:
+            from core.models.print_template import PrintTemplate
+            exists = await PrintTemplate.filter(
+                tenant_id=tenant_id,
+                code="ENGINEERING_BOM_PRINT",
+                deleted_at__isnull=True,
+            ).exists()
+            if not exists:
+                await PrintTemplate.create(
+                    tenant_id=tenant_id,
+                    code="ENGINEERING_BOM_PRINT",
+                    name="工程BOM打印",
+                    type="html",
+                    content="<div>{{content}}</div>",
+                    is_active=True,
+                    is_default=True,
+                    config={"document_type": "engineering_bom"},
+                )
+        except Exception as exc:
+            logger.warning(f"注册 BOM 打印模板跳过: {exc}")
+
+        return {
+            "document_type": "engineering_bom",
+            "template_code": "ENGINEERING_BOM_PRINT",
+            "material_id": material_id,
+            "version": resolved_version,
+            "content": html,
+            "message": "BOM 打印内容已生成",
         }
 

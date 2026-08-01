@@ -1,7 +1,3 @@
-/**
- * 注册用户名保留字（与后端 infra.domain.security.reserved_username 保持一致）
- */
-
 const RESERVED_USERNAME_EXACT = new Set([
   'admin',
   'administrator',
@@ -21,6 +17,7 @@ const RESERVED_USERNAME_EXACT = new Set([
   'test',
   'demo',
   'guest',
+  'infraadmin',
   'superuser',
   'moderator',
   'owner',
@@ -49,21 +46,18 @@ const RESERVED_USERNAME_EXACT = new Set([
   'nobody',
 ]);
 
-const RESERVED_USERNAME_PREFIXES = [
-  'admin',
-  'administrator',
-  'root',
-  'superadmin',
-  'sysadmin',
-  'system',
-] as const;
+const RESERVED_USERNAME_PREFIXES = ['admin', 'administrator', 'root', 'superadmin', 'sysadmin', 'system', 'infraadmin'];
 
-function normalizeUsernameKey(username: string): string {
+export function normalizeUsernameKey(username: string): string {
   return username.trim().toLowerCase().replace(/[_-]/g, '');
 }
 
+export function isPlatformSuperadminUsername(username: string): boolean {
+  const raw = username.trim().toLowerCase();
+  return raw === 'infra_admin' || normalizeUsernameKey(username) === 'infraadmin';
+}
+
 export function isReservedUsername(username: string): boolean {
-  if (!username?.trim()) return false;
   const key = normalizeUsernameKey(username);
   if (!key) return false;
   if (RESERVED_USERNAME_EXACT.has(key)) return true;
@@ -75,4 +69,16 @@ export function isReservedUsername(username: string): boolean {
     }
   }
   return false;
+}
+
+export function validateTenantUsernameInput(username: string): string | null {
+  const cleaned = username.trim();
+  if (!cleaned) return null;
+  if (isPlatformSuperadminUsername(cleaned)) {
+    return 'platformSuperadminReserved';
+  }
+  if (isReservedUsername(cleaned)) {
+    return 'reserved';
+  }
+  return null;
 }

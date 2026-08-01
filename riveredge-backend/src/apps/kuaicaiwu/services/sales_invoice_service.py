@@ -12,6 +12,7 @@ from tortoise.queryset import Q
 from apps.common.base_service import AppBaseService
 from apps.kuaicaiwu.models.invoice import Invoice
 from apps.kuaizhizao.models.document_relation import DocumentRelation
+from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE, normalize_price_type
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
 
@@ -224,6 +225,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             "customer_name": order.customer_name,
             "sales_order_id": order.id,
             "sales_order_code": code,
+            "price_type": normalize_price_type(getattr(order, "price_type", None)),
         }
 
     async def preview_pull_from_sales_delivery(
@@ -253,6 +255,17 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         )
         code = str(delivery.delivery_code or delivery_id)
         pushable = float(preview_items[0]["max_push_quantity"]) if preview_items else 0.0
+        price_type = DEFAULT_SALES_PRICE_TYPE
+        if getattr(delivery, "sales_order_id", None):
+            from apps.kuaizhizao.models.sales_order import SalesOrder
+
+            linked_order = await SalesOrder.get_or_none(
+                tenant_id=tenant_id,
+                id=int(delivery.sales_order_id),
+                deleted_at__isnull=True,
+            )
+            if linked_order is not None:
+                price_type = normalize_price_type(getattr(linked_order, "price_type", None))
         return {
             "target_type": "sales_invoice",
             "source_type": "sales_delivery",
@@ -271,6 +284,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             "customer_name": delivery.customer_name,
             "sales_order_id": getattr(delivery, "sales_order_id", None),
             "sales_order_code": getattr(delivery, "sales_order_code", None),
+            "price_type": price_type,
         }
 
     async def list_sales_order_pull_candidates(
