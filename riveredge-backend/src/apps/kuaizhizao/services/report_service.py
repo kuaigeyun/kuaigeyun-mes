@@ -413,6 +413,9 @@ class ReportService:
             "wo_query": "work-order-query",
             "wo_tracking": "work-order-execution-report",
             "scrap_analysis": "scrap-reason-analysis",
+            "first_pass_yield": "first-pass-yield-analysis",
+            "first_pass_yield_work_order": "first-pass-yield-work-order",
+            "first_pass_yield_rty": "first-pass-yield-rty",
             "wo_material_usage": "work-order-material-usage",
             "wo_labor_detail": "process-completion-report",
             "outsource_query": "outsource-work-order-query",
@@ -584,6 +587,84 @@ class ReportService:
             total = len(items)
             page = items[sk : sk + lim]
             return self._wrap_report_payload({"data": page, "success": True, "total": total})
+
+        if report_type in ["first-pass-yield-analysis", "first_pass_yield"]:
+            from apps.kuaizhizao.services.first_pass_yield_service import FirstPassYieldService
+
+            service = FirstPassYieldService()
+            summary = await service.get_summary(
+                tenant_id,
+                date_start=date_start,
+                date_end=date_end,
+            )
+            rows = await service.get_operation_breakdown(
+                tenant_id,
+                date_start=date_start,
+                date_end=date_end,
+                limit=500,
+            )
+            if kw:
+                rows = [row for row in rows if kw.lower() in str(row.get("operation_name") or "").lower()]
+            order_clause = _resolve_production_report_order_by(
+                order_by,
+                {"operation_name", "count", "first_pass_yield_rate", "qualification_rate"},
+                "-first_pass_yield_rate",
+            )
+            descending = order_clause.startswith("-")
+            sort_key = order_clause.lstrip("-")
+            rows.sort(key=lambda x: x.get(sort_key) or 0, reverse=descending)
+            total = len(rows)
+            page = rows[sk : sk + lim]
+            return self._wrap_report_payload(
+                {
+                    "data": page,
+                    "success": True,
+                    "total": total,
+                    "summary": summary,
+                }
+            )
+
+        if report_type in ["first-pass-yield-work-order", "first_pass_yield_work_order"]:
+            from apps.kuaizhizao.services.first_pass_yield_service import FirstPassYieldService
+
+            service = FirstPassYieldService()
+            rows, total = await service.get_work_order_first_pass_yield(
+                tenant_id,
+                date_start=date_start,
+                date_end=date_end,
+                skip=sk,
+                limit=lim,
+            )
+            if kw:
+                rows = [
+                    row
+                    for row in rows
+                    if kw.lower() in str(row.get("work_order_code") or "").lower()
+                    or kw.lower() in str(row.get("product_name") or "").lower()
+                ]
+                total = len(rows)
+            return self._wrap_report_payload({"data": rows, "success": True, "total": total})
+
+        if report_type in ["first-pass-yield-rty", "first_pass_yield_rty"]:
+            from apps.kuaizhizao.services.first_pass_yield_service import FirstPassYieldService
+
+            service = FirstPassYieldService()
+            rows, total = await service.get_product_rty(
+                tenant_id,
+                date_start=date_start,
+                date_end=date_end,
+                skip=sk,
+                limit=lim,
+            )
+            if kw:
+                rows = [
+                    row
+                    for row in rows
+                    if kw.lower() in str(row.get("product_code") or "").lower()
+                    or kw.lower() in str(row.get("product_name") or "").lower()
+                ]
+                total = len(rows)
+            return self._wrap_report_payload({"data": rows, "success": True, "total": total})
 
         if report_type == "production-delay-warning":
             from apps.kuaizhizao.services.report_enhancements import build_production_delay_warning

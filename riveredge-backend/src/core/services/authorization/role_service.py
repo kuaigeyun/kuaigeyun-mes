@@ -20,6 +20,11 @@ from core.services.authorization.position_service import PositionService
 from tortoise.transactions import in_transaction
 from core.services.authorization.permission_version_service import PermissionVersionService
 from core.services.authorization.permission_registry_service import PermissionRegistryService
+from core.config.functional_domain_spec import (
+    FUNCTIONAL_DOMAINS,
+    normalize_functional_domain,
+    resolve_functional_domain_from_role_code,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
 
 # 向后兼容别名
@@ -64,6 +69,26 @@ class RoleService:
         if pt not in RoleService.ALLOWED_EXTERNAL_PARTNER_TYPES:
             raise ValidationError("外部角色必须指定合作方类型：customer / supplier")
         return "external", pt
+
+    @staticmethod
+    def _normalize_functional_domain(
+        role_type: str,
+        functional_domain: Optional[str],
+    ) -> Optional[str]:
+        if role_type == "external":
+            if functional_domain not in (None, ""):
+                raise ValidationError("外部角色不可设置职能域")
+            return None
+        if functional_domain in (None, ""):
+            return None
+        try:
+            return normalize_functional_domain(functional_domain)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+
+    @staticmethod
+    def resolve_preset_functional_domain(code: str) -> Optional[str]:
+        return resolve_functional_domain_from_role_code(code)
 
     @staticmethod
     def _is_admin_system_role(role: Role) -> bool:
@@ -114,6 +139,10 @@ class RoleService:
             getattr(data, "role_type", None),
             getattr(data, "external_partner_type", None),
         )
+        functional_domain = RoleService._normalize_functional_domain(
+            role_type,
+            getattr(data, "functional_domain", None),
+        )
         home_path = RoleService._normalize_home_path(getattr(data, "home_path", None))
         create_position = bool(getattr(data, "create_position", False))
 
@@ -134,6 +163,7 @@ class RoleService:
                 description=data.description,
                 role_type=role_type,
                 external_partner_type=external_partner_type,
+                functional_domain=functional_domain,
                 home_path=home_path,
                 is_active=data.is_active if data.is_active is not None else True,
                 is_system=False,  # 系统角色只能由系统创建
@@ -361,6 +391,15 @@ class RoleService:
             rt, pt = RoleService._normalize_role_type_pair(next_role_type, next_partner_type)
             update_data["role_type"] = rt
             update_data["external_partner_type"] = pt
+        next_role_type = update_data.get("role_type", role.role_type)
+        if "functional_domain" in update_data or "role_type" in update_data:
+            raw_domain = update_data.get("functional_domain", role.functional_domain)
+            if "functional_domain" in update_data and raw_domain == "":
+                raw_domain = None
+            update_data["functional_domain"] = RoleService._normalize_functional_domain(
+                next_role_type,
+                raw_domain,
+            )
         for key, value in update_data.items():
             setattr(role, key, value)
         
@@ -1013,6 +1052,11 @@ class RoleService:
                 await role.save()
                 renamed_count += 1
             if role:
+                if not (role.functional_domain or "").strip():
+                    preset_domain = RoleService.resolve_preset_functional_domain(role.code)
+                    if preset_domain:
+                        role.functional_domain = preset_domain
+                        await role.save()
                 await RoleService._assign_preset_permissions(tenant_id=tenant_id, role=role)
                 permission_synced_count += 1
 
@@ -1057,6 +1101,7 @@ class RoleService:
             ).exists()
             if not exists:
                 now = now_utc()
+                preset_domain = RoleService.resolve_preset_functional_domain(item["code"])
                 role = await Role.create(
                     tenant_id=tenant_id,
                     name=item["name"],
@@ -1064,6 +1109,7 @@ class RoleService:
                     description=item.get("description"),
                     role_type="internal",
                     external_partner_type=None,
+                    functional_domain=preset_domain,
                     is_active=True,
                     is_system=False,
                     created_at=now,

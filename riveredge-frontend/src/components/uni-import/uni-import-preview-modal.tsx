@@ -14,7 +14,10 @@ export interface UniImportPreviewModalProps {
   data: any[][];
   dataStartRow?: number;
   maxPreviewRows?: number;
+  /** 与导入 Modal 同宽 */
+  width?: string | number;
   precheckLoading?: boolean;
+  commitLoading?: boolean;
   precheckResult?: ImportPrecheckResult | null;
   onCancel: () => void;
   onConfirmImport: () => void;
@@ -25,7 +28,9 @@ export const UniImportPreviewModal: React.FC<UniImportPreviewModalProps> = ({
   data,
   dataStartRow = 2,
   maxPreviewRows = 10,
+  width = 1200,
   precheckLoading = false,
+  commitLoading = false,
   precheckResult,
   onCancel,
   onConfirmImport,
@@ -42,17 +47,28 @@ export const UniImportPreviewModal: React.FC<UniImportPreviewModalProps> = ({
     [data, dataStartRow, maxPreviewRows],
   );
 
+  const ROW_NO_WIDTH = 72;
+
   const columns = useMemo(
     () =>
-      preview.headers.map((title, colIndex) => ({
-        title,
-        dataIndex: `col_${colIndex}`,
-        key: `col_${colIndex}`,
-        ellipsis: true,
-        width: Math.min(160, Math.max(80, title.length * 14)),
-        render: (text: string) => text || '—',
-      })),
+      preview.headers.map((title, colIndex) => {
+        // 固定列宽：避免 scroll.y 下表头按长标题、表体按「—」各自算宽导致错位
+        const width = Math.min(180, Math.max(110, Math.min(title.length, 10) * 14));
+        return {
+          title,
+          dataIndex: `col_${colIndex}`,
+          key: `col_${colIndex}`,
+          ellipsis: true,
+          width,
+          render: (text: string) => text || '—',
+        };
+      }),
     [preview.headers],
+  );
+
+  const scrollX = useMemo(
+    () => ROW_NO_WIDTH + columns.reduce((sum, col) => sum + Number(col.width ?? 0), 0),
+    [columns],
   );
 
   const dataSource = useMemo(
@@ -80,7 +96,8 @@ export const UniImportPreviewModal: React.FC<UniImportPreviewModalProps> = ({
   );
 
   const hasErrors = errorMessages.length > 0;
-  const canCommit = !precheckLoading && !hasErrors && preview.totalDataRows > 0;
+  const canCommit =
+    !precheckLoading && !commitLoading && !hasErrors && preview.totalDataRows > 0;
 
   const renderAlertLines = (lines: string[]) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -97,12 +114,17 @@ export const UniImportPreviewModal: React.FC<UniImportPreviewModalProps> = ({
       title={t('components.uniImport.previewModalTitle')}
       open={open}
       onCancel={onCancel}
-      width={Math.min(1100, 160 + preview.headers.length * 120)}
+      width={width}
       destroyOnHidden
       footer={
         <Space>
           <Button onClick={onCancel}>{t('components.uniImport.previewBackEdit')}</Button>
-          <Button type="primary" disabled={!canCommit} loading={precheckLoading} onClick={onConfirmImport}>
+          <Button
+            type="primary"
+            disabled={!canCommit}
+            loading={precheckLoading || commitLoading}
+            onClick={onConfirmImport}
+          >
             {t('components.uniImport.previewConfirmImport')}
           </Button>
         </Space>
@@ -145,15 +167,16 @@ export const UniImportPreviewModal: React.FC<UniImportPreviewModalProps> = ({
           size="small"
           bordered
           pagination={false}
-          scroll={{ x: 'max-content', y: 320 }}
+          tableLayout="fixed"
+          scroll={{ x: scrollX, y: 320 }}
           loading={precheckLoading}
           columns={[
             {
               title: t('components.uniImport.previewRowNo'),
               dataIndex: '__rowNo',
               key: '__rowNo',
-              width: 72,
-              fixed: 'left',
+              width: ROW_NO_WIDTH,
+              ellipsis: true,
             },
             ...columns,
           ]}

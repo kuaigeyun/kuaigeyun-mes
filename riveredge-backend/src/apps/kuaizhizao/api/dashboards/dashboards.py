@@ -1358,6 +1358,7 @@ async def get_statistics(
         
         total_reported_quantity = float(reporting_stats.get("total_reported_quantity", 0)) if reporting_stats else 0
         total_unqualified_quantity = float(reporting_stats.get("total_unqualified_quantity", 0)) if reporting_stats else 0
+        first_pass_yield_rate = float(reporting_stats.get("first_pass_yield_rate", 0)) if reporting_stats else 0
         defect_rate = (total_unqualified_quantity / total_reported_quantity * 100) if total_reported_quantity > 0 else 0
         
         # 计算产能达成率（实际完工数量 / 计划数量 * 100）
@@ -1373,6 +1374,7 @@ async def get_statistics(
             "plan_quantity": round(plan_quantity, 2),
             "completed_quantity": round(completed_quantity, 2),
             "defect_rate": round(defect_rate, 2),
+            "first_pass_yield_rate": round(first_pass_yield_rate, 2),
             "capacity_achievement_rate": round(capacity_achievement_rate, 2),
         }
     except Exception as e:
@@ -1387,6 +1389,7 @@ async def get_statistics(
             "plan_quantity": 0,
             "completed_quantity": 0,
             "defect_rate": 0,
+            "first_pass_yield_rate": 0,
             "capacity_achievement_rate": 0,
         }
     
@@ -1439,11 +1442,13 @@ async def get_statistics(
         )
         
         quality_rate = reporting_stats.get("qualification_rate", 0) if reporting_stats else 0
+        first_pass_yield_rate = reporting_stats.get("first_pass_yield_rate", 0) if reporting_stats else 0
         
         statistics.quality = {
             "total_exceptions": len(quality_exceptions),
             "open_exceptions": len(open_quality_exceptions),
             "quality_rate": round(quality_rate, 2),
+            "first_pass_yield_rate": round(first_pass_yield_rate, 2),
         }
     except Exception as e:
         logger.error(f"获取质量统计失败: {e}")
@@ -1451,6 +1456,7 @@ async def get_statistics(
             "total_exceptions": 0,
             "open_exceptions": 0,
             "quality_rate": 0,
+            "first_pass_yield_rate": 0,
         }
     
     return statistics
@@ -2250,7 +2256,7 @@ async def get_manufacturing_summary(
         tenant_id=tenant_id,
         reported_at__gte=range_start_dt,
         reported_at__lte=range_end_dt,
-    ).values_list("qualified_quantity", "unqualified_quantity")
+    ).values_list("qualified_quantity", "unqualified_quantity", "reported_quantity", "rework_order_id")
     
     # 增加：待审核报工
     q4 = ReportingRecord.filter(tenant_id=tenant_id, status="pending").count()
@@ -2274,12 +2280,28 @@ async def get_manufacturing_summary(
     total_reported = total_qualified + total_unqualified
     qualified_rate = (total_qualified / total_reported * 100) if total_reported > 0 else 0.0
 
+    first_pass_qualified = 0.0
+    first_pass_reported = 0.0
+    for row in prod_records:
+        if row[3] is not None:
+            continue
+        qualified_qty = float(row[0] or 0)
+        reported_qty = float(row[2] or 0)
+        if reported_qty <= 0:
+            reported_qty = qualified_qty + float(row[1] or 0)
+        first_pass_qualified += qualified_qty
+        first_pass_reported += reported_qty
+    first_pass_yield_rate = (
+        round(first_pass_qualified / first_pass_reported * 100, 2) if first_pass_reported > 0 else 0.0
+    )
+
     return {
         "pending_scheduling": pending_scheduling,
         "in_progress_count": in_progress_count,
         "rework_count": rework_count,
         "today_output": finished_goods_inbound_qty,
         "qualified_rate": round(qualified_rate, 2),
+        "first_pass_yield_rate": first_pass_yield_rate,
         "pending_reporting": pending_reporting
     }
 

@@ -63,31 +63,36 @@ export function relayoutUniverSheet(
   instance: UniverSheetInstance,
   clipEl?: HTMLElement | null,
 ): void {
-  const workbook = instance.univerAPI.getActiveWorkbook();
-  if (!workbook) return;
+  // dispose 后 getUnit 为 null，内部会抛 getSheetBySheetId；须吞掉，禁止冒泡成全局错误
+  try {
+    const workbook = instance.univerAPI.getActiveWorkbook?.() ?? null;
+    if (!workbook) return;
 
-  const unitId = workbook.getId();
-  const injector = instance.univer.__getInjector();
-  const renderManager = injector.get(IRenderManagerService);
-  const engine = renderManager.getRenderById(unitId)?.engine as
-    | {
-        resize?: () => void;
-        resizeBySize?: (width: number, height: number) => void;
-        getCanvasElement?: () => HTMLCanvasElement | null;
+    const unitId = workbook.getId();
+    const injector = instance.univer.__getInjector();
+    const renderManager = injector.get(IRenderManagerService);
+    const engine = renderManager.getRenderById(unitId)?.engine as
+      | {
+          resize?: () => void;
+          resizeBySize?: (width: number, height: number) => void;
+          getCanvasElement?: () => HTMLCanvasElement | null;
+        }
+      | undefined;
+    if (!engine) return;
+
+    const canvas = typeof engine.getCanvasElement === 'function' ? engine.getCanvasElement() : null;
+    const canvasHost = canvas?.parentElement;
+    if (typeof engine.resizeBySize === 'function') {
+      const width = (clipEl ?? canvasHost)?.clientWidth ?? 0;
+      // 高度取画布宿主（不含工具栏/Sheet 栏）；若无则回退 clipEl
+      const height = canvasHost?.clientHeight || clipEl?.clientHeight || 0;
+      if (width > 0 && height > 0) {
+        engine.resizeBySize(width, height);
+        return;
       }
-    | undefined;
-  if (!engine) return;
-
-  const canvas = typeof engine.getCanvasElement === 'function' ? engine.getCanvasElement() : null;
-  const canvasHost = canvas?.parentElement;
-  if (typeof engine.resizeBySize === 'function') {
-    const width = (clipEl ?? canvasHost)?.clientWidth ?? 0;
-    // 高度取画布宿主（不含工具栏/Sheet 栏）；若无则回退 clipEl
-    const height = canvasHost?.clientHeight || clipEl?.clientHeight || 0;
-    if (width > 0 && height > 0) {
-      engine.resizeBySize(width, height);
-      return;
     }
+    engine.resize?.();
+  } catch {
+    // workbook 已卸载或渲染器未就绪
   }
-  engine.resize?.();
 }

@@ -131,6 +131,32 @@ function Get-EnhancedPath {
         "$env:USERPROFILE\.local\bin",
         (Join-Path $script:FastDeployDir '.tools\caddy')
     )
+    # nvm-windows：symlink path + root 下最新 v*
+    $nvmRoot = if ($env:NVM_HOME) { $env:NVM_HOME } else { Join-Path $env:LOCALAPPDATA 'nvm' }
+    $nvmSettings = Join-Path $nvmRoot 'settings.txt'
+    if (Test-Path $nvmSettings) {
+        Get-Content $nvmSettings -ErrorAction SilentlyContinue | ForEach-Object {
+            if ($_ -match '^\s*path:\s*(.+)\s*$') {
+                $link = $Matches[1].Trim()
+                if ($link -and (Test-Path $link)) { $extra += $link }
+            }
+            if ($_ -match '^\s*root:\s*(.+)\s*$') {
+                $root = $Matches[1].Trim()
+                if ($root -and (Test-Path $root)) { $nvmRoot = $root }
+            }
+        }
+    }
+    foreach ($link in @('C:\nvm4w\nodejs', 'D:\nvm4w\nodejs')) {
+        if (Test-Path $link) { $extra += $link }
+    }
+    if (Test-Path $nvmRoot) {
+        $best = $null
+        foreach ($dir in Get-ChildItem $nvmRoot -Directory -Filter 'v*' -ErrorAction SilentlyContinue | Sort-Object Name) {
+            $exe = Join-Path $dir.FullName 'node.exe'
+            if (Test-Path $exe) { $best = $dir.FullName }
+        }
+        if ($best) { $extra += $best }
+    }
     $pgRoot = Join-Path $env:ProgramFiles 'PostgreSQL'
     if (Test-Path $pgRoot) {
         foreach ($dir in Get-ChildItem $pgRoot -Directory -ErrorAction SilentlyContinue) {
@@ -210,9 +236,16 @@ function Test-CheckNode {
     if (-not $node) {
         $candidates = @(
             (Join-Path $script:FastDeployDir '.tools\node\node.exe'),
+            'C:\nvm4w\nodejs\node.exe',
             (Join-Path $env:ProgramFiles 'nodejs\node.exe'),
             (Join-Path ${env:ProgramFiles(x86)} 'nodejs\node.exe')
         )
+        $nvmRoot = if ($env:NVM_HOME) { $env:NVM_HOME } else { Join-Path $env:LOCALAPPDATA 'nvm' }
+        if (Test-Path $nvmRoot) {
+            foreach ($dir in Get-ChildItem $nvmRoot -Directory -Filter 'v*' -ErrorAction SilentlyContinue | Sort-Object Name) {
+                $candidates += (Join-Path $dir.FullName 'node.exe')
+            }
+        }
         foreach ($p in $candidates) {
             if (Test-Path $p) { $node = Get-Command $p -ErrorAction SilentlyContinue; if ($node) { break } }
         }

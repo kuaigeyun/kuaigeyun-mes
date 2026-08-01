@@ -2,7 +2,7 @@
  * 报工统计分析页面
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Card, Row, Col, Statistic, DatePicker, Button, Space, Table, Tag, Spin, Empty } from 'antd';
+import { Card, Row, Col, Statistic, DatePicker, Button, Space, Table, Tag, Spin, Empty, Tooltip } from 'antd';
 import { Bar } from '@ant-design/charts';
 import { DownloadOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { App } from 'antd';
@@ -76,6 +76,7 @@ const ReportingStatisticsPage: React.FC = () => {
         total_unqualified_quantity: statistics.total_unqualified_quantity,
         total_work_hours: statistics.total_work_hours,
         qualification_rate: statistics.qualification_rate,
+        first_pass_yield_rate: statistics.first_pass_yield_rate,
         unqualified_rate: statistics.unqualified_rate,
         avg_quantity_per_hour: statistics.avg_quantity_per_hour,
       };
@@ -141,6 +142,21 @@ const ReportingStatisticsPage: React.FC = () => {
           </Tag>
         ),
       },
+      {
+        title: (
+          <Tooltip title={t('app.kuaizhizao.workReporting.statistics.firstPassYieldTooltip')}>
+            {t('app.kuaizhizao.workReporting.statistics.colFirstPassYieldRate')}
+          </Tooltip>
+        ),
+        dataIndex: 'first_pass_yield_rate',
+        key: 'first_pass_yield_rate',
+        align: 'right' as const,
+        render: (value: number) => (
+          <Tag color={value >= 95 ? 'green' : value >= 90 ? 'orange' : 'red'}>
+            {(value ?? 0).toFixed(2)}%
+          </Tag>
+        ),
+      },
     ],
     [t],
   );
@@ -187,6 +203,21 @@ const ReportingStatisticsPage: React.FC = () => {
         render: (value: number) => (
           <Tag color={value >= 95 ? 'green' : value >= 90 ? 'orange' : 'red'}>
             {value.toFixed(2)}%
+          </Tag>
+        ),
+      },
+      {
+        title: (
+          <Tooltip title={t('app.kuaizhizao.workReporting.statistics.firstPassYieldTooltip')}>
+            {t('app.kuaizhizao.workReporting.statistics.colFirstPassYieldRate')}
+          </Tooltip>
+        ),
+        dataIndex: 'first_pass_yield_rate',
+        key: 'first_pass_yield_rate',
+        align: 'right' as const,
+        render: (value: number) => (
+          <Tag color={value >= 95 ? 'green' : value >= 90 ? 'orange' : 'red'}>
+            {(value ?? 0).toFixed(2)}%
           </Tag>
         ),
       },
@@ -299,12 +330,24 @@ const ReportingStatisticsPage: React.FC = () => {
               </Col>
               <Col span={6}>
                 <Card>
-                  <Statistic
-                    title={t('app.kuaizhizao.workReporting.statistics.statAvgEfficiency')}
-                    value={statistics.avg_quantity_per_hour}
-                    precision={2}
-                    styles={{ content: { color: '#1890ff' } }}
-                  />
+                  <Tooltip title={t('app.kuaizhizao.workReporting.statistics.firstPassYieldTooltip')}>
+                    <Statistic
+                      title={t('app.kuaizhizao.workReporting.statistics.statFirstPassYieldRate')}
+                      value={statistics.first_pass_yield_rate ?? 0}
+                      precision={2}
+                      suffix="%"
+                      styles={{
+                        content: {
+                          color:
+                            (statistics.first_pass_yield_rate ?? 0) >= 95
+                              ? '#52c41a'
+                              : (statistics.first_pass_yield_rate ?? 0) >= 90
+                                ? '#faad14'
+                                : '#ff4d4f',
+                        },
+                      }}
+                    />
+                  </Tooltip>
                 </Card>
               </Col>
               <Col span={6}>
@@ -324,6 +367,19 @@ const ReportingStatisticsPage: React.FC = () => {
                               : '#ff4d4f',
                       },
                     }}
+                  />
+                </Card>
+              </Col>
+            </Row>
+
+            <Row gutter={16} style={{ marginBottom: 12 }}>
+              <Col span={6}>
+                <Card>
+                  <Statistic
+                    title={t('app.kuaizhizao.workReporting.statistics.statAvgEfficiency')}
+                    value={statistics.avg_quantity_per_hour}
+                    precision={2}
+                    styles={{ content: { color: '#1890ff' } }}
                   />
                 </Card>
               </Col>

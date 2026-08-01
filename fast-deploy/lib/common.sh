@@ -175,10 +175,45 @@ if is_windows_gitbash; then
     export PYTHONIOENCODING="${PYTHONIOENCODING:-utf-8}"
 fi
 
-# Windows 安装后补充常见路径（当前 Git Bash 会话内生效；含便携版 .tools/node）
+# nvm-windows：settings.txt 的 path（如 C:\nvm4w\nodejs）+ root 下最新 v* 目录
+_prepend_nvm_windows_paths() {
+    local nvm_root nvm_link settings win_path unix_path ver best=""
+    nvm_root="${NVM_HOME:-}"
+    [ -n "$nvm_root" ] || nvm_root="${LOCALAPPDATA}/nvm"
+    # Git Bash 下 LOCALAPPDATA 可能是 C:\Users\...，统一成 /c/Users/...
+    if [[ "$nvm_root" == [A-Za-z]:* ]]; then
+        nvm_root="$(cygpath -u "$nvm_root" 2>/dev/null || echo "$nvm_root")"
+    fi
+    settings="${nvm_root}/settings.txt"
+    if [ -f "$settings" ]; then
+        win_path="$(grep -E '^path:' "$settings" 2>/dev/null | head -1 | sed 's/^path:[[:space:]]*//;s/\r$//')"
+        if [ -n "$win_path" ]; then
+            unix_path="$(cygpath -u "$win_path" 2>/dev/null || true)"
+            [ -n "$unix_path" ] && [ -d "$unix_path" ] && PATH="$unix_path:$PATH"
+        fi
+        win_path="$(grep -E '^root:' "$settings" 2>/dev/null | head -1 | sed 's/^root:[[:space:]]*//;s/\r$//')"
+        if [ -n "$win_path" ]; then
+            unix_path="$(cygpath -u "$win_path" 2>/dev/null || true)"
+            [ -n "$unix_path" ] && [ -d "$unix_path" ] && nvm_root="$unix_path"
+        fi
+    fi
+    for nvm_link in "/c/nvm4w/nodejs" "/d/nvm4w/nodejs"; do
+        [ -d "$nvm_link" ] && PATH="$nvm_link:$PATH"
+    done
+    if [ -d "$nvm_root" ]; then
+        for ver in "$nvm_root"/v*; do
+            [ -x "$ver/node.exe" ] || [ -x "$ver/node" ] || continue
+            best="$ver"
+        done
+        [ -n "$best" ] && PATH="$best:$PATH"
+    fi
+}
+
+# Windows 安装后补充常见路径（当前 Git Bash 会话内生效；含便携版 .tools/node、nvm-windows）
 refresh_windows_path() {
     is_windows_gitbash || return 0
     local p dir
+    _prepend_nvm_windows_paths
     for p in \
         "$FAST_DEPLOY_DIR/.tools/node" \
         "/c/Program Files/nodejs" \
@@ -573,17 +608,31 @@ resolve_caddy() {
 
 check_node() {
     is_windows_gitbash && refresh_windows_path
-    local node_bin="" v p
+    local node_bin="" v p nvm_root ver
     if command -v node >/dev/null 2>&1; then
         node_bin="node"
     elif is_windows_gitbash; then
+        nvm_root="${NVM_HOME:-${LOCALAPPDATA}/nvm}"
+        if [[ "$nvm_root" == [A-Za-z]:* ]]; then
+            nvm_root="$(cygpath -u "$nvm_root" 2>/dev/null || echo "$nvm_root")"
+        fi
         for p in \
             "$FAST_DEPLOY_DIR/.tools/node/node.exe" \
+            "/c/nvm4w/nodejs/node.exe" \
             "/c/Program Files/nodejs/node.exe" \
             "/c/Program Files (x86)/nodejs/node.exe"
         do
             [ -x "$p" ] && { node_bin="$p"; break; }
         done
+        if [ -z "$node_bin" ] && [ -d "$nvm_root" ]; then
+            for ver in "$nvm_root"/v*; do
+                if [ -x "$ver/node.exe" ]; then
+                    node_bin="$ver/node.exe"
+                elif [ -x "$ver/node" ]; then
+                    node_bin="$ver/node"
+                fi
+            done
+        fi
     fi
     [ -z "$node_bin" ] && { echo "missing"; return; }
     v="$("$node_bin" -v 2>/dev/null | sed 's/^v//' | tr -d '\r')"

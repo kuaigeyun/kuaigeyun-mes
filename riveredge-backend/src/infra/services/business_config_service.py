@@ -21,6 +21,7 @@ from loguru import logger
 
 from apps.master_data.models.customer import Customer
 from apps.master_data.models.supplier import Supplier
+from core.config.functional_domain_spec import FUNCTIONAL_DOMAINS, normalize_functional_domain
 
 
 def coerce_finance_parameter_dict(finance: Dict[str, Any]) -> Dict[str, Any]:
@@ -244,6 +245,7 @@ PROCESS_KEYS = {
     "parameters.work_order.picking_issue_strategy",
     "parameters.work_order.picking_confirm_warehouse_only",
     "parameters.work_order.picking_confirm_allowed_role_codes",
+    "parameters.work_order.picking_confirm_allowed_functional_domains",
     "parameters.work_order.require_confirmed_picking_before_operation_start",
     "parameters.work_order.require_confirmed_picking_before_reporting",
 }
@@ -312,6 +314,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.work_order.picking_issue_strategy",
     "parameters.work_order.picking_confirm_warehouse_only",
     "parameters.work_order.picking_confirm_allowed_role_codes",
+    "parameters.work_order.picking_confirm_allowed_functional_domains",
     "parameters.work_order.require_confirmed_picking_before_operation_start",
     "parameters.work_order.require_confirmed_picking_before_reporting",
     "parameters.work_order.allow_production_without_material",
@@ -408,6 +411,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "picking_issue_strategy": "after_release",
         "picking_confirm_warehouse_only": True,
         "picking_confirm_allowed_role_codes": [],
+        "picking_confirm_allowed_functional_domains": [],
         "require_confirmed_picking_before_operation_start": False,
         "require_confirmed_picking_before_reporting": False,
         "last_operation_auto_inbound_mode": "none",
@@ -930,10 +934,28 @@ class BusinessConfigService:
             if str(code).strip()
         })
 
-        # 「仅仓库可确认领料」开启：仅仓储角色码可确认。
-        # 关闭且未配置额外角色名单：不卡角色码（由出库 RBAC 门控），避免管理员/自定义角色码永远对不上默认英文生产角色。
-        # 关闭且配置了额外名单：仓储角色 + 额外名单。
+        configured_domains = wo_params.get("picking_confirm_allowed_functional_domains", [])
+        if not isinstance(configured_domains, list):
+            configured_domains = []
+        normalized_extra_domains: list[str] = []
+        for raw_domain in configured_domains:
+            try:
+                normalized = normalize_functional_domain(raw_domain)
+            except ValueError:
+                continue
+            if normalized and normalized not in normalized_extra_domains:
+                normalized_extra_domains.append(normalized)
+        normalized_extra_domains.sort()
+
+        # 「仅仓库可确认领料」开启：仓储职能域 + 额外域；角色码白名单为补充。
+        # 关闭且未配置额外名单：不卡职能域/角色码（由出库 RBAC 门控）。
         allowed_codes = set(DEFAULT_WAREHOUSE_ROLE_CODES)
+        allowed_domains: set[str] = set()
+        if warehouse_only:
+            allowed_domains.add("warehouse")
+            allowed_domains.update(normalized_extra_domains)
+        elif normalized_extra_domains:
+            allowed_domains.update(normalized_extra_domains)
         if not warehouse_only:
             if normalized_extra_codes:
                 allowed_codes.update(normalized_extra_codes)
@@ -944,13 +966,16 @@ class BusinessConfigService:
             "picking_issue_strategy": issue_strategy,
             "picking_confirm_warehouse_only": warehouse_only,
             "picking_confirm_allowed_role_codes": normalized_extra_codes,
+            "picking_confirm_allowed_functional_domains": normalized_extra_domains,
             "require_confirmed_picking_before_operation_start": require_before_start,
             "require_confirmed_picking_before_reporting": require_before_reporting,
             "default_warehouse_role_codes": sorted(DEFAULT_WAREHOUSE_ROLE_CODES),
             "default_production_picking_confirm_role_codes": sorted(
                 DEFAULT_PRODUCTION_PICKING_CONFIRM_ROLE_CODES
             ),
+            "default_functional_domains": sorted(FUNCTIONAL_DOMAINS),
             "effective_allowed_role_codes": sorted(allowed_codes),
+            "effective_allowed_functional_domains": sorted(allowed_domains),
         }
 
     async def get_last_operation_auto_inbound_mode(self, tenant_id: int) -> str:

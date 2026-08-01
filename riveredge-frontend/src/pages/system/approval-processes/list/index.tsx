@@ -239,9 +239,25 @@ const ApprovalProcessListPage: React.FC = () => {
         ...values,
       };
       
-      // 如果是新建，提供默认的工作流骨架
+      // 新建仅填元数据；节点在设计器中配置。须带合法骨架（开始→结束），否则后端校验拒绝空图。
       if (!isEdit) {
-        (data as CreateApprovalProcessData).nodes = { nodes: [], edges: [] };
+        (data as CreateApprovalProcessData).nodes = {
+          nodes: [
+            {
+              id: 'start',
+              type: 'start',
+              position: { x: 250, y: 50 },
+              data: { label: t('pages.approval.designer.start') },
+            },
+            {
+              id: 'end',
+              type: 'end',
+              position: { x: 250, y: 350 },
+              data: { label: t('pages.approval.designer.end') },
+            },
+          ],
+          edges: [{ id: 'e-start-end', source: 'start', target: 'end', type: 'smoothstep' }],
+        };
         (data as CreateApprovalProcessData).config = {};
       }
       

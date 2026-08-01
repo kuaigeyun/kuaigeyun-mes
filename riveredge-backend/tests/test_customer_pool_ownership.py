@@ -67,13 +67,15 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
         operator.is_regular_user = MagicMock(return_value=False)
 
         with patch.object(CustomerPoolService, "_write_log", AsyncMock()):
-            result = await CustomerPoolService.apply_release(
-                tenant_id=1,
-                customer=customer,
-                operator=operator,
-                skip_own_check=True,
-            )
+            with patch.object(CustomerPoolService, "_clear_collaborators", AsyncMock()) as mock_clear:
+                result = await CustomerPoolService.apply_release(
+                    tenant_id=1,
+                    customer=customer,
+                    operator=operator,
+                    skip_own_check=True,
+                )
 
+        mock_clear.assert_awaited_once()
         self.assertIsNone(result.salesman_id)
         self.assertEqual(result.pool_status, "pool")
         self.assertIsNone(result.recycle_at)
@@ -170,7 +172,7 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
                 )
 
 
-    async def test_list_customer_pool_mine_only_current_user_owned(self):
+    async def test_list_customer_pool_mine_includes_owned_and_collaborators(self):
         user = User(id=5, tenant_id=1, username="sales5", full_name="销售五")
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -178,27 +180,35 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
         mock_query.order_by.return_value.offset.return_value.limit = AsyncMock(return_value=[])
 
         with patch(
-            "apps.kuaizhizao.services.customer_pool_service.Customer.filter",
-            return_value=mock_query,
+            "apps.kuaizhizao.services.customer_pool_service.list_collaborator_customer_ids",
+            AsyncMock(return_value=[88, 89]),
         ):
             with patch(
-                "apps.kuaizhizao.services.customer_pool_service.DataScopeService.apply",
-                new_callable=AsyncMock,
+                "apps.kuaizhizao.services.customer_pool_service.Customer.filter",
                 return_value=mock_query,
             ):
-                await CustomerPoolService.list_customers(
-                    tenant_id=1,
-                    current_user=user,
-                    scope="mine",
-                )
+                with patch(
+                    "apps.kuaizhizao.services.customer_pool_service.DataScopeService.apply",
+                    new_callable=AsyncMock,
+                    return_value=mock_query,
+                ):
+                    with patch.object(
+                        CustomerPoolService,
+                        "_load_collaborators_map",
+                        AsyncMock(return_value={}),
+                    ):
+                        await CustomerPoolService.list_customers(
+                            tenant_id=1,
+                            current_user=user,
+                            scope="mine",
+                        )
 
-        mine_filter = None
-        for call in mock_query.filter.call_args_list:
-            kwargs = call.kwargs
-            if kwargs.get("pool_status") == "owned" and kwargs.get("salesman_id") == 5:
-                mine_filter = kwargs
-                break
-        self.assertIsNotNone(mine_filter)
+        pool_status_filter = any(
+            call.kwargs.get("pool_status") == "owned" for call in mock_query.filter.call_args_list
+        )
+        self.assertTrue(pool_status_filter)
+        owned_q_filters = [call for call in mock_query.filter.call_args_list if call.args]
+        self.assertTrue(owned_q_filters)
 
     async def test_list_customer_pool_all_applies_data_scope(self):
         user = User(id=5, tenant_id=1, username="sales5", full_name="销售五")
@@ -263,6 +273,112 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(pool_status_filter)
 
 
+class CustomerPoolCollaboratorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_set_collaborators_rejects_owner_as_collaborator(self):
+        customer = _FakeCustomer(id=10, salesman_id=3, pool_status="owned")
+        operator = User(id=3, tenant_id=1, username="sales3", full_name="张三")
+
+        with patch.object(CustomerPoolService, "_load_customer", AsyncMock(return_value=customer)):
+            with patch(
+                "apps.kuaizhizao.services.customer_pool_service.DataScopeService.assert_row_visible",
+                AsyncMock(),
+            ):
+                from apps.kuaizhizao.schemas.customer_pool import CustomerPoolCollaboratorsUpdateBody
+
+                with self.assertRaises(ValidationError):
+                    await CustomerPoolService.set_collaborators(
+                        tenant_id=1,
+                        customer_id=10,
+                        current_user=operator,
+                        body=CustomerPoolCollaboratorsUpdateBody(user_ids=[3, 4]),
+                    )
+
+    async def test_set_collaborators_rejects_pool_customer(self):
+        customer = _FakeCustomer(id=10, pool_status="pool")
+        operator = User(id=3, tenant_id=1, username="sales3", full_name="张三")
+
+        with patch.object(CustomerPoolService, "_load_customer", AsyncMock(return_value=customer)):
+            with patch(
+                "apps.kuaizhizao.services.customer_pool_service.DataScopeService.assert_row_visible",
+                AsyncMock(),
+            ):
+                from apps.kuaizhizao.schemas.customer_pool import CustomerPoolCollaboratorsUpdateBody
+
+                with self.assertRaises(ValidationError):
+                    await CustomerPoolService.set_collaborators(
+                        tenant_id=1,
+                        customer_id=10,
+                        current_user=operator,
+                        body=CustomerPoolCollaboratorsUpdateBody(user_ids=[4]),
+                    )
+
+    async def test_list_collaborator_customer_ids_returns_active_customer_ids(self):
+        with patch(
+            "apps.kuaizhizao.services.customer_pool_service.CustomerCollaborator.filter"
+        ) as mock_filter:
+            mock_filter.return_value.values_list = AsyncMock(return_value=[10, 20])
+            from apps.kuaizhizao.services.customer_pool_service import list_collaborator_customer_ids
+
+            ids = await list_collaborator_customer_ids(tenant_id=1, user_id=4)
+
+        self.assertEqual(ids, [10, 20])
+        mock_filter.assert_called_once_with(
+            tenant_id=1,
+            user_id=4,
+            deleted_at__isnull=True,
+        )
+
+
+class CustomerPoolScopeResolverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_customer_salesman_pool_includes_collaborator_ids(self):
+        from core.services.authorization.data_scope_resolver_registry import ScopeResolveContext
+        from core.services.authorization.data_scope_resolvers import resolve_customer_salesman_pool
+
+        profile = MagicMock()
+        profile.applicant_user_id_field = "salesman_id"
+        ctx = ScopeResolveContext(
+            tenant_id=1,
+            user_id=5,
+            resource="kuaizhizao:customer-pool",
+            profile=profile,
+            scope_payload=None,
+            department_uuid=None,
+            department_user_ids=[],
+        )
+
+        with patch(
+            "apps.kuaizhizao.services.customer_pool_service.list_collaborator_customer_ids",
+            AsyncMock(return_value=[99]),
+        ):
+            clause = await resolve_customer_salesman_pool(ctx)
+
+        self.assertIsNotNone(clause)
+
+    async def test_customer_owned_only_includes_collaborator_ids(self):
+        from core.services.authorization.data_scope_resolver_registry import ScopeResolveContext
+        from core.services.authorization.data_scope_resolvers import resolve_customer_owned_only
+
+        profile = MagicMock()
+        profile.applicant_user_id_field = "salesman_id"
+        ctx = ScopeResolveContext(
+            tenant_id=1,
+            user_id=5,
+            resource="master-data:supply-chain:customer",
+            profile=profile,
+            scope_payload=None,
+            department_uuid=None,
+            department_user_ids=[],
+        )
+
+        with patch(
+            "apps.kuaizhizao.services.customer_pool_service.list_collaborator_customer_ids",
+            AsyncMock(return_value=[99]),
+        ):
+            clause = await resolve_customer_owned_only(ctx)
+
+        self.assertIsNotNone(clause)
+
+
 class CustomerPoolPermissionContractTests(unittest.TestCase):
     def test_customer_pool_business_permission_codes(self):
         from core.config.permission_contract import validate_permission_code
@@ -271,6 +387,7 @@ class CustomerPoolPermissionContractTests(unittest.TestCase):
             "kuaizhizao:customer-pool:read",
             "kuaizhizao:customer-pool:claim",
             "kuaizhizao:customer-pool:assign",
+            "kuaizhizao:customer-pool:collaborate",
             "kuaizhizao:customer-pool:release",
             "kuaizhizao:customer-pool:recycle",
             "kuaizhizao:customer-pool:update",

@@ -129,6 +129,7 @@ from .customer_follow_up import CustomerFollowUp
 from .sales_opportunity import SalesOpportunity
 from .customer_pool_log import CustomerPoolLog
 from .customer_pool_rule import CustomerPoolRule
+from .customer_collaborator import CustomerCollaborator
 # 统一需求模型（新设计）
 from .demand import Demand
 from .demand_item import DemandItem

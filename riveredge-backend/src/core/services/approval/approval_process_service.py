@@ -146,8 +146,19 @@ class ApprovalProcessService:
             )
             if canonical_name:
                 payload["name"] = canonical_name
-            if payload.get("nodes"):
-                payload["nodes"] = normalize_and_validate_flow(payload["nodes"])
+            raw_nodes = payload.get("nodes")
+            node_list = (
+                raw_nodes.get("nodes")
+                if isinstance(raw_nodes, dict)
+                else None
+            )
+            if not node_list:
+                # 列表「新建」只填元数据；空图补开始→结束骨架，节点在设计器中完善
+                payload["nodes"] = normalize_and_validate_flow(
+                    ApprovalProcessService._default_skeleton_nodes()
+                )
+            else:
+                payload["nodes"] = normalize_and_validate_flow(raw_nodes)
             approval_process = ApprovalProcess(
                 tenant_id=tenant_id,
                 **payload
@@ -319,6 +330,29 @@ class ApprovalProcessService:
 
         approval_process.deleted_at = resolve_business_datetime()
         await approval_process.save()
+
+    @staticmethod
+    def _default_skeleton_nodes() -> Dict[str, Any]:
+        """空白流程骨架：开始 → 结束（供列表新建后进入设计器）。"""
+        return {
+            "nodes": [
+                {
+                    "id": "start",
+                    "type": "start",
+                    "position": {"x": 250, "y": 50},
+                    "data": {"label": "开始", "layoutDirection": "vertical"},
+                },
+                {
+                    "id": "end",
+                    "type": "end",
+                    "position": {"x": 250, "y": 350},
+                    "data": {"label": "结束", "layoutDirection": "vertical"},
+                },
+            ],
+            "edges": [
+                {"id": "e-start-end", "source": "start", "target": "end"},
+            ],
+        }
 
     @staticmethod
     def _default_audit_nodes(label: str) -> Dict[str, Any]:

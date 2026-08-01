@@ -186,12 +186,30 @@ const ManufacturingDashboard: React.FC = () => {
         progress: s?.qualified_rate ?? 0,
         sideMetrics: [
           {
+            label: t('app.kuaizhizao.productionExecutionDashboard.kpi.firstPassYieldToday'),
+            value: `${s?.first_pass_yield_rate ?? 0}%`,
+          },
+          {
             label: t('app.kuaizhizao.productionExecutionDashboard.kpi.todayOutput'),
             value: s?.today_output ?? 0,
           },
+        ],
+      },
+      {
+        key: 'firstPassYield',
+        title: t('app.kuaizhizao.productionExecutionDashboard.kpi.firstPassYieldToday'),
+        value: `${s?.first_pass_yield_rate ?? 0}%`,
+        icon: <SafetyCertificateOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #fa8c16 0%, #ffd666 100%)',
+        progress: s?.first_pass_yield_rate ?? 0,
+        sideMetrics: [
           {
-            label: t('app.kuaizhizao.productionExecutionDashboard.kpi.pendingReporting'),
-            value: s?.pending_reporting ?? 0,
+            label: t('app.kuaizhizao.productionExecutionDashboard.kpi.qualifiedRateToday'),
+            value: `${s?.qualified_rate ?? 0}%`,
+          },
+          {
+            label: t('app.kuaizhizao.productionExecutionDashboard.kpi.reworkInProgress'),
+            value: s?.rework_count ?? 0,
           },
         ],
       },
@@ -359,7 +377,7 @@ const ManufacturingDashboard: React.FC = () => {
   return (
     <ModuleCenterLayout
       loading={summaryLoading && !s}
-      kpiRow={<ModuleKpiRow items={kpis} />}
+      kpiRow={<ModuleKpiRow items={kpis} colProps={{ xs: 24, sm: 12, lg: 6 }} />}
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}
       actionRow={
         <ModuleActionMasonry>

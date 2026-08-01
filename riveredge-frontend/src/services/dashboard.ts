@@ -45,6 +45,8 @@ export interface StatisticsResponse {
     completion_rate: number;
     completed_quantity: number;
     capacity_achievement_rate: number;
+    defect_rate?: number;
+    first_pass_yield_rate?: number;
   };
   inventory: {
     total_quantity: number;
@@ -56,6 +58,7 @@ export interface StatisticsResponse {
     total_exceptions: number;
     open_exceptions: number;
     quality_rate: number;
+    first_pass_yield_rate?: number;
   };
 }
 
@@ -334,6 +337,7 @@ export interface ManufacturingSummary {
   /** 区间内成品入库单（已入库）数量合计；字段名历史兼容 */
   today_output: number;
   qualified_rate: number;
+  first_pass_yield_rate?: number;
   pending_reporting: number;
 }
 

@@ -47,6 +47,11 @@ class Role(BaseModel):
         null=True,
         description="外部角色合作方类型：customer/supplier；内部与触屏专用为空",
     )
+    functional_domain = fields.CharField(
+        max_length=32,
+        null=True,
+        description="内部/触屏角色职能域：sales/purchase/production/warehouse/quality/finance/general",
+    )
     is_system = fields.BooleanField(default=False, description="是否系统角色（系统角色不可删除）")
     is_active = fields.BooleanField(default=True, description="是否启用")
     home_path = fields.CharField(

@@ -20,6 +20,7 @@ import {
 } from '../../services/dataDictionary';
 import { mapSystemDictionaryItemOptions } from '../../utils/systemDictionaryI18n';
 import {
+  dictionaryItemValueContainsStorageDelimiter,
   formatMultiselectStoredValue,
   parseMultiselectStoredValue,
 } from '../../utils/multiselectStoredValue';
@@ -230,6 +231,14 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
             ? t('components.dictionarySelect.enterUnitItem')
             : t('components.dictionarySelect.enterLabelAndValue')
       );
+      return;
+    }
+
+    if (
+      dictionaryItemValueContainsStorageDelimiter(trimmedLabel) ||
+      dictionaryItemValueContainsStorageDelimiter(trimmedValue)
+    ) {
+      messageApi.warning('选项不能包含英文逗号「,」');
       return;
     }
 

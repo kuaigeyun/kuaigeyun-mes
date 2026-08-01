@@ -10,6 +10,13 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class CustomerPoolCollaboratorItem(BaseModel):
+    user_id: int
+    user_name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CustomerPoolItem(BaseModel):
     id: int
     uuid: str
@@ -28,6 +35,7 @@ class CustomerPoolItem(BaseModel):
     updated_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    collaborators: List[CustomerPoolCollaboratorItem] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -62,4 +70,27 @@ class CustomerPoolRuleUpdateBody(BaseModel):
     recycle_after_days: Optional[int] = Field(None, ge=1, le=365)
     max_owned_customers: Optional[int] = Field(None, ge=0, le=100000)
     allow_claim_others: Optional[bool] = None
+
+
+class CustomerPoolCollaboratorsUpdateBody(BaseModel):
+    user_ids: List[int] = Field(default_factory=list, description="协作人用户ID列表")
+
+
+class CustomerPoolLogItem(BaseModel):
+    action: str
+    from_salesman_id: Optional[int] = None
+    from_salesman_name: Optional[str] = None
+    to_salesman_id: Optional[int] = None
+    to_salesman_name: Optional[str] = None
+    operator_user_id: int
+    operator_name: Optional[str] = None
+    reason: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CustomerPoolLogListEnvelope(BaseModel):
+    items: List[CustomerPoolLogItem]
+    total: int
 

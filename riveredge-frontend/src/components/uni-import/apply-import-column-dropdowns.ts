@@ -36,9 +36,13 @@ function resolveImportSheet(
   sheet?: ImportSheetLike | null,
 ): ImportSheetLike | null {
   if (sheet?.getRange) return sheet;
-  const workbook = univerAPI.getActiveWorkbook?.();
-  if (!workbook) return null;
-  return workbook.getSheetBySheetId?.('sheet-1') ?? workbook.getActiveSheet?.() ?? null;
+  try {
+    const workbook = univerAPI.getActiveWorkbook?.() ?? null;
+    if (!workbook) return null;
+    return workbook.getSheetBySheetId?.('sheet-1') ?? workbook.getActiveSheet?.() ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function applyImportColumnDropdowns(

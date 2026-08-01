@@ -399,10 +399,16 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
         if (!field.visibleWhen) {
           return element;
         }
-        const { field: depField, equals } = field.visibleWhen;
+        const { field: depField, equals, in: inValues } = field.visibleWhen;
         return (
           <ProFormDependency key={field.name} name={[depField]}>
-            {(deps) => (deps[depField] === equals ? element : null)}
+            {(deps) => {
+              const depValue = deps[depField];
+              const visible = Array.isArray(inValues)
+                ? inValues.includes(depValue)
+                : depValue === equals;
+              return visible ? element : null;
+            }}
           </ProFormDependency>
         );
       })}

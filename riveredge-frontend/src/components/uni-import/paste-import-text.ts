@@ -129,13 +129,47 @@ export function mergeHtmlAndPlainMatrices(
   return result;
 }
 
+function isEmptyClipboardCell(value: string | undefined | null): boolean {
+  return String(value ?? '').trim() === '';
+}
+
+/**
+ * Excel/WPS 剪贴板常在有效内容右侧/下方带空白格；写入前裁掉，
+ * 否则 setValues 会用空串清掉已有列/行。
+ */
+export function trimTrailingEmptyClipboardMatrix(rows: string[][]): string[][] {
+  if (!rows.length) return rows;
+
+  let endRow = rows.length - 1;
+  while (endRow >= 0 && (rows[endRow] ?? []).every((c) => isEmptyClipboardCell(c))) {
+    endRow -= 1;
+  }
+  if (endRow < 0) return [];
+
+  let endCol = -1;
+  for (let r = 0; r <= endRow; r += 1) {
+    const row = rows[r] ?? [];
+    for (let c = row.length - 1; c >= 0; c -= 1) {
+      if (!isEmptyClipboardCell(row[c])) {
+        endCol = Math.max(endCol, c);
+        break;
+      }
+    }
+  }
+  if (endCol < 0) return [];
+
+  return rows.slice(0, endRow + 1).map((row) =>
+    Array.from({ length: endCol + 1 }, (_, c) => String(row[c] ?? '')),
+  );
+}
+
 export function parseClipboardToStringMatrix(options: {
   html?: string | null;
   plain?: string | null;
 }): string[][] {
   const plainRows = options.plain ? parseClipboardTsv(options.plain) : [];
   const htmlRows = options.html ? parseClipboardHtmlTable(options.html) : null;
-  return mergeHtmlAndPlainMatrices(htmlRows, plainRows);
+  return trimTrailingEmptyClipboardMatrix(mergeHtmlAndPlainMatrices(htmlRows, plainRows));
 }
 
 export function buildForceStringCellMatrix(
@@ -159,6 +193,10 @@ type UniverSheetLike = {
   getActiveRange?: () => UniverRangeLike | null;
   getSelection?: () => { getActiveRange?: () => UniverRangeLike | null } | null;
   getRange?: (row: number, col: number, numRows: number, colCount: number) => UniverRangeLike | null;
+  /** Univer facade 真源 */
+  getMaxRows?: () => number;
+  getMaxColumns?: () => number;
+  /** 旧命名兼容（当前 facade 无此方法） */
   getRowCount?: () => number;
   getColumnCount?: () => number;
   setRowCount?: (rowCount: number) => unknown;
@@ -185,8 +223,17 @@ export function resolveActiveStart(sheet: UniverSheetLike): {
   return { startRow: 0, startColumn: 0 };
 }
 
+function readSheetMaxRows(sheet: UniverSheetLike): number {
+  return Number(sheet.getMaxRows?.() ?? sheet.getRowCount?.() ?? 0) || 0;
+}
+
+function readSheetMaxColumns(sheet: UniverSheetLike): number {
+  return Number(sheet.getMaxColumns?.() ?? sheet.getColumnCount?.() ?? 0) || 0;
+}
+
 /**
- * 粘贴前扩展工作表行列，避免默认 100 行模板截断预览。
+ * 粘贴前按需扩容。必须读 getMaxRows/getMaxColumns；
+ * 读不到当前尺寸时禁止 set*Count（否则会从 0「扩」成粘贴块，等于把右侧列/下方行裁掉）。
  */
 export function ensureSheetCapacity(
   sheet: UniverSheetLike,
@@ -195,12 +242,12 @@ export function ensureSheetCapacity(
 ): void {
   const rows = Math.max(1, Math.ceil(requiredRows));
   const cols = Math.max(1, Math.ceil(requiredCols));
-  const currentRows = Number(sheet.getRowCount?.() ?? 0) || 0;
-  const currentCols = Number(sheet.getColumnCount?.() ?? 0) || 0;
-  if (rows > currentRows && typeof sheet.setRowCount === 'function') {
+  const currentRows = readSheetMaxRows(sheet);
+  const currentCols = readSheetMaxColumns(sheet);
+  if (currentRows > 0 && rows > currentRows && typeof sheet.setRowCount === 'function') {
     sheet.setRowCount(rows);
   }
-  if (cols > currentCols && typeof sheet.setColumnCount === 'function') {
+  if (currentCols > 0 && cols > currentCols && typeof sheet.setColumnCount === 'function') {
     sheet.setColumnCount(cols);
   }
 }

@@ -12,9 +12,11 @@ export function useCustomerPoolPermissions() {
       canRead: hasModulePermission(currentUser, CUSTOMER_POOL_RESOURCE, 'read'),
       canClaim: hasModulePermission(currentUser, CUSTOMER_POOL_RESOURCE, 'claim'),
       canAssign: hasModulePermission(currentUser, CUSTOMER_POOL_RESOURCE, 'assign'),
+      canCollaborate: hasModulePermission(currentUser, CUSTOMER_POOL_RESOURCE, 'collaborate'),
       canRelease: hasModulePermission(currentUser, CUSTOMER_POOL_RESOURCE, 'release'),
       canRecycle: hasModulePermission(currentUser, CUSTOMER_POOL_RESOURCE, 'recycle'),
       canUpdateRules: hasModulePermission(currentUser, CUSTOMER_POOL_RESOURCE, 'update'),
+      currentUserId: currentUser?.id,
     }),
     [currentUser],
   );

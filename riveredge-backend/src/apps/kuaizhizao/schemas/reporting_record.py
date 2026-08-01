@@ -171,6 +171,7 @@ class ReportingOperationStatisticsItemResponse(BaseModel):
     qualified_quantity: float = Field(..., description="合格数量")
     work_hours: float = Field(..., description="工时")
     qualification_rate: float = Field(..., description="合格率")
+    first_pass_yield_rate: float = Field(0, description="直通率（首次报工，不含返工后再合格）")
 
 
 class ReportingWorkerStatisticsItemResponse(BaseModel):
@@ -182,6 +183,7 @@ class ReportingWorkerStatisticsItemResponse(BaseModel):
     qualified_quantity: float = Field(..., description="合格数量")
     work_hours: float = Field(..., description="工时")
     qualification_rate: float = Field(..., description="合格率")
+    first_pass_yield_rate: float = Field(0, description="直通率（首次报工，不含返工后再合格）")
 
 
 class ReportingPullCandidateItem(BaseSchema):
@@ -234,6 +236,9 @@ class ReportingDetailedStatisticsResponse(BaseModel):
     cumulative_hours: float = Field(0, description="累计工时")
     estimated_wages: float = Field(0, description="预估工资")
     qualification_rate: float = Field(0, description="合格率")
+    first_pass_yield_rate: float = Field(0, description="直通率（首次报工，不含返工后再合格）")
+    first_pass_reported_quantity: float = Field(0, description="首次报工数量")
+    first_pass_qualified_quantity: float = Field(0, description="首次报工合格数量")
     unqualified_rate: float = Field(0, description="不合格率")
     avg_quantity_per_hour: float = Field(0, description="平均每小时报工数量")
     efficiency: float = Field(0, description="效率")

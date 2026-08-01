@@ -101,27 +101,41 @@ async def _resolve_outsourced_unit(ctx: ScopeResolveContext) -> Q:
 
 
 async def resolve_customer_salesman_pool(ctx: ScopeResolveContext) -> Q:
-    """客户默认可见性：归属业务员 + 公海（与 master-data 客户池业务一致）。"""
+    """客户默认可见性：归属业务员 + 公海 + 协作客户。"""
+    from apps.kuaizhizao.services.customer_pool_service import list_collaborator_customer_ids
+
     field = ctx.profile.applicant_user_id_field or "salesman_id"
-    return Q(**{field: ctx.user_id}) | Q(pool_status="pool")
+    clause = Q(**{field: ctx.user_id}) | Q(pool_status="pool")
+    collab_ids = await list_collaborator_customer_ids(ctx.tenant_id, ctx.user_id)
+    if collab_ids:
+        clause |= Q(id__in=collab_ids)
+    return clause
 
 
 async def resolve_customer_owned_only(ctx: ScopeResolveContext) -> Q:
-    """客户归属业务员（非公海），用于跟进/商机父客户校验。"""
+    """客户归属业务员或协作人（非公海），用于跟进/商机父客户校验。"""
+    from apps.kuaizhizao.services.customer_pool_service import list_collaborator_customer_ids
+
     field = ctx.profile.applicant_user_id_field or "salesman_id"
-    return Q(**{field: ctx.user_id}) & Q(pool_status="owned")
+    collab_ids = await list_collaborator_customer_ids(ctx.tenant_id, ctx.user_id)
+    owned_clause = Q(**{field: ctx.user_id})
+    if collab_ids:
+        owned_clause |= Q(id__in=collab_ids)
+    return owned_clause & Q(pool_status="owned")
 
 
 async def resolve_customer_owned_via_customer_id(ctx: ScopeResolveContext) -> Q:
-    """子表通过 customer_id 关联仅 owned 客户（跟进、商机列表）。"""
+    """子表通过 customer_id 关联 owned 客户（负责人或协作人）。"""
     from apps.master_data.models.customer import Customer
+    from apps.kuaizhizao.services.customer_pool_service import list_collaborator_customer_ids
 
-    ids = await Customer.filter(
+    collab_ids = await list_collaborator_customer_ids(ctx.tenant_id, ctx.user_id)
+    customer_query = Customer.filter(
         tenant_id=ctx.tenant_id,
         deleted_at__isnull=True,
-        salesman_id=ctx.user_id,
         pool_status="owned",
-    ).values_list("id", flat=True)
+    ).filter(Q(salesman_id=ctx.user_id) | Q(id__in=collab_ids) if collab_ids else Q(salesman_id=ctx.user_id))
+    ids = await customer_query.values_list("id", flat=True)
     if not ids:
         return Q(id=-1)
     return Q(customer_id__in=list(ids))

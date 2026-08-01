@@ -717,7 +717,8 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 确认导入回调。接收 sheet-host 同步的字符串矩阵（行0 表头 / 行1 示例 / 行2+ 数据）。
    * 禁止仅用本回调打开第二个导入弹窗。
    */
-  onImport?: (data: any[][]) => void
+  /** 返回 false 表示校验/导入未成功，保留导入弹窗 */
+  onImport?: (data: any[][]) => void | boolean | Promise<void | boolean>
   /**
    * 导入入库前预检（UniImport 预览弹窗内调用；返回 errors 时禁止确认入库）
    */
@@ -3871,10 +3872,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           <LazyUniImport
             visible={importModalVisible}
             onCancel={() => setImportModalVisible(false)}
-            onConfirm={(data) => {
-              onImport(data)
+            onConfirm={async (data) => {
+              // 必须 await：否则校验失败/接口抛错会被当成成功立刻关窗，表现为「点确认无反应」
+              const result = await Promise.resolve(onImport(data))
+              if (result === false) return false
               setImportModalVisible(false)
               void reloadWithTanstackCacheBust()
+              return undefined
             }}
             headers={effectiveImportConfig.headers}
             exampleRow={effectiveImportConfig.exampleRow}

@@ -71,8 +71,9 @@ export interface UniImportProps {
   /**
    * 确认导入回调
    * @param data - 导入的数据（二维数组格式）
+   * @returns false 表示未成功，保留预检/导入弹窗
    */
-  onConfirm: (data: any[][]) => void;
+  onConfirm: (data: any[][]) => void | boolean | Promise<void | boolean>;
   /**
    * 弹窗标题（默认：'导入数据'）
    */
@@ -224,7 +225,7 @@ export const UniImport: React.FC<UniImportProps> = ({
   const location = useLocation();
   const getPreference = useUserPreferenceStore((s) => s.getPreference);
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal: modalApi } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [xlsxBusy, setXlsxBusy] = useState(false);
   /** 上传/映射后的表格行；变更时 useLayoutEffect 同步重建 Univer 工作簿 */
@@ -245,6 +246,7 @@ export const UniImport: React.FC<UniImportProps> = ({
   const [previewData, setPreviewData] = useState<any[][]>([]);
   const [precheckLoading, setPrecheckLoading] = useState(false);
   const [precheckResult, setPrecheckResult] = useState<ImportPrecheckResult | null>(null);
+  const [commitLoading, setCommitLoading] = useState(false);
   const univerInstanceRef = useRef<UniverSheetInstance | null>(null);
   const headersRef = useRef<string[] | undefined>(headers);
   const exampleRowRef = useRef<string[] | undefined>(exampleRow);
@@ -284,8 +286,19 @@ export const UniImport: React.FC<UniImportProps> = ({
     return selectedIndexes.map((idx) => String(exampleRow[idx] ?? ''));
   }, [effectiveHeaders, headers, exampleRow, selectedImportFieldKeys, fieldKeyToIndex]);
 
+  const effectiveColumnOptions = useMemo(() => {
+    if (!columnOptions?.length || !headers?.length) return columnOptions;
+    const selectedIndexes = selectedImportFieldKeys
+      .map((key) => fieldKeyToIndex.get(key))
+      .filter((idx): idx is number => idx !== undefined);
+    if (!selectedIndexes.length) return columnOptions;
+    return selectedIndexes.map((idx) => columnOptions[idx]);
+  }, [columnOptions, headers, selectedImportFieldKeys, fieldKeyToIndex]);
+
   headersRef.current = effectiveHeaders;
   exampleRowRef.current = effectiveExampleRow;
+  const columnOptionsRef = useRef(effectiveColumnOptions);
+  columnOptionsRef.current = effectiveColumnOptions;
 
   const projectImportSheetRows = useCallback(
     (rows: any[][]): string[][] => {
@@ -433,26 +446,43 @@ export const UniImport: React.FC<UniImportProps> = ({
     return () => window.removeEventListener('keydown', handleModalKeyDown, true);
   }, [open, visible]);
 
-  const handleDownloadTemplate = async () => {
+  const handleDownloadTemplate = () => {
     const importHeaders = headersRef.current;
     if (!importHeaders?.length) {
       messageApi.warning(t('components.uniImport.noHeadersForTemplate'));
       return;
     }
-    try {
-      setXlsxBusy(true);
-      await downloadImportTemplateXlsx(
-        importHeaders,
-        exampleRowRef.current,
-        resolvedTemplateFileName,
-      );
-      messageApi.success(t('components.uniImport.templateDownloaded'));
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error);
-      messageApi.error(t('components.uniImport.templateDownloadFailed', { message: msg }));
-    } finally {
-      setXlsxBusy(false);
-    }
+    modalApi.confirm({
+      title: t('components.uniImport.downloadTemplateConfirmTitle'),
+      content: (
+        <>
+          <strong style={{ color: '#ff4d4f' }}>
+            {t('components.uniImport.downloadTemplateConfirmEmphasize')}
+          </strong>
+          {t('components.uniImport.downloadTemplateConfirmContentRest')}
+        </>
+      ),
+      okText: t('components.uniImport.downloadTemplateConfirmOk'),
+      cancelText: t('components.uniImport.cancel'),
+      onOk: async () => {
+        try {
+          setXlsxBusy(true);
+          await downloadImportTemplateXlsx(
+            importHeaders,
+            exampleRowRef.current,
+            resolvedTemplateFileName,
+            columnOptionsRef.current,
+          );
+          messageApi.success(t('components.uniImport.templateDownloaded'));
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : String(error);
+          messageApi.error(t('components.uniImport.templateDownloadFailed', { message: msg }));
+          throw error;
+        } finally {
+          setXlsxBusy(false);
+        }
+      },
+    });
   };
 
   const handleUploadXlsx: UploadProps['beforeUpload'] = async (file) => {
@@ -471,15 +501,17 @@ export const UniImport: React.FC<UniImportProps> = ({
     return false;
   };
 
-  const handleMappingUpload: UploadProps['beforeUpload'] = async (file) => {
+  const mappingFileInputRef = useRef<HTMLInputElement>(null);
+
+  const processMappingFile = async (file: File) => {
     const importHeaders = headersRef.current;
     if (!importHeaders?.length) {
       messageApi.warning(t('components.uniImport.noHeadersForTemplate'));
-      return false;
+      return;
     }
     try {
       setXlsxBusy(true);
-      const rows = await parseImportXlsxFile(file as File);
+      const rows = await parseImportXlsxFile(file);
       setMappingRawRows(rows);
       setMappingModalOpen(true);
     } catch (error: unknown) {
@@ -488,7 +520,41 @@ export const UniImport: React.FC<UniImportProps> = ({
     } finally {
       setXlsxBusy(false);
     }
-    return false;
+  };
+
+  const handleMappingImportClick = () => {
+    if (loading || xlsxBusy) return;
+    const importHeaders = headersRef.current;
+    if (!importHeaders?.length) {
+      messageApi.warning(t('components.uniImport.noHeadersForTemplate'));
+      return;
+    }
+    modalApi.confirm({
+      title: t('components.uniImport.mappingImportConfirmTitle'),
+      content: (
+        <>
+          <strong style={{ color: '#ff4d4f' }}>
+            {t('components.uniImport.mappingImportConfirmEmphasize')}
+          </strong>
+          {t('components.uniImport.mappingImportConfirmContentRest')}
+        </>
+      ),
+      okText: t('components.uniImport.mappingImportConfirmOk'),
+      cancelText: t('components.uniImport.cancel'),
+      onOk: () => {
+        const input = mappingFileInputRef.current;
+        if (!input) return;
+        input.value = '';
+        input.click();
+      },
+    });
+  };
+
+  const handleMappingFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    void processMappingFile(file);
   };
 
   const handleMappingApply = (mappedRows: string[][]) => {
@@ -712,50 +778,66 @@ export const UniImport: React.FC<UniImportProps> = ({
   };
 
   const commitImport = async (data: any[][]) => {
-    if (shouldUseRelationImport && onRelationImportSubmit) {
-      const relationRows = projectImportSheetRows(
-        data.map((row) => row.map((cell) => String(cell ?? ''))),
-      );
-      const localErrors = validateRelationPayload(relationRows);
-      if (localErrors.length) {
-        setPrecheckResult({
-          canImport: false,
-          errors: localErrors,
+    if (commitLoading) return;
+    setCommitLoading(true);
+    try {
+      if (shouldUseRelationImport && onRelationImportSubmit) {
+        const relationRows = projectImportSheetRows(
+          data.map((row) => row.map((cell) => String(cell ?? ''))),
+        );
+        const localErrors = validateRelationPayload(relationRows);
+        if (localErrors.length) {
+          setPrecheckResult({
+            canImport: false,
+            errors: localErrors,
+          });
+          return;
+        }
+        const effectiveEntities = resolveEffectiveRelationEntities(resolveHeaderFieldKeys(relationRows));
+        const relationResult = await onRelationImportSubmit({
+          rawRows: relationRows,
+          entities: effectiveEntities,
+          writeStrategy: customWriteStrategy,
         });
+        if (relationResult?.success !== false && !relationResult?.errors?.length && relationResult?.message) {
+          messageApi.success(relationResult.message);
+        }
+        if (relationResult?.errors?.length) {
+          if (relationResult?.message) {
+            messageApi.error(relationResult.message);
+          }
+          setPrecheckResult({
+            canImport: false,
+            errors: relationResult.errors,
+            warnings: relationResult.warnings,
+          });
+          return;
+        }
+        setPreviewModalOpen(false);
+        onCancel();
         return;
       }
-      const effectiveEntities = resolveEffectiveRelationEntities(resolveHeaderFieldKeys(relationRows));
-      const relationResult = await onRelationImportSubmit({
-        rawRows: relationRows,
-        entities: effectiveEntities,
-        writeStrategy: customWriteStrategy,
-      });
-      if (relationResult?.success !== false && !relationResult?.errors?.length && relationResult?.message) {
-        messageApi.success(relationResult.message);
-      }
-      if (relationResult?.errors?.length) {
-        if (relationResult?.message) {
-          messageApi.error(relationResult.message);
-        }
-        setPrecheckResult({
-          canImport: false,
-          errors: relationResult.errors,
-          warnings: relationResult.warnings,
-        });
+
+      const result = await Promise.resolve(onConfirm(data));
+      if (result === false) {
         return;
       }
       setPreviewModalOpen(false);
       onCancel();
-      return;
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      messageApi.error(msg || t('common.importFailed'));
+    } finally {
+      setCommitLoading(false);
     }
-
-    onConfirm(data);
-    setPreviewModalOpen(false);
-    onCancel();
   };
 
   const handlePreviewConfirmImport = () => {
-    if (precheckResult?.errors?.length) {
+    const blockingErrors = (precheckResult?.errors ?? [])
+      .map((s) => String(s).trim())
+      .filter(Boolean);
+    if (blockingErrors.length) {
+      messageApi.warning(blockingErrors[0]);
       return;
     }
     void commitImport(previewData);
@@ -852,6 +934,19 @@ export const UniImport: React.FC<UniImportProps> = ({
             height: 100% !important;
             box-sizing: border-box !important;
           }
+          /* Excel 品牌绿 */
+          .uni-import-modal .uni-import-upload-excel-btn.ant-btn-primary {
+            background: #217346;
+            border-color: #217346;
+          }
+          .uni-import-modal .uni-import-upload-excel-btn.ant-btn-primary:not(:disabled):hover {
+            background: #1a5c38;
+            border-color: #1a5c38;
+          }
+          .uni-import-modal .uni-import-upload-excel-btn.ant-btn-primary:not(:disabled):active {
+            background: #154a2d;
+            border-color: #154a2d;
+          }
         `}</style>
       )}
       <Modal
@@ -884,16 +979,23 @@ export const UniImport: React.FC<UniImportProps> = ({
             {showXlsxTools || showMappingImport || showCustomImport ? (
               <Space wrap>
                 {showMappingImport && (
-                  <Upload
-                    accept=".xlsx,.xls"
-                    showUploadList={false}
-                    beforeUpload={handleMappingUpload}
-                    disabled={loading || xlsxBusy}
-                  >
-                    <Button icon={<SwapOutlined />} loading={xlsxBusy} disabled={loading}>
+                  <>
+                    <input
+                      ref={mappingFileInputRef}
+                      type="file"
+                      accept=".xlsx,.xls"
+                      style={{ display: 'none' }}
+                      onChange={handleMappingFileInputChange}
+                    />
+                    <Button
+                      icon={<SwapOutlined />}
+                      loading={xlsxBusy}
+                      disabled={loading}
+                      onClick={handleMappingImportClick}
+                    >
                       {t('components.uniImport.mappingImport')}
                     </Button>
-                  </Upload>
+                  </>
                 )}
                 {showCustomImport && (
                   <Button icon={<SwapOutlined />} disabled={loading || xlsxBusy} onClick={() => setCustomModalOpen(true)}>
@@ -916,7 +1018,13 @@ export const UniImport: React.FC<UniImportProps> = ({
                       beforeUpload={handleUploadXlsx}
                       disabled={loading || xlsxBusy}
                     >
-                      <Button icon={<UploadOutlined />} loading={xlsxBusy} disabled={loading}>
+                      <Button
+                        type="primary"
+                        className="uni-import-upload-excel-btn"
+                        icon={<UploadOutlined />}
+                        loading={xlsxBusy}
+                        disabled={loading}
+                      >
                         {t('components.uniImport.uploadExcel')}
                       </Button>
                     </Upload>
@@ -968,7 +1076,7 @@ export const UniImport: React.FC<UniImportProps> = ({
             uploadedSheetRows={uploadedSheetRows}
             headers={headersRef.current}
             exampleRow={exampleRowRef.current}
-            columnOptions={columnOptions}
+            columnOptions={effectiveColumnOptions}
             height={height}
             loading={loading}
             onLoadingChange={setLoading}
@@ -1014,7 +1122,9 @@ export const UniImport: React.FC<UniImportProps> = ({
         data={previewData}
         dataStartRow={importDataStartRow}
         maxPreviewRows={importPreviewMaxRows}
+        width={width}
         precheckLoading={precheckLoading}
+        commitLoading={commitLoading}
         precheckResult={precheckResult}
         onCancel={() => setPreviewModalOpen(false)}
         onConfirmImport={handlePreviewConfirmImport}

@@ -27,6 +27,10 @@ class RoleBase(BaseModel):
         None,
         description="外部角色合作方类型：customer/supplier；station 与 internal 为空",
     )
+    functional_domain: Optional[str] = Field(
+        None,
+        description="内部/触屏角色职能域：sales/purchase/production/warehouse/quality/finance/general",
+    )
     is_active: bool = Field(default=True, description="是否启用")
     home_path: Optional[str] = Field(
         None,
@@ -76,6 +80,10 @@ class RoleUpdate(BaseModel):
     external_partner_type: Optional[str] = Field(
         None,
         description="外部角色合作方类型：customer/supplier；station 与 internal 为空",
+    )
+    functional_domain: Optional[str] = Field(
+        None,
+        description="内部/触屏角色职能域；传空字符串表示清除",
     )
     is_active: Optional[bool] = Field(None, description="是否启用")
     home_path: Optional[str] = Field(
@@ -148,6 +156,10 @@ class RoleListItem(BaseModel):
     external_partner_type: Optional[str] = Field(
         None,
         description="外部角色合作方类型：customer/supplier；station 与 internal 为空",
+    )
+    functional_domain: Optional[str] = Field(
+        None,
+        description="内部/触屏角色职能域",
     )
     is_system: bool = Field(..., description="是否系统角色")
     is_active: bool = Field(..., description="是否启用")

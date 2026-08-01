@@ -38,6 +38,7 @@ export interface Role {
   description?: string;
   role_type: 'internal' | 'external' | 'station';
   external_partner_type?: 'customer' | 'supplier';
+  functional_domain?: string | null;
   is_system: boolean;
   is_active: boolean;
   home_path?: string | null;
@@ -83,6 +84,7 @@ export interface CreateRoleData {
   description?: string;
   role_type?: 'internal' | 'external' | 'station';
   external_partner_type?: 'customer' | 'supplier';
+  functional_domain?: string | null;
   is_active?: boolean;
   home_path?: string | null;
   /** 是否同步创建同名同代码职位 */
@@ -98,6 +100,7 @@ export interface UpdateRoleData {
   description?: string;
   role_type?: 'internal' | 'external' | 'station';
   external_partner_type?: 'customer' | 'supplier';
+  functional_domain?: string | null;
   is_active?: boolean;
   home_path?: string | null;
 }

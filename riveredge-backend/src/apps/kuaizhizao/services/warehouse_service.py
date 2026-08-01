@@ -1071,6 +1071,20 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 role_codes.add(str(code).strip().upper())
         return role_codes
 
+    async def _get_user_functional_domains(self, user_id: int) -> set[str]:
+        user = await User.get_or_none(id=user_id, deleted_at__isnull=True).prefetch_related("roles")
+        if not user:
+            return set()
+        domains: set[str] = set()
+        for role in getattr(user, "roles", []) or []:
+            raw = getattr(role, "functional_domain", None)
+            if not raw:
+                continue
+            normalized = str(raw).strip().lower()
+            if normalized:
+                domains.add(normalized)
+        return domains
+
     async def _user_bypasses_picking_confirm_role_policy(self, tenant_id: int, user_id: int) -> bool:
         from core.services.authorization.user_permission_service import UserPermissionService
 
@@ -1083,24 +1097,32 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         self,
         policy: Dict[str, Any],
         user_role_codes: set[str],
+        user_functional_domains: set[str],
     ) -> bool:
-        """角色码门禁：仅仓库开启时校验仓储角色；关闭且无额外名单时不限制角色码。"""
+        """职能域优先；角色码白名单为补充（与 business_config 解析结果一致）。"""
         warehouse_only = bool(policy.get("picking_confirm_warehouse_only", True))
-        extra_codes = policy.get("picking_confirm_allowed_role_codes") or []
-        if not warehouse_only and not extra_codes:
+        allowed_role_codes = set(policy.get("effective_allowed_role_codes") or [])
+        allowed_domains = set(policy.get("effective_allowed_functional_domains") or [])
+
+        if not warehouse_only and not allowed_role_codes and not allowed_domains:
             return True
-        allowed_role_codes = set(policy.get("effective_allowed_role_codes", []))
-        if not allowed_role_codes:
-            return not warehouse_only
-        return bool(user_role_codes & allowed_role_codes)
+
+        domain_ok = bool(allowed_domains) and bool(user_functional_domains & allowed_domains)
+        code_ok = bool(allowed_role_codes) and bool(user_role_codes & allowed_role_codes)
+        return domain_ok or code_ok
 
     async def _assert_can_confirm_picking(self, tenant_id: int, user_id: int) -> None:
         if await self._user_bypasses_picking_confirm_role_policy(tenant_id, user_id):
             return
         policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
         user_role_codes = await self._get_user_role_codes(user_id)
+        user_functional_domains = await self._get_user_functional_domains(user_id)
 
-        if not self._picking_confirm_allowed_by_role_policy(policy, user_role_codes):
+        if not self._picking_confirm_allowed_by_role_policy(
+            policy,
+            user_role_codes,
+            user_functional_domains,
+        ):
             mode_text = (
                 "仅仓库角色可确认"
                 if policy.get("picking_confirm_warehouse_only", True)
@@ -1108,12 +1130,22 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             )
             raise BusinessLogicError(f"无权限确认领料：{mode_text}")
 
-    async def can_user_confirm_picking(self, tenant_id: int, user_id: int) -> tuple[bool, set[str]]:
+    async def can_user_confirm_picking(
+        self,
+        tenant_id: int,
+        user_id: int,
+    ) -> tuple[bool, set[str], set[str]]:
         user_role_codes = await self._get_user_role_codes(user_id)
+        user_functional_domains = await self._get_user_functional_domains(user_id)
         if await self._user_bypasses_picking_confirm_role_policy(tenant_id, user_id):
-            return True, user_role_codes
+            return True, user_role_codes, user_functional_domains
         policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
-        return self._picking_confirm_allowed_by_role_policy(policy, user_role_codes), user_role_codes
+        allowed = self._picking_confirm_allowed_by_role_policy(
+            policy,
+            user_role_codes,
+            user_functional_domains,
+        )
+        return allowed, user_role_codes, user_functional_domains
 
     async def create_production_picking(self, tenant_id: int, picking_data: ProductionPickingCreate, created_by: int) -> ProductionPickingResponse:
         """创建生产领料单"""

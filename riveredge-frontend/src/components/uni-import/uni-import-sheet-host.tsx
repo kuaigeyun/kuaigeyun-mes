@@ -47,9 +47,14 @@ function safeDisposeUniver(instance: UniverSheetInstance | null | undefined) {
     instance.univer.dispose();
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
-    if (!msg.includes("Failed to execute 'removeChild' on 'Node'")) {
-      console.warn('univer dispose failed:', error);
+    // dispose 过程中渲染/DV 回调可能仍访问已空的 unit.getSheetBySheetId
+    if (
+      msg.includes("Failed to execute 'removeChild' on 'Node'") ||
+      msg.includes('getSheetBySheetId')
+    ) {
+      return;
     }
+    console.warn('univer dispose failed:', error);
   }
 }
 
@@ -170,13 +175,14 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
 
     let pasteInFlight = false;
     let lastPasteAt = 0;
+    /** true=写入成功；duplicate=另一路已处理（勿报失败）；false=真正失败 */
     const pastePreservingPrecision = (clipboard: {
       html?: string | null;
       plain?: string | null;
-    }) => {
+    }): true | false | 'duplicate' => {
       const now = Date.now();
       // BeforeClipboardPaste 与 document paste 可能连打两次，100ms 内只处理一次
-      if (pasteInFlight || now - lastPasteAt < 100) return false;
+      if (pasteInFlight || now - lastPasteAt < 100) return 'duplicate';
       pasteInFlight = true;
       try {
         const current = instanceRef.current;
@@ -233,6 +239,12 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
           },
         });
 
+        // 关窗与 microtask 竞态：createWorkbook 后若已 inactive，禁止再碰 sheet / DV
+        if (!active) {
+          safeDisposeUniver(instance);
+          return;
+        }
+
         const sheet =
           workbook?.getSheetBySheetId?.('sheet-1') ?? workbook?.getActiveSheet?.() ?? null;
         applyImportColumnDropdowns(
@@ -266,12 +278,14 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
             eventDisposableRef.current = api.addEvent(
               eventName,
               (params: { text?: string; html?: string; cancel?: boolean }) => {
+                // 始终拦住 Univer 默认粘贴（会按数值写格、扩大选区清空右侧/下方）
                 params.cancel = true;
-                const ok = pastePreservingPrecision({
-                  html: params.html ?? '',
-                  plain: params.text ?? '',
-                });
-                if (!ok) {
+                const html = params.html ?? '';
+                const plain = params.text ?? '';
+                // 钩子里常无剪贴板正文，交给 document paste；勿报失败
+                if (!html && !plain) return;
+                const result = pastePreservingPrecision({ html, plain });
+                if (result === false) {
                   messageApiRef.current.warning(tRef.current('components.uniImport.pasteFailed'));
                 }
               },
@@ -313,8 +327,8 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
           e.stopImmediatePropagation();
           e.stopPropagation();
 
-          const ok = pastePreservingPrecision({ html, plain });
-          if (!ok) {
+          const result = pastePreservingPrecision({ html, plain });
+          if (result === false) {
             messageApiRef.current.warning(tRef.current('components.uniImport.pasteFailed'));
           }
         };
@@ -398,12 +412,13 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
         document.removeEventListener('paste', pasteHandler, true);
         pasteHandlerRef.current = null;
       }
+      // 先摘掉 ref，避免 dispose 过程中 ResizeObserver / DV effect 仍拿旧实例去 getSheetBySheetId
       const instance = instanceRef.current ?? pendingInstance;
+      instanceRef.current = null;
+      rowCountRef.current = 0;
       if (instance) {
         safeDisposeUniver(instance);
-        instanceRef.current = null;
       }
-      rowCountRef.current = 0;
       const root = containerRef.current;
       if (root && mountEl.parentNode === root) {
         root.removeChild(mountEl);
@@ -419,10 +434,16 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
     if (!instance?.univerAPI || loading) return;
     const rowCount = rowCountRef.current;
     if (rowCount < 2) return;
-    const workbook = instance.univerAPI.getActiveWorkbook?.();
-    if (!workbook) return;
-    const sheet = workbook.getSheetBySheetId?.('sheet-1') ?? workbook.getActiveSheet?.();
-    applyImportColumnDropdowns(instance.univerAPI as any, columnOptions, rowCount, sheet);
+    try {
+      const workbook = instance.univerAPI.getActiveWorkbook?.() ?? null;
+      if (!workbook) return;
+      // 再次确认未被 cleanup 摘掉（dispose 竞态）
+      if (instanceRef.current !== instance) return;
+      const sheet = workbook.getSheetBySheetId?.('sheet-1') ?? workbook.getActiveSheet?.() ?? null;
+      applyImportColumnDropdowns(instance.univerAPI as any, columnOptions, rowCount, sheet);
+    } catch {
+      // workbook 已卸载
+    }
   }, [columnOptionsKey, columnOptions, loading, instanceRef]);
 
   return (

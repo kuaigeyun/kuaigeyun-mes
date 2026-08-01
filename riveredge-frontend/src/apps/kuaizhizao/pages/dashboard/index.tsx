@@ -7,7 +7,7 @@ import {
 } from '@ant-design/pro-components';
 import { 
   Row, Col, List, Tag, Badge, Typography, Space, Progress, Timeline, 
-  Card, Empty, Spin, Divider, theme
+  Card, Empty, Spin, Divider, theme, Tooltip
 } from 'antd';
 import { 
   ClockCircleOutlined, 
@@ -21,12 +21,14 @@ import { mesDashboardService } from '../../services/dashboard';
 import { UniDashboard } from '../../../../components/uni-dashboard';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../utils/format';
+import { useTranslation } from 'react-i18next';
 
 const { Text, Title, Link } = Typography;
 const { useToken } = theme;
 
 const MESDashboard: React.FC = () => {
   const { token } = useToken();
+  const { t } = useTranslation();
   const dashboardCardStyle = { borderRadius: token.borderRadiusLG };
   // 1. 获取基础统计
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -115,16 +117,21 @@ const MESDashboard: React.FC = () => {
               <StatisticCard
                 style={dashboardCardStyle}
                 statistic={{
-                  title: '制程良率 (Yield)',
-                  value: 100 - (stats?.production?.defect_rate || 0),
+                  title: t('app.kuaizhizao.mesDashboard.firstPassYield'),
+                  value: stats?.production?.first_pass_yield_rate ?? (100 - (stats?.production?.defect_rate || 0)),
                   suffix: '%',
                   precision: 2,
                   icon: <ThunderboltOutlined style={{ color: '#faad14' }} />,
                 }}
                 footer={
-                  <Space>
-                    <Text type="secondary">报废金额占生产总值比</Text>
-                    {stats?.production?.defect_rate > 5 && <Badge status="error" text="预警" />}
+                  <Space orientation="vertical" size={0}>
+                    <Tooltip title={t('app.kuaizhizao.mesDashboard.firstPassYieldFooter')}>
+                      <Text type="secondary">{t('app.kuaizhizao.mesDashboard.firstPassYieldFooter')}</Text>
+                    </Tooltip>
+                    <Text type="secondary">
+                      {t('app.kuaizhizao.mesDashboard.qualificationRate')}{' '}
+                      {(100 - (stats?.production?.defect_rate || 0)).toFixed(2)}%
+                    </Text>
                   </Space>
                 }
               />

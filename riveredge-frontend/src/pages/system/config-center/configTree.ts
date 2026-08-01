@@ -6,7 +6,7 @@
  */
 
 export type ConfigSource = 'business_config' | 'site_setting' | 'system_parameter' | 'quality_stage_toggle';
-export type ParamType = 'boolean' | 'number' | 'string' | 'color' | 'select';
+export type ParamType = 'boolean' | 'number' | 'string' | 'color' | 'select' | 'multiselect' | 'tags';
 
 /** 下拉选项（label 使用 i18n key，由页面 t(labelKey) 渲染） */
 export interface ParamSelectOption {
@@ -155,6 +155,31 @@ export const FLOW_CATEGORIES: ConfigCategory[] = createCategories({
   ],
   production: [
     { key: 'work_order.picking_confirm_warehouse_only', nameKey: 'pages.system.configCenter.param.work_order_picking_confirm_warehouse_only', descriptionKey: 'pages.system.configCenter.param.work_order_picking_confirm_warehouse_only_desc', source: 'business_config', sourcePath: 'parameters.work_order.picking_confirm_warehouse_only', type: 'boolean' },
+    {
+      key: 'work_order.picking_confirm_allowed_functional_domains',
+      nameKey: 'pages.system.configCenter.param.work_order_picking_confirm_allowed_functional_domains',
+      descriptionKey: 'pages.system.configCenter.param.work_order_picking_confirm_allowed_functional_domains_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.work_order.picking_confirm_allowed_functional_domains',
+      type: 'multiselect',
+      selectOptions: [
+        { value: 'sales', labelKey: 'field.role.functionalDomainSales' },
+        { value: 'purchase', labelKey: 'field.role.functionalDomainPurchase' },
+        { value: 'production', labelKey: 'field.role.functionalDomainProduction' },
+        { value: 'warehouse', labelKey: 'field.role.functionalDomainWarehouse' },
+        { value: 'quality', labelKey: 'field.role.functionalDomainQuality' },
+        { value: 'finance', labelKey: 'field.role.functionalDomainFinance' },
+        { value: 'general', labelKey: 'field.role.functionalDomainGeneral' },
+      ],
+    },
+    {
+      key: 'work_order.picking_confirm_allowed_role_codes',
+      nameKey: 'pages.system.configCenter.param.work_order_picking_confirm_allowed_role_codes',
+      descriptionKey: 'pages.system.configCenter.param.work_order_picking_confirm_allowed_role_codes_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.work_order.picking_confirm_allowed_role_codes',
+      type: 'tags',
+    },
     { key: 'work_order.require_confirmed_picking_before_operation_start', nameKey: 'pages.system.configCenter.param.work_order_require_confirmed_picking_before_operation_start', descriptionKey: 'pages.system.configCenter.param.work_order_require_confirmed_picking_before_operation_start_desc', source: 'business_config', sourcePath: 'parameters.work_order.require_confirmed_picking_before_operation_start', type: 'boolean' },
     { key: 'work_order.require_confirmed_picking_before_reporting', nameKey: 'pages.system.configCenter.param.work_order_require_confirmed_picking_before_reporting', descriptionKey: 'pages.system.configCenter.param.work_order_require_confirmed_picking_before_reporting_desc', source: 'business_config', sourcePath: 'parameters.work_order.require_confirmed_picking_before_reporting', type: 'boolean' },
   ],

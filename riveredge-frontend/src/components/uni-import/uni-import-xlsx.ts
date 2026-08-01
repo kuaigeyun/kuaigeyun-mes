@@ -1,9 +1,12 @@
 /**
  * 导入模板 xlsx 下载与解析。
- * 解析优先走 OOXML 原文（cfb），禁止 SheetJS 浮点 / 显示格式截断精度。
+ * 下载：ExcelJS（可写数据有效性下拉）；解析优先走 OOXML 原文（cfb），禁止 SheetJS 浮点截断。
  */
 
 import { readXlsxWorksheetStringMatrix } from './xlsx-raw-cell-values';
+
+/** 模板数据区行数（含示例行），与 UniSheet 预留量同量级，便于线下填表 */
+const TEMPLATE_DATA_ROWS = 100;
 
 function trimTrailingEmptyRows(rows: unknown[][]): unknown[][] {
   let end = rows.length;
@@ -24,27 +27,99 @@ function normalizeRow(row: unknown, columnCount: number): string[] {
   });
 }
 
-/** 生成并下载导入模板（表头 + 示例行 + 若干空行） */
+/** 0-based 列号 → A1 列字母 */
+export function colIndexToA1Letter(colIndex: number): string {
+  let n = colIndex + 1;
+  let s = '';
+  while (n > 0) {
+    const r = (n - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+function triggerBrowserDownload(buffer: ArrayBuffer, fileName: string): void {
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * 生成并下载导入模板（表头 + 示例行 + 空行）。
+ * 有 columnOptions 的列写入 Excel 列表数据有效性（选项落在隐藏工作表，避免逗号/长度限制）。
+ */
 export async function downloadImportTemplateXlsx(
   headers: string[],
   exampleRow: string[] | undefined,
   fileName: string,
+  columnOptions?: Array<string[] | undefined | null>,
 ): Promise<void> {
   if (!headers.length) {
     throw new Error('缺少表头，无法生成模板');
   }
-  const XLSX = await import('xlsx');
-  const rows: string[][] = [headers.map((h) => String(h ?? ''))];
+
+  const ExcelJS = await import('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('导入数据');
+
+  const headerLine = headers.map((h) => String(h ?? ''));
+  sheet.addRow(headerLine);
   if (exampleRow?.length) {
-    rows.push(normalizeRow(exampleRow, headers.length));
+    sheet.addRow(normalizeRow(exampleRow, headers.length));
+  } else {
+    sheet.addRow(Array(headers.length).fill(''));
   }
-  for (let i = 0; i < 20; i++) {
-    rows.push(Array(headers.length).fill(''));
+  for (let i = 0; i < TEMPLATE_DATA_ROWS - 1; i += 1) {
+    sheet.addRow(Array(headers.length).fill(''));
   }
-  const sheet = XLSX.utils.aoa_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, sheet, '导入数据');
-  XLSX.writeFile(wb, fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`);
+
+  headerLine.forEach((_, colIndex) => {
+    const col = sheet.getColumn(colIndex + 1);
+    col.width = Math.min(28, Math.max(12, String(headers[colIndex] ?? '').length + 2));
+  });
+
+  const listsSheet = workbook.addWorksheet('_lists');
+  listsSheet.state = 'veryHidden';
+
+  let hasListColumn = false;
+  (columnOptions ?? []).forEach((opts, colIndex) => {
+    if (colIndex >= headers.length || !opts?.length) return;
+    const values = opts.map((v) => String(v ?? '').trim()).filter(Boolean);
+    if (!values.length) return;
+
+    hasListColumn = true;
+    const listCol = colIndex + 1;
+    values.forEach((value, rowIndex) => {
+      listsSheet.getCell(rowIndex + 1, listCol).value = value;
+    });
+
+    const colLetter = colIndexToA1Letter(colIndex);
+    const listColLetter = colIndexToA1Letter(colIndex);
+    // 示例行起（Excel 第 2 行）到模板数据区末行
+    const range = `${colLetter}2:${colLetter}${TEMPLATE_DATA_ROWS + 1}`;
+    const formulae = [`_lists!$${listColLetter}$1:$${listColLetter}$${values.length}`];
+    sheet.dataValidations.add(range, {
+      type: 'list',
+      allowBlank: true,
+      showErrorMessage: false,
+      showInputMessage: false,
+      formulae,
+    });
+  });
+
+  if (!hasListColumn) {
+    workbook.removeWorksheet('_lists');
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  triggerBrowserDownload(buffer as ArrayBuffer, fileName);
 }
 
 function isZipXlsx(buffer: ArrayBuffer): boolean {

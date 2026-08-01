@@ -131,6 +131,16 @@ import {
 import { resolveFieldPermissionLabel } from '../../../utils/fieldPermissionI18n';
 import { resolvePermissionLabel } from '../../../utils/permissionContract';
 
+const ROLE_FUNCTIONAL_DOMAIN_I18N: Record<string, string> = {
+  sales: 'field.role.functionalDomainSales',
+  purchase: 'field.role.functionalDomainPurchase',
+  production: 'field.role.functionalDomainProduction',
+  warehouse: 'field.role.functionalDomainWarehouse',
+  quality: 'field.role.functionalDomainQuality',
+  finance: 'field.role.functionalDomainFinance',
+  general: 'field.role.functionalDomainGeneral',
+};
+
 /** 权限树叶子节点展示名：数据范围走 permission.scope，其余走 permission.action */
 function permissionLeafDisplayLabel(
   permission: Permission,
@@ -686,6 +696,14 @@ const RolesPermissionsPage: React.FC = () => {
             {role.role_type === 'station' && (
               <Tag color="purple">{t('field.role.roleTypeStation', { defaultValue: '触屏专用' })}</Tag>
             )}
+            {(role.role_type === 'internal' || role.role_type === 'station') &&
+              role.functional_domain?.trim() && (
+                <Tag color="blue">
+                  {t(ROLE_FUNCTIONAL_DOMAIN_I18N[role.functional_domain] ?? '', {
+                    defaultValue: role.functional_domain,
+                  })}
+                </Tag>
+              )}
             {role.is_system && <Tag color="default">{t('pages.system.roles.system')}</Tag>}
             {!role.is_active && <Tag color="default">{t('pages.system.roles.disabled')}</Tag>}
           </Space>

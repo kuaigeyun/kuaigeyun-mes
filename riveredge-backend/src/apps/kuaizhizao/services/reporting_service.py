@@ -1772,8 +1772,22 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
         wage_rate = await self._get_reporting_estimated_wage_rate(tenant_id)
 
+        from apps.kuaizhizao.services.first_pass_yield_service import compute_first_pass_yield_rate
+
         # 计算合格率
         qualification_rate = float((total_qualified_quantity / total_reported_quantity * 100)) if total_reported_quantity > 0 else 0
+
+        first_pass_reported_quantity = Decimal("0")
+        first_pass_qualified_quantity = Decimal("0")
+        for r in records:
+            if r.rework_order_id is not None:
+                continue
+            first_pass_reported_quantity += r.reported_quantity or Decimal("0")
+            first_pass_qualified_quantity += r.qualified_quantity or Decimal("0")
+        first_pass_yield_rate = compute_first_pass_yield_rate(
+            float(first_pass_qualified_quantity),
+            float(first_pass_reported_quantity),
+        )
 
         # 效率分析：平均每小时报工数量
         avg_quantity_per_hour = float(total_reported_quantity / total_work_hours) if total_work_hours > 0 else 0
@@ -1790,17 +1804,26 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     'count': 0,
                     'reported_quantity': Decimal("0"),
                     'qualified_quantity': Decimal("0"),
+                    'first_pass_reported_quantity': Decimal("0"),
+                    'first_pass_qualified_quantity': Decimal("0"),
                     'work_hours': Decimal("0"),
                 }
             operation_stats[op_name]['count'] += 1
             operation_stats[op_name]['reported_quantity'] += r.reported_quantity
             operation_stats[op_name]['qualified_quantity'] += r.qualified_quantity
             operation_stats[op_name]['work_hours'] += r.work_hours
+            if r.rework_order_id is None:
+                operation_stats[op_name]['first_pass_reported_quantity'] += r.reported_quantity or Decimal("0")
+                operation_stats[op_name]['first_pass_qualified_quantity'] += r.qualified_quantity or Decimal("0")
 
         # 转换为列表并计算合格率
         operation_stats_list = []
         for op_name, stats in sorted(operation_stats.items(), key=lambda x: x[1]['count'], reverse=True)[:10]:
             op_rate = float((stats['qualified_quantity'] / stats['reported_quantity'] * 100)) if stats['reported_quantity'] > 0 else 0
+            fp_rate = compute_first_pass_yield_rate(
+                float(stats['first_pass_qualified_quantity']),
+                float(stats['first_pass_reported_quantity']),
+            )
             operation_stats_list.append({
                 'operation_name': op_name,
                 'count': stats['count'],
@@ -1808,6 +1831,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 'qualified_quantity': float(stats['qualified_quantity']),
                 'work_hours': float(stats['work_hours']),
                 'qualification_rate': op_rate,
+                'first_pass_yield_rate': fp_rate,
             })
 
         # 按操作工统计（前10个）
@@ -1819,16 +1843,25 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     'count': 0,
                     'reported_quantity': Decimal("0"),
                     'qualified_quantity': Decimal("0"),
+                    'first_pass_reported_quantity': Decimal("0"),
+                    'first_pass_qualified_quantity': Decimal("0"),
                     'work_hours': Decimal("0"),
                 }
             worker_stats[worker_name]['count'] += 1
             worker_stats[worker_name]['reported_quantity'] += r.reported_quantity
             worker_stats[worker_name]['qualified_quantity'] += r.qualified_quantity
             worker_stats[worker_name]['work_hours'] += r.work_hours
+            if r.rework_order_id is None:
+                worker_stats[worker_name]['first_pass_reported_quantity'] += r.reported_quantity or Decimal("0")
+                worker_stats[worker_name]['first_pass_qualified_quantity'] += r.qualified_quantity or Decimal("0")
 
         worker_stats_list = []
         for worker_name, stats in sorted(worker_stats.items(), key=lambda x: x[1]['count'], reverse=True)[:10]:
             worker_rate = float((stats['qualified_quantity'] / stats['reported_quantity'] * 100)) if stats['reported_quantity'] > 0 else 0
+            fp_rate = compute_first_pass_yield_rate(
+                float(stats['first_pass_qualified_quantity']),
+                float(stats['first_pass_reported_quantity']),
+            )
             worker_stats_list.append({
                 'worker_name': worker_name,
                 'count': stats['count'],
@@ -1836,6 +1869,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 'qualified_quantity': float(stats['qualified_quantity']),
                 'work_hours': float(stats['work_hours']),
                 'qualification_rate': worker_rate,
+                'first_pass_yield_rate': fp_rate,
             })
 
         return {
@@ -1850,6 +1884,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
             'cumulative_hours': float(total_work_hours),  # 映射为前端需要的字段
             'estimated_wages': float(total_work_hours * wage_rate),
             'qualification_rate': qualification_rate,
+            'first_pass_yield_rate': first_pass_yield_rate,
+            'first_pass_reported_quantity': float(first_pass_reported_quantity),
+            'first_pass_qualified_quantity': float(first_pass_qualified_quantity),
             'unqualified_rate': unqualified_rate,
             'avg_quantity_per_hour': avg_quantity_per_hour,
             # 与 overview 统计口径保持关键字段对齐，减少前端分支判断

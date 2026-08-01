@@ -34,6 +34,7 @@ export interface ReportingDetailedStatistics {
   cumulative_hours?: number;
   estimated_wages?: number;
   qualification_rate: number;
+  first_pass_yield_rate?: number;
   unqualified_rate: number;
   avg_quantity_per_hour: number;
   efficiency?: number;
@@ -44,6 +45,7 @@ export interface ReportingDetailedStatistics {
     qualified_quantity: number;
     work_hours: number;
     qualification_rate: number;
+    first_pass_yield_rate?: number;
   }>;
   worker_stats: Array<{
     worker_name: string;
@@ -52,6 +54,7 @@ export interface ReportingDetailedStatistics {
     qualified_quantity: number;
     work_hours: number;
     qualification_rate: number;
+    first_pass_yield_rate?: number;
   }>;
   trends?: {
     hours?: number[];

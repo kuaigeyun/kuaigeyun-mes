@@ -312,9 +312,7 @@ async def get_work_order_statistics(
 
     total_wip = in_progress_count  # 在制品数 = 进行中工单数
     completion_rate = round(completed_count / total_count * 100, 1) if total_count > 0 else 0
-    # 一次合格率：completed / (completed + overdue) 的简化近似
-    denom = completed_count + overdue_count or 1
-    first_pass_yield = round(completed_count / denom * 100, 1)
+    on_time_completion_proxy = round(completed_count / (completed_count + overdue_count or 1) * 100, 1)
     # 计划达成率：completed_today / (completed_today + overdue) 的简化近似
     plan_denom = completed_today_count + overdue_count or 1
     plan_achievement_rate = round(completed_today_count / plan_denom * 100, 1)
@@ -326,6 +324,7 @@ async def get_work_order_statistics(
     trend_completed = []      # 每日完成工单数
     trend_output = []        # 每日合格产出（报工汇总）
     trend_yield = []          # 每日合格率（%）
+    trend_first_pass_yield = []  # 每日直通率（%）
     trend_operation_count = []  # 每日工序完成数量（报工记录数）
     trend_overdue = []        # 每日逾期工单数（计划结束日<当日且当日未完成）
     for i in range(6, -1, -1):
@@ -359,22 +358,35 @@ async def get_work_order_statistics(
             day_records = await rb.filter(
                 reported_at__gte=day_start,
                 reported_at__lte=day_end,
-            ).values_list("qualified_quantity", "unqualified_quantity")
+            ).values_list("qualified_quantity", "unqualified_quantity", "reported_quantity", "rework_order_id")
             out_sum = 0
             unq_sum = 0
-            for q, u in day_records:
-                out_sum += float(q or 0)
-                unq_sum += float(u or 0)
+            fp_out_sum = 0
+            fp_total_sum = 0
+            for q, u, reported, rework_order_id in day_records:
+                qualified = float(q or 0)
+                unqualified = float(u or 0)
+                reported_qty = float(reported or 0)
+                if reported_qty <= 0:
+                    reported_qty = qualified + unqualified
+                out_sum += qualified
+                unq_sum += unqualified
+                if rework_order_id is None:
+                    fp_out_sum += qualified
+                    fp_total_sum += reported_qty
             op_count = len(day_records)  # 工序完成数量 = 报工记录数
             total_qty = out_sum + unq_sum
             yield_pct = round(out_sum / total_qty * 100, 1) if total_qty > 0 else 0
+            fp_yield_pct = round(fp_out_sum / fp_total_sum * 100, 1) if fp_total_sum > 0 else 0
         except Exception:
             out_sum = 0
             op_count = 0
             yield_pct = 0
+            fp_yield_pct = 0
         trend_output.append({"date": date_str, "value": int(out_sum)})
         trend_operation_count.append({"date": date_str, "value": op_count})
         trend_yield.append({"date": date_str, "value": yield_pct})
+        trend_first_pass_yield.append({"date": date_str, "value": fp_yield_pct})
 
     # 今日合格率（合格数量 / 总报工数量）
     try:
@@ -399,6 +411,8 @@ async def get_work_order_statistics(
     yesterday_operation_count = trend_operation_count[-2]["value"] if len(trend_operation_count) > 1 else 0
     yesterday_qualified_output = trend_output[-2]["value"] if len(trend_output) > 1 else 0
     yesterday_qualified_rate = trend_yield[-2]["value"] if len(trend_yield) > 1 else 0
+    yesterday_first_pass_yield = trend_first_pass_yield[-2]["value"] if len(trend_first_pass_yield) > 1 else 0
+    first_pass_yield_today = trend_first_pass_yield[-1]["value"] if trend_first_pass_yield else 0
     yesterday_wip = trend_wip[-2]["value"] if len(trend_wip) > 1 else 0
     yesterday_overdue_count = trend_overdue[-2]["value"] if len(trend_overdue) > 1 else 0
     yesterday_draft_count = trend_draft[-2]["value"] if len(trend_draft) > 1 else 0
@@ -419,15 +433,18 @@ async def get_work_order_statistics(
         "yesterday_operation_count": yesterday_operation_count,
         "yesterday_qualified_output": yesterday_qualified_output,
         "yesterday_qualified_rate": yesterday_qualified_rate,
+        "yesterday_first_pass_yield": yesterday_first_pass_yield,
         "yesterday_wip": yesterday_wip,
         "yesterday_overdue_count": yesterday_overdue_count,
         "yesterday_draft_count": yesterday_draft_count,
-        "first_pass_yield": first_pass_yield,
+        "first_pass_yield": first_pass_yield_today,
+        "on_time_completion_proxy": on_time_completion_proxy,
         "plan_achievement_rate": plan_achievement_rate,
         "manufacturing_lead_time": manufacturing_lead_time,
         "trend_completed": trend_completed,
         "trend_output": trend_output,
         "trend_yield": trend_yield,
+        "trend_first_pass_yield": trend_first_pass_yield,
         "trend_operation_count": trend_operation_count,
         "trend_wip": trend_wip,
         "trend_overdue": trend_overdue,
@@ -436,6 +453,7 @@ async def get_work_order_statistics(
             "output": [x["value"] for x in trend_output],
             "completed": [x["value"] for x in trend_completed],
             "yield": [x["value"] for x in trend_yield],
+            "first_pass_yield": [x["value"] for x in trend_first_pass_yield],
             "operation_count": [x["value"] for x in trend_operation_count],
             "wip": [total_wip] * 7,
             "overdue": [x["value"] for x in trend_overdue],
@@ -577,7 +595,7 @@ async def get_work_order_execution_config(
     default_production_worker_mode = await BusinessConfigService().get_reporting_default_production_worker_mode(
         tenant_id
     )
-    can_confirm_picking, role_codes = await ProductionPickingService().can_user_confirm_picking(
+    can_confirm_picking, role_codes, functional_domains = await ProductionPickingService().can_user_confirm_picking(
         tenant_id=tenant_id,
         user_id=current_user.id,
     )
@@ -586,6 +604,7 @@ async def get_work_order_execution_config(
         "last_operation_auto_inbound_mode": last_inbound_mode,
         "default_production_worker_mode": default_production_worker_mode,
         "current_user_role_codes": sorted(role_codes),
+        "current_user_functional_domains": sorted(functional_domains),
         "current_user_can_confirm_picking": can_confirm_picking,
     }
 

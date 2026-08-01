@@ -23,6 +23,66 @@ log_warn() { echo -e "\033[1;33m[$(date +'%H:%M:%S')] WARN: $1\033[0m"; }
 log_success() { echo -e "\033[0;32m[$(date +'%H:%M:%S')] SUCCESS: $1\033[0m"; }
 log_error() { echo -e "\033[0;31m[$(date +'%H:%M:%S')] ERROR: $1\033[0m"; }
 
+is_windows_gitbash() {
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Git Bash 常缺 nvm-windows 的 PATH；补齐后再跑 npx vite / expo
+ensure_nodejs_path() {
+    if command -v node >/dev/null 2>&1 && command -v npx >/dev/null 2>&1; then
+        return 0
+    fi
+    is_windows_gitbash || {
+        log_error "未找到 node/npx，请先安装 Node.js 22+"
+        return 1
+    }
+    local nvm_root nvm_link settings win_path unix_path ver best=""
+    nvm_root="${NVM_HOME:-${LOCALAPPDATA}/nvm}"
+    if [[ "$nvm_root" == [A-Za-z]:* ]] && command -v cygpath >/dev/null 2>&1; then
+        nvm_root="$(cygpath -u "$nvm_root")"
+    fi
+    settings="${nvm_root}/settings.txt"
+    if [ -f "$settings" ]; then
+        win_path="$(grep -E '^path:' "$settings" 2>/dev/null | head -1 | sed 's/^path:[[:space:]]*//;s/\r$//')"
+        if [ -n "$win_path" ] && command -v cygpath >/dev/null 2>&1; then
+            unix_path="$(cygpath -u "$win_path" 2>/dev/null || true)"
+            [ -n "$unix_path" ] && [ -d "$unix_path" ] && PATH="$unix_path:$PATH"
+        fi
+        win_path="$(grep -E '^root:' "$settings" 2>/dev/null | head -1 | sed 's/^root:[[:space:]]*//;s/\r$//')"
+        if [ -n "$win_path" ] && command -v cygpath >/dev/null 2>&1; then
+            unix_path="$(cygpath -u "$win_path" 2>/dev/null || true)"
+            [ -n "$unix_path" ] && [ -d "$unix_path" ] && nvm_root="$unix_path"
+        fi
+    fi
+    for nvm_link in \
+        "$SCRIPT_DIR/.tools/node" \
+        "/c/nvm4w/nodejs" \
+        "/d/nvm4w/nodejs" \
+        "/c/Program Files/nodejs" \
+        "/c/Program Files (x86)/nodejs"
+    do
+        [ -d "$nvm_link" ] && PATH="$nvm_link:$PATH"
+    done
+    if [ -d "$nvm_root" ]; then
+        for ver in "$nvm_root"/v*; do
+            [ -x "$ver/node.exe" ] || [ -x "$ver/node" ] || continue
+            best="$ver"
+        done
+        [ -n "$best" ] && PATH="$best:$PATH"
+    fi
+    export PATH
+    if command -v node >/dev/null 2>&1 && command -v npx >/dev/null 2>&1; then
+        log_info "已加载 Node $(node -v | tr -d '\r')（npx $(npx -v 2>/dev/null | tr -d '\r')）"
+        return 0
+    fi
+    log_error "未找到 node/npx。请安装 Node 22+，或用 nvm-windows 安装后执行: nvm use 22"
+    log_error "也可把 Node 目录加入用户 PATH 后重开终端（常见: %LOCALAPPDATA%\\nvm\\v22.x.x）"
+    return 1
+}
+
 # Windows: 直接对端口监听者 Stop-Process（不依赖 Git Bash 能否 tasklist 到 PID）
 powershell_stop_port_listeners() {
     local port=$1
@@ -369,6 +429,7 @@ start_worker() {
 }
 
 start_frontend() {
+    ensure_nodejs_path || return 1
     log_info "正在拉起前端 (${FRONTEND_PORT})..."
     kill_port "${FRONTEND_PORT}" || true
     cd riveredge-frontend
@@ -382,6 +443,7 @@ start_frontend() {
 }
 
 start_mobile() {
+    ensure_nodejs_path || return 1
     if [ ! -f "${MOBILE_APP_DIR}/package.json" ]; then
         log_error "缺少手机端工程: ${MOBILE_APP_DIR}"
         log_error "请将闭源 mobile 组装到 riveredge-app/mobile 后再用 with-h5"
@@ -400,10 +462,11 @@ start_mobile() {
         log_info "手机端首次安装依赖..."
         npm install || { cd "$PROJECT_ROOT"; return 1; }
     fi
-    # 开发模式默认打本机后端；勿自动弹浏览器
+    # 开发模式默认打本机后端；勿自动弹浏览器（CI=1 替代已弃用的 --non-interactive）
     export BROWSER=none
     export EXPO_NO_TELEMETRY=1
-    nohup npx expo start --web --port "${MOBILE_PORT}" --non-interactive \
+    export CI=1
+    nohup npx expo start --web --port "${MOBILE_PORT}" \
         > "${PROJECT_ROOT}/.logs/mobile.log" 2>&1 &
     echo $! > "${PROJECT_ROOT}/.logs/mobile.pid"
     cd "$PROJECT_ROOT"

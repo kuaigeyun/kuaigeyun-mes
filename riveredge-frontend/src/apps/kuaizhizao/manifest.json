@@ -566,6 +566,12 @@
                                 "permission": "kuaizhizao:production-execution-reports-scrap-defect-analysis:read"
                             },
                             {
+                                "title": "app.kuaizhizao.menu.reports.first-pass-yield",
+                                "path": "/apps/kuaizhizao/production-execution/reports/first-pass-yield",
+                                "sort_order": 9,
+                                "permission": "kuaizhizao:production-execution-reports-first-pass-yield:read"
+                            },
+                            {
                                 "title": "app.kuaizhizao.menu.reports.production-delay-warning",
                                 "path": "/apps/kuaizhizao/production-execution/reports/production-delay-warning",
                                 "sort_order": 5,
@@ -1668,6 +1674,7 @@
         "kuaizhizao:customer-pool:update",
         "kuaizhizao:customer-pool:assign",
         "kuaizhizao:customer-pool:claim",
+        "kuaizhizao:customer-pool:collaborate",
         "kuaizhizao:customer-pool:recycle",
         "kuaizhizao:customer-pool:release",
         "kuaizhizao:delivery-notice:read",
@@ -2460,6 +2467,9 @@
         "kuaizhizao:production-execution-reports-rework-order-analysis:print",
         "kuaizhizao:production-execution-reports-scrap-defect-analysis:export",
         "kuaizhizao:production-execution-reports-scrap-defect-analysis:print",
+        "kuaizhizao:production-execution-reports-first-pass-yield:read",
+        "kuaizhizao:production-execution-reports-first-pass-yield:export",
+        "kuaizhizao:production-execution-reports-first-pass-yield:print",
         "kuaizhizao:production-execution-reports-production-delay-warning:read",
         "kuaizhizao:production-execution-reports-production-delay-warning:export",
         "kuaizhizao:production-execution-reports-production-delay-warning:print",

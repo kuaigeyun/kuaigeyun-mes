@@ -5,33 +5,54 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Dict, List, Optional, Sequence
 
 from tortoise import timezone
 from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
 
 from apps.kuaizhizao.services.customer_pool_list_core import apply_customer_pool_list_filters
 
+from apps.kuaizhizao.models.customer_collaborator import CustomerCollaborator
 from apps.kuaizhizao.models.customer_pool_log import CustomerPoolLog
 from apps.kuaizhizao.models.customer_pool_rule import CustomerPoolRule
 from apps.kuaizhizao.schemas.customer_pool import (
     CustomerPoolActionBody,
     CustomerPoolAssignBody,
+    CustomerPoolCollaboratorItem,
+    CustomerPoolCollaboratorsUpdateBody,
     CustomerPoolItem,
     CustomerPoolListEnvelope,
+    CustomerPoolLogItem,
+    CustomerPoolLogListEnvelope,
     CustomerPoolRuleResponse,
     CustomerPoolRuleUpdateBody,
 )
 from apps.master_data.models.customer import Customer
 from core.services.authorization.data_scope_service import DataScopeService
+from core.services.authorization.user_permission_service import UserPermissionService
 from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
 RESOURCE_CUSTOMER_POOL = "kuaizhizao:customer-pool"
+MAX_CUSTOMER_COLLABORATORS = 10
+PERM_CUSTOMER_POOL_ASSIGN = "kuaizhizao:customer-pool:assign"
 
 
-def _to_customer_pool_item(row: Customer) -> CustomerPoolItem:
+async def list_collaborator_customer_ids(tenant_id: int, user_id: int) -> List[int]:
+    rows = await CustomerCollaborator.filter(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        deleted_at__isnull=True,
+    ).values_list("customer_id", flat=True)
+    return list(rows)
+
+
+def _to_customer_pool_item(
+    row: Customer,
+    collaborators: Optional[Sequence[CustomerPoolCollaboratorItem]] = None,
+) -> CustomerPoolItem:
     """列表响应：显式映射字段，兼容 pool_status 历史脏数据。"""
     raw_pool_status = str(getattr(row, "pool_status", None) or "").strip().lower()
     if raw_pool_status in ("pool", "owned"):
@@ -58,6 +79,7 @@ def _to_customer_pool_item(row: Customer) -> CustomerPoolItem:
         updated_by_name=getattr(row, "updated_by_name", None),
         created_at=row.created_at,
         updated_at=row.updated_at,
+        collaborators=list(collaborators or []),
     )
 
 
@@ -189,6 +211,15 @@ class CustomerPoolService:
         )
         await customer.save()
 
+        await cls._remove_collaborator_user(
+            tenant_id=tenant_id,
+            customer=customer,
+            user_id=target_user.id,
+            operator_user_id=operator.id,
+            reason="负责人改派后自动移除协作人",
+            write_log=True,
+        )
+
         await cls._write_log(
             tenant_id=tenant_id,
             customer=customer,
@@ -228,6 +259,13 @@ class CustomerPoolService:
         customer.updated_by_name = operator.full_name or operator.username
         await customer.save()
 
+        await cls._clear_collaborators(
+            tenant_id=tenant_id,
+            customer=customer,
+            operator_user_id=operator.id,
+            reason=reason or action,
+        )
+
         await cls._write_log(
             tenant_id=tenant_id,
             customer=customer,
@@ -262,6 +300,13 @@ class CustomerPoolService:
         customer.updated_by_name = operator.full_name or operator.username
         await customer.save()
 
+        await cls._clear_collaborators(
+            tenant_id=tenant_id,
+            customer=customer,
+            operator_user_id=operator.id,
+            reason=reason or "recycle",
+        )
+
         await cls._write_log(
             tenant_id=tenant_id,
             customer=customer,
@@ -272,6 +317,292 @@ class CustomerPoolService:
             reason=reason,
         )
         return customer
+
+    @staticmethod
+    async def _user_is_external_partner(tenant_id: int, user: User) -> bool:
+        if await UserPermissionService.is_admin_bypass(user, tenant_id):
+            return False
+        roles = await DataScopeService._load_active_roles(user.id, tenant_id)
+        return any(
+            (getattr(role, "role_type", "") or "").strip().lower() == "external"
+            and (getattr(role, "external_partner_type", "") or "").strip()
+            for role in roles
+        )
+
+    @classmethod
+    async def _assert_can_manage_collaborators(
+        cls,
+        *,
+        tenant_id: int,
+        customer: Customer,
+        operator: User,
+    ) -> None:
+        if customer.salesman_id == operator.id:
+            return
+        if await UserPermissionService.has_permission(
+            operator.id,
+            tenant_id,
+            PERM_CUSTOMER_POOL_ASSIGN,
+        ):
+            return
+        raise ValidationError("无权管理协作人")
+
+    @classmethod
+    async def _load_collaborators_map(
+        cls,
+        tenant_id: int,
+        customer_ids: Sequence[int],
+    ) -> Dict[int, List[CustomerPoolCollaboratorItem]]:
+        if not customer_ids:
+            return {}
+        rows = await CustomerCollaborator.filter(
+            tenant_id=tenant_id,
+            customer_id__in=list(customer_ids),
+            deleted_at__isnull=True,
+        ).order_by("id")
+        mapping: Dict[int, List[CustomerPoolCollaboratorItem]] = {}
+        for row in await rows:
+            mapping.setdefault(row.customer_id, []).append(
+                CustomerPoolCollaboratorItem(user_id=row.user_id, user_name=row.user_name)
+            )
+        return mapping
+
+    @classmethod
+    async def _remove_collaborator_user(
+        cls,
+        *,
+        tenant_id: int,
+        customer: Customer,
+        user_id: int,
+        operator_user_id: int,
+        reason: Optional[str],
+        write_log: bool,
+    ) -> None:
+        row = await CustomerCollaborator.filter(
+            tenant_id=tenant_id,
+            customer_id=customer.id,
+            user_id=user_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not row:
+            return
+        row.deleted_at = timezone.now()
+        await row.save()
+        if write_log:
+            await cls._write_log(
+                tenant_id=tenant_id,
+                customer=customer,
+                action="collaborator_remove",
+                operator_user_id=operator_user_id,
+                from_salesman_id=None,
+                to_salesman_id=user_id,
+                reason=reason,
+            )
+
+    @classmethod
+    async def _clear_collaborators(
+        cls,
+        *,
+        tenant_id: int,
+        customer: Customer,
+        operator_user_id: int,
+        reason: Optional[str],
+    ) -> None:
+        rows = await CustomerCollaborator.filter(
+            tenant_id=tenant_id,
+            customer_id=customer.id,
+            deleted_at__isnull=True,
+        ).all()
+        if not rows:
+            return
+        now = timezone.now()
+        for row in rows:
+            row.deleted_at = now
+            await row.save()
+            await cls._write_log(
+                tenant_id=tenant_id,
+                customer=customer,
+                action="collaborator_remove",
+                operator_user_id=operator_user_id,
+                from_salesman_id=None,
+                to_salesman_id=row.user_id,
+                reason=reason,
+            )
+
+    @classmethod
+    async def list_collaborators(
+        cls,
+        *,
+        tenant_id: int,
+        customer_id: int,
+        current_user: User,
+    ) -> List[CustomerPoolCollaboratorItem]:
+        customer = await cls._load_customer(tenant_id, customer_id)
+        await DataScopeService.assert_row_visible(
+            customer,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource=RESOURCE_CUSTOMER_POOL,
+        )
+        return (await cls._load_collaborators_map(tenant_id, [customer.id])).get(customer.id, [])
+
+    @classmethod
+    async def set_collaborators(
+        cls,
+        *,
+        tenant_id: int,
+        customer_id: int,
+        current_user: User,
+        body: CustomerPoolCollaboratorsUpdateBody,
+    ) -> List[CustomerPoolCollaboratorItem]:
+        customer = await cls._load_customer(tenant_id, customer_id)
+        await DataScopeService.assert_row_visible(
+            customer,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource=RESOURCE_CUSTOMER_POOL,
+        )
+        if customer.pool_status != "owned":
+            raise ValidationError("仅已领取客户可设置协作人")
+
+        await cls._assert_can_manage_collaborators(
+            tenant_id=tenant_id,
+            customer=customer,
+            operator=current_user,
+        )
+
+        requested_ids: List[int] = []
+        seen: set[int] = set()
+        for raw in body.user_ids or []:
+            uid = int(raw)
+            if uid <= 0 or uid in seen:
+                continue
+            if customer.salesman_id and uid == customer.salesman_id:
+                raise ValidationError("负责人不能同时作为协作人")
+            seen.add(uid)
+            requested_ids.append(uid)
+        if len(requested_ids) > MAX_CUSTOMER_COLLABORATORS:
+            raise ValidationError(f"协作人数量不能超过 {MAX_CUSTOMER_COLLABORATORS} 人")
+
+        users = await User.filter(id__in=requested_ids, tenant_id=tenant_id, is_active=True).all()
+        user_map = {user.id: user for user in users}
+        missing = [uid for uid in requested_ids if uid not in user_map]
+        if missing:
+            raise ValidationError(f"协作人不存在或已停用: {missing[0]}")
+
+        for uid in requested_ids:
+            if await cls._user_is_external_partner(tenant_id, user_map[uid]):
+                raise ValidationError("外协用户不能作为协作人")
+
+        active_rows = await CustomerCollaborator.filter(
+            tenant_id=tenant_id,
+            customer_id=customer.id,
+            deleted_at__isnull=True,
+        ).all()
+        current_ids = {row.user_id for row in active_rows}
+        target_ids = set(requested_ids)
+        to_remove = current_ids - target_ids
+        to_add = [uid for uid in requested_ids if uid not in current_ids]
+
+        for uid in to_remove:
+            await cls._remove_collaborator_user(
+                tenant_id=tenant_id,
+                customer=customer,
+                user_id=uid,
+                operator_user_id=current_user.id,
+                reason="更新协作人",
+                write_log=True,
+            )
+
+        for uid in to_add:
+            user = user_map[uid]
+            existing = await CustomerCollaborator.filter(
+                tenant_id=tenant_id,
+                customer_id=customer.id,
+                user_id=uid,
+            ).first()
+            if existing:
+                existing.deleted_at = None
+                existing.user_name = user.full_name or user.username
+                existing.added_by = current_user.id
+                existing.added_by_name = current_user.full_name or current_user.username
+                await existing.save()
+            else:
+                await CustomerCollaborator.create(
+                    tenant_id=tenant_id,
+                    customer_id=customer.id,
+                    user_id=uid,
+                    user_name=user.full_name or user.username,
+                    added_by=current_user.id,
+                    added_by_name=current_user.full_name or current_user.username,
+                )
+            await cls._write_log(
+                tenant_id=tenant_id,
+                customer=customer,
+                action="collaborator_add",
+                operator_user_id=current_user.id,
+                from_salesman_id=None,
+                to_salesman_id=uid,
+                reason="更新协作人",
+            )
+
+        return await cls.list_collaborators(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            current_user=current_user,
+        )
+
+    @classmethod
+    async def list_pool_logs(
+        cls,
+        *,
+        tenant_id: int,
+        customer_id: int,
+        current_user: User,
+    ) -> CustomerPoolLogListEnvelope:
+        customer = await cls._load_customer(tenant_id, customer_id)
+        await DataScopeService.assert_row_visible(
+            customer,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource=RESOURCE_CUSTOMER_POOL,
+        )
+        log_rows = await CustomerPoolLog.filter(
+            tenant_id=tenant_id,
+            customer_id=customer.id,
+            deleted_at__isnull=True,
+        ).order_by("-created_at", "-id").all()
+
+        user_ids: set[int] = set()
+        for log in log_rows:
+            if log.from_salesman_id:
+                user_ids.add(log.from_salesman_id)
+            if log.to_salesman_id:
+                user_ids.add(log.to_salesman_id)
+            if log.operator_user_id:
+                user_ids.add(log.operator_user_id)
+
+        name_map: Dict[int, str] = {}
+        if user_ids:
+            for user in await User.filter(id__in=list(user_ids), tenant_id=tenant_id).all():
+                name_map[user.id] = user.full_name or user.username
+
+        items: List[CustomerPoolLogItem] = []
+        for log in log_rows:
+            items.append(
+                CustomerPoolLogItem(
+                    action=log.action,
+                    from_salesman_id=log.from_salesman_id,
+                    from_salesman_name=name_map.get(log.from_salesman_id) if log.from_salesman_id else None,
+                    to_salesman_id=log.to_salesman_id,
+                    to_salesman_name=name_map.get(log.to_salesman_id) if log.to_salesman_id else None,
+                    operator_user_id=log.operator_user_id,
+                    operator_name=name_map.get(log.operator_user_id),
+                    reason=log.reason,
+                    created_at=log.created_at,
+                )
+            )
+        return CustomerPoolLogListEnvelope(items=items, total=len(items))
 
     @classmethod
     async def list_customers(
@@ -305,7 +636,11 @@ class CustomerPoolService:
 
         normalized_scope = (scope or "pool").strip().lower()
         if normalized_scope == "mine":
-            query = query.filter(pool_status="owned", salesman_id=current_user.id)
+            collab_ids = await list_collaborator_customer_ids(tenant_id, current_user.id)
+            owned_clause = Q(salesman_id=current_user.id)
+            if collab_ids:
+                owned_clause |= Q(id__in=collab_ids)
+            query = query.filter(pool_status="owned").filter(owned_clause)
         elif normalized_scope == "pool":
             query = query.filter(pool_status="pool")
 
@@ -345,7 +680,11 @@ class CustomerPoolService:
 
         total = await query.count()
         rows = await query.order_by(primary_order, secondary_order).offset(skip).limit(limit)
-        items = [_to_customer_pool_item(r) for r in rows]
+        collab_map = await cls._load_collaborators_map(tenant_id, [row.id for row in rows])
+        items = [
+            _to_customer_pool_item(r, collab_map.get(r.id, []))
+            for r in rows
+        ]
         return CustomerPoolListEnvelope(items=items, total=total)
 
     @classmethod
@@ -513,6 +852,12 @@ class CustomerPoolService:
                 customer.assigned_at = None
                 customer.recycle_at = None
                 await customer.save()
+                await cls._clear_collaborators(
+                    tenant_id=rule.tenant_id,
+                    customer=customer,
+                    operator_user_id=0,
+                    reason="auto recycle job",
+                )
                 await cls._write_log(
                     tenant_id=rule.tenant_id,
                     customer=customer,

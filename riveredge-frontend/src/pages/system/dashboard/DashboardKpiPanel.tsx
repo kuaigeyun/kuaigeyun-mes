@@ -147,8 +147,8 @@ function buildKpiItems(t: TFunction): KpiItemConfig[] {
         value: formatDashboardMetric(s?.quality?.open_exceptions),
       }),
       getRightBottom: (s, tr) => ({
-        label: tr('pages.dashboard.kpiSideTotalExceptions'),
-        value: formatDashboardMetric(s?.quality?.total_exceptions),
+        label: tr('pages.dashboard.statFirstPassYield'),
+        value: `${formatDashboardRate(s?.quality?.first_pass_yield_rate)}%`,
       }),
     },
   ];

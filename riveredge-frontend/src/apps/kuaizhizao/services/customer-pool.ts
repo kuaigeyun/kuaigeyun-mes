@@ -1,5 +1,10 @@
 import { apiRequest } from '../../../services/api';
 
+export interface CustomerPoolCollaboratorItem {
+  user_id: number;
+  user_name: string;
+}
+
 export interface CustomerPoolItem {
   id: number;
   uuid: string;
@@ -18,6 +23,7 @@ export interface CustomerPoolItem {
   updated_by_name?: string | null;
   created_at: string;
   updated_at: string;
+  collaborators?: CustomerPoolCollaboratorItem[];
 }
 
 export interface CustomerPoolListResult {
@@ -32,6 +38,23 @@ export interface CustomerPoolRule {
   allow_claim_others: boolean;
   updated_at?: string | null;
   updated_by?: number | null;
+}
+
+export interface CustomerPoolLogItem {
+  action: string;
+  from_salesman_id?: number | null;
+  from_salesman_name?: string | null;
+  to_salesman_id?: number | null;
+  to_salesman_name?: string | null;
+  operator_user_id: number;
+  operator_name?: string | null;
+  reason?: string | null;
+  created_at: string;
+}
+
+export interface CustomerPoolLogListResult {
+  items: CustomerPoolLogItem[];
+  total: number;
 }
 
 export interface CustomerPoolListParams {
@@ -91,5 +114,17 @@ export const customerPoolApi = {
 
   updateRules: async (data: Partial<CustomerPoolRule>): Promise<CustomerPoolRule> =>
     apiRequest('/apps/kuaizhizao/customer-pool/rules', { method: 'PUT', data }),
+
+  getCollaborators: async (customerId: number): Promise<CustomerPoolCollaboratorItem[]> =>
+    apiRequest(`/apps/kuaizhizao/customer-pool/${customerId}/collaborators`, { method: 'GET' }),
+
+  setCollaborators: async (customerId: number, userIds: number[]): Promise<CustomerPoolCollaboratorItem[]> =>
+    apiRequest(`/apps/kuaizhizao/customer-pool/${customerId}/collaborators`, {
+      method: 'PUT',
+      data: { user_ids: userIds },
+    }),
+
+  getLogs: async (customerId: number): Promise<CustomerPoolLogListResult> =>
+    apiRequest(`/apps/kuaizhizao/customer-pool/${customerId}/logs`, { method: 'GET' }),
 };
 

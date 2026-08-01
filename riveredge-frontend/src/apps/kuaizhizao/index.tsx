@@ -227,6 +227,7 @@ const WorkOrderLaborDetailPage = lazy(() => import('./pages/production-execution
 const OutsourceOrderQueryPage = lazy(() => import('./pages/production-execution/reports/OutsourceOrderQuery'));
 const OutsourceMaterialReconciliationPage = lazy(() => import('./pages/production-execution/reports/OutsourceMaterialReconciliation'));
 const ScrapDefectAnalysisPage = lazy(() => import('./pages/production-execution/reports/ScrapDefectAnalysis'));
+const FirstPassYieldAnalysisPage = lazy(() => import('./pages/production-execution/reports/FirstPassYieldAnalysis'));
 const ProductionDelayWarningPage = lazy(() => import('./pages/production-execution/reports/ProductionDelayWarning'));
 
 // 质量管理报表
@@ -510,6 +511,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/reports/outsource-order-query" element={withPageSuspense(OutsourceOrderQueryPage)} />
       <Route path="production-execution/reports/outsource-material-reconciliation" element={withPageSuspense(OutsourceMaterialReconciliationPage)} />
       <Route path="production-execution/reports/scrap-defect-analysis" element={withPageSuspense(ScrapDefectAnalysisPage)} />
+      <Route path="production-execution/reports/first-pass-yield" element={withPageSuspense(FirstPassYieldAnalysisPage)} />
       <Route path="production-execution/reports/production-delay-warning" element={withPageSuspense(ProductionDelayWarningPage)} />
 
       {/* 质量管理报表 */}

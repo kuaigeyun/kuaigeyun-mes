@@ -13,15 +13,18 @@ from fastapi import HTTPException
 from apps.kuaizhizao.schemas.customer_pool import (
     CustomerPoolActionBody,
     CustomerPoolAssignBody,
+    CustomerPoolCollaboratorItem,
+    CustomerPoolCollaboratorsUpdateBody,
     CustomerPoolListEnvelope,
     CustomerPoolItem,
+    CustomerPoolLogListEnvelope,
     CustomerPoolRuleResponse,
     CustomerPoolRuleUpdateBody,
 )
 from apps.kuaizhizao.services.customer_pool_list_core import CUSTOMER_POOL_SORTABLE_FIELDS
 from apps.kuaizhizao.services.customer_pool_service import CustomerPoolService
 from core.api.deps import get_current_tenant, get_current_user
-from core.api.deps.access import require_access
+from core.api.deps.access import require_access, require_permission_codes
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
@@ -261,4 +264,78 @@ async def update_pool_rules(
         current_user=current_user,
         body=body,
     )
+
+
+@router.get(
+    "/{customer_id}/collaborators",
+    response_model=list[CustomerPoolCollaboratorItem],
+    summary="List customer collaborators",
+)
+async def list_customer_collaborators(
+    customer_id: int = Path(..., ge=1),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_kuaizhizao_module_access("customer-pool")),
+):
+    try:
+        return await CustomerPoolService.list_collaborators(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            current_user=current_user,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put(
+    "/{customer_id}/collaborators",
+    response_model=list[CustomerPoolCollaboratorItem],
+    summary="Set customer collaborators",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:customer-pool:collaborate",
+                "kuaizhizao:customer-pool:assign",
+            )
+        )
+    ],
+)
+async def set_customer_collaborators(
+    body: CustomerPoolCollaboratorsUpdateBody,
+    customer_id: int = Path(..., ge=1),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await CustomerPoolService.set_collaborators(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            current_user=current_user,
+            body=body,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/{customer_id}/logs",
+    response_model=CustomerPoolLogListEnvelope,
+    summary="List customer pool ownership logs",
+)
+async def list_customer_pool_logs(
+    customer_id: int = Path(..., ge=1),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_kuaizhizao_module_access("customer-pool")),
+):
+    try:
+        return await CustomerPoolService.list_pool_logs(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            current_user=current_user,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
 

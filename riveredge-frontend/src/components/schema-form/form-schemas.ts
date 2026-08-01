@@ -64,8 +64,8 @@ export interface FieldConfig {
   createOnly?: boolean;
   /** 表单项初始值（如 switch 默认关） */
   initialValue?: unknown;
-  /** 当指定字段等于某值时显示本字段 */
-  visibleWhen?: { field: string; equals: unknown };
+  /** 当指定字段等于某值（或落在 in 列表中）时显示本字段 */
+  visibleWhen?: { field: string; equals?: unknown; in?: unknown[] };
   /** slot=customFields 时：自定义字段半宽栏数（未设则从 schema 其它字段 colSpan 推断） */
   slotGridColumns?: 1 | 2 | 3 | 4;
 }
