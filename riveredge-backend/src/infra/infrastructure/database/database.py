@@ -368,6 +368,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.receipt_notice",  # 收货通知模型
                 "apps.kuaizhizao.models.replenishment_suggestion",  # 补货建议模型
                 "apps.kuaizhizao.models.customer_follow_up",  # 客户跟进记录模型
+                "apps.kuaizhizao.models.customer_collaborator",  # 客户池协作人
                 "apps.kuaizhizao.models.scheduling_config",  # 排程配置模型
                 "apps.kuaizhizao.models.work_order_score",  # 工单综合打分快照
                 "apps.kuaizhizao.models.shipment_notice",  # 发货通知模型
