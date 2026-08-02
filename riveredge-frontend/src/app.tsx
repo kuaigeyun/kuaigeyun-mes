@@ -88,9 +88,12 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载时执行一次，使用 initializedRef 确保只执行一次
 
-  // 公开页面：根路径、登录、初始化向导等，无需鉴权即可访问
+  // 公开页面：根路径、登录、初始化向导、分享页等，无需鉴权即可访问
   const pathname = location.pathname;
   const tenantDomainFromPath = resolveTenantDomainFromUrl({ pathname, search: location.search });
+  const isKuaireportSharedPath =
+    pathname === '/apps/kuaireport/reports/shared' ||
+    pathname === '/apps/kuaireport/dashboards/shared';
   const isPublicPath = pathname === '/' ||
     pathname.startsWith('/login') ||
     isPlatformInfraPublicPath(pathname) ||
@@ -98,7 +101,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     pathname.startsWith('/init/') ||
     pathname.startsWith('/docs') ||
     pathname.startsWith('/debug/') ||
-    pathname.startsWith('/qrcode/');
+    pathname.startsWith('/qrcode/') ||
+    isKuaireportSharedPath;
   const isInfraLoginPage = isPlatformAdminLoginPathname(pathname);
 
   // ⚠️ 修复：公开页面若存在过期 token，立即清除，避免触发需认证的请求导致短暂错误提示（如 "Token缺失"）
@@ -714,7 +718,12 @@ export default function App() {
       theme={responsiveThemeConfig} 
       locale={antLocale}
       componentSize={componentSize}
-      spin={{ indicator: GLOBAL_SPIN_INDICATOR }}
+      spin={{
+        indicator: GLOBAL_SPIN_INDICATOR,
+        styles: {
+          description: { whiteSpace: 'nowrap', maxWidth: 'none', flexShrink: 0 },
+        },
+      }}
       /** 状态类徽章默认 solid；分类/模式/编组等标识须显式 variant="filled" */
       tag={{ variant: 'solid' }}
     >

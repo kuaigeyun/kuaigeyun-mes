@@ -35,6 +35,8 @@ import {
   MaintenancePlan,
   CreateMaintenancePlanData,
   UpdateMaintenancePlanData,
+  resolveMaintenancePlanEquipmentUuids,
+  formatMaintenancePlanEquipmentText,
 } from '../../../../services/maintenancePlan';
 import { getEquipmentList, Equipment } from '../../../../services/equipment';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
@@ -106,7 +108,7 @@ const MaintenancePlanListPage: React.FC = () => {
       const detail = await getMaintenancePlanByUuid(record.uuid);
       setFormInitialValues({
         plan_name: detail.plan_name,
-        equipment_uuid: detail.equipment_uuid,
+        equipment_uuids: resolveMaintenancePlanEquipmentUuids(detail),
         plan_type: detail.plan_type,
         maintenance_type: detail.maintenance_type,
         cycle_type: detail.cycle_type,
@@ -196,12 +198,22 @@ const MaintenancePlanListPage: React.FC = () => {
   const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
+      const equipmentUuids = Array.isArray(values.equipment_uuids)
+        ? values.equipment_uuids.map(String).filter(Boolean)
+        : values.equipment_uuid
+          ? [String(values.equipment_uuid)]
+          : [];
+      const payload = {
+        ...values,
+        equipment_uuids: equipmentUuids,
+      };
+      delete payload.equipment_uuid;
       
       if (isEdit && currentMaintenancePlanUuid) {
-        await updateMaintenancePlan(currentMaintenancePlanUuid, values as UpdateMaintenancePlanData);
+        await updateMaintenancePlan(currentMaintenancePlanUuid, payload as UpdateMaintenancePlanData);
         messageApi.success(t('pages.system.maintenancePlans.updateSuccess'));
       } else {
-        await createMaintenancePlan(values as CreateMaintenancePlanData);
+        await createMaintenancePlan(payload as CreateMaintenancePlanData);
         messageApi.success(t('pages.system.maintenancePlans.createSuccess'));
       }
       
@@ -238,7 +250,7 @@ const MaintenancePlanListPage: React.FC = () => {
     () => [
       { title: t('pages.system.maintenancePlans.columnPlanNo'), dataIndex: 'plan_no' },
       { title: t('pages.system.maintenancePlans.columnPlanName'), dataIndex: 'plan_name' },
-      { title: t('pages.system.maintenancePlans.columnEquipment'), dataIndex: 'equipment_name' },
+      { title: t('pages.system.maintenancePlans.columnEquipment'), dataIndex: 'equipment_name', render: (_, r) => formatMaintenancePlanEquipmentText(r) },
       {
         title: t('pages.system.maintenancePlans.columnPlanType'),
         dataIndex: 'plan_type',
@@ -313,7 +325,9 @@ const MaintenancePlanListPage: React.FC = () => {
     {
       title: t('pages.system.maintenancePlans.columnEquipment'),
       dataIndex: 'equipment_name',
-      width: 200,
+      width: 260,
+      ellipsis: true,
+      render: (_, record) => formatMaintenancePlanEquipmentText(record),
     },
     {
       title: t('pages.system.maintenancePlans.columnPlanType'),
@@ -536,8 +550,11 @@ const MaintenancePlanListPage: React.FC = () => {
           placeholder={t('pages.system.maintenancePlans.planNamePlaceholder')}
         />
         <ProFormSelect
-          name="equipment_uuid"
+          name="equipment_uuids"
           label={t('pages.system.maintenancePlans.labelEquipment')}
+          mode="multiple"
+          showSearch
+          fieldProps={{ maxTagCount: 'responsive' }}
           rules={[{ required: true, message: t('pages.system.maintenancePlans.equipmentRequired') }]}
           options={equipmentList.map((eq) => ({
             label: `${eq.name} (${eq.code})`,

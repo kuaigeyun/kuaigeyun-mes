@@ -40,8 +40,23 @@ if (typeof window !== 'undefined') {
   });
 
   window.addEventListener('error', (event) => {
+    // 资源加载失败 / 跨域脚本：event.error 常为 null，不是可恢复的业务异常
+    if (!event.error) {
+      if (import.meta.env.DEV) {
+        const target = event.target;
+        const targetDesc =
+          target instanceof HTMLElement
+            ? `${target.tagName.toLowerCase()}${target.id ? `#${target.id}` : ''}`
+            : '';
+        console.warn(
+          '⚠️ 非 JS 异常或匿名脚本错误:',
+          event.message || '(no message)',
+          event.filename || targetDesc || event.target,
+        );
+      }
+      return;
+    }
     console.error('⚠️ 全局 JavaScript 错误:', event.error);
-    event.preventDefault();
   });
 }
 

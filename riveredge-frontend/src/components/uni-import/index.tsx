@@ -427,7 +427,7 @@ export const UniImport: React.FC<UniImportProps> = ({
     setPrecheckLoading(false);
   }, [open, visible, relationDefaultEntities, relationDefaultWriteStrategy]);
 
-  // 弹窗打开时拦截 Univer dispose 竞态的全局 error，避免冒泡到 AppErrorBoundary 整页崩溃
+  // 弹窗打开时拦截 Univer dispose 竞态的全局 error / unhandledrejection，避免污染控制台与其它全局监听
   useEffect(() => {
     if (!(open ?? visible)) return;
 

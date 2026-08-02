@@ -361,11 +361,12 @@ export function translateAppMenuItemName(
     }
   }
 
-  // 1b. 无 path 且 name 已是展示文案（非 i18n key）：禁止用子孙 path 反推标题。
-  // 否则自组菜单分组（子节点常含 …/reports/…）会被倒数第二段误译为「账款报表」。
-  if (!path && !nameLooksLikeI18nKey) {
+  // 1b. name 已是展示文案（非 i18n key）：优先用 name。
+  // 覆盖：无 path 的分组；以及自定义挂载页 path 末段为数字 id（如 /reports/1）时禁止显示成「1」。
+  if (!nameLooksLikeI18nKey) {
     const displayName = sanitizeHaoligoMenuDisplayTitle(name, path, children);
-    return displayName || name;
+    if (displayName) return displayName;
+    if (!path) return name;
   }
 
   let appCode = extractAppCodeFromPath(path);
@@ -445,9 +446,12 @@ export function translateAppMenuItemName(
   const displayName = sanitizeHaoligoMenuDisplayTitle(name, path, children);
   if (path) {
     const pathTitle = translatePathTitle(path, t);
-    if (pathTitle && pathTitle !== path) return pathTitle;
+    // 禁止用 path 末段裸 id（如报表 /reports/1 →「1」）覆盖标题
+    if (pathTitle && pathTitle !== path && !/^\d+$/.test(pathTitle)) {
+      return pathTitle;
+    }
   }
-  return translateMenuName(displayName, t, path);
+  return translateMenuName(displayName || name, t, path);
 }
 
 /**
@@ -482,9 +486,12 @@ export function translatePathTitle(path: string, t: any): string {
   // 去除查询参数，避免 dashboard-designer?id=xxx 等无法匹配翻译 key
   const pathname = path.split('?')[0];
 
-  // 处理 UUID（不显示在面包屑中）
+  // 处理 UUID / 纯数字 id（不显示在面包屑、Tab 标题中）
   const segment = pathname.split('/').filter(Boolean).pop() || '';
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(segment)) {
+    return '';
+  }
+  if (/^\d+$/.test(segment)) {
     return '';
   }
 

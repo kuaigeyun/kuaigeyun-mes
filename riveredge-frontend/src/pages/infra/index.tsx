@@ -97,7 +97,7 @@ export default function InfraSuperAdminPage() {
   };
 
   return (
-    <div style={{ padding: '16px' }}>
+    <div>
       <ProCard
         title={t('pages.infra.admin.cardTitle')}
         extra={

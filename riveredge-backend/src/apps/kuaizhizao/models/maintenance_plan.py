@@ -67,10 +67,11 @@ class MaintenancePlan(BaseModel):
     plan_no = fields.CharField(max_length=100, description="维护计划编号（组织内唯一）")
     plan_name = fields.CharField(max_length=200, description="计划名称")
     
-    # 关联设备
-    equipment_id = fields.IntField(description="设备ID（关联设备）")
-    equipment_uuid = fields.CharField(max_length=36, description="设备UUID")
-    equipment_name = fields.CharField(max_length=200, description="设备名称")
+    # 关联设备（首台设备字段供列表/筛选/执行默认；多设备见 equipment_items）
+    equipment_id = fields.IntField(description="设备ID（关联设备，首台）")
+    equipment_uuid = fields.CharField(max_length=36, description="设备UUID（首台）")
+    equipment_name = fields.CharField(max_length=200, description="设备名称（首台或汇总展示）")
+    equipment_items = fields.JSONField(null=True, description="关联设备列表 [{id,uuid,code,name}]")
     
     # 计划类型
     plan_type = fields.CharField(max_length=50, description="计划类型（预防性维护、定期维护、临时维护）")

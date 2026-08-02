@@ -7,10 +7,11 @@ Author: Luigi Lu
 Date: 2026-01-05
 """
 
-from typing import List, Optional
+from typing import List, Optional, Any
 from datetime import datetime
 from decimal import Decimal
 from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
 
 from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan, MaintenanceExecution
 from apps.kuaizhizao.models.equipment import Equipment
@@ -34,6 +35,78 @@ class MaintenancePlanService:
     
     提供维护保养计划的 CRUD 操作。
     """
+
+    @staticmethod
+    async def _resolve_equipment_items(tenant_id: int, equipment_uuids: List[str]) -> List[dict[str, Any]]:
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for raw in equipment_uuids:
+            value = str(raw).strip()
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            ordered.append(value)
+        if not ordered:
+            raise ValidationError("至少选择一个关联设备")
+
+        rows = await Equipment.filter(
+            tenant_id=tenant_id,
+            uuid__in=ordered,
+            deleted_at__isnull=True,
+        ).all()
+        by_uuid = {row.uuid: row for row in rows}
+        missing = [uuid for uuid in ordered if uuid not in by_uuid]
+        if missing:
+            raise ValidationError(f"设备不存在: {', '.join(missing)}")
+
+        return [
+            {
+                "id": by_uuid[uuid].id,
+                "uuid": by_uuid[uuid].uuid,
+                "code": by_uuid[uuid].code,
+                "name": by_uuid[uuid].name,
+            }
+            for uuid in ordered
+        ]
+
+    @staticmethod
+    def _apply_equipment_items(plan: MaintenancePlan, items: List[dict[str, Any]]) -> None:
+        primary = items[0]
+        plan.equipment_id = primary["id"]
+        plan.equipment_uuid = primary["uuid"]
+        plan.equipment_name = (
+            primary["name"]
+            if len(items) == 1
+            else f"{primary['name']} 等{len(items)}台"
+        )
+        plan.equipment_items = items
+
+    @staticmethod
+    def _fallback_equipment_items(plan: MaintenancePlan) -> List[dict[str, Any]]:
+        if plan.equipment_items:
+            return list(plan.equipment_items)
+        if plan.equipment_uuid:
+            return [
+                {
+                    "id": plan.equipment_id,
+                    "uuid": plan.equipment_uuid,
+                    "code": None,
+                    "name": plan.equipment_name,
+                }
+            ]
+        return []
+
+    @staticmethod
+    def serialize_plan_response(plan: MaintenancePlan):
+        from apps.kuaizhizao.schemas.maintenance_plan import MaintenancePlanResponse
+
+        items = MaintenancePlanService._fallback_equipment_items(plan)
+        resp = MaintenancePlanResponse.model_validate(plan)
+        resp.equipment_items = items
+        resp.equipment_uuids = [str(item.get("uuid")) for item in items if item.get("uuid")]
+        if resp.equipment_uuids and not resp.equipment_uuid:
+            resp.equipment_uuid = resp.equipment_uuids[0]
+        return resp
     
     @staticmethod
     async def create_maintenance_plan(
@@ -56,15 +129,23 @@ class MaintenancePlanService:
             ValidationError: 当设备不存在或计划编号已存在时抛出
         """
         try:
-            # 验证设备是否存在
+            payload = data.model_dump(exclude_none=True)
+            equipment_uuids = payload.pop("equipment_uuids", None) or []
+            legacy_uuid = payload.pop("equipment_uuid", None)
+            if legacy_uuid and legacy_uuid not in equipment_uuids:
+                equipment_uuids.insert(0, legacy_uuid)
+            equipment_items = await MaintenancePlanService._resolve_equipment_items(
+                tenant_id,
+                equipment_uuids,
+            )
+            primary = equipment_items[0]
             equipment = await Equipment.filter(
                 tenant_id=tenant_id,
-                uuid=data.equipment_uuid,
-                deleted_at__isnull=True
+                uuid=primary["uuid"],
+                deleted_at__isnull=True,
             ).first()
-            
             if not equipment:
-                raise ValidationError(f"设备不存在: {data.equipment_uuid}")
+                raise ValidationError(f"设备不存在: {primary['uuid']}")
             
             # 如果没有提供计划编号，自动生成
             if not data.plan_no:
@@ -81,11 +162,9 @@ class MaintenancePlanService:
             
             plan = MaintenancePlan(
                 tenant_id=tenant_id,
-                equipment_id=equipment.id,
-                equipment_uuid=equipment.uuid,
-                equipment_name=equipment.name,
-                **data.model_dump(exclude_none=True, exclude={'equipment_uuid'})
+                **payload,
             )
+            MaintenancePlanService._apply_equipment_items(plan, equipment_items)
             actor = None
             if created_by is not None:
                 actor = await User.filter(id=created_by, tenant_id=tenant_id).first()
@@ -101,33 +180,30 @@ class MaintenancePlanService:
         uuid: str
     ) -> MaintenancePlan:
         """
-        根据UUID获取维护计划
-        
-        Args:
-            tenant_id: 组织ID
-            uuid: 维护计划UUID
-            
-        Returns:
-            MaintenancePlan: 维护计划对象
-            
-        Raises:
-            NotFoundError: 当维护计划不存在时抛出
+        根据UUID获取维护计划（ORM 模型，供更新/删除等写操作使用）
         """
         plan = await MaintenancePlan.filter(
             tenant_id=tenant_id,
             uuid=uuid,
             deleted_at__isnull=True
         ).first()
-        
+
         if not plan:
             raise NotFoundError("维护计划不存在")
-        
-        from apps.kuaizhizao.services.document_lifecycle_service import get_maintenance_plan_lifecycle, get_document_milestones
+
+        return plan
+
+    @staticmethod
+    async def build_maintenance_plan_response(plan: MaintenancePlan):
+        """组装带生命周期的维护计划 API 响应"""
+        from apps.kuaizhizao.services.document_lifecycle_service import (
+            get_maintenance_plan_lifecycle,
+            get_document_milestones,
+        )
         from apps.kuaizhizao.schemas.maintenance_plan import MaintenancePlanResponse
-        
+
         milestones = await get_document_milestones(plan.tenant_id, "maintenance_plan", plan.id)
-        
-        resp = MaintenancePlanResponse.model_validate(plan)
+        resp = MaintenancePlanService.serialize_plan_response(plan)
         resp.lifecycle = get_maintenance_plan_lifecycle(plan, milestones=milestones)
         return resp
     
@@ -172,7 +248,10 @@ class MaintenancePlanService:
         
         # 筛选条件
         if equipment_uuid:
-            query = query.filter(equipment_uuid=equipment_uuid)
+            query = query.filter(
+                Q(equipment_uuid=equipment_uuid)
+                | Q(equipment_items__contains=[{"uuid": equipment_uuid}])
+            )
         if status:
             query = query.filter(status=status)
         if plan_type:
@@ -245,6 +324,11 @@ class MaintenancePlanService:
         plan = await MaintenancePlanService.get_maintenance_plan_by_uuid(tenant_id, uuid)
         
         update_data = data.model_dump(exclude_unset=True, exclude_none=True)
+        equipment_uuids = update_data.pop("equipment_uuids", None)
+        update_data.pop("equipment_uuid", None)
+        if equipment_uuids is not None:
+            items = await MaintenancePlanService._resolve_equipment_items(tenant_id, equipment_uuids)
+            MaintenancePlanService._apply_equipment_items(plan, items)
         
         # 更新字段
         for key, value in update_data.items():

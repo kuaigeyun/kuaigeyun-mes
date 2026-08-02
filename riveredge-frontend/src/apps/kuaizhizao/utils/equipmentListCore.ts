@@ -222,6 +222,47 @@ export function buildMaintenancePlanStatusValueEnum(t: TFunction): Record<string
   };
 }
 
+export type MaintenancePlanEquipmentItem = {
+  id?: number;
+  uuid?: string;
+  code?: string;
+  name?: string;
+};
+
+export function resolveMaintenancePlanEquipmentUuids(plan: {
+  equipment_uuids?: string[];
+  equipment_uuid?: string;
+  equipment_items?: MaintenancePlanEquipmentItem[];
+}): string[] {
+  if (Array.isArray(plan.equipment_uuids) && plan.equipment_uuids.length > 0) {
+    return plan.equipment_uuids.filter(Boolean);
+  }
+  if (Array.isArray(plan.equipment_items) && plan.equipment_items.length > 0) {
+    return plan.equipment_items.map((item) => item.uuid).filter(Boolean) as string[];
+  }
+  return plan.equipment_uuid ? [plan.equipment_uuid] : [];
+}
+
+export function formatMaintenancePlanEquipmentText(plan: {
+  equipment_name?: string;
+  equipment_code?: string;
+  equipment_items?: MaintenancePlanEquipmentItem[];
+}): string {
+  const items = plan.equipment_items;
+  if (items?.length) {
+    return items
+      .map((item) => {
+        const code = item.code?.trim();
+        const name = item.name?.trim() || '-';
+        return code ? `${code} - ${name}` : name;
+      })
+      .join('、');
+  }
+  const code = plan.equipment_code?.trim();
+  const name = plan.equipment_name?.trim() || '-';
+  return code ? `${code} - ${name}` : name;
+}
+
 export function resolveMaintenancePlanListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,

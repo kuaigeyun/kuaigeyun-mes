@@ -380,6 +380,8 @@ export function listPageShowsStatCardsRow(
 export const SYSTEM_VIEWPORT_OFFSETS = {
   BUSINESS_BOARD_PX: 100,
   PRINT_TEMPLATE_DESIGN_PX: 48,
+  /** 大屏设计器（UniTabs 内）：视口扣减与打印模板设计器一致，顶/底留白由 UniTabs 承担，勿再叠 margin-bottom */
+  DASHBOARD_DESIGNER_PX: 48,
   FILE_PREVIEW_MODAL_PX: 200,
   LANG_TRANSLATION_DRAWER_BODY_BASE_PX: 110,
   LANG_TRANSLATION_TABLE_BASE_PX: 220,

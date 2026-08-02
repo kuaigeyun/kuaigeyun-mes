@@ -585,11 +585,11 @@ const DatasetListPage: React.FC = () => {
             <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
               {t('pages.system.datasets.view')}
             </Button>,
+            <Button key="design" {...rowActionKind('update')} onClick={() => handleDesign(record)}>
+              {t('pages.system.datasets.design')}
+            </Button>,
             <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
               {t('pages.system.datasets.edit')}
-            </Button>,
-            <Button key="design" {...rowActionKind('update')} onClick={() => handleDesign(record)} data-action-priority={2}>
-              {t('pages.system.datasets.design')}
             </Button>,
             <Button
               key="execute"

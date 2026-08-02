@@ -425,6 +425,9 @@ export default defineConfig({
       '@tanstack/react-query',
       'zustand',
       'dayjs',
+      // 快报表看板缩略图（pro 包 symlink 引入，需预构建避免冷启动 504）
+      'html-to-image',
+      '@measured/puck',
       // Univer 依赖注入 token 须在同一预构建图内（dev 下 exclude 会导致多份 @univerjs/core / engine-render）
       '@univerjs/presets',
       '@univerjs/presets/preset-sheets-core',

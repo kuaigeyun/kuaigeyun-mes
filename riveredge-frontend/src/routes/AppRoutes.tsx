@@ -11,7 +11,7 @@
  * ⚠️ 注意：BasicLayout 已提升到 MainRoutes 层级，这里不再包裹 BasicLayout
  */
 
-import React, { useEffect, useState, useMemo, useRef, Suspense } from 'react';
+import React, { Component, useEffect, useState, useMemo, useRef, Suspense, type ErrorInfo, type ReactNode } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Alert, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +22,7 @@ import { getToken, getTenantId } from '../utils/auth';
 import type { Application } from '../services/application';
 import PageSkeleton from '../components/page-skeleton';
 import ProUpgradePrompt from '../components/pro-upgrade-prompt';
+import { PAGE_SPACING } from '../components/layout-templates/constants';
 
 const INSTALLED_APPS_QUERY_KEY = ['installedApplications', { is_active: true }] as const;
 
@@ -46,62 +47,68 @@ function createLazyApp(app: Application) {
   );
 }
 
-// 应用组件错误边界
-const AppErrorBoundary: React.FC<{ children: React.ReactNode; appName: string }> = ({ children, appName }) => {
-  const { t } = useTranslation();
-  const [hasError, setHasError] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-
-  React.useEffect(() => {
-    const errorHandler = (event: ErrorEvent) => {
-      console.error(`❌ AppErrorBoundary: 捕获到错误 in ${appName}:`, event.error);
-      setHasError(true);
-      setError(event.error);
-    };
-
-    window.addEventListener('error', errorHandler);
-    return () => window.removeEventListener('error', errorHandler);
-  }, [appName]);
-
-  if (hasError) {
-    return (
-      <div style={{ padding: '20px', background: '#fff2f0', border: '1px solid #ffccc7' }}>
-        <h3 style={{ color: '#cf1322' }}>❌ {t('appRoutes.loadError')}</h3>
-        <p><strong>{t('appRoutes.app')}:</strong> {appName}</p>
-        <p><strong>{t('appRoutes.error')}:</strong> {error?.message || t('common.unknownError')}</p>
-        <details>
-          <summary style={{ cursor: 'pointer', color: '#1890ff' }}>🔍 {t('appRoutes.viewDetails')}</summary>
-          <pre style={{ marginTop: '10px', whiteSpace: 'pre-wrap', fontSize: '12px' }}>
-            {error?.stack || 'No stack trace'}
-          </pre>
-        </details>
-        <Button
-          style={{ marginTop: '10px' }}
-          onClick={() => {
-            setHasError(false);
-            setError(null);
-            window.location.reload();
-          }}
-        >
-          {t('appRoutes.reload')}
-        </Button>
-      </div>
-    );
-  }
-
-  try {
-    return <>{children}</>;
-  } catch (renderError) {
-    console.error(`❌ AppErrorBoundary: 渲染错误 in ${appName}:`, renderError);
-    return (
-      <div style={{ padding: '20px', background: '#fff2f0', border: '1px solid #ffccc7' }}>
-        <h3 style={{ color: '#cf1322' }}>❌ {t('appRoutes.renderError')}</h3>
-        <p><strong>{t('appRoutes.app')}:</strong> {appName}</p>
-        <p><strong>{t('appRoutes.error')}:</strong> {renderError instanceof Error ? renderError.message : String(renderError)}</p>
-      </div>
-    );
-  }
+const appErrorPanelStyle: React.CSSProperties = {
+  // 顶/底留白由 UniTabs 承担；左右自管（flush 路由无 page-outer padding）
+  margin: `0 ${PAGE_SPACING.PADDING}px`,
+  padding: PAGE_SPACING.PADDING,
+  background: '#fff2f0',
+  border: '1px solid #ffccc7',
+  boxSizing: 'border-box',
 };
+
+/** 应用内崩溃 UI（仅由真正的 React Error Boundary 触发，勿监听 window.error） */
+const AppErrorFallback: React.FC<{
+  appName: string;
+  error: Error | null;
+  onReload: () => void;
+}> = ({ appName, error, onReload }) => {
+  const { t } = useTranslation();
+  return (
+    <div style={appErrorPanelStyle}>
+      <h3 style={{ color: '#cf1322' }}>❌ {t('appRoutes.loadError')}</h3>
+      <p><strong>{t('appRoutes.app')}:</strong> {appName}</p>
+      <p><strong>{t('appRoutes.error')}:</strong> {error?.message || t('common.unknownError')}</p>
+      <details>
+        <summary style={{ cursor: 'pointer', color: '#1890ff' }}>🔍 {t('appRoutes.viewDetails')}</summary>
+        <pre style={{ marginTop: '10px', whiteSpace: 'pre-wrap', fontSize: '12px' }}>
+          {error?.stack || 'No stack trace'}
+        </pre>
+      </details>
+      <Button style={{ marginTop: '10px' }} onClick={onReload}>
+        {t('appRoutes.reload')}
+      </Button>
+    </div>
+  );
+};
+
+type AppErrorBoundaryProps = { children: ReactNode; appName: string };
+type AppErrorBoundaryState = { hasError: boolean; error: Error | null };
+
+/** 捕获应用子树渲染错误；不订阅 window.error（资源加载失败常为 error:null，会误杀整应用） */
+class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorBoundaryState> {
+  state: AppErrorBoundaryState = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: Error): AppErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error(`❌ AppErrorBoundary: 渲染错误 in ${this.props.appName}:`, error, errorInfo.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <AppErrorFallback
+          appName={this.props.appName}
+          error={this.state.error}
+          onReload={() => window.location.reload()}
+        />
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // 加载中组件 - 延迟显示骨架屏，快速加载时不闪烁
 const LoadingFallback: React.FC = () => <DelayedFallback />;
@@ -110,13 +117,15 @@ const LoadingFallback: React.FC = () => <DelayedFallback />;
 const AppLoadError: React.FC<{ error: Error; onRetry: () => void }> = ({ error, onRetry }) => {
   const { t } = useTranslation();
   return (
-    <div style={{
-      padding: '24px',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '200px'
-    }}>
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '200px',
+        boxSizing: 'border-box',
+      }}
+    >
       <Alert
         message={t('appRoutes.loadFailed')}
         description={
@@ -238,7 +247,15 @@ const AppRoutes: React.FC = () => {
       console.warn('⚠️ [AppRoutes] 没有应用路由，可能应用未加载或配置异常');
     }
     return (
-      <div style={{ padding: '20px', background: '#fff3cd', border: '1px solid #ffeaa7' }}>
+      <div
+        style={{
+          margin: `0 ${PAGE_SPACING.PADDING}px`,
+          padding: PAGE_SPACING.PADDING,
+          background: '#fff3cd',
+          border: '1px solid #ffeaa7',
+          boxSizing: 'border-box',
+        }}
+      >
         <h3>⚠️ {t('appRoutes.noAppRoutes')}</h3>
         <p>{t('appRoutes.currentPath')}: {window.location.pathname}</p>
         <p>{t('appRoutes.loadedRoutesCount')}: {appRoutes.length}</p>

@@ -53,8 +53,10 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString, coerceFormDate } from '../../../../../utils/formDate';
 import {
   buildMaintenancePlanStatusValueEnum,
+  formatMaintenancePlanEquipmentText,
   MAINTENANCE_PLAN_PINNED_STATUS_FIELD,
   normalizeEquipmentListResponse,
+  resolveMaintenancePlanEquipmentUuids,
   resolveMaintenancePlanListParams,
 } from '../../../utils/equipmentListCore';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -86,10 +88,15 @@ const PLAN_STATUS_COLORS: Record<string, string> = {
 const EXECUTABLE_PLAN_STATUSES = new Set(['草稿', '已发布', '执行中']);
 
 function buildMaintenancePlanSubmitPayload(values: Record<string, unknown>) {
+  const equipmentUuids = Array.isArray(values.equipment_uuids)
+    ? values.equipment_uuids.map(String).filter(Boolean)
+    : values.equipment_uuid
+      ? [String(values.equipment_uuid)]
+      : [];
   return {
     plan_name: values.plan_name,
     plan_type: values.plan_type,
-    equipment_uuid: values.equipment_uuid,
+    equipment_uuids: equipmentUuids,
     maintenance_type: values.maintenance_type,
     cycle_type: values.cycle_type,
     cycle_value: values.cycle_value,
@@ -116,6 +123,8 @@ interface MaintenancePlan {
   plan_name?: string;
   plan_type?: string;
   equipment_uuid?: string;
+  equipment_uuids?: string[];
+  equipment_items?: Array<{ id?: number; uuid?: string; code?: string; name?: string }>;
   equipment_code?: string;
   equipment_name?: string;
   maintenance_type?: string;
@@ -215,7 +224,7 @@ const MaintenancePlansPage: React.FC = () => {
       setFormInitialValues({
         plan_name: detail.plan_name,
         plan_type: detail.plan_type,
-        equipment_uuid: detail.equipment_uuid,
+        equipment_uuids: resolveMaintenancePlanEquipmentUuids(detail),
         maintenance_type: detail.maintenance_type,
         cycle_type: detail.cycle_type ?? '按时间',
         cycle_value: detail.cycle_value,
@@ -315,7 +324,8 @@ const MaintenancePlansPage: React.FC = () => {
    * 打开执行维护保养 Modal
    */
   const handleExecute = (record: MaintenancePlan) => {
-    if (!record.uuid || !record.equipment_uuid) {
+    const equipmentUuids = resolveMaintenancePlanEquipmentUuids(record);
+    if (!record.uuid || equipmentUuids.length === 0) {
       messageApi.error(t(`${P}.incompleteInfo`));
       return;
     }
@@ -323,6 +333,7 @@ const MaintenancePlansPage: React.FC = () => {
     setExecutedItems([]);
     setSparePartLines([]);
     setExecuteFormInitialValues({
+      equipment_uuid: equipmentUuids[0],
       execution_date: dayjs(),
       execution_result: '正常',
       execution_content: t(`${P}.executionContentTemplate`, { name: record.plan_name }),
@@ -370,12 +381,14 @@ const MaintenancePlansPage: React.FC = () => {
    * 提交执行维护保养
    */
   const handleExecuteSubmit = async (values: any) => {
-    if (!executePlan?.uuid || !executePlan?.equipment_uuid) return;
+    const equipmentUuids = executePlan ? resolveMaintenancePlanEquipmentUuids(executePlan) : [];
+    const equipmentUuid = values.equipment_uuid ?? equipmentUuids[0];
+    if (!executePlan?.uuid || !equipmentUuid) return;
     setExecuteSubmitting(true);
     try {
       const validParts = sparePartLines.filter((l) => l.spare_part_id && l.quantity);
       await maintenancePlanApi.execute({
-        equipment_uuid: executePlan.equipment_uuid,
+        equipment_uuid: equipmentUuid,
         maintenance_plan_uuid: executePlan.uuid,
         maintenance_scheme_id: values.maintenance_scheme_id,
         executed_items: executedItems.filter((i) => i.done),
@@ -423,13 +436,12 @@ const MaintenancePlansPage: React.FC = () => {
     {
       title: t(`${P}.col.equipmentCode`),
       dataIndex: 'equipment_code',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }}>{r.equipment_code ?? '-'}</Typography.Text>
-      ),
+      render: (_, r) => formatMaintenancePlanEquipmentText(r),
     },
     {
       title: t(`${P}.col.equipmentName`),
       dataIndex: 'equipment_name',
+      render: (_, r) => formatMaintenancePlanEquipmentText(r),
     },
     {
       title: t(`${P}.col.maintenanceType`),
@@ -638,21 +650,26 @@ const MaintenancePlansPage: React.FC = () => {
     {
       title: t(`${P}.col.equipmentCode`),
       dataIndex: 'equipment_code',
-      width: 140,
+      width: 180,
       hideInSearch: true,
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }} ellipsis>
-          {r.equipment_code ?? '-'}
+        <Typography.Text ellipsis title={formatMaintenancePlanEquipmentText(r)}>
+          {formatMaintenancePlanEquipmentText(r)}
         </Typography.Text>
       ),
     },
     {
       title: t(`${P}.col.equipmentName`),
       dataIndex: 'equipment_name',
-      width: 200,
+      width: 220,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) => (
+        <Typography.Text ellipsis title={formatMaintenancePlanEquipmentText(r)}>
+          {formatMaintenancePlanEquipmentText(r)}
+        </Typography.Text>
+      ),
     },
     {
       title: t(`${P}.col.maintenanceType`),
@@ -791,11 +808,16 @@ const MaintenancePlansPage: React.FC = () => {
           </Col>
         </Row>
         <Row gutter={16}>
-          <Col span={12}>
+          <Col span={24}>
             <ProFormSelect
-              name="equipment_uuid"
+              name="equipment_uuids"
               label={t(`${P}.form.equipment`)}
               placeholder={t(`${P}.form.selectEquipment`)}
+              mode="multiple"
+              showSearch
+              fieldProps={{
+                maxTagCount: 'responsive',
+              }}
               request={async () => {
                 try {
                   const response = await equipmentApi.list({ limit: 1000 });
@@ -810,6 +832,8 @@ const MaintenancePlansPage: React.FC = () => {
               rules={[{ required: true, message: t(`${P}.form.selectEquipment`) }]}
             />
           </Col>
+        </Row>
+        <Row gutter={16}>
           <Col span={12}>
             <ProFormSelect
               name="maintenance_type"
@@ -824,8 +848,6 @@ const MaintenancePlansPage: React.FC = () => {
               rules={[{ required: true, message: t(`${P}.form.selectMaintenanceType`) }]}
             />
           </Col>
-        </Row>
-        <Row gutter={16}>
           <Col span={12}>
             <ProFormSelect
               name="cycle_type"
@@ -839,6 +861,8 @@ const MaintenancePlansPage: React.FC = () => {
               rules={[{ required: true, message: t(`${P}.form.selectCycleType`) }]}
             />
           </Col>
+        </Row>
+        <Row gutter={16}>
           <Col span={12}>
             <ProFormDigit
               name="cycle_value"
@@ -928,6 +952,24 @@ const MaintenancePlansPage: React.FC = () => {
         initialValues={executeFormInitialValues}
         grid={false}
       >
+        {executePlan && resolveMaintenancePlanEquipmentUuids(executePlan).length > 1 ? (
+          <Row gutter={16}>
+            <Col span={24}>
+              <ProFormSelect
+                name="equipment_uuid"
+                label={t(`${P}.form.equipment`)}
+                placeholder={t(`${P}.form.selectEquipment`)}
+                options={(executePlan.equipment_items ?? [])
+                  .filter((item) => item.uuid)
+                  .map((item) => ({
+                    label: item.code ? `${item.code} - ${item.name}` : String(item.name ?? item.uuid),
+                    value: item.uuid!,
+                  }))}
+                rules={[{ required: true, message: t(`${P}.form.selectEquipment`) }]}
+              />
+            </Col>
+          </Row>
+        ) : null}
         <Row gutter={16}>
           <Col span={24}>
             <ProFormSelect

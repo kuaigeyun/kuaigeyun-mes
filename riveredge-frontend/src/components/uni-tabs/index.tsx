@@ -4,10 +4,11 @@
  * 提供多标签页管理功能，支持标签的添加、切换、关闭等操作
  */
 
-import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo, type CSSProperties, type Key, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Tabs, Button, Dropdown, MenuProps, theme, Tooltip, message, Popover, Menu } from 'antd';
+import type { ItemType } from 'antd/es/menu/interface';
 import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinFilled, StarFilled, MenuOutlined } from '@ant-design/icons';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
@@ -38,9 +39,92 @@ import { RouteTransition } from '../route-transition';
 import { TabRouteCache } from './TabRouteCache';
 import { isCreateTabKey } from './isCreateTabKey';
 import { readUniTabsBorderRadius } from '../../utils/themeBorderRadius';
+import { isAppGroupTitleItem } from '../../utils/permission';
 
 function isTenantDefaultHomePath(p: string): boolean {
   return (LEGACY_TENANT_DEFAULT_HOME_PATHS as readonly string[]).includes(p);
+}
+
+function isAppGroupPlaceholderMenuItem(item: {
+  key?: Key;
+  className?: string;
+}): boolean {
+  const key = String(item.key ?? '');
+  const cls = String(item.className ?? '');
+  return key.startsWith('app-group-placeholder-') || cls.includes('app-group-placeholder-item');
+}
+
+/** 与左侧栏应用分组标题一致（BasicLayout APP_GROUP_TITLE_TEXT_STYLE） */
+const APP_GROUP_TITLE_LABEL_STYLE: CSSProperties = {
+  fontSize: 12,
+  color: 'var(--ant-colorPrimary)',
+  fontWeight: 700,
+  lineHeight: 1.2,
+  display: 'inline-flex',
+  alignItems: 'center',
+};
+
+function resolveFullscreenMenuLabel(item: MenuDataItem): ReactNode {
+  if (typeof item.label === 'string' && item.label) return item.label;
+  return item.name || (item as { title?: string }).title || '';
+}
+
+/**
+ * 全屏快捷菜单：应用分组按左侧栏 type:group 渲染（主色标题、无展开箭头），
+ * 真实菜单项仍为同级兄弟节点；占位子项跳过。
+ */
+function buildFullscreenNavMenuItems(
+  items: MenuDataItem[],
+  navigate: (path: string) => void,
+): ItemType[] {
+  const buildItems = (list: MenuDataItem[]): ItemType[] =>
+    list.flatMap((item): ItemType[] => {
+      if (isAppGroupPlaceholderMenuItem(item) || item.hideInMenu) {
+        return [];
+      }
+
+      const rawChildren = (item.children || (item as { routes?: MenuDataItem[] }).routes) ?? [];
+      const realChildren = rawChildren.filter(
+        (child) => !isAppGroupPlaceholderMenuItem(child) && !child.hideInMenu,
+      );
+      const labelText = resolveFullscreenMenuLabel(item);
+      const itemKey = String(item.key || item.path || item.name || '');
+
+      if (isAppGroupTitleItem(item) || item.type === 'group') {
+        const isAppGroup = isAppGroupTitleItem(item);
+        return [
+          {
+            type: 'group',
+            key: itemKey,
+            label: isAppGroup ? (
+              <span className="menu-group-title-app-label" style={APP_GROUP_TITLE_LABEL_STYLE}>
+                {labelText}
+              </span>
+            ) : (
+              labelText
+            ),
+            className: isAppGroup ? 'menu-group-title-app' : item.className,
+            children: buildItems(realChildren),
+          },
+        ];
+      }
+
+      return [
+        {
+          key: item.path || itemKey,
+          icon: item.icon ? <span className="anticon">{item.icon}</span> : undefined,
+          label: labelText,
+          children: realChildren.length ? buildItems(realChildren) : undefined,
+          onClick: realChildren.length
+            ? undefined
+            : () => {
+                if (item.path) navigate(item.path);
+              },
+        },
+      ];
+    });
+
+  return buildItems(items);
 }
 
 /** 工作台 / 模块看板：外层 UniTabs 不滚动，由 DashboardTemplate / UniDashboard 内部承担 */
@@ -1185,9 +1269,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   /** 工作台/模块看板：外层 UniTabs 不滚动，由内部 DashboardTemplate / UniDashboard 承担 */
   const isDashboardScrollPage = isDashboardLikePage(location.pathname);
 
-  /** 仅运营分析看板自管四边 inset，其余工作台仍用 UniTabs 统一 16px 边距 */
-  const isFlushDashboardOuter =
-    location.pathname.replace(/\/$/, '') === '/system/dashboard/analysis';
+  /** 自管边距的页面：运营分析看板（大屏设计器改走普通 page-outer，与打印模板设计器一致） */
+  const isFlushDashboardOuter = useMemo(() => {
+    const path = location.pathname.replace(/\/$/, '');
+    return path === '/system/dashboard/analysis';
+  }, [location.pathname]);
 
   const isBusinessBoardAnalysisPage = location.pathname.replace(/\/$/, '') === '/system/dashboard/analysis';
 
@@ -2039,6 +2125,19 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           width: 0 !important;
           height: 0 !important;
         }
+        /* 应用分组标题：与左侧栏对齐（左缩进对齐一级菜单图标列） */
+        .uni-tabs-nav-popover-menu .ant-menu-item-group.menu-group-title-app > .ant-menu-item-group-title,
+        .uni-tabs-nav-popover-menu .ant-menu-item-group-title:has(.menu-group-title-app-label) {
+          padding: 8px 16px 4px 24px !important;
+          margin-block: 0 !important;
+          line-height: 1.2 !important;
+          height: auto !important;
+          min-height: 20px !important;
+          cursor: default !important;
+        }
+        .uni-tabs-nav-popover-menu .ant-menu-item-group.menu-group-title-app > .ant-menu-item-group-list:empty {
+          display: none !important;
+        }
       `}</style>
       <div 
         className="uni-tabs-wrapper"
@@ -2047,7 +2146,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           // tabs header 40px + content margin-top 16px = 56px effective vertical occupancy
           '--tabs-height': '56px',
           '--content-margin': '16px',
-        } as React.CSSProperties}
+        } as CSSProperties}
       >
         <div className="uni-tabs-header">
           <div
@@ -2069,20 +2168,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
                       selectedKeys={[activeKey.split('?')[0]]}
                       defaultOpenKeys={[]}
                       style={{ border: 'none', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto' }}
-                      items={(menuConfig as any[]).map(function buildItem(item: any): any {
-                        const children = item.children || item.routes;
-                        return {
-                          key: item.path || item.key || item.name,
-                          icon: item.icon ? <span className="anticon">{item.icon}</span> : undefined,
-                          label: item.name || item.title || '',
-                          children: children?.length
-                            ? children.map(buildItem)
-                            : undefined,
-                          onClick: children?.length ? undefined : () => {
-                            if (item.path) navigate(item.path);
-                          },
-                        };
-                      })}
+                      items={buildFullscreenNavMenuItems(menuConfig, navigate)}
                     />
                   }
                 >

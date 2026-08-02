@@ -111,7 +111,7 @@ const MasterDataApp: React.FC = () => {
 
       {/* 默认路由 - 应用首页 */}
       <Route path="" element={
-        <div style={{ padding: '24px', textAlign: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
           <h2>{t('app.master-data.title', '主数据管理应用')}</h2>
           <p>{t('app.master-data.welcome', '欢迎使用主数据管理系统，请从左侧菜单选择功能模块。')}</p>
         </div>

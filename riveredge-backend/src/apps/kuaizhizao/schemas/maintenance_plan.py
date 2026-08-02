@@ -12,7 +12,7 @@ from typing import Optional, List, Dict, Any, Union
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 
 class MaintenancePlanBase(BaseModel):
@@ -23,7 +23,8 @@ class MaintenancePlanBase(BaseModel):
     """
     plan_no: Optional[str] = Field(None, max_length=100, description="维护计划编号（可选，创建时自动生成）")
     plan_name: str = Field(..., min_length=1, max_length=200, description="计划名称")
-    equipment_uuid: str = Field(..., description="设备UUID")
+    equipment_uuid: Optional[str] = Field(None, description="设备UUID（兼容单选，建议使用 equipment_uuids）")
+    equipment_uuids: Optional[List[str]] = Field(None, min_length=1, description="关联设备UUID列表")
     plan_type: str = Field(..., max_length=50, description="计划类型（预防性维护、定期维护、临时维护）")
     maintenance_type: str = Field(..., max_length=50, description="维护类型（日常保养、小修、中修、大修）")
     cycle_type: str = Field(..., max_length=50, description="周期类型（按时间、按运行时长、按使用次数）")
@@ -68,7 +69,22 @@ class MaintenancePlanCreate(MaintenancePlanBase):
     
     用于创建新维护计划的请求数据。
     """
-    pass
+
+    @model_validator(mode="after")
+    def normalize_equipment_uuids(self):
+        uuids = list(self.equipment_uuids or [])
+        if self.equipment_uuid and self.equipment_uuid not in uuids:
+            uuids.insert(0, self.equipment_uuid)
+        seen: list[str] = []
+        for raw in uuids:
+            value = str(raw).strip()
+            if value and value not in seen:
+                seen.append(value)
+        if not seen:
+            raise ValueError("至少选择一个关联设备")
+        object.__setattr__(self, "equipment_uuids", seen)
+        object.__setattr__(self, "equipment_uuid", seen[0])
+        return self
 
 
 class MaintenancePlanUpdate(BaseModel):
@@ -78,6 +94,7 @@ class MaintenancePlanUpdate(BaseModel):
     用于更新维护计划的请求数据，所有字段可选。
     """
     plan_name: Optional[str] = Field(None, min_length=1, max_length=200, description="计划名称")
+    equipment_uuids: Optional[List[str]] = Field(None, min_length=1, description="关联设备UUID列表")
     plan_type: Optional[str] = Field(None, max_length=50, description="计划类型")
     maintenance_type: Optional[str] = Field(None, max_length=50, description="维护类型")
     cycle_type: Optional[str] = Field(None, max_length=50, description="周期类型")
@@ -105,6 +122,8 @@ class MaintenancePlanResponse(MaintenancePlanBase):
     tenant_id: int = Field(..., description="组织ID")
     equipment_id: int = Field(..., description="设备ID")
     equipment_name: str = Field(..., description="设备名称")
+    equipment_items: Optional[List[Dict[str, Any]]] = Field(None, description="关联设备列表")
+    equipment_uuids: Optional[List[str]] = Field(None, description="关联设备UUID列表")
     created_by: Optional[int] = None
     created_by_name: Optional[str] = None
     updated_by: Optional[int] = None

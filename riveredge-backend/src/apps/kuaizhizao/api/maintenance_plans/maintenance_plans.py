@@ -101,7 +101,7 @@ async def list_maintenance_plans(
         updated_end_date=updated_end_date,
     )
     
-    items = [MaintenancePlanResponse.model_validate(plan) for plan in plans]
+    items = [MaintenancePlanService.serialize_plan_response(plan) for plan in plans]
     
     return MaintenancePlanListResponse(
         items=items,
@@ -275,7 +275,7 @@ async def get_maintenance_plan(
     """
     try:
         plan = await MaintenancePlanService.get_maintenance_plan_by_uuid(tenant_id, uuid)
-        return MaintenancePlanResponse.model_validate(plan)
+        return await MaintenancePlanService.build_maintenance_plan_response(plan)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -301,7 +301,7 @@ async def update_maintenance_plan(
             uuid=uuid,
             data=data
         )
-        return MaintenancePlanResponse.model_validate(plan)
+        return await MaintenancePlanService.build_maintenance_plan_response(plan)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

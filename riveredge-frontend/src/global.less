@@ -1045,6 +1045,18 @@ code {
   padding: 0 !important;
 }
 
+/*
+ * Spin tip/description：有横向空间时禁止换行。
+ * antd 6 `.ant-spin-section` 为 column + align-items:center，
+ * 中文无空格时 tip 会被压成与圆环同宽并逐字折行（如「加载大屏中...」）。
+ */
+.ant-spin-description,
+.ant-spin-text {
+  white-space: nowrap !important;
+  max-width: none !important;
+  flex-shrink: 0;
+}
+
 .hide-scrollbar,
 .left-panel-scroll-container {
   overflow: auto;

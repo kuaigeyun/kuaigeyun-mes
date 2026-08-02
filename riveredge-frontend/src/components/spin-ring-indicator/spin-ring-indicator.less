@@ -32,3 +32,11 @@
   border-color: rgba(255, 255, 255, 0.25);
   border-top-color: #fff;
 }
+
+/* 与 global.less 一致：tip 在有空间时不换行（section 为 column+center 时的中文折行） */
+.ant-spin-section .ant-spin-description,
+.ant-spin-section .ant-spin-text {
+  white-space: nowrap;
+  max-width: none;
+  flex-shrink: 0;
+}

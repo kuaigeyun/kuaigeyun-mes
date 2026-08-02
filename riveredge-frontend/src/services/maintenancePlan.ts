@@ -7,6 +7,47 @@
 
 import { apiRequest } from './api';
 
+export type MaintenancePlanEquipmentItem = {
+  id?: number;
+  uuid?: string;
+  code?: string;
+  name?: string;
+};
+
+export function resolveMaintenancePlanEquipmentUuids(plan: {
+  equipment_uuids?: string[];
+  equipment_uuid?: string;
+  equipment_items?: MaintenancePlanEquipmentItem[];
+}): string[] {
+  if (Array.isArray(plan.equipment_uuids) && plan.equipment_uuids.length > 0) {
+    return plan.equipment_uuids.filter(Boolean);
+  }
+  if (Array.isArray(plan.equipment_items) && plan.equipment_items.length > 0) {
+    return plan.equipment_items.map((item) => item.uuid).filter(Boolean) as string[];
+  }
+  return plan.equipment_uuid ? [plan.equipment_uuid] : [];
+}
+
+export function formatMaintenancePlanEquipmentText(plan: {
+  equipment_name?: string;
+  equipment_code?: string;
+  equipment_items?: MaintenancePlanEquipmentItem[];
+}): string {
+  const items = plan.equipment_items;
+  if (items?.length) {
+    return items
+      .map((item) => {
+        const code = item.code?.trim();
+        const name = item.name?.trim() || '-';
+        return code ? `${code} - ${name}` : name;
+      })
+      .join('、');
+  }
+  const code = plan.equipment_code?.trim();
+  const name = plan.equipment_name?.trim() || '-';
+  return code ? `${code} - ${name}` : name;
+}
+
 /**
  * 维护计划信息接口
  */
@@ -15,6 +56,8 @@ export interface MaintenancePlan {
   plan_no: string;
   plan_name: string;
   equipment_uuid: string;
+  equipment_uuids?: string[];
+  equipment_items?: Array<{ id?: number; uuid?: string; code?: string; name?: string }>;
   equipment_id: number;
   equipment_name: string;
   plan_type: string;
@@ -114,7 +157,8 @@ export interface MaintenanceExecutionListResponse {
 export interface CreateMaintenancePlanData {
   plan_no?: string;
   plan_name: string;
-  equipment_uuid: string;
+  equipment_uuid?: string;
+  equipment_uuids: string[];
   plan_type: string;
   maintenance_type: string;
   cycle_type: string;
@@ -133,6 +177,7 @@ export interface CreateMaintenancePlanData {
  */
 export interface UpdateMaintenancePlanData {
   plan_name?: string;
+  equipment_uuids?: string[];
   plan_type?: string;
   maintenance_type?: string;
   cycle_type?: string;
