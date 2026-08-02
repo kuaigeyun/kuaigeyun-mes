@@ -52,6 +52,7 @@ import { prefetchPlugin } from '../utils/pluginLoader';
 import { prefetchKuaizhizaoRoute } from '../apps/kuaizhizao/routePrefetch';
 import { prefetchMasterDataRoute } from '../apps/master-data/routePrefetch';
 import { prefetchSystemRoute, prefetchSystemRoutes } from '../routes/systemRoutePrefetch';
+import { PRO_APP_CODES } from '../pages/system/applications/proAppCatalog';
 import dayjs from 'dayjs';
 import { DEFAULT_SITE_LOGO_URL, SITE_LOGO_FALLBACK_SVG_URL, nextSiteLogoUrlAfterImageError } from '../constants/siteAssets';
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
@@ -168,6 +169,43 @@ import { useTouchScreen } from '../hooks/useTouchScreen';
 import { buildLoginRedirectPath } from '../utils/tenantDomainAccess';
 import { isPlatformAdminLoginPathname, isPlatformInfraPath } from '../utils/platformScope';
 import { redirectAfterLogout } from '../utils/loginEntry';
+
+/** 侧栏应用分组标题 → 应用 code（任意应用；key / path） */
+function resolveSidebarAppGroupCode(item: {
+  key?: React.Key;
+  path?: string;
+}): string | null {
+  const keyStr = String(item.key ?? '');
+  const fromKey = keyStr.match(/^app-group-code-(.+)$/)?.[1];
+  if (fromKey) return fromKey;
+
+  const path = typeof item.path === 'string' ? item.path : '';
+  const fromHash = path.match(/^#app-group-(.+)$/)?.[1];
+  if (fromHash) return fromHash;
+
+  return extractAppCodeFromPath(path);
+}
+
+function isSidebarAppGroupTitleItem(item: { key?: React.Key; className?: string }): boolean {
+  const keyStr = String(item.key ?? '');
+  const cls = String(item.className ?? '');
+  return (
+    cls.includes('menu-group-title-app') ||
+    cls.includes('app-menu-container-start') ||
+    keyStr.startsWith('app-group-code-') ||
+    keyStr.startsWith('app-group-')
+  );
+}
+
+/** 与 git HEAD 应用分组标题一致；写在标题文字节点上，避开父级灰色 !important 竞争 */
+const APP_GROUP_TITLE_TEXT_STYLE: React.CSSProperties = {
+  fontSize: 12,
+  color: 'var(--ant-colorPrimary)',
+  fontWeight: 700,
+  lineHeight: 1.2,
+  display: 'inline-flex',
+  alignItems: 'center',
+};
 
 /**
  * 左侧菜单 path → menu-badge-counts 的 key（与后端 get_menu_badge_counts 一致）
@@ -1928,35 +1966,58 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, [location.pathname]);
 
   /**
-   * 为分组标题动态添加自定义 className
-   * 因为 ProLayout 不会将 className 传递给 type: 'group' 的项
+   * 为分组标题动态添加 className。
+   * ProLayout 不会把 items.className 传到 type:'group' 的 DOM，
+   * 导致依赖 [class*="menu-group-title-app"] 的主色样式永远不命中，
+   * 被后面的 siderTextColor / 灰色通用规则盖掉。
    */
   useEffect(() => {
-    const addGroupTitleClassName = () => {
-      // 查找所有分组标题元素
-      const groupTitles = document.querySelectorAll('.ant-menu-item-group-title');
-      groupTitles.forEach((title) => {
-        // 检查是否已经添加了 className
-        if (!title.classList.contains('riveredge-menu-group-title')) {
-          title.classList.add('riveredge-menu-group-title');
+    const markGroupTitles = () => {
+      document.querySelectorAll('.ant-pro-sider-menu .ant-menu-item-group').forEach((group) => {
+        const title = group.querySelector(':scope > .ant-menu-item-group-title');
+        if (!title) return;
+        title.classList.add('riveredge-menu-group-title');
+
+        const groupEl = group as HTMLElement;
+        const idBlob = [
+          groupEl.getAttribute('data-menu-id') || '',
+          groupEl.id || '',
+          title.getAttribute('data-menu-id') || '',
+        ].join(' ');
+        const hasAppMarker =
+          idBlob.includes('app-group') ||
+          Boolean(
+            group.querySelector(
+              '[data-menu-id*="app-group-placeholder"], .app-group-placeholder-item, [data-app-menu-group], .menu-group-title-app-inner, .menu-group-title-app-label',
+            ),
+          ) ||
+          Boolean(title.querySelector('[data-app-menu-group], .menu-group-title-app-inner'));
+
+        if (hasAppMarker) {
+          title.classList.add('menu-group-title-app');
+          groupEl.classList.add('menu-group-title-app', 'app-menu-container-start');
         }
       });
+
+      // SubMenu 形态的应用分组（部分 ProLayout 版本）
+      document
+        .querySelectorAll('.ant-pro-sider-menu .ant-menu-submenu[data-menu-id*="app-group"]')
+        .forEach((submenu) => {
+          submenu.classList.add('menu-group-title-app', 'app-menu-container-start');
+        });
     };
 
-    // 初始添加
-    addGroupTitleClassName();
+    markGroupTitles();
 
-    // 使用 MutationObserver 监听 DOM 变化，确保新增的分组标题也能添加 className（合并到 rAF，避免菜单动画/重排时连发同步回调）
     let groupMoRaf = 0;
     const observer = new MutationObserver(() => {
       if (groupMoRaf) return;
       groupMoRaf = window.requestAnimationFrame(() => {
         groupMoRaf = 0;
-        addGroupTitleClassName();
+        markGroupTitles();
       });
     });
 
-    // 观察菜单容器
     const menuContainer = document.querySelector('.ant-pro-sider-menu');
     if (menuContainer) {
       observer.observe(menuContainer, {
@@ -2974,36 +3035,83 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
          * groupTitleColor: rgba(0,0,0,0.45), groupTitleFontSize: 14, groupTitleLineHeight: 1.5714285714285714
          * 使用主题颜色变量，支持深色模式，并根据菜单栏背景色自动适配
          */
-        /* 侧边栏内的分组标题 - 根据菜单栏背景色自动适配 */
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title {
+        /* 侧边栏内的系统分组标题 - 根据菜单栏背景色自动适配（排除应用分组） */
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title:not(.menu-group-title-app) {
           font-size: var(--ant-fontSize) !important;
           color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
           line-height: 1.5714285714285714 !important;
         }
-        /* 应用级菜单分组标题样式 - 使用原生的 .ant-menu-item-group-title */
-        .ant-pro-sider-menu .ant-menu-item-group[class*="app-group-"] .ant-menu-item-group-title,
-        .ant-pro-sider-menu .ant-menu-item-group[class*="menu-group-title-app"] .ant-menu-item-group-title {
+        /* 应用级分组：ProLayout 若渲染为 SubMenu；左缩进与一级菜单项图标列对齐（16px padding + 6px margin） */
+        .ant-pro-sider-menu .ant-menu-submenu.menu-group-title-app > .ant-menu-submenu-title {
           font-size: 12px !important;
           color: var(--ant-colorPrimary) !important;
           font-weight: 700 !important;
-          padding: 2px 16px 2px 0 !important;
-          margin: 0 !important;
+          padding: 2px 16px 2px 16px !important;
+          margin-block: 0 !important;
+          margin-inline: 6px !important;
+          line-height: 1.2 !important;
+          height: 20px !important;
+          min-height: 20px !important;
+          max-height: 20px !important;
+          cursor: default !important;
+          pointer-events: none !important;
+          background: transparent !important;
+        }
+        .ant-pro-sider-menu .ant-menu-submenu.menu-group-title-app > .ant-menu-submenu-title .ant-menu-submenu-arrow {
+          display: none !important;
+        }
+        .ant-pro-sider-menu .ant-menu-submenu.menu-group-title-app > .ant-menu-submenu-title .ant-menu-title-content {
+          overflow: visible !important;
+          max-width: 100% !important;
+        }
+        .ant-pro-sider-menu .ant-menu-submenu.menu-group-title-app > .ant-menu {
+          display: none !important;
+        }
+        /* 应用级菜单分组标题：左缩进对齐一级菜单图标列（itemPaddingInline 16 + margin-inline 6） */
+        .ant-pro-sider-menu .ant-menu-item-group[class*="app-group-"] .ant-menu-item-group-title,
+        .ant-pro-sider-menu .ant-menu-item-group[class*="menu-group-title-app"] .ant-menu-item-group-title,
+        .ant-pro-sider-menu .ant-menu-item-group-title.menu-group-title-app,
+        .ant-pro-sider-menu .ant-menu-item-group:has([data-menu-id*="app-group-placeholder"]) > .ant-menu-item-group-title,
+        .ant-pro-sider-menu .ant-menu-item-group:has(.app-group-placeholder-item) > .ant-menu-item-group-title,
+        .ant-pro-sider-menu .ant-menu-item-group:has([data-app-menu-group]) > .ant-menu-item-group-title {
+          font-size: 12px !important;
+          color: var(--ant-colorPrimary) !important;
+          font-weight: 700 !important;
+          padding: 2px 16px 2px 16px !important;
+          margin-block: 0 !important;
+          margin-inline: 6px !important;
           line-height: 1.2 !important;
           height: 20px !important;
           min-height: 20px !important;
           max-height: 20px !important;
         }
+        /* 应用分组标题文字：内联节点带 !important，盖过父级灰色 siderTextColor */
+        .ant-pro-sider-menu .ant-menu-item-group-title .menu-group-title-app-label,
+        .ant-pro-sider-menu .ant-menu-submenu.menu-group-title-app .menu-group-title-app-label {
+          display: inline-flex !important;
+          align-items: center !important;
+          pointer-events: none;
+          font-size: 12px !important;
+          color: var(--ant-colorPrimary) !important;
+          font-weight: 700 !important;
+          line-height: 1.2 !important;
+        }
+        .ant-pro-sider-menu .ant-menu-item-group-title .menu-item-badge-pro,
+        .ant-pro-sider-menu .ant-menu-submenu.menu-group-title-app .menu-item-badge-pro {
+          pointer-events: none;
+        }
         /* 隐藏占位子菜单项 */
         .ant-pro-sider-menu .ant-menu-item[class*="app-group-placeholder-"],
+        .ant-pro-sider-menu .ant-menu-item.app-group-placeholder-item,
         .ant-pro-sider-menu .ant-menu-item[key*="app-group-placeholder-"] {
           display: none !important;
           height: 0 !important;
           padding: 0 !important;
           margin: 0 !important;
         }
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title:hover,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title:active,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title:focus {
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title:not(.menu-group-title-app):hover,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title:not(.menu-group-title-app):active,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title:not(.menu-group-title-app):focus {
           background: transparent !important;
           color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
         }
@@ -3129,8 +3237,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 应用级菜单分组标题样式 - 使用实际的选择器 */
         .ant-menu-item.ant-menu-item-only-child.ant-pro-base-menu-inline-menu-item.menu-group-title-app,
         .ant-menu-item.ant-menu-item-only-child.ant-pro-base-menu-inline-menu-item[class*="menu-group-title-app"] {
-          padding: 0 16px 0 0 !important; /* 减小上下 padding */
-          margin: 0 !important;
+          padding: 0 16px 0 16px !important; /* 左缩进对齐一级菜单图标列 */
+          margin-block: 0 !important;
+          margin-inline: 6px !important;
           line-height: 1.2 !important;
           height: 20px !important;
           min-height: 20px !important;
@@ -3193,6 +3302,23 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .menu-item-badge-dashboard {
           background: var(--ant-colorInfoBg);
           color: var(--ant-colorInfo);
+        }
+        .menu-item-badge-pro {
+          margin-left: 6px;
+          letter-spacing: 0.04em;
+          font-size: 10px;
+          line-height: 1.2;
+          padding: 0 4px;
+          border-radius: 2px;
+          font-weight: 600;
+          background: color-mix(in srgb, #d48806 16%, var(--ant-colorBgContainer, #fff));
+          color: #d48806;
+          border: 1px solid color-mix(in srgb, #d48806 35%, transparent);
+        }
+        /* 应用分组标题（含 PRO）：避免被菜单项溢出裁切 */
+        .ant-menu-item.menu-group-title-app .ant-menu-title-content,
+        .ant-menu-item[class*='menu-group-title-app'] .ant-menu-title-content {
+          overflow: visible !important;
         }
         .menu-item-badge-count.ant-badge .ant-badge-count {
           font-size: 10px;
@@ -3710,9 +3836,20 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 根据菜单栏背景色自动适配文字颜色 */
         /* 深色背景使用浅色文字，浅色背景使用深色文字 */
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item:not(.ant-menu-item-selected),
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title {
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu:not(.menu-group-title-app) > .ant-menu-submenu-title,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title:not(.menu-group-title-app) {
           color: ${siderTextColor} !important;
+        }
+        /* 盖过上方 siderTextColor：应用分组标题保持主色（与 git HEAD 应用分组样式一致） */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title.menu-group-title-app,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group.menu-group-title-app > .ant-menu-item-group-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group:has([data-app-menu-group]) > .ant-menu-item-group-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu.menu-group-title-app > .ant-menu-submenu-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title .menu-group-title-app-label,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu.menu-group-title-app .menu-group-title-app-label {
+          color: var(--ant-colorPrimary) !important;
+          font-size: 12px !important;
+          font-weight: 700 !important;
         }
         /* 统一菜单文字排版（跨主题固定），避免切换明暗模式时文字抖动 */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
@@ -3822,25 +3959,32 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         ` : ''}
         ${isLightModeDarkSider ? `
-        /* 浅色模式 + 深色侧栏：所有菜单层级统一白色文字 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > a,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > span,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > a,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > span,
-        .ant-menu-item[data-menu-id*='app-group-'],
-        .ant-menu-item[class*='menu-group-title-app'] {
+        /* 浅色模式 + 深色侧栏：菜单文字白色（排除应用分组标题，避免盖掉主色） */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item:not([class*='menu-group-title-app']):not([data-menu-id*='app-group-']),
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu:not(.menu-group-title-app) > .ant-menu-submenu-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title:not(.menu-group-title-app),
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item:not([class*='menu-group-title-app']) .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu:not(.menu-group-title-app) > .ant-menu-submenu-title .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item:not([class*='menu-group-title-app']) .ant-menu-title-content > a,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item:not([class*='menu-group-title-app']) .ant-menu-title-content > span,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu:not(.menu-group-title-app) > .ant-menu-submenu-title .ant-menu-title-content > a,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu:not(.menu-group-title-app) > .ant-menu-submenu-title .ant-menu-title-content > span {
           color: #fff !important;
         }
-        .ant-menu-item[data-menu-id*='app-group-']:hover,
-        .ant-menu-item[class*='menu-group-title-app']:hover,
+        /* 深色侧栏下仍强制应用分组标题为主色（含 label 内联节点） */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title.menu-group-title-app,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group.menu-group-title-app > .ant-menu-item-group-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group:has([data-app-menu-group]) > .ant-menu-item-group-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu.menu-group-title-app > .ant-menu-submenu-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title .menu-group-title-app-label,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu.menu-group-title-app .menu-group-title-app-label,
+        .ant-menu-item[data-menu-id*='app-group-'],
+        .ant-menu-item[class*='menu-group-title-app'],
         .ant-menu-item[data-menu-id*='app-group-'] .ant-menu-title-content,
-        .ant-menu-item[class*='menu-group-title-app'] .ant-menu-title-content {
-          color: #fff !important;
+        .ant-menu-item[class*='menu-group-title-app'] .ant-menu-title-content,
+        .ant-menu-item[data-menu-id*='app-group-'] .menu-group-title-app-label,
+        .ant-menu-item[class*='menu-group-title-app'] .menu-group-title-app-label {
+          color: var(--ant-colorPrimary) !important;
         }
         ` : ''}
         ${(isDarkMode || isLightModeDarkSider) ? `
@@ -5325,6 +5469,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           }
           return data;
         }}
+        menuTextRender={(item: any, defaultText: React.ReactNode) => {
+          // 应用分组标题：全部套主色样式；PRO 徽标仅对 PRO 应用
+          if (!isSidebarAppGroupTitleItem(item)) return defaultText;
+          const appCode = resolveSidebarAppGroupCode(item);
+          const showPro = Boolean(appCode && (PRO_APP_CODES as readonly string[]).includes(appCode));
+          return (
+            <span
+              className="menu-group-title-app-label"
+              data-app-menu-group={appCode || '1'}
+              style={APP_GROUP_TITLE_TEXT_STYLE}
+            >
+              {defaultText}
+              {showPro ? <span className="menu-item-badge menu-item-badge-pro">PRO</span> : null}
+            </span>
+          );
+        }}
         menuProps={{
           mode: 'inline',
           ...(collapsed || isFullscreen
@@ -5355,6 +5515,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
         onMenuHeaderClick={() => navigate(effectiveSystemHomePath)}
         subMenuItemRender={(item: any, defaultDom) => {
+          if (isSidebarAppGroupTitleItem(item)) {
+            const attachGroupSubmenuClass = (el: HTMLElement | null) => {
+              const submenu = el?.closest('.ant-menu-submenu') as HTMLElement | null;
+              if (submenu) submenu.classList.add('menu-group-title-app');
+            };
+            return React.isValidElement(defaultDom)
+              ? React.cloneElement(defaultDom as React.ReactElement, {
+                  ref: attachGroupSubmenuClass,
+                })
+              : defaultDom;
+          }
           // 父分组悬停：一次性预取其下全部子项 chunk，展开即可见、点击即渲染
           const collectLeafPaths = (node: any, acc: string[]): string[] => {
             if (!node) return acc;
@@ -5412,26 +5583,23 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               </a>
             );
           }
-          // 如果是应用级菜单的分组标题（只有应用级菜单才需要特殊处理）
-          // 系统级菜单的分组标题（type: 'group'）由 Ant Design Menu 原生处理，不需要自定义渲染
-          // 检查条件：path 以 #app-group- 开头，或者有 menu-group-title-app className
-          if (item.className && (item.className.includes('menu-group-title-app') || item.className.includes('app-menu-container-start'))) {
-            // 应用名唯一来源：仅用 locale 的 app.${appCode}.name，与 useUnifiedMenuData 一致
-            const firstChildPath = item.children?.[0]?.path;
-            const fallback = item.name || item.label || '';
-            const appCode = firstChildPath ? extractAppCodeFromPath(firstChildPath) : null;
-            const groupTitle = appCode ? resolveAppMenuGroupDisplayName(appCode, fallback, t) : fallback;
+          // 应用级分组标题：主色标题 + PRO 徽标（仅 PRO 应用）
+          if (isSidebarAppGroupTitleItem(item)) {
+            const fallback = typeof item.name === 'string' ? item.name : '';
+            const appCode = resolveSidebarAppGroupCode(item);
+            const groupTitle = appCode
+              ? resolveAppMenuGroupDisplayName(appCode, fallback, t)
+              : fallback;
+            const showPro = Boolean(appCode && (PRO_APP_CODES as readonly string[]).includes(appCode));
 
             return (
               <div
                 className="menu-group-title-app"
+                data-app-code={appCode || undefined}
                 style={{
-                  fontSize: '12px',
-                  color: 'var(--ant-colorPrimary)',
-                  fontWeight: 500,
-                  padding: '0', // 减小上下 padding
+                  ...APP_GROUP_TITLE_TEXT_STYLE,
+                  padding: 0,
                   margin: 0,
-                  lineHeight: '1.2',
                   height: '16px',
                   minHeight: '16px',
                   maxHeight: '16px',
@@ -5439,15 +5607,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   userSelect: 'none',
                   pointerEvents: 'none',
                   width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
                 }}
                 onMouseEnter={(e) => {
-                  // 阻止hover效果传播到父元素
                   e.stopPropagation();
                   const parent = e.currentTarget.closest('.ant-menu-item') as HTMLElement;
                   if (parent) {
                     parent.style.backgroundColor = 'transparent';
+                    parent.classList.add('menu-group-title-app');
                   }
                 }}
                 onMouseLeave={(e) => {
@@ -5456,8 +5622,19 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     parent.style.backgroundColor = 'transparent';
                   }
                 }}
+                ref={(el) => {
+                  const parent = el?.closest('.ant-menu-item') as HTMLElement | null;
+                  if (parent) parent.classList.add('menu-group-title-app');
+                }}
               >
-                {groupTitle}
+                <span
+                  className="menu-group-title-app-label"
+                  data-app-menu-group={appCode || '1'}
+                  style={APP_GROUP_TITLE_TEXT_STYLE}
+                >
+                  {groupTitle}
+                  {showPro ? <span className="menu-item-badge menu-item-badge-pro">PRO</span> : null}
+                </span>
               </div>
             );
           }

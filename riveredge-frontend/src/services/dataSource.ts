@@ -190,3 +190,19 @@ export async function getDataSourceSchema(dataSourceUuid: string): Promise<DataS
   return apiRequest<DataSourceSchemaResponse>(`/core/integration-configs/${dataSourceUuid}/schema`);
 }
 
+export interface EnsureSystemDefaultDataSourceResponse {
+  created: boolean;
+  restored: boolean;
+  item: DataSource;
+}
+
+/**
+ * 加载默认数据源（确保当前租户存在 code=system_default 的应用主库连接）
+ */
+export async function ensureSystemDefaultDataSource(): Promise<EnsureSystemDefaultDataSourceResponse> {
+  return apiRequest<EnsureSystemDefaultDataSourceResponse>(
+    '/core/integration-configs/ensure-system-default',
+    { method: 'POST' },
+  );
+}
+

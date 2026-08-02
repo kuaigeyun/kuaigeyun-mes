@@ -128,7 +128,8 @@ export const SecureImage: React.FC<SecureImageProps> = ({
   }, [fileUuid, loadingOriginal, isOriginalPreview, messageApi, t]);
 
   useEffect(() => {
-    if (previewEnabled && !lazyLoad) {
+    // 非懒加载：立即可见（与 preview 开关无关；preview=false 仅关闭点击放大）
+    if (!lazyLoad) {
       setIsVisible(true);
       return;
     }
@@ -148,7 +149,7 @@ export const SecureImage: React.FC<SecureImageProps> = ({
     }
 
     return () => observer.disconnect();
-  }, [fileUuid, initialSrc, previewEnabled, lazyLoad]);
+  }, [fileUuid, initialSrc, lazyLoad]);
 
   useEffect(() => {
     if (!isVisible) return;

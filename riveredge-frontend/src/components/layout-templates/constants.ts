@@ -315,8 +315,11 @@ export const LIST_PAGE_TABLE_SCROLL = {
   STAT_CARDS_ROW_EXTRA_PX: 120,
   /** MultiTabListPageTemplate 相对标准列表：Ant Design Card 的 Tab 栏及结构增量 */
   MULTI_TAB_CARD_EXTRA_PX: 78,
-  /** UniReport 报表标题区（UniReportMetaHeader：标题 + 副标题 + margin，约 66px） */
-  REPORT_META_HEADER_EXTRA_PX: 70,
+  /**
+   * UniReport 报表标题区（UniReportMetaHeader：标题 32 + 副标题行约 26 + marginBottom 12 ≈ 70）
+   * 另预留卡片底边/横向滚动条等 6px，避免 fillMain overflow:hidden 吞底边。
+   */
+  REPORT_META_HEADER_EXTRA_PX: 76,
   /** UniTable 无模板变量时使用的默认回退（312 + 136） */
   DEFAULT_FALLBACK_OFFSET_PX: 448,
 } as const;

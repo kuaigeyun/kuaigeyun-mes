@@ -26,6 +26,7 @@ import {
   deleteDataSource,
   testDataSourceConnection,
   testDataSourceConfig,
+  ensureSystemDefaultDataSource,
   DataSource,
   CreateDataSourceData,
   UpdateDataSourceData,
@@ -203,6 +204,7 @@ const DataSourceListPage: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   
   const [testingConnection, setTestingConnection] = useState(false);
+  const [ensuringDefault, setEnsuringDefault] = useState(false);
   const [allDataSources, setAllDataSources] = useState<DataSource[]>([]);
   const [connectorMarketVisible, setConnectorMarketVisible] = useState(false);
   const formRef = useRef<ProFormInstance>();
@@ -214,6 +216,28 @@ const DataSourceListPage: React.FC = () => {
     setIsEdit(false);
     setCurrentDataSourceUuid(null);
     setConnectorMarketVisible(true);
+  };
+
+  /**
+   * 加载系统默认数据源（应用主库）
+   */
+  const handleEnsureSystemDefault = async () => {
+    try {
+      setEnsuringDefault(true);
+      const result = await ensureSystemDefaultDataSource();
+      if (result.created) {
+        messageApi.success(t('pages.system.dataSources.loadDefaultSuccessCreated'));
+      } else if (result.restored) {
+        messageApi.success(t('pages.system.dataSources.loadDefaultSuccessRestored'));
+      } else {
+        messageApi.info(t('pages.system.dataSources.loadDefaultAlreadyExists'));
+      }
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.dataSources.loadDefaultFailed'));
+    } finally {
+      setEnsuringDefault(false);
+    }
   };
 
   /**
@@ -959,6 +983,17 @@ const DataSourceListPage: React.FC = () => {
           showCreateButton
           onCreate={handleCreate}
           createButtonText={t('pages.system.dataSources.createButton')}
+          toolBarActionsAfterCreate={[
+            <Button
+              {...rowActionKind('create')}
+              key="ensure-system-default"
+              icon={<DatabaseOutlined />}
+              loading={ensuringDefault}
+              onClick={handleEnsureSystemDefault}
+            >
+              {t('pages.system.dataSources.loadDefault')}
+            </Button>,
+          ]}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           rowSelection={{

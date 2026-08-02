@@ -990,6 +990,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
       | number
       | { xs?: number; sm?: number; md?: number; lg?: number; xl?: number; xxl?: number }
     /**
+     * 网格卡片最小宽度（px）。默认 300；看板等大图场景可调大（如 520）。
+     */
+    minCardWidth?: number
+    /**
      * 分组字段（如按生命周期分组），分组后每组内使用瀑布流布局
      */
     groupByField?: string
@@ -2859,6 +2863,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
   }, [enableRowSelection, selectedRowKeys.length, currentViewType, isMobile])
 
+  const showViewSwitcher = !isMobile && Boolean(viewTypes && viewTypes.length > 1)
   const showSearchToolbarRow =
     searchPlacement === 'searchRow'
       ? showFuzzySearch ||
@@ -2866,9 +2871,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         Boolean(beforeSearchButtons) ||
         Boolean(afterSearchButtons) ||
         Boolean(betweenFuzzyAndAdvancedButtons) ||
+        showViewSwitcher ||
         (isMobile && gatedShowCreateButton && onCreate)
-      : (!isMobile && viewTypes && viewTypes.length > 1) ||
-        (isMobile && gatedShowCreateButton && onCreate)
+      : showViewSwitcher || (isMobile && gatedShowCreateButton && onCreate)
+
+  const isTableLikeView =
+    currentViewType === 'table' ||
+    currentViewType === 'detailTable' ||
+    Boolean(tableViewTypes && tableViewTypes.includes(currentViewType))
+
+  /** 卡片/帮助等非表格视图：ProTable 隐藏，需单独 bordered 容器包裹工具栏与内容 */
+  const showAltViewBorderedShell = !embedded && !isMobile && !isTableLikeView
 
   const effectiveToolbarButtonSize =
     toolBarButtonSize ?? (searchPlacement === 'toolbarLeft' ? 'small' : 'middle')
@@ -2968,6 +2981,43 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   const hasListToolbarActions = Boolean(memoizedHeaderActions || memoizedRightActions)
 
+  const altViewToolbarNode =
+    !isMobile && !isTableLikeView && hasListToolbarActions ? (
+      <div
+        className="uni-table-alt-view-toolbar"
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 8,
+          width: '100%',
+          minHeight: 32,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          {memoizedHeaderActions}
+        </div>
+        {memoizedRightActions ? (
+          <div style={{ flexShrink: 0 }}>{memoizedRightActions}</div>
+        ) : null}
+      </div>
+    ) : null
+
+  const wrapAltViewBody = (body: React.ReactNode) =>
+    showAltViewBorderedShell ? (
+      <div className="uni-table-pro-table uni-table-alt-view-shell">
+        <ProCard bordered styles={{ body: { padding: 16 } }}>
+          {altViewToolbarNode}
+          {body}
+        </ProCard>
+      </div>
+    ) : (
+      <>
+        {altViewToolbarNode}
+        {body}
+      </>
+    )
+
   return (
     <>
       <style>{`
@@ -2979,7 +3029,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           width: 100%;
         }
         /* ProTable 外框：ProCard 默认用 colorSplit 过浅，统一为次级边框色 */
-        .uni-table-container:not(.uni-table-embedded) .uni-table-pro-table.ant-pro-table > .ant-pro-card.ant-pro-card-border {
+        .uni-table-container:not(.uni-table-embedded) .uni-table-pro-table.ant-pro-table > .ant-pro-card.ant-pro-card-border,
+        .uni-table-container:not(.uni-table-embedded) .uni-table-alt-view-shell > .ant-pro-card.ant-pro-card-border {
           border: 1px solid var(--ant-colorBorderSecondary, var(--ant-colorBorder)) !important;
           border-radius: var(--ant-borderRadiusLG, var(--ant-borderRadius, 6px)) !important;
           overflow: hidden;
@@ -3061,6 +3112,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         .uni-table-container.uni-table-has-list-toolbar .ant-pro-table-list-toolbar-container {
           display: flex !important;
           min-height: 32px;
+        }
+        /* 卡片/看板等 alt 视图：工具栏与内容区之间分隔线（对齐表格外框 border 色） */
+        .uni-table-container .uni-table-alt-view-toolbar {
+          border-bottom: 1px solid var(--ant-colorBorderSecondary, var(--ant-colorBorder));
+          padding-bottom: 12px;
+          margin-bottom: 16px;
         }
         /* 排序提示默认向下弹出（见 showSorterTooltip），避免遮挡上方工具栏 */
         .uni-table-container .ant-table-thead .ant-table-column-sorters-tooltip-target-sorter .ant-table-column-sorter {
@@ -3160,8 +3217,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             }}
           >
             {searchPlacement === 'searchRow' ? memoizedUniSearch : null}
-            {!isMobile && viewTypes && viewTypes.length > 1 ? (
-              <div style={{ flexShrink: 0, marginLeft: 8 }}>
+            {showViewSwitcher ? (
+              <div style={{ flexShrink: 0, marginLeft: 'auto' }}>
                 <UniView
                   viewTypes={viewTypes}
                   value={currentViewType}
@@ -3178,12 +3235,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             <div
               ref={tableBodyPaneRef}
               style={{
-                display:
-                  (currentViewType === 'table' ||
-                  currentViewType === 'detailTable' ||
-                  (tableViewTypes && tableViewTypes.includes(currentViewType))) && !isMobile
-                    ? 'block'
-                    : 'none',
+                display: isTableLikeView && !isMobile ? 'block' : 'none',
                 width: '100%',
                 position: 'relative',
               }}
@@ -3379,6 +3431,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             </div>
           </ConfigProvider>
 
+          {!isTableLikeView
+            ? wrapAltViewBody(
+            <>
           {/* 甘特图视图 */}
           {currentViewType === 'gantt' && viewTypes.includes('gantt') && (
             <div style={{ padding: 0, minHeight: '400px' }}>
@@ -3404,12 +3459,21 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
           {/* 卡片视图 */}
           {currentViewType === 'card' && viewTypes.includes('card') && (
-            <div style={{ padding: '0 0 16px 0', minHeight: '400px' }}>
+            <div style={{ padding: 0, minHeight: '400px' }}>
               {cardViewConfig?.renderCard ? (
                 tableData.length > 0 ? (
                   (() => {
                     const layout = cardViewConfig.layout ?? 'grid'
                     const groupByField = cardViewConfig.groupByField
+                    const minCardWidth = Math.max(200, Number(cardViewConfig.minCardWidth) || 300)
+                    const gridStyle: React.CSSProperties =
+                      layout === 'waterfall'
+                        ? { columns: `${minCardWidth}px auto`, columnGap: 16 }
+                        : {
+                            display: 'grid',
+                            gridTemplateColumns: `repeat(auto-fill, minmax(${minCardWidth}px, 1fr))`,
+                            gap: 16,
+                          }
                     if (groupByField) {
                       const groups = new Map<string, T[]>()
                       tableData.forEach(item => {
@@ -3422,9 +3486,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                           {Array.from(groups.entries()).map(([groupKey, items]) => (
                             <div key={groupKey}>
                               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#666' }}>{groupKey}</div>
-                              <div
-                                style={layout === 'waterfall' ? { columns: '300px auto', columnGap: 16 } : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}
-                              >
+                              <div style={gridStyle}>
                                 {items.map((item, index) => (
                                   <div key={index} style={layout === 'waterfall' ? { breakInside: 'avoid' as const, marginBottom: 16 } : {}}>
                                     {cardViewConfig!.renderCard!(item, index)}
@@ -3437,9 +3499,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                       )
                     }
                     return (
-                      <div
-                        style={layout === 'waterfall' ? { columns: '300px auto', columnGap: 16 } : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}
-                      >
+                      <div style={gridStyle}>
                         {(() => {
                           const stackGroups = cardViewConfig.cardStackGroups ?? []
                           const renderedStackKeys = new Set<string>()
@@ -3685,10 +3745,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 flexDirection: 'column',
                 minHeight: 0,
                 overflow: 'hidden',
-                background: token.colorBgContainer,
-                borderRadius: token.borderRadius,
-                border: `1px solid rgba(0, 0, 0, 0.12)`,
-                boxShadow: 'none',
+                ...(showAltViewBorderedShell
+                  ? {}
+                  : {
+                      background: token.colorBgContainer,
+                      borderRadius: token.borderRadius,
+                      border: `1px solid rgba(0, 0, 0, 0.12)`,
+                      boxShadow: 'none',
+                    }),
               }}
             >
               {helpViewConfig?.content ?? (
@@ -3713,7 +3777,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             cv =>
               currentViewType === cv.key &&
               viewTypes.includes(cv.key) &&
-              !(tableViewTypes && tableViewTypes.includes(cv.key)) && (
+              !(tableViewTypes && tableViewTypes.includes(cv.key)) &&
+              (showAltViewBorderedShell ? (
+                <div key={cv.key} style={{ minHeight: '200px' }}>
+                  {cv.render(tableData)}
+                </div>
+              ) : (
                 <div
                   key={cv.key}
                   className="uni-table-pro-table"
@@ -3732,12 +3801,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                       borderRadius: token.borderRadius,
                       overflow: 'visible',
                     }}
-                    styles={{ body: {paddingLeft: 16, paddingRight: 16, paddingBottom: 16 } }}
+                    styles={{ body: { paddingLeft: 16, paddingRight: 16, paddingBottom: 16 } }}
                   >
                     <div style={{ minHeight: '200px' }}>{cv.render(tableData)}</div>
                   </ProCard>
                 </div>
-              )
+              ))
           )}
 
           {/* 触屏视图 (移动端/平板优化) */}
@@ -3791,6 +3860,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               )}
             </div>
           )}
+            </>
+          )
+            : null}
 
           {/* 手机端专用卡片视图 - 自动触发 */}
           {isMobile && (currentViewType === 'table' || currentViewType === 'detailTable' || (tableViewTypes && tableViewTypes.includes(currentViewType))) && (

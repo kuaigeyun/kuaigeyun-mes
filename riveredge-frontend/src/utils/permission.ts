@@ -204,11 +204,13 @@ type PermissionMenuItem = {
 };
 
 /** 应用侧栏分组标题（快制造 / 主数据等），无 path，仅作视觉分组 */
-export function isAppGroupTitleItem(item: { key?: string; className?: string }): boolean {
+export function isAppGroupTitleItem(item: { key?: string; className?: string; path?: string }): boolean {
   const key = String(item.key ?? '');
   const cls = String(item.className ?? '');
+  const path = String(item.path ?? '');
   return (
     key.startsWith('app-group-') ||
+    path.startsWith('#app-group-') ||
     cls.includes('menu-group-title-app') ||
     cls.includes('app-menu-container-start')
   );
@@ -244,7 +246,14 @@ export function filterMenuItemsByPermission<T extends PermissionMenuItem>(
       const hasVisibleChildren = (nextChildren ?? []).some(
         (child) => !child.hideInMenu && !isAppGroupPlaceholderItem(child),
       );
-      const isNavigableMenuEntry = Boolean(item.path) && !item.hideInMenu;
+      const itemPath = String(item.path ?? '');
+      const isNavigableMenuEntry =
+        Boolean(item.path) && !item.hideInMenu && !itemPath.startsWith('#app-group-');
+
+      // 占位子项：仅供 ProLayout 保留 SubMenu 壳，不参与权限过滤
+      if (isAppGroupPlaceholderItem(item)) {
+        return item;
+      }
 
       // 应用分组标题不参与权限/path 剔除（子项为占位符，真实菜单项为同级兄弟节点）
       if (isAppGroupTitleItem(item)) {

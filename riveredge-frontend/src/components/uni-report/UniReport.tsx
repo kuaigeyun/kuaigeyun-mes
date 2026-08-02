@@ -92,6 +92,7 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
   rowKey = 'id',
   actionRef: externalActionRef,
   children,
+  headerLeft,
   reportConfig,
   reportId,
   datasetExecute,
@@ -247,7 +248,7 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
           flexDirection: 'column',
         }}
       >
-        <UniReportMetaHeader title={title} subtitle={resolvedSubtitle} />
+        <UniReportMetaHeader title={title} subtitle={resolvedSubtitle} extraLeft={headerLeft} />
         {children}
         <UniTable<T>
           headerTitle={title}

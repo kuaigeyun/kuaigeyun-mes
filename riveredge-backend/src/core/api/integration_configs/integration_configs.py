@@ -48,6 +48,30 @@ async def test_config(
     return TestConnectionResponse(**result)
 
 
+@router.post("/ensure-system-default", status_code=status.HTTP_200_OK)
+async def ensure_system_default(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    加载/确保当前租户的系统默认数据源（应用主库）。
+
+    不存在则创建；已软删除则恢复；已存在则原样返回。
+    """
+    try:
+        result = await IntegrationConfigService.ensure_system_default(tenant_id=tenant_id)
+        item = result["item"]
+        return {
+            "created": result["created"],
+            "restored": result["restored"],
+            "item": IntegrationConfigResponse(**build_integration_response(item)),
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"加载默认数据源失败: {str(e)}",
+        )
+
+
 @router.post("", response_model=IntegrationConfigResponse, status_code=status.HTTP_201_CREATED)
 async def create_integration(
     data: IntegrationConfigCreate,

@@ -100,6 +100,8 @@ export type UniReportProps<T = Record<string, unknown>> = {
   rowKey?: string | keyof T;
   actionRef?: React.MutableRefObject<ActionType | undefined>;
   children?: ReactNode;
+  /** 报表头左侧操作（如返回），与标题同一行 */
+  headerLeft?: ReactNode;
   /** config 模式（快报表） */
   reportConfig?: ReportConfigSchema;
   reportId?: string | number;

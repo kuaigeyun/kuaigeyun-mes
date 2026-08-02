@@ -72,6 +72,7 @@
         "eslint-plugin-react-hooks": "^7.1.1",
         "exceljs": "^4.4.0",
         "framer-motion": "11.5.4",
+        "html-to-image": "^1.11.13",
         "html5-qrcode": "^2.3.8",
         "i18next": "23.15.2",
         "lottie-react": "^2.4.1",

@@ -325,6 +325,52 @@ class IntegrationConfigService:
         from datetime import datetime
         integration.deleted_at = resolve_business_datetime()
         await integration.save()
+
+    @staticmethod
+    async def ensure_system_default(tenant_id: int) -> Dict[str, Any]:
+        """
+        确保当前租户存在系统默认数据源（code=system_default）。
+
+        与迁移 140 行为一致：指向应用主库，密码来自环境变量，config 仅存标识。
+        若已软删除则恢复；已存在则直接返回。
+
+        Returns:
+            dict: { created: bool, restored: bool, item: IntegrationConfig }
+        """
+        existing = await IntegrationConfig.filter(
+            tenant_id=tenant_id,
+            code=SYSTEM_DEFAULT_CODE,
+            deleted_at__isnull=True,
+        ).first()
+        if existing:
+            return {"created": False, "restored": False, "item": existing}
+
+        soft_deleted = await IntegrationConfig.filter(
+            tenant_id=tenant_id,
+            code=SYSTEM_DEFAULT_CODE,
+        ).first()
+        if soft_deleted and soft_deleted.deleted_at is not None:
+            soft_deleted.deleted_at = None
+            soft_deleted.name = "系统默认数据库"
+            soft_deleted.type = "postgresql"
+            soft_deleted.description = "应用主数据库，密码来自环境变量，不可编辑"
+            soft_deleted.config = {"_system_default": True}
+            soft_deleted.is_active = True
+            soft_deleted.last_error = None
+            await soft_deleted.save()
+            return {"created": False, "restored": True, "item": soft_deleted}
+
+        integration = await IntegrationConfig.create(
+            tenant_id=tenant_id,
+            name="系统默认数据库",
+            code=SYSTEM_DEFAULT_CODE,
+            type="postgresql",
+            description="应用主数据库，密码来自环境变量，不可编辑",
+            config={"_system_default": True},
+            is_active=True,
+            is_connected=False,
+        )
+        return {"created": True, "restored": False, "item": integration}
     
     @staticmethod
     async def test_connection(

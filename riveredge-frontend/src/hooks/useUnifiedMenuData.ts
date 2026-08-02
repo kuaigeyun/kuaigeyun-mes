@@ -12,7 +12,7 @@
  * 使用场景：BasicLayout（侧边栏、UniTabs、面包屑、页面标题）、Dashboard 快捷入口等
  */
 
-import { useMemo, useCallback, useEffect } from 'react';
+import { createElement, useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { getMenuCustomLayout, type MenuTree, type CustomMenuLayoutNode } from '../services/menu';
@@ -340,13 +340,30 @@ export function useUnifiedMenuData(
           const appName = (appMenu.meta as any)?.custom_layout_virtual
             ? appMenu.name
             : (code ? resolveAppMenuGroupDisplayName(code, appMenu.name, t) : appMenu.name);
+          // ProLayout 需带 children；占位子项由 CSS 隐藏。
+          // label 带 data-app-menu-group，供 CSS :has / MutationObserver 识别（ProLayout 不透传 group className）。
+          // PRO 徽标走 BasicLayout.menuTextRender。
           appMenuItems.push({
             name: appName,
-            label: appName,
-            key: `app-group-${appMenu.uuid}`,
+            label: createElement(
+              'span',
+              {
+                'data-app-menu-group': code || '1',
+                className: 'menu-group-title-app-inner',
+              },
+              appName,
+            ),
+            key: code ? `app-group-code-${code}` : `app-group-${appMenu.uuid}`,
+            path: code ? `#app-group-${code}` : undefined,
             type: 'group',
             className: 'menu-group-title-app app-menu-container-start',
-            children: [{ key: `app-group-placeholder-${appMenu.uuid}`, name: '', style: { display: 'none' } }],
+            children: [
+              {
+                key: `app-group-placeholder-${appMenu.uuid}`,
+                name: '\u00A0',
+                className: 'app-group-placeholder-item',
+              },
+            ],
           } as MenuDataItem);
         }
         visibleChildren.forEach((child) => {

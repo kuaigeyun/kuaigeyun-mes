@@ -9,6 +9,8 @@ export type UniReportMetaHeaderProps = {
   subtitle?: React.ReactNode;
   printedAt?: Date;
   className?: string;
+  /** 左上角操作区（如返回），与标题同一行，不单独占高 */
+  extraLeft?: React.ReactNode;
 };
 
 /**
@@ -19,6 +21,7 @@ export const UniReportMetaHeader: React.FC<UniReportMetaHeaderProps> = ({
   subtitle,
   printedAt,
   className,
+  extraLeft,
 }) => {
   const { t } = useTranslation();
   const at = printedAt ?? new Date();
@@ -29,10 +32,25 @@ export const UniReportMetaHeader: React.FC<UniReportMetaHeaderProps> = ({
   return (
     <div
       className={className}
-      style={{ marginBottom: 12, padding: '0 4px' }}
+      style={{ marginBottom: 12, padding: '0 4px', position: 'relative' }}
       data-uni-report-meta
     >
-      <Title level={4} style={{ margin: 0, textAlign: 'center' }}>
+      {extraLeft ? (
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            zIndex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            minHeight: 32,
+          }}
+        >
+          {extraLeft}
+        </div>
+      ) : null}
+      <Title level={4} style={{ margin: 0, textAlign: 'center', lineHeight: '32px' }}>
         {title}
       </Title>
       {(subtitle || timeLabel) && (
