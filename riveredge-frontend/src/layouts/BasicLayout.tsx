@@ -587,7 +587,6 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     '自制报表': ManufacturingIcons.fileBarChart,
     'Reports & Dashboards': ManufacturingIcons.fileBarChart,
     'app.kuaireport.name': ManufacturingIcons.fileBarChart,
-    'app.kuaireport.menu.selfMadeReports': ManufacturingIcons.fileBarChart,
     // ... 其他常见的英文名称可以在这里添加
   };
 
@@ -1206,14 +1205,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }
     }
 
-    // 若 icon 未配置/未匹配：按名称与路径回退（含应用菜单 i18n key，如自制报表）
-    if (!iconElement && (menu.name || menu.path)) {
-      const fromMap = getMenuIcon(menu.name || '', menu.path);
-      if (React.isValidElement(fromMap) && (fromMap as any).type !== ManufacturingIcons.dashboard) {
-        iconElement = fromMap;
-      } else if (depth === 0 && !isAppMenu) {
-        // 系统一级菜单：未命中映射时仍给默认图标
-        iconElement = fromMap;
+    // 一级菜单：若 icon 未匹配，再尝试根据名称和路径获取（系统菜单）；应用菜单仅用 manifest icon
+    if (depth === 0 && !iconElement && !isAppMenu) {
+      if (menu.name) {
+        iconElement = getMenuIcon(menu.name, menu.path);
+      } else if (menu.path) {
+        iconElement = getMenuIcon('', menu.path);
+      }
+      if (!iconElement) {
+        iconElement = React.createElement(ManufacturingIcons.dashboard, { size: 16 });
       }
     }
 
