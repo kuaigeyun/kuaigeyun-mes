@@ -14,6 +14,7 @@ import {
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
+import { UniUserSelect } from '../../../components/uni-user-select';
 import {
   INSTALL_TASK_STATUSES,
   MAX_TASK_ATTACHMENTS,
@@ -48,6 +49,9 @@ export const InstallExecutionTaskFormModal: React.FC<Props> = ({
     form.setFieldsValue({
       stage_key: defaultStage,
       status: '待处理',
+      executor_uuid: undefined,
+      executor_id: undefined,
+      executor_name: undefined,
       attachments: [],
     });
   }, [open, job, form]);
@@ -70,6 +74,7 @@ export const InstallExecutionTaskFormModal: React.FC<Props> = ({
         const row = await onSubmit(job.id, {
           stage_key: values.stage_key,
           task_title: values.task_title,
+          executor_id: values.executor_id,
           executor_name: values.executor_name,
           status: values.status,
           planned_at: values.planned_at
@@ -96,7 +101,19 @@ export const InstallExecutionTaskFormModal: React.FC<Props> = ({
         label={t('app.kuaizhizao.installExecution.taskTitle')}
         rules={[{ required: true, message: t('app.kuaizhizao.installExecution.taskTitleRequired') }]}
       />
-      <ProFormText name="executor_name" label={t('app.kuaizhizao.installExecution.taskExecutor')} />
+      <UniUserSelect
+        name="executor_uuid"
+        label={t('app.kuaizhizao.installExecution.taskExecutor')}
+        onChange={(_value, user) => {
+          const picked = Array.isArray(user) ? user[0] : user;
+          form.setFieldsValue({
+            executor_id: picked?.id ?? undefined,
+            executor_name: picked?.full_name || picked?.username || undefined,
+          });
+        }}
+      />
+      <ProFormText name="executor_id" hidden />
+      <ProFormText name="executor_name" hidden />
       <ProFormSelect
         name="status"
         label={t('app.kuaizhizao.installExecution.taskStatus')}
