@@ -1,0 +1,71 @@
+{
+  "name": "报表与看板",
+  "code": "kuaireport",
+  "version": "2.0.0",
+  "description": "自研报表中心与大屏设计工具",
+  "icon": "fileBarChart",
+  "author": "RiverEdge Team",
+  "entry_point": "../apps/kuaireport/index.tsx",
+  "route_path": "/apps/kuaireport",
+  "sort_order": 30,
+  "menu_config": {
+    "title": "app.kuaireport.name",
+    "icon": "fileBarChart",
+    "path": "/apps/kuaireport",
+    "children": [
+      {
+        "title": "app.kuaireport.menu.selfMadeReports",
+        "children": [
+          {
+            "title": "app.kuaireport.menu.reports",
+            "path": "/apps/kuaireport/reports",
+            "permission": "kuaireport:report:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaireport.menu.dashboards",
+            "path": "/apps/kuaireport/dashboards",
+            "permission": "kuaireport:dashboard:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaireport.menu.analysis-center",
+            "path": "/apps/kuaireport/analysis-center",
+            "permission": "kuaireport:analysis-center:read",
+            "sort_order": 3
+          }
+        ]
+      },
+      {
+        "title": "app.kuaireport.menu.analysisCenterReports",
+        "children": [
+          {
+            "title": "app.kuaireport.menu.analysis-center.document-timing",
+            "path": "/apps/kuaireport/analysis-center/document-timing",
+            "permission": "kuaireport:analysis-center:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaireport.menu.analysis-center.document-efficiency",
+            "path": "/apps/kuaireport/analysis-center/document-efficiency",
+            "permission": "kuaireport:analysis-center:read",
+            "sort_order": 2
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": [
+    "kuaireport:analysis-center:read",
+    "kuaireport:dashboard:read",
+    "kuaireport:dashboard:export",
+    "kuaireport:dashboard:print",
+    "kuaireport:report:read",
+    "kuaireport:report:export",
+    "kuaireport:report:print"
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  }
+}
