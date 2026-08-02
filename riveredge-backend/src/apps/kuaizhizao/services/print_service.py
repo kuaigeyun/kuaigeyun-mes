@@ -2098,11 +2098,13 @@ class DocumentPrintService:
         items: list[Dict[str, Any]] = []
         for uuid in ordered_uuids:
             eq = by_uuid[uuid]
+            # 模块尺寸偏小，避免 PNG 固有像素在打印时撑破单元格（版式仍以库内模板为准）
             qr = QRCodeService.generate_equipment_qrcode(
                 equipment_uuid=str(eq.uuid),
                 equipment_code=eq.code or "",
                 equipment_name=eq.name or "",
-                size=10,
+                size=3,
+                border=1,
             )
             line_name = (getattr(eq, "production_line_name", None) or "").strip()
             workshop_name = (eq.workshop_name or "").strip()
@@ -2126,6 +2128,7 @@ class DocumentPrintService:
             )
 
         first = by_uuid[ordered_uuids[0]]
+        # item：设计器单卡变量；items：批量循环。两者都提供，避免缺 for 时渲染报 item undefined
         return {
             "document_type": "equipment_card",
             "document_id": first.id,
@@ -2133,6 +2136,7 @@ class DocumentPrintService:
             "name": first.name,
             "card_title": "设备卡",
             "items": items,
+            "item": items[0] if items else {},
         }
 
     async def _generate_default_print(

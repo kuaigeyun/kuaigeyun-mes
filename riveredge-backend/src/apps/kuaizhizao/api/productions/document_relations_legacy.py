@@ -77,6 +77,8 @@ async def print_document(
 @router.get("/documents/timing", response_model=List[DocumentTimingSummaryResponse], summary="List document timing statistics")
 async def list_documents_timing(
     document_type: Optional[str] = Query(None, description="单据类型（如：work_order/purchase_order/sales_order）"),
+    date_start: Optional[str] = Query(None, description="开始日期（ISO / YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（ISO / YYYY-MM-DD）"),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     current_user: User = Depends(get_current_user),
@@ -85,17 +87,36 @@ async def list_documents_timing(
     """
     获取单据耗时统计列表
 
-    返回有耗时记录的单据列表，支持按单据类型筛选。
+    返回有耗时记录的单据列表，支持按单据类型与时间范围筛选。
 
     - **document_type**: 单据类型（可选）
+    - **date_start** / **date_end**: 节点开始时间范围（可选）
     - **skip**: 跳过数量
     - **limit**: 限制数量
     """
+    date_start_dt = None
+    date_end_dt = None
+    if date_start:
+        try:
+            date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
+        except ValueError:
+            pass
+    if date_end:
+        try:
+            # 日期-only 视为当天结束
+            raw = date_end.replace('Z', '+00:00')
+            date_end_dt = datetime.fromisoformat(raw)
+            if len(date_end) <= 10:
+                date_end_dt = date_end_dt.replace(hour=23, minute=59, second=59)
+        except ValueError:
+            pass
     return await document_timing_service.list_documents_with_timing(
         tenant_id=tenant_id,
         document_type=document_type,
         skip=skip,
         limit=limit,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
     )
 
 

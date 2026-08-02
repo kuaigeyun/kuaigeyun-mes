@@ -29,7 +29,10 @@ def _attachment_content_disposition(filename: str) -> str:
     "/profile",
     response_model=TraceProfileResponse,
     summary="Get traceability profile",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:quality-management-traceability:read"))],
+    dependencies=[Depends(require_permission_codes(
+        "kuaizhizao:quality-management-traceability:read",
+        "kuaizhizao:material-lifecycle-trace:read",
+    ))],
 )
 async def get_trace_profile(
     code: str = Query(..., description="序列号 / 批号 / 工单号"),
@@ -43,7 +46,10 @@ async def get_trace_profile(
     "/graph",
     response_model=TraceGraphResponse,
     summary="Get traceability graph (legacy)",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:quality-management-traceability:read"))],
+    dependencies=[Depends(require_permission_codes(
+        "kuaizhizao:quality-management-traceability:read",
+        "kuaizhizao:material-lifecycle-trace:read",
+    ))],
 )
 async def get_trace_graph(
     batch_no: str = Query(..., description="批次号/条码/序列号/工单号"),
@@ -57,7 +63,10 @@ async def get_trace_graph(
     "/graph/by-work-order/{work_order_id}",
     response_model=TraceGraphResponse,
     summary="Get traceability graph by work order",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:quality-management-traceability:read"))],
+    dependencies=[Depends(require_permission_codes(
+        "kuaizhizao:quality-management-traceability:read",
+        "kuaizhizao:material-lifecycle-trace:read",
+    ))],
 )
 async def get_trace_graph_by_work_order(
     work_order_id: int,
@@ -69,7 +78,11 @@ async def get_trace_graph_by_work_order(
 @router.get(
     "/report",
     summary="Export traceability report PDF",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:quality-management-traceability:print"))],
+    dependencies=[Depends(require_permission_codes(
+        "kuaizhizao:quality-management-traceability:print",
+        "kuaizhizao:material-lifecycle-trace:print",
+        "kuaizhizao:material-lifecycle-trace:read",
+    ))],
 )
 async def export_trace_report(
     code: str = Query(..., description="序列号 / 批号 / 工单号"),

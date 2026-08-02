@@ -46,6 +46,149 @@ type BlockStyle = {
   textAlign?: string;
   color?: string;
   letterSpacing?: string;
+  /** 完整边框，如 1px solid #000；优先于 borderWidth/Style/Color */
+  border?: string;
+  borderTop?: string;
+  borderRight?: string;
+  borderBottom?: string;
+  borderLeft?: string;
+  borderWidth?: number | string;
+  borderColor?: string;
+  borderStyle?: 'solid' | 'dashed' | 'none' | string;
+  padding?: string;
+  backgroundColor?: string;
+  width?: string;
+  minHeight?: string;
+  whiteSpace?: string;
+  overflow?: string;
+  boxSizing?: string;
+  lineHeight?: string;
+};
+
+/** 从 BlockStyle 解析打印框线（设计器画布与右侧面板共用） */
+const resolvePrintBorderCss = (style?: BlockStyle): string | undefined => {
+  if (!style) return undefined;
+  if (style.border) return style.border;
+  if (style.borderStyle === 'none') return 'none';
+  const width = style.borderWidth;
+  const bStyle = style.borderStyle || 'solid';
+  const color = style.borderColor || '#000000';
+  if (width === undefined || width === '' || width === null) return undefined;
+  const w = typeof width === 'number' ? `${width}px` : String(width);
+  return `${w} ${bStyle} ${color}`;
+};
+
+const hasSideBorders = (style?: BlockStyle): boolean =>
+  !!(style?.borderTop || style?.borderRight || style?.borderBottom || style?.borderLeft);
+
+/** 右侧属性：容器/文本框线（写入 style，编译进打印 HTML） */
+const BlockBorderControls: React.FC<{
+  style?: BlockStyle;
+  onChange: (style: BlockStyle) => void;
+}> = ({ style, onChange }) => {
+  const { t } = useTranslation();
+  const borderMode =
+    style?.borderStyle === 'none'
+      ? 'none'
+      : style?.border || style?.borderWidth !== undefined || style?.borderStyle
+        ? (style?.borderStyle === 'dashed' ? 'dashed' : 'solid')
+        : style?.borderBottom || style?.borderTop || style?.borderLeft || style?.borderRight
+          ? 'custom'
+          : 'none';
+
+  const applyMode = (mode: 'none' | 'solid' | 'dashed') => {
+    if (mode === 'none') {
+      onChange({
+        ...style,
+        border: undefined,
+        borderStyle: 'none',
+        borderWidth: undefined,
+        borderColor: undefined,
+        borderTop: undefined,
+        borderRight: undefined,
+        borderBottom: undefined,
+        borderLeft: undefined,
+      });
+      return;
+    }
+    const width = style?.borderWidth ?? 1;
+    const color = style?.borderColor || '#000000';
+    onChange({
+      ...style,
+      borderStyle: mode,
+      borderWidth: width,
+      borderColor: color,
+      border: `${typeof width === 'number' ? `${width}px` : width} ${mode} ${color}`,
+      borderTop: undefined,
+      borderRight: undefined,
+      borderBottom: undefined,
+      borderLeft: undefined,
+    });
+  };
+
+  return (
+    <Space orientation="vertical" style={{ width: '100%' }} size={8}>
+      <div style={{ marginBottom: 0, fontSize: 12, color: '#8c8c8c' }}>
+        {t('pages.system.printTemplatesDesign.border')}
+      </div>
+      <Radio.Group
+        size="small"
+        buttonStyle="solid"
+        value={borderMode === 'custom' ? 'solid' : borderMode}
+        onChange={(e) => applyMode(e.target.value)}
+        style={{ width: '100%', display: 'flex' }}
+      >
+        <Radio.Button value="none" style={{ flex: 1, textAlign: 'center' }}>
+          {t('pages.system.printTemplatesDesign.none')}
+        </Radio.Button>
+        <Radio.Button value="solid" style={{ flex: 1, textAlign: 'center' }}>
+          {t('pages.system.printTemplatesDesign.solid')}
+        </Radio.Button>
+        <Radio.Button value="dashed" style={{ flex: 1, textAlign: 'center' }}>
+          {t('pages.system.printTemplatesDesign.dashed')}
+        </Radio.Button>
+      </Radio.Group>
+      {borderMode !== 'none' && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <InputNumber
+            size="small"
+            min={0}
+            max={8}
+            style={{ flex: 1 }}
+            value={typeof style?.borderWidth === 'number' ? style.borderWidth : Number(style?.borderWidth) || 1}
+            onChange={(v) => {
+              const width = v ?? 1;
+              const bStyle = (style?.borderStyle === 'dashed' ? 'dashed' : 'solid') as 'solid' | 'dashed';
+              const color = style?.borderColor || '#000000';
+              onChange({
+                ...style,
+                borderWidth: width,
+                borderStyle: bStyle,
+                borderColor: color,
+                border: `${width}px ${bStyle} ${color}`,
+              });
+            }}
+            addonAfter="px"
+          />
+          <ColorPicker
+            size="small"
+            value={style?.borderColor || '#000000'}
+            onChange={(_, hex) => {
+              const width = style?.borderWidth ?? 1;
+              const bStyle = (style?.borderStyle === 'dashed' ? 'dashed' : 'solid') as 'solid' | 'dashed';
+              onChange({
+                ...style,
+                borderColor: hex,
+                borderStyle: bStyle,
+                borderWidth: width,
+                border: `${typeof width === 'number' ? `${width}px` : width} ${bStyle} ${hex}`,
+              });
+            }}
+          />
+        </div>
+      )}
+    </Space>
+  );
 };
 
 /** {t('pages.system.printTemplatesDesign.compDetailTable')} table styles (compiled into HTML) */
@@ -97,6 +240,10 @@ type DesignerNodeSchema =
       type: 'columns';
       horizontalAlign?: 'start' | 'center' | 'end' | 'space-between' | 'space-around' | 'space-evenly';
       verticalAlign?: 'top' | 'middle' | 'bottom' | 'stretch';
+      /** 栏间距，支持 0 / 8 / 2mm */
+      gap?: number | string;
+      /** 容器框线、内边距、背景等（会编译进打印 HTML） */
+      style?: BlockStyle;
       cols: Array<{
         id: string;
         width: string;
@@ -113,6 +260,12 @@ interface DesignerSchema {
   margins?: { top: number; right: number; bottom: number; left: number };
   itemSpacing?: number;
   tableRowLimit?: number;
+  /** 设计单卡，打印时按集合循环（如设备卡 items） */
+  repeatCollection?: string;
+  repeatItem?: string;
+  /** asset_card_table：按表格编译完整框线 */
+  compileMode?: string;
+  assetCard?: Record<string, unknown>;
   blocks: DesignerNodeSchema[];
 }
 
@@ -125,6 +278,20 @@ const PAPER_SIZES: Record<string, { width: number; height: number; labelKey: str
   '241-1': { width: 241, height: 280, labelKey: 'pages.system.printTemplatesDesign.paperSize241_1' },
   '241-2': { width: 241, height: 140, labelKey: 'pages.system.printTemplatesDesign.paperSize241_2' },
   '241-3': { width: 241, height: 93, labelKey: 'pages.system.printTemplatesDesign.paperSize241_3' },
+  // 固定资产/设备信息卡（横版挂牌，宽×高 mm；方向选「纵向」即按此尺寸）
+  'ASSET-100x70': { width: 100, height: 70, labelKey: 'pages.system.printTemplatesDesign.paperSizeAsset100x70' },
+  'ASSET-120x80': { width: 120, height: 80, labelKey: 'pages.system.printTemplatesDesign.paperSizeAsset120x80' },
+  'ASSET-80x60': { width: 80, height: 60, labelKey: 'pages.system.printTemplatesDesign.paperSizeAsset80x60' },
+};
+
+/** 列宽：支持 flex 比例（1/2）或固定单位（14mm / 40%） */
+const colWidthFlexStyle = (width?: string): React.CSSProperties => {
+  const w = (width || '1').trim() || '1';
+  const lower = w.toLowerCase();
+  if (['mm', 'cm', 'in', 'px', '%'].some((u) => lower.endsWith(u))) {
+    return { flex: `0 0 ${w}`, width: w, maxWidth: w };
+  }
+  return { flex: w };
 };
 
 /** Keep in sync with `_PRINT_TEMPLATE_BODY_FONT_STACK` in print_template_service.py */
@@ -276,6 +443,32 @@ const COMMON_SAMPLE_PRESETS: SamplePreset[] = [
   if (docType === 'quotation') return QUOTATION_SAMPLE_PRESETS;
   if (docType === 'sales_order') return SALES_ORDER_SAMPLE_PRESETS;
   if (docType === 'purchase_order') return PURCHASE_ORDER_SAMPLE_PRESETS;
+  if (docType === 'equipment_card') {
+    const sampleItem = {
+      code: 'EQ-2026-001',
+      name: '气动液压端子机',
+      model: 'YH-2000',
+      type: '生产设备',
+      affiliation: '一车间',
+      purchase_date: '2024-06-15',
+      installation_date: '2024-07-01',
+      qrcode_image: 'https://api.qrserver.com/v1/create-qr-code/?size=148x148&data=EQ-2026-001',
+    };
+    return [
+      {
+        key: 'equipment-card-default',
+        label: t('pages.system.printTemplatesDesign.sampleEquipmentCard'),
+        data: {
+          card_title: '设备卡',
+          print_time: '2026-08-02 16:00',
+          items: [sampleItem],
+          item: sampleItem,
+          code: sampleItem.code,
+          name: sampleItem.name,
+        },
+      },
+    ];
+  }
   return COMMON_SAMPLE_PRESETS;
 };
 
@@ -342,17 +535,33 @@ const TextBlock: React.FC<{ block: DesignerNodeSchema & { type: 'text' }; select
   const { token } = theme.useToken();
   const { content, style, tag = 'div' } = block;
   const Tag = tag as any;
+  const printBorder = resolvePrintBorderCss(style);
+  const nowrap = style?.whiteSpace === 'nowrap';
   return (
     <div
       style={{
-        padding: 10,
-        border: selected ? `1px solid ${token.colorPrimary}` : `1px dashed ${token.colorBorderSecondary}`,
-        borderRadius: 6,
+        padding: style?.padding || 10,
+        ...(hasSideBorders(style)
+          ? {
+              borderTop: style?.borderTop,
+              borderRight: style?.borderRight,
+              borderBottom: style?.borderBottom,
+              borderLeft: style?.borderLeft,
+            }
+          : {
+              border: printBorder || (selected ? `1px solid ${token.colorPrimary}` : `1px dashed ${token.colorBorderSecondary}`),
+            }),
+        outline: selected && (printBorder || hasSideBorders(style)) ? `2px solid ${token.colorPrimary}` : undefined,
+        outlineOffset: selected && (printBorder || hasSideBorders(style)) ? 2 : undefined,
+        borderRadius: printBorder || hasSideBorders(style) ? 0 : 6,
         marginBottom: 0,
-        background: token.colorBgContainer,
+        background: style?.backgroundColor || token.colorBgContainer,
         textAlign: (style?.textAlign as React.CSSProperties['textAlign']) || 'left',
         color: style?.color || 'inherit',
         letterSpacing: style?.letterSpacing || 'normal',
+        width: style?.width,
+        minHeight: style?.minHeight,
+        boxSizing: (style?.boxSizing as React.CSSProperties['boxSizing']) || 'border-box',
       }}
       onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
     >
@@ -362,10 +571,11 @@ const TextBlock: React.FC<{ block: DesignerNodeSchema & { type: 'text' }; select
         fontWeight: style?.fontWeight || (tag === 'div' ? 'normal' : undefined), 
         textAlign: 'inherit', 
         color: style?.color || 'inherit', 
-        whiteSpace: 'pre-wrap',
+        whiteSpace: (style?.whiteSpace as React.CSSProperties['whiteSpace']) || 'pre-wrap',
         display: 'block',
         width: '100%',
-        wordBreak: 'break-all'
+        overflow: style?.overflow,
+        wordBreak: nowrap ? 'normal' : 'break-all',
       }}>
         {content || t('pages.system.printTemplatesDesign.blockText')}
       </Tag>
@@ -377,24 +587,49 @@ const FieldBlock: React.FC<{ block: DesignerNodeSchema & { type: 'field' }; sele
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const { key: fieldKey, label, style, showLabel = true } = block;
+  const printBorder = resolvePrintBorderCss(style);
+  const nowrap = style?.whiteSpace === 'nowrap';
   return (
     <div
       style={{
-        padding: 10,
-        border: selected ? `1px solid ${token.colorPrimary}` : `1px solid ${token.colorPrimaryBorder}`,
-        borderRadius: 6,
+        padding: style?.padding || 10,
+        ...(hasSideBorders(style)
+          ? {
+              borderTop: style?.borderTop,
+              borderRight: style?.borderRight,
+              borderBottom: style?.borderBottom,
+              borderLeft: style?.borderLeft,
+            }
+          : {
+              border: printBorder || (selected ? `1px solid ${token.colorPrimary}` : `1px solid ${token.colorPrimaryBorder}`),
+            }),
+        outline: selected && (printBorder || hasSideBorders(style)) ? `2px solid ${token.colorPrimary}` : undefined,
+        outlineOffset: selected && (printBorder || hasSideBorders(style)) ? 2 : undefined,
+        borderRadius: printBorder || hasSideBorders(style) ? 0 : 6,
         marginBottom: 0,
-        background: token.colorPrimaryBg,
+        background: style?.backgroundColor || token.colorPrimaryBg,
         fontSize: normalizeFontSize(style?.fontSize) || 'inherit',
         fontWeight: style?.fontWeight || 'bold',
         textAlign: (style?.textAlign as React.CSSProperties['textAlign']) || 'left',
         color: style?.color || token.colorPrimary,
         letterSpacing: style?.letterSpacing || 'normal',
-        position: 'relative'
+        position: 'relative',
+        width: style?.width,
+        boxSizing: (style?.boxSizing as React.CSSProperties['boxSizing']) || 'border-box',
       }}
       onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
     >
-      <div style={{ display: 'block', width: '100%', whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 'inherit', fontWeight: 'inherit' }}>
+      <div
+        style={{
+          display: 'block',
+          width: '100%',
+          whiteSpace: (style?.whiteSpace as React.CSSProperties['whiteSpace']) || 'pre-wrap',
+          overflow: style?.overflow,
+          wordBreak: nowrap ? 'normal' : 'break-all',
+          fontSize: 'inherit',
+          fontWeight: 'inherit',
+        }}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontWeight: 600 }}>{label || fieldKey}</div>
           {!showLabel && (
@@ -1201,7 +1436,9 @@ const DroppableColumn: React.FC<{
   style?: React.CSSProperties;
   isSelected?: boolean;
   isDragging?: boolean;
-}> = ({ id, children, style, isSelected, isDragging }) => {
+  /** 父容器已有打印框线时，弱化设计辅助虚线，避免盖住真实框线 */
+  printFrame?: boolean;
+}> = ({ id, children, style, isSelected, isDragging, printFrame }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const { setNodeRef, isOver } = useDroppable({
@@ -1224,14 +1461,19 @@ const DroppableColumn: React.FC<{
           ? `2px solid ${token.colorPrimary}`
           : isDragging
           ? `1.5px dashed ${token.colorPrimaryBorder}`
-          : (style?.border as string) || `1px dotted ${token.colorBorderSecondary}`,
+          : printFrame
+            ? 'none'
+            : (style?.border as string) || `1px dotted ${token.colorBorderSecondary}`,
         transition: 'all 0.2s',
         minHeight: isDragging ? 80 : undefined,
+        minWidth: 0,
       }}
     >
-      <div style={{ fontSize: 10, color: isOver ? token.colorPrimary : token.colorTextQuaternary, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: isOver ? 600 : 400 }}>
-        <span>{isOver ? t('pages.system.printTemplatesDesign.dropToColumn') : t('pages.system.printTemplatesDesign.colLayout')}</span>
-      </div>
+      {(isDragging || isOver || !printFrame) && (
+        <div style={{ fontSize: 10, color: isOver ? token.colorPrimary : token.colorTextQuaternary, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: isOver ? 600 : 400 }}>
+          <span>{isOver ? t('pages.system.printTemplatesDesign.dropToColumn') : t('pages.system.printTemplatesDesign.colLayout')}</span>
+        </div>
+      )}
       {children}
     </div>
   );
@@ -1271,22 +1513,51 @@ const ColumnsBlock: React.FC<{
     center: 'center',
     end: 'flex-end',
   };
+  const printBorder = resolvePrintBorderCss(block.style);
+  const hasPrintFrame = !!(printBorder || hasSideBorders(block.style));
+  const gapRaw = block.gap;
+  const gapCss =
+    gapRaw === undefined || gapRaw === null || gapRaw === ''
+      ? (hasPrintFrame ? 0 : 16)
+      : typeof gapRaw === 'number'
+        ? gapRaw
+        : gapRaw;
   return (
     <div 
       style={{ 
         display: 'flex', 
-        gap: 16, 
+        gap: gapCss, 
         justifyContent: justifyContentMap[block.horizontalAlign || 'start'] || 'flex-start',
         // Stretch columns to the same height first to ensure vertical alignment visibility
         alignItems: 'stretch',
-        padding: 8, 
-        border: isDragging
-          ? `1.5px dashed ${token.colorPrimaryBorder}`
-          : isSelected ? `1px solid ${token.colorPrimary}` : `1px dashed ${token.colorBorderSecondary}`,
-        borderRadius: 6,
-        background: isDragging ? token.colorPrimaryBgHover : isSelected ? token.colorPrimaryBg : 'transparent',
+        padding: block.style?.padding || (hasPrintFrame ? 0 : 8),
+        ...(hasSideBorders(block.style)
+          ? {
+              borderTop: block.style?.borderTop,
+              borderRight: block.style?.borderRight,
+              borderBottom: block.style?.borderBottom,
+              borderLeft: block.style?.borderLeft,
+            }
+          : {
+              border: isDragging
+                ? `1.5px dashed ${token.colorPrimaryBorder}`
+                : printBorder || (isSelected ? `1px solid ${token.colorPrimary}` : `1px dashed ${token.colorBorderSecondary}`),
+            }),
+        outline:
+          isSelected && hasPrintFrame
+            ? `2px solid ${token.colorPrimary}`
+            : isDragging && hasSideBorders(block.style)
+              ? `1.5px dashed ${token.colorPrimaryBorder}`
+              : undefined,
+        outlineOffset: isSelected && hasPrintFrame ? 2 : undefined,
+        borderRadius: hasPrintFrame ? 0 : 6,
+        background: isDragging
+          ? token.colorPrimaryBgHover
+          : block.style?.backgroundColor || (isSelected && !hasPrintFrame ? token.colorPrimaryBg : 'transparent'),
         marginBottom: 0,
-        minHeight: isDragging ? 120 : 60,
+        minHeight: block.style?.minHeight || (isDragging ? 120 : 60),
+        width: block.style?.width || '100%',
+        boxSizing: (block.style?.boxSizing as React.CSSProperties['boxSizing']) || 'border-box',
         transition: 'all 0.2s',
       }}
       onClick={(e) => { e.stopPropagation(); onSelect(block.id); }}
@@ -1297,10 +1568,12 @@ const ColumnsBlock: React.FC<{
           id={col.id}
           isSelected={isSelected}
           isDragging={isDragging}
+          printFrame={hasPrintFrame}
           style={{ 
-            flex: col.width || '1', 
-            padding: '8px 4px', 
-            position: 'relative', 
+            ...colWidthFlexStyle(col.width),
+            padding: hasPrintFrame ? 0 : '8px 4px', 
+            position: 'relative',
+            minWidth: 0,
           }}
         >
           <div
@@ -1551,6 +1824,10 @@ const PrintTemplateDesignPage: React.FC = () => {
   const [zoom, setZoom] = useState(100);
   const [itemSpacing, setItemSpacing] = useState(0);
   const [tableRowLimit, setTableRowLimit] = useState(0);
+  const [repeatCollection, setRepeatCollection] = useState<string>('');
+  const [repeatItem, setRepeatItem] = useState<string>('item');
+  const [compileMode, setCompileMode] = useState<string>('');
+  const [assetCard, setAssetCard] = useState<Record<string, unknown> | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const workspaceRef = React.useRef<HTMLDivElement>(null);
 
@@ -1617,6 +1894,10 @@ const PrintTemplateDesignPage: React.FC = () => {
         if (existingSchema.tableRowLimit !== undefined) {
           setTableRowLimit(existingSchema.tableRowLimit);
         }
+        setRepeatCollection(existingSchema.repeatCollection || '');
+        setRepeatItem(existingSchema.repeatItem || 'item');
+        setCompileMode(existingSchema.compileMode || '');
+        setAssetCard(existingSchema.assetCard || null);
       } else {
         const first: DesignerNodeSchema = {
           id: `text-${Date.now()}`,
@@ -1710,9 +1991,12 @@ const PrintTemplateDesignPage: React.FC = () => {
       margins,
       itemSpacing,
       tableRowLimit,
+      ...(repeatCollection ? { repeatCollection, repeatItem: repeatItem || 'item' } : {}),
+      ...(compileMode ? { compileMode } : {}),
+      ...(assetCard ? { assetCard } : {}),
       blocks: normalizeBlocks(schemaBlocks)
     };
-  }, [pageSize, orientation, margins, itemSpacing, tableRowLimit, schemaBlocks]);
+  }, [pageSize, orientation, margins, itemSpacing, tableRowLimit, repeatCollection, repeatItem, compileMode, assetCard, schemaBlocks, t]);
 
   const applyPortableDesign = useCallback((data: PrintTemplateDesignPortableV1) => {
     const schema = data.template.designer_schema as unknown as DesignerSchema;
@@ -1727,6 +2011,10 @@ const PrintTemplateDesignPage: React.FC = () => {
     }
     setItemSpacing(schema.itemSpacing ?? 0);
     setTableRowLimit(schema.tableRowLimit ?? 0);
+    setRepeatCollection(schema.repeatCollection || '');
+    setRepeatItem(schema.repeatItem || 'item');
+    setCompileMode(schema.compileMode || '');
+    setAssetCard(schema.assetCard || null);
     const blocks = Array.isArray(schema.blocks) ? schema.blocks : [];
     setSchemaBlocks(blocks as DesignerNodeSchema[]);
     setSelectedBlockId(blocks.length ? (blocks[0] as DesignerNodeSchema).id : null);
@@ -1791,6 +2079,19 @@ const PrintTemplateDesignPage: React.FC = () => {
     if (!uuid) return;
     try {
       const schema = getNormalizedSchema();
+      // 设备卡：编译前补齐循环 + 表格模式，保证完整框线
+      if (templateType === 'equipment_card') {
+        if (!schema.repeatCollection) {
+          schema.repeatCollection = 'items';
+          schema.repeatItem = schema.repeatItem || 'item';
+          setRepeatCollection('items');
+          setRepeatItem(schema.repeatItem);
+        }
+        if (!schema.compileMode) {
+          schema.compileMode = 'asset_card_table';
+          setCompileMode('asset_card_table');
+        }
+      }
       const compiled = await compilePrintTemplate({
         source_type: 'designer_json',
         source: schema,
@@ -1804,9 +2105,15 @@ const PrintTemplateDesignPage: React.FC = () => {
         config: {
           document_type: templateType || undefined,
           engine: 'jinja2',
+          strict_variables: false,
           source_type: 'designer_json',
           designer_version: compiled.schema_version || 'v1',
           designer_schema: schema,
+          page: {
+            size: schema.pageSize || 'A4',
+            orientation: schema.orientation || 'portrait',
+            margin: `${schema.margins?.top ?? 10}mm`,
+          },
         },
       });
       messageApi.success(t('pages.system.printTemplatesDesign.saveSuccess'));
@@ -2939,6 +3246,14 @@ const PrintTemplateDesignPage: React.FC = () => {
                             border-collapse: collapse; 
                             margin-bottom: ${itemSpacing}mm !important; 
                           }
+                          .print-preview-inner table.eq-asset-card,
+                          .print-preview-inner table.eq-asset-card th,
+                          .print-preview-inner table.eq-asset-card td {
+                            border: 1px solid #000 !important;
+                          }
+                          .print-preview-inner table.eq-asset-card {
+                            border: 1.5px solid #000 !important;
+                          }
                           .print-preview-inner .columns-layout { 
                             margin-bottom: ${itemSpacing}mm !important; 
                           }
@@ -2990,6 +3305,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                   <span style={{ fontWeight: 600, color: token.colorText }}>
                     {selectedBlock.type === 'text' && t('pages.system.printTemplatesDesign.compText')}
                     {selectedBlock.type === 'field' && t('pages.system.printTemplatesDesign.compVariables')}
+                    {selectedBlock.type === 'columns' && t('pages.system.printTemplatesDesign.compColumns')}
                     {selectedBlock.type === 'divider' && t('pages.system.printTemplatesDesign.compDivider')}
                     {selectedBlock.type === 'spacer' && t('pages.system.printTemplatesDesign.compSpacer')}
                     {selectedBlock.type === 'qrcode' && t('pages.system.printTemplatesDesign.typeQRCode')}
@@ -3006,38 +3322,70 @@ const PrintTemplateDesignPage: React.FC = () => {
                   </Space>
                 </div>
 
-                {(selectedBlock.type === 'text' || selectedBlock.type === 'field' || selectedBlock.type === 'qrcode' || selectedBlock.type === 'barcode' || selectedBlock.type === 'image') && (
+                {(selectedBlock.type === 'text' || selectedBlock.type === 'field' || selectedBlock.type === 'qrcode' || selectedBlock.type === 'barcode' || selectedBlock.type === 'image' || selectedBlock.type === 'columns') && (
                   <Card size="small" title={t('pages.system.printTemplatesDesign.styleSettings')} styles={{ header: { border: 0, fontSize: 13, color: token.colorTextSecondary } }}>
                     <Space orientation="vertical" style={{ width: '100%' }} size={12}>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <Input
-                          placeholder={t('pages.system.printTemplatesDesign.fontSize')}
-                          value={selectedBlock.style?.fontSize}
-                          onChange={e => updateSelectedBlock({ style: { ...selectedBlock.style, fontSize: e.target.value } })}
-                          suffix="px"
-                        />
-                        <ColorPicker
-                          value={selectedBlock.style?.color || '#000'}
-                          onChange={(_, hex) => updateSelectedBlock({ style: { ...selectedBlock.style, color: hex } })}
-                        />
-                      </div>
-                      <Radio.Group
-                        size="small"
-                        value={selectedBlock.style?.textAlign || 'left'}
-                        onChange={e => updateSelectedBlock({ style: { ...selectedBlock.style, textAlign: e.target.value } })}
-                      >
-                        <Radio.Button value="left"><AlignLeftOutlined /></Radio.Button>
-                        <Radio.Button value="center"><AlignCenterOutlined /></Radio.Button>
-                        <Radio.Button value="right"><AlignRightOutlined /></Radio.Button>
-                      </Radio.Group>
-                      <Button
-                        block
-                        icon={<BoldOutlined />}
-                        type={selectedBlock.style?.fontWeight === 'bold' ? 'primary' : 'default'}
-                        onClick={() => updateSelectedBlock({ style: { ...selectedBlock.style, fontWeight: selectedBlock.style?.fontWeight === 'bold' ? 'normal' : 'bold' } })}
-                      >
-                        {t('pages.system.printTemplatesDesign.bold')}
-                      </Button>
+                      {(selectedBlock.type === 'text' || selectedBlock.type === 'field') && (
+                        <>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <Input
+                              placeholder={t('pages.system.printTemplatesDesign.fontSize')}
+                              value={selectedBlock.style?.fontSize}
+                              onChange={e => updateSelectedBlock({ style: { ...selectedBlock.style, fontSize: e.target.value } })}
+                              suffix="px"
+                            />
+                            <ColorPicker
+                              value={selectedBlock.style?.color || '#000'}
+                              onChange={(_, hex) => updateSelectedBlock({ style: { ...selectedBlock.style, color: hex } })}
+                            />
+                          </div>
+                          <Radio.Group
+                            size="small"
+                            value={selectedBlock.style?.textAlign || 'left'}
+                            onChange={e => updateSelectedBlock({ style: { ...selectedBlock.style, textAlign: e.target.value } })}
+                          >
+                            <Radio.Button value="left"><AlignLeftOutlined /></Radio.Button>
+                            <Radio.Button value="center"><AlignCenterOutlined /></Radio.Button>
+                            <Radio.Button value="right"><AlignRightOutlined /></Radio.Button>
+                          </Radio.Group>
+                          <Button
+                            block
+                            icon={<BoldOutlined />}
+                            type={selectedBlock.style?.fontWeight === 'bold' || selectedBlock.style?.fontWeight === '700' ? 'primary' : 'default'}
+                            onClick={() => updateSelectedBlock({ style: { ...selectedBlock.style, fontWeight: (selectedBlock.style?.fontWeight === 'bold' || selectedBlock.style?.fontWeight === '700') ? 'normal' : 'bold' } })}
+                          >
+                            {t('pages.system.printTemplatesDesign.bold')}
+                          </Button>
+                        </>
+                      )}
+                      {selectedBlock.type === 'columns' && (
+                        <div>
+                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>
+                            {t('pages.system.printTemplatesDesign.columnGap')}
+                          </div>
+                          <Input
+                            size="small"
+                            value={selectedBlock.gap === undefined || selectedBlock.gap === null ? '' : String(selectedBlock.gap)}
+                            placeholder="0 / 8 / 2mm"
+                            onChange={(e) => {
+                              const raw = e.target.value.trim();
+                              if (!raw) {
+                                updateSelectedBlock({ gap: undefined });
+                                return;
+                              }
+                              if (/^\d+(\.\d+)?$/.test(raw)) {
+                                updateSelectedBlock({ gap: Number(raw) });
+                              } else {
+                                updateSelectedBlock({ gap: raw });
+                              }
+                            }}
+                          />
+                        </div>
+                      )}
+                      <BlockBorderControls
+                        style={selectedBlock.style}
+                        onChange={(next) => updateSelectedBlock({ style: next })}
+                      />
                     </Space>
                   </Card>
                 )}
@@ -3501,13 +3849,13 @@ const PrintTemplateDesignPage: React.FC = () => {
                               size="small"
                               readOnly
                               value={t('pages.system.printTemplatesDesign.widthRatio')}
-                              style={{ width: '32%' }}
+                              style={{ width: '36%' }}
                             />
                             <Input
                               size="small"
                               value={col.width}
                               placeholder={t('pages.system.printTemplatesDesign.widthRatioPlaceholder')}
-                              style={{ width: '68%' }}
+                              style={{ width: '64%' }}
                               onChange={(e) => {
                                 const newCols = selectedBlock.cols.map((c) =>
                                   c.id === col.id ? { ...c, width: e.target.value } : c,

@@ -44,6 +44,11 @@ import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 
 const TRACE_RESOURCE = 'kuaizhizao:quality-management-traceability';
 
+export type TraceabilityPageProps = {
+  /** 权限资源前缀；默认质量追溯，快报表物料生命周期可覆盖 */
+  permissionResource?: string;
+};
+
 type TraceGraphViewMode = 'sankey' | 'flow';
 
 const TRACE_CANVAS_HEIGHT = 480;
@@ -72,10 +77,12 @@ function resolveClickedNodeId(evt: FlowGraphNodeClickEvt): string | undefined {
   return legacyId != null ? String(legacyId) : undefined;
 }
 
-const TraceabilityPage: React.FC = () => {
+const TraceabilityPage: React.FC<TraceabilityPageProps> = ({
+  permissionResource = TRACE_RESOURCE,
+}) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const tracePerms = useResourcePermissions(TRACE_RESOURCE);
+  const tracePerms = useResourcePermissions(permissionResource);
 
   const [direction, setDirection] = useState<TraceDirection>('both');
   const [searchCode, setSearchCode] = useState('');

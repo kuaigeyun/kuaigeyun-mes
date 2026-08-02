@@ -655,9 +655,17 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     fields: [
       { key: 'card_title', label: '卡片标题', type: 'string' },
       { key: 'print_time', label: '打印时间', type: 'date' },
+      { key: 'item.code', label: '编号', type: 'string' },
+      { key: 'item.name', label: '名称', type: 'string' },
+      { key: 'item.model', label: '型号', type: 'string' },
+      { key: 'item.type', label: '类型', type: 'string' },
+      { key: 'item.affiliation', label: '所属', type: 'string' },
+      { key: 'item.purchase_date', label: '购买', type: 'date' },
+      { key: 'item.installation_date', label: '启用', type: 'date' },
+      { key: 'item.qrcode_image', label: '二维码图片', type: 'image' },
       {
         key: 'items',
-        label: '设备卡列表',
+        label: '设备卡列表（批量）',
         type: 'array',
         children: [
           { key: 'items.0.code', label: '编号', type: 'string' },

@@ -756,6 +756,10 @@ def build_designer_schema_for_document_type(document_type: str) -> dict[str, Any
         return build_certificate_designer_schema()
     if document_type == "sales_contract":
         return build_sales_contract_general_schema()
+    if document_type == "equipment_card":
+        from apps.kuaizhizao.print.equipment_card import build_equipment_card_designer_schema
+
+        return build_equipment_card_designer_schema()
     layout = DOCUMENT_LAYOUTS.get(document_type)
     if not layout:
         raise ValueError(f"未定义设计器布局: {document_type}")

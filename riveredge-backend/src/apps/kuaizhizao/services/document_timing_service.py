@@ -197,6 +197,8 @@ class DocumentTimingService(AppBaseService[DocumentNodeTiming]):
         document_type: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
+        date_start: Optional[datetime] = None,
+        date_end: Optional[datetime] = None,
     ) -> List[DocumentTimingSummaryResponse]:
         """
         获取有耗时记录的单据列表
@@ -206,6 +208,8 @@ class DocumentTimingService(AppBaseService[DocumentNodeTiming]):
             document_type: 单据类型筛选（可选）
             skip: 跳过数量
             limit: 限制数量
+            date_start: 节点开始时间下限（可选）
+            date_end: 节点开始时间上限（可选）
 
         Returns:
             List[DocumentTimingSummaryResponse]: 单据耗时汇总列表
@@ -214,6 +218,10 @@ class DocumentTimingService(AppBaseService[DocumentNodeTiming]):
         query = DocumentNodeTiming.filter(tenant_id=tenant_id)
         if document_type:
             query = query.filter(document_type=document_type)
+        if date_start:
+            query = query.filter(start_time__gte=date_start)
+        if date_end:
+            query = query.filter(start_time__lte=date_end)
 
         # 获取所有节点记录
         all_timings = await query.order_by('-start_time').offset(skip).limit(limit * 10)  # 多取一些以应对去重

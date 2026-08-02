@@ -539,6 +539,20 @@ class PrintTemplateService:
 
         schema = data.source
         schema_version = str(schema.get("version") or "v1")
+        # 固定资产/设备卡：强制表格编译，保证完整格子线（分栏 flex 预览常看不到框线）
+        if str(schema.get("compileMode") or "").strip() == "asset_card_table":
+            from apps.kuaizhizao.print.equipment_card import compile_asset_card_table_schema
+
+            compiled = compile_asset_card_table_schema(schema)
+            if not compiled:
+                raise ValidationError("资产卡表格模板编译结果为空")
+            return {
+                "success": True,
+                "compiled_template": compiled,
+                "schema_version": schema_version,
+                "warnings": [],
+            }
+
         blocks = schema.get("blocks")
         if not isinstance(blocks, list):
             raise ValidationError("designer_schema.blocks 必须为数组")
@@ -558,6 +572,10 @@ class PrintTemplateService:
             "241-1": "241mm 280mm",
             "241-2": "241mm 140mm",
             "241-3": "241mm 93mm",
+            # 固定资产/设备信息卡常见规格（横版挂牌）
+            "ASSET-100x70": "100mm 70mm",
+            "ASSET-120x80": "120mm 80mm",
+            "ASSET-80x60": "80mm 60mm",
         }
         page_size_val = paper_size_map.get(page_size, page_size)
 
@@ -596,24 +614,86 @@ class PrintTemplateService:
         item_spacing = schema.get("itemSpacing", 0)
         
         def _get_style_str(blk: dict, is_root: bool = False) -> str:
-            style = blk.get("style", {})
+            style = blk.get("style", {}) if isinstance(blk.get("style"), dict) else {}
             css_parts = []
-            if style.get("fontSize"):
-                css_parts.append(f"font-size:{style['fontSize']};")
-            if style.get("fontWeight"):
-                css_parts.append(f"font-weight:{style['fontWeight']};")
-            if style.get("textAlign"):
-                css_parts.append(f"text-align:{style['textAlign']};")
-            if style.get("color"):
-                css_parts.append(f"color:{style['color']};")
-            if style.get("letterSpacing"):
-                css_parts.append(f"letter-spacing:{style['letterSpacing']};")
-            
+            # 允许设计器直接下发常用 CSS，便于固定资产卡等固定版式
+            passthrough_keys = (
+                "fontSize",
+                "fontWeight",
+                "textAlign",
+                "color",
+                "letterSpacing",
+                "border",
+                "borderTop",
+                "borderRight",
+                "borderBottom",
+                "borderLeft",
+                "padding",
+                "paddingTop",
+                "paddingRight",
+                "paddingBottom",
+                "paddingLeft",
+                "margin",
+                "marginTop",
+                "marginRight",
+                "marginBottom",
+                "marginLeft",
+                "background",
+                "backgroundColor",
+                "width",
+                "height",
+                "minHeight",
+                "maxWidth",
+                "whiteSpace",
+                "overflow",
+                "lineHeight",
+                "boxSizing",
+            )
+            css_name = {
+                "fontSize": "font-size",
+                "fontWeight": "font-weight",
+                "textAlign": "text-align",
+                "letterSpacing": "letter-spacing",
+                "borderTop": "border-top",
+                "borderRight": "border-right",
+                "borderBottom": "border-bottom",
+                "borderLeft": "border-left",
+                "paddingTop": "padding-top",
+                "paddingRight": "padding-right",
+                "paddingBottom": "padding-bottom",
+                "paddingLeft": "padding-left",
+                "marginTop": "margin-top",
+                "marginRight": "margin-right",
+                "marginBottom": "margin-bottom",
+                "marginLeft": "margin-left",
+                "backgroundColor": "background-color",
+                "minHeight": "min-height",
+                "maxWidth": "max-width",
+                "whiteSpace": "white-space",
+                "lineHeight": "line-height",
+                "boxSizing": "box-sizing",
+            }
+            for key in passthrough_keys:
+                val = style.get(key)
+                if val is None or val == "":
+                    continue
+                css_parts.append(f"{css_name.get(key, key)}:{val};")
+
             # Apply global item spacing to root-level blocks
-            if is_root and item_spacing > 0:
+            if is_root and item_spacing > 0 and not style.get("marginBottom"):
                 css_parts.append(f"margin-bottom:{item_spacing}mm;")
-                
+
             return "".join(css_parts)
+
+        def _col_width_css(width_raw: Any) -> str:
+            """支持 flex 比例（如 1/2）或固定宽（如 14mm / 40%）。"""
+            width = str(width_raw or "1").strip() or "1"
+            lowered = width.lower()
+            if any(lowered.endswith(u) for u in ("mm", "cm", "in", "px", "%")):
+                return f"flex:0 0 {width};width:{width};max-width:{width};"
+            if width.replace(".", "", 1).isdigit():
+                return f"flex:{width};"
+            return f"flex:{width};"
 
         lines: list[str] = []
         def _render_blocks(blocks_list: list, warnings_list: list, is_root: bool = False) -> str:
@@ -790,7 +870,7 @@ class PrintTemplateService:
                     col_html = []
                     for col in cols:
                         if not isinstance(col, dict): continue
-                        width = str(col.get("width") or "1")
+                        width_css = _col_width_css(col.get("width") or "1")
                         col_horizontal_align = str(col.get("horizontalAlign") or "start").strip().lower()
                         col_vertical_align = str(col.get("verticalAlign") or "top").strip().lower()
                         col_justify_content = align_map.get(col_vertical_align, "flex-start")
@@ -799,7 +879,7 @@ class PrintTemplateService:
                         inner_blocks = col.get("blocks", [])
                         inner_html = _render_blocks(inner_blocks, warnings_list, is_root=False)
                         col_html.append(
-                            f'<div style="flex: {width}; display: flex;">'
+                            f'<div style="{width_css}display:flex;">'
                             f'<div style="display: flex; flex-direction: column; justify-content: {col_justify_content}; '
                             f'align-items: {col_align_items}; text-align: {col_text_align}; width: 100%; min-height: 100%;">'
                             f'{inner_html}'
@@ -807,7 +887,16 @@ class PrintTemplateService:
                             f'</div>'
                         )
                     style_str = _get_style_str(blk, is_root)
-                    container_style = f'display: flex; gap: 16px; width: 100%; justify-content: {justify_content}; align-items: stretch; {style_str}'
+                    gap = blk.get("gap")
+                    if gap is None or gap == "":
+                        gap_css = "16px"
+                    else:
+                        gap_s = str(gap).strip()
+                        gap_css = gap_s if any(gap_s.lower().endswith(u) for u in ("mm", "px", "%")) else f"{gap_s}px"
+                    container_style = (
+                        f'display: flex; gap: {gap_css}; width: 100%; '
+                        f'justify-content: {justify_content}; align-items: stretch; {style_str}'
+                    )
                     wrapper_class = ' class="print-block"' if is_root else ""
                     lines.append(
                         f'<div{wrapper_class} style="{container_style}">{ "".join(col_html) }</div>'
@@ -1028,9 +1117,26 @@ class PrintTemplateService:
         parts.append("  img { max-width: 100%; height: auto; display: block; }")
         # Ensure blocks respect item_spacing strictly
         parts.append("  .print-block { width: 100%; position: relative; }")
+        parts.append(
+            "  .print-repeat-page { page-break-after: always; break-after: page; }"
+        )
+        parts.append(
+            "  .print-repeat-page:last-child { page-break-after: auto; break-after: auto; }"
+        )
         # 打印时隐藏 body 中的页脚原文（页码已在 @page 边距盒里渲染）
         parts.append("  @media print { .print-page-counter { display: none !important; } }")
         parts.append("</style>")
+        # 固定资产卡等：设计器画一张卡，打印时按集合循环（每张卡一页）
+        repeat_collection = str(schema.get("repeatCollection") or "").strip()
+        repeat_item = str(schema.get("repeatItem") or "item").strip() or "item"
+        if compiled_body and repeat_collection:
+            compiled_body = (
+                f"{{% for {repeat_item} in {repeat_collection} %}}"
+                f'<div class="print-repeat-page">'
+                f"{compiled_body}"
+                f"</div>"
+                f"{{% endfor %}}"
+            )
         if compiled_body:
             parts.append(compiled_body)
 
@@ -1115,16 +1221,46 @@ class PrintTemplateService:
         # 同步渲染模板（pdfme 模板在上层服务中会提前降级）
         engine = PrintTemplateService._resolve_render_engine(print_template)
         strict_variables = PrintTemplateService._resolve_strict_variables(print_template)
-        if data.output_format == "html" and not is_pdfme_template(print_template.content):
+        template_content = print_template.content or ""
+        # 设计器声明了 repeatCollection，但 content 缺少 for 循环时（旧编译/保存丢失），按 schema 重编译
+        config = print_template.config if isinstance(print_template.config, dict) else {}
+        schema = config.get("designer_schema") if isinstance(config.get("designer_schema"), dict) else None
+        if schema:
+            repeat_collection = str(schema.get("repeatCollection") or "").strip()
+            repeat_item = str(schema.get("repeatItem") or "item").strip() or "item"
+            for_token = f"{{% for {repeat_item} in {repeat_collection} %}}"
+            compile_mode = str(schema.get("compileMode") or "").strip()
+            need_rebuild = False
+            if repeat_collection and for_token not in template_content:
+                need_rebuild = True
+            if compile_mode == "asset_card_table" and "eq-asset-card" not in template_content:
+                need_rebuild = True
+            if need_rebuild:
+                try:
+                    rebuilt = PrintTemplateService.compile_designer_schema(
+                        PrintTemplateCompileRequest(
+                            source_type="designer_json",
+                            source=schema,
+                            target_engine="jinja2",
+                        )
+                    )
+                    rebuilt_content = str(rebuilt.get("compiled_template") or "").strip()
+                    if rebuilt_content:
+                        template_content = rebuilt_content
+                        print_template.content = rebuilt_content
+                        await print_template.save()
+                except Exception:
+                    pass
+        if data.output_format == "html" and not is_pdfme_template(template_content):
             rendered_content = render_template_to_html(
-                print_template.content,
+                template_content,
                 data.data,
                 engine=engine,
                 strict_variables=strict_variables,
             )
         else:
             rendered_content = PrintTemplateService.render_template(
-                print_template.content,
+                template_content,
                 data.data,
                 engine=engine,
                 strict_variables=strict_variables,
