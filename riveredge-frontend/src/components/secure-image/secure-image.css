@@ -1,0 +1,13 @@
+.secure-image-fill-parent,
+.secure-image-fill-parent__root,
+.secure-image-fill-parent__root.ant-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.secure-image-fill-parent__root .ant-image-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

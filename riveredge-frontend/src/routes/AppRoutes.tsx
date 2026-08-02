@@ -48,8 +48,8 @@ function createLazyApp(app: Application) {
 }
 
 const appErrorPanelStyle: React.CSSProperties = {
-  // 顶/底留白由 UniTabs 承担；左右自管（flush 路由无 page-outer padding）
-  margin: `0 ${PAGE_SPACING.PADDING}px`,
+  // 左右留白由 UniTabs `.uni-tabs-content-page-outer` 承担；此处只保留面板内边距，勿再叠 margin 16
+  margin: 0,
   padding: PAGE_SPACING.PADDING,
   background: '#fff2f0',
   border: '1px solid #ffccc7',
@@ -249,7 +249,8 @@ const AppRoutes: React.FC = () => {
     return (
       <div
         style={{
-          margin: `0 ${PAGE_SPACING.PADDING}px`,
+          // 左右留白由 UniTabs page-outer 承担，勿再叠 margin 16
+          margin: 0,
           padding: PAGE_SPACING.PADDING,
           background: '#fff3cd',
           border: '1px solid #ffeaa7',

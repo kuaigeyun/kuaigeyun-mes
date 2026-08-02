@@ -14,6 +14,7 @@ import {
   FILE_IMAGE_SIZE_MEDIUM,
   FILE_IMAGE_SIZE_AVATAR,
 } from '../../services/file';
+import './secure-image.css';
 
 export interface SecureImageProps {
   /** 文件 UUID 或 直接图片 URL */
@@ -44,6 +45,8 @@ export interface SecureImageProps {
   onLoad?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void;
   /** 在父容器内水平垂直居中，图片 max 100% 且保持比例（配合 object-fit: contain） */
   fitCenter?: boolean;
+  /** 铺满父容器（object-fit 默认 cover），用于卡片封面等固定比例区域 */
+  fillParent?: boolean;
   /** 列表场景：进入视口后再请求缩略图（避免表格一次加载几十张） */
   lazyLoad?: boolean;
 }
@@ -79,6 +82,7 @@ export const SecureImage: React.FC<SecureImageProps> = ({
   onError,
   onLoad,
   fitCenter = false,
+  fillParent = false,
   lazyLoad = false,
 }) => {
   const { t } = useTranslation();
@@ -321,7 +325,15 @@ export const SecureImage: React.FC<SecureImageProps> = ({
     );
   }
 
-  const wrapperStyle: React.CSSProperties = fitCenter
+  const wrapperStyle: React.CSSProperties = fillParent
+    ? {
+        display: 'block',
+        width: width ?? '100%',
+        height: height ?? '100%',
+        lineHeight: 0,
+        overflow: 'hidden',
+      }
+    : fitCenter
     ? {
         display: 'flex',
         alignItems: 'center',
@@ -332,7 +344,17 @@ export const SecureImage: React.FC<SecureImageProps> = ({
       }
     : { display: 'inline-block', lineHeight: 0 };
 
-  const imageStyle: React.CSSProperties = fitCenter
+  const imageStyle: React.CSSProperties = fillParent
+    ? {
+        objectFit: style?.objectFit ?? 'cover',
+        objectPosition: 'center',
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        borderRadius: 4,
+        ...style,
+      }
+    : fitCenter
     ? {
         objectFit: 'contain',
         objectPosition: 'center',
@@ -346,14 +368,15 @@ export const SecureImage: React.FC<SecureImageProps> = ({
     : { objectFit: 'cover', borderRadius: 4, ...style };
 
   return (
-    <div ref={containerRef} style={wrapperStyle}>
+    <div ref={containerRef} style={wrapperStyle} className={fillParent ? 'secure-image-fill-parent' : undefined}>
       <Image
         key={`secure-image-${previewEpoch}`}
         src={src || undefined}
         alt={alt}
-        width={fitCenter ? undefined : width}
-        height={fitCenter ? undefined : height}
+        width={fillParent || fitCenter ? '100%' : width}
+        height={fillParent || fitCenter ? '100%' : height}
         style={imageStyle}
+        rootClassName={fillParent ? 'secure-image-fill-parent__root' : undefined}
         preview={previewConfig}
         onClick={openPreview}
         placeholder={<Skeleton.Avatar active shape="square" size={typeof width === 'number' ? width : 40} />}
