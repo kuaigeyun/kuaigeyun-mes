@@ -8,13 +8,14 @@ from datetime import date, datetime
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 import uuid
-from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
+from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body, UploadFile, File
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_productions_access
 from core.api.deps.access import require_permission_codes
+from core.ai.deps import AiAuth, get_ai_auth
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
 
@@ -3120,6 +3121,58 @@ async def get_outsource_product_return(
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/outsource-product-returns/{return_id}", tenant_id)
+
+
+# ==================== 采购订单 KU-Draft OCR ====================
+
+from apps.kuaizhizao.schemas.purchase_order_ocr import (
+    PurchaseOrderOcrParseTextRequest,
+    PurchaseOrderOcrResult,
+)
+from apps.kuaizhizao.services.purchase_order_ocr_service import PurchaseOrderOcrService
+
+
+@router.post(
+    "/purchase-orders/ocr-parse-text",
+    response_model=PurchaseOrderOcrResult,
+    response_model_by_alias=True,
+    summary="Parse purchase order from natural language (KU-AI)",
+    dependencies=[Depends(require_permission_codes("kuaiai:entry:read"))],
+)
+async def parse_purchase_order_from_text(
+    body: PurchaseOrderOcrParseTextRequest,
+    ai_auth: AiAuth = Depends(get_ai_auth),
+):
+    try:
+        return await PurchaseOrderOcrService.extract_from_text(
+            tenant_id=ai_auth.tenant_id,
+            text=body.text,
+            context=body.context,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/purchase-orders/ocr-parse-text", ai_auth.tenant_id)
+
+
+@router.post(
+    "/purchase-orders/ocr-extract",
+    response_model=PurchaseOrderOcrResult,
+    response_model_by_alias=True,
+    summary="OCR extract purchase order from image (KU-AI)",
+    dependencies=[Depends(require_permission_codes("kuaiai:entry:read"))],
+)
+async def extract_purchase_order_from_image(
+    file: UploadFile = File(..., description="采购订单/询价单图片"),
+    ai_auth: AiAuth = Depends(get_ai_auth),
+):
+    try:
+        image_bytes = await file.read()
+        return await PurchaseOrderOcrService.extract_from_image(
+            tenant_id=ai_auth.tenant_id,
+            image_bytes=image_bytes,
+            content_type=file.content_type,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/purchase-orders/ocr-extract", ai_auth.tenant_id)
 
 
 # ==================== 供应商协同 API ====================

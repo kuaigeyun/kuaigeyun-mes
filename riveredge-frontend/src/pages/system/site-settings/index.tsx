@@ -133,6 +133,7 @@ function getInitialValuesFromConfigStore(
     'integrations.deepseek.tools_enabled': configs.integrations?.deepseek?.tools_enabled !== false,
     'integrations.deepseek.rag_enabled': configs.integrations?.deepseek?.rag_enabled !== false,
     'integrations.deepseek.rag_use_embedding': configs.integrations?.deepseek?.rag_use_embedding !== false,
+    'integrations.deepseek.rag_backend': configs.integrations?.deepseek?.rag_backend ?? 'native',
     'integrations.deepseek.rag_top_k': configs.integrations?.deepseek?.rag_top_k ?? 5,
     'integrations.deepseek.custom_system_prompt': configs.integrations?.deepseek?.custom_system_prompt ?? '',
     'integrations.deepseek.ocr_base_url': configs.integrations?.deepseek?.ocr_base_url ?? '',
@@ -213,6 +214,7 @@ const SITE_SETTINGS_INTEGRATIONS_TAB_FIELDS = [
   'integrations.deepseek.tools_enabled',
   'integrations.deepseek.rag_enabled',
   'integrations.deepseek.rag_use_embedding',
+  'integrations.deepseek.rag_backend',
   'integrations.deepseek.rag_top_k',
   'integrations.deepseek.custom_system_prompt',
   'integrations.deepseek.ocr_base_url',
@@ -777,6 +779,8 @@ const SiteSettingsPage: React.FC = () => {
           setting.settings?.integrations?.deepseek?.rag_enabled !== false,
         'integrations.deepseek.rag_use_embedding':
           setting.settings?.integrations?.deepseek?.rag_use_embedding !== false,
+        'integrations.deepseek.rag_backend':
+          setting.settings?.integrations?.deepseek?.rag_backend ?? 'native',
         'integrations.deepseek.rag_top_k': setting.settings?.integrations?.deepseek?.rag_top_k ?? 5,
         'integrations.deepseek.custom_system_prompt':
           setting.settings?.integrations?.deepseek?.custom_system_prompt ?? '',
@@ -1155,6 +1159,7 @@ const SiteSettingsPage: React.FC = () => {
           tools_enabled: values['integrations.deepseek.tools_enabled'] !== false,
           rag_enabled: values['integrations.deepseek.rag_enabled'] !== false,
           rag_use_embedding: values['integrations.deepseek.rag_use_embedding'] !== false,
+          rag_backend: String(values['integrations.deepseek.rag_backend'] ?? 'native').trim() || 'native',
           rag_top_k: Number(values['integrations.deepseek.rag_top_k']) || 5,
           custom_system_prompt: String(values['integrations.deepseek.custom_system_prompt'] ?? '').trim(),
           ocr_base_url: String(values['integrations.deepseek.ocr_base_url'] ?? '').trim(),
@@ -1789,6 +1794,30 @@ const SiteSettingsPage: React.FC = () => {
                 label={t('pages.system.siteSettings.integrationsDeepseekRagTopK')}
               >
                 <InputNumber min={1} max={20} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item
+                noStyle
+                shouldUpdate={(prev, cur) =>
+                  prev['integrations.deepseek.rag_enabled'] !== cur['integrations.deepseek.rag_enabled']
+                }
+              >
+                {({ getFieldValue }) =>
+                  getFieldValue('integrations.deepseek.rag_enabled') !== false ? (
+                    <Form.Item
+                      name="integrations.deepseek.rag_backend"
+                      label={t('pages.system.siteSettings.integrationsDeepseekRagBackend')}
+                    >
+                      <Select
+                        options={[
+                          { value: 'native', label: t('pages.system.siteSettings.integrationsDeepseekRagBackendNative') },
+                          { value: 'llamaindex', label: t('pages.system.siteSettings.integrationsDeepseekRagBackendLlamaIndex') },
+                        ]}
+                      />
+                    </Form.Item>
+                  ) : null
+                }
               </Form.Item>
             </Col>
           </Row>

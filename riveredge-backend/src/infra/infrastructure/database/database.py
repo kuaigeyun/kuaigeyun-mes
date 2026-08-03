@@ -224,6 +224,7 @@ TORTOISE_ORM = {
                 "core.models.user_preference",
                 "core.models.operation_log",
                 "core.models.login_log",
+                "core.models.ai_audit_log",
                 "core.models.user_activity",
                 # Aerich 模型
                 "aerich.models",

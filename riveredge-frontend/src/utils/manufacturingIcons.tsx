@@ -116,6 +116,7 @@ import {
   PlayCircle,
   Plus,
   Printer,
+  Radar,
   Receipt,
   RefreshCw,
   RotateCcw,
@@ -269,6 +270,7 @@ const LUCIDE_BY_NAME: Record<string, React.ComponentType<any>> = {
   PlayCircle,
   Plus,
   Printer,
+  Radar,
   Receipt,
   RefreshCw,
   RotateCcw,
@@ -368,6 +370,9 @@ export const ManufacturingIcons = {
   process: getLucideIcon('Workflow'), // 工艺管理
   gitBranch: getLucideIcon('GitBranch'), // 快协同/供应链协同
   sparkles: getLucideIcon('Sparkles'), // KU-AI/智能建议
+  radar: getLucideIcon('Radar'), // KU-AI 智能运营
+  'triangle-alert': getLucideIcon('AlertTriangle'), // KU-AI 异常感知
+  'alert-triangle': getLucideIcon('AlertTriangle'),
   layers: getLucideIcon('Layers'), // 快研发/产品生命周期
   
   // 仓储和物流

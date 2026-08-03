@@ -24,8 +24,7 @@ from apps.kuaizhizao.schemas.scheduling_ai import (
     SchedulingAiWorkOrderAdjustment,
     SchedulingAiOperationAdjustment,
 )
-from apps.kuaizhizao.services.sales_order_ocr_service import SalesOrderOcrService
-from core.utils.deepseek_vision_client import extract_json_object, message_text
+from core.ai.structured_draft import StructuredDraftService
 from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingService
 from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
 from apps.master_data.models.factory import Workstation
@@ -109,27 +108,12 @@ class SchedulingAiService:
         user_content: str,
         error_prefix: str,
     ) -> Dict[str, Any]:
-        config = await SalesOrderOcrService._get_runtime_config(tenant_id)
-        payload = {
-            "model": config["chat_model"],
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_content},
-            ],
-            "response_format": {"type": "json_object"},
-            "stream": False,
-            "temperature": 0.2,
-        }
-        body = await SalesOrderOcrService._post_chat_completions(
-            tenant_id=tenant_id,
-            base_url=config["chat_base_url"],
-            api_key=config["chat_api_key"],
-            payload=payload,
+        return await StructuredDraftService.complete_json(
+            tenant_id,
+            system=system,
+            user_content=user_content,
             error_prefix=error_prefix,
         )
-        choice = (body.get("choices") or [{}])[0]
-        text = message_text(choice.get("message") or {})
-        return extract_json_object(text)
 
     async def _load_work_orders(
         self,
@@ -545,22 +529,31 @@ class SchedulingAiService:
         selected_work_order_ids: Optional[List[int]] = None,
     ) -> SchedulingAiSuggestAdjustmentsResponse:
         """Phase 3：派工单图片 OCR → 改期提案。"""
-        from apps.kuaizhizao.services.sales_order_ocr_service import _guess_image_mime
         import base64
+
+        from core.ai.runtime_config import AiRuntimeConfig
+        from core.utils.deepseek_vision_client import extract_text_from_image, guess_image_mime
 
         if not image_bytes:
             raise ValidationError("请上传图片")
         if len(image_bytes) > 12 * 1024 * 1024:
             raise ValidationError("图片大小不能超过 12MB")
 
-        mime = _guess_image_mime(image_bytes, content_type)
-        config = await SalesOrderOcrService._get_runtime_config(tenant_id)
+        mime = guess_image_mime(image_bytes, content_type)
+        config_model = await AiRuntimeConfig.load(tenant_id)
+        vision_config = {
+            "ocr_base_url": config_model.ocr_base_url,
+            "ocr_model": config_model.ocr_model,
+            "ocr_api_key": config_model.ocr_api_key,
+            "ocr_configured": config_model.ocr_configured,
+        }
         b64 = base64.b64encode(image_bytes).decode("ascii")
-        ocr_text = await SalesOrderOcrService._extract_text_from_image(
+        ocr_text = await extract_text_from_image(
             tenant_id=tenant_id,
-            config=config,
+            config=vision_config,
             mime=mime,
             b64=b64,
+            prompt=_DISPATCH_OCR_PROMPT,
         )
         logger.info(
             "scheduling dispatch OCR tenant_id={} text_len={}",

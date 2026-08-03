@@ -92,6 +92,7 @@ class DynamicDatabaseConfigService:
             "core.models.user_preference",
             "core.models.operation_log",
             "core.models.login_log",
+            "core.models.ai_audit_log",
             # 在线用户 / 会话活动（中间件与 OnlineUserService 依赖；须与静态 TORTOISE_ORM 一致纳入动态 apps）
             "core.models.user_activity",
             "core.models.data_dictionary",

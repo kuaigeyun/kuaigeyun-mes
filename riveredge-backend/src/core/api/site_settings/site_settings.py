@@ -17,6 +17,7 @@ from core.utils.integration_settings import (
 )
 from core.api.deps.access import AuthContext, get_auth_context, require_permission_codes
 from core.api.deps.deps import get_current_tenant, get_current_user
+from core.ai.deps import AiAuth, get_ai_auth
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
@@ -46,6 +47,10 @@ class DeepSeekChatCompletionRequest(BaseModel):
     model: Optional[str] = None
     stream: bool = False
     temperature: Optional[float] = Field(default=0.7, ge=0, le=2)
+    context: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="KU-AI 业务上下文（screen / resource_key / record_id 等）",
+    )
 
 
 def _deepseek_validation_http_exception(exc: ValidationError) -> HTTPException:
@@ -134,37 +139,26 @@ async def get_deepseek_integration_status(
 )
 async def create_deepseek_chat_completion(
     body: DeepSeekChatCompletionRequest,
-    auth: AuthContext = Depends(get_auth_context),
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
+    ai_auth: AiAuth = Depends(get_ai_auth),
 ):
-    """代理 DeepSeek Chat Completions；实现位于 KU-AI，须已 compose 进本环境。"""
-    import importlib.util
-
+    """代理 DeepSeek Chat Completions（薄转发至 RiverEdge AI Runtime）。"""
     from loguru import logger
 
-    if importlib.util.find_spec("apps.kuaiai.services.deepseek_service") is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="KU-AI 未组装到本环境，无法使用 DeepSeek 对话。请执行 workspace compose。",
-        )
-    from apps.kuaiai.services.deepseek_service import DeepSeekService
+    from core.ai.chat_handler import create_chat_completion
 
     try:
-        return await DeepSeekService.create_chat_completion(
-            tenant_id,
+        return await create_chat_completion(
+            ai_auth,
             body.messages,
             model=body.model,
             temperature=body.temperature,
             stream=body.stream,
-            user=current_user,
-            is_infra_admin=auth.is_infra_admin,
-            is_tenant_admin=auth.is_tenant_admin,
+            context=body.context,
         )
     except ValidationError as exc:
         raise _deepseek_validation_http_exception(exc) from exc
     except Exception as exc:
-        logger.error("KU-AI 对话失败 tenant_id={} error={}", tenant_id, exc)
+        logger.error("KU-AI 对话失败 tenant_id={} error={}", ai_auth.tenant_id, exc)
         raise _deepseek_validation_http_exception(ValidationError("对话请求失败，请稍后重试")) from exc
 
 

@@ -46,6 +46,7 @@ import { isPlatformAdminLoginPathname, isPlatformInfraPath, isPlatformInfraPubli
 import { redirectAfterLogout } from './utils/loginEntry';
 // 使用 routes 中的路由配置
 import MainRoutes from './routes';
+import { AiContextProvider } from './contexts/AiContext';
 import ErrorBoundary from './components/error-boundary';
 
 // 权限守卫组件（memo 阻断上层频繁重渲染的级联）
@@ -548,7 +549,14 @@ const AppContent: React.FC<{ touchScreen: any }> = ({ touchScreen }) => {
       .catch(() => applyFavicon(undefined));
   }, []);
 
-  const routesElement = React.useMemo(() => <MainRoutes />, []);
+  const routesElement = React.useMemo(
+    () => (
+      <AiContextProvider>
+        <MainRoutes />
+      </AiContextProvider>
+    ),
+    [],
+  );
   return (
     <ErrorBoundary>
       <AuthGuard>

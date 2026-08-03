@@ -9,7 +9,7 @@
     "is_pro": false,
     "entry_point": "../apps/kuaizhizao/index.tsx",
     "route_path": "/apps/kuaizhizao",
-    "sort_order": 20,
+    "sort_order": 120,
     "menu_config": {
         "title": "app.kuaizhizao.name",
         "icon": "production",

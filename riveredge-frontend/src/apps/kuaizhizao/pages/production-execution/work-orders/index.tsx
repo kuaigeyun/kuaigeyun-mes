@@ -249,6 +249,9 @@ const LazyUniLifecycleStepper = lazy(() =>
 const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-material-select'))
 import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue } from '../../../utils/workOrderLifecycle'
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
+import { AiPulseStrip } from '../../../../kuaiai/components/ai-pulse';
+import { useRegisterAiContext } from '../../../../../hooks/useRegisterAiContext';
+import { WorkOrderSopSidebar } from '../../../../kuaiai/components/work-order-sop';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle'
 import {
@@ -2032,6 +2035,17 @@ const WorkOrdersPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [workOrderDetail, setWorkOrderDetail] = useState<WorkOrder | null>(null)
+  const [sopSidebarOpen, setSopSidebarOpen] = useState(false)
+  useRegisterAiContext(
+    drawerVisible && workOrderDetail
+      ? {
+          screenLabel: t('app.kuaizhizao.workOrder.pageTitle'),
+          resourceKey: 'kuaizhizao:work_order',
+          recordId: workOrderDetail.id,
+          recordLabel: workOrderDetail.code,
+        }
+      : { screenLabel: t('app.kuaizhizao.workOrder.pageTitle') },
+  )
   /** 详情抽屉：单据跟踪 refresh（生命周期时间线共用） */
   const [woTrackingRefreshKey, setWoTrackingRefreshKey] = useState(0)
 
@@ -7266,6 +7280,7 @@ const WorkOrdersPage: React.FC = () => {
           background: var(--ant-color-warning-bg) !important;
         }
       `}</style>
+      <AiPulseStrip scene="production" title="KU-Pulse 生产异常" />
       <ListPageTemplate statCards={statCards}>
         <UniTable<WorkOrder>
           className="kuaizhizao-work-orders-table"
@@ -9049,6 +9064,9 @@ const WorkOrdersPage: React.FC = () => {
         extra={
           workOrderDetail && (
             <Space wrap>
+              <Button type="default" onClick={() => setSopSidebarOpen(true)}>
+                相关 SOP
+              </Button>
               {['draft', '草稿'].includes(workOrderDetail.status || '') && (
                 <Button type="primary" onClick={() => handleRelease(workOrderDetail!)}>
                   下达工单
@@ -10452,9 +10470,14 @@ const WorkOrdersPage: React.FC = () => {
         }}
         onConfirm={handleConfirmCompleteTracking}
       />
+      <WorkOrderSopSidebar
+        open={sopSidebarOpen}
+        onClose={() => setSopSidebarOpen(false)}
+        workOrderCode={workOrderDetail?.code}
+        productName={workOrderDetail?.product_name}
+      />
     </>
   )
 }
-
 
 export default WorkOrdersPage

@@ -9,7 +9,7 @@
   "is_pro": false,
   "entry_point": "../apps/kuaicaiwu/index.tsx",
   "route_path": "/apps/kuaicaiwu",
-  "sort_order": 50,
+  "sort_order": 140,
   "menu_config": {
     "title": "app.kuaicaiwu.name",
     "icon": "wallet",

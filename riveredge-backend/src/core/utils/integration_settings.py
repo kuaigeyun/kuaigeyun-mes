@@ -13,6 +13,15 @@ INTEGRATION_API_KEY_MASK = "********"
 
 DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-flash"
 DEEPSEEK_DEFAULT_BASE_URL = "https://api.deepseek.com"
+RAG_BACKEND_NATIVE = "native"
+RAG_BACKEND_LLAMAINDEX = "llamaindex"
+
+
+def normalize_rag_backend(value: Any) -> str:
+    raw = str(value or RAG_BACKEND_NATIVE).strip().lower()
+    if raw == RAG_BACKEND_LLAMAINDEX:
+        return RAG_BACKEND_LLAMAINDEX
+    return RAG_BACKEND_NATIVE
 
 
 def _is_blank(value: Any) -> bool:
@@ -59,6 +68,7 @@ def build_deepseek_public_status(settings: Dict[str, Any]) -> Dict[str, Any]:
         "configured": configured,
         "enabled": enabled and configured,
         "model": model,
+        "rag_backend": normalize_rag_backend(deepseek.get("rag_backend")),
     }
 
 

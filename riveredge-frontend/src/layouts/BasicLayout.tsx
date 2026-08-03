@@ -1895,6 +1895,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [hasAiAssistantEntry]);
 
+  useEffect(() => {
+    if (!hasAiAssistantEntry) return;
+    const handleOpenAiAssistant = () => setAiAssistantOpen(true);
+    window.addEventListener('riveredge:open-ai-assistant', handleOpenAiAssistant);
+    return () => window.removeEventListener('riveredge:open-ai-assistant', handleOpenAiAssistant);
+  }, [hasAiAssistantEntry]);
+
   /**
    * 检测面包屑是否换行，如果换行则隐藏
    */

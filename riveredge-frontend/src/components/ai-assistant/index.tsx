@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { createCache, StyleProvider } from '@ant-design/cssinjs'
-import { message, Button, Spin, theme } from 'antd'
+import { message, Button, Spin, theme, Tag } from 'antd'
 import BorderBeam from 'antd/es/border-beam'
 import { CloseOutlined, CopyOutlined, ReloadOutlined, PlusOutlined, CaretDownOutlined } from '@ant-design/icons'
 import { Bubble, Prompts, Sender } from '@ant-design/x'
@@ -18,6 +18,7 @@ import {
   type ChatIntegrationStatus,
 } from '../../services/deepseekChat'
 import { useChatIntegrationStatus } from '../../hooks/useChatIntegrationStatus'
+import { useAiContext, toAiContextApiPayload } from '../../contexts/AiContext'
 import assistAnimation from '../../../static/lottie/assist.json'
 import welcomeAnimation from '../../../static/lottie/welcome.json'
 import AiAssistantMarkdown from './AiAssistantMarkdown'
@@ -119,6 +120,16 @@ function usePromptItems(): PromptsItemType[] {
         icon: <span className="ai-qa-prompt-hash">#</span>,
       },
       {
+        key: 'shortage-week',
+        label: t('ui.aiAssistant.prompt.shortageWeek'),
+        icon: <span className="ai-qa-prompt-hash">#</span>,
+      },
+      {
+        key: 'delayed-orders',
+        label: t('ui.aiAssistant.prompt.delayedOrders'),
+        icon: <span className="ai-qa-prompt-hash">#</span>,
+      },
+      {
         key: 'progress',
         label: t('ui.aiAssistant.prompt.progress'),
         icon: <span className="ai-qa-prompt-hash">#</span>,
@@ -158,7 +169,7 @@ function buildKuaiChatRequest(model: string) {
     headers: buildKuaiChatAuthHeaders(),
     params: {
       model,
-      stream: false,
+      stream: true,
       temperature: 0.7,
     },
     middlewares: {
@@ -196,6 +207,7 @@ type AIAssistantDialogUIProps = {
   senderDisabled?: boolean
   welcomeHint?: React.ReactNode
   modelName?: string
+  contextBadge?: string | null
 }
 
 const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
@@ -208,6 +220,7 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
   senderDisabled = false,
   welcomeHint,
   modelName,
+  contextBadge,
 }) => {
   const { t } = useTranslation()
   const promptItems = usePromptItems()
@@ -289,6 +302,11 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
       <header className="ai-qa-panel-header">
         <span className="ai-qa-panel-header-title">{t('ui.aiAssistant.title')}</span>
         <div className="ai-qa-panel-header-actions">
+          {contextBadge ? (
+            <Tag className="ai-qa-context-badge" color="processing" title={contextBadge}>
+              {contextBadge}
+            </Tag>
+          ) : null}
           <span
             className="ai-qa-panel-header-beta"
             style={{
@@ -450,6 +468,7 @@ type AIAssistantLivePanelProps = {
 
 const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClose, model }) => {
   const { t } = useTranslation()
+  const { context, contextBadge, pendingAssistant, setPendingAssistant } = useAiContext()
   const provider = useMemo(() => getKuaiChatProvider(model), [model])
 
   const chat = useXChat<XChatMessage, XChatMessage, Record<string, unknown>, Record<string, unknown>>({
@@ -517,13 +536,31 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClo
   const handleSubmit = (question: string) => {
     const q = question?.trim?.() || ''
     if (!q || chat.isRequesting) return
+    const apiContext = toAiContextApiPayload(context)
     chat.onRequest(
       {
         messages: [{ role: 'user', content: q }],
+        ...(apiContext ? { context: apiContext } : {}),
       },
       { extraInfo: {} },
     )
   }
+
+  useEffect(() => {
+    if (!open || !pendingAssistant?.prompt || chat.isRequesting) return
+    const prompt = pendingAssistant.prompt.trim()
+    const pendingContext = pendingAssistant.context ?? context
+    setPendingAssistant(null)
+    if (!prompt) return
+    const apiContext = toAiContextApiPayload(pendingContext)
+    chat.onRequest(
+      {
+        messages: [{ role: 'user', content: prompt }],
+        ...(apiContext ? { context: apiContext } : {}),
+      },
+      { extraInfo: {} },
+    )
+  }, [open, pendingAssistant, chat.isRequesting, context, setPendingAssistant, chat])
 
   return (
     <AIAssistantDialogUI
@@ -534,6 +571,7 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClo
       onSubmit={handleSubmit}
       onNewChat={handleNewChat}
       modelName={model}
+      contextBadge={contextBadge}
     />
   )
 }

@@ -77,6 +77,7 @@ import { createListAuditPhaseColumn } from '../../sales-management/shared/listAu
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
+import { AiPulseStrip } from '../../../../kuaiai/components/ai-pulse';
 import { getUserInfo } from '../../../../../utils/auth';
 import { hasModulePermission } from '../../../../../utils/permissionContract';
 import { useGlobalStore } from '../../../../../stores';
@@ -1559,6 +1560,7 @@ const ReportingPage: React.FC = () => {
 
   return (
     <>
+      <AiPulseStrip scene="reporting" title="KU-Pulse 报工异常" />
       <ListPageTemplate statCards={statCards}>
       <UniTable
         headerTitle={t('app.kuaizhizao.menu.production-execution.reporting')}

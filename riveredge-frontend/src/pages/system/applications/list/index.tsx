@@ -173,32 +173,38 @@ const INDUSTRY_APP_CODES = [
   'kuaisemiconductor',
 ];
 const APP_SORT_ORDER_OVERRIDES: Record<string, number> = {
-  // 基础
-  kuaiplm: 25,
-  kuaicaiwu: 40,
-  // 专业（与 PRO_APP_CODES 顺序一致）
-  kuaiai: 100,
-  kuaireport: 101,
-  kuaiiot: 102,
-  kuaiems: 103,
-  kuaisrm: 104,
-  // 行业
-  kuaimachinery: 200,
-  kuaimolding: 201,
-  kuaielectronics: 202,
-  kuaiautoparts: 203,
-  kuaimedical: 204,
-  kuaifood: 205,
-  kuaipackaging: 206,
-  kuaihardware: 207,
-  kuaidiecasting: 208,
-  kuaiwiring: 209,
-  kuaimotor: 210,
-  kuaibattery: 211,
-  kuainewequipment: 212,
-  kuaisheetmetal: 213,
-  kuaimold: 214,
-  kuaisemiconductor: 215,
+  // 基础 1xx（步进 10）
+  'master-data': 110,
+  kuaizhizao: 120,
+  kuaierp: 121,
+  kuaimes: 122,
+  kuaiplm: 130,
+  kuaicaiwu: 140,
+  // 专业 2xx（与 PRO_APP_CODES 顺序一致）
+  kuaiai: 210,
+  kuaireport: 220,
+  kuaiiot: 230,
+  kuaiems: 240,
+  kuaisrm: 250,
+  // 行业 3xx
+  kuaimachinery: 310,
+  kuaimolding: 320,
+  kuaielectronics: 330,
+  kuaiautoparts: 340,
+  kuaimedical: 350,
+  kuaifood: 360,
+  kuaipackaging: 370,
+  kuaihardware: 380,
+  kuaidiecasting: 390,
+  kuaiwiring: 400,
+  kuaimotor: 410,
+  kuaibattery: 420,
+  kuainewequipment: 430,
+  kuaisheetmetal: 440,
+  kuaimold: 450,
+  kuaisemiconductor: 460,
+  // 定制 5xx
+  haoligo: 510,
 };
 
 const APP_DESCRIPTION_OVERRIDES: Record<string, string> = {

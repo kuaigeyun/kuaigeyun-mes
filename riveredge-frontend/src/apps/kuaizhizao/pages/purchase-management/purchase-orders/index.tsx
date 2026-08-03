@@ -157,6 +157,8 @@ import {
 import { resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
 import { getPurchaseOrderLifecycle, buildPurchaseOrderLifecycleValueEnum, resolvePurchaseOrderListLifecycleParams, isPurchaseOrderDeliveryOverdue } from '../../../utils/purchaseOrderLifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
+import { PurchaseOrderAiCreateTrigger } from './components/PurchaseOrderAiCreateDrawer';
+import { useKuaiaiEntryAvailable } from '../../../../kuaiai/hooks/useKuaiaiEntryAvailable';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
@@ -330,6 +332,7 @@ const purchaseOrderEditPath = (id: number) => `${PURCHASE_ORDER_LIST_PATH}/${id}
 
 const PurchaseOrdersPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const kuaiaiAvailable = useKuaiaiEntryAvailable();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const purchaseOrderAuditEnabled = useAuditRequired('purchase_order', false);
   const purchaseOrderPerms = useResourcePermissions(PURCHASE_ORDER_RESOURCE);
@@ -3035,6 +3038,9 @@ const PurchaseOrdersPage: React.FC = () => {
               canSubmitAfterSave={canSubmitAfterSave}
               showSaveDraft={canSubmitAfterSave}
             />
+            {isCreatePage && kuaiaiAvailable ? (
+              <PurchaseOrderAiCreateTrigger formRef={formRef} />
+            ) : null}
             </>
           }
         >

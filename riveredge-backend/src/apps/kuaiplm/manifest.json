@@ -9,7 +9,7 @@
   "is_pro": false,
   "entry_point": "../apps/kuaiplm/index.tsx",
   "route_path": "/apps/kuaiplm",
-  "sort_order": 25,
+  "sort_order": 130,
   "menu_config": {
     "title": "app.kuaiplm.name",
     "icon": "layers",

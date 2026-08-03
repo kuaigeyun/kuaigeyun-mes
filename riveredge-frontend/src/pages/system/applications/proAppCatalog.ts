@@ -30,7 +30,7 @@ export const PRO_PLACEHOLDER_META: Record<ProAppCode, ProPlaceholderMeta> = {
     nameDefault: 'KU-AI',
     descDefault: '嵌入业务场景的 AI 智能辅助引擎，提供对话助手与业务智能建议',
     version: 'PRO',
-    sort_order: 100,
+    sort_order: 210,
   },
   kuaireport: {
     nameKey: 'sys.app.kuaireport.name',
@@ -38,7 +38,7 @@ export const PRO_PLACEHOLDER_META: Record<ProAppCode, ProPlaceholderMeta> = {
     nameDefault: '快报表',
     descDefault: '多源数据聚合与经营分析决策中心',
     version: 'PRO',
-    sort_order: 101,
+    sort_order: 220,
   },
   kuaiiot: {
     nameKey: 'sys.app.kuaiiot.name',
@@ -46,7 +46,7 @@ export const PRO_PLACEHOLDER_META: Record<ProAppCode, ProPlaceholderMeta> = {
     nameDefault: '快数采',
     descDefault: '工业物联网设备数采集成平台，敬请期待',
     version: 'PRO',
-    sort_order: 102,
+    sort_order: 230,
   },
   kuaiems: {
     nameKey: 'pages.system.applications.mock.kuaienergy.name',
@@ -54,7 +54,7 @@ export const PRO_PLACEHOLDER_META: Record<ProAppCode, ProPlaceholderMeta> = {
     nameDefault: '快能源',
     descDefault: '能源数据监控与能效分析平台，敬请期待',
     version: 'PRO',
-    sort_order: 103,
+    sort_order: 240,
   },
   kuaisrm: {
     nameKey: 'pages.system.applications.mock.kuaisrm.name',
@@ -62,7 +62,7 @@ export const PRO_PLACEHOLDER_META: Record<ProAppCode, ProPlaceholderMeta> = {
     nameDefault: '快协同',
     descDefault: '新一代供应链与供应商协同平台，敬请期待',
     version: 'Beta',
-    sort_order: 104,
+    sort_order: 250,
   },
 };
 

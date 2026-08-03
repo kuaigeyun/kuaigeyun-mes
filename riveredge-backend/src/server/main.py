@@ -77,6 +77,7 @@ from core.api.code_rules.material_code_rules import router as material_code_rule
 from core.api.variant_attributes.variant_attributes import router as variant_attributes_router
 from core.api.custom_fields.custom_fields import router as custom_fields_router
 from core.api.site_settings.site_settings import router as site_settings_router
+from core.api.ai.router import router as ai_router
 from core.api.invitation_codes.invitation_codes import router as invitation_codes_router
 from core.api.languages.languages import router as languages_router
 from core.api.applications.applications import router as applications_router
@@ -574,6 +575,9 @@ app.add_middleware(PerformanceMiddleware)
 from core.middleware.operation_log_middleware import OperationLogMiddleware
 app.add_middleware(OperationLogMiddleware)
 
+from core.ai.middleware import AiAuditMiddleware
+app.add_middleware(AiAuditMiddleware)
+
 # ReDoc / openapi.json 缓存头（缩小重复加载时的等待）
 from core.middleware.docs_asset_cache_middleware import DocsAssetCacheMiddleware
 app.add_middleware(DocsAssetCacheMiddleware)
@@ -885,6 +889,7 @@ app.include_router(material_code_rules_router, prefix="/api/v1/core")
 app.include_router(variant_attributes_router, prefix="/api/v1/core")
 app.include_router(custom_fields_router, prefix="/api/v1/core")
 app.include_router(site_settings_router, prefix="/api/v1/core")
+app.include_router(ai_router, prefix="/api/v1/core")
 app.include_router(invitation_codes_router, prefix="/api/v1/core")
 app.include_router(languages_router, prefix="/api/v1/core")
 app.include_router(applications_router, prefix="/api/v1/core")

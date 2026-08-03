@@ -89,6 +89,7 @@ import dayjs from 'dayjs';
 import {formatDateTime as formatDateTimeValue, formatQuantity} from '../../../../../utils/format';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
+import { AiPulseStrip } from '../../../../kuaiai/components/ai-pulse';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -1159,6 +1160,7 @@ const DemandManagementPage: React.FC = () => {
 
   return (
     <>
+      <AiPulseStrip scene="production" title="KU-Pulse 计划异常" />
       <ListPageTemplate statCards={statCards}>
         <UniTable<Demand>
           columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-management"

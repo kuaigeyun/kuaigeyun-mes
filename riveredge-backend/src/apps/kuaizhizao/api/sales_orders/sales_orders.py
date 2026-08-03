@@ -18,6 +18,7 @@ from tortoise.exceptions import FieldError
 
 from core.api.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_permission_codes
+from core.ai.deps import AiAuth, get_ai_auth
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.models.user import User
@@ -189,24 +190,24 @@ async def pull_sales_order_from_sales_contract(
 )
 async def parse_sales_order_from_text(
     body: SalesOrderOcrParseTextRequest,
-    tenant_id: int = Depends(get_current_tenant),
+    ai_auth: AiAuth = Depends(get_ai_auth),
 ):
     """根据自然语言描述或对话补充，结构化销售订单字段。"""
     try:
         return await SalesOrderOcrService.extract_from_text(
-            tenant_id=tenant_id,
+            tenant_id=ai_auth.tenant_id,
             text=body.text,
             context=body.context,
         )
     except ValidationError as e:
-        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/ocr-parse-text", tenant_id)
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/ocr-parse-text", ai_auth.tenant_id)
     except Exception as e:
-        logger.exception("sales order OCR parse text failed tenant_id={}", tenant_id)
+        logger.exception("sales order OCR parse text failed tenant_id={}", ai_auth.tenant_id)
         raise _http_exception_with_trace(
             http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"对话录单解析失败: {str(e)}",
             "/sales-orders/ocr-parse-text",
-            tenant_id,
+            ai_auth.tenant_id,
         )
 
 
@@ -219,25 +220,25 @@ async def parse_sales_order_from_text(
 )
 async def extract_sales_order_from_image(
     file: UploadFile = File(..., description="销售订单/合同/单据图片"),
-    tenant_id: int = Depends(get_current_tenant),
+    ai_auth: AiAuth = Depends(get_ai_auth),
 ):
     """上传单据图片，通过 KU-AI 视觉模型识别并结构化销售订单字段。"""
     try:
         image_bytes = await file.read()
         return await SalesOrderOcrService.extract_from_image(
-            tenant_id=tenant_id,
+            tenant_id=ai_auth.tenant_id,
             image_bytes=image_bytes,
             content_type=file.content_type,
         )
     except ValidationError as e:
-        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/ocr-extract", tenant_id)
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/ocr-extract", ai_auth.tenant_id)
     except Exception as e:
-        logger.exception("sales order OCR extract failed tenant_id={}", tenant_id)
+        logger.exception("sales order OCR extract failed tenant_id={}", ai_auth.tenant_id)
         raise _http_exception_with_trace(
             http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"OCR 识别失败: {str(e)}",
             "/sales-orders/ocr-extract",
-            tenant_id,
+            ai_auth.tenant_id,
         )
 
 
