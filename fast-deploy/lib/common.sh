@@ -2429,6 +2429,7 @@ ensure_playwright_chromium_postinstall() {
 
 cmd_migrate() {
     sync_backend_deps
+    ensure_postgresql_pgvector || { log_error "pgvector 未就绪，无法执行依赖 vector 的迁移"; exit 1; }
     log_info "执行数据库迁移..."
     (
         cd "$BACKEND_DIR"
@@ -3601,6 +3602,149 @@ pgdg_yum_base_url() {
     fi
 }
 
+# 检测本机 PostgreSQL 主版本（优先连本地服务，供匹配安装 postgresql-N-pgvector）
+detect_postgresql_server_major() {
+    local ver major d best=""
+    if command -v sudo >/dev/null 2>&1 && getent passwd postgres >/dev/null 2>&1; then
+        ver="$(sudo -u postgres psql -tAc "SHOW server_version" 2>/dev/null | head -1 | tr -d '[:space:]')"
+        if [[ "$ver" =~ ^([0-9]+) ]]; then
+            echo "${BASH_REMATCH[1]}"
+            return 0
+        fi
+    fi
+    if command -v psql >/dev/null 2>&1; then
+        ver="$(psql -V 2>/dev/null | sed -n 's/^psql (PostgreSQL) \([0-9][0-9]*\).*/\1/p')"
+        if [ -n "$ver" ]; then
+            echo "$ver"
+            return 0
+        fi
+    fi
+    for d in /usr/share/postgresql/[0-9]* /usr/pgsql-[0-9]*; do
+        [ -d "$d" ] || continue
+        major="$(basename "$d" | grep -oE '[0-9]+$' || true)"
+        [ -n "$major" ] || continue
+        if [ -z "$best" ] || [ "$major" -gt "$best" ]; then
+            best="$major"
+        fi
+    done
+    [ -n "$best" ] && echo "$best"
+}
+
+postgresql_pgvector_control_path() {
+    local major=$1
+    if [ -f "/usr/share/postgresql/${major}/extension/vector.control" ]; then
+        echo "/usr/share/postgresql/${major}/extension/vector.control"
+        return 0
+    fi
+    if [ -f "/usr/pgsql-${major}/share/extension/vector.control" ]; then
+        echo "/usr/pgsql-${major}/share/extension/vector.control"
+        return 0
+    fi
+    return 1
+}
+
+# 确保 PGDG APT 源可用（不安装服务端，仅供扩展包）
+ensure_pgdg_apt_repo() {
+    local pgdg_base codename key_path
+    [ -f /etc/debian_version ] || return 1
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    codename="${VERSION_CODENAME:-}"
+    [ -n "$codename" ] || return 1
+    key_path="/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc"
+    if [ -f /etc/apt/sources.list.d/pgdg.list ] && [ -f "$key_path" ]; then
+        return 0
+    fi
+    pgdg_base="$(pgdg_apt_base_url)"
+    log_info "配置 PGDG 源以安装 pgvector: ${pgdg_base} (${codename}-pgdg)"
+    sudo apt-get update || return 1
+    sudo apt-get install -y ca-certificates curl gnupg postgresql-common || return 1
+    sudo install -d /usr/share/postgresql-common/pgdg
+    curl -fsSL "${pgdg_base}/ACCC4CF8.asc" | sudo tee "$key_path" > /dev/null || return 1
+    echo "deb [signed-by=${key_path}] ${pgdg_base} ${codename}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+    sudo apt-get update || return 1
+}
+
+# 确保 PGDG yum/dnf 源可用（不安装服务端）
+ensure_pgdg_yum_repo() {
+    local pkg_mgr pgdg_base arch repo_rpm el_ver
+    is_linux_rhel_family || is_linux_fedora || return 1
+    pkg_mgr="$(linux_pkg_manager)"
+    [ "$pkg_mgr" = "dnf" ] || [ "$pkg_mgr" = "yum" ] || return 1
+    if [ -f /etc/yum.repos.d/pgdg-redhat-all.repo ] || [ -f /etc/yum.repos.d/pgdg-fedora-all.repo ] \
+        || ls /etc/yum.repos.d/pgdg*.repo >/dev/null 2>&1; then
+        return 0
+    fi
+    pgdg_base="$(pgdg_yum_base_url)"
+    arch="$(linux_machine_arch)"
+    if is_linux_fedora; then
+        load_os_release
+        repo_rpm="${pgdg_base}/reporpms/F-${VERSION_ID}-${arch}/pgdg-fedora-repo-latest.noarch.rpm"
+    else
+        el_ver="$(get_rhel_el_version)"
+        repo_rpm="${pgdg_base}/reporpms/EL-${el_ver}-${arch}/pgdg-redhat-repo-latest.noarch.rpm"
+    fi
+    log_info "配置 PGDG 源以安装 pgvector: ${repo_rpm}"
+    sudo "$pkg_mgr" install -y "$repo_rpm" || return 1
+}
+
+# 安装与当前 PostgreSQL 主版本匹配的 pgvector（迁移 517 CREATE EXTENSION vector 前置条件）
+ensure_postgresql_pgvector() {
+    local major pkg control pkg_mgr
+    if is_windows_gitbash; then
+        log_warn "Windows 不自动安装 pgvector 系统包；若迁移需要 vector，请在目标 PostgreSQL 上安装扩展"
+        return 0
+    fi
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        log_warn "macOS 请自行安装 pgvector（如 brew install pgvector）后再迁移"
+        return 0
+    fi
+
+    major="$(detect_postgresql_server_major || true)"
+    if [ -z "$major" ]; then
+        log_warn "无法检测 PostgreSQL 主版本，跳过 pgvector 安装"
+        return 0
+    fi
+
+    if control="$(postgresql_pgvector_control_path "$major")"; then
+        log_ok "pgvector 已就绪 (PostgreSQL ${major}, ${control})"
+        return 0
+    fi
+
+    log_info "安装 pgvector（匹配 PostgreSQL ${major}）..."
+    if [ -f /etc/debian_version ] || is_linux_debian_family; then
+        pkg="postgresql-${major}-pgvector"
+        if ! apt-cache show "$pkg" >/dev/null 2>&1; then
+            ensure_pgdg_apt_repo || {
+                log_error "无法配置 PGDG 源，找不到包 ${pkg}"
+                return 1
+            }
+        fi
+        sudo apt-get install -y "$pkg" || {
+            log_error "安装 ${pkg} 失败（KU-AI 向量列迁移需要 pgvector）"
+            return 1
+        }
+    elif is_linux_rhel_family || is_linux_fedora; then
+        pkg="pgvector_${major}"
+        pkg_mgr="$(linux_pkg_manager)"
+        ensure_pgdg_yum_repo || true
+        sudo "$pkg_mgr" install -y "$pkg" || {
+            log_error "安装 ${pkg} 失败（KU-AI 向量列迁移需要 pgvector）"
+            return 1
+        }
+    else
+        log_error "当前平台不支持自动安装 pgvector，请手动安装后重试迁移"
+        return 1
+    fi
+
+    if control="$(postgresql_pgvector_control_path "$major")"; then
+        log_ok "pgvector 已安装 (PostgreSQL ${major}, ${control})"
+        return 0
+    fi
+    log_error "pgvector 安装后仍缺少 vector.control（PostgreSQL ${major}）"
+    return 1
+}
+
 curl_pipe_bash_fallback() {
     local url
     for url in "$@"; do
@@ -3748,14 +3892,14 @@ install_postgresql_pgdg_rhel() {
     if [ "$pkg_mgr" = "dnf" ]; then
         sudo dnf -qy module disable postgresql 2>/dev/null || true
     fi
-    sudo "$pkg_mgr" install -y postgresql15-server postgresql15-contrib || return 1
+    sudo "$pkg_mgr" install -y postgresql15-server postgresql15-contrib pgvector_15 || return 1
 
     if [ ! -f /var/lib/pgsql/15/data/PG_VERSION ]; then
         sudo /usr/pgsql-15/bin/postgresql-15-setup initdb || return 1
     fi
     sudo systemctl enable postgresql-15 || true
     sudo systemctl start postgresql-15 || return 1
-    log_ok "PostgreSQL 15 已安装 (/usr/pgsql-15/bin)"
+    log_ok "PostgreSQL 15 已安装 (/usr/pgsql-15/bin，含 pgvector)"
 }
 
 caddy_rpm_repo_urls() {
@@ -3848,8 +3992,8 @@ install_postgresql_pgdg() {
     curl -fsSL "${pgdg_base}/ACCC4CF8.asc" | sudo tee "$key_path" > /dev/null || return 1
     echo "deb [signed-by=${key_path}] ${pgdg_base} ${codename}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
     sudo apt update || return 1
-    sudo apt install -y postgresql-15 postgresql-contrib-15 || return 1
-    log_ok "PostgreSQL 15 已安装"
+    sudo apt install -y postgresql-15 postgresql-contrib-15 postgresql-15-pgvector || return 1
+    log_ok "PostgreSQL 15 已安装（含 pgvector）"
 }
 
 caddy_apt_deb_base() {

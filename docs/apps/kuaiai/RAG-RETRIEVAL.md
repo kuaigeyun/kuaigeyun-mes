@@ -47,7 +47,16 @@ uv sync --extra kuaiai-rag
 
 ## pgvector（Phase 3）
 
-迁移 `517_20260804000000_kuaiai_chunk_pgvector` 增加 `embedding_vector vector(768)` 列。
+迁移 `517_20260804000000_kuaiai_chunk_pgvector` 会执行 `CREATE EXTENSION vector`，并增加 `embedding_vector vector(768)` 列。
+
+**系统前提（安装脚本已处理）**：主机须安装与 PostgreSQL 主版本匹配的 pgvector 包，否则会出现 `vector.control: No such file or directory`。
+
+| 平台 | 包名示例 |
+|------|----------|
+| Debian/Ubuntu | `postgresql-14-pgvector` / `postgresql-15-pgvector`（PGDG） |
+| RHEL/Rocky | `pgvector_14` / `pgvector_15`（PGDG） |
+
+`fast-deploy` 在 `migrate` 前调用 `ensure_postgresql_pgvector`；全新安装 PostgreSQL 15 时一并安装对应包。已有 PG14 等版本的机器执行 update/migrate 时也会按主版本补装。
 
 - 维度与 DeepSeek `deepseek-embedding-v2` 一致（768）
 - 索引写入时双写 JSON `embedding` + `embedding_vector`
