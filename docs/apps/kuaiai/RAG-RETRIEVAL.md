@@ -57,7 +57,7 @@ uv sync --extra kuaiai-rag
 | RHEL/Rocky 系统包 PG | `pgvector_N`（PGDG） |
 | 宝塔 PostgreSQL（`/www/server/pgsql`） | 按该实例 `pg_config` **源码编译**安装 |
 
-`fast-deploy` 在 `migrate` 前调用 `ensure_postgresql_pgvector`：连应用库检测 → 本机按 `data_directory` 匹配安装 → 再校验扩展可用。远程 `DB_HOST` 无法在本机代装，需在库所在主机安装。
+`fast-deploy` 在 `migrate` 前：`ensure_postgresql_pgvector`（系统扩展）→ `ensure_vector_extension_created`（超级用户 `CREATE EXTENSION`，因业务账号通常无此权限）→ `aerich upgrade`。远程 `DB_HOST` 无法在本机代装，需在库所在主机安装并启用。
 
 - 维度与 DeepSeek `deepseek-embedding-v2` 一致（768）
 - 索引写入时双写 JSON `embedding` + `embedding_vector`

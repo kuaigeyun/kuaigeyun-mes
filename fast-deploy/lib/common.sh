@@ -2434,6 +2434,7 @@ ensure_playwright_chromium_postinstall() {
 cmd_migrate() {
     sync_backend_deps
     ensure_postgresql_pgvector || { log_error "pgvector 未就绪，无法执行依赖 vector 的迁移"; exit 1; }
+    ensure_vector_extension_created || { log_error "无法在应用库创建 vector 扩展（需要超级用户）"; exit 1; }
     log_info "执行数据库迁移..."
     (
         cd "$BACKEND_DIR"
@@ -3907,8 +3908,102 @@ ensure_postgresql_pgvector() {
         log_ok "pgvector 已对应用库可用 (PostgreSQL ${major})"
         return 0
     fi
-    log_error "pgvector 安装后应用库仍无 vector（pg_available_extensions 无记录）"
+    log_error "pgvector 安装后应用库仍无 vector（pg_available_extensions 无条目）"
     log_error "请确认 DB_HOST/DB_PORT 指向本机刚安装扩展的实例，并重试迁移"
+    return 1
+}
+
+# 应用库是否已 CREATE EXTENSION vector
+vector_extension_installed_in_app_db() {
+    local out
+    out="$(app_db_psql -tAc "SELECT 1 FROM pg_extension WHERE extname = 'vector'" 2>/dev/null | tr -d '[:space:]')" || return 1
+    [ "$out" = "1" ]
+}
+
+# 以超级用户在应用库执行 SQL（业务用户通常无 CREATE EXTENSION 权限）
+postgres_superuser_sql_on_app_db() {
+    local sql=$1
+    local db_name db_port pass psql_bin
+    db_name="$(read_env_value DB_NAME 2>/dev/null || echo riveredge)"
+    db_port="$(read_env_value DB_PORT 2>/dev/null || echo "$(detect_postgres_port)")"
+    pass="$(read_env_value DB_PASSWORD 2>/dev/null || true)"
+
+    if is_windows_gitbash; then
+        psql_bin="$(resolve_psql)"
+        export PGPASSWORD="$pass"
+        "$psql_bin" -h localhost -p "$db_port" -U postgres -d "$db_name" -v ON_ERROR_STOP=1 -c "$sql"
+        local rc=$?
+        unset PGPASSWORD
+        return $rc
+    fi
+
+    if [ -x /www/server/pgsql/bin/psql ]; then
+        if sudo -u postgres /www/server/pgsql/bin/psql -p "$db_port" -d "$db_name" -v ON_ERROR_STOP=1 -c "$sql" >/dev/null 2>&1; then
+            return 0
+        fi
+        if sudo -u postgres /www/server/pgsql/bin/psql -d "$db_name" -v ON_ERROR_STOP=1 -c "$sql" >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+
+    if sudo -u postgres psql -p "$db_port" -d "$db_name" -v ON_ERROR_STOP=1 -c "$sql" >/dev/null 2>&1; then
+        return 0
+    fi
+    if sudo -u postgres psql -d "$db_name" -v ON_ERROR_STOP=1 -c "$sql" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # 宝塔等环境 peer 失败时，用本机 TCP + postgres 口令（与 bootstrap 常为同一 DB_PASSWORD）
+    psql_bin="$(resolve_psql)"
+    if [ -x /www/server/pgsql/bin/psql ]; then
+        psql_bin=/www/server/pgsql/bin/psql
+    fi
+    export PGPASSWORD="$pass"
+    if "$psql_bin" -h 127.0.0.1 -p "$db_port" -U postgres -d "$db_name" -v ON_ERROR_STOP=1 -c "$sql" >/dev/null 2>&1; then
+        unset PGPASSWORD
+        return 0
+    fi
+    unset PGPASSWORD
+    return 1
+}
+
+# 迁移前由超级用户创建 vector，避免业务账号 permission denied to create extension
+ensure_vector_extension_created() {
+    if is_windows_gitbash || [[ "$(uname -s)" == "Darwin" ]]; then
+        if vector_extension_installed_in_app_db; then
+            return 0
+        fi
+        log_warn "非 Linux 部署：请确认应用库已执行 CREATE EXTENSION vector"
+        return 0
+    fi
+
+    if vector_extension_installed_in_app_db; then
+        log_ok "应用库已启用 vector 扩展"
+        return 0
+    fi
+
+    if ! pgvector_available_in_app_db; then
+        log_error "应用库尚无 pgvector 系统扩展，无法 CREATE EXTENSION"
+        return 1
+    fi
+
+    if ! is_app_db_local_host; then
+        log_error "远程库需超级用户执行: CREATE EXTENSION IF NOT EXISTS vector;"
+        return 1
+    fi
+
+    log_info "以超级用户在应用库创建 vector 扩展..."
+    if ! postgres_superuser_sql_on_app_db "CREATE EXTENSION IF NOT EXISTS vector;"; then
+        log_error "超级用户 CREATE EXTENSION vector 失败"
+        log_error "请手动以 postgres 连接应用库执行: CREATE EXTENSION IF NOT EXISTS vector;"
+        return 1
+    fi
+
+    if vector_extension_installed_in_app_db; then
+        log_ok "已在应用库创建 vector 扩展"
+        return 0
+    fi
+    log_error "CREATE EXTENSION 后应用库仍无 vector"
     return 1
 }
 
