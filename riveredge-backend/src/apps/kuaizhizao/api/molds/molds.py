@@ -7,9 +7,11 @@ Author: Luigi Lu
 Date: 2026-01-05
 """
 
+import base64
 import uuid
-from typing import Any, Optional
-from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, status, Query
+from typing import Any, List, Optional
+from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Path, Query, status
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from loguru import logger
 
 from apps.kuaizhizao.models.mold import Mold
@@ -143,6 +145,145 @@ async def list_molds(
         skip=skip,
         limit=limit
     )
+
+
+@router.get(
+    "/print-cards",
+    summary="Print mold identification cards",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-molds:print"))],
+)
+async def print_mold_cards(
+    uuids: List[str] = Query(..., description="模具 UUID 列表"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量打印模具卡（统一 DocumentPrintService + 打印模板）。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        result = await DocumentPrintService().print_mold_cards(
+            tenant_id=tenant_id,
+            mold_uuids=uuids,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'inline; filename="mold-cards.pdf"'},
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.get(
+    "/id/{mold_id}/print",
+    summary="Print mold identification card by id",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-molds:print"))],
+)
+async def print_mold_card_by_id(
+    mold_id: int = Path(..., description="模具主键 ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """按主键打印单张模具卡。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="mold_card",
+            document_id=mold_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="mold-card-{mold_id}.pdf"'},
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.get(
+    "/{uuid}/print",
+    summary="Print mold identification card",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-molds:print"))],
+)
+async def print_mold_card(
+    uuid: str = Path(..., description="模具UUID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """按 UUID 打印单张模具卡。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        result = await DocumentPrintService().print_mold_cards(
+            tenant_id=tenant_id,
+            mold_uuids=[uuid],
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="mold-card-{uuid}.pdf"'},
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
 
 
 # ========== 模具校验记录相关端点 ==========

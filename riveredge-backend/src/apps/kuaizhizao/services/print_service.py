@@ -254,6 +254,57 @@ def _html_to_pdf_engine_pref() -> str:
     return os.environ.get("RIVEREDGE_HTML_TO_PDF_ENGINE", "auto").strip().lower()
 
 
+_CSS_PAGE_SIZE_RE = re.compile(
+    r"@page\s*\{[^}]*?\bsize\s*:\s*"
+    r"(?P<w>\d+(?:\.\d+)?(?:mm|cm|in|px))"
+    r"\s+"
+    r"(?P<h>\d+(?:\.\d+)?(?:mm|cm|in|px))"
+    r"(?:\s+(?:portrait|landscape))?\s*;",
+    re.IGNORECASE | re.DOTALL,
+)
+
+_CSS_PAGE_NAMED_SIZE_RE = re.compile(
+    r"@page\s*\{[^}]*?\bsize\s*:\s*"
+    r"(?P<name>A3|A4|A5|Letter|Legal)"
+    r"(?:\s+(?P<orient>portrait|landscape))?\s*;",
+    re.IGNORECASE | re.DOTALL,
+)
+
+# 命名纸张物理尺寸（mm），landscape 时宽高对调
+_NAMED_PAPER_SIZE_MM: dict[str, tuple[float, float]] = {
+    "A3": (297.0, 420.0),
+    "A4": (210.0, 297.0),
+    "A5": (148.0, 210.0),
+    "Letter": (215.9, 279.4),
+    "Legal": (215.9, 355.6),
+}
+
+
+def _parse_css_page_size(html_string: str) -> Optional[Tuple[str, str]]:
+    """从 HTML 的 @page size 解析宽高，供 Playwright 显式传 width/height。
+
+    Chromium 对自定义 @page（如 100mm 70mm）+ prefer_css_page_size 时常回退 Letter/A4，
+    因此导出 PDF 时优先把尺寸直接传给 page.pdf。
+    """
+    if not html_string:
+        return None
+    m = _CSS_PAGE_SIZE_RE.search(html_string)
+    if m:
+        return m.group("w"), m.group("h")
+    named = _CSS_PAGE_NAMED_SIZE_RE.search(html_string)
+    if not named:
+        return None
+    name = named.group("name").upper()
+    dims = _NAMED_PAPER_SIZE_MM.get(name)
+    if not dims:
+        return None
+    w_mm, h_mm = dims
+    orient = (named.group("orient") or "portrait").strip().lower()
+    if orient == "landscape":
+        w_mm, h_mm = h_mm, w_mm
+    return f"{w_mm}mm", f"{h_mm}mm"
+
+
 async def _html_to_pdf_bytes_playwright_async(html_string: str) -> bytes:
     """
     使用 Playwright(Chromium) 将 HTML 转为 PDF。
@@ -278,6 +329,7 @@ async def _html_to_pdf_bytes_playwright_async(html_string: str) -> bytes:
         host = "localhost" if settings.HOST == "0.0.0.0" else settings.HOST
         base_url = f"http://{host}:{settings.PORT}"
     html_for_playwright = _inject_base_href_for_playwright(html_string, base_url)
+    page_size = _parse_css_page_size(html_for_playwright)
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=launch_args)
@@ -312,11 +364,21 @@ async def _html_to_pdf_bytes_playwright_async(html_string: str) -> bytes:
             except Exception:
                 pass
 
-            return await page.pdf(
-                print_background=True,
-                prefer_css_page_size=True,
-                display_header_footer=False,
-            )
+            pdf_kwargs: Dict[str, Any] = {
+                "print_background": True,
+                "prefer_css_page_size": True,
+                "display_header_footer": False,
+                # 外边距交给 CSS @page；避免 Playwright 再叠一层默认边距
+                "margin": {"top": "0", "right": "0", "bottom": "0", "left": "0"},
+            }
+            if page_size:
+                pdf_kwargs["width"] = page_size[0]
+                pdf_kwargs["height"] = page_size[1]
+                logger.info("PDF 按模板尺寸导出: {} x {}", page_size[0], page_size[1])
+            else:
+                logger.warning("未解析到 @page size，PDF 将依赖 Chromium 默认纸张")
+
+            return await page.pdf(**pdf_kwargs)
         finally:
             await browser.close()
 
@@ -599,6 +661,7 @@ class DocumentPrintService:
         "delivery_notice": "DELIVERY_NOTICE_PRINT",
         "product_quality_certificate": "PRODUCT_QUALITY_CERTIFICATE_PRINT",
         "equipment_card": "EQUIPMENT_CARD_PRINT",
+        "mold_card": "MOLD_CARD_PRINT",
     }
 
     @staticmethod
@@ -765,6 +828,32 @@ class DocumentPrintService:
         return await self._render_prepared_document(
             tenant_id=tenant_id,
             document_type="equipment_card",
+            document_id=first_id,
+            document_data=document_data,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+            i18n=i18n,
+        )
+
+    async def print_mold_cards(
+        self,
+        tenant_id: int,
+        mold_uuids: list[str],
+        template_code: Optional[str] = None,
+        template_uuid: Optional[str] = None,
+        output_format: str = "html",
+    ) -> Dict[str, Any]:
+        """批量打印模具卡（统一走打印模板渲染）。"""
+        uuids = [str(u).strip() for u in mold_uuids if str(u).strip()]
+        if not uuids:
+            raise ValidationError("请选择要打印的模具")
+        i18n = await PrintLocalization.for_tenant(tenant_id)
+        document_data = await self._format_mold_cards_data(tenant_id, uuids, i18n)
+        first_id = int(document_data.get("document_id") or 0)
+        return await self._render_prepared_document(
+            tenant_id=tenant_id,
+            document_type="mold_card",
             document_id=first_id,
             document_data=document_data,
             template_code=template_code,
@@ -1118,6 +1207,18 @@ class DocumentPrintService:
                 raise NotFoundError(f"设备不存在: {document_id}")
             return await self._format_equipment_cards_data(
                 tenant_id, [str(equipment.uuid)], loc
+            )
+
+        elif document_type == "mold_card":
+            from apps.kuaizhizao.models.mold import Mold
+
+            mold = await Mold.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not mold:
+                raise NotFoundError(f"模具不存在: {document_id}")
+            return await self._format_mold_cards_data(
+                tenant_id, [str(mold.uuid)], loc
             )
 
         else:
@@ -2135,6 +2236,78 @@ class DocumentPrintService:
             "code": first.code,
             "name": first.name,
             "card_title": "设备卡",
+            "items": items,
+            "item": items[0] if items else {},
+        }
+
+    async def _format_mold_cards_data(
+        self,
+        tenant_id: int,
+        mold_uuids: list[str],
+        i18n: PrintLocalization | None = None,
+    ) -> Dict[str, Any]:
+        """格式化模具卡打印变量（支持批量）。"""
+        from apps.kuaizhizao.models.mold import Mold
+        from core.services.qrcode.qrcode_service import QRCodeService
+
+        loc = i18n or await PrintLocalization.for_tenant(tenant_id)
+        ordered_uuids = [str(u).strip() for u in mold_uuids if str(u).strip()]
+        if not ordered_uuids:
+            raise ValidationError("请选择要打印的模具")
+
+        rows = await Mold.filter(
+            tenant_id=tenant_id,
+            uuid__in=ordered_uuids,
+            deleted_at__isnull=True,
+        ).all()
+        by_uuid = {str(m.uuid): m for m in rows}
+        missing = [u for u in ordered_uuids if u not in by_uuid]
+        if missing:
+            raise NotFoundError(f"模具不存在: {missing[0]}")
+
+        def _fmt_date(value: Any) -> str:
+            if value is None or value == "":
+                return ""
+            if hasattr(value, "strftime"):
+                return value.strftime("%Y-%m-%d")
+            text = str(value).strip()
+            return text[:10] if text else ""
+
+        items: list[Dict[str, Any]] = []
+        for uuid in ordered_uuids:
+            mold = by_uuid[uuid]
+            qr = QRCodeService.generate_mold_qrcode(
+                mold_uuid=str(mold.uuid),
+                mold_code=mold.code or "",
+                mold_name=mold.name or "",
+                size=3,
+                border=1,
+            )
+            affiliation = (getattr(mold, "storage_location", None) or "").strip()
+            items.append(
+                {
+                    "id": mold.id,
+                    "uuid": str(mold.uuid),
+                    "code": mold.code,
+                    "name": mold.name,
+                    "model": mold.model,
+                    "type": mold.type,
+                    "storage_location": getattr(mold, "storage_location", None),
+                    "affiliation": affiliation,
+                    "purchase_date": _fmt_date(mold.purchase_date),
+                    "installation_date": _fmt_date(mold.installation_date),
+                    "status": loc.document_status(mold.status) if mold.status else mold.status,
+                    "qrcode_image": qr.get("qrcode_image") or "",
+                }
+            )
+
+        first = by_uuid[ordered_uuids[0]]
+        return {
+            "document_type": "mold_card",
+            "document_id": first.id,
+            "code": first.code,
+            "name": first.name,
+            "card_title": "模具卡",
             "items": items,
             "item": items[0] if items else {},
         }

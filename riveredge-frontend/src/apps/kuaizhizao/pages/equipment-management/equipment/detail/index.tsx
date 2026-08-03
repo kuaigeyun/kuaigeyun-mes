@@ -46,6 +46,7 @@ import { useResourcePermissions } from '../../../../../../hooks/useResourcePermi
 import { FutureDatePicker } from '../../../../../../utils/futureDatePickerShortcuts';
 import { uploadMultipleFiles } from '../../../../../../services/file';
 import { normalizeDocumentAttachments } from '../../../../utils/documentAttachments';
+import { SecureImage } from '../../../../../../components/secure-image';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
 import { useKuaizhizaoPrintModal } from '../../../../hooks/useKuaizhizaoPrintModal';
@@ -65,6 +66,8 @@ function equipmentStatusTag(
 ): { text: string; color: string } {
   const statusMap: Record<string, { text: string; color: string }> = {
     正常: { text: t('app.kuaizhizao.equipment.statusNormal'), color: 'success' },
+    运行中: { text: t('app.kuaizhizao.equipment.statusRunning'), color: 'processing' },
+    待机: { text: t('app.kuaizhizao.equipment.statusStandby'), color: 'default' },
     故障: { text: t('app.kuaizhizao.equipment.statusFault'), color: 'error' },
     维修中: { text: t('app.kuaizhizao.equipment.statusRepairing'), color: 'warning' },
     停用: { text: t('app.kuaizhizao.equipment.statusDisabled'), color: 'default' },
@@ -104,6 +107,7 @@ interface EquipmentDetail {
   status?: string;
   is_active?: boolean;
   description?: string;
+  photo_file_uuid?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -295,6 +299,36 @@ const EquipmentDetailPage: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Card size="small" title={t('app.uniDetail.sectionBasic')}>
             <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+              <div
+                style={{
+                  flex: '0 0 120px',
+                  width: 120,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('app.kuaizhizao.equipment.fieldPhoto')}
+                </Typography.Text>
+                {equipment.photo_file_uuid ? (
+                  <SecureImage
+                    fileUuid={equipment.photo_file_uuid}
+                    alt={equipment.name || t('app.kuaizhizao.equipment.fieldPhoto')}
+                    width={120}
+                    height={120}
+                    style={{ objectFit: 'cover', borderRadius: 8 }}
+                  />
+                ) : (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={t('app.kuaizhizao.equipment.noPhoto')}
+                    style={{ margin: 0 }}
+                    imageStyle={{ height: 48 }}
+                  />
+                )}
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <ProDescriptions<EquipmentDetail> dataSource={equipment} column={3} columns={detailColumns} />
               </div>

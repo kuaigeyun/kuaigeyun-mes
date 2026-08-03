@@ -86,6 +86,7 @@ class InspectionSchemeLineBase(BaseModel):
     unit: Optional[str] = None
     numeric_min: Optional[Decimal] = None
     numeric_max: Optional[Decimal] = None
+    is_critical: bool = False
 
 
 class InspectionSchemeLineCreate(InspectionSchemeLineBase):
@@ -100,10 +101,14 @@ class InspectionSchemeLineResponse(InspectionSchemeLineBase):
 
 # ---------- 点检方案 ----------
 
+INSPECTION_SCHEME_CYCLE_TYPES = ("每班", "每天", "每周", "每月", "每季度")
+
+
 class InspectionSchemeBase(BaseModel):
     code: str = Field(..., max_length=64)
     name: str = Field(..., max_length=200)
     description: Optional[str] = None
+    cycle_type: Optional[str] = Field(None, max_length=32, description="点检周期")
     is_active: bool = True
 
 
@@ -115,6 +120,7 @@ class InspectionSchemeUpdate(BaseModel):
     code: Optional[str] = Field(None, max_length=64)
     name: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
+    cycle_type: Optional[str] = Field(None, max_length=32)
     is_active: Optional[bool] = None
     lines: Optional[List[InspectionSchemeLineCreate]] = None
 
@@ -340,6 +346,7 @@ class SpotCheckPreviewLine(BaseModel):
     unit: Optional[str] = None
     numeric_min: Optional[Decimal] = None
     numeric_max: Optional[Decimal] = None
+    is_critical: bool = False
     measured_value: Optional[str] = None
     is_pass: bool = True
 
@@ -360,8 +367,11 @@ class SpotCheckLineInput(BaseModel):
     requirement: Optional[str] = None
     value_type: Optional[str] = None
     unit: Optional[str] = None
+    numeric_min: Optional[Decimal] = None
+    numeric_max: Optional[Decimal] = None
     measured_value: Optional[str] = None
-    is_pass: bool = True
+    # None 时按 value_type + 数值上下限自动判定
+    is_pass: Optional[bool] = None
     remark: Optional[str] = None
     attachments: Optional[List[dict]] = None
 

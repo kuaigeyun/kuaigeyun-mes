@@ -1388,11 +1388,15 @@ export default function SalesForecastsPage() {
             theme="link"
             size="small"
             onSuccess={() => {
-              invalidateForecastCache();
-              invalidateStatistics();
-              invalidateMenuBadge();
-      setTrackingRefreshKey((k) => k + 1);
-      actionRef.current?.reload();
+              if (record.id != null) {
+                refreshForecastAfterPush(record.id);
+              } else {
+                invalidateForecastCache();
+                invalidateStatistics();
+                invalidateMenuBadge();
+                setTrackingRefreshKey((k) => k + 1);
+                actionRef.current?.reload();
+              }
             }}
           />
         );
@@ -2173,12 +2177,15 @@ export default function SalesForecastsPage() {
                 approvedStatuses={['已审核', 'AUDITED', 'APPROVED', '审核通过', '通过', '已通过']}
                 rejectedStatuses={['已驳回', 'REJECTED', '审核驳回']}
                 onSuccess={() => {
-                  invalidateForecastCache();
-                  invalidateStatistics();
-                  invalidateMenuBadge();
-      setTrackingRefreshKey((k) => k + 1);
-      actionRef.current?.reload();
-                  setDrawerVisible(false);
+                  if (currentForecast.id != null) {
+                    refreshForecastAfterPush(currentForecast.id);
+                  } else {
+                    invalidateForecastCache();
+                    invalidateStatistics();
+                    invalidateMenuBadge();
+                    setTrackingRefreshKey((k) => k + 1);
+                    actionRef.current?.reload();
+                  }
                 }}
               />
               {currentForecast.id != null && !detailCapabilityGates.print.disabled && (

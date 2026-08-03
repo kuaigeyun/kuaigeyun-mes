@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { App, Button, Tag, Space, message, Modal, Tabs, Table, Form, Input, InputNumber, DatePicker, Select, Row, Col, Typography, Spin, Empty, Upload } from 'antd';
-import { PlusOutlined, UploadOutlined } from '@ant-design/icons';
+import { PlusOutlined, UploadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { uploadMultipleFiles } from '../../../../../services/file';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -23,6 +23,7 @@ import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerSection, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { moldApi } from '../../../services/equipment';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import {
   schemeBindingsApi,
   maintenanceSchemesApi,
@@ -194,6 +195,8 @@ const MoldsPage: React.FC = () => {
   );
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
 
   // Modal 相关状态（创建/编辑模具）
   const [modalVisible, setModalVisible] = useState(false);
@@ -268,6 +271,25 @@ const MoldsPage: React.FC = () => {
     () => withSingleNewShortcutHint(t('app.kuaizhizao.mold.create')),
     [t],
   );
+
+  const handleBatchPrintMoldCards = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.mold.selectMoldForCard'));
+      return;
+    }
+    const uuids = selectedRowKeys.map((key) => String(key)).filter(Boolean);
+    if (uuids.length === 0) {
+      messageApi.error(t('app.kuaizhizao.mold.getSelectedFailed'));
+      return;
+    }
+    openPrint({
+      documentType: 'mold_card',
+      documentId: uuids.length,
+      printApiPath: '/apps/kuaizhizao/molds/print-cards',
+      printApiParams: { uuids },
+      pdfDownloadFilename: 'mold-cards.pdf',
+    });
+  };
 
   /**
    * 处理编辑模具
@@ -910,6 +932,16 @@ const MoldsPage: React.FC = () => {
     [t],
   );
 
+  const moldCardToolbar = useMemo(
+    () =>
+      perms.canPrint ? (
+        <Button key="mold-card-print" icon={<QrcodeOutlined />} onClick={handleBatchPrintMoldCards}>
+          {t('app.kuaizhizao.mold.printMoldCards')}
+        </Button>
+      ) : null,
+    [t, selectedRowKeys, perms.canPrint],
+  );
+
   return (
     <>
       <ListPageTemplate>
@@ -951,11 +983,13 @@ const MoldsPage: React.FC = () => {
             }
           }}
           enableRowSelection={true}
+          onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={true}
           onDelete={handleDelete}
           showCreateButton={true}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
+          toolbar={{ actions: [moldCardToolbar] }}
           showImportButton
           onImport={async (data) => {
             if (!data || data.length < 2) {
@@ -1236,11 +1270,30 @@ const MoldsPage: React.FC = () => {
           resetMoldDetailFieldValues();
         }}
         basicColumns={detailColumns}
-        extra={buildDetailDrawerEditExtra(t, Boolean(moldDetail && perms.canUpdate), () => {
-          if (!moldDetail) return;
-          setDrawerVisible(false);
-          void handleEdit(moldDetail);
-        })}
+        extra={
+          <Space wrap>
+            {perms.canPrint && moldDetail?.uuid ? (
+              <Button
+                icon={<QrcodeOutlined />}
+                onClick={() =>
+                  openPrint({
+                    documentType: 'mold_card',
+                    documentId: moldDetail.id ?? 1,
+                    printApiPath: `/apps/kuaizhizao/molds/${moldDetail.uuid}/print`,
+                    pdfDownloadFilename: `mold-card-${moldDetail.code || moldDetail.uuid}.pdf`,
+                  })
+                }
+              >
+                {t('app.kuaizhizao.mold.printMoldCard')}
+              </Button>
+            ) : null}
+            {buildDetailDrawerEditExtra(t, Boolean(moldDetail && perms.canUpdate), () => {
+              if (!moldDetail) return;
+              setDrawerVisible(false);
+              void handleEdit(moldDetail);
+            })}
+          </Space>
+        }
         lines={
           moldDetail ? (
             <>
@@ -1489,6 +1542,7 @@ const MoldsPage: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
+      {PrintModal}
     </>
   );
 };

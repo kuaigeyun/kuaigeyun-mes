@@ -881,6 +881,11 @@ const PurchaseInquiriesPage: React.FC = () => {
             rejectedStatuses={['REJECTED', '已驳回']}
             onSuccess={() => {
               actionRef.current?.reload();
+              if (detailOpen && detail?.id === record.id && record.id != null) {
+                void getPurchaseInquiry(record.id)
+                  .then(setDetail)
+                  .catch(() => {});
+              }
             }}
           />,
         );
@@ -889,7 +894,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       },
     },
   ], PURCHASE_INQUIRY_LIST_FIELD_RANK),
-    [auditEnabled, message, modal, openCompare, purchaseInquiryAuditColumn, purchaseInquiryLifecycleValueEnum, purchaseInquiryPerms.canDelete, purchaseInquiryPerms.canUpdate, resolveInquiryPushPercent, t],
+    [auditEnabled, detail, detailOpen, message, modal, openCompare, purchaseInquiryAuditColumn, purchaseInquiryLifecycleValueEnum, purchaseInquiryPerms.canDelete, purchaseInquiryPerms.canUpdate, resolveInquiryPushPercent, t],
   );
 
   const request = useCallback(

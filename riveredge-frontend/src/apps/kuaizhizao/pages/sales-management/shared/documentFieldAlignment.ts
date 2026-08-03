@@ -45,6 +45,8 @@ function sortByRank<T>(
 export const GLOBAL_DOC_LIST_FIELD_RANK = {
   // 主标识与客户
   code: 10,
+  name_code: 10,
+  photo_file_uuid: 10.5,
   calculation_no: 10,
   order_code: 10,
   quotation_code: 10,

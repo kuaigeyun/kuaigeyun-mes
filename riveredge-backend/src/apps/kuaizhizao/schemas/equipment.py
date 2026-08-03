@@ -13,6 +13,18 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
+# 台账状态 + 运行态（状态监控页会回写 equipment.status）
+EQUIPMENT_ALLOWED_STATUSES = (
+    "正常",
+    "运行中",
+    "待机",
+    "故障",
+    "维修中",
+    "停用",
+    "校验中",
+    "报废",
+)
+
 
 class EquipmentBase(BaseModel):
     """
@@ -50,10 +62,11 @@ class EquipmentBase(BaseModel):
     status: str = Field(
         default="正常",
         max_length=50,
-        description="设备状态（正常、故障、维修中、停用、校验中、报废）",
+        description="设备状态（正常、运行中、待机、故障、维修中、停用、校验中、报废）",
     )
     is_active: bool = Field(default=True, description="是否启用")
     description: Optional[str] = Field(None, description="描述")
+    photo_file_uuid: Optional[str] = Field(None, max_length=36, description="设备照片文件 UUID")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     
     @field_validator("status")
@@ -71,9 +84,8 @@ class EquipmentBase(BaseModel):
         Raises:
             ValueError: 如果设备状态不合法
         """
-        allowed_statuses = ["正常", "故障", "维修中", "停用", "校验中", "报废"]
-        if v not in allowed_statuses:
-            raise ValueError(f"设备状态必须是 {allowed_statuses} 之一")
+        if v not in EQUIPMENT_ALLOWED_STATUSES:
+            raise ValueError(f"设备状态必须是 {list(EQUIPMENT_ALLOWED_STATUSES)} 之一")
         return v
 
 
@@ -122,10 +134,11 @@ class EquipmentUpdate(BaseModel):
     status: Optional[str] = Field(
         None,
         max_length=50,
-        description="设备状态（正常、故障、维修中、停用、校验中、报废）",
+        description="设备状态（正常、运行中、待机、故障、维修中、停用、校验中、报废）",
     )
     is_active: Optional[bool] = Field(None, description="是否启用")
     description: Optional[str] = Field(None, description="描述")
+    photo_file_uuid: Optional[str] = Field(None, max_length=36, description="设备照片文件 UUID")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     
     @field_validator("status")
@@ -143,10 +156,8 @@ class EquipmentUpdate(BaseModel):
         Raises:
             ValueError: 如果设备状态不合法
         """
-        if v is not None:
-            allowed_statuses = ["正常", "故障", "维修中", "停用", "校验中", "报废"]
-            if v not in allowed_statuses:
-                raise ValueError(f"设备状态必须是 {allowed_statuses} 之一")
+        if v is not None and v not in EQUIPMENT_ALLOWED_STATUSES:
+            raise ValueError(f"设备状态必须是 {list(EQUIPMENT_ALLOWED_STATUSES)} 之一")
         return v
 
 

@@ -2203,23 +2203,28 @@ const SalesContractsPage: React.FC = () => {
 
   const reload = () => actionRef.current?.reload();
 
-
-
   const refreshDetail = async (id: number) => {
-
     const data = await salesContractApi.get(id);
-
     setDetail(data);
-
     void loadPaymentSummary(id);
-
     setTrackingRefreshKey((k) => k + 1);
-
     reload();
-
   };
 
-
+  /** 审核流动作成功后：刷新列表；若详情抽屉正打开同一单据则同步详情/生命周期 */
+  const handleContractWorkflowSuccess = useCallback(
+    (contractId?: number) => {
+      actionRef.current?.reload();
+      const openId = detail?.id;
+      const targetId = contractId ?? openId;
+      if (detailOpen && targetId != null && (contractId == null || openId === contractId)) {
+        void refreshDetail(targetId);
+      }
+    },
+    // refreshDetail/reload 依赖稳定的 actionRef；detail/detailOpen 决定是否同步抽屉
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshDetail 每次 render 新建，刻意用最新闭包
+    [detail?.id, detailOpen],
+  );
 
   // 统一审核动作由 UniWorkflowActions 接管（提交/撤回提交/审核/驳回/撤销审核）
 
@@ -2241,7 +2246,10 @@ const SalesContractsPage: React.FC = () => {
   const handleContractAuditBatchSuccess = useCallback(() => {
     setSelectedRowKeys([]);
     actionRef.current?.reload();
-  }, []);
+    if (detailOpen && detail?.id != null) {
+      void refreshDetail(detail.id);
+    }
+  }, [detail?.id, detailOpen]);
 
   const handleBatchDeleteDrafts = useCallback(async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
@@ -2956,6 +2964,7 @@ const SalesContractsPage: React.FC = () => {
               pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW', '已发送', 'sent']}
               approvedStatuses={['已审核', '已确认', '审核通过', 'approved', 'APPROVED']}
               rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
+              onSuccess={() => handleContractWorkflowSuccess(record.id)}
             />,
           );
           return parts;
@@ -2976,6 +2985,7 @@ const SalesContractsPage: React.FC = () => {
       contractPerms.canDelete,
       contractPerms.canPrint,
       contractPerms.canUpdate,
+      handleContractWorkflowSuccess,
     ],
 
   );
@@ -3536,10 +3546,7 @@ const SalesContractsPage: React.FC = () => {
                 pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW', '已发送', 'sent']}
                 approvedStatuses={['已审核', '已确认', '审核通过', 'approved', 'APPROVED']}
                 rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
-                onSuccess={() => {
-                  reload();
-                  if (detail.id != null) void refreshDetail(detail.id);
-                }}
+                onSuccess={() => handleContractWorkflowSuccess(detail.id)}
               />
 
               {!detailCapabilityGates.createChange.disabled && (

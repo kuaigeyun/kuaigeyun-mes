@@ -126,7 +126,7 @@ class Equipment(BaseModel):
     status = fields.CharField(
         max_length=50,
         default="正常",
-        description="设备状态（正常、故障、维修中、停用、校验中、报废）",
+        description="设备状态（正常、运行中、待机、故障、维修中、停用、校验中、报废）",
     )
     is_active = fields.BooleanField(default=True, description="是否启用")
     
@@ -139,6 +139,11 @@ class Equipment(BaseModel):
     next_calibration_date = fields.DateField(null=True, description="下次校验日期")
     
     description = fields.TextField(null=True, description="描述")
+    photo_file_uuid = fields.CharField(
+        max_length=36,
+        null=True,
+        description="设备照片（core_files.uuid）",
+    )
     attachments = fields.JSONField(null=True, description="附件列表")
     
     # 软删除字段

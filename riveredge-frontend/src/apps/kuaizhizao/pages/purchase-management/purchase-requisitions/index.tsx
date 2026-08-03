@@ -1445,7 +1445,18 @@ const PurchaseRequisitionsPage: React.FC = () => {
               theme="link"
               size="small"
               confirmMessages={{ revoke: t('app.kuaizhizao.purchaseRequisition.workflowRevokeConfirm') }}
-              onSuccess={() => actionRef.current?.reload()}
+              onSuccess={() => {
+                invalidateMenuBadgeCounts();
+                actionRef.current?.reload();
+                if (detailVisible && currentReq?.id === record.id && record.id != null) {
+                  void getPurchaseRequisition(record.id)
+                    .then((res) => {
+                      setCurrentReq(res);
+                      setPrTrackingRefreshKey((k) => k + 1);
+                    })
+                    .catch(() => {});
+                }
+              }}
             />
           </span>
         );
@@ -1459,7 +1470,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         return parts;
       },
     },
-  ], SALES_DOC_LIST_FIELD_RANK), [t, purchaseRequestAuditEnabled, purchaseRequisitionAuditColumn, lifecycleValueEnum, handleDetail, handleEdit, handleDeleteOne, resolveRequisitionPushPercent]);
+  ], SALES_DOC_LIST_FIELD_RANK), [t, purchaseRequestAuditEnabled, purchaseRequisitionAuditColumn, lifecycleValueEnum, handleDetail, handleEdit, handleDeleteOne, resolveRequisitionPushPercent, detailVisible, currentReq?.id, invalidateMenuBadgeCounts]);
 
   const renderPurchaseRequisitionForm = () => (
     <>

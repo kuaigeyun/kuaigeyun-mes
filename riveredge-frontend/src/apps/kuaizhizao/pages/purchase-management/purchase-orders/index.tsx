@@ -980,15 +980,20 @@ const PurchaseOrdersPage: React.FC = () => {
             onSuccess={() => {
               invalidateStatistics();
               invalidateMenuBadgeCounts();
-
               actionRef.current?.reload();
+              if (detailDrawerVisible && orderDetail?.id === record.id && record.id != null) {
+                void getPurchaseOrder(record.id).then((d) => {
+                  setOrderDetail(d);
+                  setPoTrackingRefreshKey((k) => k + 1);
+                });
+              }
             }}
           />
         );
         return parts;
       },
     },
-  ], SALES_DOC_LIST_FIELD_RANK), [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderAuditColumn, purchaseOrderCustomFieldColumns, purchaseOrderPerms, purchaseOrderSupplierSearchOptions]);
+  ], SALES_DOC_LIST_FIELD_RANK), [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderAuditColumn, purchaseOrderCustomFieldColumns, purchaseOrderPerms, purchaseOrderSupplierSearchOptions, detailDrawerVisible, orderDetail?.id]);
 
   const [pushToInvoiceLoading, setPushToInvoiceLoading] = useState(false);
 

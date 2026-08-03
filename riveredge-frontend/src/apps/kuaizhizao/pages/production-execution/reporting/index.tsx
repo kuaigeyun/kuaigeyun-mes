@@ -1222,11 +1222,10 @@ const ReportingPage: React.FC = () => {
         <UniWorkflowActions
           {...rowActionKind('skip')}
           record={record}
-          {...reportingRecordUniAuditProps({
-            resourcePrefix: REPORTING_RESOURCE,
-            entityName: t('app.kuaizhizao.workReporting.entityName'),
-            onSuccess: () => handleReportingWorkflowSuccess(record),
-          })}
+          resourcePrefix={REPORTING_RESOURCE}
+          entityName={t('app.kuaizhizao.workReporting.entityName')}
+          {...reportingRecordUniAuditProps(record as unknown as Record<string, unknown>)}
+          onSuccess={() => handleReportingWorkflowSuccess(record)}
         />
       </span>
     );
@@ -2314,12 +2313,11 @@ const ReportingPage: React.FC = () => {
             <UniWorkflowActions
               {...rowActionKind('skip')}
               record={reportingDetail}
-              {...reportingRecordUniAuditProps({
-                resourcePrefix: REPORTING_RESOURCE,
-                entityName: t('app.kuaizhizao.workReporting.entityName'),
-                theme: 'default',
-                onSuccess: () => handleReportingWorkflowSuccess(reportingDetail),
-              })}
+              resourcePrefix={REPORTING_RESOURCE}
+              entityName={t('app.kuaizhizao.workReporting.entityName')}
+              theme="default"
+              {...reportingRecordUniAuditProps(reportingDetail as unknown as Record<string, unknown>)}
+              onSuccess={() => handleReportingWorkflowSuccess(reportingDetail)}
             />
           ) : null
         }

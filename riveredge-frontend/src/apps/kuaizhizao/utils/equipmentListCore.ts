@@ -468,6 +468,8 @@ export function resolveLedgerListParams(
   const codeKeyword = pickString(s, 'code');
   return {
     ...base,
+    // 未点列头排序时默认按设备编码升序（与后端 list_equipment 默认一致）
+    order_by: (base.order_by as string | undefined) ?? 'code',
     keyword: codeKeyword ?? base.keyword,
     status: typeof s.status === 'string' && s.status ? s.status : undefined,
     type: typeof s.type === 'string' && s.type ? s.type : undefined,

@@ -167,7 +167,7 @@ class EquipmentService:
         order_clause = resolve_equipment_list_order_by(
             order_by,
             EQUIPMENT_LEDGER_SORTABLE_FIELDS,
-            "-updated_at",
+            "code",
         )
         equipment_list = await query.offset(skip).limit(limit).order_by(order_clause)
         return equipment_list, total
@@ -186,6 +186,9 @@ class EquipmentService:
             update_data["responsible_person_id"] = data.responsible_person_id
         if "responsible_person_name" in data.model_fields_set:
             update_data["responsible_person_name"] = data.responsible_person_name
+        # 允许清空设备照片
+        if "photo_file_uuid" in data.model_fields_set:
+            update_data["photo_file_uuid"] = data.photo_file_uuid
         if 'code' in update_data and update_data['code'] != equipment.code:
             existing = await EquipmentService.get_equipment_by_code(
                 tenant_id, update_data['code']

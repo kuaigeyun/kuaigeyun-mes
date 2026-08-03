@@ -28,7 +28,8 @@ export type KuaizhizaoPrintDocumentType =
   | 'material_borrow'
   | 'material_return'
   | 'product_quality_certificate'
-  | 'equipment_card';
+  | 'equipment_card'
+  | 'mold_card';
 
 const PRINT_API_PATH_BUILDERS: Record<KuaizhizaoPrintDocumentType, (id: number) => string> = {
   quotation: (id) => `/apps/kuaizhizao/quotations/${id}/print`,
@@ -55,6 +56,8 @@ const PRINT_API_PATH_BUILDERS: Record<KuaizhizaoPrintDocumentType, (id: number) 
     `/apps/kuaizhizao/finished-goods-inspections/${id}/print-certificate`,
   /** 单张按主键；批量用 printApiPath 覆盖为 /equipment/print-cards?uuids=... */
   equipment_card: (id) => `/apps/kuaizhizao/equipment/id/${id}/print`,
+  /** 单张按主键；批量用 printApiPath 覆盖为 /molds/print-cards?uuids=... */
+  mold_card: (id) => `/apps/kuaizhizao/molds/id/${id}/print`,
 };
 
 export function buildKuaizhizaoPrintApiPath(documentType: string, documentId: number): string {

@@ -21,6 +21,7 @@ import {
   ProFormDigit,
   ProFormTextArea,
   ProFormSwitch,
+  ProFormUploadButton,
 } from '@ant-design/pro-components';
 import {
   App,
@@ -29,13 +30,21 @@ import {
   Row,
   Col,
   Typography,
+  Upload,
 } from 'antd';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { photoUuidToUploadList, uploadListToPhotoUuid } from '../../../utils/equipmentPhoto';
+import { uploadMultipleFiles } from '../../../../../services/file';
+import { SecureImage } from '../../../../../components/secure-image';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -120,6 +129,7 @@ interface Equipment {
   status?: string;
   is_active?: boolean;
   description?: string;
+  photo_file_uuid?: string | null;
   attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
   updated_at?: string;
@@ -352,9 +362,10 @@ const EquipmentPage: React.FC = () => {
       const detail = await equipmentApi.get(record.uuid);
       setIsEdit(true);
       setCurrentEquipment(detail);
-      const [fieldFormValues, responsiblePersonUuid] = await Promise.all([
+      const [fieldFormValues, responsiblePersonUuid, photoList] = await Promise.all([
         detail.id != null ? loadEquipmentFormFieldValues(detail.id) : Promise.resolve({}),
         resolveUserUuidById(detail.responsible_person_id),
+        photoUuidToUploadList(detail.photo_file_uuid),
       ]);
       setFormInitialValues({
         code: detail.code,
@@ -387,6 +398,7 @@ const EquipmentPage: React.FC = () => {
         status: detail.status,
         is_active: detail.is_active,
         description: detail.description,
+        photo: photoList,
         attachments: mapAttachmentsToUploadList(detail.attachments),
         ...fieldFormValues,
       });
@@ -475,6 +487,7 @@ const EquipmentPage: React.FC = () => {
       const { customData, standardValues } = extractEquipmentFormValues(values);
       const {
         responsible_person_uuid: _responsiblePersonUuid,
+        photo: _photo,
         ...standardWithoutPersonUuid
       } = standardValues;
       const submitData = {
@@ -483,6 +496,7 @@ const EquipmentPage: React.FC = () => {
         installation_date: toApiDateString(standardValues.installation_date) ?? null,
         responsible_person_id: standardValues.responsible_person_id ?? null,
         responsible_person_name: standardValues.responsible_person_name ?? null,
+        photo_file_uuid: uploadListToPhotoUuid(standardValues.photo),
         attachments: normalizeDocumentAttachments(standardValues.attachments),
       };
 
@@ -578,6 +592,8 @@ const EquipmentPage: React.FC = () => {
   const equipmentStatusValueEnum = useMemo(
     () => ({
       正常: { text: t('app.kuaizhizao.equipment.statusNormal') },
+      运行中: { text: t('app.kuaizhizao.equipment.statusRunning') },
+      待机: { text: t('app.kuaizhizao.equipment.statusStandby') },
       故障: { text: t('app.kuaizhizao.equipment.statusFault') },
       维修中: { text: t('app.kuaizhizao.equipment.statusRepairing') },
       停用: { text: t('app.kuaizhizao.equipment.statusDisabled') },
@@ -727,26 +743,52 @@ const EquipmentPage: React.FC = () => {
       search: { order: 25 } as ProColumns['search'],
     },
     {
-      title: t('app.kuaizhizao.equipment.colCode'),
+      title: t('app.kuaizhizao.equipment.colNameCode'),
       dataIndex: 'code',
-      width: 140,
-      ellipsis: true,
+      key: 'name_code',
       fixed: 'left',
       sorter: true,
+      defaultSortOrder: 'ascend',
       search: { order: 30 } as ProColumns['search'],
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-          {r.code ?? '-'}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.name ?? '')}
+          secondary={String(r.code ?? '')}
+        />
       ),
     },
     {
-      title: t('app.kuaizhizao.equipment.colName'),
-      dataIndex: 'name',
-      width: 200,
-      ellipsis: true,
-      sorter: true,
+      title: t('app.kuaizhizao.equipment.colPhoto'),
+      dataIndex: 'photo_file_uuid',
+      width: 72,
+      align: 'center',
       hideInSearch: true,
+      search: false,
+      sorter: false,
+      uniTableKeepWidth: true,
+      render: (_, r) => {
+        const uuid = (r.photo_file_uuid || '').trim();
+        if (!uuid) {
+          return <Typography.Text type="secondary">-</Typography.Text>;
+        }
+        return (
+          <span
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{ display: 'inline-flex', lineHeight: 0 }}
+          >
+            <SecureImage
+              fileUuid={uuid}
+              alt={r.name || t('app.kuaizhizao.equipment.fieldPhoto')}
+              width={48}
+              height={48}
+              thumbSize={64}
+              style={{ objectFit: 'cover', borderRadius: 6 }}
+            />
+          </span>
+        );
+      },
     },
     {
       title: t('app.kuaizhizao.equipment.colType'),
@@ -1203,6 +1245,36 @@ const EquipmentPage: React.FC = () => {
             gridColumns={2}
             embedInParentRow
           />
+          <Col span={24}>
+            <ProFormUploadButton
+              name="photo"
+              label={t('app.kuaizhizao.equipment.fieldPhoto')}
+              max={1}
+              extra={t('app.kuaizhizao.equipment.fieldPhotoHint')}
+              fieldProps={{
+                listType: 'picture-card',
+                accept: '.jpg,.jpeg,.png,.gif,.webp',
+                beforeUpload: (file) => {
+                  const isLt20M = (file.size ?? 0) / 1024 / 1024 < 20;
+                  if (!isLt20M) {
+                    messageApi.error(t('app.kuaizhizao.equipment.photoSizeLimit'));
+                    return Upload.LIST_IGNORE;
+                  }
+                  return true;
+                },
+                customRequest: async (options) => {
+                  try {
+                    const res = await uploadMultipleFiles([options.file as File], {
+                      category: 'equipment_photo',
+                    });
+                    options.onSuccess?.(res[0], options.file as any);
+                  } catch (err) {
+                    options.onError?.(err as Error);
+                  }
+                },
+              }}
+            />
+          </Col>
           <Col span={24}>
             <DocumentAttachmentsField category="equipment_attachments" />
           </Col>

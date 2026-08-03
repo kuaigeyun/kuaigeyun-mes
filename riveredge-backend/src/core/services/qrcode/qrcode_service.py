@@ -49,6 +49,7 @@ QRCODE_TYPE_MAT = "MAT"  # 物料码
 QRCODE_TYPE_WO = "WO"  # 工单码
 QRCODE_TYPE_OP = "OP"  # 工序码
 QRCODE_TYPE_EQ = "EQ"  # 设备码
+QRCODE_TYPE_MD = "MD"  # 模具码
 QRCODE_TYPE_EMP = "EMP"  # 人员码
 QRCODE_TYPE_STATION = "STATION"  # 工位码
 QRCODE_TYPE_BOX = "BOX"  # 装箱码
@@ -60,6 +61,7 @@ VALID_QRCODE_TYPES = [
     QRCODE_TYPE_WO,
     QRCODE_TYPE_OP,
     QRCODE_TYPE_EQ,
+    QRCODE_TYPE_MD,
     QRCODE_TYPE_EMP,
     QRCODE_TYPE_STATION,
     QRCODE_TYPE_BOX,
@@ -321,6 +323,21 @@ class QRCodeService:
             "equipment_name": equipment_name,
         }
         return QRCodeService.generate_qrcode(data, QRCODE_TYPE_EQ, **kwargs)
+
+    @staticmethod
+    def generate_mold_qrcode(
+        mold_uuid: str,
+        mold_code: str,
+        mold_name: str,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """生成模具二维码。"""
+        data = {
+            "mold_uuid": mold_uuid,
+            "mold_code": mold_code,
+            "mold_name": mold_name,
+        }
+        return QRCodeService.generate_qrcode(data, QRCODE_TYPE_MD, **kwargs)
     
     @staticmethod
     def generate_employee_qrcode(

@@ -282,6 +282,7 @@ const PAPER_SIZES: Record<string, { width: number; height: number; labelKey: str
   'ASSET-100x70': { width: 100, height: 70, labelKey: 'pages.system.printTemplatesDesign.paperSizeAsset100x70' },
   'ASSET-120x80': { width: 120, height: 80, labelKey: 'pages.system.printTemplatesDesign.paperSizeAsset120x80' },
   'ASSET-80x60': { width: 80, height: 60, labelKey: 'pages.system.printTemplatesDesign.paperSizeAsset80x60' },
+  'ASSET-60x50': { width: 60, height: 50, labelKey: 'pages.system.printTemplatesDesign.paperSizeAsset60x50' },
 };
 
 /** 列宽：支持 flex 比例（1/2）或固定单位（14mm / 40%） */
@@ -461,6 +462,32 @@ const COMMON_SAMPLE_PRESETS: SamplePreset[] = [
         data: {
           card_title: '设备卡',
           print_time: '2026-08-02 16:00',
+          items: [sampleItem],
+          item: sampleItem,
+          code: sampleItem.code,
+          name: sampleItem.name,
+        },
+      },
+    ];
+  }
+  if (docType === 'mold_card') {
+    const sampleItem = {
+      code: 'MD-2026-001',
+      name: '壳体注塑模',
+      model: 'M-01',
+      type: '注塑模具',
+      affiliation: '模具库 A-01',
+      purchase_date: '2024-03-10',
+      installation_date: '2024-03-20',
+      qrcode_image: 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=MD-2026-001',
+    };
+    return [
+      {
+        key: 'mold-card-default',
+        label: t('pages.system.printTemplatesDesign.sampleMoldCard'),
+        data: {
+          card_title: '模具卡',
+          print_time: '2026-08-03 16:00',
           items: [sampleItem],
           item: sampleItem,
           code: sampleItem.code,
@@ -2079,8 +2106,8 @@ const PrintTemplateDesignPage: React.FC = () => {
     if (!uuid) return;
     try {
       const schema = getNormalizedSchema();
-      // 设备卡：编译前补齐循环 + 表格模式，保证完整框线
-      if (templateType === 'equipment_card') {
+      // 设备卡 / 模具卡：编译前补齐循环 + 表格模式，保证完整框线
+      if (templateType === 'equipment_card' || templateType === 'mold_card') {
         if (!schema.repeatCollection) {
           schema.repeatCollection = 'items';
           schema.repeatItem = schema.repeatItem || 'item';

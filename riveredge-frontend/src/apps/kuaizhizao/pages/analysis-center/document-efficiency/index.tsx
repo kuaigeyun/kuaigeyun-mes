@@ -22,7 +22,7 @@ import {
   Button,
   Empty,
 } from 'antd';
-import { WarningOutlined, CheckCircleOutlined, DownloadOutlined } from '@ant-design/icons';
+import { WarningOutlined, CheckCircleOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { Column } from '@ant-design/charts';
@@ -107,20 +107,21 @@ const DocumentEfficiencyPage: React.FC = () => {
 
   const handleExport = () => {
     const nodes = efficiencyData?.node_statistics || [];
-    if (!nodes.length) {
+    const bottlenecks = efficiencyData?.bottleneck_nodes || [];
+    if (!nodes.length && !bottlenecks.length) {
       messageApi.warning(t('app.kuaireport.analysis.exportEmpty', { defaultValue: '暂无数据可导出' }));
       return;
     }
     setExporting(true);
     try {
-      const headers = ['节点名称', '节点编码', '执行次数', '平均耗时(小时)', '最长耗时', '最短耗时'];
+      const headers = ['分区', '节点名称', '节点编码', '执行次数', '平均耗时(小时)', '最长耗时', '最短耗时'];
+      const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const row = (section: string, n: { node_name: string; node_code: string; count: number; avg_hours: number; max_hours: number; min_hours: number }) =>
+        [section, n.node_name, n.node_code, n.count, n.avg_hours, n.max_hours, n.min_hours].map(esc).join(',');
       const lines = [
         headers.join(','),
-        ...nodes.map((n) =>
-          [n.node_name, n.node_code, n.count, n.avg_hours, n.max_hours, n.min_hours]
-            .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`)
-            .join(','),
-        ),
+        ...bottlenecks.map((n) => row('瓶颈节点', n)),
+        ...nodes.map((n) => row('节点统计', n)),
       ];
       const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
       downloadFile(blob, `document-efficiency_${new Date().toISOString().slice(0, 10)}.csv`);
@@ -208,11 +209,18 @@ const DocumentEfficiencyPage: React.FC = () => {
                 }}
               />
             </Space>
-            {perms.canExport ? (
-              <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>
-                {t('common.export', { defaultValue: '导出' })}
-              </Button>
-            ) : null}
+            <Space>
+              {perms.canExport ? (
+                <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>
+                  {t('common.export', { defaultValue: '导出' })}
+                </Button>
+              ) : null}
+              {perms.canPrint ? (
+                <Button icon={<PrinterOutlined />} onClick={() => window.print()}>
+                  {t('common.print', { defaultValue: '打印' })}
+                </Button>
+              ) : null}
+            </Space>
           </Space>
         </DetailDrawerSection>
 

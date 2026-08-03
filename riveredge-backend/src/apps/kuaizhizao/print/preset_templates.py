@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from apps.kuaizhizao.print.equipment_card import build_equipment_card_preset
+from apps.kuaizhizao.print.mold_card import build_mold_card_preset
 from apps.kuaizhizao.print.styles import make_preset
 
 KUAIZHIZAO_PRESET_PRINT_TEMPLATES = [
@@ -35,4 +36,5 @@ KUAIZHIZAO_PRESET_PRINT_TEMPLATES = [
         description="产品合格证（A5），挂接成品检验单；随货交付打印",
     ),
     build_equipment_card_preset(),
+    build_mold_card_preset(),
 ]

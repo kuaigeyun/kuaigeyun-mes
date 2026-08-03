@@ -909,6 +909,14 @@ const DemandManagementPage: React.FC = () => {
             onSuccess={() => {
               invalidateStatistics();
               actionRef.current?.reload();
+              if (drawerVisible && currentDemand?.id === record.id && record.id != null) {
+                void getDemand(record.id, true, false)
+                  .then((updated) => {
+                    setCurrentDemand(updated);
+                    setDemandTrackingRefreshKey((k) => k + 1);
+                  })
+                  .catch(() => {});
+              }
             }}
           />
         );
@@ -916,7 +924,7 @@ const DemandManagementPage: React.FC = () => {
       },
     },
   ], SALES_DOC_LIST_FIELD_RANK),
-    [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, demandCanWithdrawComputation, handleWithdrawFromComputation, demandAuditColumn, demandPlanLifecycleValueEnum]
+    [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, demandCanWithdrawComputation, handleWithdrawFromComputation, demandAuditColumn, demandPlanLifecycleValueEnum, drawerVisible, currentDemand?.id]
   );
 
   const statCards: StatCard[] = useMemo(

@@ -43,6 +43,8 @@ class EquipmentInspectionScheme(BaseModel):
     code = fields.CharField(max_length=64, description="方案编码")
     name = fields.CharField(max_length=200, description="方案名称")
     description = fields.TextField(null=True)
+    # 每班 / 每天 / 每周 / 每月 / 每季度
+    cycle_type = fields.CharField(max_length=32, null=True, description="点检周期")
     is_active = fields.BooleanField(default=True)
     deleted_at = fields.DatetimeField(null=True)
 
@@ -66,6 +68,7 @@ class EquipmentInspectionSchemeLine(BaseModel):
     unit = fields.CharField(max_length=32, null=True)
     numeric_min = fields.DecimalField(max_digits=20, decimal_places=6, null=True)
     numeric_max = fields.DecimalField(max_digits=20, decimal_places=6, null=True)
+    is_critical = fields.BooleanField(default=False, description="是否关键项（不合格即停用）")
     deleted_at = fields.DatetimeField(null=True)
 
 

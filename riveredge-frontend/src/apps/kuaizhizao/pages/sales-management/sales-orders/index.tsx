@@ -3119,7 +3119,16 @@ const SalesOrdersPage: React.FC = () => {
             resourcePrefix="kuaizhizao:sales-order"
             theme="link"
             size="small"
-            onSuccess={() => { invalidateOrdersCache(); invalidateMenuBadge(); invalidateStatistics(); actionRef.current?.reload(); }}
+            onSuccess={() => {
+              if (drawerVisible && currentSalesOrder?.id === record.id && record.id != null) {
+                void refreshDrawerOrder(record.id);
+              } else {
+                invalidateOrdersCache();
+                invalidateMenuBadge();
+                invalidateStatistics();
+                actionRef.current?.reload();
+              }
+            }}
             confirmMessages={{
               submit: isManualAuditEnabled(record.audit)
                 ? t('app.kuaizhizao.salesOrder.submitConfirmAudit')

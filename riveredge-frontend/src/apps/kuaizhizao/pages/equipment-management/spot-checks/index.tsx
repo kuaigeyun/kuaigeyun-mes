@@ -62,6 +62,8 @@ interface SpotCheckLine {
   requirement?: string;
   value_type?: string;
   unit?: string;
+  numeric_min?: number | string | null;
+  numeric_max?: number | string | null;
   measured_value?: string;
   is_pass?: boolean;
   remark?: string;
@@ -242,8 +244,10 @@ const SpotChecksPage: React.FC = () => {
         requirement: l.requirement,
         value_type: l.value_type,
         unit: l.unit,
+        numeric_min: l.numeric_min,
+        numeric_max: l.numeric_max,
         measured_value: l.measured_value,
-        is_pass: l.is_pass ?? true,
+        is_pass: l.is_pass,
         remark: l.remark,
         attachments: l.attachments?.length ? l.attachments : undefined,
       })),

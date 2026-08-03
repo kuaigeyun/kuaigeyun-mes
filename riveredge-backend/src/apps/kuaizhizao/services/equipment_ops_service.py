@@ -329,8 +329,9 @@ class EquipmentInspectionSchemeService(_MasterCRUDMixin):
                 requirement=line.requirement or snap["requirement"],
                 value_type=line.value_type or snap["value_type"],
                 unit=line.unit or snap["unit"],
-                numeric_min=line.numeric_min or snap["numeric_min"],
-                numeric_max=line.numeric_max or snap["numeric_max"],
+                numeric_min=line.numeric_min if line.numeric_min is not None else snap["numeric_min"],
+                numeric_max=line.numeric_max if line.numeric_max is not None else snap["numeric_max"],
+                is_critical=bool(line.is_critical),
             )
 
     async def create(self, tenant_id: int, data: InspectionSchemeCreate, current_user: Optional[User] = None) -> EquipmentInspectionScheme:
@@ -347,6 +348,7 @@ class EquipmentInspectionSchemeService(_MasterCRUDMixin):
                 code=data.code,
                 name=data.name,
                 description=data.description,
+                cycle_type=data.cycle_type,
                 is_active=data.is_active,
             )
             apply_create_audit(payload, current_user)
@@ -731,6 +733,7 @@ class EquipmentSpotCheckService:
                     unit=line.unit,
                     numeric_min=line.numeric_min,
                     numeric_max=line.numeric_max,
+                    is_critical=bool(getattr(line, "is_critical", False)),
                     is_pass=True,
                 )
             )
@@ -801,6 +804,8 @@ class EquipmentSpotCheckService:
                         requirement=sl.requirement,
                         value_type=sl.value_type,
                         unit=sl.unit,
+                        numeric_min=sl.numeric_min,
+                        numeric_max=sl.numeric_max,
                     )
                     for idx, sl in enumerate(scheme_lines)
                 ]
@@ -810,8 +815,8 @@ class EquipmentSpotCheckService:
                 is_pass = _line_is_pass(
                     line_input.value_type,
                     line_input.measured_value,
-                    None,
-                    None,
+                    line_input.numeric_min,
+                    line_input.numeric_max,
                     line_input.is_pass,
                 )
                 await EquipmentSpotCheckLine.create(
@@ -934,8 +939,8 @@ class EquipmentSpotCheckService:
                     is_pass = _line_is_pass(
                         line_input.value_type,
                         line_input.measured_value,
-                        None,
-                        None,
+                        line_input.numeric_min,
+                        line_input.numeric_max,
                         line_input.is_pass,
                     )
                     await EquipmentSpotCheckLine.create(

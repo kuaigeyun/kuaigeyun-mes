@@ -23,6 +23,7 @@ import {
   ModuleActionMasonry,
   ModuleTodoList,
   ModuleChartPanel,
+  ModuleChartMount,
 } from '../../../components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
@@ -398,29 +399,45 @@ const EquipmentDashboard: React.FC = () => {
             layout="masonry"
             title={t('app.kuaizhizao.equipmentDashboard.statusDistributionTitle')}
           >
-            <Suspense fallback={null}>
-              <EquipmentStatusPie
-                data={statusPieData}
-                angleField="value"
-                colorField="type"
-                radius={0.8}
-                height={240}
-              />
-            </Suspense>
+            <ModuleChartMount height={240}>
+              {({ width, height }) => (
+                <Suspense fallback={null}>
+                  <EquipmentStatusPie
+                    data={statusPieData}
+                    angleField="value"
+                    colorField="type"
+                    radius={0.75}
+                    innerRadius={0.55}
+                    width={width}
+                    height={height}
+                    autoFit={false}
+                    animation={false}
+                    legend={{ color: { position: 'bottom' } }}
+                  />
+                </Suspense>
+              )}
+            </ModuleChartMount>
           </ModuleChartPanel>
           <ModuleChartPanel
             layout="masonry"
             title={t('app.kuaizhizao.equipmentDashboard.faultTrendTitle')}
             loading={trendLoading}
           >
-            <Suspense fallback={null}>
-              <EquipmentTrendColumn
-                data={trendData?.items || []}
-                xField="date"
-                yField="count"
-                height={240}
-              />
-            </Suspense>
+            <ModuleChartMount height={240}>
+              {({ width, height }) => (
+                <Suspense fallback={null}>
+                  <EquipmentTrendColumn
+                    data={trendData?.items || []}
+                    xField="date"
+                    yField="count"
+                    width={width}
+                    height={height}
+                    autoFit={false}
+                    animation={false}
+                  />
+                </Suspense>
+              )}
+            </ModuleChartMount>
           </ModuleChartPanel>
         </ModuleActionMasonry>
       }

@@ -5,7 +5,7 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Tag, Table, Descriptions, Typography, Timeline, Button, Empty } from 'antd';
-import { EyeOutlined, DownloadOutlined } from '@ant-design/icons';
+import { EyeOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -190,15 +190,24 @@ const DocumentTimingPage: React.FC = () => {
         scroll={{ x: 'max-content' }}
         rowKey={(r) => `${r.document_type}-${r.document_id}-${r.document_code}`}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-        toolBarRender={() =>
-          perms.canExport
-            ? [
-                <Button key="export" icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>
-                  {t('common.export', { defaultValue: '导出' })}
-                </Button>,
-              ]
-            : []
-        }
+        toolBarRender={() => {
+          const actions: React.ReactNode[] = [];
+          if (perms.canExport) {
+            actions.push(
+              <Button key="export" icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>
+                {t('common.export', { defaultValue: '导出' })}
+              </Button>,
+            );
+          }
+          if (perms.canPrint) {
+            actions.push(
+              <Button key="print" icon={<PrinterOutlined />} onClick={() => window.print()}>
+                {t('common.print', { defaultValue: '打印' })}
+              </Button>,
+            );
+          }
+          return actions;
+        }}
         locale={{
           emptyText: (
             <Empty

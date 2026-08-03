@@ -46,17 +46,25 @@ def build_asset_card_config() -> dict[str, Any]:
     }
 
 
-def render_asset_card_table_html(card: dict[str, Any] | None = None) -> str:
-    """生成带完整框线的设备卡 table HTML（单卡本体，不含 for 循环）。"""
+def render_asset_card_table_html(
+    card: dict[str, Any] | None = None,
+    *,
+    page_size: str | None = None,
+    default_rows: list[tuple[str, str]] | None = None,
+    default_title: str = "设备卡",
+) -> str:
+    """生成带完整框线的资产卡 table HTML（单卡本体，不含 for 循环）。"""
     cfg = card or build_asset_card_config()
-    label_w = int(cfg.get("labelWidthMm") or ASSET_CARD_LABEL_WIDTH_MM)
-    qr_w = int(cfg.get("qrWidthMm") or ASSET_CARD_QR_WIDTH_MM)
-    qr_px = int(cfg.get("qrImgPx") or ASSET_CARD_QR_IMG_PX)
-    title_expr = str(cfg.get("titleExpr") or "{{ card_title or '设备卡' }}")
+    layout = resolve_asset_card_layout(page_size, cfg)
+    label_w = int(layout["label_width_mm"])
+    qr_w = int(layout["qr_width_mm"])
+    qr_px = int(layout["qr_img_px"])
+    title_expr = str(cfg.get("titleExpr") or f"{{{{ card_title or '{default_title}' }}}}")
     qr_url = str(cfg.get("qrUrlExpr") or "{{ item.qrcode_image }}")
     rows = cfg.get("rows") if isinstance(cfg.get("rows"), list) else []
     if not rows:
-        rows = [{"label": label, "key": key} for label, key in ASSET_CARD_ROWS]
+        base_rows = default_rows or ASSET_CARD_ROWS
+        rows = [{"label": label, "key": key} for label, key in base_rows]
 
     row_count = max(len(rows), 1)
     body_rows: list[str] = []
@@ -103,64 +111,162 @@ def render_asset_card_table_html(card: dict[str, Any] | None = None) -> str:
 """.strip()
 
 
-def asset_card_table_css() -> str:
-    return """
-  table.eq-asset-card {
+# 纸张尺寸 → 表格版式（宽×高 mm）；未命中时按 100×70 设备卡
+ASSET_CARD_LAYOUT_BY_PAGE: dict[str, dict[str, Any]] = {
+    "ASSET-100x70": {
+        "card_height_mm": 66,
+        "label_width_mm": 12,
+        "qr_width_mm": 40,
+        "qr_img_mm": 36,
+        "qr_img_px": 148,
+        "title_font_px": 16,
+        "label_font_px": 11,
+        "value_font_px": 12,
+        "title_height_mm": 10,
+        "title_pad_mm": "2.5mm 2mm",
+        "qr_pad_mm": "2mm",
+    },
+    "ASSET-120x80": {
+        "card_height_mm": 76,
+        "label_width_mm": 14,
+        "qr_width_mm": 44,
+        "qr_img_mm": 40,
+        "qr_img_px": 160,
+        "title_font_px": 17,
+        "label_font_px": 12,
+        "value_font_px": 13,
+        "title_height_mm": 11,
+        "title_pad_mm": "2.5mm 2mm",
+        "qr_pad_mm": "2mm",
+    },
+    "ASSET-80x60": {
+        "card_height_mm": 56,
+        "label_width_mm": 11,
+        "qr_width_mm": 30,
+        "qr_img_mm": 26,
+        "qr_img_px": 120,
+        "title_font_px": 14,
+        "label_font_px": 10,
+        "value_font_px": 11,
+        "title_height_mm": 8,
+        "title_pad_mm": "2mm 1.5mm",
+        "qr_pad_mm": "1.5mm",
+    },
+    # 模具卡默认：60×50mm 标签
+    "ASSET-60x50": {
+        "card_height_mm": 46,
+        "label_width_mm": 10,
+        "qr_width_mm": 22,
+        "qr_img_mm": 20,
+        "qr_img_px": 100,
+        "title_font_px": 12,
+        "label_font_px": 9,
+        "value_font_px": 10,
+        "title_height_mm": 7,
+        "title_pad_mm": "1.5mm 1mm",
+        "qr_pad_mm": "1mm",
+    },
+}
+
+ASSET_CARD_PAPER_SIZE_MAP: dict[str, str] = {
+    "A4": "210mm 297mm",
+    "A5": "148mm 210mm",
+    "ASSET-100x70": "100mm 70mm",
+    "ASSET-120x80": "120mm 80mm",
+    "ASSET-80x60": "80mm 60mm",
+    "ASSET-60x50": "60mm 50mm",
+}
+
+
+def resolve_asset_card_layout(
+    page_size: str | None = None,
+    card: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """合并纸张预设与 assetCard 显式覆盖。"""
+    layout = dict(ASSET_CARD_LAYOUT_BY_PAGE.get(str(page_size or "ASSET-100x70"), ASSET_CARD_LAYOUT_BY_PAGE["ASSET-100x70"]))
+    cfg = card or {}
+    if cfg.get("labelWidthMm") is not None:
+        layout["label_width_mm"] = int(cfg["labelWidthMm"])
+    if cfg.get("qrWidthMm") is not None:
+        layout["qr_width_mm"] = int(cfg["qrWidthMm"])
+    if cfg.get("qrImgPx") is not None:
+        layout["qr_img_px"] = int(cfg["qrImgPx"])
+    if cfg.get("cardHeightMm") is not None:
+        layout["card_height_mm"] = int(cfg["cardHeightMm"])
+    if cfg.get("qrImgMm") is not None:
+        layout["qr_img_mm"] = int(cfg["qrImgMm"])
+    return layout
+
+
+def asset_card_table_css(layout: dict[str, Any] | None = None) -> str:
+    lay = layout or ASSET_CARD_LAYOUT_BY_PAGE["ASSET-100x70"]
+    h = int(lay["card_height_mm"])
+    label_w = int(lay["label_width_mm"])
+    qr_w = int(lay["qr_width_mm"])
+    qr_img = int(lay["qr_img_mm"])
+    title_fs = int(lay["title_font_px"])
+    label_fs = int(lay["label_font_px"])
+    value_fs = int(lay["value_font_px"])
+    title_h = int(lay["title_height_mm"])
+    title_pad = str(lay.get("title_pad_mm") or "2.5mm 2mm")
+    qr_pad = str(lay.get("qr_pad_mm") or "2mm")
+    return f"""
+  table.eq-asset-card {{
     width: 100%;
-    height: 66mm;
+    height: {h}mm;
     border-collapse: collapse;
     table-layout: fixed;
     border: 1.5px solid #000;
     background: #fff;
     color: #000;
-  }
+  }}
   table.eq-asset-card th,
-  table.eq-asset-card td {
+  table.eq-asset-card td {{
     border: 1px solid #000;
     vertical-align: middle;
     box-sizing: border-box;
-  }
-  table.eq-asset-card .eq-title {
+  }}
+  table.eq-asset-card .eq-title {{
     text-align: center;
-    font-size: 16px;
+    font-size: {title_fs}px;
     font-weight: 700;
-    letter-spacing: 3px;
-    padding: 2.5mm 2mm;
-    height: 10mm;
-  }
-  table.eq-asset-card .eq-label {
-    width: 12mm;
-    max-width: 12mm;
+    letter-spacing: 2px;
+    padding: {title_pad};
+    height: {title_h}mm;
+  }}
+  table.eq-asset-card .eq-label {{
+    width: {label_w}mm;
+    max-width: {label_w}mm;
     text-align: center;
-    font-size: 11px;
+    font-size: {label_fs}px;
     font-weight: 600;
     white-space: nowrap;
     padding: 0 1px;
     overflow: hidden;
-  }
-  table.eq-asset-card .eq-value {
+  }}
+  table.eq-asset-card .eq-value {{
     text-align: center;
-    font-size: 12px;
+    font-size: {value_fs}px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding: 1mm 2mm;
-  }
-  table.eq-asset-card .eq-qr {
+    padding: 0.5mm 1.5mm;
+  }}
+  table.eq-asset-card .eq-qr {{
     text-align: center;
-    padding: 2mm;
-    width: 40mm;
-    max-width: 40mm;
-  }
-  table.eq-asset-card .eq-qr img {
-    width: 36mm !important;
-    height: 36mm !important;
-    max-width: 36mm !important;
-    max-height: 36mm !important;
+    padding: {qr_pad};
+    width: {qr_w}mm;
+    max-width: {qr_w}mm;
+  }}
+  table.eq-asset-card .eq-qr img {{
+    width: {qr_img}mm !important;
+    height: {qr_img}mm !important;
+    max-width: {qr_img}mm !important;
+    max-height: {qr_img}mm !important;
     display: block;
     margin: 0 auto;
     object-fit: contain;
-  }
+  }}
 """.strip()
 
 
@@ -319,23 +425,17 @@ def compile_asset_card_table_schema(schema: dict[str, Any]) -> str:
     """按 asset_card_table 模式编译完整 Jinja 模板。"""
     from core.services.print.print_template_service import _PRINT_TEMPLATE_BODY_FONT_STACK
 
-    paper_size_map = {
-        "A4": "210mm 297mm",
-        "A5": "148mm 210mm",
-        "ASSET-100x70": "100mm 70mm",
-        "ASSET-120x80": "120mm 80mm",
-        "ASSET-80x60": "80mm 60mm",
-    }
     page_size = str(schema.get("pageSize") or "ASSET-100x70")
-    orientation = str(schema.get("orientation") or "portrait")
-    page_size_val = paper_size_map.get(page_size, page_size)
+    page_size_val = ASSET_CARD_PAPER_SIZE_MAP.get(page_size, page_size)
     margins = schema.get("margins") if isinstance(schema.get("margins"), dict) else {}
     margin_str = (
         f"{margins.get('top', 2)}mm {margins.get('right', 2)}mm "
         f"{margins.get('bottom', 2)}mm {margins.get('left', 2)}mm"
     )
     card = schema.get("assetCard") if isinstance(schema.get("assetCard"), dict) else None
-    table_html = render_asset_card_table_html(card)
+    default_title = "模具卡" if str(schema.get("cardKind") or "") == "mold" else "设备卡"
+    table_html = render_asset_card_table_html(card, page_size=page_size, default_title=default_title)
+    layout = resolve_asset_card_layout(page_size, card)
     repeat_collection = str(schema.get("repeatCollection") or "items").strip() or "items"
     repeat_item = str(schema.get("repeatItem") or "item").strip() or "item"
     body = (
@@ -344,13 +444,15 @@ def compile_asset_card_table_schema(schema: dict[str, Any]) -> str:
         f"{{% endfor %}}"
     )
 
+    # 自定义 mm 尺寸不再拼 orientation，避免 Chromium/PDF 回退 A4
+    page_size_css = page_size_val
     return f"""<style>
-  @page {{ size: {page_size_val} {orientation}; margin: {margin_str}; }}
+  @page {{ size: {page_size_css}; margin: {margin_str}; }}
   * {{ box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
   html, body {{ width: 100%; margin: 0 !important; padding: 0 !important; font-family: {_PRINT_TEMPLATE_BODY_FONT_STACK}; color: #000; }}
   .print-repeat-page {{ page-break-after: always; break-after: page; }}
   .print-repeat-page:last-child {{ page-break-after: auto; break-after: auto; }}
-  {asset_card_table_css()}
+  {asset_card_table_css(layout)}
 </style>
 {body}""".strip()
 

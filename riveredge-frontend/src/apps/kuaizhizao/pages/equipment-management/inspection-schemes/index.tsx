@@ -45,6 +45,7 @@ interface SchemeLine {
   sort_order?: number;
   item_code?: string;
   item_name?: string;
+  is_critical?: boolean;
 }
 
 interface InspectionScheme {
@@ -52,6 +53,7 @@ interface InspectionScheme {
   code?: string;
   name?: string;
   description?: string;
+  cycle_type?: string;
   is_active?: boolean;
   lines?: SchemeLine[];
   updated_at?: string;
@@ -88,7 +90,7 @@ const InspectionSchemesPage: React.FC = () => {
     setIsEdit(false);
     setCurrent(null);
     // FormModal destroyOnHidden：须用 initialValues，打开瞬间 setFieldsValue 无效
-    setFormInitialValues({ is_active: true, lines: [{ sort_order: 0 }] });
+    setFormInitialValues({ is_active: true, cycle_type: '每班', lines: [{ sort_order: 0 }] });
     setModalVisible(true);
     void loadItemOptions();
   };
@@ -105,6 +107,7 @@ const InspectionSchemesPage: React.FC = () => {
         lines: (loaded.lines ?? []).map((l: SchemeLine, i: number) => ({
           item_id: l.item_id,
           sort_order: l.sort_order ?? i,
+          is_critical: l.is_critical ?? false,
         })),
       });
       setModalVisible(true);
@@ -155,6 +158,7 @@ const InspectionSchemesPage: React.FC = () => {
       lines: ((values.lines as SchemeLine[]) ?? []).map((l, i) => ({
         item_id: l.item_id,
         sort_order: l.sort_order ?? i,
+        is_critical: Boolean(l.is_critical),
       })),
     };
     if (isEdit && current?.id) {
@@ -177,6 +181,7 @@ const InspectionSchemesPage: React.FC = () => {
     () => [
       { title: t(`${P}.col.code`), dataIndex: 'code' },
       { title: t(`${P}.col.name`), dataIndex: 'name' },
+      { title: t(`${P}.col.cycleType`), dataIndex: 'cycle_type' },
       { title: t(`${P}.col.description`), dataIndex: 'description', span: 2 },
       buildIsActiveDescriptionColumn<InspectionScheme>(t, `${P}.col.isActive`),
     ],
@@ -186,6 +191,12 @@ const InspectionSchemesPage: React.FC = () => {
   const detailLineColumns = useMemo<ColumnsType<SchemeLine>>(
     () => [
       { title: t(`${P}.form.item`), key: 'item', render: (_, row) => `${row.item_code ?? '-'} - ${row.item_name ?? '-'}` },
+      {
+        title: t(`${P}.form.isCritical`),
+        dataIndex: 'is_critical',
+        width: 90,
+        render: (v) => (v ? '是' : '否'),
+      },
       { title: t(`${P}.form.sortOrder`), dataIndex: 'sort_order', width: 80, align: 'right' },
     ],
     [t],
@@ -222,6 +233,12 @@ const InspectionSchemesPage: React.FC = () => {
         width: 180,
         ellipsis: true,
         sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t(`${P}.col.cycleType`),
+        dataIndex: 'cycle_type',
+        width: 100,
         hideInSearch: true,
       },
       {
@@ -352,18 +369,31 @@ const InspectionSchemesPage: React.FC = () => {
         grid={false}
       >
         <Row gutter={16}>
-          <Col span={12}>
+          <Col span={8}>
             <ProFormText name="code" label={t(`${P}.col.code`)} rules={[{ required: true }]} />
           </Col>
-          <Col span={12}>
+          <Col span={8}>
             <ProFormText name="name" label={t(`${P}.col.name`)} rules={[{ required: true }]} />
+          </Col>
+          <Col span={8}>
+            <ProFormSelect
+              name="cycle_type"
+              label={t(`${P}.col.cycleType`)}
+              options={[
+                { label: t(`${P}.cycle.shift`), value: '每班' },
+                { label: t(`${P}.cycle.daily`), value: '每天' },
+                { label: t(`${P}.cycle.weekly`), value: '每周' },
+                { label: t(`${P}.cycle.monthly`), value: '每月' },
+                { label: t(`${P}.cycle.quarterly`), value: '每季度' },
+              ]}
+            />
           </Col>
         </Row>
         <FormListDetailTable
           name="lines"
           label={t(`${P}.form.lines`)}
           addButtonText={t(`${P}.form.addLine`)}
-          defaultRow={{ sort_order: 0 }}
+          defaultRow={{ sort_order: 0, is_critical: false }}
           bulkAdd={{
             title: t('common.bulkAddPickTitle', { item: t(`${P}.form.item`) }),
             options: itemOptions,
@@ -381,6 +411,17 @@ const InspectionSchemesPage: React.FC = () => {
                   showSearch
                   formItemProps={{ noStyle: true }}
                   fieldProps={{ style: { width: '100%' }, placeholder: t('common.select') }}
+                />
+              ),
+            },
+            {
+              title: t(`${P}.form.isCritical`),
+              key: 'is_critical',
+              width: 100,
+              render: (field) => (
+                <ProFormSwitch
+                  name={[field.name, 'is_critical']}
+                  formItemProps={{ noStyle: true }}
                 />
               ),
             },

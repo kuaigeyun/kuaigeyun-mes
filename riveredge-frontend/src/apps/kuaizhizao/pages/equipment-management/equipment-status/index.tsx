@@ -17,8 +17,6 @@ import { ReloadOutlined, HistoryOutlined, EditOutlined, PlayCircleOutlined, Paus
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { equipmentStatusApi } from '../../../services/equipment';
 import { ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
-import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
-import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
@@ -266,7 +264,6 @@ const EquipmentStatusPage: React.FC = () => {
         is_online: values.is_online,
         reason: values.reason,
         remark: values.remark,
-        attachments: normalizeDocumentAttachments(values.attachments),
       });
       messageApi.success(t(`${P}.updateSuccess`));
       setUpdateModalVisible(false);
@@ -708,7 +705,6 @@ const EquipmentStatusPage: React.FC = () => {
           label={t(`${P}.form.changeReason`)}
           placeholder={t(`${P}.form.changeReasonPlaceholder`)}
         />
-        <DocumentAttachmentsField category="equipment_status_attachments" />
         <ProFormTextArea
           name="remark"
           label={t(`${P}.form.remark`)}

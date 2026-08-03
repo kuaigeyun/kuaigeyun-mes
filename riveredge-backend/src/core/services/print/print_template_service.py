@@ -572,12 +572,18 @@ class PrintTemplateService:
             "241-1": "241mm 280mm",
             "241-2": "241mm 140mm",
             "241-3": "241mm 93mm",
-            # 固定资产/设备信息卡常见规格（横版挂牌）
+            # 固定资产/设备信息卡常见规格（横版挂牌）；模具卡默认 60×50
             "ASSET-100x70": "100mm 70mm",
             "ASSET-120x80": "120mm 80mm",
             "ASSET-80x60": "80mm 60mm",
+            "ASSET-60x50": "60mm 50mm",
         }
         page_size_val = paper_size_map.get(page_size, page_size)
+        # 已是「宽 高」物理尺寸时不再拼 portrait/landscape，避免 Chromium 忽略自定义纸张回退 A4
+        _has_explicit_dims = bool(
+            re.search(r"\d+(?:\.\d+)?(?:mm|cm|in)\s+\d+(?:\.\d+)?(?:mm|cm|in)", page_size_val, re.I)
+        )
+        page_size_css = page_size_val if _has_explicit_dims else f"{page_size_val} {orientation}"
 
         margins = schema.get("margins", {"top": 10, "right": 10, "bottom": 10, "left": 10})
         margin_str = f"{margins.get('top', 10)}mm {margins.get('right', 10)}mm {margins.get('bottom', 10)}mm {margins.get('left', 10)}mm"
@@ -1100,7 +1106,7 @@ class PrintTemplateService:
         parts = []
         # 与设计器预览保持一致的关键打印样式
         parts.append("<style>")
-        parts.append(f"  @page {{ size: {page_size_val} {orientation}; margin: {margin_str}; }}")
+        parts.append(f"  @page {{ size: {page_size_css}; margin: {margin_str}; }}")
         if page_margin_css:
             parts.append(page_margin_css)
         parts.append("  html, body { width: 100%; }")

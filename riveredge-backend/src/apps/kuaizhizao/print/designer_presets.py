@@ -760,6 +760,10 @@ def build_designer_schema_for_document_type(document_type: str) -> dict[str, Any
         from apps.kuaizhizao.print.equipment_card import build_equipment_card_designer_schema
 
         return build_equipment_card_designer_schema()
+    if document_type == "mold_card":
+        from apps.kuaizhizao.print.mold_card import build_mold_card_designer_schema
+
+        return build_mold_card_designer_schema()
     layout = DOCUMENT_LAYOUTS.get(document_type)
     if not layout:
         raise ValueError(f"未定义设计器布局: {document_type}")
