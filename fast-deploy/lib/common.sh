@@ -3565,11 +3565,18 @@ cmd_details() {
 
 cmd_status() {
     load_deploy_env
+    local server_ip web_url
     echo "=== RiverEdge ${DEPLOY_MODE} 状态 ==="
     for name in backend frontend worker scheduler caddy; do
         local pidf="$LOGS_DIR/${name}.pid"
         if [ -f "$pidf" ] && kill -0 "$(cat "$pidf")" 2>/dev/null; then
             echo "  $name: 运行中 (PID $(cat "$pidf"))"
+        elif [ "$name" = "frontend" ] && [ "$DEPLOY_MODE" = "prod" ]; then
+            if [ -f "$FRONTEND_DIR/dist/index.html" ]; then
+                echo "  frontend: 静态 dist（由 Caddy 提供，无需独立进程）"
+            else
+                echo "  frontend: 缺少 dist/index.html"
+            fi
         else
             echo "  $name: 未运行"
         fi
@@ -3583,6 +3590,15 @@ cmd_status() {
         check_port 80 && echo "  端口 80 (HTTP 跳转): 监听中" || echo "  端口 80 (HTTP 跳转): 空闲"
     else
         check_port "$PROXY_PORT" && echo "  端口 ${PROXY_PORT}: 监听中" || echo "  端口 ${PROXY_PORT}: 空闲"
+    fi
+    if [ "$DEPLOY_MODE" = "prod" ]; then
+        server_ip="$(read_deploy_env_value SERVER_IP || detect_server_ip)"
+        web_url="$(resolve_prod_web_url "$server_ip")"
+        echo "  访问地址: ${web_url}"
+        if ! caddy_https_enabled; then
+            echo "  说明: 当前未启用域名 HTTPS；浏览器请用上述地址（勿用未配置的 https://域名）"
+            echo "  若要用域名 HTTPS: 向导配置开启 CADDY_DOMAIN + Let's Encrypt，或宝塔 Nginx 反代到 :${PROXY_PORT}"
+        fi
     fi
     echo "  蓝绿部署: $(blue_green_deploy_status_label)"
     if bg_enabled; then
