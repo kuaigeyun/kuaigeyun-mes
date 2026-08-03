@@ -393,7 +393,11 @@ _collect_psql_candidates() {
         done
         command -v psql >/dev/null 2>&1 && echo "$(command -v psql)"
     fi
-    for item in /usr/pgsql-*/bin/psql /usr/lib/postgresql/*/bin/psql; do
+    for item in \
+        /www/server/pgsql/bin/psql \
+        /usr/pgsql-*/bin/psql \
+        /usr/lib/postgresql/*/bin/psql
+    do
         [ -x "$item" ] 2>/dev/null && echo "$item"
     done
     command -v psql >/dev/null 2>&1 && echo "$(command -v psql)"
@@ -3602,9 +3606,48 @@ pgdg_yum_base_url() {
     fi
 }
 
-# 检测本机 PostgreSQL 主版本（优先连本地服务，供匹配安装 postgresql-N-pgvector）
+# 应用库是否本机（远程库无法在本机 apt/源码装扩展）
+is_app_db_local_host() {
+    local host
+    host="$(read_env_value DB_HOST 2>/dev/null || echo localhost)"
+    [ -z "$host" ] && host=localhost
+    case "$host" in
+        localhost|127.0.0.1|::1) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# 用 .env 中的应用库执行 SQL（stdout 为查询结果）
+app_db_psql() {
+    local psql_bin host port user pass dbname
+    psql_bin="$(resolve_psql)"
+    host="$(read_env_value DB_HOST 2>/dev/null || echo localhost)"
+    port="$(read_env_value DB_PORT 2>/dev/null || echo "$(detect_postgres_port)")"
+    user="$(read_env_value DB_USER 2>/dev/null || echo postgres)"
+    pass="$(read_env_value DB_PASSWORD 2>/dev/null || true)"
+    dbname="$(read_env_value DB_NAME 2>/dev/null || echo riveredge)"
+    export PGPASSWORD="$pass"
+    "$psql_bin" -h "$host" -p "$port" -U "$user" -d "$dbname" -v ON_ERROR_STOP=1 "$@"
+    local rc=$?
+    unset PGPASSWORD
+    return $rc
+}
+
+# 应用库中 vector 扩展是否已对 CREATE EXTENSION 可用
+pgvector_available_in_app_db() {
+    local out
+    out="$(app_db_psql -tAc "SELECT 1 FROM pg_available_extensions WHERE name = 'vector'" 2>/dev/null | tr -d '[:space:]')" || return 1
+    [ "$out" = "1" ]
+}
+
+# 检测应用库 PostgreSQL 主版本（供匹配包 / 编译）
 detect_postgresql_server_major() {
     local ver major d best=""
+    ver="$(app_db_psql -tAc "SHOW server_version" 2>/dev/null | head -1 | tr -d '[:space:]')"
+    if [[ "$ver" =~ ^([0-9]+) ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return 0
+    fi
     if command -v sudo >/dev/null 2>&1 && getent passwd postgres >/dev/null 2>&1; then
         ver="$(sudo -u postgres psql -tAc "SHOW server_version" 2>/dev/null | head -1 | tr -d '[:space:]')"
         if [[ "$ver" =~ ^([0-9]+) ]]; then
@@ -3612,15 +3655,19 @@ detect_postgresql_server_major() {
             return 0
         fi
     fi
+    if [ -x /www/server/pgsql/bin/pg_config ]; then
+        ver="$(/www/server/pgsql/bin/pg_config --version 2>/dev/null | sed -n 's/.* \([0-9][0-9]*\)\..*/\1/p')"
+        [ -n "$ver" ] && echo "$ver" && return 0
+    fi
     if command -v psql >/dev/null 2>&1; then
         ver="$(psql -V 2>/dev/null | sed -n 's/^psql (PostgreSQL) \([0-9][0-9]*\).*/\1/p')"
-        if [ -n "$ver" ]; then
-            echo "$ver"
-            return 0
-        fi
+        [ -n "$ver" ] && echo "$ver" && return 0
     fi
-    for d in /usr/share/postgresql/[0-9]* /usr/pgsql-[0-9]*; do
+    for d in /www/server/pgsql /usr/share/postgresql/[0-9]* /usr/pgsql-[0-9]*; do
         [ -d "$d" ] || continue
+        if [ "$d" = "/www/server/pgsql" ]; then
+            continue
+        fi
         major="$(basename "$d" | grep -oE '[0-9]+$' || true)"
         [ -n "$major" ] || continue
         if [ -z "$best" ] || [ "$major" -gt "$best" ]; then
@@ -3630,14 +3677,43 @@ detect_postgresql_server_major() {
     [ -n "$best" ] && echo "$best"
 }
 
-postgresql_pgvector_control_path() {
-    local major=$1
-    if [ -f "/usr/share/postgresql/${major}/extension/vector.control" ]; then
-        echo "/usr/share/postgresql/${major}/extension/vector.control"
+# 解析与应用库实例匹配的 pg_config（按 data_directory，避免误装到旁路 PG）
+resolve_pg_config() {
+    local major=${1:-} candidate datadir
+    datadir="$(app_db_psql -tAc "SHOW data_directory" 2>/dev/null | head -1 | tr -d '[:space:]')"
+    if [[ "$datadir" == /www/server/pgsql* ]] && [ -x /www/server/pgsql/bin/pg_config ]; then
+        echo /www/server/pgsql/bin/pg_config
         return 0
     fi
-    if [ -f "/usr/pgsql-${major}/share/extension/vector.control" ]; then
-        echo "/usr/pgsql-${major}/share/extension/vector.control"
+    if [ -n "$major" ]; then
+        for candidate in \
+            "/usr/lib/postgresql/${major}/bin/pg_config" \
+            "/usr/pgsql-${major}/bin/pg_config"
+        do
+            if [ -x "$candidate" ]; then
+                echo "$candidate"
+                return 0
+            fi
+        done
+    fi
+    # 未连上库时的兜底：本机仅宝塔 PG
+    if [ -x /www/server/pgsql/bin/pg_config ]; then
+        echo /www/server/pgsql/bin/pg_config
+        return 0
+    fi
+    if command -v pg_config >/dev/null 2>&1; then
+        command -v pg_config
+        return 0
+    fi
+    return 1
+}
+
+postgresql_pgvector_control_for_pg_config() {
+    local pg_config=$1 sharedir
+    sharedir="$("$pg_config" --sharedir 2>/dev/null)" || return 1
+    [ -n "$sharedir" ] || return 1
+    if [ -f "${sharedir}/extension/vector.control" ]; then
+        echo "${sharedir}/extension/vector.control"
         return 0
     fi
     return 1
@@ -3688,11 +3764,78 @@ ensure_pgdg_yum_repo() {
     sudo "$pkg_mgr" install -y "$repo_rpm" || return 1
 }
 
-# 安装与当前 PostgreSQL 主版本匹配的 pgvector（迁移 517 CREATE EXTENSION vector 前置条件）
+install_pgvector_deb_package() {
+    local major=$1 pkg
+    pkg="postgresql-${major}-pgvector"
+    if ! apt-cache show "$pkg" >/dev/null 2>&1; then
+        ensure_pgdg_apt_repo || return 1
+    fi
+    sudo apt-get install -y "$pkg"
+}
+
+install_pgvector_rpm_package() {
+    local major=$1 pkg pkg_mgr
+    pkg="pgvector_${major}"
+    pkg_mgr="$(linux_pkg_manager)"
+    ensure_pgdg_yum_repo || true
+    sudo "$pkg_mgr" install -y "$pkg"
+}
+
+# 按目标 pg_config 源码编译安装（宝塔 /www/server/pgsql 等无系统包时）
+install_pgvector_from_source() {
+    local pg_config=$1
+    local work src_dir url rc=1
+    local -a urls=()
+    [ -x "$pg_config" ] || {
+        log_error "pg_config 不可用: ${pg_config}"
+        return 1
+    }
+
+    if [ -f /etc/debian_version ] || is_linux_debian_family; then
+        sudo apt-get install -y build-essential git ca-certificates || return 1
+    elif is_linux_rhel_family || is_linux_fedora; then
+        sudo "$(linux_pkg_manager)" install -y gcc make git ca-certificates || return 1
+    else
+        log_error "当前平台无法自动编译 pgvector，请安装 gcc/make/git 后重试"
+        return 1
+    fi
+
+    urls=(
+        "https://github.com/pgvector/pgvector.git"
+        "https://ghproxy.net/https://github.com/pgvector/pgvector.git"
+        "https://mirror.ghproxy.com/https://github.com/pgvector/pgvector.git"
+    )
+
+    work="$(mktemp -d /tmp/pgvector-build.XXXXXX)" || return 1
+    src_dir="${work}/pgvector"
+    for url in "${urls[@]}"; do
+        log_info "克隆 pgvector: ${url}"
+        rm -rf "$src_dir"
+        if git clone --depth 1 "$url" "$src_dir" >/dev/null 2>&1; then
+            log_info "编译安装 pgvector（PG_CONFIG=${pg_config}）..."
+            if (
+                cd "$src_dir" || exit 1
+                make clean >/dev/null 2>&1 || true
+                make PG_CONFIG="$pg_config" && sudo make PG_CONFIG="$pg_config" install
+            ); then
+                rc=0
+                break
+            fi
+            log_warn "pgvector 编译失败（${url}）"
+        else
+            log_warn "克隆失败: ${url}"
+        fi
+    done
+    rm -rf "$work"
+    return $rc
+}
+
+# 安装与应用库匹配的 pgvector（迁移 517 CREATE EXTENSION vector 前置条件）
+# 以应用库 pg_available_extensions 为准；宝塔路径用源码安装，勿仅看 apt 包 control 文件。
 ensure_postgresql_pgvector() {
-    local major pkg control pkg_mgr
+    local major pg_config sharedir control host
     if is_windows_gitbash; then
-        log_warn "Windows 不自动安装 pgvector 系统包；若迁移需要 vector，请在目标 PostgreSQL 上安装扩展"
+        log_warn "Windows 不自动安装 pgvector；若迁移需要 vector，请在目标 PostgreSQL 主机安装扩展"
         return 0
     fi
     if [[ "$(uname -s)" == "Darwin" ]]; then
@@ -3700,48 +3843,72 @@ ensure_postgresql_pgvector() {
         return 0
     fi
 
-    major="$(detect_postgresql_server_major || true)"
-    if [ -z "$major" ]; then
-        log_warn "无法检测 PostgreSQL 主版本，跳过 pgvector 安装"
+    if pgvector_available_in_app_db; then
+        log_ok "应用库已具备 pgvector（pg_available_extensions）"
         return 0
     fi
 
-    if control="$(postgresql_pgvector_control_path "$major")"; then
-        log_ok "pgvector 已就绪 (PostgreSQL ${major}, ${control})"
-        return 0
-    fi
-
-    log_info "安装 pgvector（匹配 PostgreSQL ${major}）..."
-    if [ -f /etc/debian_version ] || is_linux_debian_family; then
-        pkg="postgresql-${major}-pgvector"
-        if ! apt-cache show "$pkg" >/dev/null 2>&1; then
-            ensure_pgdg_apt_repo || {
-                log_error "无法配置 PGDG 源，找不到包 ${pkg}"
-                return 1
-            }
-        fi
-        sudo apt-get install -y "$pkg" || {
-            log_error "安装 ${pkg} 失败（KU-AI 向量列迁移需要 pgvector）"
-            return 1
-        }
-    elif is_linux_rhel_family || is_linux_fedora; then
-        pkg="pgvector_${major}"
-        pkg_mgr="$(linux_pkg_manager)"
-        ensure_pgdg_yum_repo || true
-        sudo "$pkg_mgr" install -y "$pkg" || {
-            log_error "安装 ${pkg} 失败（KU-AI 向量列迁移需要 pgvector）"
-            return 1
-        }
-    else
-        log_error "当前平台不支持自动安装 pgvector，请手动安装后重试迁移"
+    host="$(read_env_value DB_HOST 2>/dev/null || echo localhost)"
+    if ! is_app_db_local_host; then
+        log_error "应用库 ${host} 为远程主机，无法在本机安装 pgvector"
+        log_error "请在 PostgreSQL 所在机器安装 vector 扩展后重试迁移"
         return 1
     fi
 
-    if control="$(postgresql_pgvector_control_path "$major")"; then
-        log_ok "pgvector 已安装 (PostgreSQL ${major}, ${control})"
+    major="$(detect_postgresql_server_major || true)"
+    if [ -z "$major" ]; then
+        log_error "无法检测 PostgreSQL 主版本，无法安装 pgvector"
+        return 1
+    fi
+
+    if ! pg_config="$(resolve_pg_config "$major")"; then
+        log_error "未找到 pg_config（已查宝塔 /www/server/pgsql 与系统路径）"
+        return 1
+    fi
+    sharedir="$("$pg_config" --sharedir 2>/dev/null || true)"
+    log_info "安装 pgvector（PostgreSQL ${major}, pg_config=${pg_config}, sharedir=${sharedir:-?}）..."
+
+    # 系统包路径的 PG：优先 apt/yum；宝塔或 sharedir 已是自定义前缀则走源码
+    if [[ "$pg_config" == /www/server/pgsql/* ]] || [[ "${sharedir}" == /www/server/pgsql* ]]; then
+        install_pgvector_from_source "$pg_config" || {
+            log_error "宝塔 PostgreSQL 源码安装 pgvector 失败"
+            return 1
+        }
+    elif [ -f /etc/debian_version ] || is_linux_debian_family; then
+        if ! install_pgvector_deb_package "$major"; then
+            log_warn "系统包 postgresql-${major}-pgvector 安装失败，改源码编译"
+            install_pgvector_from_source "$pg_config" || {
+                log_error "pgvector 安装失败（KU-AI 向量列迁移需要）"
+                return 1
+            }
+        fi
+    elif is_linux_rhel_family || is_linux_fedora; then
+        if ! install_pgvector_rpm_package "$major"; then
+            log_warn "系统包 pgvector_${major} 安装失败，改源码编译"
+            install_pgvector_from_source "$pg_config" || {
+                log_error "pgvector 安装失败（KU-AI 向量列迁移需要）"
+                return 1
+            }
+        fi
+    else
+        install_pgvector_from_source "$pg_config" || {
+            log_error "当前平台 pgvector 安装失败"
+            return 1
+        }
+    fi
+
+    if control="$(postgresql_pgvector_control_for_pg_config "$pg_config")"; then
+        log_info "已写入 ${control}"
+    else
+        log_warn "未在 sharedir 找到 vector.control，仍将校验应用库"
+    fi
+
+    if pgvector_available_in_app_db; then
+        log_ok "pgvector 已对应用库可用 (PostgreSQL ${major})"
         return 0
     fi
-    log_error "pgvector 安装后仍缺少 vector.control（PostgreSQL ${major}）"
+    log_error "pgvector 安装后应用库仍无 vector（pg_available_extensions 无记录）"
+    log_error "请确认 DB_HOST/DB_PORT 指向本机刚安装扩展的实例，并重试迁移"
     return 1
 }
 

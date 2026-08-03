@@ -49,14 +49,15 @@ uv sync --extra kuaiai-rag
 
 迁移 `517_20260804000000_kuaiai_chunk_pgvector` 会执行 `CREATE EXTENSION vector`，并增加 `embedding_vector vector(768)` 列。
 
-**系统前提（安装脚本已处理）**：主机须安装与 PostgreSQL 主版本匹配的 pgvector 包，否则会出现 `vector.control: No such file or directory`。
+**系统前提（安装脚本已处理）**：应用库所在 PostgreSQL 实例必须能 `CREATE EXTENSION vector`（以 `pg_available_extensions` 为准）。仅装 apt 包但库是宝塔 `/www/server/pgsql` 时无效。
 
-| 平台 | 包名示例 |
+| 场景 | 安装方式 |
 |------|----------|
-| Debian/Ubuntu | `postgresql-14-pgvector` / `postgresql-15-pgvector`（PGDG） |
-| RHEL/Rocky | `pgvector_14` / `pgvector_15`（PGDG） |
+| Debian/Ubuntu 系统包 PG | `postgresql-N-pgvector`（PGDG） |
+| RHEL/Rocky 系统包 PG | `pgvector_N`（PGDG） |
+| 宝塔 PostgreSQL（`/www/server/pgsql`） | 按该实例 `pg_config` **源码编译**安装 |
 
-`fast-deploy` 在 `migrate` 前调用 `ensure_postgresql_pgvector`；全新安装 PostgreSQL 15 时一并安装对应包。已有 PG14 等版本的机器执行 update/migrate 时也会按主版本补装。
+`fast-deploy` 在 `migrate` 前调用 `ensure_postgresql_pgvector`：连应用库检测 → 本机按 `data_directory` 匹配安装 → 再校验扩展可用。远程 `DB_HOST` 无法在本机代装，需在库所在主机安装。
 
 - 维度与 DeepSeek `deepseek-embedding-v2` 一致（768）
 - 索引写入时双写 JSON `embedding` + `embedding_vector`
