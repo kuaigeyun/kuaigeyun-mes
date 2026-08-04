@@ -1,9 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Upload } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { uploadMultipleFiles } from '../../../services/file';
-import { getFileDownloadUrl } from '../../../services/file';
+import { uploadMultipleFiles, buildImageUploadFileUrls } from '../../../services/file';
 import type { StepConductEntry } from '../types/inspectionStepSpec';
 
 type PhotoFile = NonNullable<StepConductEntry['photos']>[number];
@@ -24,12 +23,53 @@ export const InspectionStepConductPhotoField: React.FC<Props> = ({
   label,
 }) => {
   const { t } = useTranslation();
-  const fileList = (value ?? []).map((f, idx) => ({
-    uid: f.uid || String(idx),
-    name: f.name || t('app.kuaizhizao.quality.template.stepPhoto'),
-    status: 'done' as const,
-    url: f.url || (f.uid ? getFileDownloadUrl(f.uid) : undefined),
-  }));
+  const [resolvedUrls, setResolvedUrls] = useState<Record<string, { thumbUrl?: string; url?: string }>>({});
+  const photoUidsKey = (value ?? []).map((f) => f.uid).filter(Boolean).join(',');
+
+  useEffect(() => {
+    let cancelled = false;
+    const photos = value ?? [];
+    const pending = photos.filter((f) => f.uid && !resolvedUrls[f.uid]);
+    if (!pending.length) return;
+
+    void (async () => {
+      const entries = await Promise.all(
+        pending.map(async (f) => {
+          const uid = String(f.uid);
+          try {
+            const urls = await buildImageUploadFileUrls(uid);
+            return [uid, urls] as const;
+          } catch {
+            return [uid, { thumbUrl: f.url, url: f.url }] as const;
+          }
+        }),
+      );
+      if (cancelled) return;
+      setResolvedUrls((prev) => {
+        const next = { ...prev };
+        for (const [uid, urls] of entries) {
+          next[uid] = urls;
+        }
+        return next;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [photoUidsKey, value, resolvedUrls]);
+
+  const fileList = (value ?? []).map((f, idx) => {
+    const uid = f.uid || String(idx);
+    const resolved = f.uid ? resolvedUrls[f.uid] : undefined;
+    return {
+      uid,
+      name: f.name || t('app.kuaizhizao.quality.template.stepPhoto'),
+      status: 'done' as const,
+      thumbUrl: resolved?.thumbUrl || f.url,
+      url: resolved?.url || f.url,
+    };
+  });
 
   return (
     <Upload
@@ -41,11 +81,16 @@ export const InspectionStepConductPhotoField: React.FC<Props> = ({
         try {
           const res = await uploadMultipleFiles([options.file as File], { category });
           const uploaded = res[0];
+          const urls = await buildImageUploadFileUrls(uploaded.uuid);
+          setResolvedUrls((prev) => ({
+            ...prev,
+            [uploaded.uuid]: urls,
+          }));
           const next: PhotoFile = {
             uid: uploaded.uuid,
             name: uploaded.original_name,
             status: 'done',
-            url: getFileDownloadUrl(uploaded.uuid),
+            url: urls.url,
           };
           onChange?.([...(value ?? []), next]);
           options.onSuccess?.(uploaded, options.file as File);

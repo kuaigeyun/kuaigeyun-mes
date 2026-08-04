@@ -90,6 +90,30 @@ def _info_columns(info_items: list[tuple[str, str]]) -> dict[str, Any]:
     }
 
 
+def _seal_overlay_block(
+    content: str,
+    *,
+    url: str = "{{ company_seal }}",
+    width: int = 88,
+    height: int = 88,
+    seal_align: str = "center",
+    min_height: int = 88,
+) -> dict[str, Any]:
+    """签章叠放：印章衬于文字下方，定位相对于所在分栏（随文档流下移）。"""
+    return {
+        "id": _id("seal"),
+        "type": "seal_overlay",
+        "url": url,
+        "width": width,
+        "height": height,
+        "keepRatio": True,
+        "content": content,
+        "sealAlign": seal_align,
+        "minHeight": min_height,
+        "style": {"fontSize": "10px"},
+    }
+
+
 def _sign_row(labels: tuple[str, ...]) -> dict[str, Any]:
     return {
         "id": _id("sign"),
@@ -98,7 +122,7 @@ def _sign_row(labels: tuple[str, ...]) -> dict[str, Any]:
             {
                 "id": _id("c"),
                 "width": "1",
-                "blocks": [_text(f"{label}：________________", style={"fontSize": "10px"})],
+                "blocks": [_seal_overlay_block(f"{label}：________________")],
             }
             for label in labels
         ],
@@ -353,7 +377,7 @@ DOCUMENT_LAYOUTS: dict[str, DocumentLayout] = {
             ("客户联系人", "customer_contact"),
             ("合同日期", "contract_date"),
             ("有效期起", "valid_from"),
-            ("有效期止", "valid_to"),
+            ("终止日期", "valid_to"),
             ("销售员", "salesman_name"),
             ("付款条件", "payment_terms"),
             ("发货方式", "shipping_method"),
@@ -654,7 +678,7 @@ def build_sales_contract_general_schema() -> dict[str, Any]:
                     ("合同类型", "contract_type"),
                     ("合同日期", "contract_date"),
                     ("有效期起", "valid_from"),
-                    ("有效期止", "valid_to"),
+                    ("终止日期", "valid_to"),
                     ("销售员", "salesman_name"),
                     ("币别", "currency_code"),
                     ("付款条件", "payment_terms"),

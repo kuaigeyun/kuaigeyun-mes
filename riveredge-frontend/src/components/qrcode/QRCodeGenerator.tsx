@@ -14,7 +14,7 @@ import { qrcodeApi, type QRCodeGenerateRequest, type QRCodeGenerateResponse } fr
 
 export interface QRCodeGeneratorProps {
   /** 二维码类型 */
-  qrcodeType: 'MAT' | 'WO' | 'OP' | 'EQ' | 'EMP' | 'STATION' | 'BOX' | 'TRACE';
+  qrcodeType: 'MAT' | 'WO' | 'OP' | 'EQ' | 'MD' | 'EMP' | 'STATION' | 'BOX' | 'TRACE';
   /** 二维码数据 */
   data: Record<string, any>;
   /** 二维码大小 */

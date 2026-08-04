@@ -126,6 +126,38 @@ class SalesContractService(AppBaseService[SalesContract]):
         return (total_amt * release_qty / contract_qty).quantize(Decimal("0.01"))
 
     @staticmethod
+    def _contract_goods_total(items: List[SalesContractItem]) -> Decimal:
+        return sum((Decimal(str(it.total_amount or 0)) for it in items), Decimal("0"))
+
+    @staticmethod
+    def _allocate_release_discount(
+        contract: SalesContract,
+        all_items: List[SalesContractItem],
+        gross_release_amt: Decimal,
+    ) -> Decimal:
+        """按合同整单优惠比例分摊本次释放优惠（与下推销售订单一致）。"""
+        full_goods = SalesContractService._contract_goods_total(all_items)
+        contract_discount = Decimal(str(getattr(contract, "discount_amount", None) or 0))
+        if contract_discount <= 0 or full_goods <= 0:
+            return Decimal("0")
+        if gross_release_amt >= full_goods - Decimal("0.005"):
+            return contract_discount
+        return (contract_discount * gross_release_amt / full_goods).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+
+    @staticmethod
+    def _release_net_amount(
+        contract: SalesContract,
+        all_items: List[SalesContractItem],
+        gross_release_amt: Decimal,
+    ) -> Decimal:
+        discount = SalesContractService._allocate_release_discount(
+            contract, all_items, gross_release_amt
+        )
+        return (gross_release_amt - discount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    @staticmethod
     def _contract_capability_context(
         contract: SalesContract,
         items: Optional[List[SalesContractItem]] = None,
@@ -520,13 +552,12 @@ class SalesContractService(AppBaseService[SalesContract]):
             )
         if contract_code and contract_code.strip():
             qs = qs.filter(contract_code__icontains=contract_code.strip())
-        # 加载建销售订单：生效中 + 已审核 + 未过期/已到生效日（行级可释放量仍由 capabilities 判定）
+        # 加载建销售订单：生效中 + 已审核 + 已到生效日（终止日期不阻断；行级可释放量仍由 capabilities 判定）
         if pullable_only:
             today = date.today()
             approved_review = ("APPROVED", "已通过", "审核通过", "通过", "已审核")
             qs = qs.filter(status__in=("已生效", "执行中"))
             qs = qs.filter(review_status__in=approved_review)
-            qs = qs.filter(Q(valid_to__isnull=True) | Q(valid_to__gte=today))
             qs = qs.filter(Q(valid_from__isnull=True) | Q(valid_from__lte=today))
         total = await qs.count()
         order_clause = order_by if order_by else "-contract_date"
@@ -918,8 +949,6 @@ class SalesContractService(AppBaseService[SalesContract]):
         if not _is_approved(contract.review_status):
             raise BusinessLogicError("合同未审核通过")
         today = date.today()
-        if contract.valid_to and contract.valid_to < today:
-            raise BusinessLogicError("合同已过期，无法下推订单")
         if contract.valid_from and contract.valid_from > today:
             raise BusinessLogicError("合同尚未到生效日期")
 
@@ -929,10 +958,18 @@ class SalesContractService(AppBaseService[SalesContract]):
         order_qty: Decimal,
         order_amt: Decimal,
         item_quantities: Optional[dict[int, Decimal]] = None,
+        all_items: Optional[List[SalesContractItem]] = None,
     ) -> None:
         rem_qty, rem_amt = self._remaining(contract)
-        if order_amt > rem_amt:
-            raise BusinessLogicError(f"订单金额 {order_amt} 超过合同剩余额度 {rem_amt}")
+        net_order_amt = (
+            self._release_net_amount(contract, all_items, order_amt)
+            if all_items is not None
+            else order_amt
+        )
+        if net_order_amt > rem_amt:
+            raise BusinessLogicError(
+                f"订单金额 {net_order_amt} 超过合同剩余额度 {rem_amt}"
+            )
         if contract.contract_type == self.CONTRACT_TYPE_SINGLE and rem_amt <= Decimal("0"):
             raise BusinessLogicError("单次合同已释放完毕")
         if contract.contract_type == self.CONTRACT_TYPE_FRAMEWORK:
@@ -1067,9 +1104,15 @@ class SalesContractService(AppBaseService[SalesContract]):
         order_qty: Decimal,
         order_amt: Decimal,
         item_quantities: Optional[dict[int, Decimal]] = None,
+        all_items: Optional[List[SalesContractItem]] = None,
     ) -> None:
+        net_order_amt = (
+            self._release_net_amount(contract, all_items, order_amt)
+            if all_items is not None
+            else order_amt
+        )
         contract.released_quantity = Decimal(str(contract.released_quantity or 0)) + order_qty
-        contract.released_amount = Decimal(str(contract.released_amount or 0)) + order_amt
+        contract.released_amount = Decimal(str(contract.released_amount or 0)) + net_order_amt
         if contract.status == "已生效":
             contract.status = "执行中"
         await contract.save(update_fields=["released_quantity", "released_amount", "status", "updated_at"])
@@ -1485,7 +1528,6 @@ class SalesContractService(AppBaseService[SalesContract]):
             customer_phone=quotation.customer_phone,
             contract_date=quotation.quotation_date,
             valid_from=quotation.quotation_date,
-            valid_to=quotation.valid_until,
             price_type=getattr(quotation, "price_type", None) or DEFAULT_SALES_PRICE_TYPE,
             currency_code=quotation.currency_code or "CNY",
             salesman_id=quotation.salesman_id,
@@ -1592,7 +1634,9 @@ class SalesContractService(AppBaseService[SalesContract]):
         plan, item_qty_map, order_qty, order_amt = self._resolve_release_plan(
             all_items, selected_item_ids=selected_item_ids, release_lines=release_lines
         )
-        await self._validate_release_capacity(contract, order_qty, order_amt, item_qty_map)
+        await self._validate_release_capacity(
+            contract, order_qty, order_amt, item_qty_map, all_items=all_items
+        )
 
         valid_dates = [it.delivery_date for it, _ in plan if it.delivery_date]
         delivery_date = min(valid_dates) if valid_dates else contract.contract_date
@@ -1613,14 +1657,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             )
             for it, qty in plan
         ]
-        full_goods = sum((it.total_amount or Decimal("0")) for it in all_items)
-        contract_discount = Decimal(str(getattr(contract, "discount_amount", None) or 0))
-        if full_goods > 0 and order_amt < full_goods - Decimal("0.005"):
-            discount = (contract_discount * order_amt / full_goods).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-        else:
-            discount = contract_discount
+        discount = self._allocate_release_discount(contract, all_items, order_amt)
         so_create = SalesOrderCreate(
             order_date=date.today(),
             delivery_date=delivery_date,
@@ -1653,7 +1690,9 @@ class SalesContractService(AppBaseService[SalesContract]):
             sales_order_data=so_create,
             created_by=created_by,
         )
-        await self._apply_release_to_contract(contract, order_qty, order_amt, item_qty_map)
+        await self._apply_release_to_contract(
+            contract, order_qty, order_amt, item_qty_map, all_items=all_items
+        )
         sales_order = await sales_order_service.apply_push_default_mode_after_create(
             tenant_id=tenant_id,
             sales_order_id=int(sales_order.id),
@@ -1883,7 +1922,9 @@ class SalesContractService(AppBaseService[SalesContract]):
             selected_item_ids=selected_item_ids,
             release_lines=release_lines,
         )
-        await self._validate_release_capacity(contract, order_qty, order_amt, item_qty_map)
+        await self._validate_release_capacity(
+            contract, order_qty, order_amt, item_qty_map, all_items=all_items
+        )
 
         raw_push_mode = (push_mode or "").strip().lower()
         if raw_push_mode not in ("draft", "confirm"):
@@ -2061,7 +2102,9 @@ class SalesContractService(AppBaseService[SalesContract]):
         if not work_orders:
             raise BusinessLogicError("所选明细的本次下推数量均为 0，无法生成工单")
 
-        await self._apply_release_to_contract(contract, order_qty, order_amt, item_qty_map)
+        await self._apply_release_to_contract(
+            contract, order_qty, order_amt, item_qty_map, all_items=all_items
+        )
 
         return {
             "success": True,
@@ -2127,7 +2170,7 @@ class SalesContractService(AppBaseService[SalesContract]):
                         contract_id=c.id,
                         contract_code=c.contract_code,
                         customer_name=c.customer_name,
-                        message=f"合同将于 {c.valid_to} 到期",
+                        message=f"合同终止日为 {c.valid_to}",
                         severity="high" if c.valid_to <= today else "medium",
                         due_date=c.valid_to,
                     )

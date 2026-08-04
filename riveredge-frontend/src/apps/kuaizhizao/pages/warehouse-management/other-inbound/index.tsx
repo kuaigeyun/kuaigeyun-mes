@@ -25,6 +25,8 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
+import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
@@ -72,10 +74,18 @@ const REASON_TYPES_FALLBACK = [
 const REASON_TYPE_I18N: Record<string, string> = {
   '盘盈': 'app.kuaizhizao.warehouseOtherInbound.reason.surplus',
   '调拨': 'app.kuaizhizao.warehouseOtherInbound.reason.transfer',
+  '调拨入库': 'app.kuaizhizao.warehouseOtherInbound.reason.transfer',
   '样品': 'app.kuaizhizao.warehouseOtherInbound.reason.sample',
   '报废': 'app.kuaizhizao.warehouseOtherInbound.reason.scrap',
   '其他': 'app.kuaizhizao.warehouseOtherInbound.reason.other',
 };
+
+function normalizeReasonTypeValue(value: string | undefined): string | undefined {
+  if (!value) return value;
+  const trimmed = value.trim();
+  if (trimmed === '调拨入库') return '调拨';
+  return trimmed;
+}
 
 function translateReasonTypeLabel(t: (key: string) => string, value: string | undefined): string {
   if (!value) return '-';
@@ -235,7 +245,19 @@ const OtherInboundPage: React.FC = () => {
           return;
         }
         const items = await getDictionaryItemList(dict.uuid, true);
-        setReasonTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+        const seen = new Set<string>();
+        const options = items
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((it) => {
+            const value = normalizeReasonTypeValue(it.value) || it.value;
+            return { label: it.label, value };
+          })
+          .filter((opt) => {
+            if (seen.has(opt.value)) return false;
+            seen.add(opt.value);
+            return true;
+          });
+        setReasonTypeOptions(options);
       } catch {
         setReasonTypeOptions(fallbackReasonTypeOptions);
       } finally {
@@ -1018,7 +1040,13 @@ const OtherInboundPage: React.FC = () => {
                                 fillMapping={{
                                   material_code: 'mainCode',
                                   material_name: 'name',
-                                  material_unit: 'baseUnit',
+                                }}
+                                onChange={(_val, material) => {
+                                  if (!material) return;
+                                  formRef.current?.setFieldValue(
+                                    ['items', index, 'material_unit'],
+                                    resolveMaterialScenarioUnit(material, 'purchase'),
+                                  );
                                 }}
                                 fallbackOption={fallback}
                                 formItemProps={{ style: { margin: 0 } }}
@@ -1040,12 +1068,17 @@ const OtherInboundPage: React.FC = () => {
                       <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
                         {({ getFieldValue }) => {
                           const materialId = getFieldValue(['items', index, 'material_id']);
+                          if (!formRef.current) return null;
                           return (
                             <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                              <MaterialUnitSelect 
-                                materialId={materialId} 
-                                size="small" 
-                                noStyle 
+                              <DocumentLineUnitSelect
+                                form={formRef.current}
+                                listName="items"
+                                rowIndex={index}
+                                fields={{ quantity: 'inbound_quantity', unit: 'material_unit' }}
+                                materialId={materialId}
+                                size="small"
+                                noStyle
                               />
                             </AntForm.Item>
                           );

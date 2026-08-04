@@ -650,6 +650,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     "该工序为委外工序，请通过委外接收完成数量，不可厂内报工"
                 )
 
+            if not work_order_operation.assigned_worker_id:
+                raise ValidationError("该工序尚未派工，请先派工后再报工")
+
             # 报工会将 pending 工序隐式置为 in_progress，等同开工，须同样校验领料
             if work_order_operation.status == "pending":
                 from apps.kuaizhizao.services.work_order_service import WorkOrderService

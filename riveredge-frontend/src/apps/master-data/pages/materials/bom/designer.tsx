@@ -72,6 +72,10 @@ import {
 import type { FabricationMaterialRef } from '../../../utils/fabricationRawMaterial';
 import { RouteFormModal } from '../../../components/RouteFormModal';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import {
+  convertQuantityBetweenUnits,
+  resolveMaterialScenarioUnit,
+} from '../../../../../utils/materialScenarioUnit';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
 const BOM_RESOURCE = 'master-data:process:engineering-bom';
@@ -3277,6 +3281,19 @@ const BOMDesignerPage: React.FC = () => {
                       options={unitOptionsFromMaterial}
                       disabled={!selectedMaterial}
                       allowClear={false}
+                      onChange={(newUnit: string) => {
+                        const row = nodeConfigForm.getFieldsValue(['quantity', 'unit']);
+                        const newQty = convertQuantityBetweenUnits(
+                          selectedMaterial,
+                          Number(row.quantity),
+                          row.unit,
+                          newUnit,
+                        );
+                        nodeConfigForm.setFieldsValue({
+                          unit: newUnit,
+                          quantity: Number.isFinite(newQty) ? newQty : row.quantity,
+                        });
+                      }}
                     />
                   </Form.Item>
                 </Col>

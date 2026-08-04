@@ -24,6 +24,8 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
+import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -891,7 +893,13 @@ const OtherOutboundPage: React.FC = () => {
                                 fillMapping={{
                                   material_code: 'mainCode',
                                   material_name: 'name',
-                                  material_unit: 'baseUnit',
+                                }}
+                                onChange={(_val, material) => {
+                                  if (!material) return;
+                                  formRef.current?.setFieldValue(
+                                    ['items', index, 'material_unit'],
+                                    resolveMaterialScenarioUnit(material, 'sale'),
+                                  );
                                 }}
                                 fallbackOption={fallback}
                                 formItemProps={{ style: { margin: 0 } }}
@@ -912,12 +920,17 @@ const OtherOutboundPage: React.FC = () => {
                       <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
                         {({ getFieldValue }) => {
                           const materialId = getFieldValue(['items', index, 'material_id']);
+                          if (!formRef.current) return null;
                           return (
                             <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                              <MaterialUnitSelect 
-                                materialId={materialId} 
-                                size="small" 
-                                noStyle 
+                              <DocumentLineUnitSelect
+                                form={formRef.current}
+                                listName="items"
+                                rowIndex={index}
+                                fields={{ quantity: 'outbound_quantity', unit: 'material_unit' }}
+                                materialId={materialId}
+                                size="small"
+                                noStyle
                               />
                             </AntForm.Item>
                           );

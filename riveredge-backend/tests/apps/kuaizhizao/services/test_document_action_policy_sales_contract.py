@@ -78,6 +78,22 @@ def test_revoke_blocked_when_executing_with_release():
     assert not caps.revoke_approval.allowed
 
 
+def test_push_allowed_after_termination_date():
+    caps = derive_sales_contract_capabilities(
+        _c(
+            status="已生效",
+            review_status="APPROVED",
+            valid_to=date(2020, 1, 1),
+        ),
+        has_items=True,
+        has_releasable_items=True,
+        remaining_amount=Decimal("500"),
+        today=date(2026, 8, 4),
+    )
+    assert caps.push_to_sales_order.allowed
+    assert caps.push_to_work_order.allowed
+
+
 def test_assert_delete_audited_raises():
     with pytest.raises(BusinessLogicError):
         assert_sales_contract_capability(_c(status="已生效", review_status="APPROVED"), "delete")

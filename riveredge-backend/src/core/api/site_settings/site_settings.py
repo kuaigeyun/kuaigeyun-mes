@@ -15,6 +15,8 @@ from core.utils.integration_settings import (
     mask_integrations_for_response,
     merge_integrations_update,
 )
+from core.utils.site_setting_response import mask_company_seal_for_response
+from core.services.authorization.user_permission_service import UserPermissionService
 from core.api.deps.access import AuthContext, get_auth_context, require_permission_codes
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.ai.deps import AiAuth, get_ai_auth
@@ -34,6 +36,18 @@ from infra.services.tenant_service import TenantService, schedule_initialize_ten
 from infra.services.package_service import PackageService
 
 router = APIRouter(prefix="/site-settings", tags=["Core - Site Settings"])
+
+
+async def _include_company_seal_in_response(auth: AuthContext) -> bool:
+    if auth.is_infra_admin or auth.is_tenant_admin:
+        return True
+    if auth.tenant_id is None:
+        return False
+    return await UserPermissionService.has_permission(
+        auth.user_id,
+        auth.tenant_id,
+        "system:print-template:read",
+    )
 
 
 class DeepSeekIntegrationStatusResponse(BaseModel):
@@ -165,6 +179,7 @@ async def create_deepseek_chat_completion(
 @router.get("", response_model=SiteSettingResponse)
 async def get_settings(
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
     获取站点设置
@@ -184,6 +199,10 @@ async def get_settings(
     if tenant:
         merged_settings["tenant_domain"] = tenant.domain
     merged_settings = mask_integrations_for_response(merged_settings)
+    merged_settings = mask_company_seal_for_response(
+        merged_settings,
+        include_seal_value=await _include_company_seal_in_response(auth),
+    )
     return SiteSettingResponse(
         uuid=site_settings.uuid,
         tenant_id=site_settings.tenant_id,
@@ -197,6 +216,7 @@ async def get_settings(
 async def update_settings(
     data: SiteSettingUpdate,
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
     更新站点设置
@@ -261,6 +281,10 @@ async def update_settings(
     if tenant:
         merged_settings["tenant_domain"] = tenant.domain
     merged_settings = mask_integrations_for_response(merged_settings)
+    merged_settings = mask_company_seal_for_response(
+        merged_settings,
+        include_seal_value=await _include_company_seal_in_response(auth),
+    )
     return SiteSettingResponse(
         uuid=settings.uuid,
         tenant_id=settings.tenant_id,

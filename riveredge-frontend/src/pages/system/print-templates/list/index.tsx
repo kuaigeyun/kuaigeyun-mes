@@ -12,6 +12,7 @@ import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, Pr
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Modal, Form, Space, Typography, Tooltip, Card, theme, Descriptions } from 'antd';
 import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined, EditOutlined, HighlightOutlined } from '@ant-design/icons';
+import { useCompanySealSettings } from '../CompanySealSettingsPanel';
 import { UniTable } from '../../../../components/uni-table';
 import { rowActionKind } from '../../../../components/uni-action';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -118,6 +119,7 @@ const PrintTemplateListPage: React.FC = () => {
   const [currentRenderTemplateUuid, setCurrentRenderTemplateUuid] = useState<string | null>(null);
   const [renderFormRef] = Form.useForm();
   const [renderResult, setRenderResult] = useState<PrintTemplateRenderResponse | null>(null);
+  const companySeal = useCompanySealSettings();
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -721,6 +723,7 @@ const PrintTemplateListPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.printTemplates.batchDelete')}
+          toolBarActionsAfterDelete={[companySeal.toolbarActions]}
           toolBarRender={() => [
             <Button {...rowActionKind('import')} key="loadPreset" onClick={handleLoadPreset} loading={presetLoading}>
               {t('pages.system.printTemplates.loadPresetButton')}
@@ -910,6 +913,7 @@ const PrintTemplateListPage: React.FC = () => {
           ) : null
         }
       />
+      {companySeal.cropModal}
     </>
   );
 };

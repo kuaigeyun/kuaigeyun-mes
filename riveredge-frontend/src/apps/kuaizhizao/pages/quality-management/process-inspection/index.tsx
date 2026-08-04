@@ -99,6 +99,7 @@ import {
 } from '../../../utils/qualityInspectionListCore';
 import dayjs from 'dayjs';
 import {formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
+import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
@@ -1157,7 +1158,11 @@ const ProcessInspectionPage: React.FC = () => {
             </Row>
             <Row gutter={16} style={{ marginTop: 8 }}>
               <Col span={24}>
-                <strong>{t('app.kuaizhizao.quality.common.label.inspectionQty')}：</strong>{currentInspection.inspection_quantity}
+                <strong>{t('app.kuaizhizao.quality.common.label.inspectionQty')}：</strong>
+                {formatQuantityWithUnit(
+                  currentInspection.inspection_quantity,
+                  currentInspection.material_unit,
+                )}
               </Col>
             </Row>
           </Card>

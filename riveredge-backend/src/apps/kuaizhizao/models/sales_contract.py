@@ -36,7 +36,7 @@ class SalesContract(BaseModel):
 
     contract_date = fields.DateField(description="签订日期")
     valid_from = fields.DateField(null=True, description="生效日期")
-    valid_to = fields.DateField(null=True, description="失效日期")
+    valid_to = fields.DateField(null=True, description="终止日期")
 
     total_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="合同总数量")
     total_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="合同总金额")

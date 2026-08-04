@@ -818,6 +818,9 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '通用',
     fields: [
       { key: 'company_name', label: '公司名称', type: 'string' },
+      { key: 'company_logo', label: '公司 LOGO', type: 'string' },
+      { key: 'logo', label: 'LOGO', type: 'string' },
+      { key: 'company_seal', label: '公司印章', type: 'string' },
       { key: 'print_user', label: '打印人', type: 'string' },
       { key: 'print_time', label: '打印时间', type: 'date' },
       { key: 'tenant_name', label: '组织名称', type: 'string' },

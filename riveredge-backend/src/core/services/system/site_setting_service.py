@@ -65,6 +65,7 @@ _LOGO_UUID_RE = re.compile(
     re.IGNORECASE,
 )
 _LOGO_FILE_CATEGORIES = ("site-logo", "platform-logo")
+_SEAL_FILE_CATEGORIES = ("company-seal",)
 
 
 class SiteSettingService:
@@ -142,6 +143,43 @@ class SiteSettingService:
         return ""
 
     @staticmethod
+    async def _resolve_company_seal_value(tenant_id: int, seal: Any) -> str:
+        """校验 company_seal：URL 原样返回；UUID 须对应本租户 company-seal 文件。"""
+        if not seal or not isinstance(seal, str):
+            return ""
+        seal = seal.strip()
+        if not seal:
+            return ""
+        if not _LOGO_UUID_RE.match(seal):
+            return seal
+
+        from core.models.file import File
+        from core.services.file.file_service import FileService
+
+        try:
+            file = await FileService.get_file_by_uuid(tenant_id, seal)
+            if file.category in _SEAL_FILE_CATEGORIES:
+                return seal
+        except NotFoundError:
+            pass
+
+        file = await File.filter(
+            uuid=seal,
+            category__in=_SEAL_FILE_CATEGORIES,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if file:
+            return seal
+
+        logger.warning(
+            "company_seal 引用无效（文件不存在）: tenant_id={} uuid={}",
+            tenant_id,
+            seal,
+        )
+        return ""
+
+    @staticmethod
     async def get_settings(tenant_id: int) -> SiteSetting:
         """
         获取站点设置（如果不存在则创建）
@@ -208,6 +246,10 @@ class SiteSettingService:
         tenant_settings["site_logo"] = await SiteSettingService._resolve_site_logo_value(
             tenant_id,
             tenant_settings.get("site_logo"),
+        )
+        tenant_settings["company_seal"] = await SiteSettingService._resolve_company_seal_value(
+            tenant_id,
+            tenant_settings.get("company_seal"),
         )
 
         return tenant_settings

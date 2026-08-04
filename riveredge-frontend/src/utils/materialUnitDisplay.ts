@@ -3,6 +3,7 @@
  */
 
 import { getDataDictionaryByCode, getDictionaryItemList } from '../services/dataDictionary';
+import { formatQuantity } from './format';
 
 export function normUnitKey(s: string): string {
   return String(s).trim().toLowerCase();
@@ -54,4 +55,20 @@ export function resolveMaterialUnitLabel(raw: unknown, map: Record<string, strin
   const t = String(raw ?? '').trim();
   if (!t) return '';
   return map[t] ?? map[normUnitKey(t)] ?? t;
+}
+
+/** 数量 + 单位文案（字典标签优先，否则 raw code） */
+export function formatQuantityWithUnit(
+  quantity: unknown,
+  unitCode: unknown,
+  unitLabelMap?: Record<string, string>,
+): string {
+  const qtyStr = formatQuantity(quantity);
+  if (qtyStr === '—') return qtyStr;
+  const unitRaw = String(unitCode ?? '').trim();
+  if (!unitRaw) return qtyStr;
+  const unitLabel = unitLabelMap
+    ? resolveMaterialUnitLabel(unitRaw, unitLabelMap)
+    : unitRaw;
+  return `${qtyStr} ${unitLabel}`;
 }

@@ -12,7 +12,14 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+
+function renderRecordQuantityWithUnit(record: Record<string, unknown>, quantityKey: string): React.ReactNode {
+  const qty = record[quantityKey];
+  const unit = String(record.material_unit ?? record.materialUnit ?? '').trim();
+  return formatQuantityWithUnit(qty, unit || undefined);
+}
 
 export function pickRecordText(record: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
@@ -22,11 +29,17 @@ export function pickRecordText(record: Record<string, unknown>, ...keys: string[
   return '';
 }
 
-export function renderQualifiedQuantity(value: unknown): React.ReactNode {
+export function renderQualifiedQuantity(value: unknown, record?: Record<string, unknown>): React.ReactNode {
+  if (record) {
+    return <Typography.Text type="success">{renderRecordQuantityWithUnit(record, 'qualified_quantity')}</Typography.Text>;
+  }
   return <Typography.Text type="success">{formatQuantity(value)}</Typography.Text>;
 }
 
-export function renderUnqualifiedQuantity(value: unknown): React.ReactNode {
+export function renderUnqualifiedQuantity(value: unknown, record?: Record<string, unknown>): React.ReactNode {
+  if (record) {
+    return <Typography.Text type="danger">{renderRecordQuantityWithUnit(record, 'unqualified_quantity')}</Typography.Text>;
+  }
   return <Typography.Text type="danger">{formatQuantity(value)}</Typography.Text>;
 }
 
@@ -82,14 +95,14 @@ export const qualifiedQuantityColumnProps = {
   align: 'right' as const,
   width: 100,
   render: (_: unknown, record: Record<string, unknown>) =>
-    renderQualifiedQuantity(record.qualified_quantity ?? record.qualifiedQuantity),
+    renderQualifiedQuantity(record.qualified_quantity ?? record.qualifiedQuantity, record),
 };
 
 export const unqualifiedQuantityColumnProps = {
   align: 'right' as const,
   width: 100,
   render: (_: unknown, record: Record<string, unknown>) =>
-    renderUnqualifiedQuantity(record.unqualified_quantity ?? record.unqualifiedQuantity),
+    renderUnqualifiedQuantity(record.unqualified_quantity ?? record.unqualifiedQuantity, record),
 };
 
 /** 检验四单据列表：高级搜索区（顺序与来料检验一致） */
@@ -195,7 +208,8 @@ export function buildQualityInspectionListQuantityResultColumns<T extends object
       align: 'right',
       sorter: true,
       hideInSearch: true,
-      render: (text) => text || 0,
+      render: (_, record) =>
+        renderRecordQuantityWithUnit(record as Record<string, unknown>, 'inspection_quantity'),
     },
     {
       title: t('app.kuaizhizao.quality.common.columns.qualifiedQty'),

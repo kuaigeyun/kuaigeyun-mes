@@ -23,6 +23,7 @@ from core.schemas.qrcode import (
     WorkOrderQRCodeGenerateRequest,
     OperationQRCodeGenerateRequest,
     EquipmentQRCodeGenerateRequest,
+    MoldQRCodeGenerateRequest,
     EmployeeQRCodeGenerateRequest,
     BoxQRCodeGenerateRequest,
     TraceQRCodeGenerateRequest,
@@ -41,7 +42,7 @@ async def generate_qrcode(
     """
     生成二维码
     
-    支持生成各种类型的二维码（物料码、工单码、工序码、设备码、人员码、装箱码、追溯码）。
+    支持生成各种类型的二维码（物料码、工单码、工序码、设备码、模具码、人员码、装箱码、追溯码）。
     """
     try:
         result = QRCodeService.generate_qrcode(
@@ -213,6 +214,37 @@ async def generate_equipment_qrcode(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"生成设备二维码失败: {str(e)}"
+        )
+
+
+@router.post("/mold/generate", response_model=QRCodeGenerateResponse, summary="Generate mold QR code")
+async def generate_mold_qrcode(
+    request: MoldQRCodeGenerateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    生成模具二维码（模具码）
+
+    为模具生成二维码，包含模具UUID、编码、名称等信息。
+    """
+    try:
+        result = QRCodeService.generate_mold_qrcode(
+            mold_uuid=request.mold_uuid,
+            mold_code=request.mold_code,
+            mold_name=request.mold_name,
+            size=request.size,
+            border=request.border,
+            error_correction=request.error_correction
+        )
+        return QRCodeGenerateResponse(**result)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"生成模具二维码失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"生成模具二维码失败: {str(e)}"
         )
 
 

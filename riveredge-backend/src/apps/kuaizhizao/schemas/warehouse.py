@@ -9,7 +9,7 @@ Date: 2025-12-30
 
 from datetime import datetime
 from typing import Optional, List, Literal
-from pydantic import Field
+from pydantic import Field, field_validator
 from core.schemas.base import BaseSchema
 
 from apps.kuaizhizao.services.document_action_policy.types import (
@@ -1077,13 +1077,21 @@ class PurchaseReturnItemResponse(PurchaseReturnItemBase):
 
 # === 其他入库单 ===
 
-OtherInboundReasonType = Literal["盘盈", "样品", "报废", "其他"]
+OtherInboundReasonType = Literal["盘盈", "调拨", "样品", "报废", "其他"]
+
+
+def normalize_other_inbound_reason_type(value: str) -> str:
+    """归一化其他入库原因：字典「调拨入库」等与 schema 对齐为「调拨」。"""
+    normalized = (value or "").strip()
+    if normalized == "调拨入库":
+        return "调拨"
+    return normalized
 
 
 class OtherInboundBase(BaseSchema):
     """其他入库单基础schema"""
     inbound_code: Optional[str] = Field(None, max_length=50, description="入库单编码（可选，不提供则自动生成）")
-    reason_type: OtherInboundReasonType = Field(..., description="原因类型：盘盈/样品/报废/其他")
+    reason_type: OtherInboundReasonType = Field(..., description="原因类型：盘盈/调拨/样品/报废/其他")
     reason_desc: Optional[str] = Field(None, description="原因说明")
     warehouse_id: int = Field(..., description="入库仓库ID")
     warehouse_name: str = Field(..., max_length=100, description="入库仓库名称")
@@ -1100,6 +1108,13 @@ class OtherInboundBase(BaseSchema):
     total_amount: float = Field(0, ge=0, description="总金额")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+
+    @field_validator("reason_type", mode="before")
+    @classmethod
+    def _normalize_reason_type(cls, value: object) -> object:
+        if isinstance(value, str):
+            return normalize_other_inbound_reason_type(value)
+        return value
 
 
 class OtherInboundCreate(OtherInboundBase):

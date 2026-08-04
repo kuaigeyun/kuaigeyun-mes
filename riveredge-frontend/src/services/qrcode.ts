@@ -12,7 +12,7 @@ import { api } from './api';
 /**
  * 二维码类型
  */
-export type QRCodeType = 'MAT' | 'WO' | 'OP' | 'EQ' | 'EMP' | 'STATION' | 'BOX' | 'TRACE' | 'DOC';
+export type QRCodeType = 'MAT' | 'WO' | 'OP' | 'EQ' | 'MD' | 'EMP' | 'STATION' | 'BOX' | 'TRACE' | 'DOC';
 
 /**
  * 错误纠正级别
@@ -109,6 +109,18 @@ export interface EquipmentQRCodeGenerateRequest {
 }
 
 /**
+ * 生成模具二维码请求
+ */
+export interface MoldQRCodeGenerateRequest {
+  mold_uuid: string;
+  mold_code: string;
+  mold_name: string;
+  size?: number;
+  border?: number;
+  error_correction?: ErrorCorrectionLevel;
+}
+
+/**
  * 生成人员二维码请求
  */
 export interface EmployeeQRCodeGenerateRequest {
@@ -188,6 +200,13 @@ export const qrcodeApi = {
    */
   generateEquipment: async (request: EquipmentQRCodeGenerateRequest): Promise<QRCodeGenerateResponse> => {
     return api.post('/core/qrcode/equipment/generate', request);
+  },
+
+  /**
+   * 生成模具二维码（模具码）
+   */
+  generateMold: async (request: MoldQRCodeGenerateRequest): Promise<QRCodeGenerateResponse> => {
+    return api.post('/core/qrcode/mold/generate', request);
   },
 
   /**

@@ -819,7 +819,7 @@ class PrintTemplateService:
                     url = str(blk.get("url") or "").strip()
                     width = blk.get("width", 100)
                     height = blk.get("height", 60)
-                    preserve_ratio = blk.get("preserveAspectRatio", False)
+                    preserve_ratio = blk.get("keepRatio", blk.get("preserveAspectRatio", False))
                     if not url:
                         warnings_list.append(f"block[{index}] image 缺少 url，已跳过")
                         continue
@@ -838,6 +838,51 @@ class PrintTemplateService:
                     
                     img_style_str = " ".join(img_styles)
                     lines.append(f'<div{wrapper_css}><img {" ".join(img_attrs)} style="{img_style_str}" /></div>')
+                elif blk_type == "seal_overlay":
+                    url = str(blk.get("url") or "{{ company_seal }}").strip()
+                    width = blk.get("width", 88)
+                    height = blk.get("height", 88)
+                    keep_ratio = blk.get("keepRatio", True)
+                    content = str(blk.get("content") or "")
+                    min_height = blk.get("minHeight", height)
+                    seal_align = str(blk.get("sealAlign") or "center").strip().lower()
+                    try:
+                        offset_x = int(blk.get("sealOffsetX") or 0)
+                    except (TypeError, ValueError):
+                        offset_x = 0
+                    try:
+                        offset_y = int(blk.get("sealOffsetY") or 0)
+                    except (TypeError, ValueError):
+                        offset_y = 0
+                    if seal_align == "left":
+                        seal_pos = f"left:{offset_x}px;top:{offset_y}px;"
+                    elif seal_align == "right":
+                        seal_pos = f"right:{max(offset_x, 0)}px;top:{offset_y}px;left:auto;"
+                    else:
+                        seal_pos = (
+                            f"left:50%;top:{offset_y}px;"
+                            f"transform:translateX(calc(-50% + {offset_x}px));"
+                        )
+                    img_height_css = "height:auto;" if keep_ratio else f"height:{height}px;"
+                    text_style_str = _get_style_str(blk, is_root=False)
+                    wrapper_style_str = _get_style_str(blk, is_root) if is_root else ""
+                    wrapper_css = f' style="{wrapper_style_str}"' if wrapper_style_str else ""
+                    if is_root:
+                        wrapper_css = f' class="print-block"{wrapper_css}'
+                    img_html = (
+                        f'<img src="{url}" width="{width}" '
+                        f'style="position:absolute;z-index:0;{seal_pos}{img_height_css}'
+                        f'opacity:0.88;pointer-events:none;" />'
+                    )
+                    text_html = (
+                        f'<div style="position:relative;z-index:1;{text_style_str}">{content}</div>'
+                    )
+                    inner = (
+                        f'<div style="position:relative;min-height:{min_height}px;width:100%;">'
+                        f'{img_html}{text_html}'
+                        f"</div>"
+                    )
+                    lines.append(f"<div{wrapper_css}>{inner}</div>")
                 elif blk_type == "spacer":
                     height = blk.get("height", 20)
                     lines.append(f'<div style="height: {height}px;"></div>')
@@ -887,7 +932,7 @@ class PrintTemplateService:
                         inner_html = _render_blocks(inner_blocks, warnings_list, is_root=False)
                         col_html.append(
                             f'<div style="{width_css}display:flex;">'
-                            f'<div style="display: flex; flex-direction: column; justify-content: {col_justify_content}; '
+                            f'<div style="position:relative;display: flex; flex-direction: column; justify-content: {col_justify_content}; '
                             f'align-items: {col_align_items}; text-align: {col_text_align}; width: 100%; min-height: 100%;">'
                             f'{inner_html}'
                             f'</div>'

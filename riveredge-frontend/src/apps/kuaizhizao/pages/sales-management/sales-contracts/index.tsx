@@ -243,14 +243,19 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { testGenerateCode, getCodeRulePageConfig, generateCode } from '../../../../../services/codeRule';
 import SalesContractTermsManageModal from './SalesContractTermsManageModal';
+import { ContractTermPreviewContent } from './ContractTermPreviewContent';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import {
   buildTermTemplatesFromGroupItems,
+  extractFieldBindingsFromTerms,
   extractPlaceholdersFromTerms,
+  resolveContractTermFieldBindings,
   resolveTermsWithPlaceholders,
+  type ContractTermFieldBindingContext,
 } from './contract-term-placeholders';
+import { formatBusinessDateOnly } from '../../../../../utils/format';
 import {
   salesContractTermApi,
   type SalesContractTermSnapshot,
@@ -556,6 +561,27 @@ const SalesContractsPage: React.FC = () => {
     [termTemplateTerms],
   );
 
+  const termFieldBindingKeys = useMemo(
+    () => extractFieldBindingsFromTerms(termTemplateTerms),
+    [termTemplateTerms],
+  );
+
+  const termFieldBindingContext = useMemo(
+    (): ContractTermFieldBindingContext => ({
+      dictionaryLabelsByCode: {
+        PAYMENT_TERMS: contractImportDict.packs.PAYMENT_TERMS?.labelByCode,
+        SHIPPING_METHOD: contractImportDict.packs.SHIPPING_METHOD?.labelByCode,
+        CURRENCY: contractImportDict.packs.CURRENCY?.labelByCode,
+      },
+      contractTypeLabels: {
+        single: t('app.kuaizhizao.salesContract.contractTypeSingle'),
+        framework: t('app.kuaizhizao.salesContract.contractTypeFramework'),
+      },
+      formatDate: (value) => formatBusinessDateOnly(value as string, ''),
+    }),
+    [contractImportDict.packs, t],
+  );
+
 
 
   const contractTracking = useDocumentTracking(
@@ -611,11 +637,33 @@ const SalesContractsPage: React.FC = () => {
 
   const syncTermsPreview = useCallback(
     (templates: SalesContractTermSnapshot[], placeholderValues: Record<string, string>) => {
-      const resolved = resolveTermsWithPlaceholders(templates, placeholderValues);
+      const formValues = formRef.current?.getFieldsValue(true) ?? {};
+      const requestedFields = extractFieldBindingsFromTerms(templates);
+      const fieldBindings = resolveContractTermFieldBindings(
+        formValues,
+        termFieldBindingContext,
+        requestedFields.length ? requestedFields : undefined,
+      );
+      const resolved = resolveTermsWithPlaceholders(templates, placeholderValues, fieldBindings);
       setTermsPreview(resolved);
     },
-    [],
+    [termFieldBindingContext],
   );
+
+  const handleContractFormValuesChange = useCallback(
+    (changedValues: Record<string, unknown>) => {
+      if (!termTemplateTerms.length || !termFieldBindingKeys.length) return;
+      const affectsBindings = Object.keys(changedValues).some((key) => termFieldBindingKeys.includes(key));
+      if (!affectsBindings) return;
+      syncTermsPreview(termTemplateTerms, termPlaceholderValues);
+    },
+    [termTemplateTerms, termFieldBindingKeys, termPlaceholderValues, syncTermsPreview],
+  );
+
+  useEffect(() => {
+    if (!termTemplateTerms.length) return;
+    syncTermsPreview(termTemplateTerms, termPlaceholderValues);
+  }, [contractImportDict.packs, termTemplateTerms, termPlaceholderValues, syncTermsPreview]);
 
   const applyTermGroupPreview = useCallback(
     async (groupId: number | undefined | null, existingTerms?: SalesContractTermSnapshot[]) => {
@@ -2064,6 +2112,25 @@ const SalesContractsPage: React.FC = () => {
 
         </ProForm.Item>
 
+        {termFieldBindingKeys.length > 0 && (
+          <Card
+            size="small"
+            title={t('app.kuaizhizao.salesContract.terms.fieldBindingAutoTitle')}
+            style={{ marginBottom: 16 }}
+          >
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+              {t('app.kuaizhizao.salesContract.terms.fieldBindingAutoHint')}
+            </Typography.Paragraph>
+            <Space size={[8, 8]} wrap>
+              {termFieldBindingKeys.map((field) => (
+                <Tag key={field} color="blue">
+                  {t('app.kuaizhizao.salesContract.terms.fieldBindingItem', { field })}
+                </Tag>
+              ))}
+            </Space>
+          </Card>
+        )}
+
         {termPlaceholderKeys.length > 0 && (
           <Card
             size="small"
@@ -2110,9 +2177,7 @@ const SalesContractsPage: React.FC = () => {
                 </Typography.Text>
 
                 <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
-
-                  {term.content}
-
+                  <ContractTermPreviewContent content={term.content ?? ''} />
                 </Typography.Paragraph>
 
               </div>
@@ -3274,6 +3339,7 @@ const SalesContractsPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
+                onValuesChange={handleContractFormValuesChange}
                 onFinish={(values) => handleFormSubmit(values, { asDraft: false })}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];

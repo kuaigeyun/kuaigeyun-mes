@@ -3,6 +3,7 @@ import type { ProColumns } from '@ant-design/pro-components';
 import { App, Popover, Select, Space, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { formatQuantity } from '../../../../../utils/format';
+import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { ListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniTable } from '../../../../../components/uni-table';
@@ -343,7 +344,9 @@ const InventoryPage: React.FC = () => {
         render: (_, record) => {
           const qty = Number(record.quantity || 0);
           return (
-            <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>{formatQuantity(qty)}</span>
+            <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>
+              <QuantityWithUnitDisplay quantity={qty} unit={record.material_unit} />
+            </span>
           );
         },
       },

@@ -72,6 +72,22 @@ export function convertFromBaseQuantity(
   return qty / factor;
 }
 
+/** 切换业务单位时重算数量：newQty = oldQty × (old→base) / (new→base) */
+export function convertQuantityBetweenUnits(
+  material: MaterialUnitLike | null | undefined,
+  quantity: number,
+  fromUnit?: string | null,
+  toUnit?: string | null,
+): number {
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty)) return qty;
+  const from = String(fromUnit ?? '').trim();
+  const to = String(toUnit ?? '').trim();
+  if (!from || !to || from === to) return qty;
+  const baseQty = convertToBaseQuantity(material, qty, from);
+  return convertFromBaseQuantity(material, baseQty, to);
+}
+
 export function usesProductionDisplayUnit(record: {
   product_unit?: string;
   productUnit?: string;

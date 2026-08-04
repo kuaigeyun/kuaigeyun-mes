@@ -49,3 +49,19 @@ def test_build_work_order_unit_fields():
     assert fields["product_unit"] == "瓶"
     assert fields["display_quantity"] == Decimal("80")
     assert fields["display_completed_quantity"] == Decimal("16")
+
+
+def test_purchase_box_to_base_piece():
+    """验收：1 箱 = 10 件，采购入库 1 箱 → 库存 +10 件（基础单位）"""
+    mat = SimpleNamespace(
+        base_unit="件",
+        units={
+            "units": [
+                {"unit": "箱", "numerator": 10, "denominator": 1},
+            ],
+            "scenarios": {"purchase": "箱", "sale": "箱", "production": "件", "inventory": "件"},
+        },
+    )
+    assert convert_to_base_quantity(mat, Decimal("1"), from_unit="箱") == Decimal("10")
+    assert convert_from_base_quantity(mat, Decimal("10"), to_unit="箱") == Decimal("1")
+    assert convert_from_base_quantity(mat, Decimal("2"), to_unit="件") == Decimal("2")

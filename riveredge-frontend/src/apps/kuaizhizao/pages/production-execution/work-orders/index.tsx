@@ -312,6 +312,7 @@ import {
   resolveMaterialScenarioUnit,
   resolveWorkOrderFormQuantity,
 } from '../../../../../utils/materialScenarioUnit'
+import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay'
 import type { Material } from '../../../../master-data/types/material'
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateTimeString } from '../../../../../utils/formDate'
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns'
@@ -857,20 +858,21 @@ function renderWorkOrderPriorityTag(
 
 function formatWorkOrderListQuantity(record: WorkOrder): string {
   const planned = formatWorkOrderDisplayQuantity(record, 'quantity')
-  const qtyLabel = formatQuantity(planned.value)
-  const unitSuffix = planned.unit ? ` ${planned.unit}` : ''
+  const qtyLabel = formatQuantityWithUnit(planned.value, planned.unit)
   const isSplitParent =
     (record.row_kind || 'work_order') === 'work_order' &&
     ['split', '已拆分'].includes(record.status || '')
   if (isSplitParent && record.split_remaining_quantity != null) {
     const remaining = formatWorkOrderDisplayQuantity(record, 'split_remaining_quantity')
-    const remainingLabel = formatQuantity(remaining.value)
+    const remainingLabel = formatQuantityWithUnit(
+      remaining.value,
+      remaining.unit || planned.unit,
+    )
     if (remainingLabel !== '—') {
-      const remUnit = remaining.unit || planned.unit
-      return `${qtyLabel}${unitSuffix}(${remainingLabel}${remUnit ? ` ${remUnit}` : ''})`
+      return `${qtyLabel}(${remainingLabel})`
     }
   }
-  return qtyLabel === '—' ? qtyLabel : `${qtyLabel}${unitSuffix}`
+  return qtyLabel
 }
 
 function isSplitParentWorkOrder(record: WorkOrder): boolean {

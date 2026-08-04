@@ -98,6 +98,8 @@ type EquipmentMasterDetailDrawerProps<T extends Record<string, unknown>> = {
   title: string;
   onClose: () => void;
   basicColumns: ProDescriptionsItemProps<T>[];
+  /** 基本信息区右侧附加内容（如模具码/设备码二维码） */
+  basicExtra?: React.ReactNode;
   lines?: React.ReactNode;
   linesTitle?: string;
   extra?: React.ReactNode;
@@ -110,6 +112,7 @@ export function EquipmentMasterDetailDrawer<T extends Record<string, unknown>>({
   title,
   onClose,
   basicColumns,
+  basicExtra,
   lines,
   linesTitle,
   extra,
@@ -132,11 +135,35 @@ export function EquipmentMasterDetailDrawer<T extends Record<string, unknown>>({
       extra={extra}
       basic={
         detail ? (
-          <Descriptions
-            column={2}
-            size="small"
-            items={detailDrawerDescriptionItems(visibleBasicColumns, detail)}
-          />
+          basicExtra ? (
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Descriptions
+                  column={2}
+                  size="small"
+                  items={detailDrawerDescriptionItems(visibleBasicColumns, detail)}
+                />
+              </div>
+              <div
+                style={{
+                  flex: '0 0 168px',
+                  width: 168,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                {basicExtra}
+              </div>
+            </div>
+          ) : (
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(visibleBasicColumns, detail)}
+            />
+          )
         ) : undefined
       }
       lines={lines}

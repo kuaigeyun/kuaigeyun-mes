@@ -16,7 +16,8 @@ import {
 import { App, Button, Modal, Space, Tabs, Tag, Transfer } from 'antd';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { extractPlaceholders } from './contract-term-placeholders';
+import { extractPlaceholders, extractFieldBindings } from './contract-term-placeholders';
+import { ContractTermContentField } from './ContractTermContentField';
 import {
   salesContractTermApi,
   type SalesContractTermGroup,
@@ -107,8 +108,13 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
         width: 140,
         ellipsis: true,
         render: (_, r) => {
-          const keys = extractPlaceholders(r.content ?? '');
-          return keys.length ? keys.map((k) => `{${k}}`).join('、') : '—';
+          const manual = extractPlaceholders(r.content ?? '');
+          const fields = extractFieldBindings(r.content ?? '');
+          const parts = [
+            ...manual.map((k) => `{${k}}`),
+            ...fields.map((f) => `{@${f}}`),
+          ];
+          return parts.length ? parts.join('、') : '—';
         },
       },
       { title: t('app.kuaizhizao.salesContract.terms.colSort'), dataIndex: 'sort_order', width: 72 },
@@ -343,13 +349,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
           label={t('app.kuaizhizao.salesContract.terms.colName')}
           rules={[{ required: true, message: t('common.required') }]}
         />
-        <ProFormTextArea
-          name="content"
-          label={t('app.kuaizhizao.salesContract.terms.colContent')}
-          rules={[{ required: true, message: t('common.required') }]}
-          fieldProps={{ rows: 6 }}
-          extra={t('app.kuaizhizao.salesContract.terms.contentPlaceholderHint')}
-        />
+        <ContractTermContentField />
         <ProFormDigit name="sort_order" label={t('app.kuaizhizao.salesContract.terms.colSort')} min={0} fieldProps={{ precision: 0 }} />
         <ProFormSwitch name="is_active" label={t('common.enabled')} />
       </ModalForm>

@@ -21,6 +21,7 @@ from loguru import logger
 
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 from apps.common.audit_actor import audit_response_fields
+from apps.kuaizhizao.utils.material_unit_utils import convert_to_base_quantity
 
 
 def _agent_debug_ndjson(location: str, message: str, data: dict, hypothesis_id: str, run_id: str = "pre-fix") -> None:
@@ -252,59 +253,38 @@ def _build_sales_return_item_response(item: Any) -> SalesReturnItemResponse:
     return SalesReturnItemResponse.model_validate(payload)
 
 
-def _resolve_unit_conversion_factor(material_units: Any, unit_name: Optional[str]) -> Decimal:
-    """从物料多单位配置中解析“业务单位 -> 基础单位”换算因子。"""
-    if not unit_name:
-        return Decimal("1")
-    if not isinstance(material_units, dict):
-        return Decimal("1")
-    units = material_units.get("units")
-    if not isinstance(units, list):
-        return Decimal("1")
-
-    target = str(unit_name).strip()
-    if not target:
-        return Decimal("1")
-
-    for unit_cfg in units:
-        if not isinstance(unit_cfg, dict):
-            continue
-        if str(unit_cfg.get("unit", "")).strip() != target:
-            continue
-        try:
-            numerator = Decimal(str(unit_cfg.get("numerator", 1) or 1))
-            denominator = Decimal(str(unit_cfg.get("denominator", 1) or 1))
-            if numerator <= 0 or denominator <= 0:
-                return Decimal("1")
-            return numerator / denominator
-        except Exception:
-            return Decimal("1")
-    return Decimal("1")
-
-
-def _to_base_quantity(
+def _convert_line_quantity_to_base(
     *,
     quantity: Decimal,
     material_unit: Optional[str],
     material: Optional[Any],
 ) -> Decimal:
-    """把业务数量按物料多单位规则换算为基础单位数量。"""
+    """把业务行数量按物料多单位规则换算为基础单位数量。"""
     qty = Decimal(str(quantity or 0))
     if qty <= 0 or not material:
         return qty
-
-    base_unit = str(getattr(material, "base_unit", "") or "").strip()
-    unit_name = str(material_unit or "").strip()
-    if not unit_name or not base_unit or unit_name == base_unit:
-        return qty
-
-    factor = _resolve_unit_conversion_factor(
-        getattr(material, "units", None),
-        unit_name,
+    return convert_to_base_quantity(
+        material,
+        qty,
+        from_unit=material_unit,
     )
-    if factor <= 0:
-        factor = Decimal("1")
-    return qty * factor
+
+
+async def _load_materials_by_ids(
+    tenant_id: int,
+    material_ids: List[int],
+) -> Dict[int, Any]:
+    """批量加载物料，供入库/出库过账前换算为基础单位。"""
+    if not material_ids:
+        return {}
+    from apps.master_data.models.material import Material
+
+    materials = await Material.filter(
+        tenant_id=tenant_id,
+        id__in=material_ids,
+        deleted_at__isnull=True,
+    ).all()
+    return {int(m.id): m for m in materials}
 
 
 def _aggregate_warehouse_from_picking_item_rows(
@@ -4560,7 +4540,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 qty = item.delivery_quantity or Decimal(0)
                 if qty <= 0:
                     continue
-                base_qty = _to_base_quantity(
+                base_qty = _convert_line_quantity_to_base(
                     quantity=Decimal(str(qty)),
                     material_unit=getattr(item, "material_unit", None),
                     material=material_by_id.get(item.material_id),
@@ -5291,7 +5271,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     qty = item.delivery_quantity or Decimal(0)
                     if qty <= 0:
                         continue
-                    base_qty = _to_base_quantity(
+                    base_qty = _convert_line_quantity_to_base(
                         quantity=Decimal(str(qty)),
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
@@ -6275,11 +6255,18 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 items = await PurchaseReceiptItem.filter(
                     tenant_id=tenant_id, receipt_id=receipt_id
                 ).all()
+                material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
+                material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
                 _stock_snap = []
                 for item in items:
                     qty = item.receipt_quantity or Decimal(0)
                     if qty <= 0:
                         continue
+                    base_qty = _convert_line_quantity_to_base(
+                        quantity=qty,
+                        material_unit=getattr(item, "material_unit", None),
+                        material=material_by_id.get(item.material_id),
+                    )
                     line_wh = await _resolve_purchase_receipt_line_warehouse_id_for_stock(
                         tenant_id, item, receipt
                     )
@@ -6309,7 +6296,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=qty,
+                        quantity=base_qty,
                         warehouse_id=line_wh,
                         batch_no=item.batch_number or None,
                         serial_nos=_parse_serial_numbers(getattr(item, "serial_numbers", None)) or None,
@@ -6509,10 +6496,17 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 items = await PurchaseReceiptItem.filter(
                     tenant_id=tenant_id, receipt_id=receipt_id
                 ).all()
+                material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
+                material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
                 for item in items:
                     qty = item.receipt_quantity or Decimal(0)
                     if qty <= 0:
                         continue
+                    base_qty = _convert_line_quantity_to_base(
+                        quantity=qty,
+                        material_unit=getattr(item, "material_unit", None),
+                        material=material_by_id.get(item.material_id),
+                    )
                     line_wh = await _resolve_purchase_receipt_line_warehouse_id_for_stock(
                         tenant_id, item, receipt_obj
                     )
@@ -6523,7 +6517,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=qty,
+                        quantity=base_qty,
                         warehouse_id=line_wh,
                         batch_no=item.batch_number or None,
                         source_type="purchase_receipt_revoke",
@@ -9045,15 +9039,22 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             inbound_obj = await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
             wh_id = inbound_obj.warehouse_id if inbound_obj.warehouse_id else None
             items = await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id)
+            material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
+            material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
 
             for item in items:
                 qty = Decimal(str(item.inbound_quantity or 0))
                 if qty <= 0:
                     continue
+                base_qty = _convert_line_quantity_to_base(
+                    quantity=qty,
+                    material_unit=getattr(item, "material_unit", None),
+                    material=material_by_id.get(item.material_id),
+                )
                 await InventoryService._decrease_stock_no_atomic(
                     tenant_id=tenant_id,
                     material_id=item.material_id,
-                    quantity=qty,
+                    quantity=base_qty,
                     warehouse_id=wh_id,
                     batch_no=item.batch_number or None,
                     source_type="other_inbound_delete_cleanup",
@@ -9196,15 +9197,22 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 from apps.kuaizhizao.services.inventory_service import InventoryService
                 # 重新加载明细
                 reload_items = await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id).all()
+                material_ids = list({int(it.material_id) for it in reload_items if getattr(it, "material_id", None)})
+                material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
                 for item in reload_items:
                     qty = Decimal(str(item.inbound_quantity or 0))
                     if qty <= 0:
                         continue
+                    base_qty = _convert_line_quantity_to_base(
+                        quantity=qty,
+                        material_unit=getattr(item, "material_unit", None),
+                        material=material_by_id.get(item.material_id),
+                    )
                     wh_id = getattr(item, "warehouse_id", None) or inbound.warehouse_id
                     await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=qty,
+                        quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         serial_nos=serial_nos_by_item_id.get(int(item.id)) or None,
@@ -9248,17 +9256,24 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 inbound_obj = await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
                 wh_id = inbound_obj.warehouse_id if inbound_obj.warehouse_id else None
                 items = await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id)
+                material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
+                material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
                 
                 for item in items:
                     qty = Decimal(str(item.inbound_quantity or 0))
                     if qty <= 0:
                         continue
+                    base_qty = _convert_line_quantity_to_base(
+                        quantity=qty,
+                        material_unit=getattr(item, "material_unit", None),
+                        material=material_by_id.get(item.material_id),
+                    )
                     
                     # 反向扣减库存（decrease_stock 内部会校验余量，如果已被领用，这里会报错拦截）
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=qty,
+                        quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         source_type="other_inbound_revoke", 

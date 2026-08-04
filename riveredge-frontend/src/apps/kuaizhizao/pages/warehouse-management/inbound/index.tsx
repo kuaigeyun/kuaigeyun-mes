@@ -1737,8 +1737,8 @@ const InboundPage: React.FC = () => {
       sorter: true,
       render: (_, record) => (
         <UniTableStackedPrimaryCell
-          primary={resolveInboundHubOperator(record) || '-'}
-          secondary={formatInboundDateTimeDisplay(record)}
+          primary={formatInboundDateTimeDisplay(record)}
+          secondary={resolveInboundHubOperator(record) || '-'}
           secondaryCopyable={false}
           primaryBold={false}
         />

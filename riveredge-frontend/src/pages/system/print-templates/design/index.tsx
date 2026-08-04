@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { App, Button, Input, Space, Typography, Card, Select, InputNumber, Divider, ColorPicker, Radio, Checkbox, theme } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined, EyeOutlined, QrcodeOutlined, DashOutlined, FontSizeOutlined, BoldOutlined, AlignCenterOutlined, AlignLeftOutlined, AlignRightOutlined, AppstoreOutlined, FunctionOutlined, OrderedListOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, DeleteOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, AppstoreAddOutlined, PlusOutlined, TableOutlined, BarcodeOutlined, PictureOutlined, HolderOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, EyeOutlined, QrcodeOutlined, DashOutlined, FontSizeOutlined, BoldOutlined, AlignCenterOutlined, AlignLeftOutlined, AlignRightOutlined, AppstoreOutlined, FunctionOutlined, OrderedListOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, DeleteOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, AppstoreAddOutlined, PlusOutlined, TableOutlined, BarcodeOutlined, PictureOutlined, HolderOutlined, UploadOutlined, DownloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { compilePrintTemplate, compilePreviewPrintTemplate, getPrintTemplateByUuid, updatePrintTemplate } from '../../../../services/printTemplate';
 import { getArrayTableTemplates, getTemplateVariableItems, type TemplateVariableItem } from '../../../../config/printTemplateSchemas';
 import { useSiteLogoUrl } from '../../../../hooks/useSiteLogoUrl';
@@ -232,6 +232,20 @@ type DesignerNodeSchema =
   | { id: string; type: 'qrcode'; key: string; size: number; style?: BlockStyle }
   | { id: string; type: 'barcode'; key: string; format: string; height: number; style?: BlockStyle }
   | { id: string; type: 'image'; url: string; width: number; height: number; keepRatio?: boolean; style?: BlockStyle }
+  | {
+      id: string;
+      type: 'seal_overlay';
+      url: string;
+      width: number;
+      height: number;
+      keepRatio?: boolean;
+      content: string;
+      minHeight?: number;
+      sealAlign?: 'left' | 'center' | 'right';
+      sealOffsetX?: number;
+      sealOffsetY?: number;
+      style?: BlockStyle;
+    }
   | { id: string; type: 'spacer'; height: number }
   | { id: string; type: 'divider' }
   | { id: string; type: 'detail_table'; collection: string; row_alias: string; columns: DetailTableColumn[]; tableStyle?: DetailTableStyle }
@@ -774,6 +788,78 @@ const ImageBlock: React.FC<{ block: DesignerNodeSchema & { type: 'image' }; sele
   );
 };
 
+const SealOverlayBlock: React.FC<{ block: DesignerNodeSchema & { type: 'seal_overlay' }; selected?: boolean; onSelect?: () => void }> = ({ block, selected, onSelect }) => {
+  const { token } = theme.useToken();
+  const rawUrl = block.url || '';
+  const sealPreviewUrl = /\{\{\s*company_seal\s*\}\}/i.test(rawUrl) ? '' : rawUrl;
+  const minHeight = block.minHeight ?? block.height ?? 88;
+  const sealAlign = block.sealAlign || 'center';
+  const offsetX = block.sealOffsetX ?? 0;
+  const offsetY = block.sealOffsetY ?? 0;
+
+  const sealPositionStyle: React.CSSProperties = {
+    position: 'absolute',
+    zIndex: 0,
+    width: block.width,
+    height: block.keepRatio !== false ? 'auto' : block.height,
+    opacity: 0.88,
+    pointerEvents: 'none',
+    top: offsetY,
+    ...(sealAlign === 'left'
+      ? { left: offsetX }
+      : sealAlign === 'right'
+        ? { right: Math.max(offsetX, 0), left: 'auto' }
+        : { left: '50%', transform: `translateX(calc(-50% + ${offsetX}px))` }),
+  };
+
+  return (
+    <div
+      style={{
+        padding: 10,
+        border: selected ? `1px solid ${token.colorPrimary}` : `1px dashed ${token.colorBorderSecondary}`,
+        borderRadius: 6,
+        marginBottom: 0,
+        background: token.colorBgContainer,
+      }}
+      onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
+    >
+      <div style={{ position: 'relative', minHeight, width: '100%' }}>
+        {sealPreviewUrl ? (
+          <img src={sealPreviewUrl} alt="" style={sealPositionStyle} />
+        ) : (
+          <div
+            style={{
+              ...sealPositionStyle,
+              borderRadius: '50%',
+              border: `2px dashed ${token.colorBorderSecondary}`,
+              background: token.colorFillTertiary,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: token.colorTextQuaternary,
+            }}
+          >
+            <SafetyCertificateOutlined style={{ fontSize: 28 }} />
+          </div>
+        )}
+        <div
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            fontSize: block.style?.fontSize || '10px',
+            fontWeight: block.style?.fontWeight,
+            textAlign: (block.style?.textAlign as React.CSSProperties['textAlign']) || 'left',
+            color: block.style?.color,
+            whiteSpace: 'pre-wrap',
+          }}
+        >
+          {block.content}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SpacerBlock: React.FC<{ block: DesignerNodeSchema & { type: 'spacer' }; selected?: boolean; onSelect?: () => void }> = ({ block, selected, onSelect }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -810,6 +896,7 @@ const DragOverlayBlock: React.FC<{ type: string; label?: string }> = ({ type, la
     qrcode: <QrcodeOutlined />,
     barcode: <BarcodeOutlined />,
     image: <PictureOutlined />,
+    seal_overlay: <SafetyCertificateOutlined />,
     spacer: <VerticalAlignBottomOutlined />,
     columns: <AppstoreOutlined />,
     detail_table: <TableOutlined />,
@@ -1726,12 +1813,13 @@ const ComponentLibrary: React.FC<{
   onImage: () => void;
   onSpacer: (height: number) => void;
   onLogo: () => void;
+  onSealOverlay: () => void;
   onHeader: (style: number) => void;
   onFooter: () => void;
   templateType: string;
 }> = ({ 
   onInsertText, onDivider, onTable, onIf, onFor, onColumns, onQRCode, onBarcode, onImage, 
-  onSpacer, onLogo, onHeader, onFooter,
+  onSpacer, onLogo, onSealOverlay, onHeader, onFooter,
   templateType 
 }) => {
   const { t } = useTranslation();
@@ -1751,6 +1839,7 @@ const ComponentLibrary: React.FC<{
         <DraggableSidebarItem type="barcode" label={t('pages.system.printTemplatesDesign.typeBarcode')} icon={<BarcodeOutlined />} onClick={onBarcode} />
         <DraggableSidebarItem type="image" label={t('pages.system.printTemplatesDesign.compImage')} icon={<PictureOutlined />} onClick={onImage} />
         <DraggableSidebarItem type="image" label={t('pages.system.printTemplatesDesign.compLogo')} icon={<PictureOutlined />} onClick={onLogo} />
+        <DraggableSidebarItem type="seal_overlay" label={t('pages.system.printTemplatesDesign.compSealOverlay')} icon={<SafetyCertificateOutlined />} onClick={onSealOverlay} />
       </div>
 
       <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.compPreset')}</div>
@@ -2444,6 +2533,23 @@ const PrintTemplateDesignPage: React.FC = () => {
     setSelectedBlockId(item.id);
   };
 
+  const handleInsertSealOverlay = () => {
+    const item: DesignerNodeSchema = {
+      id: `seal-${Date.now()}`,
+      type: 'seal_overlay',
+      url: '{{ company_seal }}',
+      width: 88,
+      height: 88,
+      keepRatio: true,
+      content: t('pages.system.printTemplatesDesign.sealOverlayDefaultContent'),
+      sealAlign: 'center',
+      minHeight: 88,
+      style: { fontSize: '10px' },
+    };
+    setSchemaBlocks((prev) => [...prev, item]);
+    setSelectedBlockId(item.id);
+  };
+
   const handleInsertHeaderPreset = (style: number = 1) => {
     let item: DesignerNodeSchema;
     if (style === 1) {
@@ -2715,6 +2821,20 @@ const PrintTemplateDesignPage: React.FC = () => {
         case 'image':
           newBlock = { id, type: 'image', url: payload?.url || '', width: 100, height: 60, keepRatio: true };
           break;
+        case 'seal_overlay':
+          newBlock = {
+            id,
+            type: 'seal_overlay',
+            url: '{{ company_seal }}',
+            width: 88,
+            height: 88,
+            keepRatio: true,
+            content: t('pages.system.printTemplatesDesign.sealOverlayDefaultContent'),
+            sealAlign: 'center',
+            minHeight: 88,
+            style: { fontSize: '10px' },
+          };
+          break;
         case 'spacer':
           newBlock = { id, type: 'spacer', height: 20 };
           break;
@@ -2797,6 +2917,7 @@ const PrintTemplateDesignPage: React.FC = () => {
             {blk.type === 'qrcode' && <QRBlock block={blk} selected={isSelected} onSelect={() => setSelectedBlockId(blk.id)} />}
             {blk.type === 'barcode' && <BarcodeBlock block={blk} selected={isSelected} onSelect={() => setSelectedBlockId(blk.id)} />}
             {blk.type === 'image' && <ImageBlock block={blk} selected={isSelected} onSelect={() => setSelectedBlockId(blk.id)} />}
+            {blk.type === 'seal_overlay' && <SealOverlayBlock block={blk} selected={isSelected} onSelect={() => setSelectedBlockId(blk.id)} />}
             {blk.type === 'spacer' && <SpacerBlock block={blk} selected={isSelected} onSelect={() => setSelectedBlockId(blk.id)} />}
             {blk.type === 'columns' && (
               <ColumnsBlock 
@@ -3052,6 +3173,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                 onImage={handleInsertImage}
                 onSpacer={handleInsertSpacer}
                 onLogo={handleInsertLogo}
+                onSealOverlay={handleInsertSealOverlay}
                 onHeader={handleInsertHeaderPreset}
                 onFooter={handleInsertFooterPreset}
                 templateType={templateType}
@@ -3461,6 +3583,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                     {selectedBlock.type === 'qrcode' && t('pages.system.printTemplatesDesign.typeQRCode')}
                     {selectedBlock.type === 'barcode' && t('pages.system.printTemplatesDesign.typeBarcode')}
                     {selectedBlock.type === 'image' && t('pages.system.printTemplatesDesign.compImage')}
+                    {selectedBlock.type === 'seal_overlay' && t('pages.system.printTemplatesDesign.compSealOverlay')}
                     {selectedBlock.type === 'if' && t('pages.system.printTemplatesDesign.compIf')}
                     {selectedBlock.type === 'for' && t('pages.system.printTemplatesDesign.compFor')}
                     {selectedBlock.type === 'detail_table' && t('pages.system.printTemplatesDesign.compDetailTable')}
@@ -3472,10 +3595,10 @@ const PrintTemplateDesignPage: React.FC = () => {
                   </Space>
                 </div>
 
-                {(selectedBlock.type === 'text' || selectedBlock.type === 'field' || selectedBlock.type === 'qrcode' || selectedBlock.type === 'barcode' || selectedBlock.type === 'image' || selectedBlock.type === 'columns') && (
+                {(selectedBlock.type === 'text' || selectedBlock.type === 'field' || selectedBlock.type === 'qrcode' || selectedBlock.type === 'barcode' || selectedBlock.type === 'image' || selectedBlock.type === 'seal_overlay' || selectedBlock.type === 'columns') && (
                   <Card size="small" title={t('pages.system.printTemplatesDesign.styleSettings')} styles={{ header: { border: 0, fontSize: 13, color: token.colorTextSecondary } }}>
                     <Space orientation="vertical" style={{ width: '100%' }} size={12}>
-                      {(selectedBlock.type === 'text' || selectedBlock.type === 'field') && (
+                      {(selectedBlock.type === 'text' || selectedBlock.type === 'field' || selectedBlock.type === 'seal_overlay') && (
                         <>
                           <div style={{ display: 'flex', gap: 8 }}>
                             <Input
@@ -3509,6 +3632,10 @@ const PrintTemplateDesignPage: React.FC = () => {
                         </>
                       )}
                       {selectedBlock.type === 'columns' && (
+                        <>
+                        <div style={{ background: token.colorFillTertiary, padding: '8px 12px', borderRadius: 6, fontSize: 12, color: token.colorTextSecondary, marginBottom: 8 }}>
+                          {t('pages.system.printTemplatesDesign.columnSealAnchorHint')}
+                        </div>
                         <div>
                           <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>
                             {t('pages.system.printTemplatesDesign.columnGap')}
@@ -3531,6 +3658,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                             }}
                           />
                         </div>
+                        </>
                       )}
                       <BlockBorderControls
                         style={selectedBlock.style}
@@ -3655,6 +3783,68 @@ const PrintTemplateDesignPage: React.FC = () => {
                         <div>
                           <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.heightPx')} {selectedBlock.keepRatio && <span style={{ color: '#bfbfbf' }}>{t('pages.system.printTemplatesDesign.auto')}</span>}</div>
                           <InputNumber disabled={selectedBlock.keepRatio} style={{ width: '100%' }} value={selectedBlock.height} onChange={v => updateSelectedBlock({ height: v || 60 })} />
+                        </div>
+                      </div>
+                    </Space>
+                  )}
+                  {selectedBlock.type === 'seal_overlay' && (
+                    <Space orientation="vertical" style={{ width: '100%' }} size={12}>
+                      <div style={{ background: token.colorFillTertiary, padding: '8px 12px', borderRadius: 6, fontSize: 12, color: token.colorTextSecondary }}>
+                        {t('pages.system.printTemplatesDesign.sealOverlayHint')}
+                      </div>
+                      <div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.sealOverlayContent')}</div>
+                        <Input.TextArea rows={2} value={selectedBlock.content} onChange={e => updateSelectedBlock({ content: e.target.value })} />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: token.colorFillTertiary, padding: '8px 12px', borderRadius: 6 }}>
+                        <span style={{ fontSize: 13 }}>{t('pages.system.printTemplatesDesign.keepRatio')}</span>
+                        <Radio.Group
+                          size="small"
+                          value={selectedBlock.keepRatio !== false}
+                          onChange={e => updateSelectedBlock({ keepRatio: e.target.value })}
+                        >
+                          <Radio.Button value={true}>{t('pages.system.printTemplatesDesign.on')}</Radio.Button>
+                          <Radio.Button value={false}>{t('pages.system.printTemplatesDesign.off')}</Radio.Button>
+                        </Radio.Group>
+                      </div>
+                      <div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.sealOverlayUrl')}</div>
+                        <Input.TextArea rows={2} value={selectedBlock.url} onChange={e => updateSelectedBlock({ url: e.target.value })} placeholder="{{ company_seal }}" />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div>
+                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.widthPx')}</div>
+                          <InputNumber style={{ width: '100%' }} value={selectedBlock.width} onChange={v => updateSelectedBlock({ width: v || 88 })} />
+                        </div>
+                        <div>
+                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.heightPx')} {selectedBlock.keepRatio !== false && <span style={{ color: '#bfbfbf' }}>{t('pages.system.printTemplatesDesign.auto')}</span>}</div>
+                          <InputNumber disabled={selectedBlock.keepRatio !== false} style={{ width: '100%' }} value={selectedBlock.height} onChange={v => updateSelectedBlock({ height: v || 88 })} />
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.minHeightPx')}</div>
+                        <InputNumber min={40} max={400} style={{ width: '100%' }} value={selectedBlock.minHeight ?? selectedBlock.height} onChange={v => updateSelectedBlock({ minHeight: v || 88 })} />
+                      </div>
+                      <div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.sealAlign')}</div>
+                        <Radio.Group
+                          size="small"
+                          value={selectedBlock.sealAlign || 'center'}
+                          onChange={e => updateSelectedBlock({ sealAlign: e.target.value })}
+                        >
+                          <Radio.Button value="left">{t('pages.system.printTemplatesDesign.sealAlignLeft')}</Radio.Button>
+                          <Radio.Button value="center">{t('pages.system.printTemplatesDesign.sealAlignCenter')}</Radio.Button>
+                          <Radio.Button value="right">{t('pages.system.printTemplatesDesign.sealAlignRight')}</Radio.Button>
+                        </Radio.Group>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div>
+                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.sealOffsetX')}</div>
+                          <InputNumber style={{ width: '100%' }} value={selectedBlock.sealOffsetX ?? 0} onChange={v => updateSelectedBlock({ sealOffsetX: v ?? 0 })} />
+                        </div>
+                        <div>
+                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.sealOffsetY')}</div>
+                          <InputNumber style={{ width: '100%' }} value={selectedBlock.sealOffsetY ?? 0} onChange={v => updateSelectedBlock({ sealOffsetY: v ?? 0 })} />
                         </div>
                       </div>
                     </Space>
@@ -4085,6 +4275,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                   qrcode: t('pages.system.printTemplatesDesign.typeQRCode'),
                   barcode: t('pages.system.printTemplatesDesign.typeBarcode'),
                   image: t('pages.system.printTemplatesDesign.compImage'),
+                  seal_overlay: t('pages.system.printTemplatesDesign.compSealOverlay'),
                   divider: t('pages.system.printTemplatesDesign.compDivider'),
                   spacer: t('pages.system.printTemplatesDesign.compSpacer'),
                   columns: t('pages.system.printTemplatesDesign.compColumns'),

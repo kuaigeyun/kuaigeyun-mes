@@ -45,6 +45,8 @@ import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../..
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
+import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
@@ -108,6 +110,7 @@ import { DetailAuditPhaseTitleExtra } from '../../../../../components/uni-audit/
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatDateTime, formatNumber, formatQuantity } from '../../../../../utils/format';
+import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -117,6 +120,12 @@ import {
 } from '../../../../../hooks/useDocumentCapabilities';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import {
+  buildDocumentCreateDraftKey,
+  clearDocumentFormDraft,
+  getDocumentFormDraft,
+  setDocumentFormDraft,
+} from '../../../../../utils/documentFormDraftCache';
 
 /** 采购申请详情只读明细表最小横向宽度 */
 const PURCHASE_REQUISITION_DETAIL_ITEMS_MIN_WIDTH = 980;
@@ -173,6 +182,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
   const isFormPage = isCreatePage || isEditPage;
   const editingId = isEditPage ? editRouteId : null;
+  const prFormDraftKey = useMemo(
+    () =>
+      isFormPage
+        ? buildDocumentCreateDraftKey('kuaizhizao:purchase-requisition', location.pathname, location.search)
+        : null,
+    [isFormPage, location.pathname, location.search],
+  );
   const formPageInitKeyRef = useRef<string | null>(null);
   const { token } = theme.useToken();
   const prqDetailDrawerZIndex = token.zIndexPopupBase;
@@ -384,7 +400,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           return;
         }
         setTimeout(() => {
-          createFormRef.current?.setFieldsValue({
+          const baseValues = {
             requisition_code: detail.requisition_code ?? '',
             requisition_name: detail.requisition_name,
             requisition_date: detail.requisition_date ? dayjs(detail.requisition_date) : dayjs(),
@@ -408,14 +424,19 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     notes: it.notes,
                   }))
                 : [{ ...INITIAL_PR_FORM_ITEM_ROW }],
-          });
+          };
+          createFormRef.current?.setFieldsValue(baseValues);
+          const draft = prFormDraftKey ? getDocumentFormDraft(prFormDraftKey) : null;
+          if (draft && Object.keys(draft).length > 0) {
+            createFormRef.current?.setFieldsValue(draft);
+          }
         }, 0);
       } catch {
         messageApi.error(t('app.kuaizhizao.purchaseRequisition.loadFailed'));
         navigate(PURCHASE_REQUISITION_LIST_PATH);
       }
     },
-    [messageApi, ensureSupplierList, navigate, t],
+    [messageApi, ensureSupplierList, navigate, t, prFormDraftKey],
   );
 
   const handleEdit = useCallback(
@@ -445,6 +466,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
   const initPurchaseRequisitionCreateForm = useCallback(async () => {
     void ensureSupplierList();
+    const draft = prFormDraftKey ? getDocumentFormDraft(prFormDraftKey) : null;
+    if (draft && Object.keys(draft).length > 0) {
+      setTimeout(() => createFormRef.current?.setFieldsValue(draft), 0);
+      return;
+    }
     setPreviewCode(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
@@ -523,7 +549,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         }, 100);
       }
     }
-  }, [ensureSupplierList]);
+  }, [ensureSupplierList, prFormDraftKey]);
 
   const handleCreate = () => {
     navigate(PURCHASE_REQUISITION_CREATE_PATH);
@@ -565,6 +591,16 @@ const PurchaseRequisitionsPage: React.FC = () => {
       void loadPurchaseRequisitionEditForm(editRouteId);
     }
   }, [isFormPage, isCreatePage, editRouteId, initPurchaseRequisitionCreateForm, loadPurchaseRequisitionEditForm]);
+
+  useEffect(() => {
+    if (!isFormPage || !prFormDraftKey) return;
+    return () => {
+      const values = createFormRef.current?.getFieldsValue?.(true);
+      if (values && Object.keys(values).length > 0) {
+        setDocumentFormDraft(prFormDraftKey, values);
+      }
+    };
+  }, [isFormPage, prFormDraftKey]);
 
   const pullFromComputationColumns: ProColumns<PullDemandComputationCandidate>[] = useMemo(
     () => [
@@ -773,6 +809,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           items: mapItemsForApi(validItems),
         });
         messageApi.success(t('common.save'));
+        if (prFormDraftKey) clearDocumentFormDraft(prFormDraftKey);
         setEffectiveRuleCode(null);
         setEffectiveAutoGen(null);
         createFormRef.current?.resetFields();
@@ -810,6 +847,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         items: mapItemsForApi(validItems),
       });
       messageApi.success(t('common.createSuccess'));
+      if (prFormDraftKey) clearDocumentFormDraft(prFormDraftKey);
       setEffectiveRuleCode(null);
       setEffectiveAutoGen(null);
       createFormRef.current?.resetFields();
@@ -1607,7 +1645,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
                                       material_code: 'mainCode',
                                       material_name: 'name',
                                       material_spec: 'specification',
-                                      unit: 'baseUnit',
+                                    }}
+                                    onChange={(_val, material) => {
+                                      if (!material) return;
+                                      createFormRef.current?.setFieldValue(
+                                        ['items', index, 'unit'],
+                                        resolveMaterialScenarioUnit(material, 'purchase'),
+                                      );
                                     }}
                                     fallbackOption={fallback}
                                     formItemProps={{ style: { margin: 0 } }}
@@ -1649,9 +1693,18 @@ const PurchaseRequisitionsPage: React.FC = () => {
                       >
                         {({ getFieldValue }) => {
                           const materialId = getFieldValue(['items', index, 'material_id']);
+                          if (!createFormRef.current) return null;
                           return (
                             <AntForm.Item name={[index, 'unit']} style={{ margin: 0 }}>
-                              <MaterialUnitSelect materialId={materialId} size="small" noStyle />
+                              <DocumentLineUnitSelect
+                                form={createFormRef.current}
+                                listName="items"
+                                rowIndex={index}
+                                fields={{ quantity: 'quantity', unit: 'unit' }}
+                                materialId={materialId}
+                                size="small"
+                                noStyle
+                              />
                             </AntForm.Item>
                           );
                         }}
@@ -2423,7 +2476,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                         { title: t('app.kuaizhizao.purchaseRequisition.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
                         { title: t('app.kuaizhizao.purchaseRequisition.col.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
                         { title: t('app.kuaizhizao.purchaseRequisition.col.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true },
-                        { title: t('app.kuaizhizao.purchaseRequisition.col.quantity'), dataIndex: 'quantity', width: 88, align: 'right', render: formatQuantity },
+                        { title: t('app.kuaizhizao.purchaseRequisition.col.quantity'), dataIndex: 'quantity', width: 120, align: 'right', render: (val, row) => <QuantityWithUnitDisplay quantity={val} unit={row.unit} /> },
                         {
                           title: t('app.kuaizhizao.purchaseRequisition.col.unit'),
                           dataIndex: 'unit',

@@ -549,9 +549,9 @@ def _is_uuid_like(value: str) -> bool:
         return False
 
 
-async def _resolve_company_logo_for_print(tenant_id: int) -> str:
+async def _resolve_site_image_setting_for_print(tenant_id: int, setting_key: str) -> str:
     """
-    解析站点 Logo 为可打印值：
+    解析站点图片类配置（site_logo / company_seal 等）为可打印值：
     - 优先返回 data URL（UUID 文件）
     - 其次返回 http(s)/data URL 原值
     - 其他格式返回空串
@@ -560,27 +560,35 @@ async def _resolve_company_logo_for_print(tenant_id: int) -> str:
         from core.services.system.site_setting_service import SiteSettingService
         from infra.config.infra_config import infra_settings as settings
 
-        settings = await SiteSettingService.get_settings_with_platform_fallback(tenant_id)
-        logo_raw = str((settings or {}).get("site_logo") or "").strip()
-        if not logo_raw:
+        site_settings = await SiteSettingService.get_settings_with_platform_fallback(tenant_id)
+        raw = str((site_settings or {}).get(setting_key) or "").strip()
+        if not raw:
             return ""
-        if logo_raw.startswith("data:image/"):
-            return logo_raw
-        if logo_raw.startswith("http://") or logo_raw.startswith("https://"):
-            return logo_raw
-        if logo_raw.startswith("/"):
+        if raw.startswith("data:image/"):
+            return raw
+        if raw.startswith("http://") or raw.startswith("https://"):
+            return raw
+        if raw.startswith("/"):
             base_url = settings.BASE_URL
             if not base_url:
                 host = "localhost" if settings.HOST == "0.0.0.0" else settings.HOST
                 base_url = f"http://{host}:{settings.PORT}"
-            return f"{base_url}{logo_raw}"
-        if _is_uuid_like(logo_raw):
-            data_url = await _material_image_data_url_for_pdfme(tenant_id, logo_raw)
+            return f"{base_url}{raw}"
+        if _is_uuid_like(raw):
+            data_url = await _material_image_data_url_for_pdfme(tenant_id, raw)
             return data_url or ""
         return ""
     except Exception as e:
-        logger.warning("解析打印 Logo 失败 tenant_id={}: {}", tenant_id, e)
+        logger.warning("解析打印图片配置失败 tenant_id={} key={}: {}", tenant_id, setting_key, e)
         return ""
+
+
+async def _resolve_company_logo_for_print(tenant_id: int) -> str:
+    return await _resolve_site_image_setting_for_print(tenant_id, "site_logo")
+
+
+async def _resolve_company_seal_for_print(tenant_id: int) -> str:
+    return await _resolve_site_image_setting_for_print(tenant_id, "company_seal")
 
 
 def _format_sales_contract_terms_for_print(contract_terms: Any) -> str:
@@ -881,6 +889,8 @@ class DocumentPrintService:
             document_data["company_logo"] = await _resolve_company_logo_for_print(tenant_id)
         if not document_data.get("logo") and document_data.get("company_logo"):
             document_data["logo"] = document_data["company_logo"]
+        if not document_data.get("company_seal"):
+            document_data["company_seal"] = await _resolve_company_seal_for_print(tenant_id)
 
         try:
             if template_uuid or template_code:

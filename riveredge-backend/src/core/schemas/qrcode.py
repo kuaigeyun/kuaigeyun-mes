@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, validator
 
 class QRCodeGenerateRequest(BaseModel):
     """生成二维码请求"""
-    qrcode_type: str = Field(..., description="二维码类型（MAT/WO/OP/EQ/EMP/STATION/BOX/TRACE/DOC）")
+    qrcode_type: str = Field(..., description="二维码类型（MAT/WO/OP/EQ/MD/EMP/STATION/BOX/TRACE/DOC）")
     data: Dict[str, Any] = Field(..., description="二维码数据")
     size: int = Field(10, ge=1, le=50, description="二维码大小（每个模块的像素数）")
     border: int = Field(4, ge=1, le=10, description="边框大小")
@@ -19,7 +19,7 @@ class QRCodeGenerateRequest(BaseModel):
     @validator("qrcode_type")
     def validate_qrcode_type(cls, v):
         """验证二维码类型"""
-        valid_types = ["MAT", "WO", "OP", "EQ", "EMP", "STATION", "BOX", "TRACE", "DOC"]
+        valid_types = ["MAT", "WO", "OP", "EQ", "MD", "EMP", "STATION", "BOX", "TRACE", "DOC"]
         if v not in valid_types:
             raise ValueError(f"二维码类型必须是以下之一: {', '.join(valid_types)}")
         return v
@@ -98,6 +98,16 @@ class EquipmentQRCodeGenerateRequest(BaseModel):
     equipment_uuid: str = Field(..., description="设备UUID")
     equipment_code: str = Field(..., description="设备编码")
     equipment_name: str = Field(..., description="设备名称")
+    size: int = Field(10, ge=1, le=50, description="二维码大小")
+    border: int = Field(4, ge=1, le=10, description="边框大小")
+    error_correction: str = Field("M", description="错误纠正级别")
+
+
+class MoldQRCodeGenerateRequest(BaseModel):
+    """生成模具二维码请求"""
+    mold_uuid: str = Field(..., description="模具UUID")
+    mold_code: str = Field(..., description="模具编码")
+    mold_name: str = Field(..., description="模具名称")
     size: int = Field(10, ge=1, le=50, description="二维码大小")
     border: int = Field(4, ge=1, le=10, description="边框大小")
     error_correction: str = Field("M", description="错误纠正级别")

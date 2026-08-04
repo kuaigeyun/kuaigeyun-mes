@@ -4,7 +4,7 @@ import { materialApi } from '../../apps/master-data/services/material';
 import type { Material } from '../../apps/master-data/types/material';
 import { getMaterialUnitDisplayMapShared, normUnitKey } from '../../utils/materialUnitDisplay';
 
-interface MaterialUnitSelectProps {
+export interface MaterialUnitSelectProps {
   /** 物料 ID (支持数字 ID 或字符串 UUID) */
   materialId?: number | string;
   /** 当前选中的单位值 */
@@ -44,7 +44,7 @@ function rememberMaterialForUnitSelect(material: Material): void {
 /**
  * 拉取单条物料（每次请求最新；同 id 并发去重）
  */
-async function fetchMaterialForUnitSelectCache(materialId: number | string): Promise<Material | null> {
+export async function fetchMaterialForUnitSelectCache(materialId: number | string): Promise<Material | null> {
   const cacheKey = String(materialId);
   const cached = materialByKeyCache.get(cacheKey);
   if (cached) return cached;

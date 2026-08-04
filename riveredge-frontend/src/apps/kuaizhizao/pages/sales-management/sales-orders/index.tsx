@@ -30,6 +30,8 @@ const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
+import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
@@ -222,6 +224,7 @@ import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } f
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
@@ -3202,6 +3205,7 @@ const SalesOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.unit'),
       dataIndex: 'material_unit',
       width: 72,
+      hideInTable: true,
       render: (_: unknown, row: SalesOrderItemRow) => (
         <DictionaryLabel dictionaryCode="MATERIAL_UNIT" value={row.material_unit} />
       ),
@@ -3209,12 +3213,12 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.quantity'),
       dataIndex: 'required_quantity',
-      width: 100,
+      width: 120,
       align: 'right' as const,
       render: (val: any, record: SalesOrderItemRow) => (
         <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
           <MaterialInventoryIndicator materialId={record.material_id} requiredQuantity={record.required_quantity} />
-          {formatQuantity(val)}
+          <QuantityWithUnitDisplay quantity={val} unit={record.material_unit} />
         </span>
       ),
     },
@@ -3659,7 +3663,6 @@ const SalesOrdersPage: React.FC = () => {
                                       material_code: 'mainCode',
                                       material_name: 'name',
                                       material_spec: 'specification',
-                                      material_unit: 'baseUnit',
                                     }}
                                     fallbackOption={fallback}
                                     formItemProps={{ style: { margin: 0 } }}
@@ -3669,6 +3672,10 @@ const SalesOrdersPage: React.FC = () => {
                                     sourceType={materialSourceType}
                                     onChange={(_val, material) => {
                                       if (!material) return;
+                                      formRef.current?.setFieldValue(
+                                        ['items', index, 'material_unit'],
+                                        resolveMaterialScenarioUnit(material, 'sale'),
+                                      );
                                       formRef.current?.setFieldValue(
                                         ['items', index, '_sourceType'],
                                         (material as any)?.sourceType || (material as any)?.source_type,
@@ -3731,12 +3738,17 @@ const SalesOrdersPage: React.FC = () => {
                         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
                           {({ getFieldValue }) => {
                             const materialId = getFieldValue(['items', index, 'material_id']);
+                            if (!formRef.current) return null;
                             return (
                               <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                                <MaterialUnitSelect 
-                                  materialId={materialId} 
-                                  size={DOCUMENT_DETAIL_CONTROL_SIZE} 
-                                  noStyle 
+                                <DocumentLineUnitSelect
+                                  form={formRef.current}
+                                  listName="items"
+                                  rowIndex={index}
+                                  fields={{ quantity: 'required_quantity', unit: 'material_unit' }}
+                                  materialId={materialId}
+                                  size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                                  noStyle
                                 />
                               </AntForm.Item>
                             );

@@ -1275,9 +1275,6 @@ class SalesOrderService:
             raise BusinessLogicError("关联的销售合同须已生效")
         if not _is_approved(contract.review_status):
             raise BusinessLogicError("关联的销售合同未审核通过")
-        today = date.today()
-        if contract.valid_to and contract.valid_to < today:
-            raise BusinessLogicError("关联的销售合同已过期")
         if not sales_order_data.contract_code:
             sales_order_data.contract_code = contract.contract_code
 

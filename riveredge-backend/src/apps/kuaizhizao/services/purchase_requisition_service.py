@@ -872,6 +872,25 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
         assert_purchase_requisition_capability(req, "revoke_approval")
 
+        items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id, requisition_id=requisition_id, deleted_at__isnull=True
+        ).all()
+        if any(it.purchase_order_id for it in items):
+            raise BusinessLogicError("采购申请已有明细转采购订单，不能撤销审核")
+
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+        req_item_ids = [it.id for it in items]
+        if req_item_ids:
+            linked_po_item = await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                source_type="PurchaseRequisition",
+                source_id__in=req_item_ids,
+                deleted_at__isnull=True,
+            ).exists()
+            if linked_po_item:
+                raise BusinessLogicError("采购申请已有明细转采购订单，不能撤销审核")
+
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "purchase_request"
         )

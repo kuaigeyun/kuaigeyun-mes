@@ -123,11 +123,8 @@ def derive_sales_contract_capabilities(
     elif not has_items:
         push_reason = "sales_contract.push.no_items"
     else:
-        valid_to = getattr(contract, "valid_to", None)
         valid_from = getattr(contract, "valid_from", None)
-        if valid_to and valid_to < today:
-            push_reason = "sales_contract.push.expired"
-        elif valid_from and valid_from > today:
+        if valid_from and valid_from > today:
             push_reason = "sales_contract.push.not_yet_valid"
         else:
             rem_amt = remaining_amount

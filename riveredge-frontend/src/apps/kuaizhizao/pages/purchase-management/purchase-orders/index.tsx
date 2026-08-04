@@ -90,12 +90,15 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
+import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import type { Material } from '../../../../master-data/types/material';
 import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { setFormPriceType } from '../../../../../utils/priceTypeSwitch';
 import dayjs from 'dayjs';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
@@ -683,7 +686,7 @@ const PurchaseOrdersPage: React.FC = () => {
           material_code: m.mainCode ?? m.code ?? '',
           material_name: m.name ?? '',
           material_spec: m.specification ?? '',
-          unit: m.baseUnit ?? '件',
+          unit: resolveMaterialScenarioUnit(m, 'purchase'),
           ordered_quantity: 1,
           unit_price: price,
           tax_rate: taxR,
@@ -2761,7 +2764,13 @@ const PurchaseOrdersPage: React.FC = () => {
                                 material_code: 'mainCode',
                                 material_name: 'name',
                                 material_spec: 'specification',
-                                unit: 'baseUnit',
+                              }}
+                              onChange={(_val, material) => {
+                                if (!material) return;
+                                formRef.current?.setFieldValue(
+                                  ['items', index, 'unit'],
+                                  resolveMaterialScenarioUnit(material, 'purchase'),
+                                );
                               }}
                               fallbackOption={fallback}
                               formItemProps={{ style: { margin: 0 } }}
@@ -2794,12 +2803,17 @@ const PurchaseOrdersPage: React.FC = () => {
                       <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
                         {({ getFieldValue }) => {
                           const materialId = getFieldValue(['items', index, 'material_id']);
+                          if (!formRef.current) return null;
                           return (
                             <AntForm.Item name={[index, 'unit']} style={{ margin: 0 }}>
-                              <MaterialUnitSelect 
-                                materialId={materialId} 
-                                size={DOCUMENT_DETAIL_CONTROL_SIZE} 
-                                noStyle 
+                              <DocumentLineUnitSelect
+                                form={formRef.current}
+                                listName="items"
+                                rowIndex={index}
+                                fields={{ quantity: 'ordered_quantity', unit: 'unit' }}
+                                materialId={materialId}
+                                size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                                noStyle
                               />
                             </AntForm.Item>
                           );
@@ -3973,8 +3987,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     columns={[
                       { title: t('app.kuaizhizao.purchaseOrder.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
                       { title: t('app.kuaizhizao.purchaseOrder.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true, render: (_, record) => record.material_name || record.materialName || '—' },
-                      { title: t('app.kuaizhizao.purchaseOrder.col.orderedQty'), dataIndex: 'ordered_quantity', width: 100, align: 'right' , render: formatQuantity },
-                      { title: t('app.kuaizhizao.purchaseOrder.col.unit'), dataIndex: 'unit', width: 60 },
+                      { title: t('app.kuaizhizao.purchaseOrder.col.orderedQty'), dataIndex: 'ordered_quantity', width: 120, align: 'right' , render: (val, row) => <QuantityWithUnitDisplay quantity={val} unit={row.unit} /> },
                       {
                         title: t('app.kuaizhizao.purchaseOrder.col.unitPrice'),
                         dataIndex: 'unit_price',
@@ -3989,7 +4002,7 @@ const PurchaseOrdersPage: React.FC = () => {
                         align: 'right',
                         render: (text) => `¥${text?.toLocaleString()}`,
                       },
-                      { title: t('app.kuaizhizao.purchaseOrder.col.receivedQty'), dataIndex: 'received_quantity', width: 100, align: 'right', render: formatQuantity },
+                      { title: t('app.kuaizhizao.purchaseOrder.col.receivedQty'), dataIndex: 'received_quantity', width: 120, align: 'right', render: (val, row) => <QuantityWithUnitDisplay quantity={val} unit={row.unit} /> },
                       { title: t('app.kuaizhizao.purchaseOrder.col.outstandingQty'), dataIndex: 'outstanding_quantity', width: 100, align: 'right' },
                       { title: t('app.kuaizhizao.purchaseOrder.form.requiredDate'), dataIndex: 'required_date', width: 120 },
                       {

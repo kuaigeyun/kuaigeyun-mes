@@ -385,6 +385,27 @@ export function invalidateSiteLogoPreviewCache(fileUuid?: string): void {
 }
 
 /**
+ * 公司印章预览（须登录；不加入公开 preview 接口，站点设置页展示时前端做模糊处理）。
+ */
+export async function getCompanySealPreview(
+  fileUuid: string,
+): Promise<FilePreviewResponse | null> {
+  try {
+    return await getFilePreview(fileUuid, { size: 128 });
+  } catch {
+    return null;
+  }
+}
+
+export function invalidateCompanySealPreviewCache(fileUuid?: string): void {
+  for (const key of [...previewUrlCache.keys()]) {
+    if (!fileUuid || key.includes(fileUuid)) {
+      previewUrlCache.delete(key);
+    }
+  }
+}
+
+/**
  * 获取文件预览信息
  *
  * 返回带 token 的下载 URL，供 img/iframe 等直接使用。

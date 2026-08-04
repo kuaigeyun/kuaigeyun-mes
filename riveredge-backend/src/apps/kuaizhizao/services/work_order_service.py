@@ -5904,6 +5904,49 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if reporting_records:
                 raise BusinessLogicError("工单已有报工记录，不允许撤回。只能撤回未报工的工单。")
 
+            from apps.kuaizhizao.models.production_picking import ProductionPicking
+            from apps.kuaizhizao.models.production_return import ProductionReturn
+            from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+            from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
+
+            downstream_checks = [
+                (
+                    ProductionPicking.filter(
+                        tenant_id=tenant_id,
+                        work_order_id=work_order_id,
+                        deleted_at__isnull=True,
+                    ).exclude(status__in=["已作废", "cancelled"]).exists(),
+                    "工单已有生产领料单，不允许撤回",
+                ),
+                (
+                    ProductionReturn.filter(
+                        tenant_id=tenant_id,
+                        work_order_id=work_order_id,
+                        deleted_at__isnull=True,
+                    ).exclude(status__in=["已作废", "cancelled"]).exists(),
+                    "工单已有生产退料单，不允许撤回",
+                ),
+                (
+                    FinishedGoodsReceipt.filter(
+                        tenant_id=tenant_id,
+                        work_order_id=work_order_id,
+                        deleted_at__isnull=True,
+                    ).exclude(status__in=["已作废", "cancelled"]).exists(),
+                    "工单已有成品入库单，不允许撤回",
+                ),
+                (
+                    SemiFinishedGoodsReceipt.filter(
+                        tenant_id=tenant_id,
+                        work_order_id=work_order_id,
+                        deleted_at__isnull=True,
+                    ).exclude(status__in=["已作废", "cancelled"]).exists(),
+                    "工单已有半成品入库单，不允许撤回",
+                ),
+            ]
+            for exists_query, message in downstream_checks:
+                if await exists_query:
+                    raise BusinessLogicError(message)
+
             # 兜底保护：检查是否有产出（即便报工记录缺失）
             completed_qty = work_order.completed_quantity or Decimal("0")
             if completed_qty > 0:

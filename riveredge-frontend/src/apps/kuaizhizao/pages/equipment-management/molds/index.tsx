@@ -23,6 +23,7 @@ import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerSection, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { moldApi } from '../../../services/equipment';
+import { QRCodeGenerator } from '../../../../../components/qrcode';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import {
   schemeBindingsApi,
@@ -1270,6 +1271,26 @@ const MoldsPage: React.FC = () => {
           resetMoldDetailFieldValues();
         }}
         basicColumns={detailColumns}
+        basicExtra={
+          moldDetail?.uuid ? (
+            <>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {t('app.kuaizhizao.mold.qrcodeCardTitle')}
+              </Typography.Text>
+              <QRCodeGenerator
+                qrcodeType="MD"
+                data={{
+                  mold_uuid: moldDetail.uuid,
+                  mold_code: moldDetail.code || '',
+                  mold_name: moldDetail.name || '',
+                }}
+                autoGenerate
+                size={6}
+                noCard
+              />
+            </>
+          ) : null
+        }
         extra={
           <Space wrap>
             {perms.canPrint && moldDetail?.uuid ? (
