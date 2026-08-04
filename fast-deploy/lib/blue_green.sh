@@ -12,7 +12,7 @@ bg_enabled() {
     return 1
 }
 
-# update 时是否走蓝绿（交互选择；非交互默认开启，可用 UPDATE_BLUE_GREEN=0 关闭）
+# update 时是否走蓝绿（交互选择；非交互与传统模式默认 stop-start，UPDATE_BLUE_GREEN=1 启用蓝绿）
 update_use_blue_green() {
     load_deploy_env
     if [ -n "${UPDATE_BLUE_GREEN:-}" ]; then
@@ -22,22 +22,22 @@ update_use_blue_green() {
         esac
     fi
     if [ ! -t 0 ]; then
-        log_info "非交互 update，默认启用蓝绿部署（export UPDATE_BLUE_GREEN=0 可改为传统 stop-start）"
-        return 0
+        log_info "非交互 update，默认传统 stop-start（export UPDATE_BLUE_GREEN=1 可启用蓝绿）"
+        return 1
     fi
     local input
     echo ""
     log_info "更新方式："
-    echo "  [1] 蓝绿部署（推荐，update 期间尽量不停机）"
-    echo "  [0] 传统 stop → migrate → start（全量停机更新）"
-    read -rp "请选择 [1/0，回车=1 蓝绿]: " input
-    input="${input:-1}"
+    echo "  [0] 传统 stop → migrate → start（默认，低配友好）"
+    echo "  [1] 蓝绿部署（备选，尽量不停机；低配机可能卡顿）"
+    read -rp "请选择 [0/1，回车=0 传统]: " input
+    input="${input:-0}"
     case "$input" in
         1|y|Y|yes|蓝绿) return 0 ;;
         0|n|N|no|传统) return 1 ;;
         *)
-            log_warn "无效输入，使用默认：蓝绿部署"
-            return 0
+            log_warn "无效输入，使用默认：传统 stop-start"
+            return 1
             ;;
     esac
 }
@@ -178,6 +178,22 @@ bg_get_frontend_root_for_caddy() {
         return 0
     fi
     caddy_native_path "$FRONTEND_DIR/dist"
+}
+
+bg_sync_all_frontend_slots_from_dist() {
+    local slot src dest
+    src="$FRONTEND_DIR/dist"
+    [ -f "$src/index.html" ] || { log_error "缺少 $src/index.html"; return 1; }
+    [ -f "$src/login.html" ] || { log_error "缺少 $src/login.html"; return 1; }
+    bg_init_frontend_slots
+    for slot in blue green; do
+        dest="$(bg_frontend_slot_dir "$slot")"
+        log_info "同步前端槽位 dist-${slot} ← dist..."
+        rm -rf "$dest"
+        mkdir -p "$dest"
+        cp -a "$src/." "$dest/"
+    done
+    log_ok "蓝绿前端槽位已从 Git dist 同步"
 }
 
 bg_prepare_frontend_inactive() {

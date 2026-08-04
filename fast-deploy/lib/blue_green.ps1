@@ -19,21 +19,21 @@ function Test-UpdateUseBlueGreen {
         }
     }
     if ([Console]::IsInputRedirected) {
-        Write-LogInfo '非交互 update，默认启用蓝绿部署（$env:UPDATE_BLUE_GREEN=0 可改为传统 stop-start）'
-        return $true
+        Write-LogInfo '非交互 update，默认传统 stop-start（$env:UPDATE_BLUE_GREEN=1 可启用蓝绿）'
+        return $false
     }
     Write-Host ''
     Write-LogInfo '更新方式：'
-    Write-Host '  [1] 蓝绿部署（推荐，update 期间尽量不停机）'
-    Write-Host '  [0] 传统 stop → migrate → start（全量停机更新）'
-    $input = Read-Host '请选择 [1/0，回车=1 蓝绿]'
-    if ([string]::IsNullOrWhiteSpace($input)) { $input = '1' }
+    Write-Host '  [0] 传统 stop → migrate → start（默认，低配友好）'
+    Write-Host '  [1] 蓝绿部署（备选，尽量不停机；低配机可能卡顿）'
+    $input = Read-Host '请选择 [0/1，回车=0 传统]'
+    if ([string]::IsNullOrWhiteSpace($input)) { $input = '0' }
     switch ($input.Trim()) {
         { $_ -in '1','y','Y','yes','蓝绿' } { return $true }
         { $_ -in '0','n','N','no','传统' } { return $false }
         default {
-            Write-LogWarn '无效输入，使用默认：蓝绿部署'
-            return $true
+            Write-LogWarn '无效输入，使用默认：传统 stop-start'
+            return $false
         }
     }
 }
@@ -56,7 +56,7 @@ function Get-BlueGreenDeployStatusLabel {
     if ($script:BLUE_GREEN_DEPLOY -eq '1') {
         return "配置开启 (槽位 $($script:BACKEND_PORT_BLUE)/$($script:BACKEND_PORT_GREEN))"
     }
-    return '未启用 (update 时可选蓝绿，默认开启)'
+    return '未启用 (update 时可选蓝绿，默认传统)'
 }
 
 function Initialize-BgDefaults {

@@ -359,7 +359,7 @@ wizard_show_home_panel() {
     wizard_panel_section "DEPLOY 部署"
     wizard_panel_menu_item "1" "全新安装" "检测环境与依赖，完成配置后启动"
     wizard_panel_menu_item "2" "修改配置" "修改数据库、超管账号与访问地址"
-    wizard_panel_menu_item "3" "更新系统" "拉代码后选择蓝绿/传统更新（默认蓝绿）"
+    wizard_panel_menu_item "3" "更新系统" "拉代码后选择传统/蓝绿更新（默认传统）"
     wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包 / 移动端 H5（私有仓，需凭证）"
     wizard_panel_section "OPS 运维"
     wizard_panel_menu_short "${WIZARD_CYAN}[5]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[6]${WIZARD_RESET} 服务  ${WIZARD_CYAN}[7]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[9]${WIZARD_RESET} 释放内存  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"

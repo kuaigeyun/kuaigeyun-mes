@@ -58,16 +58,16 @@ Node.js 22+ · Python 3.12+（系统）/ 3.11（uv 虚拟环境）· uv · npm �
 
 ## 蓝绿部署（可选，`update` 零停机）
 
-**每次 update 时选择**（默认蓝绿），无需事先写配置：
+**每次 update 时选择**（默认传统 stop-start），无需事先写配置：
 
 ```bash
-./fast-deploy/deploy.sh update          # 生产：提示 [1] 蓝绿 / [0] 传统，回车=蓝绿
+./fast-deploy/deploy.sh update          # 生产：提示 [0] 传统 / [1] 蓝绿，回车=传统
 ./fast-deploy/deploy.sh dev update      # 开发
 ```
 
 向导 **[3] 更新系统** 同样会先确认模式（dev/prod），再询问更新方式。
 
-非交互脚本默认蓝绿；要传统 stop-start：`UPDATE_BLUE_GREEN=0 ./fast-deploy/deploy.sh update`
+非交互脚本默认传统；要蓝绿：`UPDATE_BLUE_GREEN=1 ./fast-deploy/deploy.sh update`
 
 **`deploy.env` 的 `BLUE_GREEN_DEPLOY=1`** 仅影响 start/stop/status（无 state 文件时强制双槽位）；日常不必修改。
 
@@ -78,7 +78,7 @@ Node.js 22+ · Python 3.12+（系统）/ 3.11（uv 虚拟环境）· uv · npm �
 
 | 变量 | 默认 | 说明 |
 |------|------|------|
-| `BLUE_GREEN_DEPLOY` | `0` | `1` 启用蓝绿 update |
+| `BLUE_GREEN_DEPLOY` | `0` | `1` 时 start/stop 走双槽位；update 仍可在交互时选蓝绿 |
 | `BACKEND_PORT_BLUE` | `8201` | 蓝槽 backend |
 | `BACKEND_PORT_GREEN` | `8202` | 绿槽 backend |
 | `WORKER_DRAIN_TIMEOUT` | `60` | Worker 优雅退出秒数 |

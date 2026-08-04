@@ -1766,7 +1766,7 @@ blue_green_deploy_status_label() {
         echo "配置开启 (槽位 ${BACKEND_PORT_BLUE}/${BACKEND_PORT_GREEN})"
         return
     fi
-    echo "未启用 (update 时可选蓝绿，默认开启)"
+    echo "未启用 (update 时可选蓝绿，默认传统)"
 }
 
 print_configure_summary() {
@@ -4526,7 +4526,42 @@ _git_clean_untracked_safe() {
         || true
 }
 
-# 主仓 update 后或扩展开关已开时，按 deploy.env 重新写入 yaml 并 compose
+# 扩展应用已启用时，与 update 同步拉取专业/定制私仓（避免生产后端仍跑旧 haoligo 等）
+sync_extension_git_repos_if_enabled() {
+    load_deploy_env
+    local pro_en custom_en
+    pro_en="$(read_deploy_env_value PRO_ENABLED || echo 0)"
+    custom_en="$(read_deploy_env_value CUSTOM_ENABLED || echo 0)"
+    if [ "$pro_en" != "1" ] && [ "$custom_en" != "1" ]; then
+        return 0
+    fi
+
+    local pro_url pro_path pro_branch pro_token
+    local custom_url custom_path custom_branch custom_token
+
+    if [ "$pro_en" = "1" ]; then
+        pro_url="$(read_deploy_env_value PRO_REPO_URL || echo "$DEFAULT_PRO_REPO_URL")"
+        pro_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
+        [ -n "$pro_path" ] || pro_path="$(_pro_default_repo_path)"
+        pro_branch="$(read_deploy_env_value PRO_GIT_BRANCH || echo develop)"
+        pro_token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
+        _warn_missing_https_token "专业仓" "$pro_url" "$pro_token" "PRO_GIT_TOKEN"
+        sync_sibling_git_repo "kuaigeyun-pro" "$pro_url" "$pro_path" "$pro_branch" "$pro_token" || return 1
+    fi
+
+    if [ "$custom_en" = "1" ]; then
+        custom_url="$(read_deploy_env_value CUSTOM_REPO_URL || echo "$DEFAULT_CUSTOM_REPO_URL")"
+        custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
+        [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
+        custom_branch="$(read_deploy_env_value CUSTOM_GIT_BRANCH || echo develop)"
+        custom_token="$(read_deploy_env_value CUSTOM_GIT_TOKEN || true)"
+        [ -n "$custom_token" ] || custom_token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
+        _warn_missing_https_token "定制仓" "$custom_url" "$custom_token" "CUSTOM_GIT_TOKEN"
+        sync_sibling_git_repo "kuaigeyun-custom" "$custom_url" "$custom_path" "$custom_branch" "$custom_token" || return 1
+    fi
+}
+
+# 主仓 update 后或扩展开关已开时，同步私仓并按 deploy.env 重新 compose
 recompose_extension_apps_if_enabled() {
     load_deploy_env
     local pro_en custom_en
@@ -4535,7 +4570,8 @@ recompose_extension_apps_if_enabled() {
     if [ "$pro_en" != "1" ] && [ "$custom_en" != "1" ]; then
         return 0
     fi
-    log_info "扩展应用已启用，重新组装（workspace compose）..."
+    log_info "扩展应用已启用，同步私仓并重新组装（workspace compose）..."
+    sync_extension_git_repos_if_enabled || return 1
     run_workspace_compose || {
         log_error "扩展应用组装失败。请检查私仓路径与 PyYAML，或执行: ./fast-deploy/deploy.sh pro-apps all"
         return 1
@@ -4965,7 +5001,6 @@ run_update_dev() {
         return 0
     fi
     # SKIP_GIT_SYNC=1：调用方已 sync（如向导拉取后 reload 脚本）
-    # 私仓拉取仍走菜单 [4]；若已启用则 update 后自动 recompose，避免 clean 掉组装产物
     if [ "${SKIP_GIT_SYNC:-0}" != "1" ]; then
         sync_git_from_origin || return 1
     fi
@@ -4982,7 +5017,6 @@ run_update_prod() {
         bg_run_update_prod || return 1
         return 0
     fi
-    # 私仓拉取仍走菜单 [4]；若已启用则 update 后自动 recompose，避免 clean 掉组装产物
     if [ "${SKIP_GIT_SYNC:-0}" != "1" ]; then
         sync_git_from_origin || return 1
     fi
@@ -4990,6 +5024,9 @@ run_update_prod() {
     cmd_stop_prod || return 1
     cmd_migrate || return 1
     cmd_ensure_frontend_dist || return 1
+    if bg_enabled; then
+        bg_sync_all_frontend_slots_from_dist || return 1
+    fi
     record_deploy_release_metadata || return 1
     cmd_start_prod || return 1
 }
