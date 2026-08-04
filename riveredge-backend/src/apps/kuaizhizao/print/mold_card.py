@@ -1,6 +1,6 @@
 """快制造 — 模具卡打印预设（默认 60×50mm 标签）。
 
-复用设备卡的 asset_card_table 编译与框线表格，字段与标题改为模具。
+可视化 designer_schema（blocks）为打印真源；字段与标题为模具。
 """
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ from typing import Any
 from apps.kuaizhizao.print.designer_presets import _field, _id, _text
 from apps.kuaizhizao.print.equipment_card import (
     ASSET_CARD_LAYOUT_BY_PAGE,
-    compile_asset_card_table_schema,
     resolve_asset_card_layout,
 )
 
@@ -103,9 +102,7 @@ def build_mold_card_designer_schema() -> dict[str, Any]:
     rows = [_label_value_row(label, key, label_w=label_w) for label, key in MOLD_CARD_ROWS]
     return {
         "version": "v1",
-        "compileMode": "asset_card_table",
         "cardKind": "mold",
-        "assetCard": build_mold_card_config(),
         "pageSize": MOLD_CARD_PAGE_SIZE,
         "orientation": "portrait",
         "margins": {"top": 2, "right": 2, "bottom": 2, "left": 2},
@@ -197,13 +194,15 @@ def build_mold_card_designer_schema() -> dict[str, Any]:
 
 
 def build_mold_card_preset() -> dict[str, Any]:
+    from apps.kuaizhizao.print.designer_presets import compile_designer_schema
+
     designer_schema = build_mold_card_designer_schema()
-    compiled = compile_asset_card_table_schema(designer_schema)
+    compiled = compile_designer_schema(designer_schema)
     return {
         "name": "模具卡",
         "code": "MOLD_CARD_PRINT",
         "type": "html",
-        "description": "模具信息卡（60×50mm 标签，表格框线单卡，可视化设计；支持批量）",
+        "description": "模具信息卡（60×50mm 可视化标签；纸张可改预设或自定义 mm；支持批量）",
         "content": compiled,
         "config": {
             "document_type": "mold_card",

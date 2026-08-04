@@ -5,8 +5,8 @@
 - 设备信息挂牌卡：100×70 / 120×80 mm
 默认 100×70mm 横版单卡。
 
-版式用 HTML table 画完整格子线（分栏 flex 在预览里框线常看不见）。
-设计器仍保存 designer_schema，编译时走 compileMode=asset_card_table。
+内置模板为可视化 designer_schema（blocks），与其它单据一致走通用编译。
+保留 compileMode=asset_card_table 路径，仅兼容租户库内尚未升级的旧模板。
 """
 
 from __future__ import annotations
@@ -271,7 +271,7 @@ def asset_card_table_css(layout: dict[str, Any] | None = None) -> str:
 
 
 def _label_value_row(label: str, field_key: str) -> dict[str, Any]:
-    """设计器画布用的近似行（真正打印以 table 为准）。"""
+    """可视化设计器中的标签/值行（打印与画布同源）。"""
     return {
         "id": _id("row"),
         "type": "columns",
@@ -281,6 +281,7 @@ def _label_value_row(label: str, field_key: str) -> dict[str, Any]:
             "border": "1px solid #000",
             "borderBottom": "1px solid #000",
             "width": "100%",
+            "boxSizing": "border-box",
         },
         "cols": [
             {
@@ -298,6 +299,8 @@ def _label_value_row(label: str, field_key: str) -> dict[str, Any]:
                             "padding": "2px 0",
                             "whiteSpace": "nowrap",
                             "borderRight": "1px solid #000",
+                            "width": "100%",
+                            "boxSizing": "border-box",
                         },
                     )
                 ],
@@ -316,6 +319,8 @@ def _label_value_row(label: str, field_key: str) -> dict[str, Any]:
                             "padding": "2px 4px",
                             "whiteSpace": "nowrap",
                             "overflow": "hidden",
+                            "width": "100%",
+                            "boxSizing": "border-box",
                         },
                     }
                 ],
@@ -325,12 +330,10 @@ def _label_value_row(label: str, field_key: str) -> dict[str, Any]:
 
 
 def build_equipment_card_designer_schema() -> dict[str, Any]:
-    """可视化 schema：设计器可调；compileMode 强制按表格编译出完整框线。"""
+    """可视化 schema：画布 blocks 即打印真源。"""
     rows = [_label_value_row(label, key) for label, key in ASSET_CARD_ROWS]
     return {
         "version": "v1",
-        "compileMode": "asset_card_table",
-        "assetCard": build_asset_card_config(),
         "pageSize": "ASSET-100x70",
         "orientation": "portrait",
         "margins": {"top": 2, "right": 2, "bottom": 2, "left": 2},
@@ -368,6 +371,7 @@ def build_equipment_card_designer_schema() -> dict[str, Any]:
                                     "border": "1px solid #000",
                                     "borderBottom": "1.5px solid #000",
                                     "width": "100%",
+                                    "boxSizing": "border-box",
                                 },
                             ),
                             {
@@ -378,6 +382,7 @@ def build_equipment_card_designer_schema() -> dict[str, Any]:
                                 "style": {
                                     "width": "100%",
                                     "border": "1px solid #000",
+                                    "boxSizing": "border-box",
                                 },
                                 "cols": [
                                     {
@@ -458,14 +463,15 @@ def compile_asset_card_table_schema(schema: dict[str, Any]) -> str:
 
 
 def build_equipment_card_preset() -> dict[str, Any]:
+    from apps.kuaizhizao.print.designer_presets import compile_designer_schema
+
     designer_schema = build_equipment_card_designer_schema()
-    # 走专用表格编译，保证框线；designer_schema 仍可供设计器打开
-    compiled = compile_asset_card_table_schema(designer_schema)
+    compiled = compile_designer_schema(designer_schema)
     return {
         "name": "设备卡",
         "code": "EQUIPMENT_CARD_PRINT",
         "type": "html",
-        "description": "固定资产/设备信息卡（100×70mm 表格框线单卡，可视化设计；支持批量）",
+        "description": "固定资产/设备信息卡（100×70mm 可视化单卡；纸张可改预设或自定义 mm；支持批量）",
         "content": compiled,
         "config": {
             "document_type": "equipment_card",

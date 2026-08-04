@@ -539,7 +539,8 @@ class PrintTemplateService:
 
         schema = data.source
         schema_version = str(schema.get("version") or "v1")
-        # 固定资产/设备卡：强制表格编译，保证完整格子线（分栏 flex 预览常看不到框线）
+        # 兼容旧资产卡：仍声明 compileMode=asset_card_table 时走表格编译；
+        # 新内置设备卡/模具卡为可视化 blocks，走下方通用编译。
         if str(schema.get("compileMode") or "").strip() == "asset_card_table":
             from apps.kuaizhizao.print.equipment_card import compile_asset_card_table_schema
 

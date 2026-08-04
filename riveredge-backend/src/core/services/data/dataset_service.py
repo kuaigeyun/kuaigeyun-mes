@@ -522,12 +522,16 @@ class DatasetService:
     @staticmethod
     def _convert_named_params_to_positional(sql: str, params: Dict[str, Any]) -> Tuple[str, list]:
         """将 :param 占位符转为 asyncpg 的 $1,$2 格式，按 SQL 中首次出现顺序，返回 (sql, args)。
-        使用 (?<!:) 排除 PostgreSQL 类型转换 ::type（如 ::int、::numeric）被误识别为参数。"""
-        if not params:
-            return sql, []
+        使用 (?<!:) 排除 PostgreSQL 类型转换 ::type（如 ::int、::numeric）被误识别为参数。
+        禁止在 params 为空时原样返回含 :name 的 SQL（asyncpg 会报 syntax error at or near \":\"）。"""
         # 仅匹配 :param，不匹配 ::type（PostgreSQL 类型转换）
         param_names = list(dict.fromkeys(re.findall(r"(?<!:):(\w+)\b", sql)))
-        args = [params[n] for n in param_names]
+        if not param_names:
+            return sql, []
+        missing = [name for name in param_names if name not in (params or {})]
+        if missing:
+            raise KeyError(f"缺少查询参数: {', '.join(':' + m for m in missing)}")
+        args = [params[name] for name in param_names]
         for i, name in enumerate(param_names, 1):
             sql = re.sub(rf"(?<!:):{re.escape(name)}\b", f"${i}", sql)
         return sql, args
@@ -571,8 +575,12 @@ class DatasetService:
             query_params.update(parameters)
         if apply_tenant_isolation:
             query_params["tenant_id"] = tenant_id
+        # SQL 手写 :tenant_id 且关闭自动注入时，仍须绑定当前租户，否则占位符残留导致 PG 语法错误
+        named = DatasetService._list_sql_named_parameters(sql)
+        if "tenant_id" in named and "tenant_id" not in query_params:
+            query_params["tenant_id"] = tenant_id
         if fill_missing_sql_parameters:
-            for name in DatasetService._list_sql_named_parameters(sql):
+            for name in named:
                 if name not in query_params:
                     query_params[name] = None
         return query_params

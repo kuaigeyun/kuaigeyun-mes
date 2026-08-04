@@ -21,3 +21,6 @@ export function getUniToolbarControlShellStyle(token: GlobalToken): CSSPropertie
 
 /** 工具栏并排控件在 flex 容器中的 class，配合 global.less 统一 Segmented 内层高度 */
 export const UNI_TOOLBAR_SEGMENTED_CLASS = 'uni-toolbar-segmented';
+
+/** 页面头 / 表格外并排 Segmented + Select 等控件统一对齐 */
+export const UNI_TOOLBAR_INLINE_CONTROLS_CLASS = 'uni-toolbar-inline-controls';

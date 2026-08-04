@@ -263,11 +263,14 @@ interface DesignerSchema {
   /** 设计单卡，打印时按集合循环（如设备卡 items） */
   repeatCollection?: string;
   repeatItem?: string;
-  /** asset_card_table：按表格编译完整框线 */
+  /** 旧资产卡表格编译；新模板不再写入，仅兼容历史库 */
   compileMode?: string;
   assetCard?: Record<string, unknown>;
   blocks: DesignerNodeSchema[];
 }
+
+const CUSTOM_PAPER_SIZE = 'CUSTOM';
+const CUSTOM_PAGE_SIZE_RE = /^(\d+(?:\.\d+)?)\s*mm\s+(\d+(?:\.\d+)?)\s*mm$/i;
 
 const PAPER_SIZES: Record<string, { width: number; height: number; labelKey: string }> = {
   A4: { width: 210, height: 297, labelKey: 'pages.system.printTemplatesDesign.paperSizeA4' },
@@ -284,6 +287,21 @@ const PAPER_SIZES: Record<string, { width: number; height: number; labelKey: str
   'ASSET-80x60': { width: 80, height: 60, labelKey: 'pages.system.printTemplatesDesign.paperSizeAsset80x60' },
   'ASSET-60x50': { width: 60, height: 50, labelKey: 'pages.system.printTemplatesDesign.paperSizeAsset60x50' },
 };
+
+function parseCustomPageSizeMm(pageSize: string): { width: number; height: number } | null {
+  const m = CUSTOM_PAGE_SIZE_RE.exec((pageSize || '').trim());
+  if (!m) return null;
+  const width = Number(m[1]);
+  const height = Number(m[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+  return { width, height };
+}
+
+function formatCustomPageSizeMm(width: number, height: number): string {
+  const w = Math.round(width * 100) / 100;
+  const h = Math.round(height * 100) / 100;
+  return `${w}mm ${h}mm`;
+}
 
 /** 列宽：支持 flex 比例（1/2）或固定单位（14mm / 40%） */
 const colWidthFlexStyle = (width?: string): React.CSSProperties => {
@@ -1843,6 +1861,8 @@ const PrintTemplateDesignPage: React.FC = () => {
   const [selectedSamplePreset, setSelectedSamplePreset] = useState<string>('');
   const [previewDataText, setPreviewDataText] = useState('{}');
   const [pageSize, setPageSize] = useState<string>('A4');
+  const [customWidthMm, setCustomWidthMm] = useState<number>(100);
+  const [customHeightMm, setCustomHeightMm] = useState<number>(70);
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [margins, setMargins] = useState<{ top: number; right: number; bottom: number; left: number }>({ top: 10, right: 10, bottom: 10, left: 10 });
   const [renderedHtmlPreview, setRenderedHtmlPreview] = useState('');
@@ -1858,10 +1878,63 @@ const PrintTemplateDesignPage: React.FC = () => {
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const workspaceRef = React.useRef<HTMLDivElement>(null);
 
+  const resolvePaperDims = useCallback(() => {
+    if (pageSize === CUSTOM_PAPER_SIZE) {
+      return {
+        width: customWidthMm > 0 ? customWidthMm : 100,
+        height: customHeightMm > 0 ? customHeightMm : 70,
+      };
+    }
+    const preset = PAPER_SIZES[pageSize];
+    if (preset) return { width: preset.width, height: preset.height };
+    const parsed = parseCustomPageSizeMm(pageSize);
+    if (parsed) return parsed;
+    return { width: PAPER_SIZES.A4.width, height: PAPER_SIZES.A4.height };
+  }, [pageSize, customWidthMm, customHeightMm]);
+
+  const resolveSchemaPageSize = useCallback(() => {
+    if (pageSize === CUSTOM_PAPER_SIZE) {
+      return formatCustomPageSizeMm(
+        customWidthMm > 0 ? customWidthMm : 100,
+        customHeightMm > 0 ? customHeightMm : 70,
+      );
+    }
+    return pageSize;
+  }, [pageSize, customWidthMm, customHeightMm]);
+
+  const applyPageSizeFromSchema = useCallback((raw: string | undefined) => {
+    const value = (raw || 'A4').trim();
+    if (PAPER_SIZES[value]) {
+      setPageSize(value);
+      return;
+    }
+    const parsed = parseCustomPageSizeMm(value);
+    if (parsed) {
+      setPageSize(CUSTOM_PAPER_SIZE);
+      setCustomWidthMm(parsed.width);
+      setCustomHeightMm(parsed.height);
+      return;
+    }
+    setPageSize('A4');
+  }, []);
+
+  const handlePaperSizeChange = useCallback((next: string) => {
+    if (next === CUSTOM_PAPER_SIZE) {
+      const dims = PAPER_SIZES[pageSize];
+      if (dims) {
+        setCustomWidthMm(dims.width);
+        setCustomHeightMm(dims.height);
+      }
+      setPageSize(CUSTOM_PAPER_SIZE);
+      return;
+    }
+    setPageSize(next);
+  }, [pageSize]);
+
   const handleFitToWidth = useCallback(() => {
     const container = workspaceRef.current;
     if (!container) return;
-    const preset = PAPER_SIZES[pageSize] || PAPER_SIZES.A4;
+    const preset = resolvePaperDims();
     const isLandscape = orientation === 'landscape';
     // Total physical width of the canvas element including 10mm ruler space on each side (for symmetry)
     const paperWidthMm = (isLandscape ? preset.height : preset.width) + 20; 
@@ -1876,14 +1949,14 @@ const PrintTemplateDesignPage: React.FC = () => {
     const targetZoom = Math.floor((availablePx / paperPx) * 100);
     // Auto-shrink only if it's wider than the viewport; do not exceed 100%
     setZoom(Math.max(30, Math.min(100, targetZoom)));
-  }, [pageSize, orientation]);
+  }, [resolvePaperDims, orientation]);
 
   const samplePresets = useMemo(() => getSamplePresetsByDocType(t, templateType), [t, templateType]);
   const hasLoaded = React.useRef(false);
   const designImportInputRef = React.useRef<HTMLInputElement>(null);
 
   const getPaperStyles = useCallback(() => {
-    const preset = PAPER_SIZES[pageSize] || PAPER_SIZES.A4;
+    const preset = resolvePaperDims();
     const isLandscape = orientation === 'landscape';
     const width = isLandscape ? preset.height : preset.width;
     const height = isLandscape ? preset.width : preset.height;
@@ -1892,7 +1965,7 @@ const PrintTemplateDesignPage: React.FC = () => {
       minHeight: `${height}mm`,
       padding: `${margins.top}mm ${margins.right}mm ${margins.bottom}mm ${margins.left}mm`,
     };
-  }, [pageSize, orientation, margins]);
+  }, [resolvePaperDims, orientation, margins]);
 
   const loadTemplate = useCallback(async () => {
     if (!uuid) return;
@@ -1906,7 +1979,7 @@ const PrintTemplateDesignPage: React.FC = () => {
       setTemplateDescription(data.description || '');
       const existingSchema = (data.config?.designer_schema as DesignerSchema | undefined) || null;
       if (existingSchema) {
-        setPageSize(existingSchema.pageSize || 'A4');
+        applyPageSizeFromSchema(existingSchema.pageSize || 'A4');
         setOrientation(existingSchema.orientation || 'portrait');
         if (existingSchema.margins) {
           setMargins(existingSchema.margins);
@@ -1923,8 +1996,18 @@ const PrintTemplateDesignPage: React.FC = () => {
         }
         setRepeatCollection(existingSchema.repeatCollection || '');
         setRepeatItem(existingSchema.repeatItem || 'item');
-        setCompileMode(existingSchema.compileMode || '');
-        setAssetCard(existingSchema.assetCard || null);
+        // 设备/模具卡：丢弃旧表格编译模式，保存后走可视化 blocks
+        if (
+          docType === 'equipment_card' ||
+          docType === 'mold_card' ||
+          existingSchema.compileMode === 'asset_card_table'
+        ) {
+          setCompileMode('');
+          setAssetCard(null);
+        } else {
+          setCompileMode(existingSchema.compileMode || '');
+          setAssetCard(existingSchema.assetCard || null);
+        }
       } else {
         const first: DesignerNodeSchema = {
           id: `text-${Date.now()}`,
@@ -1941,7 +2024,7 @@ const PrintTemplateDesignPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [uuid, t, messageApi]);
+  }, [uuid, t, messageApi, applyPageSizeFromSchema]);
 
   useEffect(() => {
     if (!hasLoaded.current) {
@@ -2013,7 +2096,7 @@ const PrintTemplateDesignPage: React.FC = () => {
 
     return {
       version: 'v1',
-      pageSize,
+      pageSize: resolveSchemaPageSize(),
       orientation,
       margins,
       itemSpacing,
@@ -2023,7 +2106,7 @@ const PrintTemplateDesignPage: React.FC = () => {
       ...(assetCard ? { assetCard } : {}),
       blocks: normalizeBlocks(schemaBlocks)
     };
-  }, [pageSize, orientation, margins, itemSpacing, tableRowLimit, repeatCollection, repeatItem, compileMode, assetCard, schemaBlocks, t]);
+  }, [resolveSchemaPageSize, orientation, margins, itemSpacing, tableRowLimit, repeatCollection, repeatItem, compileMode, assetCard, schemaBlocks, t]);
 
   const applyPortableDesign = useCallback((data: PrintTemplateDesignPortableV1) => {
     const schema = data.template.designer_schema as unknown as DesignerSchema;
@@ -2031,7 +2114,7 @@ const PrintTemplateDesignPage: React.FC = () => {
     setTemplateCode(data.template.code ?? '');
     setTemplateDescription(data.template.description ?? '');
     setTemplateType(data.template.document_type || '');
-    setPageSize(schema.pageSize || 'A4');
+    applyPageSizeFromSchema(schema.pageSize || 'A4');
     setOrientation(schema.orientation === 'landscape' ? 'landscape' : 'portrait');
     if (schema.margins) {
       setMargins(schema.margins);
@@ -2040,12 +2123,18 @@ const PrintTemplateDesignPage: React.FC = () => {
     setTableRowLimit(schema.tableRowLimit ?? 0);
     setRepeatCollection(schema.repeatCollection || '');
     setRepeatItem(schema.repeatItem || 'item');
-    setCompileMode(schema.compileMode || '');
-    setAssetCard(schema.assetCard || null);
+    const docType = data.template.document_type || '';
+    if (docType === 'equipment_card' || docType === 'mold_card' || schema.compileMode === 'asset_card_table') {
+      setCompileMode('');
+      setAssetCard(null);
+    } else {
+      setCompileMode(schema.compileMode || '');
+      setAssetCard(schema.assetCard || null);
+    }
     const blocks = Array.isArray(schema.blocks) ? schema.blocks : [];
     setSchemaBlocks(blocks as DesignerNodeSchema[]);
     setSelectedBlockId(blocks.length ? (blocks[0] as DesignerNodeSchema).id : null);
-  }, []);
+  }, [applyPageSizeFromSchema]);
 
   const handleExportPortableDesign = useCallback(() => {
     try {
@@ -2106,7 +2195,7 @@ const PrintTemplateDesignPage: React.FC = () => {
     if (!uuid) return;
     try {
       const schema = getNormalizedSchema();
-      // 设备卡 / 模具卡：编译前补齐循环 + 表格模式，保证完整框线
+      // 设备卡 / 模具卡：补齐批量循环；打印以可视化 blocks 为准
       if (templateType === 'equipment_card' || templateType === 'mold_card') {
         if (!schema.repeatCollection) {
           schema.repeatCollection = 'items';
@@ -2114,10 +2203,10 @@ const PrintTemplateDesignPage: React.FC = () => {
           setRepeatCollection('items');
           setRepeatItem(schema.repeatItem);
         }
-        if (!schema.compileMode) {
-          schema.compileMode = 'asset_card_table';
-          setCompileMode('asset_card_table');
-        }
+        delete schema.compileMode;
+        delete schema.assetCard;
+        setCompileMode('');
+        setAssetCard(null);
       }
       const compiled = await compilePrintTemplate({
         source_type: 'designer_json',
@@ -2839,7 +2928,7 @@ const PrintTemplateDesignPage: React.FC = () => {
     return <div style={{ padding: 20 }}>{t('pages.system.printTemplatesDesign.loading')}</div>;
   }
 
-  const preset = PAPER_SIZES[pageSize] || PAPER_SIZES.A4;
+  const preset = resolvePaperDims();
   const isLandscape = orientation === 'landscape';
   const paperBaseWidth = isLandscape ? preset.height : preset.width;
   const paperBaseHeight = isLandscape ? preset.width : preset.height;
@@ -3040,10 +3129,44 @@ const PrintTemplateDesignPage: React.FC = () => {
                   <div style={{ marginBottom: 8, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.paperSize')}</div>
                   <Select
                     style={{ width: '100%' }}
-                    value={pageSize}
-                    options={Object.keys(PAPER_SIZES).map(k => ({ label: t(PAPER_SIZES[k].labelKey), value: k }))}
-                    onChange={setPageSize}
+                    value={pageSize === CUSTOM_PAPER_SIZE || PAPER_SIZES[pageSize] ? pageSize : CUSTOM_PAPER_SIZE}
+                    options={[
+                      ...Object.keys(PAPER_SIZES).map((k) => ({ label: t(PAPER_SIZES[k].labelKey), value: k })),
+                      { label: t('pages.system.printTemplatesDesign.paperSizeCustom'), value: CUSTOM_PAPER_SIZE },
+                    ]}
+                    onChange={handlePaperSizeChange}
                   />
+                  {pageSize === CUSTOM_PAPER_SIZE && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.widthMm')}</div>
+                        <InputNumber
+                          size="small"
+                          style={{ width: '100%' }}
+                          min={1}
+                          max={2000}
+                          step={0.5}
+                          value={customWidthMm}
+                          onChange={(v) => setCustomWidthMm(typeof v === 'number' && v > 0 ? v : 1)}
+                        />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.heightMm')}</div>
+                        <InputNumber
+                          size="small"
+                          style={{ width: '100%' }}
+                          min={1}
+                          max={2000}
+                          step={0.5}
+                          value={customHeightMm}
+                          onChange={(v) => setCustomHeightMm(typeof v === 'number' && v > 0 ? v : 1)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: '#bfbfbf', marginTop: 4 }}>
+                    {t('pages.system.printTemplatesDesign.paperSizeCustomHint')}
+                  </div>
                 </div>
                 <div>
                   <div style={{ marginBottom: 8, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.paperOrientation')}</div>

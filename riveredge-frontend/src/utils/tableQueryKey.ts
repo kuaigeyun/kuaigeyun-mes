@@ -1,6 +1,7 @@
 /**
  * 与 UniTable + TanStack Query 的 queryKey 片段一致，供列表预取与缓存键对齐。
  */
+import dayjs from 'dayjs'
 export function stableJsonForQueryKey(value: unknown): string {
   const walk = (v: any, depth: number): any => {
     if (depth > 14) return '[MaxDepth]'
@@ -91,6 +92,69 @@ export function mergeListKeyword(
     if (v != null && String(v).trim()) return String(v).trim()
   }
   return ''
+}
+
+/** UniTable 顶栏模糊词 → API keyword（空则 undefined） */
+export function pickListSearchKeyword(
+  searchFormValues?: Record<string, unknown> | null,
+): string | undefined {
+  const kw = String(searchFormValues?.keyword ?? '').trim()
+  return kw || undefined
+}
+
+/** 高级搜索字符串字段（空则 undefined） */
+export function pickSearchString(
+  searchFormValues: Record<string, unknown> | undefined | null,
+  key: string,
+): string | undefined {
+  const raw = searchFormValues?.[key]
+  if (raw == null) return undefined
+  const trimmed = String(raw).trim()
+  return trimmed || undefined
+}
+
+/** 高级搜索日期字段 → YYYY-MM-DD（兼容 dayjs / Date / ISO 字符串） */
+export function pickSearchDate(
+  searchFormValues: Record<string, unknown> | undefined | null,
+  key: string,
+): string | undefined {
+  const raw = searchFormValues?.[key]
+  if (raw == null || raw === '') return undefined
+  const parsed = dayjs(raw as never)
+  if (parsed.isValid()) return parsed.format('YYYY-MM-DD')
+  const fallback = String(raw).trim()
+  return fallback || undefined
+}
+
+/** 高级搜索日期区间：优先 from/to 键，否则读取 rangeKey 数组 */
+export function pickSearchDateRange(
+  searchFormValues: Record<string, unknown> | undefined | null,
+  fromKey: string,
+  toKey: string,
+  rangeKey?: string,
+): { from?: string; to?: string } {
+  const from = pickSearchDate(searchFormValues, fromKey)
+  const to = pickSearchDate(searchFormValues, toKey)
+  if (from || to) return { from, to }
+  if (!rangeKey) return {}
+  const raw = searchFormValues?.[rangeKey]
+  if (!Array.isArray(raw) || raw.length < 2) return {}
+  const start = pickSearchDate({ [fromKey]: raw[0] }, fromKey)
+  const end = pickSearchDate({ [toKey]: raw[1] }, toKey)
+  return { from: start, to: end }
+}
+
+/** 客户端列表：模糊词匹配若干文本字段（OR） */
+export function filterRowsByListKeyword<T>(
+  rows: T[],
+  keyword: string | undefined,
+  pickTexts: (row: T) => (string | null | undefined)[],
+): T[] {
+  if (!keyword) return rows
+  const q = keyword.toLowerCase()
+  return rows.filter((row) =>
+    pickTexts(row).some((text) => String(text ?? '').toLowerCase().includes(q)),
+  )
 }
 
 /** 权限列表 sortBy → 后端字段（snake_case） */

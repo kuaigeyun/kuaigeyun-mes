@@ -234,18 +234,29 @@ const EquipmentDashboard: React.FC = () => {
     () => [
       {
         title: t('app.kuaizhizao.equipmentDashboard.colMaintenanceName'),
-        dataIndex: 'name',
+        dataIndex: 'plan_name',
         ellipsis: true,
+        render: (text: string, record: Record<string, unknown>) =>
+          String(text || record.name || '—'),
       },
       {
         title: t('app.kuaizhizao.equipmentDashboard.colNextPlanDate'),
-        dataIndex: 'next_execution_date',
-        width: 100,
-        render: (value: string) => (
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {value || '—'}
-          </Text>
-        ),
+        dataIndex: 'planned_start_date',
+        width: 110,
+        render: (value: string, record: Record<string, unknown>) => {
+          const raw = value || record.next_execution_date;
+          const label =
+            raw == null
+              ? '—'
+              : String(raw).includes('T')
+                ? String(raw).slice(0, 10)
+                : String(raw).slice(0, 10);
+          return (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {label}
+            </Text>
+          );
+        },
       },
     ],
     [t],
@@ -255,10 +266,10 @@ const EquipmentDashboard: React.FC = () => {
     () => [
       {
         title: t('app.kuaizhizao.equipmentDashboard.colSpotCheckCode'),
-        dataIndex: 'check_code',
-        render: (text: string, record: { id?: number }) => (
+        dataIndex: 'document_no',
+        render: (text: string, record: { id?: number; check_code?: string }) => (
           <a onClick={() => navigate('/apps/kuaizhizao/equipment-management/spot-checks')}>
-            {text || record.id}
+            {text || record.check_code || record.id}
           </a>
         ),
       },
@@ -275,17 +286,17 @@ const EquipmentDashboard: React.FC = () => {
     () => [
       {
         title: t('app.kuaizhizao.equipmentDashboard.colSparePart'),
-        dataIndex: 'spare_part_name',
+        dataIndex: 'part_name',
         ellipsis: true,
         render: (text: string, record: Record<string, unknown>) =>
-          String(text || record.name || record.material_name || '—'),
+          String(text || record.spare_part_name || record.name || record.material_name || '—'),
       },
       {
         title: t('app.kuaizhizao.equipmentDashboard.colStockQty'),
-        dataIndex: 'current_quantity',
+        dataIndex: 'current_stock',
         width: 72,
         render: (_: unknown, record: Record<string, unknown>) =>
-          String(record.current_quantity ?? record.quantity ?? '—'),
+          String(record.current_stock ?? record.current_quantity ?? record.quantity ?? '—'),
       },
     ],
     [t],
