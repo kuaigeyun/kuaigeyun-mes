@@ -6504,6 +6504,7 @@ const WorkOrdersPage: React.FC = () => {
       uniTablePrimaryFlex: false,
       fixed: 'left',
       sorter: true,
+      defaultSortOrder: 'descend',
       hideInSearch: false,
       render: (_, record) => <WorkOrderListPrimaryCell record={record} />,
     },

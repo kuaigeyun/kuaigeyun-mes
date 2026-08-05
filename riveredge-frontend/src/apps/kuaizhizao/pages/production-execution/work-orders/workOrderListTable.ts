@@ -169,7 +169,10 @@ export function buildWorkOrderListUniTableQueryKey(
   ] as const
 }
 
-const emptySort: Record<string, 'ascend' | 'descend' | null> = {}
+/** 列表默认排序：工单号倒序（与列 defaultSortOrder 及后端 list 默认一致） */
+export const WORK_ORDER_LIST_DEFAULT_SORT: Record<string, 'ascend' | 'descend' | null> = {
+  code: 'descend',
+}
 const emptyFilter: Record<string, ReactText[] | null> = {}
 
 function tenantIdForSnapshot(): string {
@@ -376,7 +379,7 @@ export function hydrateDefaultWorkOrderListPageFromSession(
   pageSize: number,
   staleTimeMs: number
 ): void {
-  const key = buildWorkOrderListUniTableQueryKey(1, pageSize, emptySort, emptyFilter, {})
+  const key = buildWorkOrderListUniTableQueryKey(1, pageSize, WORK_ORDER_LIST_DEFAULT_SORT, emptyFilter, {})
   hydrateWorkOrderListQueryFromSession(queryClient, key, staleTimeMs)
 }
 
@@ -444,6 +447,9 @@ function buildWorkOrderListApiParams(
       apiParams.order_by = sortOrder === 'desc' ? `-${sortBy}` : sortBy
     }
   }
+  if (!apiParams.order_by) {
+    apiParams.order_by = '-code'
+  }
   return apiParams
 }
 
@@ -494,11 +500,11 @@ export async function fetchWorkOrderListForTable(
 
 /** 默认第一页 + 空条件，与刚进页时 ProTable 首次请求一致（pageSize 与偏好不一致时会再拉一次，仍暖一部分缓存） */
 export function prefetchDefaultWorkOrderList(queryClient: QueryClient, pageSize: number): void {
-  const key = buildWorkOrderListUniTableQueryKey(1, pageSize, emptySort, emptyFilter, {})
+  const key = buildWorkOrderListUniTableQueryKey(1, pageSize, WORK_ORDER_LIST_DEFAULT_SORT, emptyFilter, {})
   void queryClient.prefetchQuery({
     queryKey: [...key],
     queryFn: () =>
-      fetchWorkOrderListForTable({ current: 1, pageSize }, emptySort, emptyFilter, {}, {
+      fetchWorkOrderListForTable({ current: 1, pageSize }, WORK_ORDER_LIST_DEFAULT_SORT, emptyFilter, {}, {
         include_readiness: false,
         include_downstream_push_progress: false,
       }),

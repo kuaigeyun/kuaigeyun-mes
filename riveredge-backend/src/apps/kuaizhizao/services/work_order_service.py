@@ -1887,7 +1887,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         total = await query.count()
 
         # 排序
-        order_clause = order_by if order_by else "-created_at"
+        order_clause = order_by if order_by else "-code"
         work_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
 
         from apps.kuaizhizao.services.work_order_tree_service import (
