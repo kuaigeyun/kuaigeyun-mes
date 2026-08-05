@@ -21,6 +21,8 @@ export interface SecureImageProps {
   fileUuid?: string;
   /** 直接图片 URL (可选，如果提供则跳过鉴权请求) */
   src?: string;
+  /** 分享页凭 kuaireport 分享 token 加载同租户文件预览 */
+  sharePreviewToken?: string;
   /** 图片 alt 文本 */
   alt?: string;
   /** 宽度 */
@@ -70,6 +72,7 @@ function resolveThumbSize(
 export const SecureImage: React.FC<SecureImageProps> = ({
   fileUuid,
   src: initialSrc,
+  sharePreviewToken,
   alt = '',
   width,
   height,
@@ -174,7 +177,23 @@ export const SecureImage: React.FC<SecureImageProps> = ({
         ? { forAvatar: true }
         : undefined;
 
-    getFileDownloadUrlWithToken(fileUuid, fetchOptions)
+    const resolveUrl = async (): Promise<string> => {
+      if (sharePreviewToken) {
+        const { getDashboardSharedFilePreviewUrl } = await import(
+          '../../apps/kuaireport/services/kuaireport'
+        );
+        return getDashboardSharedFilePreviewUrl(
+          sharePreviewToken,
+          fileUuid,
+          fetchOptions && 'size' in fetchOptions && fetchOptions.size != null
+            ? { size: fetchOptions.size as number }
+            : undefined,
+        );
+      }
+      return getFileDownloadUrlWithToken(fileUuid, fetchOptions);
+    };
+
+    resolveUrl()
       .then((url) => {
         if (!cancelled) {
           setSrc(url);
@@ -192,7 +211,7 @@ export const SecureImage: React.FC<SecureImageProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [fileUuid, forAvatar, isVisible, initialSrc, thumbSize, useTieredLoading]);
+  }, [fileUuid, forAvatar, isVisible, initialSrc, sharePreviewToken, thumbSize, useTieredLoading]);
 
   useEffect(() => {
     if (!previewVisible || !useTieredLoading || !fileUuid) return;
