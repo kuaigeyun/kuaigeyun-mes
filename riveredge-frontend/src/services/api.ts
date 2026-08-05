@@ -10,6 +10,7 @@ import { updateLastActivity, incrementPendingRequests, decrementPendingRequests 
 import { handleNetworkError, handleServerError, withRetry } from '../utils/errorRecovery';
 import { navigateTo } from '../utils/navigation';
 import { redirectAfterLogout } from '../utils/loginEntry';
+import { isKuaireportSharedApiPath, isKuaireportSharedBrowsePath } from '../utils/kuaireportSharedPath';
 import { webClientChannelHeaders } from '../utils/clientChannel';
 
 /**
@@ -155,7 +156,8 @@ export async function apiRequest<T = any>(
 
   // 检查是否是公开接口（登录、注册等接口不应该携带 token）
   // ⚠️ 关键修复：使用精确匹配，避免误匹配包含 '/login' 的其他路径（如 '/core/login-logs'）
-  const isPublicEndpoint = 
+  const isShareBrowse = isKuaireportSharedBrowsePath();
+  const isPublicEndpoint =
     url === '/auth/login' ||
     url.startsWith('/auth/login?') ||
     url === '/auth/guest-login' ||
@@ -168,8 +170,8 @@ export async function apiRequest<T = any>(
     url.startsWith('/register?') ||
     url.startsWith('/tenants/search') ||
     url.startsWith('/tenants/check-domain') ||
-    url.startsWith('/apps/kuaireport/dashboards/shared') ||
-    url.startsWith('/apps/kuaireport/reports/shared');
+    isKuaireportSharedApiPath(url) ||
+    isShareBrowse;
   
   // ========== 重写：简化 Token 和 Tenant ID 获取逻辑 ==========
   
@@ -357,7 +359,7 @@ export async function apiRequest<T = any>(
       if (response.status === 401) {
         // ⚠️ 关键修复：区分公开接口和其他接口的错误处理
         // ⚠️ 关键修复：使用精确匹配，避免误匹配包含 '/login' 的其他路径（如 '/core/login-logs'）
-        const isPublicEndpoint = 
+        const isPublicEndpoint =
           url === '/auth/login' ||
           url.startsWith('/auth/login?') ||
           url === '/infra/auth/login' ||
@@ -371,7 +373,8 @@ export async function apiRequest<T = any>(
           url === '/register' ||
           url.startsWith('/register?') ||
           url.startsWith('/tenants/search') ||
-          url.startsWith('/tenants/check-domain');
+          url.startsWith('/tenants/check-domain') ||
+          isKuaireportSharedApiPath(url);
         if (isPublicEndpoint) {
           // 公开接口返回 401，说明认证失败（登录：用户名或密码错误；注册：可能的问题）
           // 尝试从响应中提取错误信息
@@ -404,7 +407,11 @@ export async function apiRequest<T = any>(
           }
 
           const currentPath = window.location.pathname;
-          if (currentPath !== '/login' && currentPath !== '/infra/login') {
+          if (
+            !isKuaireportSharedBrowsePath(currentPath) &&
+            currentPath !== '/login' &&
+            currentPath !== '/infra/login'
+          ) {
             redirectAfterLogout();
           }
 

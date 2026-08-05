@@ -17,6 +17,7 @@ import { initReactI18next } from 'react-i18next';
 import { getSiteSetting } from '../services/siteSetting';
 import { getLanguageList, type Language } from '../services/language';
 import { getToken } from '../utils/auth';
+import { isKuaireportSharedBrowsePath } from '../utils/kuaireportSharedPath';
 import {
   useUserPreferenceStore,
 } from '../stores/userPreferenceStore';
@@ -208,7 +209,7 @@ export async function syncLanguageFromPreferences(
 let languageInitInFlight: Promise<void> | null = null;
 
 async function runInitLanguageFromApi(): Promise<void> {
-  if (!getToken()) {
+  if (!getToken() || isKuaireportSharedBrowsePath()) {
     await applyLanguage(resolveInitialLanguage());
     languageInitialized = true;
     return;

@@ -43,6 +43,7 @@ import { useTouchScreen } from './hooks/useTouchScreen';
 import { initDocumentStatusCache } from './services/enums';
 import { buildLoginRedirectPath, resolveTenantDomainFromUrl } from './utils/tenantDomainAccess';
 import { isPlatformAdminLoginPathname, isPlatformInfraPath, isPlatformInfraPublicPath } from './utils/platformScope';
+import { isKuaireportSharedBrowsePath } from './utils/kuaireportSharedPath';
 import { redirectAfterLogout } from './utils/loginEntry';
 // 使用 routes 中的路由配置
 import MainRoutes from './routes';
@@ -92,9 +93,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   // 公开页面：根路径、登录、初始化向导、分享页等，无需鉴权即可访问
   const pathname = location.pathname;
   const tenantDomainFromPath = resolveTenantDomainFromUrl({ pathname, search: location.search });
-  const isKuaireportSharedPath =
-    pathname === '/apps/kuaireport/reports/shared' ||
-    pathname === '/apps/kuaireport/dashboards/shared';
+  const isKuaireportSharedPath = isKuaireportSharedBrowsePath(pathname);
   const isPublicPath = pathname === '/' ||
     pathname.startsWith('/login') ||
     isPlatformInfraPublicPath(pathname) ||
@@ -111,12 +110,16 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   React.useLayoutEffect(() => {
     if (isPublicPath) {
       const token = getToken();
-      if (token && isTokenExpired(token)) {
+      // 分享页凭 URL token 访问，清除残留登录态，避免 401 被全局拦截器重定向到登录页
+      if (isKuaireportSharedPath && token) {
+        clearAuth();
+        setCurrentUser(undefined);
+      } else if (token && isTokenExpired(token)) {
         clearAuth();
         setCurrentUser(undefined);
       }
     }
-  }, [isPublicPath, setCurrentUser]);
+  }, [isPublicPath, isKuaireportSharedPath, setCurrentUser]);
 
   // 使用 useMemo 计算是否应该获取用户信息，避免重复计算
   // ⚠️ 关键修复：在公开页面（如登录页）不应该尝试获取用户信息，避免后端未运行时出现连接错误

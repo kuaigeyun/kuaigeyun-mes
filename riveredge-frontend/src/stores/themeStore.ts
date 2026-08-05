@@ -11,6 +11,7 @@ import { create } from 'zustand';
 import { theme } from 'antd';
 import { getSiteSetting } from '../services/siteSetting';
 import { getToken } from '../utils/auth';
+import { isKuaireportSharedBrowsePath } from '../utils/kuaireportSharedPath';
 import { useUserPreferenceStore } from './userPreferenceStore';
 import { getThemeFromPreferenceCache } from './userPreferenceStore';
 import { useConfigStore } from './configStore';
@@ -291,7 +292,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
       const { initialized, loading } = get();
       if (initialized || loading) return;
 
-      if (!getToken()) {
+      if (!getToken() || isKuaireportSharedBrowsePath()) {
         const cachedTheme = getThemeFromPreferenceCache();
         if (cachedTheme) {
           const { theme, config } = resolveThemeFromCloud({
