@@ -1,0 +1,1 @@
+const r="/apps/kuaizhizao/warehouse-management/outbound",t=o=>`${r}/entry/work-order/${o}`,e=o=>`${r}/entry/sales-order/${o}`,a=o=>`${r}/entry/outsource-work-order/${o}`;export{r as O,e as a,t as b,a as o};

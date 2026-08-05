@@ -1,0 +1,1 @@
+const t="/apps/kuaizhizao/warehouse-management/inbound",r=n=>`${t}/entry/purchase-order/${n}`,e=n=>`${t}/entry/receipt-notice/${n}`,a=n=>`${t}/entry/work-order/${n}`,s=n=>`${t}/entry/production-return/${n}`,u=n=>`${t}/entry/sales-order/${n}`,c=(n,o)=>`${t}/entry/outsource-work-order/${n}?pullType=${encodeURIComponent(o)}`;export{t as I,r as a,s as b,a as c,u as d,e,c as i};

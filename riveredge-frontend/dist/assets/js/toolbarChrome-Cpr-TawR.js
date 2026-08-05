@@ -1,0 +1,1 @@
+function r(o){return{height:32,boxSizing:"border-box",borderRadius:o.borderRadius,border:`1px solid ${o.colorBorder}`,background:o.colorBgContainer,boxShadow:"none"}}const n="uni-toolbar-segmented",e="uni-toolbar-inline-controls";export{n as U,e as a,r as g};

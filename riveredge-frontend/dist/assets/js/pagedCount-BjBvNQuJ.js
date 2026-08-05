@@ -1,0 +1,1 @@
+async function l(o,r,e){const t=e?.chunkSize??100,u=e?.maxRounds??200;let n=0,a=0;for(let s=0;s<u;s+=1){const i=await o({...r,skip:a,limit:t}),c=Array.isArray(i)?i.length:0;if(n+=c,c<t)break;a+=t}return n}export{l as c};

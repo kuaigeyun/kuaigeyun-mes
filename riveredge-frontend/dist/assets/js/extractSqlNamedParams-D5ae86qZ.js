@@ -1,0 +1,1 @@
+function l(n){const _=n.replace(/::/g,"__PG_CAST__"),t=new Set;let e;const c=/:([a-zA-Z_][a-zA-Z0-9_]*)/g;for(;(e=c.exec(_))!==null;){const a=e[1];a&&!a.startsWith("__PG")&&t.add(a)}const s=/(^|[^@])@([a-zA-Z_][a-zA-Z0-9_]*)/g;for(;(e=s.exec(n))!==null;)t.add(e[2]);return[...t]}export{l as e};

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- 顶栏/登录页 LOGO 常用静态资源：尽早发起请求，减轻首帧后再补请求的延迟 -->
+    <link rel="preload" as="image" href="/favicon.svg" />
+    <link rel="preload" as="image" href="/img/logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RiverEdge SaaS</title>
+
+    <meta name="theme-color" content="#141414" />
+
+    <!-- SVAR 甘特图图标字体改为按需加载（utils/loadGanttIconsCss.ts），
+         仅在用户打开甘特图组件时注入，减少默认首屏/登录页的外链资源与握手成本。 -->
+  <script type="module" crossorigin src="/assets/js/main-HZdJX8W9.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/js/vendor-BRaCGcjg.js">
+  <link rel="stylesheet" crossorigin href="/assets/css/clearSessionQueries-ASj4GZNz.css">
+  <link rel="stylesheet" crossorigin href="/assets/css/main-CJ8_o-Rb.css">
+</head>
+
+<body>
+    <div id="root">
+        <!--
+          首屏占位：保持最简洁，不再渲染后台壳骨架（顶部栏/侧边栏/正文条纹）。
+          React 挂载后会替换 #root 子节点；若 main 未执行，看门狗会自动重试或提示错误。
+        -->
+        <div class="app-first-paint" data-app-first-paint aria-busy="true" aria-label="应用启动"></div>
+    </div>
+    <!--
+      首屏加载看门狗：
+      - module script error（如 /assets/ 404）→ 立即硬错误
+      - 15s 内未卸掉 first-paint（Vite 冷启动等）→ sessionStorage 最多自动 reload 2 次
+      - 重试耗尽仍未挂载 → 硬错误 + 点击重试
+      - first-paint 被卸掉 → 清除重试计数
+    -->
+    <script>
+      (function () {
+        var RETRY_KEY = 're_app_boot_retry';
+        var MAX_AUTO_RELOAD = 2;
+        var timeoutMs = 15000;
+        var hardErrorShown = false;
+        var timer = null;
+
+        function clearRetryCount() {
+          try { sessionStorage.removeItem(RETRY_KEY); } catch (e) { /* ignore */ }
+        }
+
+        function getRetryCount() {
+          try {
+            var n = parseInt(sessionStorage.getItem(RETRY_KEY) || '0', 10);
+            return isNaN(n) ? 0 : n;
+          } catch (e) {
+            return 0;
+          }
+        }
+
+        function setRetryCount(n) {
+          try { sessionStorage.setItem(RETRY_KEY, String(n)); } catch (e) { /* ignore */ }
+        }
+
+        function firstPaintStillPresent() {
+          var root = document.getElementById('root');
+          var fp = root && root.querySelector('[data-app-first-paint]');
+          return !!(fp && fp.isConnected);
+        }
+
+        function showHardError() {
+          if (hardErrorShown || document.getElementById('app-load-timeout')) return;
+          if (!firstPaintStillPresent()) return;
+          hardErrorShown = true;
+          if (timer) { clearTimeout(timer); timer = null; }
+          var wrap = document.createElement('div');
+          wrap.id = 'app-load-timeout';
+          wrap.style.cssText = 'position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;z-index:9999;';
+          wrap.innerHTML = '<div style="text-align:center;color:#666;max-width:320px;padding:16px;"><p style="margin-bottom:12px;">页面未能完成加载，请检查网络或静态资源路径（如 /assets/ 是否可访问）</p><p><a href="javascript:location.reload()" style="color:#1890ff;">点击重试</a></p></div>';
+          document.body.appendChild(wrap);
+        }
+
+        function showRetryHint(attempt, max) {
+          if (document.getElementById('app-load-retry-hint')) return;
+          var wrap = document.createElement('div');
+          wrap.id = 'app-load-retry-hint';
+          wrap.style.cssText = 'position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;z-index:9999;';
+          wrap.innerHTML = '<div style="text-align:center;color:#666;max-width:320px;padding:16px;"><p style="margin-bottom:0;">应用正在启动，自动重试中（' + attempt + '/' + max + '）…</p></div>';
+          document.body.appendChild(wrap);
+        }
+
+        function onBootTimeout() {
+          if (!firstPaintStillPresent() || hardErrorShown) return;
+          var count = getRetryCount();
+          if (count < MAX_AUTO_RELOAD) {
+            setRetryCount(count + 1);
+            showRetryHint(count + 1, MAX_AUTO_RELOAD);
+            location.reload();
+            return;
+          }
+          showHardError();
+        }
+
+        // 挂载成功：first-paint 被卸掉时清重试计数
+        var root = document.getElementById('root');
+        if (root && typeof MutationObserver !== 'undefined') {
+          var mo = new MutationObserver(function () {
+            if (!firstPaintStillPresent()) {
+              clearRetryCount();
+              mo.disconnect();
+              if (timer) { clearTimeout(timer); timer = null; }
+              var hint = document.getElementById('app-load-retry-hint');
+              if (hint) hint.remove();
+              var err = document.getElementById('app-load-timeout');
+              if (err) err.remove();
+            }
+          });
+          mo.observe(root, { childList: true, subtree: true });
+        }
+
+        timer = setTimeout(onBootTimeout, timeoutMs);
+
+        // module script 加载失败（404 等）→ 立即硬错误，不走自动重试空转
+        window.addEventListener('error', function (e) {
+          var t = e && e.target;
+          if (!t || t.tagName !== 'SCRIPT') return;
+          clearRetryCount();
+          showHardError();
+        }, true);
+      })();
+    </script>
+    <!-- 外链样式：避免 Windows + preserveSymlinks 下 Vite html-inline-proxy 对 <style> 解析失败 -->
+</body>
+
+</html>
