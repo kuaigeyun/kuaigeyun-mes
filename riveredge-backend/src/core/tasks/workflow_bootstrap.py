@@ -15,7 +15,7 @@ from loguru import logger
 
 _BOOTSTRAPPED = False
 
-_PLACEHOLDER_APP_CODES: Set[str] = {"kuaicrm", "kuaipdm", "kuaichain", "kuaiiot"}
+_PLACEHOLDER_APP_CODES: Set[str] = {"kuaicrm", "kuaipdm", "kuaichain"}
 
 # 已知 workflow 包（其余应用按约定路径探测）
 _KNOWN_WORKFLOW_PACKAGES: dict[str, str] = {
