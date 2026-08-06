@@ -30052,6 +30052,14 @@
               }
             ],
             "title": "Invoice Id"
+          },
+          "invoice_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Invoice Ids",
+            "default": []
           }
         },
         "type": "object",
@@ -30178,6 +30186,22 @@
             ],
             "title": "Invoice No"
           },
+          "invoice_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Invoice Ids",
+            "default": []
+          },
+          "invoice_nos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Invoice Nos",
+            "default": []
+          },
           "creator_name": {
             "anyOf": [
               {
@@ -30303,6 +30327,20 @@
               }
             ],
             "title": "Invoice Id"
+          },
+          "invoice_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Ids"
           }
         },
         "type": "object",
