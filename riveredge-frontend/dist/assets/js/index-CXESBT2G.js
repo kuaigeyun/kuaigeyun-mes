@@ -1,1 +1,0 @@
-import{j as a}from"./vendor-BP873C3N.js";import{N as e}from"./clearSessionQueries-DRdpmK-8.js";const o=()=>a.jsx(e,{to:"/apps/kuaizhizao/warehouse-management/batching-center",replace:!0});export{o as default};
