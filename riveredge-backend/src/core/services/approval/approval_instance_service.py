@@ -2112,6 +2112,24 @@ class ApprovalInstanceService:
                     )
                 logger.info(f"报价单 {entity_id} 审批回调完成: {approval_instance.status}")
 
+            async def _handle_kuaioa_form_request() -> None:
+                from apps.kuaioa.services.form_service import apply_form_request_decision
+
+                approved = approval_instance.status == "approved"
+                await apply_form_request_decision(
+                    tenant_id, entity_id, approved, approver_id
+                )
+                logger.info(f"轻办公申请单 {entity_id} 审批回调完成: {approval_instance.status}")
+
+            async def _handle_kuaioa_asset_purchase() -> None:
+                from apps.kuaioa.services.asset_service import apply_asset_purchase_decision
+
+                approved = approval_instance.status == "approved"
+                await apply_asset_purchase_decision(
+                    tenant_id, entity_id, approved, approver_id
+                )
+                logger.info(f"固定资产采买 {entity_id} 审批回调完成: {approval_instance.status}")
+
             completion_handlers = {
                 "sales_order": _handle_sales_order,
                 "demand": _handle_demand,
@@ -2119,6 +2137,8 @@ class ApprovalInstanceService:
                 "bom_change": _handle_bom_change,
                 "process_route_change": _handle_process_route_change,
                 "quotation": _handle_quotation,
+                "kuaioa_form_request": _handle_kuaioa_form_request,
+                "kuaioa_asset_purchase": _handle_kuaioa_asset_purchase,
             }
             handler = completion_handlers.get(entity_type)
             if handler:

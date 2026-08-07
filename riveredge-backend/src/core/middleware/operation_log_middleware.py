@@ -1,12 +1,13 @@
 """
 操作日志中间件模块
 
-自动记录所有 API 操作日志与在线用户活动时间。
-在同一请求协程内写入操作日志并更新活动，避免响应结束后上下文失效。
+自动记录 API 变更操作日志，并按节流更新在线用户活动时间。
+读请求（GET/HEAD/OPTIONS）不写入操作日志，避免浏览列表时每个请求双写数据库。
 """
 
 import re
-from typing import Callable, Optional
+import time
+from typing import Callable, Optional, Tuple
 
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -29,6 +30,12 @@ _EXCLUDED_PATHS = frozenset(
     }
 )
 
+_READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+# 同一用户在线活动最短更新间隔（秒）
+_ACTIVITY_DEBOUNCE_SECONDS = 30
+_last_activity_update: dict[Tuple[int, int], float] = {}
+
 _METHOD_TO_OPERATION = {
     "GET": "view",
     "POST": "create",
@@ -42,8 +49,9 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
     """
     操作日志中间件
 
-    仅对 `/api/` 下、非排除路径、携带合法 Bearer 的请求记录一次日志。
-    日志写入与在线用户活动更新在响应返回前串行执行。
+    对 `/api/` 下、非排除路径、携带合法 Bearer 的请求：
+    - POST/PUT/PATCH/DELETE：写入操作日志 + 更新在线活动
+    - GET/HEAD/OPTIONS：仅按节流更新在线活动，不写操作日志
     """
 
     def __init__(self, app):
@@ -67,30 +75,73 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
         logger.debug(f"✅ 已提取身份: tenant_id={tenant_id}, user_id={user_id}")
 
         ip_address = self._get_client_ip(request)
-        payload = {
-            "tenant_id": tenant_id,
-            "user_id": user_id,
-            "operation_type": self._parse_operation_type(request.method, response.status_code),
-            "operation_module": self._parse_operation_module(request.url.path),
-            "operation_object_type": self._parse_operation_object_type(request.url.path),
-            "operation_object_uuid": self._parse_operation_object_uuid(request.url.path),
-            "operation_content": (
-                f"{request.method} {request.url.path} - "
-                f"{'成功' if response.status_code < 400 else '失败'} "
-                f"(状态码: {response.status_code})"
-            ),
-            "ip_address": ip_address,
-            "user_agent": request.headers.get("User-Agent", ""),
-            "request_method": request.method,
-            "request_path": request.url.path,
-        }
+        is_mutation = request.method not in _READ_METHODS
 
-        await self._persist(payload, ip_address)
+        await self._persist_activity(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            ip_address=ip_address,
+            force=is_mutation,
+        )
+
+        if is_mutation:
+            payload = {
+                "tenant_id": tenant_id,
+                "user_id": user_id,
+                "operation_type": self._parse_operation_type(request.method, response.status_code),
+                "operation_module": self._parse_operation_module(request.url.path),
+                "operation_object_type": self._parse_operation_object_type(request.url.path),
+                "operation_object_uuid": self._parse_operation_object_uuid(request.url.path),
+                "operation_content": (
+                    f"{request.method} {request.url.path} - "
+                    f"{'成功' if response.status_code < 400 else '失败'} "
+                    f"(状态码: {response.status_code})"
+                ),
+                "ip_address": ip_address,
+                "user_agent": request.headers.get("User-Agent", ""),
+                "request_method": request.method,
+                "request_path": request.url.path,
+            }
+            await self._persist_operation_log(payload)
         return response
 
     @staticmethod
-    async def _persist(payload: dict, ip_address: Optional[str]) -> None:
-        """后台写入操作日志 + 更新在线用户活动。单任务内串行，失败各自吞掉。"""
+    def _should_update_activity(tenant_id: int, user_id: int, *, force: bool) -> bool:
+        if force:
+            return True
+        key = (tenant_id, user_id)
+        now = time.monotonic()
+        last = _last_activity_update.get(key, 0.0)
+        if now - last < _ACTIVITY_DEBOUNCE_SECONDS:
+            return False
+        _last_activity_update[key] = now
+        return True
+
+    @staticmethod
+    async def _persist_activity(
+        *,
+        tenant_id: int,
+        user_id: int,
+        ip_address: Optional[str],
+        force: bool,
+    ) -> None:
+        if not OperationLogMiddleware._should_update_activity(tenant_id, user_id, force=force):
+            return
+        try:
+            await OnlineUserService.update_user_activity(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                login_ip=ip_address,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "在线用户活动更新失败 user_id={user_id} error={error}",
+                user_id=user_id,
+                error=exc,
+            )
+
+    @staticmethod
+    async def _persist_operation_log(payload: dict) -> None:
         try:
             await OperationLogService.create_operation_log(**payload)
         except Exception as exc:  # noqa: BLE001
@@ -100,18 +151,16 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
                 error=exc,
             )
 
-        try:
-            await OnlineUserService.update_user_activity(
-                tenant_id=payload["tenant_id"],
-                user_id=payload["user_id"],
-                login_ip=ip_address,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "在线用户活动更新失败 user_id={user_id} error={error}",
-                user_id=payload.get("user_id"),
-                error=exc,
-            )
+    @staticmethod
+    async def _persist(payload: dict, ip_address: Optional[str]) -> None:
+        """兼容旧调用：变更写日志 + 活动更新。"""
+        await OperationLogMiddleware._persist_activity(
+            tenant_id=payload["tenant_id"],
+            user_id=payload["user_id"],
+            ip_address=ip_address,
+            force=True,
+        )
+        await OperationLogMiddleware._persist_operation_log(payload)
 
     @staticmethod
     def _should_log(request: Request) -> bool:

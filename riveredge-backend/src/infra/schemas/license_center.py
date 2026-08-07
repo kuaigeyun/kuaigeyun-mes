@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 class PlatformLicenseCreateRequest(BaseModel):
     """创建平台许可证密钥请求。"""
     license_key: str = Field(..., min_length=8, max_length=256, description="许可证密钥")
-    app_code: str = Field(default="*", min_length=1, max_length=64, description="适用应用 code，* 表示全局")
+    app_code: str = Field(default="*", min_length=1, max_length=64, description="适用 PRO 应用 code；* 表示全部 PRO 应用")
     alias: Optional[str] = Field(default=None, max_length=120, description="别名")
     remark: Optional[str] = Field(default=None, max_length=500, description="备注")
     max_activations: int = Field(default=1, ge=1, le=100000, description="最大激活租户数")

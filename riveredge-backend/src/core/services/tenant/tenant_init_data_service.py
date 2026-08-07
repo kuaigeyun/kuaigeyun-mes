@@ -356,7 +356,7 @@ class TenantInitDataService:
     BOOTSTRAP_APPLICATION_STEP: Dict[str, str] = {
         "key": "application",
         "name": "应用注册与启用",
-        "description": "扫描并安装默认基础应用（快制造、快研发、快财务、主数据等）",
+        "description": "扫描并安装默认基础应用（快制造、快研发、轻财务、轻办公、主数据等）",
     }
 
     @classmethod

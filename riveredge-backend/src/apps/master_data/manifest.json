@@ -9,7 +9,7 @@
   "is_pro": false,
   "entry_point": "../apps/master-data/index.tsx",
   "route_path": "/apps/master-data",
-  "sort_order": 110,
+  "sort_order": 150,
   "menu_config": {
     "title": "app.master-data.name",
     "icon": "database",

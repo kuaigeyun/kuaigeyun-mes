@@ -85,7 +85,7 @@
 | 幂等去重 | 冒烟脚本同一 `idempotency_key` 重复 POST 不倍增 |
 | 批量续传 | 冒烟脚本 batch 端点返回 accepted |
 | 入站防护 | 冒烟脚本 201 个 tags 被拒绝 |
-| Edge Agent | `riveredge-edge-agent/` 连接 Modbus 模拟从站并成功 ingest |
+| Edge Agent | `riveredge-backend/src/apps/kuaiiot/edge-agent/` 连接 Modbus 模拟从站并成功 ingest |
 | 告警通知 | 配置中心加载快数采预设，启用 `iot_alert` 规则后阈值触发可收站内信 |
 | 数据留存 | Taskiq `kuaiiot_retention_tick` 清理过期 dedup 与已确认告警 |
 | 运维概览 | 仪表盘 ops summary 与连接健康定时探测可用 |

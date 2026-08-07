@@ -6,6 +6,7 @@ import App from './app'
 import './global.less'
 import './styles/theme-plain.less'
 import { useGlobalStore } from './stores/globalStore'
+import { defaultQueryOptions } from './config/reactQuery'
 import { seedCurrentUserFromAuthStorage } from './utils/restoredUser'
 import './initSpinIndicator'
 import './config/dayjs'
@@ -63,26 +64,7 @@ if (typeof window !== 'undefined') {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: (failureCount, error: any) => {
-        if (error?.response?.status === 401) return false;
-        if (error?.response?.status === 400) return false;
-        if (error?.response?.status === 500) return false;
-        const isNetworkError = error?.message?.includes('fetch') ||
-                               error?.message?.includes('NetworkError') ||
-                               error?.message?.includes('Failed to fetch');
-        const isServerError = [502, 503, 504].includes(error?.response?.status);
-        if (isNetworkError || isServerError) {
-          return failureCount < 2;
-        }
-        return false;
-      },
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-      refetchOnWindowFocus: true,
-      refetchOnReconnect: true,
-      refetchOnMount: true,
-      staleTime: 0,
-      throwOnError: false,
-      retryOnMount: false,
+      ...defaultQueryOptions,
     },
     mutations: {
       retry: () => false,

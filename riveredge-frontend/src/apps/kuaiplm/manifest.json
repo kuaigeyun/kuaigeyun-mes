@@ -41,12 +41,9 @@
         ]
       },
       {
-        "title": "app.kuaiplm.menu.engineering-data",
-        "icon": "workflow",
+        "title": "app.kuaiplm.menu.design-data",
+        "icon": "fileText",
         "sort_order": 2,
-        "meta": {
-          "menu_takeover": "master-data-process"
-        },
         "children": [
           {
             "title": "app.kuaiplm.menu.change-management",
@@ -55,53 +52,63 @@
             "sort_order": 1
           },
           {
-            "title": "app.master-data.menu.process.defect-types",
-            "path": "/apps/master-data/process/defect-types",
-            "permission": "master-data:process:defect-type:read",
-            "sort_order": 2
-          },
-          {
-            "title": "app.master-data.menu.process.operations",
-            "path": "/apps/master-data/process/operations",
-            "permission": "master-data:process:operation:read",
-            "sort_order": 3
-          },
-          {
-            "title": "app.master-data.menu.process.routes",
-            "path": "/apps/master-data/process/routes",
-            "permission": "master-data:process:route:read",
-            "sort_order": 4
-          },
-          {
-            "title": "app.master-data.menu.process.product-process",
-            "path": "/apps/master-data/process/product-process",
-            "permission": "master-data:process:route:read",
-            "sort_order": 5
-          },
-          {
             "title": "app.master-data.menu.process.drawings",
             "path": "/apps/master-data/process/drawings",
             "permission": "master-data:process:drawing:read",
-            "sort_order": 6
+            "sort_order": 2
           },
           {
             "title": "app.master-data.menu.process.engineering-bom",
             "path": "/apps/master-data/process/engineering-bom",
             "permission": "master-data:process:engineering-bom:read",
-            "sort_order": 7
+            "sort_order": 3
+          }
+        ]
+      },
+      {
+        "title": "app.kuaiplm.menu.process-data",
+        "icon": "workflow",
+        "sort_order": 3,
+        "meta": {
+          "menu_takeover": "master-data-process"
+        },
+        "children": [
+          {
+            "title": "app.master-data.menu.process.defect-types",
+            "path": "/apps/master-data/process/defect-types",
+            "permission": "master-data:process:defect-type:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.master-data.menu.process.operations",
+            "path": "/apps/master-data/process/operations",
+            "permission": "master-data:process:operation:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.master-data.menu.process.routes",
+            "path": "/apps/master-data/process/routes",
+            "permission": "master-data:process:route:read",
+            "sort_order": 3
+          },
+          {
+            "title": "app.master-data.menu.process.product-process",
+            "path": "/apps/master-data/process/product-process",
+            "permission": "master-data:process:route:read",
+            "sort_order": 4
           },
           {
             "title": "app.master-data.menu.process.sop",
             "path": "/apps/master-data/process/sop",
             "permission": "master-data:process:sop:read",
-            "sort_order": 8
+            "sort_order": 5
           }
         ]
       },
       {
         "title": "app.kuaiplm.menu.phase2",
         "icon": "users",
-        "sort_order": 3,
+        "sort_order": 4,
         "children": [
           {
             "title": "app.kuaiplm.menu.phase2.requirements",
@@ -126,7 +133,7 @@
       {
         "title": "app.kuaiplm.menu.knowledge-center",
         "icon": "bookOpen",
-        "sort_order": 4,
+        "sort_order": 5,
         "children": [
           {
             "title": "app.kuaiplm.menu.knowledge-base",

@@ -65,6 +65,7 @@ const APP_SOLAR_ICONS: Record<string, string> = {
   kuaiai: 'solar:magic-stick-3-bold-duotone',
   kuaiiot: 'solar:cpu-bolt-bold-duotone',
   kuaiplm: 'solar:layers-bold-duotone',
+  kuaioa: 'solar:document-text-bold-duotone',
   kuaisrm: 'solar:share-circle-bold-duotone',
   kuaiems: 'solar:bolt-bold-duotone',
   kuaicrm: 'solar:hand-shake-bold-duotone',
@@ -152,7 +153,7 @@ const APP_ACTION_ICON = {
  * - 行业：同属专业版私有仓，单独标签便于区分
  * - 定制：定制私有仓（is_dedicated）
  */
-const BASIC_APP_CODES = ['master-data', 'kuaizhizao', 'kuaiplm', 'kuaicaiwu'];
+const BASIC_APP_CODES = ['kuaizhizao', 'kuaiplm', 'kuaicaiwu', 'kuaioa', 'master-data'];
 /** 行业应用（代码仍归专业版仓库，筛选单独成档） */
 const INDUSTRY_APP_CODES = [
   'kuaimachinery',
@@ -173,13 +174,14 @@ const INDUSTRY_APP_CODES = [
   'kuaisemiconductor',
 ];
 const APP_SORT_ORDER_OVERRIDES: Record<string, number> = {
-  // 基础 1xx（步进 10）
-  'master-data': 110,
+  // 基础 1xx（步进 10；主数据置末）
   kuaizhizao: 120,
   kuaierp: 121,
   kuaimes: 122,
   kuaiplm: 130,
   kuaicaiwu: 140,
+  kuaioa: 145,
+  'master-data': 150,
   // 专业 2xx（与 PRO_APP_CODES 顺序一致）
   kuaiai: 210,
   kuaireport: 220,
@@ -290,6 +292,7 @@ const getApplicationIcon = (
 const CARD_HEADER_TINT: Record<string, string> = {
   kuaizhizao: '#38bdf8',
   kuaicaiwu: '#fbbf24',
+  kuaioa: '#6366f1',
   kuaireport: '#4ade80',
   'master-data': '#a78bfa',
   kuaiai: '#fb7185',
@@ -323,6 +326,7 @@ const getCardGradient = (code: string, isActive: boolean, token: GlobalToken, is
     // 采用更明快、高明度的渐变色，提升活力感
     kuaizhizao: 'linear-gradient(135deg, #f0f9ff 0%, #bae6fd 100%)',  // 天蓝色
     kuaicaiwu: 'linear-gradient(135deg, #fffbeb 0%, #fde68a 100%)',   // 琥珀金
+    kuaioa: 'linear-gradient(135deg, #eef2ff 0%, #c7d2fe 100%)',       // 靛蓝
     kuaireport: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%)',  // 翡翠绿
     'master-data': 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)', // 丁香紫
     kuaiai: 'linear-gradient(135deg, #fff1f2 0%, #fecdd3 100%)',      // 玫瑰粉

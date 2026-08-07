@@ -10,6 +10,7 @@
  */
 
 import { useMemo } from 'react';
+import { layoutShellQueryOptions } from '../config/reactQuery';
 import { useQuery } from '@tanstack/react-query';
 import { useGlobalStore } from '../stores';
 import { getNavigationMenuTree, type MenuTree } from '../services/menu';
@@ -53,9 +54,7 @@ export function useNavigationMenuTreeQuery(
     queryKey,
     queryFn: () => getNavigationMenuTree(),
     enabled: !!currentUser && enabled,
+    ...layoutShellQueryOptions,
     staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    // 菜单由后台同步/配置中心变更后，当前会话需要在回到窗口时及时拉取新树，避免长时间停留旧缓存。
-    refetchOnWindowFocus: true,
   });
 }

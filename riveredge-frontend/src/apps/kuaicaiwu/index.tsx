@@ -107,7 +107,7 @@ const KuaicaiwuApp: React.FC = () => {
       {/* 默认路由 */}
       <Route path="" element={
         <div style={{ textAlign: 'center' }}>
-          <h2>快财务</h2>
+          <h2>轻财务</h2>
           <p>业务驱动的管理会计，提供成本、账款、盈利分析等核心功能</p>
         </div>
       } />

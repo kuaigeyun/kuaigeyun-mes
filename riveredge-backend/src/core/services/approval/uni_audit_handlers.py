@@ -686,6 +686,54 @@ async def _dispatch_freight_bill(
     _unsupported("freight_bill", action)
 
 
+async def _dispatch_kuaioa_form_request(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaioa.services.form_service import FormRequestService, apply_form_request_decision
+
+    svc = FormRequestService()
+    if action == "submit":
+        return await svc.submit_request(tenant_id, entity_id, user_id)
+    if action == "approve":
+        await apply_form_request_decision(tenant_id, entity_id, True, user_id)
+        return await svc.get_request(tenant_id, entity_id)
+    if action == "reject":
+        await apply_form_request_decision(tenant_id, entity_id, False, user_id)
+        return await svc.get_request(tenant_id, entity_id)
+    if action == "revoke":
+        return await svc.revoke_request(tenant_id, entity_id, user_id)
+    _unsupported("kuaioa_form_request", action)
+
+
+async def _dispatch_kuaioa_asset_purchase(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaioa.services.asset_service import AssetPurchaseService, apply_asset_purchase_decision
+
+    svc = AssetPurchaseService()
+    if action == "submit":
+        return await svc.submit_purchase(tenant_id, entity_id, user_id)
+    if action == "approve":
+        await apply_asset_purchase_decision(tenant_id, entity_id, True, user_id)
+        return await svc.get_purchase(tenant_id, entity_id)
+    if action == "reject":
+        await apply_asset_purchase_decision(tenant_id, entity_id, False, user_id)
+        return await svc.get_purchase(tenant_id, entity_id)
+    if action == "revoke":
+        return await svc.revoke_purchase(tenant_id, entity_id, user_id)
+    _unsupported("kuaioa_asset_purchase", action)
+
+
 HANDLERS: Dict[str, DispatchFn] = {
     "sales_order": _dispatch_sales_order,
     "sales_order_change": _dispatch_sales_order_change,
@@ -712,4 +760,6 @@ HANDLERS: Dict[str, DispatchFn] = {
     "bom_change": _dispatch_bom_change,
     "process_route_change": _dispatch_process_route_change,
     "freight_bill": _dispatch_freight_bill,
+    "kuaioa_form_request": _dispatch_kuaioa_form_request,
+    "kuaioa_asset_purchase": _dispatch_kuaioa_asset_purchase,
 }

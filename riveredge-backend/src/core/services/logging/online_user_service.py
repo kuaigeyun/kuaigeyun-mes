@@ -79,8 +79,8 @@ class OnlineUserService:
                     login_time=login_time or now,
                     expires_at=expires_at,
                 )
-            logger.info(
-                "✅ 已更新用户活动状态: tenant_id={}, user_id={}, IP={}, 过期时间={}s",
+            logger.debug(
+                "已更新用户活动状态: tenant_id={}, user_id={}, IP={}, 过期时间={}s",
                 tenant_id,
                 user_id,
                 login_ip,

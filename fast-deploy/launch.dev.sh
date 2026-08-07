@@ -451,6 +451,7 @@ start_backend() {
     fi
 
     cd riveredge-backend
+    export MENU_CACHE_ENABLED="${MENU_CACHE_ENABLED:-true}"
     export RIVEREDGE_DB_POOL_MIN="${RIVEREDGE_DB_POOL_MIN:-1}"
     export RIVEREDGE_DB_POOL_MAX="${RIVEREDGE_DB_POOL_MAX:-5}"
     PYTHONPATH="src" nohup uv run --extra ocr --extra pdf uvicorn server.main:app --host 0.0.0.0 --port "${BACKEND_PORT}" --reload --reload-dir src > ../.logs/backend.log 2>&1 &

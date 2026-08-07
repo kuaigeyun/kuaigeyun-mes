@@ -85,7 +85,7 @@ POST /api/v1/apps/kuaiiot/ingest/{device_token}/batch
 | `data_type` | 是 | `int16` / `uint16` / `int32` / `uint32` / `float32` / `bool` |
 | `scale` | 否 | 数值缩放系数，默认 1.0 |
 
-Agent 参考实现见仓库 `riveredge-edge-agent/`，当前支持 `modbus_tcp` 保持寄存器轮询与断网缓冲续传。
+Agent 参考实现见仓库 `riveredge-backend/src/apps/kuaiiot/edge-agent/`，当前支持 `modbus_tcp` 保持寄存器轮询与断网缓冲续传。
 
 ## 无 IoT 平台直连
 

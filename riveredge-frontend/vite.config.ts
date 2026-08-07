@@ -204,9 +204,9 @@ export default defineConfig({
       // Windows 环境下使用轮询模式以确保文件变化能被检测到
       usePolling: platform() === 'win32',
       // ⚠️ 优化：增加文件变化检测间隔，减少 CPU 占用和重启频率
-      interval: platform() === 'win32' ? 2000 : 500, // Windows 增加到 2 秒，其他平台 0.5 秒
+      interval: platform() === 'win32' ? 5000 : 500, // Windows 轮询间隔加大，降低 dev CPU
       // 优化文件监听性能
-      binaryInterval: platform() === 'win32' ? 3000 : 1000, // Windows 增加到 3 秒
+      binaryInterval: platform() === 'win32' ? 8000 : 1000,
       // 使用原子写入检测，减少不必要的重载
       atomic: true,
     },

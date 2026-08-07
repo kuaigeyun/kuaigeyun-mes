@@ -1,0 +1,205 @@
+{
+  "code": "kuaioa",
+  "name": "轻办公",
+  "version": "1.0.0",
+  "description": "制造业行政协同与审批办公平台",
+  "icon": "briefcase",
+  "author": "RiverEdge Team",
+  "market_category": "base",
+  "is_pro": false,
+  "entry_point": "../apps/kuaioa/index.tsx",
+  "route_path": "/apps/kuaioa",
+  "sort_order": 145,
+  "menu_config": {
+    "title": "app.kuaioa.name",
+    "icon": "briefcase",
+    "path": "/apps/kuaioa",
+    "permission": "kuaioa:entry:read",
+    "children": [
+      {
+        "title": "app.kuaioa.menu.group.approval",
+        "icon": "workflow",
+        "sort_order": 1,
+        "children": [
+          {
+            "title": "app.kuaioa.menu.form-templates",
+            "path": "/apps/kuaioa/approval/form-templates",
+            "permission": "kuaioa:form-template:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaioa.menu.form-requests",
+            "path": "/apps/kuaioa/approval/form-requests",
+            "permission": "kuaioa:form-request:read",
+            "sort_order": 2
+          }
+        ]
+      },
+      {
+        "title": "app.kuaioa.menu.group.hr",
+        "icon": "users",
+        "sort_order": 2,
+        "children": [
+          {
+            "title": "app.kuaioa.menu.training-plans",
+            "path": "/apps/kuaioa/hr/training-plans",
+            "permission": "kuaioa:training-plan:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaioa.menu.training-records",
+            "path": "/apps/kuaioa/hr/training-records",
+            "permission": "kuaioa:training-record:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaioa.menu.work-licenses",
+            "path": "/apps/kuaioa/hr/work-licenses",
+            "permission": "kuaioa:work-license:read",
+            "sort_order": 3
+          },
+          {
+            "title": "app.kuaioa.menu.leave",
+            "path": "/apps/kuaioa/hr/leave",
+            "permission": "kuaioa:leave:read",
+            "sort_order": 4
+          }
+        ]
+      },
+      {
+        "title": "app.kuaioa.menu.group.compliance",
+        "icon": "shield",
+        "sort_order": 3,
+        "children": [
+          {
+            "title": "app.kuaioa.menu.licenses",
+            "path": "/apps/kuaioa/compliance/licenses",
+            "permission": "kuaioa:license:read",
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "title": "app.kuaioa.menu.group.assets",
+        "icon": "package",
+        "sort_order": 4,
+        "children": [
+          {
+            "title": "app.kuaioa.menu.asset-purchases",
+            "path": "/apps/kuaioa/assets/purchases",
+            "permission": "kuaioa:asset-purchase:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaioa.menu.assets",
+            "path": "/apps/kuaioa/assets/registry",
+            "permission": "kuaioa:asset:read",
+            "sort_order": 2
+          }
+        ]
+      },
+      {
+        "title": "app.kuaioa.menu.group.admin",
+        "icon": "building",
+        "sort_order": 5,
+        "children": [
+          {
+            "title": "app.kuaioa.menu.announcements",
+            "path": "/apps/kuaioa/admin/announcements",
+            "permission": "kuaioa:announcement:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaioa.menu.meetings",
+            "path": "/apps/kuaioa/admin/meetings",
+            "permission": "kuaioa:meeting:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaioa.menu.seal",
+            "path": "/apps/kuaioa/admin/seal",
+            "permission": "kuaioa:seal:read",
+            "sort_order": 3
+          },
+          {
+            "title": "app.kuaioa.menu.vehicles",
+            "path": "/apps/kuaioa/admin/vehicles",
+            "permission": "kuaioa:vehicle:read",
+            "sort_order": 4
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": [
+    "kuaioa:entry:read",
+    "kuaioa:form-template:read",
+    "kuaioa:form-template:create",
+    "kuaioa:form-template:update",
+    "kuaioa:form-template:delete",
+    "kuaioa:form-request:read",
+    "kuaioa:form-request:create",
+    "kuaioa:form-request:update",
+    "kuaioa:form-request:delete",
+    "kuaioa:form-request:submit",
+    "kuaioa:form-request:approve",
+    "kuaioa:form-request:reject",
+    "kuaioa:form-request:revoke",
+    "kuaioa:training-plan:read",
+    "kuaioa:training-plan:create",
+    "kuaioa:training-plan:update",
+    "kuaioa:training-plan:delete",
+    "kuaioa:training-record:read",
+    "kuaioa:training-record:create",
+    "kuaioa:training-record:update",
+    "kuaioa:training-record:delete",
+    "kuaioa:work-license:read",
+    "kuaioa:work-license:create",
+    "kuaioa:work-license:update",
+    "kuaioa:work-license:delete",
+    "kuaioa:work-license:print",
+    "kuaioa:license:read",
+    "kuaioa:license:create",
+    "kuaioa:license:update",
+    "kuaioa:license:delete",
+    "kuaioa:asset-purchase:read",
+    "kuaioa:asset-purchase:create",
+    "kuaioa:asset-purchase:update",
+    "kuaioa:asset-purchase:delete",
+    "kuaioa:asset-purchase:submit",
+    "kuaioa:asset-purchase:approve",
+    "kuaioa:asset-purchase:reject",
+    "kuaioa:asset-purchase:revoke",
+    "kuaioa:asset:read",
+    "kuaioa:asset:create",
+    "kuaioa:asset:update",
+    "kuaioa:asset:delete",
+    "kuaioa:announcement:read",
+    "kuaioa:meeting:read",
+    "kuaioa:seal:read",
+    "kuaioa:vehicle:read",
+    "kuaioa:leave:read"
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  },
+  "audit": [
+    {
+      "node_key": "kuaioa_form_request",
+      "entity_type": "kuaioa_form_request",
+      "resource": "kuaioa:form-request",
+      "name": "轻办公通用申请单审核",
+      "template": "simple",
+      "config_category": "common"
+    },
+    {
+      "node_key": "kuaioa_asset_purchase",
+      "entity_type": "kuaioa_asset_purchase",
+      "resource": "kuaioa:asset-purchase",
+      "name": "固定资产采买申请审核",
+      "template": "simple",
+      "config_category": "common"
+    }
+  ]
+}

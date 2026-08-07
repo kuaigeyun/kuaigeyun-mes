@@ -1,0 +1,1 @@
+import{r as s,j as c}from"./vendor-DU_BQAYA.js";import{g as o,f as m}from"./materialUnitDisplay-CspNAQ4M.js";const x=({quantity:r,unit:i,unitLabelMap:t,className:n,style:f})=>{const[l,e]=s.useState(t??{});return s.useEffect(()=>{if(t){e(t);return}let a=!1;return o().then(u=>{a||e(u)}),()=>{a=!0}},[t]),c.jsx("span",{className:n,style:f,children:m(r,i,l)})};export{x as Q};

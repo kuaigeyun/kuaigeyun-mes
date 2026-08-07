@@ -147,7 +147,7 @@ class FreightBillService(AppBaseService):
             return
         carrier = await LogisticsCarrier.get_or_none(id=bill.carrier_id, tenant_id=tenant_id, deleted_at__isnull=True)
         if not carrier or not carrier.supplier_id:
-            raise BusinessLogicError("承运商未关联快财务供应商，无法推送应付单")
+            raise BusinessLogicError("承运商未关联轻财务供应商，无法推送应付单")
         from apps.kuaicaiwu.schemas.finance import PayableCreate
         from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
         from apps.kuaicaiwu.services.finance_service import PayableService

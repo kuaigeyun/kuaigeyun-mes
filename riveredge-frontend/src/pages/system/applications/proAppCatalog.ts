@@ -1,6 +1,6 @@
 /**
  * 专业版应用清单与前端占位（未 compose / 未入库时展示于应用中心「专业」）。
- * 真实应用以 kuaigeyun-pro compose + 后端扫描为准；占位仅补全缺失 code。
+ * 与 core/config/pro_app_catalog.py 的 PRO_APP_CODES 保持一致。
  */
 
 export const PRO_APP_CODES = [

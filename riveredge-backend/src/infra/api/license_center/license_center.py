@@ -8,6 +8,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from core.config.pro_app_catalog import is_valid_license_scope, normalize_license_scope
 from infra.api.deps.deps import get_current_infra_superadmin
 from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.schemas.license_center import (
@@ -35,7 +36,13 @@ async def create_platform_license(
     data: PlatformLicenseCreateRequest,
     current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
 ):
-    return await LicenseCenterService.create_license(data=data, created_by=current_admin.id)
+    if not is_valid_license_scope(data.app_code):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="适用范围无效：仅支持全部 PRO 应用（*）或已定义的 PRO 应用 code。",
+        )
+    payload = data.model_copy(update={"app_code": normalize_license_scope(data.app_code)})
+    return await LicenseCenterService.create_license(data=payload, created_by=current_admin.id)
 
 
 @router.get("/licenses/generate", response_model=PlatformLicenseGenerateResponse)
@@ -44,8 +51,14 @@ async def generate_platform_license_key(
     current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
 ):
     _ = current_admin
+    normalized = normalize_license_scope(app_code)
+    if not is_valid_license_scope(normalized):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="适用范围无效：仅支持全部 PRO 应用（*）或已定义的 PRO 应用 code。",
+        )
     return PlatformLicenseGenerateResponse(
-        license_key=LicenseCenterService.generate_license_key(app_code=app_code)
+        license_key=LicenseCenterService.generate_license_key(app_code=normalized)
     )
 
 

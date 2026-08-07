@@ -6,13 +6,13 @@
  */
 
 import { ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Tabs } from 'antd';
-import { LogoutOutlined, SafetyCertificateOutlined, SettingOutlined, UserOutlined, GlobalOutlined, DeploymentUnitOutlined } from '@ant-design/icons';
+import { App, Button, Modal } from 'antd';
+import { LogoutOutlined, SettingOutlined, UserOutlined, GlobalOutlined, DeploymentUnitOutlined } from '@ant-design/icons';
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
-import { 
-  getInfraSuperAdmin, 
+import {
+  getInfraSuperAdmin,
   updateInfraSuperAdmin,
   type InfraSuperAdmin,
   type InfraSuperAdminUpdateRequest
@@ -23,11 +23,9 @@ import { useNavigate } from 'react-router-dom';
 import { useGlobalStore } from '../../../stores';
 import { useTranslation } from 'react-i18next';
 import PlatformSettingsPage from './settings';
-import LicenseCenterTab from './license-center';
 import BuildProvenanceSummaryTab from './build-provenance-summary';
 import { getBuildProvenance } from '../../../services/platformSettings';
 import { canShowRegistrySummaryAdmin } from '../../../utils/officialRegistrySite';
-// import InfraSuperAdminForm from './form'; // 暂时注释掉，等待后续实现
 
 /**
  * 平台超级管理员管理页面组件
@@ -39,10 +37,7 @@ export default function InfraSuperAdminPage() {
   const queryClient = useQueryClient();
   const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
   const [activeTabKey, setActiveTabKey] = useState('settings');
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editFormData, setEditFormData] = useState<InfraSuperAdminUpdateRequest | null>(null);
 
-  // 获取平台超级管理员信息
   const { data: admin, isLoading } = useQuery({
     queryKey: ['infraSuperAdmin'],
     queryFn: getInfraSuperAdmin,
@@ -58,13 +53,10 @@ export default function InfraSuperAdminPage() {
     buildProvenance?.registry_summary_admin_available,
   );
 
-  // 更新平台超级管理员信息
   const updateMutation = useMutation({
     mutationFn: (data: InfraSuperAdminUpdateRequest) => updateInfraSuperAdmin(data),
     onSuccess: () => {
       messageApi.success(t('pages.infra.admin.updateSuccess'));
-      // setEditModalVisible(false);
-      // setEditFormData(null);
       queryClient.invalidateQueries({ queryKey: ['infraSuperAdmin'] });
     },
     onError: (error: any) => {
@@ -72,30 +64,10 @@ export default function InfraSuperAdminPage() {
     },
   });
 
-  /**
-   * 处理编辑 - 暂时注释掉，等待后续实现
-   */
-  // const handleEdit = () => {
-  //   if (admin) {
-  //     setEditFormData({
-  //       email: admin.email,
-  //       full_name: admin.full_name,
-  //       is_active: admin.is_active,
-  //     });
-  //     setEditModalVisible(true);
-  //   }
-  // };
-
-  /**
-   * 处理保存
-   */
   const handleSave = async (values: InfraSuperAdminUpdateRequest) => {
     await updateMutation.mutateAsync(values);
   };
 
-  /**
-   * 处理退出登录
-   */
   const handleLogout = useCallback(() => {
     Modal.confirm({
       title: t('pages.infra.admin.logoutConfirmTitle'),
@@ -132,16 +104,6 @@ export default function InfraSuperAdminPage() {
         ),
         children: <PlatformSettingsPage mode="login" />,
       },
-      {
-        key: 'license-center',
-        label: (
-          <span>
-            <SafetyCertificateOutlined />
-            {t('pages.infra.admin.tabLicenseCenter', { defaultValue: '许可证中心' })}
-          </span>
-        ),
-        children: <LicenseCenterTab />,
-      },
     ];
 
     if (showProvenanceSummaryTab) {
@@ -169,10 +131,7 @@ export default function InfraSuperAdminPage() {
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
             <h2 style={{ margin: 0 }}>{t('pages.infra.admin.pageTitle')}</h2>
-            <Button
-              icon={<LogoutOutlined />}
-              onClick={handleLogout}
-            >
+            <Button icon={<LogoutOutlined />} onClick={handleLogout}>
               {t('pages.infra.admin.logout')}
             </Button>
           </div>
@@ -182,22 +141,10 @@ export default function InfraSuperAdminPage() {
               dataSource={admin}
               loading={isLoading}
               columns={[
-                {
-                  title: t('pages.infra.admin.id'),
-                  dataIndex: 'id',
-                },
-                {
-                  title: t('pages.infra.admin.username'),
-                  dataIndex: 'username',
-                },
-                {
-                  title: t('pages.infra.admin.email'),
-                  dataIndex: 'email',
-                },
-                {
-                  title: t('pages.infra.admin.fullName'),
-                  dataIndex: 'full_name',
-                },
+                { title: t('pages.infra.admin.id'), dataIndex: 'id' },
+                { title: t('pages.infra.admin.username'), dataIndex: 'username' },
+                { title: t('pages.infra.admin.email'), dataIndex: 'email' },
+                { title: t('pages.infra.admin.fullName'), dataIndex: 'full_name' },
                 {
                   title: t('pages.infra.admin.status'),
                   dataIndex: 'is_active',
@@ -207,21 +154,9 @@ export default function InfraSuperAdminPage() {
                     false: { text: t('pages.infra.admin.statusInactive'), status: 'Error' },
                   },
                 },
-                {
-                  title: t('pages.infra.admin.lastLogin'),
-                  dataIndex: 'last_login',
-                  valueType: 'dateTime',
-                },
-                {
-                  title: t('pages.infra.admin.createdAt'),
-                  dataIndex: 'created_at',
-                  valueType: 'dateTime',
-                },
-                {
-                  title: t('pages.infra.admin.updatedAt'),
-                  dataIndex: 'updated_at',
-                  valueType: 'dateTime',
-                },
+                { title: t('pages.infra.admin.lastLogin'), dataIndex: 'last_login', valueType: 'dateTime' },
+                { title: t('pages.infra.admin.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+                { title: t('pages.infra.admin.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
               ]}
             />
           )}
@@ -240,4 +175,3 @@ export default function InfraSuperAdminPage() {
     />
   );
 }
-

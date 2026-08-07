@@ -22,10 +22,12 @@ import zhTW from 'antd/locale/zh_TW';
 import jaJP from 'antd/locale/ja_JP';
 import viVN from 'antd/locale/vi_VN';
 import { useQuery } from '@tanstack/react-query';
+import { currentUserQueryOptions } from './config/reactQuery';
 import { getCurrentUser } from './services/auth';
 import { getCurrentInfraSuperAdmin } from './services/infraAdmin';
 import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, getTenantId, isTokenExpired, getTokenRemainingTime, isInfraSuperAdminUser, isInfraSuperAdminFromToken } from './utils/auth';
 import { buildRestoredUserFromStorage } from './utils/restoredUser';
+import { isEquivalentCurrentUser } from './utils/currentUserSnapshot';
 import { refreshAccessTokenSilently } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
 import { FORM_LAYOUT } from './components/layout-templates/constants';
@@ -157,17 +159,18 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     },
     enabled: shouldFetchUser,
     retry: false,
-    staleTime: 0,
-    refetchOnWindowFocus: true,
+    ...currentUserQueryOptions,
   });
 
   // 处理用户信息加载成功（唯一数据源：/auth/me）
   useEffect(() => {
-    if (userData) {
+    if (!userData) return;
+    const prev = useGlobalStore.getState().currentUser;
+    if (!isEquivalentCurrentUser(prev, userData)) {
       setCurrentUser(userData);
-      setUserInfo(userData);
-      if (userData.avatar) prefetchAvatarUrl(userData.avatar);
     }
+    setUserInfo(userData);
+    if (userData.avatar) prefetchAvatarUrl(userData.avatar);
   }, [userData, setCurrentUser]);
 
   // 用户就绪（无论来自 API 成功还是 localStorage 恢复）后统一预加载枚举缓存；

@@ -175,6 +175,7 @@ const TenantsPage = React.lazy(() => import('../pages/infra/tenants/list'));
 const PackagesPage = React.lazy(() => import('../pages/infra/packages'));
 const PlatformAdminPage = React.lazy(() => import('../pages/infra/admin'));
 const ClientReleasesPage = React.lazy(() => import('../pages/infra/client-releases'));
+const LicenseManagementPage = React.lazy(() => import('../pages/infra/license-management'));
 
 const SystemRoutes: React.FC = () => (
   <Routes>
@@ -265,6 +266,7 @@ const SystemRoutes: React.FC = () => (
 
     <Route path="/infra/admin" element={withSuspense(PlatformAdminPage)} />
     <Route path="/infra/client-releases" element={withSuspense(ClientReleasesPage)} />
+    <Route path="/infra/license-management" element={withSuspense(LicenseManagementPage)} />
     <Route path="/infra/operation" element={withSuspense(PlatformOperationPage)} />
     <Route path="/platform/operation" element={withSuspense(PlatformOperationPage)} />
     <Route path="/infra/tenants" element={withSuspense(TenantsPage)} />
