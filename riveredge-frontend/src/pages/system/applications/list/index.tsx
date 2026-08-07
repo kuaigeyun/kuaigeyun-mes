@@ -115,6 +115,7 @@ import {
   activateProApplication,
   updateApplication,
   syncApplicationManifest,
+  syncAllManifestsAndMenus,
   scanApplications,
   Application,
 } from '../../../../services/application';
@@ -173,41 +174,6 @@ const INDUSTRY_APP_CODES = [
   'kuaimold',
   'kuaisemiconductor',
 ];
-const APP_SORT_ORDER_OVERRIDES: Record<string, number> = {
-  // 基础 1xx（步进 10；主数据置末）
-  kuaizhizao: 120,
-  kuaierp: 121,
-  kuaimes: 122,
-  kuaiplm: 130,
-  kuaicaiwu: 140,
-  kuaioa: 145,
-  'master-data': 150,
-  // 专业 2xx（与 PRO_APP_CODES 顺序一致）
-  kuaiai: 210,
-  kuaireport: 220,
-  kuaiiot: 230,
-  kuaiems: 240,
-  kuaisrm: 250,
-  // 行业 3xx
-  kuaimachinery: 310,
-  kuaimolding: 320,
-  kuaielectronics: 330,
-  kuaiautoparts: 340,
-  kuaimedical: 350,
-  kuaifood: 360,
-  kuaipackaging: 370,
-  kuaihardware: 380,
-  kuaidiecasting: 390,
-  kuaiwiring: 400,
-  kuaimotor: 410,
-  kuaibattery: 420,
-  kuainewequipment: 430,
-  kuaisheetmetal: 440,
-  kuaimold: 450,
-  kuaisemiconductor: 460,
-  // 定制 5xx
-  haoligo: 510,
-};
 
 const APP_DESCRIPTION_OVERRIDES: Record<string, string> = {
   // 快财务当前聚焦管理会计，不包含总账
@@ -656,60 +622,49 @@ const ApplicationListPage: React.FC = () => {
   const handleSyncAllMenus = async () => {
     try {
       setSyncAllLoading(true);
-      const apps = await getInstalledApplicationList({ is_active: true });
-      const codes = apps.map((a) => a.code).filter(Boolean);
-      if (codes.length === 0) {
-        messageApi.info(t('pages.system.applications.syncAllNoApps', { defaultValue: '暂无已安装的应用' }));
-        return;
-      }
       messageApi.loading({
         content: t('pages.system.applications.syncAllLoading', {
           defaultValue: '正在同步菜单，请稍候…',
         }),
         key: 'sync-all',
       });
-      let successCount = 0;
-      const errors: string[] = [];
       const unknown = () => t('pages.system.applications.syncAllErrUnknown', { defaultValue: '未知错误' });
-      for (const code of codes) {
-        try {
-          const result = await syncApplicationManifest(code);
-          if (result.success) successCount += 1;
-          else {
-            errors.push(
-              t('pages.system.applications.syncAllErrManifest', {
-                code,
-                detail: (result.message || '').trim() || unknown(),
-              })
-            );
-          }
-        } catch (e: any) {
-          errors.push(
-            t('pages.system.applications.syncAllErrManifest', {
-              code,
-              detail: (e?.message || String(e)).trim() || unknown(),
-            })
-          );
-        }
+      const result = await syncAllManifestsAndMenus();
+      const manifestTotal = result.manifest_total ?? 0;
+      const menuCount = result.menu_count ?? 0;
+      if (manifestTotal === 0) {
+        messageApi.info({
+          content: t('pages.system.applications.syncAllNoApps', { defaultValue: '暂无已安装的应用' }),
+          key: 'sync-all',
+        });
+        return;
       }
-      // 再执行一次「同步全部菜单」，确保菜单与数据库完全一致（解决 manifest 更新后菜单未显示的问题）
-      try {
-        await syncAllMenus();
-      } catch (e: any) {
-        errors.push(
-          t('pages.system.applications.syncAllErrMenusDb', {
-            detail: (e?.message || String(e)).trim() || unknown(),
-          })
-        );
-      }
-      if (errors.length > 0) {
+      const errors = (result.manifest_errors ?? []).map((item) =>
+        t('pages.system.applications.syncAllErrManifest', {
+          code: item.code,
+          detail: (item.detail || '').trim() || unknown(),
+        }),
+      );
+      const successCount = result.manifest_synced ?? 0;
+      if (!result.success) {
+        messageApi.error({
+          content: result.message || t('pages.system.applications.syncAllFailed', { defaultValue: '菜单同步失败' }),
+          key: 'sync-all',
+          duration: 10,
+        });
+      } else if (errors.length > 0) {
         messageApi.warning({
           content: (
             <span style={{ whiteSpace: 'pre-line' }}>
               {t('pages.system.applications.syncAllPartial', {
                 success: successCount,
-                total: codes.length,
+                total: manifestTotal,
                 errors: errors.slice(0, 3).join('\n'),
+              })}
+              {'\n'}
+              {t('pages.system.applications.syncAllSuccess', {
+                count: menuCount,
+                defaultValue: `已写入 ${menuCount} 个菜单项，导航菜单已更新。`,
               })}
             </span>
           ),
@@ -719,8 +674,8 @@ const ApplicationListPage: React.FC = () => {
       } else {
         messageApi.success({
           content: t('pages.system.applications.syncAllSuccess', {
-            count: successCount,
-            defaultValue: `已完成 ${successCount} 个应用的菜单同步，导航菜单已更新。`,
+            count: menuCount,
+            defaultValue: `已写入 ${menuCount} 个菜单项，导航菜单已更新。`,
           }),
           key: 'sync-all',
         });
@@ -1861,16 +1816,11 @@ const ApplicationListPage: React.FC = () => {
                 (app) => !existingCodes.has(app.code as string),
               );
 
-              let filteredData = [...(allData || []), ...mergedPlaceholders].map(app => {
-                const overriddenSortOrder = APP_SORT_ORDER_OVERRIDES[app.code as string];
+              let filteredData = [...(allData || []), ...mergedPlaceholders].map((app) => {
                 const overriddenDescription = APP_DESCRIPTION_OVERRIDES[app.code as string];
-                const appWithSort = overriddenSortOrder !== undefined
-                  ? { ...app, sort_order: overriddenSortOrder }
+                return overriddenDescription !== undefined
+                  ? { ...app, description: overriddenDescription }
                   : app;
-                const appWithDisplay = overriddenDescription !== undefined
-                  ? { ...appWithSort, description: overriddenDescription }
-                  : appWithSort;
-                return appWithDisplay;
               });
 
               // 前端筛选（因为后端可能不支持某些筛选）
@@ -1890,7 +1840,7 @@ const ApplicationListPage: React.FC = () => {
 
               filteredData = filteredData.filter(item => matchAppCategory(item, appCategoryFilter));
 
-              // 按后端 sort_order 字段排序（数据库迁移 212 保证所有应用都有正确排序值）
+              // 按 core_applications.sort_order 排序（唯一真源：manifest.json → 库内字段）
               filteredData.sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999));
 
               return {
@@ -1925,17 +1875,6 @@ const ApplicationListPage: React.FC = () => {
                   setAppCategoryFilter(value as AppCategoryFilter);
                 }}
               />
-              {appCategoryFilter === 'pro' && (
-                <Alert
-                  type="info"
-                  showIcon
-                  banner
-                  style={{ padding: '2px 10px', margin: 0 }}
-                  message={t('pages.system.applications.proCategoryTip', {
-                    defaultValue: '专业应用需升级专业版；未部署专业包时以下为占位预告，安装/启用将提示升级。',
-                  })}
-                />
-              )}
             </Space>
           }
           showImportButton={false}

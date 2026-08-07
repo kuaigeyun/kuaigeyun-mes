@@ -1,1 +1,0 @@
-import{t}from"./clearSessionQueries-MOEVHHXt.js";const e="/apps/kuaiai/suggestions";async function a(){return t(`${e}/pulse/all`,{method:"GET"})}async function i(s,n){const o={};return n&&(o.context=JSON.stringify(n)),t(`${e}/${s}`,{method:"GET",params:o})}async function u(s){return t(`${e}/work-order/${s}`,{method:"GET"})}export{u as a,a as b,i as g};

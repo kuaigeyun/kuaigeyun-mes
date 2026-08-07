@@ -4,6 +4,10 @@
 
 源码位于 `riveredge-backend/src/apps/kuaiiot/edge-agent/`（按快数采应用域聚合）。这是**独立 Python 部署包**，使用自有 `requirements.txt` 与 venv，**不参与 backend 进程 import**；现场部署时可将本目录复制到目标机（如 `/opt/riveredge-edge-agent`）单独运行。
 
+源码位于 `riveredge-backend/src/apps/kuaiiot/edge-agent/`（按快数采应用域聚合）。这是**独立 Python 部署包**，使用自有 `requirements.txt` 与 venv，**不参与 backend 进程 import**；现场部署时可将本目录复制到目标机（如 `/opt/riveredge-edge-agent`）单独运行。
+
+源码位于 `riveredge-backend/src/apps/kuaiiot/edge-agent/`（按快数采应用域聚合）。这是**独立 Python 部署包**，使用自有 `requirements.txt` 与 venv，**不参与 backend 进程 import**；现场部署时可将本目录复制到目标机（如 `/opt/riveredge-edge-agent`）单独运行。
+
 ## 依赖
 
 ```bash

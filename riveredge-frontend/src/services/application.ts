@@ -318,6 +318,53 @@ function formatSyncManifestApiError(
   return `HTTP ${status}: ${statusText}`;
 }
 
+const SYNC_ALL_MANIFESTS_AND_MENUS_TIMEOUT_MS = 180_000;
+
+export type SyncAllManifestsAndMenusResult = {
+  success: boolean;
+  message: string;
+  manifest_synced: number;
+  manifest_total: number;
+  manifest_errors: Array<{ code: string; detail: string }>;
+  menu_count?: number;
+};
+
+/** 批量从 manifest 刷新清单并一次性同步菜单（应用中心「一键同步菜单」） */
+export async function syncAllManifestsAndMenus(): Promise<SyncAllManifestsAndMenusResult> {
+  const baseUrl = window.location.origin;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SYNC_ALL_MANIFESTS_AND_MENUS_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/core/applications/sync-all-manifests-and-menus`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${getToken()}`,
+        'X-Tenant-ID': localStorage.getItem('tenant_id') || '',
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(formatSyncManifestApiError(errorData, response.status, response.statusText));
+    }
+    return (await response.json()) as SyncAllManifestsAndMenusResult;
+  } catch (e: any) {
+    const aborted =
+      e?.name === 'AbortError' ||
+      e?.originalError?.name === 'AbortError' ||
+      /aborted/i.test(String(e?.message || ''));
+    if (aborted) {
+      throw new Error(
+        `菜单同步超时（超过 ${SYNC_ALL_MANIFESTS_AND_MENUS_TIMEOUT_MS / 1000} 秒），请查看后端日志或稍后重试`,
+      );
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function syncApplicationManifest(appCode: string): Promise<{
   success: boolean;
   message: string;

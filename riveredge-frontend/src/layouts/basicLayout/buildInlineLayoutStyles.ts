@@ -3,6 +3,9 @@
  */
 import type { GlobalToken } from 'antd/es/theme/interface';
 import { useMemo } from 'react';
+import {
+  SPLIT_SIDEBAR_PRIMARY_WIDTH,
+} from './sidebarMenuLayout';
 
 export type BasicLayoutStyleContext = {
   token: GlobalToken;
@@ -333,6 +336,10 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
     startMenuPanelRadius,
     startMenuTheme,
   } = ctx;
+  const siderDividerColor =
+    isDarkMode || siderTextColor === '#ffffff'
+      ? 'rgba(255, 255, 255, 0.15)'
+      : 'rgba(0, 0, 0, 0.12)';
   return `
         /* 动态注入主题色到 CSS 变量 */
         :root {
@@ -343,6 +350,11 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           --ant-colorBorderSecondary: ${token.colorBorderSecondary ?? token.colorBorder};
           --ant-borderRadius: ${token.borderRadius}px;
           --ant-borderRadiusLG: ${token.borderRadiusLG ?? token.borderRadius + 2}px;
+        }
+        /* 侧栏分割线：与底栏/搜索框等同层级，随侧栏明暗适配 */
+        .ant-pro-layout .ant-pro-sider,
+        .ant-pro-layout .ant-layout-sider {
+          --riveredge-sider-divider-color: ${siderDividerColor};
         }
         /* ==================== PageContainer 相关 ==================== */
         .ant-pro-page-container .ant-page-header .ant-page-header-breadcrumb,
@@ -544,7 +556,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         /* 子菜单标题样式（ant-menu-submenu-title）- 使用 Ant Design 原生样式 */
         /* 使用主题颜色变量，支持深色模式 */
         /* 注意：只针对侧边栏内的子菜单标题，不影响弹出菜单 */
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-submenu-title {
+        html[data-sidebar-menu-layout="flat"] .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-submenu-title {
           /* 子菜单标题的独立样式，与普通菜单项区分开；几何参数跨主题固定，避免切换时右侧抖动 */
           margin-inline: 6px !important;
           width: calc(100% - 24px) !important;
@@ -791,8 +803,9 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer,
         /* 覆盖 collapsedButtonRender 返回的 div */
         .ant-pro-layout .ant-pro-sider-footer > div,
-        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div {
-          border-top: 1px solid var(--river-divider-color) !important;
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div,
+        .ant-pro-layout .riveredge-sider-footer-bar {
+          border-top: 1px solid var(--riveredge-sider-divider-color) !important;
         }
         /* 侧边栏底部收起按钮样式 - 根据菜单栏背景色自动适配 */
         .ant-pro-layout .ant-pro-sider-footer .ant-btn,
@@ -1147,14 +1160,26 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           height: 0 !important;
           display: none !important;
         }
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .riveredge-split-sidebar)::-webkit-scrollbar {
+          width: 0 !important;
+          height: 0 !important;
+          display: none !important;
+        }
         .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .ant-pro-sider-menu)::-webkit-scrollbar-track {
+          display: none !important;
+        }
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .riveredge-split-sidebar)::-webkit-scrollbar-track {
           display: none !important;
         }
         .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .ant-pro-sider-menu)::-webkit-scrollbar-thumb {
           display: none !important;
         }
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .riveredge-split-sidebar)::-webkit-scrollbar-thumb {
+          display: none !important;
+        }
         /* Firefox 左侧菜单栏滚动条样式 */
-        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .ant-pro-sider-menu) {
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .ant-pro-sider-menu),
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .riveredge-split-sidebar) {
           scrollbar-width: none !important;
         }
         /* 统一顶部、标签栏和菜单栏的背景色 - 使用 token 值并同步到 CSS 变量；Modal 内容区/footer 使用 colorBgElevated */
@@ -1288,13 +1313,23 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           height: 100% !important;
           overflow: hidden !important;
         }
-        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .ant-pro-sider-menu) {
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .ant-pro-sider-menu),
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .riveredge-split-sidebar) {
           flex: 1 1 auto !important;
           min-height: 0 !important;
           overflow-x: hidden !important;
           overflow-y: auto !important;
           padding-bottom: var(--riveredge-sider-footer-height, 0px) !important;
           box-sizing: border-box !important;
+        }
+        html[data-sidebar-menu-layout="split"] .ant-pro-sider .ant-layout-sider-children > div:has(> .riveredge-split-sidebar) {
+          display: flex !important;
+          flex-direction: column !important;
+          flex: 1 1 0 !important;
+          min-height: 0 !important;
+          height: 100% !important;
+          padding-bottom: 0 !important;
+          overflow: hidden !important;
         }
         .ant-pro-layout .ant-pro-sider-menu {
           padding-top: 8px !important;
@@ -1319,22 +1354,22 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         .ant-pro-layout .ant-pro-sider-footer button {
           pointer-events: auto !important;
         }
-        /* 嵌套菜单排版（明暗模式一致）：三级及以下保持原缩进，二级略向左 */
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-item,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-submenu-title {
+        /* 嵌套菜单排版（平铺侧栏专用；双列见 split 段 CSS 变量） */
+        html[data-sidebar-menu-layout="flat"] .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-item,
+        html[data-sidebar-menu-layout="flat"] .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-submenu-title {
           margin-inline: 6px !important;
           width: calc(100% - 24px) !important;
           box-sizing: border-box !important;
           overflow: hidden !important;
           padding-inline-start: 40px !important;
         }
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-sub > .ant-menu-item,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-sub > .ant-menu-submenu > .ant-menu-submenu-title {
+        html[data-sidebar-menu-layout="flat"] .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-sub > .ant-menu-item,
+        html[data-sidebar-menu-layout="flat"] .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-sub > .ant-menu-submenu > .ant-menu-submenu-title {
           padding-inline-start: 32px !important;
         }
-        ${!isDarkMode ? `
-        /* 浅色模式：激活菜单统一主题色背景（含浅色侧栏与深色侧栏） */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected {
+        /* 激活菜单统一主题色背景（明暗模式、平铺/双列一致） */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-dark .ant-menu-item.ant-menu-item-selected {
           background-color: var(--riveredge-menu-primary-color) !important;
           border-right: none !important;
           box-shadow: none !important;
@@ -1345,20 +1380,23 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content > span,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-title-content,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-title-content a,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-title-content span {
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-title-content span,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-dark .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-dark .ant-menu-item.ant-menu-item-selected .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-dark .ant-menu-item.ant-menu-item-selected .ant-menu-title-content a,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-dark .ant-menu-item.ant-menu-item-selected .ant-menu-title-content span {
           color: #fff !important;
           font-weight: normal !important;
         }
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected::after {
           display: none !important;
         }
-        ` : ''}
         ${isDarkMode ? `
-        /* 深色模式：激活菜单项宽度与明亮模式保持一致（参考明亮模式右侧留白） */
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-item.ant-menu-item-selected,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-item.ant-menu-item-selected,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title {
+        /* 深色模式（平铺侧栏）：激活行宽度；双列侧栏见 split 段，不在此改几何 */
+        html[data-sidebar-menu-layout="flat"] .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-item.ant-menu-item-selected,
+        html[data-sidebar-menu-layout="flat"] .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title,
+        html[data-sidebar-menu-layout="flat"] .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-item.ant-menu-item-selected,
+        html[data-sidebar-menu-layout="flat"] .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title {
           margin-inline: 6px !important;
           width: calc(100% - 24px) !important;
           box-sizing: border-box !important;
@@ -1867,6 +1905,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         .ant-layout-sider .riveredge-sidebar-search-wrapper {
           width: 100% !important;
           box-sizing: border-box;
+          border-bottom: 1px solid var(--riveredge-sider-divider-color) !important;
         }
         .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-affix-wrapper,
         .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input {
@@ -2258,6 +2297,223 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
             margin: 0 !important;
             padding: 0 !important;
           }
+        }
+
+        /* ==================== 双列侧栏菜单（颜色/交互与平铺 ant-pro-sider-menu 一致） ==================== */
+        html[data-sidebar-menu-layout="split"] .ant-pro-sider .ant-pro-sider-menu {
+          padding-inline: 0 !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar {
+          display: flex;
+          flex-direction: column;
+          flex: 1 1 0;
+          min-height: 0;
+          height: 100%;
+          background: ${siderBgColor} !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-search {
+          flex-shrink: 0;
+          width: 100%;
+          padding: 8px 6px 0;
+          box-sizing: border-box;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-search .riveredge-sidebar-search-wrapper {
+          margin: 0 !important;
+          padding: 0 0 4px 0 !important;
+          width: 100% !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-body {
+          flex: 1 1 0;
+          min-height: 0;
+          display: grid;
+          grid-template-columns: ${SPLIT_SIDEBAR_PRIMARY_WIDTH}px minmax(0, 1fr);
+          overflow: hidden;
+          background: ${siderBgColor} !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-body.is-collapsed {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary {
+          grid-column: 1;
+          min-height: 0;
+          align-self: stretch;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding: 8px 2px;
+          overflow-x: hidden;
+          overflow-y: auto;
+          scrollbar-width: none !important;
+          border-inline-end: 1px solid var(--riveredge-sider-divider-color);
+          background: ${siderBgColor} !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary::-webkit-scrollbar {
+          width: 0 !important;
+          height: 0 !important;
+          display: none !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary::-webkit-scrollbar-track,
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary::-webkit-scrollbar-thumb {
+          display: none !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-body.is-collapsed .riveredge-split-sidebar-primary {
+          border-inline-end: none;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          width: 100%;
+          min-height: 58px;
+          padding: 2px 1px 4px;
+          border: none;
+          border-radius: ${token.borderRadius}px;
+          background: transparent;
+          color: ${siderTextColor};
+          cursor: pointer;
+          transition: background-color 0s, color 0s;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary-item:hover {
+          background-color: transparent !important;
+          color: ${siderTextColor} !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary-item.is-active {
+          background-color: transparent !important;
+          color: ${siderTextColor} !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary-icon {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          width: 34px;
+          height: 34px;
+          border-radius: ${token.borderRadiusSM ?? token.borderRadius}px;
+          background: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.05)' : 'var(--ant-colorFillQuaternary, var(--ant-colorFillTertiary))'} !important;
+          color: ${siderTextColor} !important;
+          transition: background-color 0s, color 0s;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary-item:hover .riveredge-split-sidebar-primary-icon {
+          background: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.09)' : 'var(--ant-colorFillTertiary)'} !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary-item.is-active .riveredge-split-sidebar-primary-icon {
+          background: var(--riveredge-menu-primary-color) !important;
+          color: #fff !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary-icon .anticon,
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary-icon svg {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+          width: 18px;
+          height: 18px;
+          line-height: 1;
+          color: currentColor !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary-label {
+          font-size: 12px;
+          line-height: 1.2;
+          text-align: center;
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          color: currentColor;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary-item.is-active .riveredge-split-sidebar-primary-label {
+          color: var(--riveredge-menu-primary-color) !important;
+          font-weight: 500;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary {
+          grid-column: 2;
+          min-width: 0;
+          min-height: 0;
+          align-self: stretch;
+          display: flex;
+          flex-direction: column;
+          overflow-x: hidden !important;
+          overflow-y: auto !important;
+          scrollbar-width: none !important;
+          background: ${siderBgColor} !important;
+          --riveredge-split-menu-row-margin: 3px;
+          --riveredge-split-menu-row-width: calc(100% - 6px);
+          --riveredge-split-menu-pad-l1: 8px;
+          --riveredge-split-menu-pad-l2: 22px;
+          --riveredge-split-menu-pad-l3: 28px;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary::-webkit-scrollbar {
+          width: 0 !important;
+          height: 0 !important;
+          display: none !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary::-webkit-scrollbar-track,
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary::-webkit-scrollbar-thumb {
+          display: none !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-menu.ant-pro-sider-menu {
+          flex: 0 0 auto;
+          height: auto !important;
+          min-height: auto !important;
+          overflow: visible !important;
+          border-inline-end: none !important;
+          background: ${siderBgColor} !important;
+          padding-top: 4px !important;
+          padding-bottom: 8px !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary .ant-pro-sider-menu.ant-menu-inline .ant-menu-sub.ant-menu-inline {
+          padding-inline-start: 0 !important;
+        }
+        /* 双列右栏行几何唯一真源：各层级 margin/width 一致，选中态只改颜色 */
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary .riveredge-split-sidebar-menu.ant-menu-inline > .ant-menu-item,
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary .riveredge-split-sidebar-menu.ant-menu-inline > .ant-menu-submenu > .ant-menu-submenu-title {
+          margin-inline: var(--riveredge-split-menu-row-margin) !important;
+          width: var(--riveredge-split-menu-row-width) !important;
+          max-width: var(--riveredge-split-menu-row-width) !important;
+          box-sizing: border-box !important;
+          border-radius: ${token.borderRadius}px !important;
+          padding-inline-end: 6px !important;
+          padding-inline-start: var(--riveredge-split-menu-pad-l1) !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary .riveredge-split-sidebar-menu.ant-menu-inline .ant-menu-sub > .ant-menu-item,
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary .riveredge-split-sidebar-menu.ant-menu-inline .ant-menu-sub > .ant-menu-submenu > .ant-menu-submenu-title {
+          margin-inline: var(--riveredge-split-menu-row-margin) !important;
+          width: var(--riveredge-split-menu-row-width) !important;
+          max-width: var(--riveredge-split-menu-row-width) !important;
+          box-sizing: border-box !important;
+          padding-inline-end: 6px !important;
+          padding-inline-start: var(--riveredge-split-menu-pad-l2) !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary .riveredge-split-sidebar-menu.ant-menu-inline .ant-menu-sub .ant-menu-sub > .ant-menu-item,
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary .riveredge-split-sidebar-menu.ant-menu-inline .ant-menu-sub .ant-menu-sub > .ant-menu-submenu > .ant-menu-submenu-title {
+          margin-inline: var(--riveredge-split-menu-row-margin) !important;
+          width: var(--riveredge-split-menu-row-width) !important;
+          max-width: var(--riveredge-split-menu-row-width) !important;
+          box-sizing: border-box !important;
+          padding-inline-end: 6px !important;
+          padding-inline-start: var(--riveredge-split-menu-pad-l3) !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary .ant-pro-sider-menu .ant-menu-title-content {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary .ant-pro-sider-menu .ant-menu-item-group-title {
+          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
+          font-size: var(--ant-fontSizeSM) !important;
+          font-weight: 500 !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected,
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary .ant-pro-sider-menu.ant-menu-dark .ant-menu-item.ant-menu-item-selected {
+          background-color: var(--riveredge-menu-primary-color) !important;
+          color: #fff !important;
+        }
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-title-content,
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-title-content a,
+        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-secondary .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-title-content span {
+          color: #fff !important;
         }
       `;
 }

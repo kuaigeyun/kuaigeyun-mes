@@ -18,6 +18,11 @@ import { getDrawerFloatingWrapperStyle } from '../layout-templates/drawerFloatin
 import { clampBorderRadius, readBorderRadius } from '../../utils/themeBorderRadius';
 import { clampFontSize, readFontSize } from '../../utils/themeFontSize';
 import { ThemeBorderRadiusSlider, ThemeFontSizeSlider } from './ThemeStyleSliders';
+import {
+  DEFAULT_SIDEBAR_MENU_LAYOUT,
+  SIDEBAR_MENU_LAYOUT_PREF_KEY,
+  type SidebarMenuLayout,
+} from '../../layouts/basicLayout/sidebarMenuLayout';
 import '../layout-templates/drawerSlideMotion.css';
 
 const { Text } = Typography;
@@ -421,6 +426,11 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       const tabsPersistence = 'tabs_persistence' in prefs ? Boolean(prefs.tabs_persistence) : false;
       const loadedThemeStyle = applied.themeStyle === 'plain' ? 'plain' : 'vivid';
       setThemeStyleValue(loadedThemeStyle);
+      const uiPrefs = prefs.ui as Record<string, unknown> | undefined;
+      const loadedSidebarMenuLayout: SidebarMenuLayout =
+        uiPrefs?.sidebar_menu_layout === 'split' || prefs[SIDEBAR_MENU_LAYOUT_PREF_KEY] === 'split'
+          ? 'split'
+          : DEFAULT_SIDEBAR_MENU_LAYOUT;
 
       const formValues = {
         colorPrimary: colorPrimaryValue,
@@ -433,6 +443,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         tabsPersistence,
         layoutMode: 'mix',
         themeStyle: loadedThemeStyle,
+        sidebarMenuLayout: loadedSidebarMenuLayout,
       };
 
       form.setFieldsValue(formValues);
@@ -624,6 +635,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       values.colorMode = resolvedColorMode;
 
       const tabsPersistenceValue = Boolean(form.getFieldValue('tabsPersistence'));
+      const sidebarMenuLayoutValue: SidebarMenuLayout =
+        form.getFieldValue('sidebarMenuLayout') === 'split' ? 'split' : DEFAULT_SIDEBAR_MENU_LAYOUT;
 
       const { themeMode, themeConfigForPreference } = buildThemeConfigFromForm(
         values,
@@ -639,6 +652,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         theme: themeMode,
         theme_config: cleanedThemeConfig,
         tabs_persistence: tabsPersistenceValue,
+        [SIDEBAR_MENU_LAYOUT_PREF_KEY]: sidebarMenuLayoutValue,
       });
 
       useThemeStore.getState().applyTheme(themeMode, cleanedThemeConfig);
@@ -695,6 +709,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         tabsPersistence: true,
         layoutMode: 'mix',
         themeStyle: 'vivid',
+        sidebarMenuLayout: DEFAULT_SIDEBAR_MENU_LAYOUT,
       });
 
       localStorage.removeItem('riveredge_theme_config');
@@ -708,6 +723,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         theme: 'light',
         tabs_persistence: true,
         theme_config: defaultThemeConfig,
+        [SIDEBAR_MENU_LAYOUT_PREF_KEY]: DEFAULT_SIDEBAR_MENU_LAYOUT,
       });
 
       useThemeStore.getState().applyTheme('light', defaultThemeConfig);
@@ -791,6 +807,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               colorMode: 'light',
               layoutMode: 'mix',
               themeStyle: 'vivid',
+              sidebarMenuLayout: DEFAULT_SIDEBAR_MENU_LAYOUT,
             }}
           >
             {/* 颜色模式 */}
@@ -930,26 +947,53 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               </Form.Item>
             </Card>
 
-            {/* 主题风格 */}
-            <Card
-              size="small"
-              title={t('ui.theme.style.label')}
-              style={{ marginBottom: 16 }}
-              styles={{ body: { padding: '16px' } }}
+            {/* 主题风格 + 菜单布局：同一行 */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                gap: 16,
+                marginBottom: 16,
+              }}
             >
-              <Form.Item name="themeStyle" style={{ marginBottom: 8 }}>
-                <Segmented
-                  block
-                  options={[
-                    { label: t('ui.theme.style.vivid'), value: 'vivid' },
-                    { label: t('ui.theme.style.plain'), value: 'plain' },
-                  ]}
-                />
-              </Form.Item>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {isPlainStyle ? t('ui.theme.style.plainDesc') : t('ui.theme.style.vividDesc')}
-              </Text>
-            </Card>
+              <Card
+                size="small"
+                title={t('ui.theme.style.label')}
+                styles={{ body: { padding: '16px' } }}
+              >
+                <Form.Item name="themeStyle" style={{ marginBottom: 8 }}>
+                  <Segmented
+                    block
+                    options={[
+                      { label: t('ui.theme.style.vivid'), value: 'vivid' },
+                      { label: t('ui.theme.style.plain'), value: 'plain' },
+                    ]}
+                  />
+                </Form.Item>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {isPlainStyle ? t('ui.theme.style.plainDesc') : t('ui.theme.style.vividDesc')}
+                </Text>
+              </Card>
+
+              <Card
+                size="small"
+                title={t('components.themeEditor.sidebarMenuLayout.label')}
+                styles={{ body: { padding: '16px' } }}
+              >
+                <Form.Item name="sidebarMenuLayout" style={{ marginBottom: 8 }}>
+                  <Segmented
+                    block
+                    options={[
+                      { label: t('components.themeEditor.sidebarMenuLayout.flat'), value: 'flat' },
+                      { label: t('components.themeEditor.sidebarMenuLayout.split'), value: 'split' },
+                    ]}
+                  />
+                </Form.Item>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('components.themeEditor.sidebarMenuLayout.desc')}
+                </Text>
+              </Card>
+            </div>
 
             {/* 主题颜色 */}
             <Card

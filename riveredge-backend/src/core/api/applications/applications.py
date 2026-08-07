@@ -841,6 +841,21 @@ async def test_sync_endpoint():
     """测试同步端点是否可访问"""
     return {"message": "Sync endpoint is working", "timestamp": "2024-12-01"}
 
+@router.post("/sync-all-manifests-and-menus", status_code=status.HTTP_200_OK)
+async def sync_all_manifests_and_menus(
+    auth: AuthContext = Depends(get_auth_context),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量从 manifest.json 刷新已安装应用清单，并一次性同步所有菜单与权限。
+
+    应用中心「一键同步菜单」专用，避免前端按应用串行请求。
+    """
+    _require_tenant_or_platform_admin(auth)
+    result = await ApplicationService.sync_all_manifests_and_menus(tenant_id)
+    return result
+
+
 @router.post("/sync-manifest/{app_code}")
 async def sync_application_manifest(
     app_code: str,
@@ -861,14 +876,8 @@ async def sync_application_manifest(
         dict: 同步结果
     """
     try:
-        # 构建manifest.json文件路径（后端 apps 为来源，支持 code 与目录名不一致如 master-data/master_data）
-        plugins_dir = ApplicationService._get_plugins_directory()
-        for dir_name in (app_code, app_code.replace("-", "_")):
-            candidate = plugins_dir / dir_name / "manifest.json"
-            if candidate.exists():
-                manifest_path = candidate
-                break
-        else:
+        manifest_path = ApplicationService._resolve_manifest_path(app_code)
+        if not manifest_path:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"manifest.json文件不存在: {app_code}"
@@ -889,32 +898,16 @@ async def sync_application_manifest(
             )
         await _assert_application_visible_to_viewer(tenant_id, app, auth)
 
-        # 更新应用配置
-        menu_config = manifest.get('menu_config')
-        version = manifest.get('version', app.get('version', '1.0.0'))
-        
-        # 决定是否同步名称和排序
-        app_name = app.get('name')
-        if not app.get('is_custom_name'):
-            app_name = manifest.get('name', app_name)
-            
-        app_sort_order = app.get('sort_order', 0)
-        if not app.get('is_custom_sort'):
-            app_sort_order = manifest.get('sort_order', app_sort_order)
+        update_data = ApplicationService._build_manifest_sync_update(app, manifest)
+        version = update_data.version or app.get('version', '1.0.0')
+        menu_config = update_data.menu_config
 
-        # 更新数据库中的应用配置
-        update_data = ApplicationUpdate(
-            name=app_name,
-            menu_config=menu_config,
-            version=version,
-            sort_order=app_sort_order
-        )
-
-        # 清单同步后由 sync-all 或单应用「同步菜单」收尾统一写权限，避免批量时每个应用全量 ensure_permissions 超时
+        # 清单同步后由 sync-all 或单应用「同步菜单」收尾统一写菜单/权限
         updated_app = await ApplicationService.update_application(
             tenant_id=tenant_id,
             uuid=str(app['uuid']),
             data=update_data,
+            sync_derived_resources=False,
             skip_permission_sync=True,
         )
 

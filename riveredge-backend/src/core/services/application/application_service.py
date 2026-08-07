@@ -38,6 +38,32 @@ class ApplicationService:
     """
 
     @staticmethod
+    def _normalize_menu_config_field(raw: Any) -> Optional[Dict[str, Any]]:
+        """asyncpg jsonb 可能已是 dict；仅对字符串做 json.loads。"""
+        if raw is None:
+            return None
+        if isinstance(raw, dict):
+            return raw
+        if isinstance(raw, str):
+            text = raw.strip()
+            if not text:
+                return None
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                return None
+            return parsed if isinstance(parsed, dict) else None
+        return None
+
+    @staticmethod
+    def _normalize_application_row(app_dict: Dict[str, Any]) -> Dict[str, Any]:
+        if "menu_config" in app_dict:
+            app_dict["menu_config"] = ApplicationService._normalize_menu_config_field(
+                app_dict.get("menu_config")
+            )
+        return app_dict
+
+    @staticmethod
     def _manifest_is_dedicated(manifest: Dict[str, Any]) -> bool:
         if manifest.get("is_dedicated") is True:
             return True
@@ -345,13 +371,7 @@ class ApplicationService:
             if not row:
                 raise NotFoundError("应用不存在")
             
-            app_dict = dict(row)
-            # 处理 JSON 字段
-            if 'menu_config' in app_dict and app_dict['menu_config']:
-                try:
-                    app_dict['menu_config'] = json.loads(app_dict['menu_config'])
-                except:
-                    app_dict['menu_config'] = None
+            app_dict = ApplicationService._normalize_application_row(dict(row))
             
             return app_dict
         finally:
@@ -397,13 +417,7 @@ class ApplicationService:
             if not row:
                 return None
             
-            app_dict = dict(row)
-            # 处理 JSON 字段
-            if 'menu_config' in app_dict and app_dict['menu_config']:
-                try:
-                    app_dict['menu_config'] = json.loads(app_dict['menu_config'])
-                except:
-                    app_dict['menu_config'] = None
+            app_dict = ApplicationService._normalize_application_row(dict(row))
             
             return app_dict
         finally:
@@ -467,14 +481,7 @@ class ApplicationService:
             # 转换结果为字典列表
             applications = []
             for row in rows:
-                app_dict = dict(row)
-                # 处理 JSON 字段
-                if 'menu_config' in app_dict and app_dict['menu_config']:
-                    try:
-                        app_dict['menu_config'] = json.loads(app_dict['menu_config'])
-                    except:
-                        app_dict['menu_config'] = None
-                applications.append(app_dict)
+                applications.append(ApplicationService._normalize_application_row(dict(row)))
 
             bound = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
             # 未绑定租户不会有 bound；已绑定但尚未在该租户注册 core_applications 行时，从 manifest 补齐（与应用中心默认未筛选一致）
@@ -1117,6 +1124,119 @@ class ApplicationService:
             except (json.JSONDecodeError, IOError):
                 continue
         return None
+
+    @staticmethod
+    def _resolve_manifest_path(app_code: str) -> Optional[Path]:
+        """按应用 code 解析 manifest.json 路径（支持 code 与目录名不一致）。"""
+        plugins_dir = ApplicationService._get_plugins_directory()
+        for dir_name in (app_code, app_code.replace("-", "_")):
+            candidate = plugins_dir / dir_name / "manifest.json"
+            if candidate.exists():
+                return candidate
+        return None
+
+    @staticmethod
+    def _build_manifest_sync_update(app: ApplicationDict, manifest: Dict[str, Any]) -> ApplicationUpdate:
+        menu_config = manifest.get("menu_config")
+        version = manifest.get("version", app.get("version", "1.0.0"))
+        app_name = app.get("name")
+        if not app.get("is_custom_name"):
+            app_name = manifest.get("name", app_name)
+        app_sort_order = app.get("sort_order", 0)
+        if not app.get("is_custom_sort"):
+            app_sort_order = manifest.get("sort_order", app_sort_order)
+        return ApplicationUpdate(
+            name=app_name,
+            menu_config=menu_config,
+            version=version,
+            sort_order=app_sort_order,
+        )
+
+    @staticmethod
+    async def sync_all_manifests_and_menus(tenant_id: int) -> Dict[str, Any]:
+        """
+        批量从 manifest.json 刷新已安装应用清单，再一次性写入 core_menus。
+
+        供应用中心「一键同步菜单」使用，避免前端按应用串行 HTTP + 重复菜单/权限同步。
+        """
+        from core.services.system.menu_service import MenuService
+
+        manifest_by_code = {
+            str(plugin.get("code") or "").strip(): plugin
+            for plugin in ApplicationService._scan_plugin_manifests()
+            if plugin.get("code")
+        }
+
+        # 排序唯一真源：各应用 manifest.json 的 sort_order → core_applications（与扫描注册一致）
+        apps = await ApplicationService.list_applications(
+            tenant_id=tenant_id,
+            skip=0,
+            limit=500,
+        )
+        manifest_synced = 0
+        manifest_errors: List[Dict[str, str]] = []
+
+        conn = await get_db_connection()
+        try:
+            for app in apps:
+                app_code = str(app.get("code") or "").strip()
+                app_uuid = app.get("uuid")
+                if not app_code or not app_uuid:
+                    continue
+                manifest = manifest_by_code.get(app_code)
+                if not manifest:
+                    manifest_errors.append(
+                        {"code": app_code, "detail": f"manifest.json 不存在: {app_code}"}
+                    )
+                    continue
+                try:
+                    update_data = ApplicationService._build_manifest_sync_update(app, manifest)
+                    fields = update_data.model_dump(exclude_unset=True)
+                    if fields:
+                        set_clauses = []
+                        params: List[Any] = [tenant_id, str(app_uuid)]
+                        param_index = 3
+                        for key, value in fields.items():
+                            if key == "menu_config" and value is not None:
+                                set_clauses.append(f"{key} = ${param_index}::jsonb")
+                                params.append(json.dumps(value, ensure_ascii=False))
+                            else:
+                                set_clauses.append(f"{key} = ${param_index}")
+                                params.append(value)
+                            param_index += 1
+                        query = f"""
+                            UPDATE core_applications
+                            SET {', '.join(set_clauses)}, updated_at = NOW()
+                            WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
+                        """
+                        result = await conn.execute(query, *params)
+                        if result != "UPDATE 1":
+                            raise NotFoundError(f"应用 {app_code} 更新失败")
+                    manifest_synced += 1
+                except Exception as e:
+                    logger.warning("批量清单同步失败 app={}: {}", app_code, e)
+                    manifest_errors.append({"code": app_code, "detail": str(e)})
+        finally:
+            await conn.close()
+
+        menu_count = await MenuService.sync_all_menus_from_applications(
+            tenant_id,
+            skip_permission_sync=True,
+        )
+        manifest_total = len([a for a in apps if a.get("code")])
+
+        return {
+            "success": menu_count > 0 or manifest_synced > 0,
+            "manifest_synced": manifest_synced,
+            "manifest_total": manifest_total,
+            "manifest_errors": manifest_errors,
+            "menu_count": menu_count,
+            "message": (
+                f"已同步 {manifest_synced}/{manifest_total} 个应用清单，"
+                f"写入 {menu_count} 个菜单"
+                + (f"（{len(manifest_errors)} 个应用无本地 manifest，排序以库内 sort_order 为准）" if manifest_errors else "")
+            ),
+        }
     
     @staticmethod
     async def scan_and_register_plugins(tenant_id: int) -> List[ApplicationDict]:
@@ -1157,13 +1277,7 @@ class ApplicationService:
                     tenant_id,
                 )
                 for row in rows:
-                    app_dict = dict(row)
-                    raw_menu = app_dict.get('menu_config')
-                    if isinstance(raw_menu, str) and raw_menu:
-                        try:
-                            app_dict['menu_config'] = json.loads(raw_menu)
-                        except Exception:
-                            app_dict['menu_config'] = None
+                    app_dict = ApplicationService._normalize_application_row(dict(row))
                     app_code = app_dict.get('code')
                     if not app_code:
                         continue

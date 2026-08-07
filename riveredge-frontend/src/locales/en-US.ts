@@ -12,6 +12,7 @@ import customFieldPageEn from './generated/customFieldPage/en-US';
 export default {
   // Menu translations
   'menu.dashboard': 'Dashboard',
+  'menu.dashboard.short': 'Home',
   'menu.dashboard.workplace': 'Workbench',
   'menu.dashboard.analysis': 'Operations Board',
 
@@ -311,8 +312,8 @@ export default {
   'ui.theme.style.label': 'Theme Style',
   'ui.theme.style.vivid': 'Vivid',
   'ui.theme.style.plain': 'Minimal',
-  'ui.theme.style.vividDesc': 'Customize multiple accent colors for a richer interface',
-  'ui.theme.style.plainDesc': 'Grayscale-first with brand primary only, less visual noise',
+  'ui.theme.style.vividDesc': 'Multiple accent colors',
+  'ui.theme.style.plainDesc': 'Grayscale with brand primary only',
 
   'components.themeEditor.title': 'Theme',
   'components.themeEditor.subtitle': 'Customize your interface for a more comfortable workflow',
@@ -333,6 +334,10 @@ export default {
   'components.themeEditor.tabsBg.hint': 'Customize the tabs bar background color using hex (e.g. #ffffff, with alpha use 8-digit #rrggbbaa)',
   'components.themeEditor.interface.title': 'Interface',
   'components.themeEditor.interface.hint': 'Adjust radius and spacing to fit your preferences',
+  'components.themeEditor.sidebarMenuLayout.label': 'Menu layout',
+  'components.themeEditor.sidebarMenuLayout.desc': 'Flat: single column. Split: primary left, submenus right',
+  'components.themeEditor.sidebarMenuLayout.flat': 'Flat',
+  'components.themeEditor.sidebarMenuLayout.split': 'Split',
   'components.themeEditor.borderRadius.label': 'Border radius',
   'components.themeEditor.borderRadius.desc': 'Controls the rounding of buttons and cards ({{value}}px)',
   'components.themeEditor.borderRadius.mark.0': 'Square',

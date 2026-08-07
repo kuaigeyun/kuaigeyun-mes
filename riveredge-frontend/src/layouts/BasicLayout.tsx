@@ -56,6 +56,16 @@ import { PRO_APP_CODES } from '../pages/system/applications/proAppCatalog';
 import { layoutShellQueryOptions } from '../config/reactQuery';
 import { useDocumentVisible } from '../hooks/useDocumentVisible';
 import { useBasicLayoutInlineStyles, type BasicLayoutStyleContext } from './basicLayout/buildInlineLayoutStyles';
+import { LayoutStyleInjector } from './basicLayout/LayoutStyleInjector';
+import SplitSidebarMenu from './basicLayout/SplitSidebarMenu';
+import {
+  buildSplitMenuRoots,
+  computeSplitSecondaryOpenKeys,
+  FLAT_SIDEBAR_WIDTH,
+  readSidebarMenuLayoutPref,
+  SPLIT_SIDEBAR_COLLAPSED_WIDTH,
+  SPLIT_SIDEBAR_WIDTH,
+} from './basicLayout/sidebarMenuLayout';
 import dayjs from 'dayjs';
 import { DEFAULT_SITE_LOGO_URL, SITE_LOGO_FALLBACK_SVG_URL, nextSiteLogoUrlAfterImageError } from '../constants/siteAssets';
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
@@ -840,6 +850,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   });
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
 
+  const sidebarMenuLayoutPref = useUserPreferenceStore((s) =>
+    readSidebarMenuLayoutPref(s.preferences as Record<string, unknown> | undefined),
+  );
+
+  useEffect(() => {
+    document.documentElement.setAttribute(
+      'data-sidebar-menu-layout',
+      sidebarMenuLayoutPref === 'split' ? 'split' : 'flat',
+    );
+  }, [sidebarMenuLayoutPref]);
+
   // 侧边栏折叠状态
   const [collapsed, setCollapsed] = useState<boolean>(false);
 
@@ -862,6 +883,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   // PC / H5 二分：宽度中间档不再走平板壳；仅「触屏工位 + 竖屏」保留紧凑顶栏
   // 普通浏览器缩到 <1200 已跳 H5，此处勿再按 screens.lg / 宽度切平板模式
   const isMobileOrTablet = touchScreen.isTouchScreenMode && touchScreen.isPortrait;
+  const isSplitSidebarLayout = sidebarMenuLayoutPref === 'split' && !isMobileOrTablet;
 
   // 工作区最大化模式 (由 UniTab 控制)
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1327,6 +1349,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     t,
     collapsed,
   });
+
+  const splitMenuRoots = useMemo(
+    () => buildSplitMenuRoots(breadcrumbMenuData),
+    [breadcrumbMenuData],
+  );
 
   // APP 菜单来自 navigation-tree（异步），系统菜单为同步硬编码即时渲染。
   // 首次加载（缓存未命中）时在 APP 菜单将出现的位置展示骨架占位，避免「系统菜单先出、
@@ -1972,6 +1999,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    * 被后面的 siderTextColor / 灰色通用规则盖掉。
    */
   useLayoutEffect(() => {
+    if (isSplitSidebarLayout) return;
+
     const markGroupTitles = () => {
       document.querySelectorAll('.ant-pro-sider-menu .ant-menu-item-group').forEach((group) => {
         const title = group.querySelector(':scope > .ant-menu-item-group-title');
@@ -2007,7 +2036,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     };
 
     markGroupTitles();
-  }, [filteredMenuData, collapsed, location.pathname, appMenusLoading]);
+  }, [filteredMenuData, collapsed, location.pathname, appMenusLoading, isSplitSidebarLayout]);
 
   /**
    * 根据当前路径设置文档标题（浏览器标签页标题）
@@ -2348,10 +2377,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return selectedKeys;
   }, []);
 
+  const menuDataForSelection = isSplitSidebarLayout ? breadcrumbMenuData : filteredMenuData;
+
   // 计算应该选中的菜单 key（只选中精确匹配的路径）
   const selectedKeys = useMemo(() => {
-    return calculateSelectedKeys(filteredMenuData, location.pathname);
-  }, [filteredMenuData, location.pathname, calculateSelectedKeys]);
+    return calculateSelectedKeys(menuDataForSelection, location.pathname);
+  }, [menuDataForSelection, location.pathname, calculateSelectedKeys]);
 
   const [sidebarOpenKeys, setSidebarOpenKeys] = useState<string[]>(() =>
     computeMenuOpenKeysForPath(filteredMenuData, location.pathname)
@@ -2359,8 +2390,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const siderFooterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (isSplitSidebarLayout) {
+      setSidebarOpenKeys(
+        computeSplitSecondaryOpenKeys(splitMenuRoots, location.pathname, computeMenuOpenKeysForPath),
+      );
+      return;
+    }
     setSidebarOpenKeys(computeMenuOpenKeysForPath(filteredMenuData, location.pathname));
-  }, [location.pathname, filteredMenuData]);
+  }, [location.pathname, filteredMenuData, isSplitSidebarLayout, splitMenuRoots]);
 
   useLayoutEffect(() => {
     const footerEl = siderFooterRef.current;
@@ -2579,6 +2616,73 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     document.documentElement.style.setProperty('--riveredge-logo-title-color', logoTitleColor);
   }, [isDarkMode, isLightModeLightBg]);
 
+  const sidebarSearchExtra = useMemo(() => {
+    return (
+      <div
+        className="riveredge-sidebar-search-wrapper"
+        style={{
+          flexShrink: 0,
+          height: 38,
+          display: 'flex',
+          alignItems: 'center',
+          margin: '-13px 0 0 0',
+          padding: '2px 0 4px 0',
+        }}
+      >
+        <TopBarSearch
+          menuData={filteredMenuData}
+          hotMenuPaths={TOPBAR_SEARCH_HOT_MENU_PATHS}
+          isLightModeLightBg={siderTextColor !== '#ffffff'}
+          token={token}
+          placeholder={t('common.searchPlaceholderShort')}
+          inputHeight={34}
+          borderRadius={17}
+          shortcutKey="/"
+          transparentBg
+        />
+      </div>
+    );
+  }, [filteredMenuData, siderTextColor, t, token]);
+
+  const splitSiderWidth = collapsed ? SPLIT_SIDEBAR_COLLAPSED_WIDTH : SPLIT_SIDEBAR_WIDTH;
+
+  const handleSplitNavigate = useCallback(
+    (path: string) => {
+      navigate(path);
+    },
+    [navigate],
+  );
+
+  const splitMenuContentRender = useCallback(
+    () => (
+      <SplitSidebarMenu
+        roots={splitMenuRoots}
+        currentPath={location.pathname}
+        collapsed={collapsed}
+        selectedKeys={selectedKeys}
+        openKeys={sidebarOpenKeys}
+        onOpenChange={setSidebarOpenKeys}
+        searchExtra={sidebarSearchExtra}
+        onNavigate={handleSplitNavigate}
+      />
+    ),
+    [
+      splitMenuRoots,
+      location.pathname,
+      collapsed,
+      selectedKeys,
+      sidebarOpenKeys,
+      sidebarSearchExtra,
+      handleSplitNavigate,
+    ],
+  );
+
+  const menuContentRenderProp = useMemo(() => {
+    if (isFullscreen) return false as const;
+    if (isSplitSidebarLayout) return splitMenuContentRender;
+    return undefined;
+  }, [isFullscreen, isSplitSidebarLayout, splitMenuContentRender]);
+
   return (
     <>
       {/* 技术栈列表 Modal */}
@@ -2587,8 +2691,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         onCancel={() => setTechStackModalOpen(false)}
       />
 
-      <style>{shellStyles}</style>
-      <style>{themeStyles}</style>
+      <LayoutStyleInjector shellStyles={shellStyles} themeStyles={themeStyles} />
 
       <ProLayout
         title={siteName}
@@ -2605,9 +2708,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         layout="mix" // 固定使用 MIX 布局模式
         navTheme={isDarkMode ? "realDark" : "light"}
         collapsedButtonRender={(collapsed) => {
-          const dividerColor = isDarkSiderFooter
-            ? 'rgba(255, 255, 255, 0.15)'
-            : 'rgba(0, 0, 0, 0.12)';
           const settingsBtnBg = startMenuTheme.settingsBtnBg;
           const settingsBtnBorder = startMenuTheme.settingsBtnBorder;
           const settingsAccentColor = startMenuTheme.settingsBtnColor;
@@ -2621,7 +2721,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               className="riveredge-sider-footer-bar"
               style={{
                 padding: '8px',
-                borderTop: `1px solid ${dividerColor}`,
                 flexShrink: 0,
               }}
             >
@@ -2690,48 +2789,20 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         fixSiderbar
         breadcrumbRender={isMobileOrTablet ? () => [] : undefined}
         breadcrumbProps={isMobileOrTablet ? { style: { display: 'none' } } : undefined}
-        // 验证方案3：同时使用 collapsed + siderWidth + menuRender
-        // 全屏时：collapsed={true} + siderWidth={0} + menuRender={() => null} 完全隐藏侧边栏
-        // 退出全屏时：恢复所有 props，确保 ProLayout 重新计算布局
+        // 全屏时 menuRender={() => null} 完全隐藏侧边栏；双列模式用 menuContentRender 仅替换菜单区，保留底栏与侧栏壳层
         collapsed={isFullscreen ? true : collapsed}
         onCollapse={isFullscreen ? undefined : handleSetCollapsed}
         location={location}
-        siderWidth={isFullscreen ? 0 : undefined}
-        // 全屏时：不渲染菜单，确保折叠的侧边栏也不占据空间
+        siderWidth={
+          isFullscreen ? 0 : isSplitSidebarLayout ? splitSiderWidth : FLAT_SIDEBAR_WIDTH
+        }
         menuRender={isFullscreen ? () => null : undefined}
-        // 侧栏顶部固定搜索框：总高 38px，输入框 34px、上下各 2px，胶囊圆角 50%，简短文案，拟物按键提示
-        menuExtraRender={isFullscreen || collapsed ? undefined : () => {
-          // 与侧栏底部分割线一致（深色底栏统一用 isDarkSiderFooter）
-          const sidebarSearchBottomBorder = isDarkSiderFooter
-            ? 'rgba(255, 255, 255, 0.15)'
-            : 'rgba(0, 0, 0, 0.12)';
-          return (
-          <div
-            className="riveredge-sidebar-search-wrapper"
-            style={{
-              flexShrink: 0,
-              height: 38,
-              display: 'flex',
-              alignItems: 'center',
-              margin: '-13px 0 0 0',
-              padding: '2px 0 4px 0',
-              borderBottom: `1px solid ${sidebarSearchBottomBorder}`,
-            }}
-          >
-            <TopBarSearch
-              menuData={filteredMenuData}
-              hotMenuPaths={TOPBAR_SEARCH_HOT_MENU_PATHS}
-              isLightModeLightBg={siderTextColor !== '#ffffff'}
-              token={token}
-              placeholder={t('common.searchPlaceholderShort')}
-              inputHeight={34}
-              borderRadius={17}
-              shortcutKey="/"
-              transparentBg
-            />
-          </div>
-          );
-        }}
+        menuContentRender={menuContentRenderProp}
+        menuExtraRender={
+          isFullscreen || collapsed || isSplitSidebarLayout
+            ? undefined
+            : () => sidebarSearchExtra
+        }
         // 退出全屏时，强制 ProLayout 重新计算布局
         // 使用 location 作为 key 的一部分，确保路由变化时重新渲染
         // 但这里不使用 key，因为会导致标签丢失

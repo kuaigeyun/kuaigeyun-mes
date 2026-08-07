@@ -1420,6 +1420,8 @@ class MenuService:
         *,
         preserve_existing_is_active: bool = True,
         skip_permission_sync: bool = False,
+        defer_cache_clear: bool = False,
+        defer_menu_takeover: bool = False,
     ) -> int:
         """
         从应用菜单配置同步菜单到菜单管理
@@ -1436,6 +1438,8 @@ class MenuService:
                 ``core.config.menu_sync_is_active_policy.resolve_sync_is_active_for_existing_row``
                 （菜单同步 is_active 策略见业务文档）
             skip_permission_sync: 为 True 时不同步 core_permissions（例如「扫描应用」批量路径由调用方在最后统一同步）
+            defer_cache_clear: 为 True 时跳过本应用菜单缓存清理（批量 sync-all 结束时统一清理）
+            defer_menu_takeover: 为 True 时跳过菜单接管重算（批量 sync-all 结束时统一处理）
             
         Returns:
             int: 同步的菜单数量
@@ -1473,13 +1477,14 @@ class MenuService:
         
         # 递归创建或更新菜单
         created_count = 0
+        synced_count = 0
         
         async def _create_or_update_menu(
             menu_item: Dict[str, Any],
             parent_uuid: Optional[str] = None,
             parent_id: Optional[int] = None
         ) -> Optional[Menu]:
-            nonlocal created_count  # 允许修改外部函数的变量
+            nonlocal created_count, synced_count
             """
             递归创建或更新菜单项
             
@@ -1568,6 +1573,7 @@ class MenuService:
                     existing_menu_by_parent_name[(existing_menu.parent_id, existing_menu.name)] = existing_menu
                 
                 menu_obj = existing_menu
+                synced_count += 1
             else:
                 # 创建新菜单
                 menu_obj = await Menu.create(
@@ -1586,6 +1592,7 @@ class MenuService:
                     meta=menu_meta,
                 )
                 created_count += 1
+                synced_count += 1
                 if menu_obj.path:
                     existing_menu_by_path[menu_obj.path] = menu_obj
                 if menu_obj.name:
@@ -1624,17 +1631,20 @@ class MenuService:
             ).update(deleted_at=now_utc())
             logger.info(f"应用 {application_uuid} 菜单配置同步完成，删除 {len(deleted_uuids)} 个不再存在的菜单")
         
-        logger.info(f"应用 {application_uuid} 菜单配置同步完成，创建/更新 {created_count} 个菜单")
+        logger.info(
+            f"应用 {application_uuid} 菜单配置同步完成，处理 {synced_count} 个菜单（新建 {created_count} 个）"
+        )
 
         # 菜单同步后，清除相关缓存，确保前端能立即获取最新菜单
-        try:
-            # 使用通配符清除该租户的所有菜单缓存
-            await cache_manager.delete_pattern("menu", f"{tenant_id}:list*")
-            await cache_manager.delete_pattern("menu", f"{tenant_id}:tree*")
-            logger.debug(f"已清除租户 {tenant_id} 的菜单缓存")
-        except Exception as e:
-            from loguru import logger
-            logger.warning(f"清除菜单缓存失败: {e}")
+        if not defer_cache_clear:
+            try:
+                # 使用通配符清除该租户的所有菜单缓存
+                await cache_manager.delete_pattern("menu", f"{tenant_id}:list*")
+                await cache_manager.delete_pattern("menu", f"{tenant_id}:tree*")
+                logger.debug(f"已清除租户 {tenant_id} 的菜单缓存")
+            except Exception as e:
+                from loguru import logger
+                logger.warning(f"清除菜单缓存失败: {e}")
 
         # 菜单同步后强制同步权限到 core_permissions，保证角色权限页「全部权限」含应用级菜单权限
         if not skip_permission_sync:
@@ -1644,14 +1654,19 @@ class MenuService:
             except Exception as e:
                 logger.warning(f"菜单同步后权限同步失败: {e}")
 
-        if app and app.get("code"):
+        if not defer_menu_takeover and app and app.get("code"):
             from core.services.system.menu_takeover_service import MenuTakeoverService
             await MenuTakeoverService.reapply_after_source_menu_sync(tenant_id, str(app["code"]))
 
-        return created_count
+        return synced_count
 
     @staticmethod
-    async def sync_all_menus_from_applications(tenant_id: int) -> int:
+    async def sync_all_menus_from_applications(
+        tenant_id: int,
+        *,
+        skip_permission_sync: bool = False,
+        skip_canonical_sort: bool = False,
+    ) -> int:
         """
         根据已安装应用的菜单配置，同步所有菜单到数据库。
         用于初始化向导或组织首次进入时，确保菜单已写入数据库。
@@ -1673,6 +1688,7 @@ class MenuService:
         )
         total = await MenuService._sync_builtin_system_menu_tree(tenant_id=tenant_id)
         need_permission_sync = False
+        synced_app_codes: List[str] = []
         for app in apps:
             menu_config = app.get("menu_config")
             app_uuid = app.get("uuid")
@@ -1686,17 +1702,27 @@ class MenuService:
                         menu_config=menu_config,
                         is_active=app.get("is_active", True),
                         skip_permission_sync=True,
+                        defer_cache_clear=True,
+                        defer_menu_takeover=True,
                     )
                     total += count
                     need_permission_sync = True
+                    app_code = app.get("code")
+                    if app_code:
+                        synced_app_codes.append(str(app_code))
                 except Exception as e:
                     logger.warning(f"同步应用 {app.get('code')} 菜单失败: {e}")
-        if need_permission_sync:
+        if need_permission_sync and not skip_permission_sync:
             try:
                 from core.services.authorization.permission_sync_service import PermissionSyncService
-                await PermissionSyncService.ensure_permissions(tenant_id=tenant_id, force=True)
+                await PermissionSyncService.ensure_permissions(tenant_id=tenant_id, force=False)
             except Exception as e:
                 logger.warning(f"全量菜单同步后权限同步失败: {e}")
-        if total > 0:
+        if synced_app_codes:
+            from core.services.system.menu_takeover_service import MenuTakeoverService
+            for app_code in synced_app_codes:
+                await MenuTakeoverService.reapply_after_source_menu_sync(tenant_id, app_code)
+        if total > 0 or synced_app_codes:
+            await MenuService._clear_menu_cache(tenant_id)
             logger.info(f"租户 {tenant_id} 菜单同步完成，共 {total} 个菜单")
         return total
