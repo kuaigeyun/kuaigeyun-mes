@@ -1,1 +1,0 @@
-import{r as a}from"./vendor-DU_BQAYA.js";function s(e=!0){const[u,r]=a.useState(!e);return a.useEffect(()=>{if(!e){r(!0);return}r(!1);let t=0,n=0;return t=requestAnimationFrame(()=>{n=requestAnimationFrame(()=>{r(!0)})}),()=>{cancelAnimationFrame(t),cancelAnimationFrame(n)}},[e]),u}export{s as u};

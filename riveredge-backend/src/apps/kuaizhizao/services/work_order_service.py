@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 from decimal import Decimal
 
+from tortoise.exceptions import IntegrityError
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 from core.utils.timezone_utils import (
@@ -3837,8 +3838,35 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         if not source_ops or target_work_order.id is None:
             return []
 
+        existing_rows = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=target_work_order.id,
+        ).all()
+        existing_by_sequence = {row.sequence: row for row in existing_rows}
+
         created_ops: List[WorkOrderOperation] = []
         for op in source_ops:
+            existing = existing_by_sequence.get(op.sequence)
+            if existing is not None:
+                if existing.deleted_at is not None:
+                    existing.deleted_at = None
+                    existing.status = "pending"
+                    existing.completed_quantity = Decimal("0")
+                    existing.qualified_quantity = Decimal("0")
+                    existing.unqualified_quantity = Decimal("0")
+                    await existing.save(
+                        update_fields=[
+                            "deleted_at",
+                            "status",
+                            "completed_quantity",
+                            "qualified_quantity",
+                            "unqualified_quantity",
+                            "updated_at",
+                        ]
+                    )
+                    created_ops.append(existing)
+                continue
+
             new_op = await WorkOrderOperation.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -3882,24 +3910,20 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 created_by=created_by,
                 created_by_name=created_by_name,
             )
+            existing_by_sequence[op.sequence] = new_op
             created_ops.append(new_op)
 
-        await self.compute_and_apply_operation_planned_times(
-            tenant_id, target_work_order, created_ops, created_by
-        )
+        if created_ops:
+            await self.compute_and_apply_operation_planned_times(
+                tenant_id, target_work_order, created_ops, created_by
+            )
         return created_ops
 
     async def backfill_split_child_operations(self, tenant_id: int, split_work_order: WorkOrder) -> bool:
         """为历史拆分工单补复制工序（幂等）。"""
         if split_work_order.id is None or split_work_order.parent_work_order_id is None:
             return False
-        exists = await WorkOrderOperation.filter(
-            tenant_id=tenant_id,
-            work_order_id=split_work_order.id,
-            deleted_at__isnull=True,
-        ).exists()
-        if exists:
-            return False
+
         template_ops = await self._resolve_split_operation_template_ops(
             tenant_id,
             split_work_order.parent_work_order_id,
@@ -3907,14 +3931,34 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         )
         if not template_ops:
             return False
-        await self._copy_work_order_operations(
-            tenant_id,
-            source_ops=template_ops,
-            target_work_order=split_work_order,
-            created_by=split_work_order.created_by or 0,
-            created_by_name=split_work_order.created_by_name or "系统",
+
+        template_sequences = {op.sequence for op in template_ops}
+        active_sequences = set(
+            await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=split_work_order.id,
+                deleted_at__isnull=True,
+            ).values_list("sequence", flat=True)
         )
-        return True
+        if template_sequences.issubset(active_sequences):
+            return False
+
+        try:
+            created = await self._copy_work_order_operations(
+                tenant_id,
+                source_ops=template_ops,
+                target_work_order=split_work_order,
+                created_by=split_work_order.created_by or 0,
+                created_by_name=split_work_order.created_by_name or "系统",
+            )
+        except IntegrityError:
+            logger.warning(
+                "拆分工单 {} 补工序并发冲突，跳过（tenant={}）",
+                split_work_order.id,
+                tenant_id,
+            )
+            return False
+        return bool(created)
 
     async def ensure_split_children_have_operations(
         self,

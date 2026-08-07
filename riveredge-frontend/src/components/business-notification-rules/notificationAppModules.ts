@@ -11,11 +11,6 @@ import {
 } from './coreNotificationRules';
 import { USER_SPECIFIED_SCOPE_OPTION } from './notificationRecipientConstants';
 import { loadKuaizhizaoNotificationRulePresets } from '../../apps/kuaizhizao/services/notification-rules';
-import {
-  KUAIIOT_NOTIFICATION_ACTION_OPTIONS,
-  KUAIIOT_NOTIFICATION_DOCUMENT_OPTIONS,
-} from '../../apps/kuaiiot/constants/notificationRules';
-import { loadKuaiiotNotificationRulePresets } from '../../apps/kuaiiot/services/notification-rules';
 
 export type NotificationDocumentOption = { value: string; labelKey: string; fallback: string };
 
@@ -39,7 +34,15 @@ const HAOLIGO_NOTIFICATION_CONSTANTS = import.meta.glob(
 
 const HAOLIGO_SERVICES = import.meta.glob('../../apps/haoligo/services/haoligo.ts');
 
+const KUAIIOT_NOTIFICATION_CONSTANTS = import.meta.glob(
+  '../../apps/kuaiiot/constants/notificationRules.ts',
+);
+const KUAIIOT_NOTIFICATION_SERVICES = import.meta.glob(
+  '../../apps/kuaiiot/services/notification-rules.ts',
+);
+
 let haoligoModulePromise: Promise<NotificationAppModule | null> | null = null;
+let kuaiiotModulePromise: Promise<NotificationAppModule | null> | null = null;
 
 async function loadHaoligoNotificationModule(): Promise<NotificationAppModule | null> {
   const constEntry = Object.entries(HAOLIGO_NOTIFICATION_CONSTANTS)[0];
@@ -67,7 +70,32 @@ async function loadHaoligoNotificationModule(): Promise<NotificationAppModule | 
   };
 }
 
-/** 开源应用：静态注册。定制应用：ensureNotificationAppModules 后并入。 */
+async function loadKuaiiotNotificationModule(): Promise<NotificationAppModule | null> {
+  const constEntry = Object.entries(KUAIIOT_NOTIFICATION_CONSTANTS)[0];
+  if (!constEntry) return null;
+  const [, loadConstants] = constEntry;
+  const constants = (await loadConstants()) as {
+    KUAIIOT_NOTIFICATION_DOCUMENT_OPTIONS: NotificationAppModule['documentOptions'];
+    KUAIIOT_NOTIFICATION_ACTION_OPTIONS: NotificationAppModule['actionOptions'];
+  };
+  const svcEntry = Object.entries(KUAIIOT_NOTIFICATION_SERVICES)[0];
+  let loadPresets: NotificationPresetLoader | undefined;
+  if (svcEntry) {
+    const services = (await svcEntry[1]()) as {
+      loadKuaiiotNotificationRulePresets?: NotificationPresetLoader;
+    };
+    loadPresets = services.loadKuaiiotNotificationRulePresets;
+  }
+  return {
+    appCode: 'kuaiiot',
+    documentOptions: constants.KUAIIOT_NOTIFICATION_DOCUMENT_OPTIONS,
+    actionOptions: constants.KUAIIOT_NOTIFICATION_ACTION_OPTIONS,
+    extraRecipientScopes: [],
+    loadPresets,
+  };
+}
+
+/** 开源应用：静态注册。定制/专业包：ensureNotificationAppModules 后并入。 */
 export const NOTIFICATION_APP_MODULES: Record<string, NotificationAppModule> = {
   kuaizhizao: {
     appCode: 'kuaizhizao',
@@ -76,16 +104,9 @@ export const NOTIFICATION_APP_MODULES: Record<string, NotificationAppModule> = {
     extraRecipientScopes: [],
     loadPresets: loadKuaizhizaoNotificationRulePresets,
   },
-  kuaiiot: {
-    appCode: 'kuaiiot',
-    documentOptions: KUAIIOT_NOTIFICATION_DOCUMENT_OPTIONS,
-    actionOptions: KUAIIOT_NOTIFICATION_ACTION_OPTIONS,
-    extraRecipientScopes: [],
-    loadPresets: loadKuaiiotNotificationRulePresets,
-  },
 };
 
-/** 确保定制包提醒模块已合并进 NOTIFICATION_APP_MODULES（可重复调用） */
+/** 确保定制/专业包提醒模块已合并进 NOTIFICATION_APP_MODULES（可重复调用） */
 export async function ensureNotificationAppModules(): Promise<void> {
   if (!haoligoModulePromise) {
     haoligoModulePromise = loadHaoligoNotificationModule();
@@ -93,6 +114,13 @@ export async function ensureNotificationAppModules(): Promise<void> {
   const haoligo = await haoligoModulePromise;
   if (haoligo && !NOTIFICATION_APP_MODULES.haoligo) {
     NOTIFICATION_APP_MODULES.haoligo = haoligo;
+  }
+  if (!kuaiiotModulePromise) {
+    kuaiiotModulePromise = loadKuaiiotNotificationModule();
+  }
+  const kuaiiot = await kuaiiotModulePromise;
+  if (kuaiiot && !NOTIFICATION_APP_MODULES.kuaiiot) {
+    NOTIFICATION_APP_MODULES.kuaiiot = kuaiiot;
   }
 }
 
