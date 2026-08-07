@@ -91,6 +91,15 @@ async def _on_worker_startup(_state: TaskiqState) -> None:
 
     await bootstrap_worker_event_handlers()
 
+    try:
+        from apps.kuaiiot.services.mqtt_subscriber_service import MqttSubscriberService
+
+        await MqttSubscriberService.start_all()
+    except ImportError:
+        pass
+    except Exception as e:  # pragma: no cover
+        logger.warning("KuaiIoT MQTT 订阅启动失败: {}", e)
+
     # 与 API 侧 kiq 的 task_name 必须一致；若缺漏，Receiver 会打 warning「task is not found」且备份永远 pending
     try:
         names = sorted(broker.get_all_tasks().keys())
@@ -102,6 +111,15 @@ async def _on_worker_startup(_state: TaskiqState) -> None:
 async def _on_worker_shutdown(_state: TaskiqState) -> None:
     from tortoise import Tortoise
     from loguru import logger
+
+    try:
+        from apps.kuaiiot.services.mqtt_subscriber_service import MqttSubscriberService
+
+        await MqttSubscriberService.stop_all()
+    except ImportError:
+        pass
+    except Exception as e:  # pragma: no cover
+        logger.warning("KuaiIoT MQTT 订阅停止失败: {}", e)
 
     try:
         if Tortoise._inited:
@@ -196,6 +214,62 @@ async def work_order_score_recalc_tick() -> dict:
     )
 
     return await run_work_order_score_scheduler()
+
+
+@task(schedule=[{"cron": "* * * * *"}])
+async def kuaiiot_offline_check_tick() -> dict:
+    """每分钟检测快数采设备离线。"""
+    from apps.kuaiiot.workflows.functions.device_lifecycle_workflow import run_kuaiiot_offline_check
+
+    return await run_kuaiiot_offline_check()
+
+
+@task(schedule=[{"cron": "*/2 * * * *"}])
+async def kuaiiot_mqtt_reload_tick() -> dict:
+    """每 2 分钟对齐 MQTT 连接源订阅。"""
+    from apps.kuaiiot.workflows.functions.mqtt_subscriber_workflow import run_kuaiiot_mqtt_reload
+
+    return await run_kuaiiot_mqtt_reload()
+
+
+@task(schedule=[{"cron": "*/5 * * * *"}])
+async def kuaiiot_telemetry_pull_tick() -> dict:
+    """每 5 分钟拉取 ThingsBoard / JetLinks 最新遥测。"""
+    from apps.kuaiiot.workflows.functions.telemetry_sync_workflow import run_kuaiiot_telemetry_pull
+
+    return await run_kuaiiot_telemetry_pull()
+
+
+@task(schedule=[{"cron": "*/5 * * * *"}])
+async def kuaiiot_connection_health_tick() -> dict:
+    """每 5 分钟探测启用连接源健康状态。"""
+    from apps.kuaiiot.workflows.functions.connection_health_workflow import run_kuaiiot_connection_health_check
+
+    return await run_kuaiiot_connection_health_check()
+
+
+@task(schedule=[{"cron": "* * * * *"}])
+async def kuaiiot_edge_agent_offline_tick() -> dict:
+    """每分钟检测边缘 Agent 心跳超时。"""
+    from apps.kuaiiot.workflows.functions.edge_agent_lifecycle_workflow import run_kuaiiot_edge_agent_offline_check
+
+    return await run_kuaiiot_edge_agent_offline_check()
+
+
+@task(schedule=[{"cron": "* * * * *"}])
+async def kuaiiot_command_timeout_tick() -> dict:
+    """每分钟将超时未回执指令置为 timeout。"""
+    from apps.kuaiiot.workflows.functions.command_timeout_workflow import run_kuaiiot_command_timeout_check
+
+    return await run_kuaiiot_command_timeout_check()
+
+
+@task(schedule=[{"cron": "0 3 * * *"}])
+async def kuaiiot_retention_tick() -> dict:
+    """每天凌晨清理过期入站幂等记录与已确认告警。"""
+    from apps.kuaiiot.workflows.functions.retention_workflow import run_kuaiiot_retention_cleanup
+
+    return await run_kuaiiot_retention_cleanup()
 
 
 @task(schedule=[{"cron": "15 2 * * *"}])

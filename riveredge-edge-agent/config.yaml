@@ -1,0 +1,7 @@
+base_url: "http://localhost:8100"
+device_token: "replace-with-device-token"
+edge_config_code: "line1-modbus"
+poll_interval_seconds: 5
+heartbeat_interval_seconds: 30
+buffer_db_path: "buffer.db"
+agent_version: "1.0.0"

@@ -1348,11 +1348,11 @@ function Start-WorkerDev {
     Push-Location $script:BackendDir
     try {
         $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
-        $wArgs = @('run','--extra','pdf','taskiq','worker','core.tasks.taskiq_app:broker','--fs-discover',
+        $wArgs = @('run','--extra','pdf','taskiq','worker','core.tasks.taskiq_app:broker',
             '--workers',"$($script:TASKIQ_WORKERS)",
-            'core.tasks.taskiq_app','core.tasks.worker_bootstrap','core.tasks.data_backup_handlers')
+            'core.tasks.taskiq_app','core.tasks.ai_tasks','core.tasks.worker_bootstrap','core.tasks.data_backup_handlers')
         Start-ProcessBackground 'worker' $uv $wArgs @{ PYTHONPATH = $env:PYTHONPATH; WORKDIR = $script:BackendDir }
-        $sArgs = @('run','--extra','pdf','taskiq','scheduler','core.tasks.taskiq_app:scheduler','--fs-discover',
+        $sArgs = @('run','--extra','pdf','taskiq','scheduler','core.tasks.taskiq_app:scheduler',
             'core.tasks.taskiq_app')
         Start-ProcessBackground 'scheduler' $uv $sArgs @{ PYTHONPATH = $env:PYTHONPATH; WORKDIR = $script:BackendDir }
     } finally { Pop-Location }
@@ -1414,10 +1414,10 @@ function Start-WorkerProd {
         Write-LogInfo '启动 Taskiq Worker...'
         Set-PlaywrightEnv
         $args = @(
-            'run','--extra','pdf','taskiq','worker','--app-dir','src','--fs-discover',
+            'run','--extra','pdf','taskiq','worker','--app-dir','src',
             '--workers',"$($script:TASKIQ_WORKERS)",
             'core.tasks.taskiq_app:broker',
-            'core.tasks.taskiq_app','core.tasks.worker_bootstrap','core.tasks.data_backup_handlers'
+            'core.tasks.taskiq_app','core.tasks.ai_tasks','core.tasks.worker_bootstrap','core.tasks.data_backup_handlers'
         )
         Start-ProcessBackground 'worker' $uv $args @{
             ENVIRONMENT = 'production'; SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
@@ -1435,7 +1435,7 @@ function Start-WorkerProd {
         Write-LogInfo '启动 Taskiq Scheduler...'
         Set-PlaywrightEnv
         $args = @(
-            'run','--extra','pdf','taskiq','scheduler','--app-dir','src','--fs-discover',
+            'run','--extra','pdf','taskiq','scheduler','--app-dir','src',
             'core.tasks.taskiq_app:scheduler','core.tasks.taskiq_app'
         )
         Start-ProcessBackground 'scheduler' $uv $args @{

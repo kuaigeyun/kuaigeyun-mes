@@ -71,7 +71,7 @@ import {
   buildKuaizhizaoPullCreateMenuItems,
   resolveKuaizhizaoDocumentAction,
 } from '../../../constants/documentActionRegistry';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 
 /** 取单弹窗状态码 → documentStatus.*（与单据跟踪一致） */
@@ -1042,10 +1042,10 @@ const AfterSalesTicketsPage: React.FC = () => {
     <>
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<AfterSalesTicket>
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.after-sales-tickets"
+          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.tickets"
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
-          headerTitle={t('app.kuaizhizao.menu.sales-management.after-sales-tickets')}
+          headerTitle={t('app.kuaizhizao.menu.after-sales-service.tickets')}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

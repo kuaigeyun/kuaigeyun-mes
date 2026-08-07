@@ -63,8 +63,8 @@ INSTALL_EXECUTION_SORTABLE_FIELDS = frozenset({
     "updated_at",
 })
 
-RESOURCE_INSTALL_EXECUTION = "kuaizhizao:production-execution-install-execution"
-RESOURCE_INSTALL_EXECUTION_CUSTOMER = "kuaizhizao:production-execution-install-execution-customer"
+RESOURCE_INSTALL_EXECUTION = "kuaizhizao:after-sales-install"
+RESOURCE_INSTALL_EXECUTION_CUSTOMER = "kuaizhizao:after-sales-install-customer"
 
 
 class InstallExecutionService:
@@ -652,6 +652,14 @@ class InstallExecutionService:
             update_fields["notes"] = f"{prev}\n{extra}".strip() if prev else extra
         apply_update_audit(update_fields, current_user)
         await job.update_from_dict(update_fields).save()
+        job = await InstallExecutionJob.get(id=job_id, tenant_id=tenant_id)
+        from apps.kuaizhizao.services.service_asset_service import ServiceAssetService
+
+        await ServiceAssetService.create_from_install_execution(
+            tenant_id,
+            job,
+            current_user,
+        )
         return await cls.get_by_id(tenant_id, job_id, current_user)
 
     @classmethod

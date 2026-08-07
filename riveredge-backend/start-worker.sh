@@ -29,16 +29,19 @@ fi
 echo "📦 正在启动 Taskiq worker..."
 uv run taskiq worker \
     --app-dir src \
-    --fs-discover \
     --workers "$TASKIQ_WORKERS" \
     $RELOAD_FLAG \
-    core.tasks.taskiq_app:broker &
+    core.tasks.taskiq_app:broker \
+    core.tasks.taskiq_app \
+    core.tasks.ai_tasks \
+    core.tasks.worker_bootstrap \
+    core.tasks.data_backup_handlers &
 
 # Scheduler：cron 任务（schedule 标签 + AsyncpgScheduleSource）
 echo "⏰ 正在启动 Taskiq scheduler..."
 uv run taskiq scheduler \
     --app-dir src \
-    --fs-discover \
-    core.tasks.taskiq_app:scheduler &
+    core.tasks.taskiq_app:scheduler \
+    core.tasks.taskiq_app &
 
 wait

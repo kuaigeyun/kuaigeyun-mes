@@ -2753,12 +2753,12 @@ start_worker_dev() {
         cd "$BACKEND_DIR"
         export PYTHONPATH="$BACKEND_DIR/src"
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
-        nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq worker core.tasks.taskiq_app:broker --fs-discover \
+        nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq worker core.tasks.taskiq_app:broker \
             --workers "$TASKIQ_WORKERS" \
-            core.tasks.taskiq_app core.tasks.worker_bootstrap core.tasks.data_backup_handlers \
+            core.tasks.taskiq_app core.tasks.ai_tasks core.tasks.worker_bootstrap core.tasks.data_backup_handlers \
             > "$LOGS_DIR/worker.log" 2>&1 &
         echo $! > "$LOGS_DIR/worker.pid"
-        nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq scheduler core.tasks.taskiq_app:scheduler --fs-discover \
+        nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq scheduler core.tasks.taskiq_app:scheduler \
             core.tasks.taskiq_app \
             > "$LOGS_DIR/scheduler.log" 2>&1 &
         echo $! > "$LOGS_DIR/scheduler.pid"
@@ -2835,10 +2835,10 @@ start_worker_prod() {
             export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
             export PYTHONPATH="$BACKEND_DIR/src"
             playwright_export_env
-            nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq worker --app-dir src --fs-discover \
+            nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq worker --app-dir src \
                 --workers "$TASKIQ_WORKERS" \
                 core.tasks.taskiq_app:broker \
-                core.tasks.taskiq_app core.tasks.worker_bootstrap core.tasks.data_backup_handlers \
+                core.tasks.taskiq_app core.tasks.ai_tasks core.tasks.worker_bootstrap core.tasks.data_backup_handlers \
                 > "$LOGS_DIR/worker.log" 2>&1 &
             echo $! > "$LOGS_DIR/worker.pid"
         )
@@ -2856,7 +2856,7 @@ start_worker_prod() {
             export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
             export PYTHONPATH="$BACKEND_DIR/src"
             playwright_export_env
-            nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq scheduler --app-dir src --fs-discover \
+            nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq scheduler --app-dir src \
                 core.tasks.taskiq_app:scheduler \
                 core.tasks.taskiq_app \
                 > "$LOGS_DIR/scheduler.log" 2>&1 &

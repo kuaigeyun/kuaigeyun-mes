@@ -155,8 +155,8 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "kuaizhizao:production-execution-packing-binding:update",
     ),
     "install_execution_task_attachments": (
-        "kuaizhizao:production-execution-install-execution:assign",
-        "kuaizhizao:production-execution-install-execution:update",
+        "kuaizhizao:after-sales-install:assign",
+        "kuaizhizao:after-sales-install:update",
     ),
     # kuaizhizao — 质量管理
     "incoming_inspection_attachments": (

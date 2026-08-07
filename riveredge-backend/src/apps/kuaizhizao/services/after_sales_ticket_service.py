@@ -29,6 +29,7 @@ from apps.kuaizhizao.schemas.after_sales_ticket import (
     AfterSalesTicketPullFromSalesOrderRequest,
     AfterSalesTicketPushPreviewLine,
     AfterSalesTicketPushPreviewResponse,
+    AfterSalesTicketPushToRepairOrderRequest,
     AfterSalesTicketPushToSalesReturnRequest,
     AfterSalesTicketResponse,
     AfterSalesTicketUpdate,
@@ -840,6 +841,82 @@ class AfterSalesTicketService:
                 CAPABILITY_REASON_MESSAGES.get(blocking_reason or "", None) if has_blocking else None
             ),
         )
+
+    @classmethod
+    async def push_to_repair_order(
+        cls,
+        tenant_id: int,
+        ticket_id: int,
+        data: AfterSalesTicketPushToRepairOrderRequest,
+        current_user: User,
+    ) -> dict:
+        from apps.kuaizhizao.models.after_sales_service import RepairOrder
+        from apps.kuaizhizao.schemas.after_sales_service import RepairOrderCreate
+        from apps.kuaizhizao.services.repair_order_service import RepairOrderService
+
+        row = await AfterSalesTicket.filter(
+            id=ticket_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not row:
+            raise NotFoundError(f"售后服务工单不存在: {ticket_id}")
+        if str(row.request_type or "").strip() != "维修":
+            raise ValidationError("仅维修类型工单可下推维修单")
+        if row.status == "已关闭":
+            raise ValidationError("已关闭的工单不可下推维修单")
+
+        existing = await RepairOrder.filter(
+            tenant_id=tenant_id,
+            after_sales_ticket_id=ticket_id,
+            deleted_at__isnull=True,
+        ).first()
+        if existing:
+            raise BusinessLogicError(f"该工单已存在维修单: {existing.order_code}")
+
+        fault_description = (data.fault_description or row.content or "").strip()
+        if not fault_description:
+            raise ValidationError("请填写故障描述")
+
+        async with in_transaction():
+            repair = await RepairOrderService.create(
+                tenant_id,
+                RepairOrderCreate(
+                    customer_id=row.customer_id,
+                    after_sales_ticket_id=row.id,
+                    service_asset_id=data.service_asset_id,
+                    repair_mode=data.repair_mode or "现场",
+                    fault_category=data.fault_category,
+                    fault_description=fault_description,
+                    site_address=data.site_address,
+                    reported_at=row.registered_at,
+                ),
+                current_user,
+            )
+            if str(row.status or "").strip() == "待处理":
+                dump = {"status": "处理中"}
+                apply_update_audit(dump, current_user)
+                await AfterSalesTicket.filter(id=ticket_id, tenant_id=tenant_id).update(**dump)
+
+        await cls._create_document_relation(
+            tenant_id=tenant_id,
+            created_by=current_user.id,
+            source_type="after_sales_ticket",
+            source_id=row.id,
+            source_code=row.ticket_code,
+            target_type="repair_order",
+            target_id=repair.id,
+            target_code=repair.order_code,
+            relation_mode="push",
+            relation_desc="售后服务工单下推维修单",
+        )
+        return {
+            "success": True,
+            "message": "已生成维修单",
+            "ticket_id": ticket_id,
+            "repair_order_id": repair.id,
+            "repair_order_code": repair.order_code,
+        }
 
     @classmethod
     async def push_to_sales_return(

@@ -36,7 +36,7 @@ def resolve_kuaizhizao_module_action(
         return "audit"
     if "/mark-adjustment-complete" in p:
         return "confirm_adjustment"
-    if "/dispatch" in p:
+    if "/dispatch" in p and "/dispatch-orders" not in p:
         return "dispatch"
     if "/release" in p:
         return "submit"
@@ -61,7 +61,12 @@ def resolve_kuaizhizao_module_action(
     if "/cancel-customer-confirm" in p:
         return "execute"
     if "/close" in p:
-        if module_code in {"after-sales-ticket", "production-execution-install-execution"}:
+        if module_code in {
+            "after-sales-ticket",
+            "after-sales-install",
+            "repair-order",
+            "service-dispatch",
+        }:
             return "close"
         return "execute"
     if module_code == "after-sales-ticket" and "/push-to-" in p:
@@ -69,13 +74,28 @@ def resolve_kuaizhizao_module_action(
     if "/conduct" in p:
         return "update"
     m = (method or "").upper()
-    if module_code == "production-execution-install-execution":
+    if module_code == "after-sales-install":
         if "/tasks" in p and m == "POST":
             return "assign"
         if "/advance-stage" in p and m == "POST":
             return "execute"
         if "/costs" in p and m == "POST":
             return "update"
+    if module_code == "service-dispatch":
+        if "/assign" in p and m == "POST":
+            return "assign"
+        if "/accept" in p and m == "POST":
+            return "execute"
+        if "/complete" in p and m == "POST":
+            return "execute"
+        if "/cancel" in p and m == "POST":
+            return "close"
+    if module_code == "repair-order":
+        if "/close" in p and m == "POST":
+            return "close"
+    if module_code in {"after-sales-spare-part-requisition", "service-settlement"}:
+        if "/reject" in p and m == "POST":
+            return "audit"
     if m == "GET":
         return "read"
     if m in {"PUT", "PATCH"}:

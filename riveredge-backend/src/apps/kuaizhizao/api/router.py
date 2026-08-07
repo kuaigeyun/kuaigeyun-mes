@@ -41,6 +41,13 @@ from .shipment_notices.shipment_notices import router as shipment_notice_router
 from .receipt_notices.receipt_notices import router as receipt_notice_router
 from .customer_follow_ups.customer_follow_ups import router as customer_follow_up_router
 from .after_sales_tickets.after_sales_tickets import router as after_sales_ticket_router
+from .after_sales.service_assets import router as service_asset_router
+from .after_sales.repair_orders import router as repair_order_router
+from .after_sales.dispatch_orders import router as service_dispatch_router
+from .after_sales.spare_part_requisitions import router as after_sales_spare_part_requisition_router
+from .after_sales.service_settlements import router as service_settlement_router
+from .after_sales.return_visits import router as customer_return_visit_router
+from .after_sales.dashboard import router as after_sales_dashboard_router
 from .install_executions.install_executions import router as install_execution_router
 from .sales_opportunities.sales_opportunities import router as sales_opportunity_router
 from .customer_pool.customer_pool import router as customer_pool_router
@@ -80,6 +87,9 @@ from .tool_ops import router as tool_ops_router
 from .initial_data.initial_data import router as initial_data_router
 # 导入线边仓与倒冲记录路由
 from .line_side_warehouses.line_side_warehouses import router as line_side_warehouse_router, backflush_router
+from .logistics.logistics_master import carriers_router, vehicles_router, drivers_router
+from .logistics.freight_orders import router as freight_orders_router
+from .logistics.freight_bills import router as freight_bills_router
 # 导入应用中心管理路由
 from .management import router as management_router
 from .routes_mobile import router as mobile_router
@@ -104,6 +114,13 @@ router.include_router(shipment_notice_router)  # 发货通知单管理
 router.include_router(receipt_notice_router)  # 收货通知单管理
 router.include_router(customer_follow_up_router)  # 客户跟进（销售极简 CRM）
 router.include_router(after_sales_ticket_router)  # 售后服务工单
+router.include_router(service_asset_router)  # 装机档案
+router.include_router(repair_order_router)  # 维修单
+router.include_router(service_dispatch_router)  # 服务派工
+router.include_router(after_sales_spare_part_requisition_router)  # 售后备件申领
+router.include_router(service_settlement_router)  # 服务结算
+router.include_router(customer_return_visit_router)  # 客户回访
+router.include_router(after_sales_dashboard_router)  # 售后服务看板
 router.include_router(install_execution_router)  # 安装执行
 router.include_router(sales_opportunity_router)  # 销售商机
 router.include_router(customer_pool_router)  # 客户池（公海管理）
@@ -171,6 +188,11 @@ router.include_router(reports_router)
 
 # 注册波次拣货路由
 router.include_router(wave_picking_router)
+router.include_router(carriers_router)
+router.include_router(vehicles_router)
+router.include_router(drivers_router)
+router.include_router(freight_orders_router)
+router.include_router(freight_bills_router)
 
 @router.get("/health")
 async def health_check():

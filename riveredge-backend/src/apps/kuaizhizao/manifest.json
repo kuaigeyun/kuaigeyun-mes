@@ -95,16 +95,6 @@
                         "permission": "kuaizhizao:sales-order:read"
                     },
                     {
-                        "title": "app.kuaizhizao.menu.sales-management.after-sales-tickets",
-                        "path": "/apps/kuaizhizao/sales-management/after-sales-tickets",
-                        "sort_order": 7,
-                        "meta": {
-                            "node": "after_sales_ticket",
-                            "module": "sales"
-                        },
-                        "permission": "kuaizhizao:after-sales-ticket:read"
-                    },
-                    {
                         "title": "app.kuaizhizao.menu.sales-management.sales-order-changes",
                         "path": "/apps/kuaizhizao/sales-management/sales-order-changes",
                         "sort_order": 8,
@@ -479,16 +469,6 @@
                             "node": "work_order"
                         },
                         "permission": "kuaizhizao:production-execution-packing-binding:read"
-                    },
-                    {
-                        "title": "app.kuaizhizao.menu.production-execution.install-execution",
-                        "path": "/apps/kuaizhizao/production-execution/install-execution",
-                        "sort_order": 7,
-                        "meta": {
-                            "module": "production",
-                            "node": "install_execution"
-                        },
-                        "permission": "kuaizhizao:production-execution-install-execution:read"
                     },
                     {
                         "title": "app.kuaizhizao.menu.production-execution.reporting.statistics",
@@ -1632,6 +1612,152 @@
                 ]
             },
             {
+                "title": "app.kuaizhizao.menu.logistics-management",
+                "icon": "truck",
+                "sort_order": 8,
+                "meta": {
+                    "module": "logistics"
+                },
+                "children": [
+                    {
+                        "title": "app.kuaizhizao.menu.logistics-management.freight-orders",
+                        "path": "/apps/kuaizhizao/logistics-management/freight-orders",
+                        "permission": "kuaizhizao:freight-order:read",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.logistics-management.tracking",
+                        "path": "/apps/kuaizhizao/logistics-management/tracking",
+                        "permission": "kuaizhizao:freight-order:read",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.logistics-management.freight-bills",
+                        "path": "/apps/kuaizhizao/logistics-management/freight-bills",
+                        "permission": "kuaizhizao:freight-bill:read",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.logistics-management.vehicles",
+                        "path": "/apps/kuaizhizao/logistics-management/vehicles",
+                        "permission": "kuaizhizao:vehicle:read",
+                        "sort_order": 4
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.logistics-management.drivers",
+                        "path": "/apps/kuaizhizao/logistics-management/drivers",
+                        "permission": "kuaizhizao:driver:read",
+                        "sort_order": 5
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.logistics-management.carriers",
+                        "path": "/apps/kuaizhizao/logistics-management/carriers",
+                        "permission": "kuaizhizao:logistics-carrier:read",
+                        "sort_order": 6
+                    }
+                ]
+            },
+            {
+                "title": "app.kuaizhizao.menu.after-sales-service",
+                "icon": "headphones",
+                "sort_order": 9,
+                "meta": {
+                    "module": "after_sales"
+                },
+                "children": [
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.dashboard",
+                        "path": "/apps/kuaizhizao/after-sales-service/dashboard",
+                        "sort_order": 0,
+                        "meta": {
+                            "module": "after_sales",
+                            "node": "after_sales_dashboard"
+                        },
+                        "permission": "kuaizhizao:after-sales-dashboard:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.tickets",
+                        "path": "/apps/kuaizhizao/after-sales-service/tickets",
+                        "sort_order": 1,
+                        "meta": {
+                            "node": "after_sales_ticket",
+                            "module": "after_sales"
+                        },
+                        "permission": "kuaizhizao:after-sales-ticket:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.service-assets",
+                        "path": "/apps/kuaizhizao/after-sales-service/service-assets",
+                        "sort_order": 2,
+                        "meta": {
+                            "node": "service_asset",
+                            "module": "after_sales"
+                        },
+                        "permission": "kuaizhizao:service-asset:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.install-execution",
+                        "path": "/apps/kuaizhizao/after-sales-service/install-execution",
+                        "sort_order": 3,
+                        "meta": {
+                            "module": "after_sales",
+                            "node": "install_execution"
+                        },
+                        "permission": "kuaizhizao:after-sales-install:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.repair-orders",
+                        "path": "/apps/kuaizhizao/after-sales-service/repair-orders",
+                        "sort_order": 4,
+                        "meta": {
+                            "node": "repair_order",
+                            "module": "after_sales"
+                        },
+                        "permission": "kuaizhizao:repair-order:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.dispatch-orders",
+                        "path": "/apps/kuaizhizao/after-sales-service/dispatch-orders",
+                        "sort_order": 5,
+                        "meta": {
+                            "node": "service_dispatch",
+                            "module": "after_sales"
+                        },
+                        "permission": "kuaizhizao:service-dispatch:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.spare-part-requisitions",
+                        "path": "/apps/kuaizhizao/after-sales-service/spare-part-requisitions",
+                        "sort_order": 6,
+                        "meta": {
+                            "node": "after_sales_spare_part_requisition",
+                            "module": "after_sales"
+                        },
+                        "permission": "kuaizhizao:after-sales-spare-part-requisition:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.service-settlements",
+                        "path": "/apps/kuaizhizao/after-sales-service/service-settlements",
+                        "sort_order": 7,
+                        "meta": {
+                            "node": "service_settlement",
+                            "module": "after_sales"
+                        },
+                        "permission": "kuaizhizao:service-settlement:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.return-visits",
+                        "path": "/apps/kuaizhizao/after-sales-service/return-visits",
+                        "sort_order": 8,
+                        "meta": {
+                            "node": "customer_return_visit",
+                            "module": "after_sales"
+                        },
+                        "permission": "kuaizhizao:customer-return-visit:read"
+                    }
+                ]
+            },
+            {
                 "title": "app.kuaizhizao.menu.performance-management",
                 "icon": "trophy",
                 "sort_order": 10,
@@ -1860,8 +1986,8 @@
             ],
             "data_scope_key": "kuaizhizao:after-sales-ticket"
         },
-        "production-execution-install-execution": {
-            "permission_prefix": "kuaizhizao:production-execution-install-execution",
+        "after-sales-install": {
+            "permission_prefix": "kuaizhizao:after-sales-install",
             "display_fields": [
                 "id",
                 "uuid",
@@ -1869,7 +1995,84 @@
                 "name",
                 "label"
             ],
-            "data_scope_key": "kuaizhizao:production-execution-install-execution"
+            "data_scope_key": "kuaizhizao:after-sales-install"
+        },
+        "service-asset": {
+            "permission_prefix": "kuaizhizao:service-asset",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": "kuaizhizao:service-asset"
+        },
+        "repair-order": {
+            "permission_prefix": "kuaizhizao:repair-order",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": "kuaizhizao:repair-order"
+        },
+        "service-dispatch": {
+            "permission_prefix": "kuaizhizao:service-dispatch",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": "kuaizhizao:service-dispatch"
+        },
+        "after-sales-spare-part-requisition": {
+            "permission_prefix": "kuaizhizao:after-sales-spare-part-requisition",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": "kuaizhizao:after-sales-spare-part-requisition"
+        },
+        "service-settlement": {
+            "permission_prefix": "kuaizhizao:service-settlement",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": "kuaizhizao:service-settlement"
+        },
+        "customer-return-visit": {
+            "permission_prefix": "kuaizhizao:customer-return-visit",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": "kuaizhizao:customer-return-visit"
+        },
+        "after-sales-dashboard": {
+            "permission_prefix": "kuaizhizao:after-sales-dashboard",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": null
         },
         "plan-management-rolling-scheduling": {
             "permission_prefix": "kuaizhizao:plan-management-rolling-scheduling",
@@ -2050,7 +2253,29 @@
             "master-data:supply-chain:customer",
             "master-data:material"
         ],
-        "production-execution-install-execution": [
+        "after-sales-install": [
+            "master-data:supply-chain:customer",
+            "master-data:material"
+        ],
+        "service-asset": [
+            "master-data:supply-chain:customer",
+            "master-data:material"
+        ],
+        "repair-order": [
+            "master-data:supply-chain:customer",
+            "master-data:material"
+        ],
+        "service-dispatch": [
+            "master-data:supply-chain:customer"
+        ],
+        "after-sales-spare-part-requisition": [
+            "master-data:material",
+            "master-data:warehouse:warehouse"
+        ],
+        "service-settlement": [
+            "master-data:supply-chain:customer"
+        ],
+        "customer-return-visit": [
             "master-data:supply-chain:customer"
         ],
         "purchase-receipt": [
@@ -2134,6 +2359,12 @@
         "kuaizhizao:demand:revoke",
         "kuaizhizao:demand:submit",
         "kuaizhizao:demand:update",
+        "kuaizhizao:driver:create",
+        "kuaizhizao:driver:delete",
+        "kuaizhizao:driver:export",
+        "kuaizhizao:driver:import",
+        "kuaizhizao:driver:read",
+        "kuaizhizao:driver:update",
         "kuaizhizao:equipment-fault:approve",
         "kuaizhizao:equipment-fault:audit",
         "kuaizhizao:equipment-fault:create",
@@ -2342,6 +2573,35 @@
         "kuaizhizao:inventory:revoke",
         "kuaizhizao:inventory:submit",
         "kuaizhizao:inventory:update",
+        "kuaizhizao:freight-bill:approve",
+        "kuaizhizao:freight-bill:audit",
+        "kuaizhizao:freight-bill:create",
+        "kuaizhizao:freight-bill:delete",
+        "kuaizhizao:freight-bill:export",
+        "kuaizhizao:freight-bill:read",
+        "kuaizhizao:freight-bill:reject",
+        "kuaizhizao:freight-bill:revoke",
+        "kuaizhizao:freight-bill:submit",
+        "kuaizhizao:freight-bill:update",
+        "kuaizhizao:freight-order:create",
+        "kuaizhizao:freight-order:delete",
+        "kuaizhizao:freight-order:execute",
+        "kuaizhizao:freight-order:export",
+        "kuaizhizao:freight-order:print",
+        "kuaizhizao:freight-order:read",
+        "kuaizhizao:freight-order:update",
+        "kuaizhizao:logistics-carrier:create",
+        "kuaizhizao:logistics-carrier:delete",
+        "kuaizhizao:logistics-carrier:export",
+        "kuaizhizao:logistics-carrier:import",
+        "kuaizhizao:logistics-carrier:read",
+        "kuaizhizao:logistics-carrier:update",
+        "kuaizhizao:vehicle:create",
+        "kuaizhizao:vehicle:delete",
+        "kuaizhizao:vehicle:export",
+        "kuaizhizao:vehicle:import",
+        "kuaizhizao:vehicle:read",
+        "kuaizhizao:vehicle:update",
         "kuaizhizao:maintenance-plan:approve",
         "kuaizhizao:maintenance-plan:audit",
         "kuaizhizao:maintenance-plan:create",
@@ -2780,15 +3040,59 @@
         "kuaizhizao:production-execution-packing-binding:revoke",
         "kuaizhizao:production-execution-packing-binding:submit",
         "kuaizhizao:production-execution-packing-binding:update",
-        "kuaizhizao:production-execution-install-execution:close",
-        "kuaizhizao:production-execution-install-execution:create",
-        "kuaizhizao:production-execution-install-execution:delete",
-        "kuaizhizao:production-execution-install-execution:export",
-        "kuaizhizao:production-execution-install-execution:print",
-        "kuaizhizao:production-execution-install-execution:read",
-        "kuaizhizao:production-execution-install-execution:update",
-        "kuaizhizao:production-execution-install-execution:assign",
-        "kuaizhizao:production-execution-install-execution:execute",
+        "kuaizhizao:after-sales-install:close",
+        "kuaizhizao:after-sales-install:create",
+        "kuaizhizao:after-sales-install:delete",
+        "kuaizhizao:after-sales-install:export",
+        "kuaizhizao:after-sales-install:print",
+        "kuaizhizao:after-sales-install:read",
+        "kuaizhizao:after-sales-install:update",
+        "kuaizhizao:after-sales-install:assign",
+        "kuaizhizao:after-sales-install:execute",
+        "kuaizhizao:after-sales-dashboard:read",
+        "kuaizhizao:service-asset:create",
+        "kuaizhizao:service-asset:read",
+        "kuaizhizao:service-asset:update",
+        "kuaizhizao:service-asset:delete",
+        "kuaizhizao:service-asset:export",
+        "kuaizhizao:service-asset:print",
+        "kuaizhizao:repair-order:create",
+        "kuaizhizao:repair-order:read",
+        "kuaizhizao:repair-order:update",
+        "kuaizhizao:repair-order:delete",
+        "kuaizhizao:repair-order:close",
+        "kuaizhizao:repair-order:export",
+        "kuaizhizao:repair-order:print",
+        "kuaizhizao:repair-order:execute",
+        "kuaizhizao:service-dispatch:create",
+        "kuaizhizao:service-dispatch:read",
+        "kuaizhizao:service-dispatch:update",
+        "kuaizhizao:service-dispatch:delete",
+        "kuaizhizao:service-dispatch:assign",
+        "kuaizhizao:service-dispatch:execute",
+        "kuaizhizao:service-dispatch:close",
+        "kuaizhizao:service-dispatch:export",
+        "kuaizhizao:service-dispatch:print",
+        "kuaizhizao:after-sales-spare-part-requisition:create",
+        "kuaizhizao:after-sales-spare-part-requisition:read",
+        "kuaizhizao:after-sales-spare-part-requisition:update",
+        "kuaizhizao:after-sales-spare-part-requisition:delete",
+        "kuaizhizao:after-sales-spare-part-requisition:submit",
+        "kuaizhizao:after-sales-spare-part-requisition:audit",
+        "kuaizhizao:after-sales-spare-part-requisition:export",
+        "kuaizhizao:after-sales-spare-part-requisition:print",
+        "kuaizhizao:service-settlement:create",
+        "kuaizhizao:service-settlement:read",
+        "kuaizhizao:service-settlement:update",
+        "kuaizhizao:service-settlement:delete",
+        "kuaizhizao:service-settlement:audit",
+        "kuaizhizao:service-settlement:export",
+        "kuaizhizao:service-settlement:print",
+        "kuaizhizao:customer-return-visit:create",
+        "kuaizhizao:customer-return-visit:read",
+        "kuaizhizao:customer-return-visit:update",
+        "kuaizhizao:customer-return-visit:delete",
+        "kuaizhizao:customer-return-visit:export",
         "kuaizhizao:production-execution-quality-exceptions:print",
         "kuaizhizao:production-execution-quality-exceptions:create",
         "kuaizhizao:production-execution-quality-exceptions:update",
@@ -3647,6 +3951,14 @@
             "config_category": "sales"
         },
         {
+            "node_key": "freight_bill",
+            "entity_type": "freight_bill",
+            "resource": "kuaizhizao:freight-bill",
+            "name": "运费单审核",
+            "template": "simple",
+            "config_category": "warehouse"
+        },
+        {
             "node_key": "sales_return",
             "entity_type": "sales_return",
             "resource": "kuaizhizao:sales-return",
@@ -3926,6 +4238,30 @@
             "module_icon": "tool",
             "auto_generate": true,
             "rule_code": "DELIVERY_NOTICE_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-freight-bill",
+            "page_name": "运费单",
+            "page_path": "/apps/kuaizhizao/logistics-management/freight-bills",
+            "code_field": "bill_code",
+            "code_field_label": "运费单号",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "FREIGHT_BILL_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-freight-order",
+            "page_name": "货运单",
+            "page_path": "/apps/kuaizhizao/logistics-management/freight-orders",
+            "code_field": "order_code",
+            "code_field_label": "货运单号",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "FREIGHT_ORDER_CODE",
             "allow_manual_edit": true
         },
         {
@@ -4423,8 +4759,8 @@
         },
         {
             "page_code": "kuaizhizao-after-sales-ticket",
-            "page_name": "售后服务",
-            "page_path": "/apps/kuaizhizao/sales-management/after-sales-tickets",
+            "page_name": "售后工单",
+            "page_path": "/apps/kuaizhizao/after-sales-service/tickets",
             "table_name": "apps_kuaizhizao_after_sales_tickets",
             "table_name_label": "售后服务工单表",
             "module": "快制造",
@@ -4613,7 +4949,7 @@
         {
             "page_code": "kuaizhizao-production-install-execution",
             "page_name": "安装执行",
-            "page_path": "/apps/kuaizhizao/production-execution/install-execution",
+            "page_path": "/apps/kuaizhizao/after-sales-service/install-execution",
             "table_name": "apps_kuaizhizao_install_execution_jobs",
             "table_name_label": "安装执行单",
             "module": "快制造",

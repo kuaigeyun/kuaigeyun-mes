@@ -121,6 +121,17 @@ from .quotation import Quotation
 from .quotation_item import QuotationItem
 from .delivery_notice import DeliveryNotice
 from .delivery_notice_item import DeliveryNoticeItem
+from .logistics import (
+    Driver,
+    FreightBill,
+    FreightBillItem,
+    FreightOrder,
+    FreightOrderReceipt,
+    FreightOrderSource,
+    FreightTrackingEvent,
+    LogisticsCarrier,
+    Vehicle,
+)
 from .shipment_notice import ShipmentNotice
 from .shipment_notice_item import ShipmentNoticeItem
 from .receipt_notice import ReceiptNotice
@@ -132,6 +143,17 @@ from .install_execution_job import InstallExecutionJob
 from .install_execution_stage import InstallExecutionStage
 from .install_execution_cost import InstallExecutionCost
 from .install_execution_task import InstallExecutionTask
+from .after_sales_service import (
+    ServiceAsset,
+    RepairOrder,
+    RepairOrderItem,
+    ServiceDispatchOrder,
+    AfterSalesSparePartRequisition,
+    AfterSalesSparePartRequisitionItem,
+    ServiceSettlement,
+    ServiceSettlementItem,
+    CustomerReturnVisit,
+)
 from .sales_opportunity import SalesOpportunity
 from .customer_pool_log import CustomerPoolLog
 from .customer_pool_rule import CustomerPoolRule
@@ -332,6 +354,15 @@ __all__ = [
     'QuotationItem',
     'DeliveryNotice',
     'DeliveryNoticeItem',
+    'LogisticsCarrier',
+    'Vehicle',
+    'Driver',
+    'FreightOrder',
+    'FreightOrderSource',
+    'FreightTrackingEvent',
+    'FreightOrderReceipt',
+    'FreightBill',
+    'FreightBillItem',
     'ShipmentNotice',
     'ShipmentNoticeItem',
     'ReceiptNotice',
@@ -339,6 +370,15 @@ __all__ = [
     'CustomerFollowUp',
     'AfterSalesTicket',
     'AfterSalesTicketItem',
+    'ServiceAsset',
+    'RepairOrder',
+    'RepairOrderItem',
+    'ServiceDispatchOrder',
+    'AfterSalesSparePartRequisition',
+    'AfterSalesSparePartRequisitionItem',
+    'ServiceSettlement',
+    'ServiceSettlementItem',
+    'CustomerReturnVisit',
     'SalesOpportunity',
     'CustomerPoolLog',
     'CustomerPoolRule',

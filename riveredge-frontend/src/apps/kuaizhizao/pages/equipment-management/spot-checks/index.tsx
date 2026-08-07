@@ -43,6 +43,7 @@ import {
 } from '../../../utils/equipmentListCore';
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import type { DocumentAttachmentFile } from '../../../utils/documentAttachments';
+import { fetchKuaiiotFillContext } from '../../../../../utils/kuaiiotFillContext';
 
 const P = 'app.kuaizhizao.equipmentOps.spotCheck';
 const RESOURCE = 'kuaizhizao:equipment-spot-check';
@@ -103,6 +104,7 @@ const SpotChecksPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [previewLines, setPreviewLines] = useState<SpotCheckLine[]>([]);
   const [equipmentOptions, setEquipmentOptions] = useState<{ label: string; value: number }[]>([]);
+  const [equipmentUuidById, setEquipmentUuidById] = useState<Record<number, string>>({});
   const [schemeOptions, setSchemeOptions] = useState<{ label: string; value: number }[]>([]);
   const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
     useEquipmentDetailDrawer<SpotCheck>();
@@ -125,6 +127,13 @@ const SpotChecksPage: React.FC = () => {
         label: `${eq.code} - ${eq.name}`,
         value: eq.id,
       })),
+    );
+    setEquipmentUuidById(
+      Object.fromEntries(
+        (eqRes.items ?? [])
+          .filter((eq: { id: number; uuid?: string }) => eq.id && eq.uuid)
+          .map((eq: { id: number; uuid: string }) => [eq.id, eq.uuid]),
+      ),
     );
     setSchemeOptions(
       (schRes.items ?? []).map((s: { id: number; code: string; name: string }) => ({
@@ -167,6 +176,27 @@ const SpotChecksPage: React.FC = () => {
           };
         }),
       );
+      const equipmentUuid = equipmentUuidById[equipmentId];
+      if (equipmentUuid) {
+        const fillContext = await fetchKuaiiotFillContext({
+          context: 'spot_check',
+          equipment_uuid: equipmentUuid,
+        });
+        if (fillContext?.values && Object.keys(fillContext.values).length > 0) {
+          setPreviewLines((prev) =>
+            prev.map((line) => {
+              const key = line.item_code || String(line.item_id || '');
+              const filled = fillContext.values[key];
+              if (filled == null || filled === '') return line;
+              if (line.measured_value && String(line.measured_value).trim()) return line;
+              return {
+                ...line,
+                measured_value: String(filled),
+              };
+            }),
+          );
+        }
+      }
       if (res.scheme_id) {
         formRef.current?.setFieldsValue({ scheme_id: res.scheme_id });
       }

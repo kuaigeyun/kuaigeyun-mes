@@ -17,6 +17,7 @@ from apps.kuaizhizao.schemas.after_sales_ticket import (
     AfterSalesTicketPullFromSalesDeliveryRequest,
     AfterSalesTicketPullFromSalesOrderRequest,
     AfterSalesTicketPushPreviewResponse,
+    AfterSalesTicketPushToRepairOrderRequest,
     AfterSalesTicketPushToSalesReturnRequest,
     AfterSalesTicketResponse,
     AfterSalesTicketUpdate,
@@ -190,6 +191,24 @@ async def preview_push_to_sales_return(
 ):
     try:
         return await _service.preview_push_to_sales_return(tenant_id, ticket_id, current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (ValidationError, BusinessLogicError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/{ticket_id}/push-to-repair-order",
+    summary="Push after-sales ticket to repair order",
+)
+async def push_to_repair_order(
+    body: AfterSalesTicketPushToRepairOrderRequest,
+    ticket_id: int = Path(..., description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.push_to_repair_order(tenant_id, ticket_id, body, current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except (ValidationError, BusinessLogicError) as e:

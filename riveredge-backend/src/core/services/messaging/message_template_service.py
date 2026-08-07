@@ -376,6 +376,36 @@ class MessageTemplateService:
             },
             "is_active": True,
         },
+        {
+            "name": "设备点位告警",
+            "code": "IOT_ALERT_THRESHOLD",
+            "type": "internal",
+            "description": "快数采点位阈值告警触发时发送的站内信",
+            "subject": "【设备告警】{device_name}",
+            "content": "设备 {device_name} 触发告警规则「{rule_name}」。\n点位：{tag_key}\n详情：{message}\n请尽快处理。",
+            "variables": {
+                "rule_name": "规则名称",
+                "device_name": "设备名称",
+                "tag_key": "点位",
+                "message": "告警详情",
+            },
+            "is_active": True,
+        },
+        {
+            "name": "设备离线告警",
+            "code": "IOT_DEVICE_OFFLINE",
+            "type": "internal",
+            "description": "快数采设备离线时发送的站内信",
+            "subject": "【设备离线】{device_name}",
+            "content": "设备 {device_name} 已离线。\n规则：{rule_name}\n详情：{message}\n请尽快处理。",
+            "variables": {
+                "rule_name": "规则名称",
+                "device_name": "设备名称",
+                "tag_key": "点位",
+                "message": "告警详情",
+            },
+            "is_active": True,
+        },
     ]
 
     @staticmethod

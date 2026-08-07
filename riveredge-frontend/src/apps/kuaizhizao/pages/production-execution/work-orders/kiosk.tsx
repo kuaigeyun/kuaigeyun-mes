@@ -47,6 +47,8 @@ import { getCurrentUser, CurrentUser } from '../../../../../services/auth';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
 import { formatOperationInspectionSummary, getOperationCardPhase, getOperationProgressPercent, getOperationQualityMetrics, getProcessInspectionCardStatus, isOperationEffectivelyCompleted } from '../../../utils/workOrderReporting';
+import { fetchKuaiiotFillContext } from '../../../../../utils/kuaiiotFillContext';
+import { equipmentApi } from '../../../services/equipment';
 
 const { Search } = Input;
 const { Text, Title } = Typography;
@@ -100,6 +102,9 @@ const WorkOrdersKioskPage: React.FC = () => {
     const [sopModalTab, setSopModalTab] = useState<'static' | 'guided'>('static');
     // 报工参数弹窗
     const [paramModalVisible, setParamModalVisible] = useState(false);
+    const [reportingParameters, setReportingParameters] = useState<Array<{ id: string; name: string; type: 'string' | 'number' | 'boolean'; defaultValue?: unknown }>>([
+        { id: 'quality', name: '首检', type: 'boolean', defaultValue: true },
+    ]);
     // 物料绑定弹窗
     const [materialBindingModalVisible, setMaterialBindingModalVisible] = useState(false);
     const [lastReportingRecordId, setLastReportingRecordId] = useState<string | number | null>(null);
@@ -258,6 +263,36 @@ const WorkOrdersKioskPage: React.FC = () => {
             message.error('领料失败');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleOpenParamModal = async () => {
+        setParamModalVisible(true);
+        const assignedEquipmentId = activeOperation?.assigned_equipment_id;
+        if (!assignedEquipmentId) return;
+        try {
+            const eqRes = await equipmentApi.list({ limit: 1000 });
+            const equipment = (eqRes.items ?? []).find((item: { id?: number }) => item.id === assignedEquipmentId) as
+                | { uuid?: string }
+                | undefined;
+            if (!equipment?.uuid) return;
+            const fillContext = await fetchKuaiiotFillContext({
+                context: 'reporting',
+                equipment_uuid: equipment.uuid,
+            });
+            if (!fillContext?.values) return;
+            const dynamicParams = Object.entries(fillContext.values).map(([id, value]) => ({
+                id,
+                name: id,
+                type: typeof value === 'boolean' ? 'boolean' as const : typeof value === 'number' ? 'number' as const : 'string' as const,
+                defaultValue: value,
+            }));
+            if (dynamicParams.length > 0) {
+                setReportingParameters(dynamicParams);
+                form.setFieldsValue(fillContext.values);
+            }
+        } catch {
+            // kuaiiot 未安装或无绑定设备时保持默认参数
         }
     };
 
@@ -722,7 +757,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                 <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<FileProtectOutlined />} onClick={() => { setSopModalTab('static'); setSopModalVisible(true); }}>
                                                     作业指导书
                                                 </Button>
-                                                <Button size="large" {...touchButtonProps({ size: 'header' })} onClick={() => setParamModalVisible(true)}>
+                                                <Button size="large" {...touchButtonProps({ size: 'header' })} onClick={() => void handleOpenParamModal()}>
                                                     报工参数
                                                 </Button>
                                                 <Button size="large" {...touchButtonProps({ size: 'header' })} disabled={!lastReportingRecordId} onClick={() => setMaterialBindingModalVisible(true)}>
@@ -1303,7 +1338,7 @@ const WorkOrdersKioskPage: React.FC = () => {
             >
                 <ReportingParameterForm
                     form={form}
-                    parameters={[{ id: 'quality', name: '首检', type: 'boolean', defaultValue: true }]}
+                    parameters={reportingParameters}
                     embedded
                 />
             </Modal>

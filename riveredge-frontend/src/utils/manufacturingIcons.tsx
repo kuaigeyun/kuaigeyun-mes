@@ -587,6 +587,7 @@ export const ManufacturingIcons = {
   schedule: getLucideIcon('Calendar'), // APS 排程
   certificate: getLucideIcon('Award'), // 认证
   'customer-service': getLucideIcon('Phone'), // CRM 客户服务
+  customerService: getLucideIcon('Headphones'), // 售后服务（manifest camelCase 兼容）
   thunderbolt: getLucideIcon('Zap'), // EMS 能源管理
   trophy: getLucideIcon('Trophy'), // EPM 企业绩效
   'cloud-server': getLucideIcon('Cloud'), // IOT 物联网

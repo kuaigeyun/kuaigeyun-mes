@@ -1570,6 +1570,106 @@
                 ]
             },
             {
+                "title": "app.kuaizhizao.menu.after-sales-service",
+                "icon": "headphones",
+                "sort_order": 9,
+                "meta": {
+                    "module": "after_sales"
+                },
+                "children": [
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.dashboard",
+                        "path": "/apps/kuaizhizao/after-sales-service/dashboard",
+                        "sort_order": 0,
+                        "meta": {
+                            "module": "after_sales",
+                            "node": "after_sales_dashboard"
+                        },
+                        "permission": "kuaizhizao:after-sales-dashboard:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.tickets",
+                        "path": "/apps/kuaizhizao/after-sales-service/tickets",
+                        "sort_order": 1,
+                        "meta": {
+                            "node": "after_sales_ticket",
+                            "module": "after_sales"
+                        },
+                        "permission": "kuaizhizao:after-sales-ticket:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.service-assets",
+                        "path": "/apps/kuaizhizao/after-sales-service/service-assets",
+                        "sort_order": 2,
+                        "meta": {
+                            "node": "service_asset",
+                            "module": "after_sales"
+                        },
+                        "permission": "kuaizhizao:service-asset:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.install-execution",
+                        "path": "/apps/kuaizhizao/after-sales-service/install-execution",
+                        "sort_order": 3,
+                        "meta": {
+                            "module": "after_sales",
+                            "node": "install_execution"
+                        },
+                        "permission": "kuaizhizao:after-sales-install:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.repair-orders",
+                        "path": "/apps/kuaizhizao/after-sales-service/repair-orders",
+                        "sort_order": 4,
+                        "meta": {
+                            "node": "repair_order",
+                            "module": "after_sales"
+                        },
+                        "permission": "kuaizhizao:repair-order:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.dispatch-orders",
+                        "path": "/apps/kuaizhizao/after-sales-service/dispatch-orders",
+                        "sort_order": 5,
+                        "meta": {
+                            "node": "service_dispatch",
+                            "module": "after_sales"
+                        },
+                        "permission": "kuaizhizao:service-dispatch:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.spare-part-requisitions",
+                        "path": "/apps/kuaizhizao/after-sales-service/spare-part-requisitions",
+                        "sort_order": 6,
+                        "meta": {
+                            "node": "after_sales_spare_part_requisition",
+                            "module": "after_sales"
+                        },
+                        "permission": "kuaizhizao:after-sales-spare-part-requisition:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.service-settlements",
+                        "path": "/apps/kuaizhizao/after-sales-service/service-settlements",
+                        "sort_order": 7,
+                        "meta": {
+                            "node": "service_settlement",
+                            "module": "after_sales"
+                        },
+                        "permission": "kuaizhizao:service-settlement:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.after-sales-service.return-visits",
+                        "path": "/apps/kuaizhizao/after-sales-service/return-visits",
+                        "sort_order": 8,
+                        "meta": {
+                            "node": "customer_return_visit",
+                            "module": "after_sales"
+                        },
+                        "permission": "kuaizhizao:customer-return-visit:read"
+                    }
+                ]
+            },
+            {
                 "title": "app.kuaizhizao.menu.performance-management",
                 "icon": "trophy",
                 "sort_order": 10,
@@ -1670,6 +1770,66 @@
         "kuaizhizao:customer-follow-up:audit",
         "kuaizhizao:customer-follow-up:reject",
         "kuaizhizao:customer-follow-up:print",
+        "kuaizhizao:after-sales-dashboard:read",
+        "kuaizhizao:after-sales-ticket:close",
+        "kuaizhizao:after-sales-ticket:create",
+        "kuaizhizao:after-sales-ticket:delete",
+        "kuaizhizao:after-sales-ticket:export",
+        "kuaizhizao:after-sales-ticket:print",
+        "kuaizhizao:after-sales-ticket:read",
+        "kuaizhizao:after-sales-ticket:update",
+        "kuaizhizao:after-sales-install:close",
+        "kuaizhizao:after-sales-install:create",
+        "kuaizhizao:after-sales-install:delete",
+        "kuaizhizao:after-sales-install:export",
+        "kuaizhizao:after-sales-install:print",
+        "kuaizhizao:after-sales-install:read",
+        "kuaizhizao:after-sales-install:update",
+        "kuaizhizao:after-sales-install:assign",
+        "kuaizhizao:after-sales-install:execute",
+        "kuaizhizao:service-asset:create",
+        "kuaizhizao:service-asset:read",
+        "kuaizhizao:service-asset:update",
+        "kuaizhizao:service-asset:delete",
+        "kuaizhizao:service-asset:export",
+        "kuaizhizao:service-asset:print",
+        "kuaizhizao:repair-order:create",
+        "kuaizhizao:repair-order:read",
+        "kuaizhizao:repair-order:update",
+        "kuaizhizao:repair-order:delete",
+        "kuaizhizao:repair-order:close",
+        "kuaizhizao:repair-order:export",
+        "kuaizhizao:repair-order:print",
+        "kuaizhizao:repair-order:execute",
+        "kuaizhizao:service-dispatch:create",
+        "kuaizhizao:service-dispatch:read",
+        "kuaizhizao:service-dispatch:update",
+        "kuaizhizao:service-dispatch:delete",
+        "kuaizhizao:service-dispatch:assign",
+        "kuaizhizao:service-dispatch:execute",
+        "kuaizhizao:service-dispatch:close",
+        "kuaizhizao:service-dispatch:export",
+        "kuaizhizao:service-dispatch:print",
+        "kuaizhizao:after-sales-spare-part-requisition:create",
+        "kuaizhizao:after-sales-spare-part-requisition:read",
+        "kuaizhizao:after-sales-spare-part-requisition:update",
+        "kuaizhizao:after-sales-spare-part-requisition:delete",
+        "kuaizhizao:after-sales-spare-part-requisition:submit",
+        "kuaizhizao:after-sales-spare-part-requisition:audit",
+        "kuaizhizao:after-sales-spare-part-requisition:export",
+        "kuaizhizao:after-sales-spare-part-requisition:print",
+        "kuaizhizao:service-settlement:create",
+        "kuaizhizao:service-settlement:read",
+        "kuaizhizao:service-settlement:update",
+        "kuaizhizao:service-settlement:delete",
+        "kuaizhizao:service-settlement:audit",
+        "kuaizhizao:service-settlement:export",
+        "kuaizhizao:service-settlement:print",
+        "kuaizhizao:customer-return-visit:create",
+        "kuaizhizao:customer-return-visit:read",
+        "kuaizhizao:customer-return-visit:update",
+        "kuaizhizao:customer-return-visit:delete",
+        "kuaizhizao:customer-return-visit:export",
         "kuaizhizao:customer-pool:read",
         "kuaizhizao:customer-pool:update",
         "kuaizhizao:customer-pool:assign",

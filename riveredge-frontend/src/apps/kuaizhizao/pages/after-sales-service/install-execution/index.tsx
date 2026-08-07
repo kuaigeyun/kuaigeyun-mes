@@ -44,7 +44,7 @@ import { formatDateTime } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 
-const RESOURCE = 'kuaizhizao:production-execution-install-execution';
+const RESOURCE = 'kuaizhizao:after-sales-install';
 
 const STATUS_COLOR: Record<string, string> = {
   待派工: 'default',
@@ -393,8 +393,8 @@ const InstallExecutionPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           permissionResource={RESOURCE}
-          columnPersistenceId="apps.kuaizhizao.pages.production-execution.install-execution"
-          headerTitle={t('app.kuaizhizao.menu.production-execution.install-execution')}
+          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.install-execution"
+          headerTitle={t('app.kuaizhizao.menu.after-sales-service.install-execution')}
           columns={columns}
           enableRowSelection={perms.canDelete || canBatchClose}
           selectedRowKeys={selectedRowKeys}

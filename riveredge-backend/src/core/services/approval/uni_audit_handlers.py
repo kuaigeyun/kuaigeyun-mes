@@ -660,6 +660,32 @@ async def _dispatch_process_route_change(
     _unsupported("process_route_change", action)
 
 
+async def _dispatch_freight_bill(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.freight_bill_service import FreightBillService
+
+    svc = FreightBillService()
+    if action == "submit":
+        return await svc.submit_freight_bill(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_freight_bill(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_freight_bill(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_freight_bill_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_freight_bill_approval(tenant_id, entity_id, user_id)
+    _unsupported("freight_bill", action)
+
+
 HANDLERS: Dict[str, DispatchFn] = {
     "sales_order": _dispatch_sales_order,
     "sales_order_change": _dispatch_sales_order_change,
@@ -685,4 +711,5 @@ HANDLERS: Dict[str, DispatchFn] = {
     "purchase_invoice": _dispatch_purchase_invoice,
     "bom_change": _dispatch_bom_change,
     "process_route_change": _dispatch_process_route_change,
+    "freight_bill": _dispatch_freight_bill,
 }

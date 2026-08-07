@@ -11,6 +11,11 @@ import {
 } from './coreNotificationRules';
 import { USER_SPECIFIED_SCOPE_OPTION } from './notificationRecipientConstants';
 import { loadKuaizhizaoNotificationRulePresets } from '../../apps/kuaizhizao/services/notification-rules';
+import {
+  KUAIIOT_NOTIFICATION_ACTION_OPTIONS,
+  KUAIIOT_NOTIFICATION_DOCUMENT_OPTIONS,
+} from '../../apps/kuaiiot/constants/notificationRules';
+import { loadKuaiiotNotificationRulePresets } from '../../apps/kuaiiot/services/notification-rules';
 
 export type NotificationDocumentOption = { value: string; labelKey: string; fallback: string };
 
@@ -70,6 +75,13 @@ export const NOTIFICATION_APP_MODULES: Record<string, NotificationAppModule> = {
     actionOptions: CORE_NOTIFICATION_ACTION_OPTIONS,
     extraRecipientScopes: [],
     loadPresets: loadKuaizhizaoNotificationRulePresets,
+  },
+  kuaiiot: {
+    appCode: 'kuaiiot',
+    documentOptions: KUAIIOT_NOTIFICATION_DOCUMENT_OPTIONS,
+    actionOptions: KUAIIOT_NOTIFICATION_ACTION_OPTIONS,
+    extraRecipientScopes: [],
+    loadPresets: loadKuaiiotNotificationRulePresets,
   },
 };
 

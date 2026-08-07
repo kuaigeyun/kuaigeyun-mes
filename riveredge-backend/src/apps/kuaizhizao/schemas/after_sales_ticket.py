@@ -91,6 +91,16 @@ class AfterSalesTicketPullFromSalesDeliveryRequest(BaseSchema):
     selected_item_ids: Optional[List[int]] = Field(None, description="所选销售出库明细ID（空=全部）")
 
 
+class AfterSalesTicketPushToRepairOrderRequest(BaseSchema):
+    """下推维修单"""
+
+    service_asset_id: Optional[int] = Field(None, description="装机档案ID")
+    repair_mode: Optional[str] = Field("现场", max_length=20, description="维修方式")
+    fault_category: Optional[str] = Field(None, max_length=100, description="故障分类")
+    fault_description: Optional[str] = Field(None, description="故障描述（缺省用工单内容）")
+    site_address: Optional[str] = Field(None, max_length=500, description="现场地址")
+
+
 class AfterSalesTicketPushToSalesReturnRequest(BaseSchema):
     """下推销售退货单"""
 

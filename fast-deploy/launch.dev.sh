@@ -501,17 +501,20 @@ start_worker() {
     export RIVEREDGE_TASKIQ_POOL_MAX="${RIVEREDGE_TASKIQ_POOL_MAX:-2}"
     PYTHONPATH="src" nohup uv run --extra ocr --extra pdf taskiq worker \
         --app-dir src \
-        --fs-discover \
         --workers "$TASKIQ_WORKERS" \
-        core.tasks.taskiq_app:broker > ../.logs/worker.log 2>&1 &
+        core.tasks.taskiq_app:broker \
+        core.tasks.taskiq_app \
+        core.tasks.ai_tasks \
+        core.tasks.worker_bootstrap \
+        core.tasks.data_backup_handlers > ../.logs/worker.log 2>&1 &
     echo $! > ../.logs/worker.pid
     local worker_launcher_pid=$!
 
     [ -f "../.logs/scheduler.pid" ] && rm -f "../.logs/scheduler.pid"
     PYTHONPATH="src" nohup uv run --extra ocr --extra pdf taskiq scheduler \
         --app-dir src \
-        --fs-discover \
-        core.tasks.taskiq_app:scheduler > ../.logs/scheduler.log 2>&1 &
+        core.tasks.taskiq_app:scheduler \
+        core.tasks.taskiq_app > ../.logs/scheduler.log 2>&1 &
     echo $! > ../.logs/scheduler.pid
     local scheduler_launcher_pid=$!
 

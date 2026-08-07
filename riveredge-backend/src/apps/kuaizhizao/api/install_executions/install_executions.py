@@ -30,7 +30,7 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/install-executions",
     tags=["App - Kuaige Zhizao - Install Execution"],
-    dependencies=[Depends(require_kuaizhizao_module_access("production-execution-install-execution"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("after-sales-install"))],
 )
 
 _service = InstallExecutionService()

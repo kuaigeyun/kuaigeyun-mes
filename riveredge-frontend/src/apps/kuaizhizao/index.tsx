@@ -62,9 +62,15 @@ const SalesContractsPage = lazy(() => import('./pages/sales-management/sales-con
 const SalesOrdersPage = lazy(() => import('./pages/sales-management/sales-orders'));
 const SalesOrderChangesPage = lazy(() => import('./pages/sales-management/sales-order-changes'));
 const DeliveryNotesPage = lazy(() => import('./pages/warehouse-management/delivery-notes'));
+const LogisticsCarriersPage = lazy(() => import('./pages/logistics-management/carriers'));
+const LogisticsVehiclesPage = lazy(() => import('./pages/logistics-management/vehicles'));
+const LogisticsDriversPage = lazy(() => import('./pages/logistics-management/drivers'));
+const LogisticsFreightOrdersPage = lazy(() => import('./pages/logistics-management/freight-orders'));
+const LogisticsTrackingPage = lazy(() => import('./pages/logistics-management/tracking'));
+const LogisticsFreightBillsPage = lazy(() => import('./pages/logistics-management/freight-bills'));
 const ShipmentNoticesPage = lazy(() => import('./pages/sales-management/shipment-notices'));
 const CustomerFollowUpsPage = lazy(() => import('./pages/sales-management/customer-follow-ups'));
-const AfterSalesTicketsPage = lazy(() => import('./pages/sales-management/after-sales-tickets'));
+const AfterSalesTicketsPage = lazy(() => import('./pages/after-sales-service/tickets'));
 const SalesReturnsPage = lazy(() => import('./pages/sales-management/sales-returns'));
 
 // 质量管理页面
@@ -172,7 +178,16 @@ const MaterialCallsPage = lazy(() => import('./pages/warehouse-management/materi
 const DisassemblyOrdersPage = lazy(() => import('./pages/warehouse-management/disassembly-orders'));
 const InventoryAlertPage = lazy(() => import('./pages/warehouse-management/inventory-alert'));
 const PackingBindingPage = lazy(() => import('./pages/production-execution/packing-binding'));
-const InstallExecutionPage = lazy(() => import('./pages/production-execution/install-execution'));
+const InstallExecutionPage = lazy(() => import('./pages/after-sales-service/install-execution'));
+
+// 售后服务模块
+const AfterSalesDashboardPage = lazy(() => import('./pages/after-sales-service/dashboard'));
+const AfterSalesServiceAssetsPage = lazy(() => import('./pages/after-sales-service/service-assets'));
+const AfterSalesRepairOrdersPage = lazy(() => import('./pages/after-sales-service/repair-orders'));
+const AfterSalesDispatchOrdersPage = lazy(() => import('./pages/after-sales-service/dispatch-orders'));
+const AfterSalesSparePartRequisitionsPage = lazy(() => import('./pages/after-sales-service/spare-part-requisitions'));
+const AfterSalesServiceSettlementsPage = lazy(() => import('./pages/after-sales-service/service-settlements'));
+const AfterSalesReturnVisitsPage = lazy(() => import('./pages/after-sales-service/return-visits'));
 
 // 绩效管理页面
 const HolidaysPage = lazy(() => import('./pages/performance/holidays'));
@@ -307,7 +322,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/rework-orders" element={withPageSuspense(ReworkOrdersPage)} />
       <Route path="production-execution/outsource-management" element={withPageSuspense(OutsourceManagementPage)} />
       <Route path="production-execution/packing-binding" element={withPageSuspense(PackingBindingPage)} />
-      <Route path="production-execution/install-execution" element={withPageSuspense(InstallExecutionPage)} />
       <Route path="production-execution/material-shortage-exceptions" element={withPageSuspense(MaterialShortageExceptionsPage)} />
       <Route path="production-execution/delivery-delay-exceptions" element={withPageSuspense(DeliveryDelayExceptionsPage)} />
       <Route path="production-execution/quality-exceptions" element={withPageSuspense(QualityExceptionsPage)} />
@@ -329,7 +343,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="sales-management/sales-orders/new" element={withPageSuspense(SalesOrdersPage)} />
       <Route path="sales-management/sales-orders/:id/edit" element={withPageSuspense(SalesOrdersPage)} />
       <Route path="sales-management/sales-orders" element={withPageSuspense(SalesOrdersPage)} />
-      <Route path="sales-management/after-sales-tickets" element={withPageSuspense(AfterSalesTicketsPage)} />
       <Route path="sales-management/sales-order-changes" element={withPageSuspense(SalesOrderChangesPage)} />
       <Route path="sales-management/shipment-notices" element={withPageSuspense(ShipmentNoticesPage)} />
       <Route path="sales-management/customer-follow-ups" element={withPageSuspense(CustomerFollowUpsPage)} />
@@ -469,6 +482,24 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/inventory-alert" element={withPageSuspense(InventoryAlertPage)} />
       <Route path="warehouse-management/line-side-warehouse" element={withPageSuspense(LineSideWarehousePage)} />
       <Route path="warehouse-management/backflush-records" element={withPageSuspense(BackflushRecordsPage)} />
+
+      {/* 售后服务路由 */}
+      <Route path="after-sales-service/dashboard" element={withPageSuspense(AfterSalesDashboardPage)} />
+      <Route path="after-sales-service/tickets" element={withPageSuspense(AfterSalesTicketsPage)} />
+      <Route path="after-sales-service/service-assets" element={withPageSuspense(AfterSalesServiceAssetsPage)} />
+      <Route path="after-sales-service/install-execution" element={withPageSuspense(InstallExecutionPage)} />
+      <Route path="after-sales-service/repair-orders" element={withPageSuspense(AfterSalesRepairOrdersPage)} />
+      <Route path="after-sales-service/dispatch-orders" element={withPageSuspense(AfterSalesDispatchOrdersPage)} />
+      <Route path="after-sales-service/spare-part-requisitions" element={withPageSuspense(AfterSalesSparePartRequisitionsPage)} />
+      <Route path="after-sales-service/service-settlements" element={withPageSuspense(AfterSalesServiceSettlementsPage)} />
+      <Route path="after-sales-service/return-visits" element={withPageSuspense(AfterSalesReturnVisitsPage)} />
+
+      <Route path="logistics-management/carriers" element={withPageSuspense(LogisticsCarriersPage)} />
+      <Route path="logistics-management/vehicles" element={withPageSuspense(LogisticsVehiclesPage)} />
+      <Route path="logistics-management/drivers" element={withPageSuspense(LogisticsDriversPage)} />
+      <Route path="logistics-management/freight-orders" element={withPageSuspense(LogisticsFreightOrdersPage)} />
+      <Route path="logistics-management/tracking" element={withPageSuspense(LogisticsTrackingPage)} />
+      <Route path="logistics-management/freight-bills" element={withPageSuspense(LogisticsFreightBillsPage)} />
 
       {/* 成本管理已归属快财务；旧路径跳转 */}
       <Route path="cost-management/dashboard" element={<Navigate to="/apps/kuaicaiwu/cost-management/dashboard" replace />} />

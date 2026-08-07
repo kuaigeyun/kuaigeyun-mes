@@ -272,6 +272,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.install_execution_job",  # 安装执行单
                 "apps.kuaizhizao.models.install_execution_stage",  # 安装执行阶段
                 "apps.kuaizhizao.models.install_execution_cost",  # 安装执行费用
+                "apps.kuaizhizao.models.after_sales_service",  # 售后服务模块
                 "apps.kuaizhizao.models.sales_delivery",  # 销售发货模型
                 "apps.kuaizhizao.models.sales_delivery_item",  # 销售发货明细模型
                 "apps.kuaizhizao.models.sales_return",  # 销售退货模型
