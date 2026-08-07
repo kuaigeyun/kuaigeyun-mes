@@ -1,0 +1,1 @@
+import{C as r}from"./clearSessionQueries-DRdpmK-8.js";const t={get:async s=>r.get(`/apps/master-data/process/materials/${s}/product-process`),save:async(s,a)=>r.put(`/apps/master-data/process/materials/${s}/product-process`,a)};export{t as p};

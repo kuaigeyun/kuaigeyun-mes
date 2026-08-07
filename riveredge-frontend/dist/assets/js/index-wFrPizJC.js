@@ -1,0 +1,1 @@
+import{j as e}from"./vendor-BP873C3N.js";import{N as t}from"./clearSessionQueries-DRdpmK-8.js";function p(){return e.jsx(t,{to:"/apps/haoligo/molds/documents/upkeep-complete",replace:!0})}export{p as default};
