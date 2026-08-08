@@ -249,7 +249,6 @@ const LazyUniLifecycleStepper = lazy(() =>
 const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-material-select'))
 import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue } from '../../../utils/workOrderLifecycle'
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
-import { AiPulseStrip } from '../../../../kuaiai/components/ai-pulse';
 import { useRegisterAiContext } from '../../../../../hooks/useRegisterAiContext';
 import { WorkOrderSopSidebar } from '../../../../kuaiai/components/work-order-sop';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
@@ -3192,6 +3191,9 @@ const WorkOrdersPage: React.FC = () => {
         ...prev,
         [currentWorkOrderForDispatch.id!]: operations || [],
       }))
+      if (workOrderDetail?.id === currentWorkOrderForDispatch.id) {
+        setWorkOrderOperations(operations || [])
+      }
       queryClient.invalidateQueries({
         queryKey: [WORK_ORDER_ROW_EXPAND_QK, currentWorkOrderForDispatch.id],
       })
@@ -7283,7 +7285,6 @@ const WorkOrdersPage: React.FC = () => {
           background: var(--ant-color-warning-bg) !important;
         }
       `}</style>
-      <AiPulseStrip scene="production" title="KU-Pulse 生产异常" />
       <ListPageTemplate statCards={statCards}>
         <UniTable<WorkOrder>
           className="kuaizhizao-work-orders-table"
@@ -9937,6 +9938,32 @@ const WorkOrdersPage: React.FC = () => {
               throw new Error('工单ID不存在')
             }
 
+            const formValues =
+              operationFormRef.current?.getFieldsValue(true) ?? values
+            const mergedValues = { ...values, ...formValues }
+            let operationCode = String(mergedValues.operation_code ?? '').trim()
+            let operationName = String(mergedValues.operation_name ?? '').trim()
+            const operationId = mergedValues.operation_id
+            if ((!operationCode || !operationName) && operationId) {
+              const operations = unwrapProcessPagedList(
+                await operationApi.list({ isActive: true, limit: 1000 })
+              )
+              const masterOp = operations.find((op: any) => op.id === operationId)
+              if (masterOp) {
+                operationCode = String(masterOp.code ?? masterOp.mainCode ?? '').trim()
+                operationName = String(masterOp.name ?? '').trim()
+              }
+            }
+            if (!operationCode || !operationName) {
+              throw new Error('请选择工序并确保工序编号与名称有效')
+            }
+
+            const operationPayload = {
+              ...mergedValues,
+              operation_code: operationCode,
+              operation_name: operationName,
+            }
+
             // 获取当前工序列表
             const currentOperations = await workOrderApi.getOperations(
               workOrderDetail.id.toString()
@@ -9950,7 +9977,7 @@ const WorkOrdersPage: React.FC = () => {
                 if (op.id === currentOperation.id) {
                   return {
                     ...op,
-                    ...values,
+                    ...operationPayload,
                     sequence: op.sequence, // 保持sequence不变
                   }
                 }
@@ -9965,7 +9992,7 @@ const WorkOrdersPage: React.FC = () => {
               updatedOperations = [
                 ...currentOperations,
                 {
-                  ...values,
+                  ...operationPayload,
                   sequence: maxSequence + 1,
                 },
               ]

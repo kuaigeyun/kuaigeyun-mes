@@ -1901,24 +1901,65 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         .ant-layout-sider-children{
           padding-inline: 0 !important;
         }
-        /* 侧栏顶部搜索框：固定高度 38px 与 unitabs 等高，宽度填满，无胶囊背景、聚焦无光晕 */
+        /* 侧栏搜索条：平铺/双列唯一几何真源（总高 40px = 上下各 5px + 输入 30px） */
+        :root {
+          --riveredge-sidebar-search-strip-height: 40px;
+          --riveredge-sidebar-search-padding-inline: 16px;
+          --riveredge-sidebar-search-input-height: 30px;
+        }
         .ant-layout-sider .riveredge-sidebar-search-wrapper {
           width: 100% !important;
-          box-sizing: border-box;
+          box-sizing: border-box !important;
+          height: var(--riveredge-sidebar-search-strip-height) !important;
+          min-height: var(--riveredge-sidebar-search-strip-height) !important;
+          max-height: var(--riveredge-sidebar-search-strip-height) !important;
+          padding: 0 var(--riveredge-sidebar-search-padding-inline) !important;
+          margin: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          flex-shrink: 0 !important;
           border-bottom: 1px solid var(--riveredge-sider-divider-color) !important;
+        }
+        html[data-sidebar-menu-layout="flat"] .ant-pro-sider .ant-pro-sider-extra {
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+        }
+        .ant-layout-sider .riveredge-sidebar-search-wrapper > div {
+          width: 100% !important;
+          min-width: 0 !important;
         }
         .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-affix-wrapper,
         .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input {
           width: 100% !important;
           max-width: 100% !important;
+          height: var(--riveredge-sidebar-search-input-height) !important;
+          min-height: var(--riveredge-sidebar-search-input-height) !important;
           box-sizing: border-box;
           background: transparent !important;
         }
         .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-affix-wrapper {
+          display: flex !important;
+          align-items: center !important;
           padding-inline: 4px !important;
+          padding-block: 0 !important;
+        }
+        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-prefix,
+        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-suffix {
+          display: flex !important;
+          align-items: center !important;
+          align-self: center !important;
+          margin-block: 0 !important;
         }
         .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input {
           padding-left: 4px !important;
+          padding-block: 0 !important;
+          line-height: var(--riveredge-sidebar-search-input-height) !important;
+        }
+        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-prefix .anticon,
+        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-prefix .anticon svg {
+          display: block !important;
+          line-height: 1 !important;
         }
         .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-affix-wrapper:hover {
           background: transparent !important;
@@ -1930,6 +1971,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         }
         .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-prefix .anticon {
           color: ${isDarkMode ? 'rgba(255,255,255,0.65)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.45)')} !important;
+          font-size: 14px !important;
         }
         /* 侧栏搜索框占位字符颜色：适配“明亮模式 + 深色背景” */
         .riveredge-sidebar-search-wrapper input::placeholder,
@@ -1938,6 +1980,13 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         }
         /* 侧栏搜索框快捷键（拟物按键）：框线/底影与搜索条底边一致，不用浅色主题的 --river-border-color */
         .riveredge-sidebar-search-wrapper .topbar-search-shortcut-key {
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          height: 18px !important;
+          min-width: 18px !important;
+          line-height: 1 !important;
+          margin-block: 0 !important;
           color: ${isDarkMode ? 'rgba(255,255,255,0.28)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.28)' : (token?.colorBorder ?? '#d9d9d9'))} !important;
           background: ${isDarkMode ? 'rgba(255,255,255,0.10)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.10)' : (token?.colorFillQuaternary ?? '#f5f5f5'))} !important;
           border: 1px solid ${
@@ -2314,13 +2363,6 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-search {
           flex-shrink: 0;
           width: 100%;
-          padding: 8px 6px 0;
-          box-sizing: border-box;
-        }
-        html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-search .riveredge-sidebar-search-wrapper {
-          margin: 0 !important;
-          padding: 0 0 4px 0 !important;
-          width: 100% !important;
         }
         html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-body {
           flex: 1 1 0;

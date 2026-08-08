@@ -2265,6 +2265,18 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 if _dt_key in update_data and update_data[_dt_key] is not None:
                     update_data[_dt_key] = coerce_business_datetime_to_utc(update_data[_dt_key])
 
+            from apps.kuaizhizao.constants import normalize_status as _normalize_wo_status
+
+            _wo_status = _normalize_wo_status(str(work_order.status or ""))
+            if _wo_status not in ("draft", "DRAFT", "草稿"):
+                for _date_field in ("planned_start_date", "planned_end_date"):
+                    if _date_field not in update_data:
+                        continue
+                    _new_dt = update_data[_date_field]
+                    _old_dt = getattr(work_order, _date_field, None)
+                    if _new_dt != _old_dt:
+                        raise BusinessLogicError("非草稿工单不可修改计划开始或计划结束时间")
+
             if "process_route_id" in update_data:
                 new_pr_id = update_data.pop("process_route_id")
                 old_pr_id = getattr(work_order, "process_route_id", None)

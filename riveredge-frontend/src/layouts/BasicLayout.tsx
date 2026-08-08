@@ -63,7 +63,6 @@ import {
   computeSplitSecondaryOpenKeys,
   FLAT_SIDEBAR_WIDTH,
   readSidebarMenuLayoutPref,
-  SPLIT_SIDEBAR_COLLAPSED_WIDTH,
   SPLIT_SIDEBAR_WIDTH,
 } from './basicLayout/sidebarMenuLayout';
 import dayjs from 'dayjs';
@@ -854,13 +853,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     readSidebarMenuLayoutPref(s.preferences as Record<string, unknown> | undefined),
   );
 
-  useEffect(() => {
-    document.documentElement.setAttribute(
-      'data-sidebar-menu-layout',
-      sidebarMenuLayoutPref === 'split' ? 'split' : 'flat',
-    );
-  }, [sidebarMenuLayoutPref]);
-
   // 侧边栏折叠状态
   const [collapsed, setCollapsed] = useState<boolean>(false);
 
@@ -884,6 +876,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   // 普通浏览器缩到 <1200 已跳 H5，此处勿再按 screens.lg / 宽度切平板模式
   const isMobileOrTablet = touchScreen.isTouchScreenMode && touchScreen.isPortrait;
   const isSplitSidebarLayout = sidebarMenuLayoutPref === 'split' && !isMobileOrTablet;
+  /** 双列偏好且侧栏展开时才用 SplitSidebarMenu；收起时走平铺菜单 */
+  const useSplitSidebarMenu = isSplitSidebarLayout && !collapsed;
+
+  useEffect(() => {
+    document.documentElement.setAttribute(
+      'data-sidebar-menu-layout',
+      useSplitSidebarMenu ? 'split' : 'flat',
+    );
+  }, [useSplitSidebarMenu]);
 
   // 工作区最大化模式 (由 UniTab 控制)
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1999,7 +2000,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    * 被后面的 siderTextColor / 灰色通用规则盖掉。
    */
   useLayoutEffect(() => {
-    if (isSplitSidebarLayout) return;
+    if (useSplitSidebarMenu) return;
 
     const markGroupTitles = () => {
       document.querySelectorAll('.ant-pro-sider-menu .ant-menu-item-group').forEach((group) => {
@@ -2036,7 +2037,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     };
 
     markGroupTitles();
-  }, [filteredMenuData, collapsed, location.pathname, appMenusLoading, isSplitSidebarLayout]);
+  }, [filteredMenuData, collapsed, location.pathname, appMenusLoading, useSplitSidebarMenu]);
 
   /**
    * 根据当前路径设置文档标题（浏览器标签页标题）
@@ -2377,7 +2378,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return selectedKeys;
   }, []);
 
-  const menuDataForSelection = isSplitSidebarLayout ? breadcrumbMenuData : filteredMenuData;
+  const menuDataForSelection = useSplitSidebarMenu ? breadcrumbMenuData : filteredMenuData;
 
   // 计算应该选中的菜单 key（只选中精确匹配的路径）
   const selectedKeys = useMemo(() => {
@@ -2390,14 +2391,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const siderFooterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isSplitSidebarLayout) {
+    if (useSplitSidebarMenu) {
       setSidebarOpenKeys(
         computeSplitSecondaryOpenKeys(splitMenuRoots, location.pathname, computeMenuOpenKeysForPath),
       );
       return;
     }
     setSidebarOpenKeys(computeMenuOpenKeysForPath(filteredMenuData, location.pathname));
-  }, [location.pathname, filteredMenuData, isSplitSidebarLayout, splitMenuRoots]);
+  }, [location.pathname, filteredMenuData, useSplitSidebarMenu, splitMenuRoots]);
 
   useLayoutEffect(() => {
     const footerEl = siderFooterRef.current;
@@ -2618,33 +2619,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   const sidebarSearchExtra = useMemo(() => {
     return (
-      <div
-        className="riveredge-sidebar-search-wrapper"
-        style={{
-          flexShrink: 0,
-          height: 38,
-          display: 'flex',
-          alignItems: 'center',
-          margin: '-13px 0 0 0',
-          padding: '2px 0 4px 0',
-        }}
-      >
+      <div className="riveredge-sidebar-search-wrapper">
         <TopBarSearch
           menuData={filteredMenuData}
           hotMenuPaths={TOPBAR_SEARCH_HOT_MENU_PATHS}
           isLightModeLightBg={siderTextColor !== '#ffffff'}
           token={token}
           placeholder={t('common.searchPlaceholderShort')}
-          inputHeight={34}
-          borderRadius={17}
+          inputHeight={30}
+          borderRadius={15}
           shortcutKey="/"
           transparentBg
         />
       </div>
     );
   }, [filteredMenuData, siderTextColor, t, token]);
-
-  const splitSiderWidth = collapsed ? SPLIT_SIDEBAR_COLLAPSED_WIDTH : SPLIT_SIDEBAR_WIDTH;
 
   const handleSplitNavigate = useCallback(
     (path: string) => {
@@ -2658,7 +2647,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       <SplitSidebarMenu
         roots={splitMenuRoots}
         currentPath={location.pathname}
-        collapsed={collapsed}
+        collapsed={false}
         selectedKeys={selectedKeys}
         openKeys={sidebarOpenKeys}
         onOpenChange={setSidebarOpenKeys}
@@ -2669,7 +2658,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     [
       splitMenuRoots,
       location.pathname,
-      collapsed,
       selectedKeys,
       sidebarOpenKeys,
       sidebarSearchExtra,
@@ -2679,9 +2667,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   const menuContentRenderProp = useMemo(() => {
     if (isFullscreen) return false as const;
-    if (isSplitSidebarLayout) return splitMenuContentRender;
+    if (useSplitSidebarMenu) return splitMenuContentRender;
     return undefined;
-  }, [isFullscreen, isSplitSidebarLayout, splitMenuContentRender]);
+  }, [isFullscreen, useSplitSidebarMenu, splitMenuContentRender]);
 
   return (
     <>
@@ -2794,12 +2782,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         onCollapse={isFullscreen ? undefined : handleSetCollapsed}
         location={location}
         siderWidth={
-          isFullscreen ? 0 : isSplitSidebarLayout ? splitSiderWidth : FLAT_SIDEBAR_WIDTH
+          isFullscreen ? 0 : useSplitSidebarMenu ? SPLIT_SIDEBAR_WIDTH : FLAT_SIDEBAR_WIDTH
         }
         menuRender={isFullscreen ? () => null : undefined}
         menuContentRender={menuContentRenderProp}
         menuExtraRender={
-          isFullscreen || collapsed || isSplitSidebarLayout
+          isFullscreen || collapsed || useSplitSidebarMenu
             ? undefined
             : () => sidebarSearchExtra
         }

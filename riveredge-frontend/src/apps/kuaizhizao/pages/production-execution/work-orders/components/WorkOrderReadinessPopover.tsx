@@ -691,8 +691,10 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     /** 数量相对需求：够=绿，不够=红，无法比较=默认色 */
     qtyVsRequired: 'ok' | 'short' | 'neutral'
     kittingApplicable: boolean
-    /** 已有正式生产领料确认数量（picked_quantity > 0） */
+    /** 正式领料已全部满足需求 */
     pickingConfirmed: boolean
+    /** 已有正式领料但未满足全部需求 */
+    pickingPartial: boolean
     /** 解析后发料方式 pick / backflush / none */
     issueMethod: string
     relatedWorkOrder?: RelatedWorkOrderRow
@@ -811,7 +813,16 @@ const WorkOrderReadinessPopoverContent: React.FC<{
       const relatedOutsourceWorkOrder = parseRelatedOutsourceWorkOrder(it)
       const supplyProgress = parseSupplyProgress(it)
       const pickedNum = Number(it.picked_quantity ?? it.pickedQuantity ?? 0)
-      const pickingConfirmed = Number.isFinite(pickedNum) && pickedNum > QTY_CMP_EPS
+      const pickingFull =
+        Number.isFinite(pickedNum) &&
+        Number.isFinite(requiredNum) &&
+        requiredNum > QTY_CMP_EPS &&
+        pickedNum + QTY_CMP_EPS >= requiredNum
+      const pickingPartial =
+        Number.isFinite(pickedNum) &&
+        pickedNum > QTY_CMP_EPS &&
+        !pickingFull
+      const pickingConfirmed = pickingFull
       const woSupply = Number(it.work_order_supply_quantity ?? 0)
       const woSupplySafe = Number.isFinite(woSupply) ? woSupply : 0
 
@@ -826,6 +837,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
           qtyVsRequired: 'neutral',
           kittingApplicable: false,
           pickingConfirmed,
+          pickingPartial,
           issueMethod,
           supplyProgress,
         })
@@ -893,6 +905,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
             materialCmp === null ? 'neutral' : materialCmp ? 'ok' : 'short',
           kittingApplicable: true,
           pickingConfirmed,
+          pickingPartial,
           issueMethod,
           relatedWorkOrder,
           relatedOutsourceWorkOrder,
@@ -914,6 +927,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
               materialCmp === null ? 'neutral' : materialCmp ? 'ok' : 'short',
             kittingApplicable: true,
             pickingConfirmed,
+            pickingPartial,
             issueMethod,
             relatedWorkOrder,
             relatedOutsourceWorkOrder,
@@ -1188,6 +1202,10 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                     const pickingConfirmedTag = row.pickingConfirmed ? (
                       <Tag style={{ margin: 0 }} color="blue">
                         {t('app.kuaizhizao.workOrder.tagPickingConfirmed')}
+                      </Tag>
+                    ) : row.pickingPartial ? (
+                      <Tag style={{ margin: 0 }} color="gold">
+                        {t('app.kuaizhizao.workOrder.tagPickingPartial')}
                       </Tag>
                     ) : null
                     const backflushTag =

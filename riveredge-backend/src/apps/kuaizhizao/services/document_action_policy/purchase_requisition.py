@@ -58,7 +58,11 @@ def _can_push_downstream(status: Any) -> bool:
     )
 
 
-def derive_purchase_requisition_capabilities(req: Any) -> PurchaseRequisitionCapabilities:
+def derive_purchase_requisition_capabilities(
+    req: Any,
+    *,
+    has_linked_purchase_order: bool = False,
+) -> PurchaseRequisitionCapabilities:
     status = getattr(req, "status", None)
 
     update_allowed = is_draft_status(status or "") or is_pending_review_status(status or "")
@@ -86,11 +90,13 @@ def derive_purchase_requisition_capabilities(req: Any) -> PurchaseRequisitionCap
         else None,
     )
 
-    revoke_allowed = _is_revoke_approval_allowed(status)
-    revoke_cap = _cap(
-        revoke_allowed,
-        "purchase_requisition.revoke_approval.not_allowed" if not revoke_allowed else None,
-    )
+    revoke_allowed = _is_revoke_approval_allowed(status) and not has_linked_purchase_order
+    revoke_reason = None
+    if has_linked_purchase_order:
+        revoke_reason = "purchase_requisition.revoke_approval.has_purchase_order"
+    elif not _is_revoke_approval_allowed(status):
+        revoke_reason = "purchase_requisition.revoke_approval.not_allowed"
+    revoke_cap = _cap(revoke_allowed, revoke_reason)
 
     push_downstream_allowed = _can_push_downstream(status)
     push_po_cap = _cap(

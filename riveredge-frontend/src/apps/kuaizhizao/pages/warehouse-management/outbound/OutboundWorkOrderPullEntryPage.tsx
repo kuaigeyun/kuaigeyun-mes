@@ -538,7 +538,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
             materialId,
             materialCode: String(row.material_code ?? ''),
             materialName: String(row.material_name ?? ''),
-            unit: '',
+            unit: String(row.material_unit ?? ''),
             requiredQuantity: Number(row.quantity ?? 0),
             pickedQuantity: Number(row.pushed_quantity ?? 0),
             pendingQuantity: pending,

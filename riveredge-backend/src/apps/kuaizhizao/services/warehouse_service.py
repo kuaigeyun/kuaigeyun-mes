@@ -1960,6 +1960,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     "item_id": int(getattr(item, "material_id", 0) or 0),
                     "material_code": str(getattr(item, "material_code", "") or ""),
                     "material_name": str(getattr(item, "material_name", "") or ""),
+                    "material_unit": str(getattr(item, "material_unit", "") or ""),
                     "quantity": float(required_qty),
                     "pushed_quantity": float(picked_qty),
                     "max_push_quantity": float(max_push_qty),

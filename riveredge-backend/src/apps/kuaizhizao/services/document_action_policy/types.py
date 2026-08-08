@@ -466,6 +466,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "purchase_requisition.submit.not_draft": "只有草稿状态可提交",
     "purchase_requisition.approve.not_pending": "只有待审核状态的采购申请可审核",
     "purchase_requisition.revoke_approval.not_allowed": "只有已通过或转单状态的采购申请可撤回审核",
+    "purchase_requisition.revoke_approval.has_purchase_order": "采购申请已有明细转采购订单，不能撤销审核",
     "purchase_requisition.push_purchase_order.not_allowed": "当前状态不可下推采购订单",
     "purchase_requisition.push_purchase_order.no_lines": "没有可下推的采购申请明细",
     "purchase_requisition.push_inquiry.not_allowed": "当前状态不可下推询价单",
