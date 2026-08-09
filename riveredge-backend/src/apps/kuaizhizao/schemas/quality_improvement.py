@@ -130,6 +130,7 @@ class OQCInspectionBase(BaseSchema):
     material_id: int = Field(..., description="成品物料ID")
     material_code: str = Field(..., description="成品物料编码")
     material_name: str = Field(..., description="成品物料名称")
+    material_unit: Optional[str] = Field(None, max_length=20, description="物料单位（基础单位）")
     batch_number: Optional[str] = Field(None, description="批次号")
     inspection_quantity: float = Field(..., description="检验数量")
     qualified_quantity: float = Field(0, description="合格数量")

@@ -1,0 +1,42 @@
+/** Database connector brand colors */
+export const DATABASE_BRAND_COLORS: Record<string, string> = {
+  "chroma": "#FF6442",
+  "clickhouse": "#FFCC01",
+  "couchbase": "#EA2328",
+  "dameng": "#003DA6",
+  "doris": "#521DAF",
+  "gaussdb": "#CF0A2C",
+  "gbase": "#E60012",
+  "kingbase": "#005BAC",
+  "oceanbase": "#002FA7",
+  "opengauss": "#0066CC",
+  "sequoiadb": "#00A651",
+  "druid": "#29F1FB",
+  "elasticsearch": "#005571",
+  "etcd": "#419EDA",
+  "influxdb": "#22ADF6",
+  "keydb": "#DC382D",
+  "mariadb": "#003545",
+  "memcached": "#086FAF",
+  "milvus": "#00A1EA",
+  "mongodb": "#47A248",
+  "mysql": "#4479A1",
+  "opensearch": "#005EB8",
+  "oracle": "#F80000",
+  "postgresql": "#4169E1",
+  "prometheus": "#E6522C",
+  "qdrant": "#DC244C",
+  "tidb": "#172D72",
+  "redis": "#DC382D",
+  "sqlite": "#003B57",
+  "sqlserver": "#CC2927",
+  "starrocks": "#6C63FF",
+  "tdengine": "#00B4A0",
+  "timescaledb": "#FDB515",
+  "trino": "#DD00A1",
+  "weaviate": "#00EC99",
+};
+
+export function getDatabaseBrandColor(typeOrId: string): string | undefined {
+  return DATABASE_BRAND_COLORS[typeOrId];
+}

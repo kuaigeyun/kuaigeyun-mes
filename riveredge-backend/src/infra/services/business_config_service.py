@@ -467,7 +467,8 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "defect_handling": True,
         "auto_create_iqc_on_purchase_receipt": False,
         "auto_create_ipqc_on_reporting": True,
-        "auto_create_fqc_on_last_reporting": True,
+        # 成品检建单改由入库前 ensure + 工单手工下推；末道报工自动建默认关闭
+        "auto_create_fqc_on_last_reporting": False,
         "auto_create_oqc_on_shipment_notice_notify": False,
         "auto_create_oqc_on_sales_delivery": False,
     },

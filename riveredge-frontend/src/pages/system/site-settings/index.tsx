@@ -9,7 +9,7 @@ import React, { useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker, Modal, Table, Tag, Typography, theme } from 'antd';
 import dayjs from 'dayjs';
-import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined, InfoCircleOutlined, SettingOutlined, CloudDownloadOutlined, ApartmentOutlined, GlobalOutlined, LinkOutlined } from '@ant-design/icons';
+import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined, InfoCircleOutlined, SettingOutlined, CloudDownloadOutlined, ApartmentOutlined, GlobalOutlined } from '@ant-design/icons';
 import { ThemedSegmented } from '../../../components/themed-segmented';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import type { UploadFile, UploadProps } from 'antd';
@@ -56,14 +56,6 @@ import {
   LoginFeatureSwitchesBlock,
 } from '../../../components/login-page-editor';
 import { isLoginVisualLayerEnabled, validateLoginVisualLayers } from '../../../utils/loginVisualLayers';
-import {
-  DEEPSEEK_DEFAULT_BASE_URL,
-  DEEPSEEK_DEFAULT_MODEL,
-  DEEPSEEK_OCR_EXAMPLE_BASE_URL,
-  DEEPSEEK_OCR_EXAMPLE_MODEL,
-  DEEPSEEK_V4_MODEL_OPTIONS,
-  INTEGRATION_API_KEY_MASK,
-} from '../../../utils/integrationSettings';
 
 /**
  * 站点设置页面组件
@@ -126,19 +118,6 @@ function getInitialValuesFromConfigStore(
     'theme_config.colorPrimary': configs['theme_config.colorPrimary'] ?? themeConfig.colorPrimary ?? normalizedThemeColor ?? '#1890ff',
     'network.timeout': configs['network.timeout'] ?? configs.network?.timeout ?? 10000,
     'system.max_retries': configs['system.max_retries'] ?? configs.system?.max_retries ?? 3,
-    'integrations.deepseek.enabled': configs.integrations?.deepseek?.enabled === true,
-    'integrations.deepseek.api_key': '',
-    'integrations.deepseek.model': configs.integrations?.deepseek?.model ?? DEEPSEEK_DEFAULT_MODEL,
-    'integrations.deepseek.base_url': configs.integrations?.deepseek?.base_url ?? DEEPSEEK_DEFAULT_BASE_URL,
-    'integrations.deepseek.tools_enabled': configs.integrations?.deepseek?.tools_enabled !== false,
-    'integrations.deepseek.rag_enabled': configs.integrations?.deepseek?.rag_enabled !== false,
-    'integrations.deepseek.rag_use_embedding': configs.integrations?.deepseek?.rag_use_embedding !== false,
-    'integrations.deepseek.rag_backend': configs.integrations?.deepseek?.rag_backend ?? 'native',
-    'integrations.deepseek.rag_top_k': configs.integrations?.deepseek?.rag_top_k ?? 5,
-    'integrations.deepseek.custom_system_prompt': configs.integrations?.deepseek?.custom_system_prompt ?? '',
-    'integrations.deepseek.ocr_base_url': configs.integrations?.deepseek?.ocr_base_url ?? '',
-    'integrations.deepseek.ocr_model': configs.integrations?.deepseek?.ocr_model ?? '',
-    'integrations.deepseek.ocr_api_key': '',
   };
 }
 
@@ -206,22 +185,6 @@ const SITE_SETTINGS_SYSTEM_TAB_FIELDS = [
   'system.max_retries',
 ] as const;
 
-const SITE_SETTINGS_INTEGRATIONS_TAB_FIELDS = [
-  'integrations.deepseek.enabled',
-  'integrations.deepseek.model',
-  'integrations.deepseek.base_url',
-  'integrations.deepseek.api_key',
-  'integrations.deepseek.tools_enabled',
-  'integrations.deepseek.rag_enabled',
-  'integrations.deepseek.rag_use_embedding',
-  'integrations.deepseek.rag_backend',
-  'integrations.deepseek.rag_top_k',
-  'integrations.deepseek.custom_system_prompt',
-  'integrations.deepseek.ocr_base_url',
-  'integrations.deepseek.ocr_model',
-  'integrations.deepseek.ocr_api_key',
-] as const;
-
 const SiteSettingsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -281,8 +244,6 @@ const SiteSettingsPage: React.FC = () => {
   const [updatingBranchOrg, setUpdatingBranchOrg] = useState(false);
   const [branchOrgForm] = Form.useForm();
   const [useNewBranchAdmin, setUseNewBranchAdmin] = useState(false);
-  const [deepseekApiKeyConfigured, setDeepseekApiKeyConfigured] = useState(false);
-  const [deepseekOcrApiKeyConfigured, setDeepseekOcrApiKeyConfigured] = useState(false);
   const tenantDomainValue = Form.useWatch('tenant_domain', form);
   const loginLogoValue = Form.useWatch('login_logo', form);
   const loginDecorationValue = Form.useWatch('login_decoration_image', form);
@@ -767,33 +728,7 @@ const SiteSettingsPage: React.FC = () => {
         'theme_config.colorPrimary': setting.settings?.theme_config?.colorPrimary ?? normalizedThemeColor ?? '#1890ff',
         'network.timeout': setting.settings?.network?.timeout ?? 10000,
         'system.max_retries': setting.settings?.system?.max_retries ?? 3,
-        'integrations.deepseek.enabled': setting.settings?.integrations?.deepseek?.enabled === true,
-        'integrations.deepseek.api_key': '',
-        'integrations.deepseek.model':
-          setting.settings?.integrations?.deepseek?.model ?? DEEPSEEK_DEFAULT_MODEL,
-        'integrations.deepseek.base_url':
-          setting.settings?.integrations?.deepseek?.base_url ?? DEEPSEEK_DEFAULT_BASE_URL,
-        'integrations.deepseek.tools_enabled':
-          setting.settings?.integrations?.deepseek?.tools_enabled !== false,
-        'integrations.deepseek.rag_enabled':
-          setting.settings?.integrations?.deepseek?.rag_enabled !== false,
-        'integrations.deepseek.rag_use_embedding':
-          setting.settings?.integrations?.deepseek?.rag_use_embedding !== false,
-        'integrations.deepseek.rag_backend':
-          setting.settings?.integrations?.deepseek?.rag_backend ?? 'native',
-        'integrations.deepseek.rag_top_k': setting.settings?.integrations?.deepseek?.rag_top_k ?? 5,
-        'integrations.deepseek.custom_system_prompt':
-          setting.settings?.integrations?.deepseek?.custom_system_prompt ?? '',
-        'integrations.deepseek.ocr_base_url':
-          setting.settings?.integrations?.deepseek?.ocr_base_url ?? '',
-        'integrations.deepseek.ocr_model':
-          setting.settings?.integrations?.deepseek?.ocr_model ?? '',
-        'integrations.deepseek.ocr_api_key': '',
       };
-      setDeepseekApiKeyConfigured(setting.settings?.integrations?.deepseek?.api_key_configured === true);
-      setDeepseekOcrApiKeyConfigured(
-        setting.settings?.integrations?.deepseek?.ocr_api_key_configured === true,
-      );
       setUseCustomLoginLogo(Boolean(String(newValues.login_logo || '').trim()));
 
       if (!hasCache) {
@@ -1129,35 +1064,6 @@ const SiteSettingsPage: React.FC = () => {
         }
         shouldRefreshConfigs = true;
         shouldRefreshTheme = true;
-      } else if (saveTab === 'integrations') {
-        const values = await form.validateFields([...SITE_SETTINGS_INTEGRATIONS_TAB_FIELDS]);
-        const deepseekApiKey = String(values['integrations.deepseek.api_key'] ?? '').trim();
-        const deepseekOcrApiKey = String(values['integrations.deepseek.ocr_api_key'] ?? '').trim();
-        const deepseekPayload: Record<string, any> = {
-          enabled: values['integrations.deepseek.enabled'] === true,
-          model:
-            String(values['integrations.deepseek.model'] ?? DEEPSEEK_DEFAULT_MODEL).trim() ||
-            DEEPSEEK_DEFAULT_MODEL,
-          base_url:
-            String(values['integrations.deepseek.base_url'] ?? DEEPSEEK_DEFAULT_BASE_URL).trim() ||
-            DEEPSEEK_DEFAULT_BASE_URL,
-          tools_enabled: values['integrations.deepseek.tools_enabled'] !== false,
-          rag_enabled: values['integrations.deepseek.rag_enabled'] !== false,
-          rag_use_embedding: values['integrations.deepseek.rag_use_embedding'] !== false,
-          rag_backend: String(values['integrations.deepseek.rag_backend'] ?? 'native').trim() || 'native',
-          rag_top_k: Number(values['integrations.deepseek.rag_top_k']) || 5,
-          custom_system_prompt: String(values['integrations.deepseek.custom_system_prompt'] ?? '').trim(),
-          ocr_base_url: String(values['integrations.deepseek.ocr_base_url'] ?? '').trim(),
-          ocr_model: String(values['integrations.deepseek.ocr_model'] ?? '').trim(),
-        };
-        if (deepseekApiKey && deepseekApiKey !== INTEGRATION_API_KEY_MASK) {
-          deepseekPayload.api_key = deepseekApiKey;
-        }
-        if (deepseekOcrApiKey && deepseekOcrApiKey !== INTEGRATION_API_KEY_MASK) {
-          deepseekPayload.ocr_api_key = deepseekOcrApiKey;
-        }
-        settings.integrations = { deepseek: deepseekPayload };
-        shouldRefreshConfigs = true;
       } else {
         return;
       }
@@ -1628,209 +1534,6 @@ const SiteSettingsPage: React.FC = () => {
     </>
   );
 
-  const integrationsSettingsContent = (
-    <Row gutter={[0, 16]}>
-      <Col span={24}>
-        <Card title={t('pages.system.siteSettings.integrationsDeepseekTitle')} size="small">
-          <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-            {t('pages.system.siteSettings.integrationsDeepseekHint')}
-          </Typography.Paragraph>
-          <Row gutter={[16, 16]}>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="integrations.deepseek.enabled"
-                label={t('pages.system.siteSettings.integrationsDeepseekEnabled')}
-                valuePropName="checked"
-              >
-                <Switch />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={[16, 16]}>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="integrations.deepseek.model"
-                label={t('pages.system.siteSettings.integrationsDeepseekModel')}
-                tooltip={t('pages.system.siteSettings.integrationsDeepseekModelTooltip')}
-              >
-                <Select
-                  options={DEEPSEEK_V4_MODEL_OPTIONS.map(value => ({
-                    value,
-                    label: t(`pages.system.siteSettings.integrationsDeepseekModel_${value}`),
-                  }))}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="integrations.deepseek.base_url"
-                label={t('pages.system.siteSettings.integrationsDeepseekBaseUrl')}
-              >
-                <Input placeholder={t('pages.system.siteSettings.integrationsDeepseekBaseUrlPlaceholder')} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="integrations.deepseek.api_key"
-                label={t('pages.system.siteSettings.integrationsDeepseekApiKey')}
-                extra={
-                  deepseekApiKeyConfigured
-                    ? t('pages.system.siteSettings.integrationsDeepseekApiKeyConfigured')
-                    : undefined
-                }
-              >
-                <Input.Password
-                  placeholder={
-                    deepseekApiKeyConfigured
-                      ? t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholderConfigured')
-                      : t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholder')
-                  }
-                  autoComplete="new-password"
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Card>
-      </Col>
-      <Col span={24}>
-        <Card title={t('pages.system.siteSettings.integrationsDeepseekOcrTitle')} size="small">
-          <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-            {t('pages.system.siteSettings.integrationsDeepseekOcrHint')}
-          </Typography.Paragraph>
-          <Row gutter={[16, 16]}>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="integrations.deepseek.ocr_base_url"
-                label={t('pages.system.siteSettings.integrationsDeepseekOcrBaseUrl')}
-              >
-                <Input placeholder={DEEPSEEK_OCR_EXAMPLE_BASE_URL} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="integrations.deepseek.ocr_model"
-                label={t('pages.system.siteSettings.integrationsDeepseekOcrModel')}
-              >
-                <Input placeholder={DEEPSEEK_OCR_EXAMPLE_MODEL} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="integrations.deepseek.ocr_api_key"
-                label={t('pages.system.siteSettings.integrationsDeepseekOcrApiKey')}
-                tooltip={t('pages.system.siteSettings.integrationsDeepseekOcrApiKeyTooltip')}
-                extra={
-                  deepseekOcrApiKeyConfigured
-                    ? t('pages.system.siteSettings.integrationsDeepseekApiKeyConfigured')
-                    : undefined
-                }
-              >
-                <Input.Password
-                  placeholder={
-                    deepseekOcrApiKeyConfigured
-                      ? t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholderConfigured')
-                      : t('pages.system.siteSettings.integrationsDeepseekOcrApiKeyPlaceholder')
-                  }
-                  autoComplete="new-password"
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Card>
-      </Col>
-      <Col span={24}>
-        <Card title={t('pages.system.siteSettings.integrationsDeepseekAiTitle')} size="small">
-          <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-            {t('pages.system.siteSettings.integrationsDeepseekAiHint')}
-          </Typography.Paragraph>
-          <Row gutter={[16, 16]}>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="integrations.deepseek.tools_enabled"
-                label={t('pages.system.siteSettings.integrationsDeepseekToolsEnabled')}
-                valuePropName="checked"
-              >
-                <Switch />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="integrations.deepseek.rag_enabled"
-                label={t('pages.system.siteSettings.integrationsDeepseekRagEnabled')}
-                valuePropName="checked"
-              >
-                <Switch />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="integrations.deepseek.rag_use_embedding"
-                label={t('pages.system.siteSettings.integrationsDeepseekRagEmbedding')}
-                valuePropName="checked"
-              >
-                <Switch />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={[16, 16]}>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="integrations.deepseek.rag_top_k"
-                label={t('pages.system.siteSettings.integrationsDeepseekRagTopK')}
-              >
-                <InputNumber min={1} max={20} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item
-                noStyle
-                shouldUpdate={(prev, cur) =>
-                  prev['integrations.deepseek.rag_enabled'] !== cur['integrations.deepseek.rag_enabled']
-                }
-              >
-                {({ getFieldValue }) =>
-                  getFieldValue('integrations.deepseek.rag_enabled') !== false ? (
-                    <Form.Item
-                      name="integrations.deepseek.rag_backend"
-                      label={t('pages.system.siteSettings.integrationsDeepseekRagBackend')}
-                    >
-                      <Select
-                        options={[
-                          { value: 'native', label: t('pages.system.siteSettings.integrationsDeepseekRagBackendNative') },
-                          { value: 'llamaindex', label: t('pages.system.siteSettings.integrationsDeepseekRagBackendLlamaIndex') },
-                        ]}
-                      />
-                    </Form.Item>
-                  ) : null
-                }
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={[16, 16]}>
-            <Col span={24}>
-              <Form.Item
-                name="integrations.deepseek.custom_system_prompt"
-                label={t('pages.system.siteSettings.integrationsDeepseekCustomPrompt')}
-              >
-                <Input.TextArea
-                  rows={5}
-                  placeholder={t('pages.system.siteSettings.integrationsDeepseekCustomPromptPlaceholder')}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Card>
-      </Col>
-    </Row>
-  );
-
-  const integrationsSettingsWithActions = (
-    <>
-      {integrationsSettingsContent}
-      {actionButtons}
-    </>
-  );
-
   const loginPageSettingsContent = (
     <Row gutter={[0, 16]}>
       <Col span={24}>
@@ -2092,7 +1795,6 @@ const SiteSettingsPage: React.FC = () => {
             ? [{ key: 'login-page', label: (<Space><GlobalOutlined /><span>{t('pages.system.siteSettings.tabLoginPage')}</span></Space>), children: loginPageSettingsWithActions }]
             : []),
           { key: 'system', label: (<Space><SettingOutlined /><span>{t('pages.system.siteSettings.tabSystem')}</span></Space>), children: systemSettingsWithActions },
-          { key: 'integrations', label: (<Space><LinkOutlined /><span>{t('pages.system.siteSettings.tabIntegrations')}</span></Space>), children: integrationsSettingsWithActions },
           ...(showBranchOrganizationsTab
             ? [{ key: 'branch-organizations', label: (<Space><ApartmentOutlined /><span>{t('pages.system.siteSettings.tabBranchOrganizations')}</span></Space>), children: branchOrganizationsTabContent }]
             : []),

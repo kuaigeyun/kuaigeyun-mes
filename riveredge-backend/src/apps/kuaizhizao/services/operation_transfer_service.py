@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
@@ -93,14 +94,22 @@ async def build_operation_policy_cache(
     tenant_id: int,
     operation_ids: List[int],
 ) -> Dict[int, Tuple[str, Optional[int], str]]:
-    cache: Dict[int, Tuple[str, Optional[int], str]] = {}
+    uniq: List[int] = []
+    seen: set[int] = set()
     for op_id in operation_ids:
         if op_id is None:
             continue
         oid = int(op_id)
-        if oid not in cache:
-            cache[oid] = await resolve_inspection_policy(tenant_id, "ipqc", operation_id=oid)
-    return cache
+        if oid in seen:
+            continue
+        seen.add(oid)
+        uniq.append(oid)
+    if not uniq:
+        return {}
+    resolved = await asyncio.gather(
+        *[resolve_inspection_policy(tenant_id, "ipqc", operation_id=oid) for oid in uniq]
+    )
+    return {oid: policy for oid, policy in zip(uniq, resolved)}
 
 
 async def resolve_operation_inspection_plan_label(

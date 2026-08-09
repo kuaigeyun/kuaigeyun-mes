@@ -33,6 +33,7 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
@@ -73,6 +74,7 @@ interface StocktakingItem {
   material_id?: number;
   material_code?: string;
   material_name?: string;
+  material_unit?: string;
   warehouse_id?: number;
   location_id?: number;
   location_code?: string;
@@ -334,6 +336,7 @@ const StocktakingPage: React.FC = () => {
         material_id: values.material_id,
         material_code: material.mainCode ?? material.code ?? '',
         material_name: material.name,
+        material_unit: material.baseUnit ?? material.base_unit ?? '',
         warehouse_id: currentStocktakingForItem.warehouse_id,
         location_code: values.location_code,
         batch_no: values.batch_no,
@@ -698,6 +701,11 @@ const StocktakingPage: React.FC = () => {
       width: 150,
     },
     {
+      title: t('app.kuaizhizao.warehouseOutbound.col.unit'),
+      dataIndex: 'material_unit',
+      width: 72,
+    },
+    {
       title: t('app.kuaizhizao.warehouseReports.colBatchNo'),
       dataIndex: 'batch_no',
       width: 100,
@@ -706,9 +714,9 @@ const StocktakingPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseReports.colBookQty'),
       dataIndex: 'book_quantity',
-      width: 100,
+      width: 120,
       align: 'right' as const,
-      render: (v: number) => formatQuantity(v),
+      render: (v: number, item: StocktakingItem) => formatQuantityWithUnit(v, item.material_unit),
     },
     {
       title: t('app.kuaizhizao.warehouseReports.colActualQty'),
@@ -717,7 +725,7 @@ const StocktakingPage: React.FC = () => {
       align: 'right' as const,
       render: (_: unknown, item: StocktakingItem) => {
         if (currentStocktaking?.status !== 'in_progress' || item.status !== 'pending') {
-          return formatQuantity(item.actual_quantity);
+          return formatQuantityWithUnit(item.actual_quantity, item.material_unit);
         }
         const itemId = item.id!;
         return (

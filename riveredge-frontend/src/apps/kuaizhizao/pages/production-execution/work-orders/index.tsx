@@ -11,6 +11,7 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
 import { DatePicker } from 'antd'
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 const { RangePicker } = DatePicker
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -206,7 +207,11 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { inboundProductionReturnEntryPath, inboundWorkOrderEntryPath } from '../../warehouse-management/inbound/inboundPaths'
 import { outboundWorkOrderEntryPath } from '../../warehouse-management/outbound/outboundPaths'
 import { buildDocumentCreateDraftKey, setDocumentFormDraft } from '../../../../../utils/documentFormDraftCache'
-import { workOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities'
+import {
+  qualityInspectionCapabilityReasonMessage,
+  workOrderCapabilityReasonMessage,
+} from '../../../../../hooks/useDocumentCapabilities'
+import { qualityApi } from '../../../services/production'
 import type { PushPreviewResponse } from '../../../services/sales-order'
 import { mapOutsourceOptionsToPullPreview } from '../../../utils/outsourceOrderPullPreview'
 import dayjs from 'dayjs'
@@ -240,6 +245,14 @@ import WorkOrderCompleteTrackingModal, {
   type WorkOrderTrackingConfirmValues,
 } from './components/WorkOrderCompleteTrackingModal'
 import type { WorkOrderOperationStep } from './workOrderOperationSteps'
+import {
+  WORK_ORDER_ROW_EXPAND_STALE_MS,
+  parseWorkOrderOperationsBundle,
+  patchWorkOrderRowExpandOperation,
+  syncWorkOrderRowExpand,
+  workOrderRowExpandQueryKey,
+  type WorkOrderOperationsBundle,
+} from './workOrderRowExpandCache'
 const LazyQRCodeGenerator = lazy(() =>
   import('../../../../../components/qrcode/QRCodeGenerator').then(m => ({ default: m.QRCodeGenerator }))
 )
@@ -247,7 +260,7 @@ const LazyUniLifecycleStepper = lazy(() =>
   import('../../../../../components/uni-lifecycle').then(m => ({ default: m.UniLifecycleStepper }))
 )
 const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-material-select'))
-import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue } from '../../../utils/workOrderLifecycle'
+import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue, isWorkOrderPlannedDatesLocked } from '../../../utils/workOrderLifecycle'
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
 import { useRegisterAiContext } from '../../../../../hooks/useRegisterAiContext';
 import { WorkOrderSopSidebar } from '../../../../kuaiai/components/work-order-sop';
@@ -269,21 +282,19 @@ import {
 } from '../../../utils/workOrderReporting'
 import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel'
 import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField'
+import { ReportingProducerField } from '../../../components/ReportingProducerField'
 import {
   isInboundWarehouseRequiredForLastOperation,
   resolveIsLastOperation,
   resolveLastInboundHint,
 } from '../../../utils/reportingLastOperation'
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload'
-import { getUserInfo } from '../../../../../utils/auth'
+import { getSessionCurrentUser } from '../../../../../utils/sessionCurrentUser'
 import type { CurrentUser } from '../../../../../types/api'
 import { hasModulePermission } from '../../../../../utils/permissionContract';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useGlobalStore } from '../../../../../stores'
-import { UniUserSelect } from '../../../../../components/uni-user-select'
 
-/** 列表行展开工序：TanStack 缓存键前缀（与派工/开工后 invalidate 一致） */
-const WORK_ORDER_ROW_EXPAND_QK = 'workOrderRowExpand' as const
 const WORK_ORDER_STATISTICS_STALE_MS = 60_000
 const WORK_ORDER_EXECUTION_CONFIG_STALE_MS = 5 * 60_000
 
@@ -512,6 +523,7 @@ interface WorkOrder {
   downstream_push_progress?: number
   capabilities?: {
     release?: { allowed: boolean; reason?: string | null }
+    revoke?: { allowed: boolean; reason?: string | null }
     freeze?: { allowed: boolean; reason?: string | null }
     cancel?: { allowed: boolean; reason?: string | null }
     set_priority?: { allowed: boolean; reason?: string | null }
@@ -552,7 +564,7 @@ function isBlankNumericInput(value: unknown): boolean {
 
 /** 报工默认生产人员：优先工序派工，否则当前登录用户 */
 function getWorkerInfoForReporting(operation?: any) {
-  const user = getUserInfo() || {}
+  const user = getSessionCurrentUser() || {}
   if (operation?.assigned_worker_id) {
     return {
       worker_id: operation.assigned_worker_id,
@@ -573,7 +585,7 @@ function pickDefaultProductionWorker(
   operation: any,
   currentUser: CurrentUser | null | undefined
 ): { id: number; full_name: string; username?: string; uuid?: string } {
-  const gu = getUserInfo() || {}
+  const gu = getSessionCurrentUser() || {}
   const curId = Number(currentUser?.id ?? gu.id ?? 0) || 0
   const curName = String(
     currentUser?.full_name || gu.full_name || currentUser?.username || gu.username || '当前用户'
@@ -986,7 +998,7 @@ function renderWorkOrderBatchSerialLine(
 }
 
 /** 工单列表列结构版本：列增删改时递增，避免 HMR 下 columns useMemo 沿用旧缓存 */
-const WORK_ORDER_LIST_COLUMNS_REV = 'batch-in-product-v2'
+const WORK_ORDER_LIST_COLUMNS_REV = 'batch-in-product-v4-op-hint-inline'
 
 function summarizeWorkOrderTreeChildren(record: WorkOrder) {
   const children = record.children ?? []
@@ -1131,42 +1143,6 @@ function isWorkOrderOperationExpandTriggerRow(record: WorkOrder): boolean {
   return canExpandWorkOrderOperationPanel(record)
 }
 
-function parseWorkOrderOperationsBundle(
-  res: unknown,
-  fallbackManufacturingMode = 'fabrication',
-): {
-  manufacturing_mode: string
-  operations: any[]
-  status?: string
-  downstream_push_progress?: number
-  operation_steps?: WorkOrderOperationStep[]
-} {
-  if (
-    res &&
-    typeof res === 'object' &&
-    !Array.isArray(res) &&
-    Array.isArray((res as { operations?: unknown }).operations)
-  ) {
-    const r = res as {
-      manufacturing_mode?: string
-      operations: any[]
-      status?: string
-      downstream_push_progress?: number
-      operation_steps?: WorkOrderOperationStep[]
-    }
-    return {
-      manufacturing_mode: r.manufacturing_mode || fallbackManufacturingMode,
-      operations: r.operations || [],
-      status: r.status,
-      downstream_push_progress: r.downstream_push_progress,
-      operation_steps: r.operation_steps,
-    }
-  }
-  return {
-    manufacturing_mode: fallbackManufacturingMode,
-    operations: Array.isArray(res) ? res : [],
-  }
-}
 
 function isWorkOrderListSelectableRow(record: WorkOrder): boolean {
   const kind = record.row_kind || 'work_order'
@@ -1397,6 +1373,10 @@ const WorkOrdersPage: React.FC = () => {
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_sales_order')
   const pushToOutboundAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_work_order')
   const pushToInboundAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_work_order')
+  const pushToFinishedGoodsInspectionAction = resolveKuaizhizaoDocumentAction(
+    t,
+    'finished_goods_inspection.pull_from_work_order',
+  )
   const pushToProductionReturnInboundAction = resolveKuaizhizaoDocumentAction(
     t,
     'inbound.pull_from_work_order_for_production_return',
@@ -1429,6 +1409,8 @@ const WorkOrdersPage: React.FC = () => {
   }, [])
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [highlightPlannedEndOverdue, setHighlightPlannedEndOverdue] = useState(false)
+  /** 工序列提示：页面刷新后流光引导一次 */
+  const [operationsHintShimmer, setOperationsHintShimmer] = useState(true)
 
   const [computationPullPreviewOpen, setComputationPullPreviewOpen] = useState(false)
   const [computationPullPreviewLoading, setComputationPullPreviewLoading] = useState(false)
@@ -1457,7 +1439,12 @@ const WorkOrdersPage: React.FC = () => {
   const [notifyInboundPreviewData, setNotifyInboundPreviewData] = useState<any>(null)
   const [notifyInboundWorkOrder, setNotifyInboundWorkOrder] = useState<WorkOrder | null>(null)
 
-  type WorkOrderToolbarPushKind = 'production_picking' | 'finished_goods_inbound' | 'production_return'
+  type WorkOrderToolbarPushKind =
+    | 'production_picking'
+    | 'finished_goods_inbound'
+    | 'finished_goods_inspection'
+    | 'production_return'
+  const [toolbarPushConfirming, setToolbarPushConfirming] = useState(false)
   const [toolbarPushPreviewOpen, setToolbarPushPreviewOpen] = useState(false)
   const [toolbarPushPreviewLoading, setToolbarPushPreviewLoading] = useState(false)
   const [toolbarPushPreviewKind, setToolbarPushPreviewKind] = useState<WorkOrderToolbarPushKind | null>(null)
@@ -1917,6 +1904,10 @@ const WorkOrdersPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false)
   const [currentWorkOrder, setCurrentWorkOrder] = useState<WorkOrder | null>(null)
   const formRef = useRef<any>(null)
+  const workOrderPlannedDatesLocked = useMemo(
+    () => isEdit && isWorkOrderPlannedDatesLocked(currentWorkOrder?.status),
+    [isEdit, currentWorkOrder?.status],
+  )
 
   const {
     customFields: workOrderFormCustomFields,
@@ -2135,9 +2126,15 @@ const WorkOrdersPage: React.FC = () => {
   const [quickReportingRouteOperations, setQuickReportingRouteOperations] = useState<any[]>([])
   const quickReportingFormRef = useRef<any>(null)
   const quickReportingProxyWorkerRef = useRef<Pick<User, 'id' | 'full_name' | 'username'> | null>(null)
-  const currentUser = useGlobalStore((s) => s.currentUser)
+  const quickReportingTeamRef = useRef<{ id: number; name: string } | null>(null)
+  const currentUser = useCurrentUser()
   const canProxyReporting = useMemo(
-    () => hasModulePermission(currentUser ?? undefined, 'kuaizhizao:reporting', 'proxy'),
+    () =>
+      hasModulePermission(
+        currentUser ?? undefined,
+        'kuaizhizao:production-execution-reporting',
+        'assign',
+      ),
     [currentUser]
   )
 
@@ -2159,6 +2156,8 @@ const WorkOrdersPage: React.FC = () => {
         completed_status: 'completed',
         work_hours: stdH ?? 0,
         remarks: undefined,
+        producer_mode: 'worker',
+        report_team_id: undefined,
       }
     }
     const remBase = getRemainingReportableQuantity(quickReportingOperation, qtyBase)
@@ -2170,6 +2169,8 @@ const WorkOrdersPage: React.FC = () => {
       defect_reason_text: undefined,
       work_hours: stdH,
       remarks: undefined,
+      producer_mode: 'worker',
+      report_team_id: undefined,
     }
   }, [quickReportingModalVisible, quickReportingWorkOrder, quickReportingOperation])
 
@@ -2918,25 +2919,34 @@ const WorkOrdersPage: React.FC = () => {
       // 加载工单工序列表，用于编辑时展示
       try {
         const operations = await workOrderApi.getOperations(record.id!.toString())
-        const ops = (operations || []).map((op: any) => ({
-          operation_id: op.operation_id,
-          operation_code: op.operation_code || op.operationCode,
-          operation_name: op.operation_name || op.operationName,
-          sequence: op.sequence ?? 0,
-          is_node_operation: op.is_node_operation ?? op.isNodeOperation ?? false,
-          reporting_type: op.reporting_type ?? op.reportingType ?? 'quantity',
-          over_report_mode: op.over_report_mode ?? op.overReportMode ?? 'none',
-          over_report_value: Number(op.over_report_value ?? op.overReportValue ?? 0) || 0,
-          workshop_id: op.workshop_id,
-          workshop_name: op.workshop_name,
-          work_center_id: op.work_center_id,
-          work_center_name: op.work_center_name,
-          planned_start_date: op.planned_start_date,
-          planned_end_date: op.planned_end_date,
-          standard_time: op.standard_time,
-          setup_time: op.setup_time,
-          remarks: op.remarks,
-        }))
+        const ops = (operations || []).map((op: any) => {
+          const completedQty = Number(op.completed_quantity ?? op.completedQuantity ?? 0) || 0
+          const status = op.status || 'pending'
+          return {
+            id: op.id,
+            operation_id: op.operation_id,
+            operation_code: op.operation_code || op.operationCode,
+            operation_name: op.operation_name || op.operationName,
+            sequence: op.sequence ?? 0,
+            status,
+            completed_quantity: completedQty,
+            // 与后端「已有审核报工不可改内容/删除」对齐的前端门控
+            has_reporting: completedQty > 0 || status === 'completed',
+            is_node_operation: op.is_node_operation ?? op.isNodeOperation ?? false,
+            reporting_type: op.reporting_type ?? op.reportingType ?? 'quantity',
+            over_report_mode: op.over_report_mode ?? op.overReportMode ?? 'none',
+            over_report_value: Number(op.over_report_value ?? op.overReportValue ?? 0) || 0,
+            workshop_id: op.workshop_id,
+            workshop_name: op.workshop_name,
+            work_center_id: op.work_center_id,
+            work_center_name: op.work_center_name,
+            planned_start_date: op.planned_start_date,
+            planned_end_date: op.planned_end_date,
+            standard_time: op.standard_time,
+            setup_time: op.setup_time,
+            remarks: op.remarks,
+          }
+        })
         setSelectedOperations(ops)
       } catch (e) {
         console.error('加载工单工序失败', e)
@@ -3009,54 +3019,67 @@ const WorkOrdersPage: React.FC = () => {
   /**
    * 处理行展开
    */
-  const handleExpand = async (expanded: boolean, record: WorkOrder) => {
-    if (expanded && record.id) {
-      const panelWorkOrderId = record.id
-      const operationSourceId = getWorkOrderOperationSourceId(record) ?? panelWorkOrderId
-      // 展开：始终拉取 include_meta（后端会按检验放行回写完成态），避免缓存仍显示已完成
-      setLoadingOperationsMap(prev => ({ ...prev, [panelWorkOrderId]: true }))
-      try {
-        await queryClient.invalidateQueries({
-          queryKey: [WORK_ORDER_ROW_EXPAND_QK, panelWorkOrderId, operationSourceId],
-        })
-        const bundle = await queryClient.fetchQuery({
-          queryKey: [WORK_ORDER_ROW_EXPAND_QK, panelWorkOrderId, operationSourceId],
-          staleTime: 0,
-          queryFn: async () => {
-            const res = await workOrderApi.getOperations(String(operationSourceId), { includeMeta: true })
-            const parsed = parseWorkOrderOperationsBundle(res)
-            if (parsed.operations.length > 0 || (res && typeof res === 'object' && !Array.isArray(res))) {
-              return parsed
-            }
-            const detail = await workOrderApi.get(String(operationSourceId))
-            return {
-              manufacturing_mode: (detail as WorkOrder)?.manufacturing_mode || 'fabrication',
-              operations: parsed.operations,
-            }
-          },
-        })
-        setExpandedWorkOrderDetailMap(prev => ({
-          ...prev,
-          [panelWorkOrderId]: { manufacturing_mode: bundle.manufacturing_mode } as WorkOrder,
-        }))
-        setExpandedOperationsMap(prev => ({ ...prev, [panelWorkOrderId]: bundle.operations || [] }))
-        // 列表行若仍是「已完成 / 100%」，用 meta 回写后的状态刷新
-        const listStatus = String(record.status || '')
-        const syncedStatus = String(bundle.status || '')
-        const listProgress = Number(record.downstream_push_progress ?? 0)
-        const syncedProgress = Number(bundle.downstream_push_progress ?? listProgress)
-        if (
-          (syncedStatus && syncedStatus !== listStatus) ||
-          Math.abs(syncedProgress - listProgress) > 0.05
-        ) {
-          actionRef.current?.reload?.()
-        }
-      } catch (error) {
-        console.error('获取工单工序列表失败:', error)
-        setExpandedOperationsMap(prev => ({ ...prev, [panelWorkOrderId]: [] }))
-      } finally {
-        setLoadingOperationsMap(prev => ({ ...prev, [panelWorkOrderId]: false }))
+  const applyWorkOrderExpandBundle = useCallback(
+    (panelWorkOrderId: number, bundle: WorkOrderOperationsBundle, listRecord?: WorkOrder) => {
+      setExpandedWorkOrderDetailMap((prev) => ({
+        ...prev,
+        [panelWorkOrderId]: { manufacturing_mode: bundle.manufacturing_mode } as WorkOrder,
+      }))
+      setExpandedOperationsMap((prev) => ({ ...prev, [panelWorkOrderId]: bundle.operations || [] }))
+      if (!listRecord) return
+      const listStatus = String(listRecord.status || '')
+      const syncedStatus = String(bundle.status || '')
+      const listProgress = Number(listRecord.downstream_push_progress ?? 0)
+      const syncedProgress = Number(bundle.downstream_push_progress ?? listProgress)
+      if (
+        (syncedStatus && syncedStatus !== listStatus) ||
+        Math.abs(syncedProgress - listProgress) > 0.05
+      ) {
+        softReloadWorkOrderList()
       }
+    },
+    [softReloadWorkOrderList],
+  )
+
+  const handleExpand = async (expanded: boolean, record: WorkOrder) => {
+    if (!expanded || !record.id) return
+    const panelWorkOrderId = record.id
+    const operationSourceId = getWorkOrderOperationSourceId(record) ?? panelWorkOrderId
+    const queryKey = workOrderRowExpandQueryKey(panelWorkOrderId, operationSourceId)
+
+    // 有缓存先上屏，避免重复展开时整表转圈
+    const cached = queryClient.getQueryData(queryKey) as WorkOrderOperationsBundle | undefined
+    if (cached) {
+      applyWorkOrderExpandBundle(panelWorkOrderId, cached, record)
+    } else {
+      setLoadingOperationsMap((prev) => ({ ...prev, [panelWorkOrderId]: true }))
+    }
+
+    try {
+      const bundle = await queryClient.fetchQuery({
+        queryKey,
+        staleTime: WORK_ORDER_ROW_EXPAND_STALE_MS,
+        queryFn: async () => {
+          const res = await workOrderApi.getOperations(String(operationSourceId), { includeMeta: true })
+          const parsed = parseWorkOrderOperationsBundle(res)
+          if (parsed.operations.length > 0 || (res && typeof res === 'object' && !Array.isArray(res))) {
+            return parsed
+          }
+          const detail = await workOrderApi.get(String(operationSourceId))
+          return {
+            manufacturing_mode: (detail as WorkOrder)?.manufacturing_mode || 'fabrication',
+            operations: parsed.operations,
+          }
+        },
+      })
+      applyWorkOrderExpandBundle(panelWorkOrderId, bundle, record)
+    } catch (error) {
+      console.error('获取工单工序列表失败:', error)
+      if (!cached) {
+        setExpandedOperationsMap((prev) => ({ ...prev, [panelWorkOrderId]: [] }))
+      }
+    } finally {
+      setLoadingOperationsMap((prev) => ({ ...prev, [panelWorkOrderId]: false }))
     }
   }
 
@@ -3145,13 +3168,19 @@ const WorkOrdersPage: React.FC = () => {
         if (r.startsWith('S_')) assigned_station_id = Number(r.substring(2));
       });
 
-      const worker = workerList.find(w => w.id === assigned_worker_id)
-      const team = teamList.find(t => t.id === assigned_team_id)
-      const equipment = equipmentList.find(e => e.id === values.assigned_equipment_id)
-      const mold = moldList.find(m => m.id === values.assigned_mold_id)
-      const tool = toolList.find(t => t.id === values.assigned_tool_id)
-      const station = stationList.find(s => s.id === assigned_station_id)
-      const workCenter = workCenterList.find(w => w.id === work_center_id)
+      const worker = workerList.find((w) => Number(w.id) === Number(assigned_worker_id))
+      const team = teamList.find((t) => Number(t.id) === Number(assigned_team_id))
+      const equipment = equipmentList.find((e) => Number(e.id) === Number(values.assigned_equipment_id))
+      const mold = moldList.find((m) => Number(m.id) === Number(values.assigned_mold_id))
+      const tool = toolList.find((t) => Number(t.id) === Number(values.assigned_tool_id))
+      const station = stationList.find((s) => Number(s.id) === Number(assigned_station_id))
+      const workCenter = workCenterList.find((w) => Number(w.id) === Number(work_center_id))
+      const workerLabel = personnelOptions.find((o) => o.value === `U_${assigned_worker_id}`)?.label
+      const workerNameFromOption =
+        typeof workerLabel === 'string' ? workerLabel.replace(/^\[人员\]\s*/, '').trim() : ''
+      const teamLabel = personnelOptions.find((o) => o.value === `T_${assigned_team_id}`)?.label
+      const teamNameFromOption =
+        typeof teamLabel === 'string' ? teamLabel.replace(/^\[小组\]\s*/, '').trim() : ''
 
       const dispatchData = {
         workshop_id: values.workshop_id ?? null,
@@ -3162,9 +3191,10 @@ const WorkOrdersPage: React.FC = () => {
         assigned_station_id: assigned_station_id ?? null,
         assigned_station_name: station?.name ?? null,
         assigned_worker_id: assigned_worker_id ?? null,
-        assigned_worker_name: worker?.full_name || worker?.username || null,
+        assigned_worker_name:
+          worker?.full_name || worker?.username || workerNameFromOption || null,
         assigned_team_id: assigned_team_id ?? null,
-        assigned_team_name: team?.name ?? null,
+        assigned_team_name: team?.name || teamNameFromOption || null,
         assigned_equipment_id: values.assigned_equipment_id ?? null,
         assigned_equipment_name: equipment?.name || null,
         assigned_mold_id: values.assigned_mold_id ?? null,
@@ -3174,7 +3204,11 @@ const WorkOrdersPage: React.FC = () => {
         remarks: values.remarks,
       }
 
-      await workOrderApi.dispatchOperation(
+      const panelWorkOrderId = Number(currentWorkOrderForDispatch.id)
+      const operationSourceId =
+        getWorkOrderOperationSourceId(currentWorkOrderForDispatch) ?? panelWorkOrderId
+
+      const updatedOperation = await workOrderApi.dispatchOperation(
         getWorkOrderOperationApiId(currentWorkOrderForDispatch),
         currentOperationForDispatch.id,
         dispatchData
@@ -3183,20 +3217,36 @@ const WorkOrdersPage: React.FC = () => {
       messageApi.success('派工成功')
       setDispatchModalVisible(false)
 
-      // 刷新工序列表
-      const operations = await workOrderApi.getOperations(
-        getWorkOrderOperationApiId(currentWorkOrderForDispatch)
-      )
-      setExpandedOperationsMap(prev => ({
-        ...prev,
-        [currentWorkOrderForDispatch.id!]: operations || [],
-      }))
-      if (workOrderDetail?.id === currentWorkOrderForDispatch.id) {
-        setWorkOrderOperations(operations || [])
+      // 先用派工响应补丁上屏，再写穿展开缓存，避免 15s/5s stale 复开仍显示旧人名
+      if (updatedOperation && Number.isFinite(panelWorkOrderId)) {
+        setExpandedOperationsMap((prev) => {
+          const list = prev[panelWorkOrderId] || []
+          if (!list.length) return prev
+          return {
+            ...prev,
+            [panelWorkOrderId]: list.map((op) =>
+              Number(op.id) === Number(updatedOperation.id) ? { ...op, ...updatedOperation } : op,
+            ),
+          }
+        })
+        patchWorkOrderRowExpandOperation(
+          queryClient,
+          panelWorkOrderId,
+          operationSourceId,
+          updatedOperation,
+        )
       }
-      queryClient.invalidateQueries({
-        queryKey: [WORK_ORDER_ROW_EXPAND_QK, currentWorkOrderForDispatch.id],
-      })
+
+      const bundle = await syncWorkOrderRowExpand(
+        queryClient,
+        panelWorkOrderId,
+        operationSourceId,
+        expandedWorkOrderDetailMap[panelWorkOrderId]?.manufacturing_mode || 'fabrication',
+      )
+      applyWorkOrderExpandBundle(panelWorkOrderId, bundle, currentWorkOrderForDispatch)
+      if (workOrderDetail?.id === panelWorkOrderId) {
+        setWorkOrderOperations(bundle.operations || [])
+      }
     } catch (error: any) {
       messageApi.error(error.message || '派工失败')
     }
@@ -3297,14 +3347,7 @@ const WorkOrdersPage: React.FC = () => {
           return
         }
       }
-      const { worker_id, worker_name } = canProxyReporting
-        ? getQuickReportWorkerPayload(
-            quickReportingOperation,
-            quickReportingProxyWorkerRef.current,
-            executionConfig?.default_production_worker_mode,
-            currentUser
-          )
-        : getWorkerInfoForReporting(quickReportingOperation)
+      const producerMode = canProxyReporting && values.producer_mode === 'team' ? 'team' : 'worker'
       const reportingData: any = {
         work_order_id: quickReportingWorkOrder.id,
         work_order_code: quickReportingWorkOrder.code,
@@ -3312,12 +3355,33 @@ const WorkOrdersPage: React.FC = () => {
         operation_id: quickReportingOperation.operation_id,
         operation_code: quickReportingOperation.operation_code,
         operation_name: quickReportingOperation.operation_name,
-        worker_id,
-        worker_name,
         status: 'pending',
         reported_at: new Date().toISOString(),
         remarks: values.remarks,
         work_hours: values.work_hours ?? 0,
+      }
+      if (producerMode === 'team') {
+        const team = quickReportingTeamRef.current
+        const teamId = Number(team?.id ?? values.report_team_id)
+        const teamName = String(team?.name || values.report_team_name || '').trim()
+        if (!Number.isFinite(teamId) || teamId <= 0 || !teamName) {
+          messageApi.warning(t('app.kuaizhizao.workReporting.formWorkGroupRequired'))
+          return
+        }
+        reportingData.team_id = teamId
+        reportingData.team_name = teamName
+        reportingData.worker_name = teamName
+      } else {
+        const { worker_id, worker_name } = canProxyReporting
+          ? getQuickReportWorkerPayload(
+              quickReportingOperation,
+              quickReportingProxyWorkerRef.current,
+              executionConfig?.default_production_worker_mode,
+              currentUser
+            )
+          : getWorkerInfoForReporting(quickReportingOperation)
+        reportingData.worker_id = worker_id
+        reportingData.worker_name = worker_name
       }
       if (quickReportingOperation.reporting_type === 'status') {
         const planQty = Number(quickReportingWorkOrder.quantity) || 0
@@ -3409,23 +3473,22 @@ const WorkOrdersPage: React.FC = () => {
         }
       }
       messageApi.success('报工成功')
+      const reportedWorkOrder = quickReportingWorkOrder
       setQuickReportingModalVisible(false)
       setQuickReportingWorkOrder(null)
       setQuickReportingOperation(null)
+      quickReportingProxyWorkerRef.current = null
+      quickReportingTeamRef.current = null
       quickReportingFormRef.current?.resetFields()
-      const res = await workOrderApi.getOperations(String(wid), { includeMeta: true })
-      const bundle = parseWorkOrderOperationsBundle(res)
-      setExpandedOperationsMap((prev) => ({ ...prev, [wid!]: bundle.operations }))
-      if (bundle.manufacturing_mode) {
-        setExpandedWorkOrderDetailMap((prev) => ({
-          ...prev,
-          [wid!]: {
-            ...(prev[wid!] || {}),
-            manufacturing_mode: bundle.manufacturing_mode,
-          } as WorkOrder,
-        }))
-      }
-      await queryClient.invalidateQueries({ queryKey: [WORK_ORDER_ROW_EXPAND_QK, wid] })
+      const panelId = Number(wid)
+      const sourceId = getWorkOrderOperationSourceId(reportedWorkOrder) ?? panelId
+      const bundle = await syncWorkOrderRowExpand(
+        queryClient,
+        panelId,
+        sourceId,
+        expandedWorkOrderDetailMap[panelId]?.manufacturing_mode || 'fabrication',
+      )
+      applyWorkOrderExpandBundle(panelId, bundle, reportedWorkOrder)
       invalidateStatistics()
       actionRef.current?.reload()
     } catch (error: any) {
@@ -3915,24 +3978,15 @@ const WorkOrdersPage: React.FC = () => {
                           operation.id,
                         )
                         messageApi.success(t('app.kuaizhizao.workOrder.kioskOpStarted'))
-                        const res = await workOrderApi.getOperations(getWorkOrderOperationApiId(workOrder), {
-                          includeMeta: true,
-                        })
-                        const bundle = parseWorkOrderOperationsBundle(
-                          res,
-                          expandedWorkOrderDetailMap[workOrder.id!]?.manufacturing_mode || 'fabrication',
+                        const panelId = Number(workOrder.id)
+                        const sourceId = getWorkOrderOperationSourceId(workOrder) ?? panelId
+                        const bundle = await syncWorkOrderRowExpand(
+                          queryClient,
+                          panelId,
+                          sourceId,
+                          expandedWorkOrderDetailMap[panelId]?.manufacturing_mode || 'fabrication',
                         )
-                        setExpandedWorkOrderDetailMap(prev => ({
-                          ...prev,
-                          [workOrder.id!]: { manufacturing_mode: bundle.manufacturing_mode } as WorkOrder,
-                        }))
-                        setExpandedOperationsMap(prev => ({
-                          ...prev,
-                          [workOrder.id!]: bundle.operations,
-                        }))
-                        queryClient.invalidateQueries({
-                          queryKey: [WORK_ORDER_ROW_EXPAND_QK, workOrder.id, getWorkOrderOperationSourceId(workOrder)],
-                        })
+                        applyWorkOrderExpandBundle(panelId, bundle, workOrder)
                         invalidateStatistics(); actionRef.current?.reload()
                       } catch (error: any) {
                         const detail = error?.response?.data?.detail || error?.message || ''
@@ -4526,6 +4580,11 @@ const WorkOrdersPage: React.FC = () => {
         values.variant_attributes = (currentWorkOrder as any).variant_attributes
       }
 
+      if (isEdit && isWorkOrderPlannedDatesLocked(currentWorkOrder?.status)) {
+        delete values.planned_start_date
+        delete values.planned_end_date
+      }
+
       if (isEdit && currentWorkOrder?.id) {
         for (const key of [
           'planned_batch_no',
@@ -4540,38 +4599,31 @@ const WorkOrdersPage: React.FC = () => {
           }
         }
         await workOrderApi.update(currentWorkOrder.id.toString(), values)
-        if (selectedOperations.length > 0) {
-          const opsPayload = selectedOperations.map((op: any, i: number) => ({
-            operation_id: op.operation_id,
-            operation_code: op.operation_code,
-            operation_name: op.operation_name,
-            sequence: i + 1,
-            workshop_id: op.workshop_id,
-            workshop_name: op.workshop_name,
-            work_center_id: op.work_center_id,
-            work_center_name: op.work_center_name,
-            planned_start_date: op.planned_start_date,
-            planned_end_date: op.planned_end_date,
-            standard_time: op.standard_time,
-            setup_time: op.setup_time,
-            remarks: op.remarks,
-            reporting_type: op.reporting_type ?? 'quantity',
-            allow_jump: false,
-            is_node_operation: op.is_node_operation ?? false,
-            over_report_mode: op.over_report_mode ?? 'none',
-            over_report_value: Number(op.over_report_value ?? 0) || 0,
-          }))
-          try {
-            await workOrderApi.updateOperations(currentWorkOrder.id.toString(), {
-              operations: opsPayload,
-            })
-          } catch (e: any) {
-            messageApi.warning(
-              e?.message ||
-                '工单主信息已保存，但工序清单同步失败（可能已有报工的工序不可改）'
-            )
-          }
-        }
+        // 编辑保存必须以当前清单为准同步工序（含删除）；失败则整单视为未成功
+        const opsPayload = selectedOperations.map((op: any, i: number) => ({
+          ...(op.id != null ? { id: Number(op.id) } : {}),
+          operation_id: op.operation_id,
+          operation_code: op.operation_code,
+          operation_name: op.operation_name,
+          sequence: i + 1,
+          workshop_id: op.workshop_id,
+          workshop_name: op.workshop_name,
+          work_center_id: op.work_center_id,
+          work_center_name: op.work_center_name,
+          planned_start_date: op.planned_start_date,
+          planned_end_date: op.planned_end_date,
+          standard_time: op.standard_time,
+          setup_time: op.setup_time,
+          remarks: op.remarks,
+          reporting_type: op.reporting_type ?? 'quantity',
+          allow_jump: false,
+          is_node_operation: op.is_node_operation ?? false,
+          over_report_mode: op.over_report_mode ?? 'none',
+          over_report_value: Number(op.over_report_value ?? 0) || 0,
+        }))
+        await workOrderApi.updateOperations(currentWorkOrder.id.toString(), {
+          operations: opsPayload,
+        })
         messageApi.success('工单更新成功')
         if (currentWorkOrder.id != null) {
           await saveWorkOrderCustomFieldValues(currentWorkOrder.id, customData)
@@ -5270,6 +5322,7 @@ const WorkOrdersPage: React.FC = () => {
     setToolbarPushPreviewData(null)
     toolbarPushReturnRawRef.current = null
     setToolbarPushReturnPickingId(null)
+    setToolbarPushConfirming(false)
   }, [])
 
   const mapWorkOrderInboundPreview = useCallback(
@@ -5327,6 +5380,9 @@ const WorkOrdersPage: React.FC = () => {
       try {
         if (kind === 'production_picking') {
           const res = await workOrderApi.previewPushProductionPicking(record.id)
+          setToolbarPushPreviewData(res as PushPreviewResponse)
+        } else if (kind === 'finished_goods_inspection') {
+          const res = await qualityApi.finishedGoodsInspection.previewPullFromWorkOrder(String(record.id))
           setToolbarPushPreviewData(res as PushPreviewResponse)
         } else if (kind === 'finished_goods_inbound') {
           const res = await warehouseApi.finishedGoodsReceipt.previewFromWorkOrder(record.id)
@@ -5398,7 +5454,7 @@ const WorkOrdersPage: React.FC = () => {
     [mapWorkOrderInboundPreview, messageApi, resetToolbarPushPreview, t],
   )
 
-  const handleToolbarPushPreviewConfirm = useCallback(() => {
+  const handleToolbarPushPreviewConfirm = useCallback(async () => {
     if (!toolbarPushPreviewWorkOrderId || !toolbarPushPreviewData || toolbarPushPreviewData.has_blocking_issues) return
     if (toolbarPushPreviewKind === 'production_picking') {
       const issueQuantities: Record<number, number> = {}
@@ -5413,6 +5469,23 @@ const WorkOrdersPage: React.FC = () => {
       setDocumentFormDraft(draftKey, { issueQuantities, maxQuantities })
       resetToolbarPushPreview()
       navigate(entryPath)
+      return
+    }
+    if (toolbarPushPreviewKind === 'finished_goods_inspection') {
+      setToolbarPushConfirming(true)
+      try {
+        await qualityApi.finishedGoodsInspection.createFromWorkOrder(String(toolbarPushPreviewWorkOrderId))
+        messageApi.success(t('app.kuaizhizao.workOrder.push.fqcCreateSuccess'))
+        resetToolbarPushPreview()
+      } catch (error: any) {
+        messageApi.warning(
+          qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+            error?.message ||
+            t('app.kuaizhizao.workOrder.push.fqcCreateFailed'),
+        )
+      } finally {
+        setToolbarPushConfirming(false)
+      }
       return
     }
     if (toolbarPushPreviewKind === 'finished_goods_inbound') {
@@ -5466,10 +5539,20 @@ const WorkOrdersPage: React.FC = () => {
 
   const toolbarPushPreviewTitle = useMemo(() => {
     if (toolbarPushPreviewKind === 'production_picking') return pushToOutboundAction.label
+    if (toolbarPushPreviewKind === 'finished_goods_inspection') {
+      return pushToFinishedGoodsInspectionAction.label
+    }
     if (toolbarPushPreviewKind === 'finished_goods_inbound') return pushToInboundAction.label
     if (toolbarPushPreviewKind === 'production_return') return pushToProductionReturnInboundAction.label
     return t('app.kuaizhizao.salesOrder.pushPreviewTitle')
-  }, [pushToInboundAction.label, pushToOutboundAction.label, pushToProductionReturnInboundAction.label, t, toolbarPushPreviewKind])
+  }, [
+    pushToFinishedGoodsInspectionAction.label,
+    pushToInboundAction.label,
+    pushToOutboundAction.label,
+    pushToProductionReturnInboundAction.label,
+    t,
+    toolbarPushPreviewKind,
+  ])
 
   /**
    * 通知入库（从工单下推创建待入库单）
@@ -5486,6 +5569,10 @@ const WorkOrdersPage: React.FC = () => {
     void openToolbarPushPreview('finished_goods_inbound', record)
   }
 
+  const handlePushToFinishedGoodsInspection = (record: WorkOrder) => {
+    void openToolbarPushPreview('finished_goods_inspection', record)
+  }
+
   const handlePushToProductionPickingOutbound = (record: WorkOrder) => {
     void openToolbarPushPreview('production_picking', record)
   }
@@ -5497,11 +5584,30 @@ const WorkOrdersPage: React.FC = () => {
     return row
   }, [selectedRowKeys, workOrderListRowIndexVersion])
 
+  const canCreateFinishedGoodsInspection = useMemo(
+    () =>
+      hasModulePermission(
+        currentUser ?? undefined,
+        'kuaizhizao:quality-management-finished-goods-inspection',
+        'create',
+      ),
+    [currentUser],
+  )
+
   const toolbarPushMenuItems = useMemo(() => {
     if (!selectedWorkOrderForToolbarPush?.id) return [];
     const rawStatus = String(selectedWorkOrderForToolbarPush.status ?? '').trim();
     const canPushOutbound = ['released', '已下达', 'in_progress', '执行中'].includes(rawStatus);
     const canPushInbound = ['completed', '已完成'].includes(rawStatus);
+    const canPushFqc = [
+      'released',
+      '已下达',
+      'in_progress',
+      '执行中',
+      '进行中',
+      'completed',
+      '已完成',
+    ].includes(rawStatus);
     return buildUniPushMenuItems([
       {
         key: 'push-production-picking-outbound',
@@ -5509,6 +5615,17 @@ const WorkOrdersPage: React.FC = () => {
         disabled: !canPushOutbound,
         title: canPushOutbound ? undefined : t('app.kuaizhizao.workOrder.push.outboundStatusBlocked'),
         onClick: () => handlePushToProductionPickingOutbound(selectedWorkOrderForToolbarPush),
+      },
+      {
+        key: 'push-finished-goods-inspection',
+        label: pushToFinishedGoodsInspectionAction.label,
+        disabled: !canPushFqc || !canCreateFinishedGoodsInspection,
+        title: !canCreateFinishedGoodsInspection
+          ? t('app.kuaizhizao.workOrder.push.fqcNoPermission')
+          : canPushFqc
+            ? undefined
+            : t('app.kuaizhizao.workOrder.push.fqcStatusBlocked'),
+        onClick: () => handlePushToFinishedGoodsInspection(selectedWorkOrderForToolbarPush),
       },
       {
         key: 'push-finished-goods-inbound',
@@ -5528,8 +5645,11 @@ const WorkOrdersPage: React.FC = () => {
   }, [
     selectedWorkOrderForToolbarPush,
     pushToOutboundAction.label,
+    pushToFinishedGoodsInspectionAction.label,
     pushToInboundAction.label,
     pushToProductionReturnInboundAction.label,
+    canCreateFinishedGoodsInspection,
+    t,
   ])
 
   const canUseToolbarPush = useMemo(
@@ -6648,7 +6768,24 @@ const WorkOrdersPage: React.FC = () => {
       hideInSearch: false,
     },
     {
-      title: t('app.kuaizhizao.workOrder.colOperations'),
+      title: (
+        <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+          <span>{t('app.kuaizhizao.workOrder.colOperations')}</span>
+          <Typography.Text
+            type="secondary"
+            className={
+              operationsHintShimmer ? 'wo-operations-col-hint wo-operations-col-hint--shimmer' : 'wo-operations-col-hint'
+            }
+            style={{ fontSize: 12, fontWeight: 400 }}
+            onAnimationEnd={(e) => {
+              if (e.animationName !== 'wo-operations-hint-shimmer') return
+              setOperationsHintShimmer(false)
+            }}
+          >
+            {t('app.kuaizhizao.workOrder.colOperationsHint')}
+          </Typography.Text>
+        </span>
+      ),
       key: 'operation_steps',
       dataIndex: 'operation_steps',
       minWidth: 300,
@@ -6851,9 +6988,10 @@ const WorkOrdersPage: React.FC = () => {
 
         const hasWork = Number(record.completed_quantity || 0) > 0
 
-        // 撤回条件：已下达、执行中或手动结束，且无实际报工完成
+        // 撤回：以后端 capabilities.revoke 为准（含报工/领料/入库等下游单据）
         const canRevoke =
-          (isReleased || isInProgress || (isCompleted && record.manually_completed)) && !hasWork
+          record.capabilities?.revoke?.allowed === true &&
+          (workOrderPerms.canAction?.('revoke') ?? false)
 
         // 删除条件：草稿；或者已下达且无开工无完工
         const canDelete = isDraft || (isReleased && !record.actual_start_date && !hasWork)
@@ -7028,7 +7166,7 @@ const WorkOrdersPage: React.FC = () => {
         )
       },
     },
-  ], [t, dissolveGroupLoading, workOrderCustomFieldColumns, workOrderLifecycleValueEnum, WORK_ORDER_LIST_COLUMNS_REV, softReloadWorkOrderList])
+  ], [t, dissolveGroupLoading, workOrderCustomFieldColumns, workOrderLifecycleValueEnum, WORK_ORDER_LIST_COLUMNS_REV, softReloadWorkOrderList, workOrderPerms, operationsHintShimmer])
 
   const workOrderTableBodyColSpan = useMemo(() => {
     const visibleDataCols = columns.filter((col) => !col.hideInTable).length
@@ -7283,6 +7421,51 @@ const WorkOrdersPage: React.FC = () => {
       <style>{`
         .work-order-row-overdue td.ant-table-cell {
           background: var(--ant-color-warning-bg) !important;
+        }
+        .wo-operations-col-hint {
+          position: relative;
+          display: inline-block;
+        }
+        .wo-operations-col-hint--shimmer {
+          /* 延后 2s 开播：先等列表首屏渲染，延时期保持普通灰色文案 */
+          animation: wo-operations-hint-shimmer 1.8s ease-in-out 2s 1;
+        }
+        @keyframes wo-operations-hint-shimmer {
+          0% {
+            background-image: linear-gradient(
+              100deg,
+              var(--ant-color-text-secondary) 0%,
+              var(--ant-color-text-secondary) 38%,
+              var(--ant-color-primary) 50%,
+              var(--ant-color-text-secondary) 62%,
+              var(--ant-color-text-secondary) 100%
+            );
+            background-size: 220% 100%;
+            background-position: 100% 0;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+          }
+          100% {
+            background-image: linear-gradient(
+              100deg,
+              var(--ant-color-text-secondary) 0%,
+              var(--ant-color-text-secondary) 38%,
+              var(--ant-color-primary) 50%,
+              var(--ant-color-text-secondary) 62%,
+              var(--ant-color-text-secondary) 100%
+            );
+            background-size: 220% 100%;
+            background-position: -100% 0;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .wo-operations-col-hint--shimmer {
+            animation: none;
+          }
         }
       `}</style>
       <ListPageTemplate statCards={statCards}>
@@ -7905,12 +8088,18 @@ const WorkOrdersPage: React.FC = () => {
         destroyOnClose
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={resetToolbarPushPreview}
-        okText={t('common.next')}
+        okText={
+          toolbarPushPreviewKind === 'finished_goods_inspection'
+            ? t('app.kuaizhizao.workOrder.push.fqcConfirmCreate')
+            : t('common.next')
+        }
         cancelText={t('common.cancel')}
-        onOk={() => handleToolbarPushPreviewConfirm()}
+        onOk={() => void handleToolbarPushPreviewConfirm()}
+        confirmLoading={toolbarPushConfirming}
         okButtonProps={{
           disabled:
             toolbarPushPreviewLoading ||
+            toolbarPushConfirming ||
             !toolbarPushPreviewData ||
             !!toolbarPushPreviewData?.has_blocking_issues ||
             !(toolbarPushPreviewData?.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0),
@@ -7930,6 +8119,7 @@ const WorkOrdersPage: React.FC = () => {
                 showIcon
                 style={{ marginBottom: 12 }}
                 message={
+                  qualityInspectionCapabilityReasonMessage(toolbarPushPreviewData.blocking_reason, t) ||
                   workOrderCapabilityReasonMessage(toolbarPushPreviewData.blocking_reason, t) ||
                   toolbarPushPreviewData.blocking_reason
                 }
@@ -7982,6 +8172,8 @@ const WorkOrdersPage: React.FC = () => {
           setQuickReportingWorkOrder(null)
           setQuickReportingOperation(null)
           setQuickReportingRouteOperations([])
+          quickReportingProxyWorkerRef.current = null
+          quickReportingTeamRef.current = null
           quickReportingFormRef.current?.resetFields()
         }}
         onFinish={handleQuickReportingSubmit}
@@ -8011,20 +8203,17 @@ const WorkOrdersPage: React.FC = () => {
             />
             {canProxyReporting && (
               <>
-                <UniUserSelect
-                  name="proxy_worker_uuid"
-                  label="生产人员"
-                  placeholder="选择实际完成报工的生产人员"
-                  colProps={{ span: 12 }}
+                <ReportingProducerField
                   defaultBadgeUserIds={(quickReportingOperation?.default_operators || [])
                     .map((d: { id?: number }) => d.id)
                     .filter((n: number | undefined): n is number => typeof n === 'number')}
-                  onChange={(_uuid, u) => {
-                    quickReportingProxyWorkerRef.current =
-                      u && !Array.isArray(u)
-                        ? { id: u.id, full_name: u.full_name, username: u.username }
-                        : null
+                  onWorkerChange={(u) => {
+                    quickReportingProxyWorkerRef.current = u
                   }}
+                  onTeamChange={(team) => {
+                    quickReportingTeamRef.current = team
+                  }}
+                  colProps={{ span: 12 }}
                 />
                 <ProFormDigit
                   name="work_hours"
@@ -8186,20 +8375,17 @@ const WorkOrdersPage: React.FC = () => {
             </ProFormDependency>
             {canProxyReporting && (
               <>
-                <UniUserSelect
-                  name="proxy_worker_uuid"
-                  label="生产人员"
-                  placeholder="选择实际完成报工的生产人员"
-                  colProps={{ span: 12 }}
+                <ReportingProducerField
                   defaultBadgeUserIds={(quickReportingOperation?.default_operators || [])
                     .map((d: { id?: number }) => d.id)
                     .filter((n: number | undefined): n is number => typeof n === 'number')}
-                  onChange={(_uuid, u) => {
-                    quickReportingProxyWorkerRef.current =
-                      u && !Array.isArray(u)
-                        ? { id: u.id, full_name: u.full_name, username: u.username }
-                        : null
+                  onWorkerChange={(u) => {
+                    quickReportingProxyWorkerRef.current = u
                   }}
+                  onTeamChange={(team) => {
+                    quickReportingTeamRef.current = team
+                  }}
+                  colProps={{ span: 12 }}
                 />
                 <ProFormDigit
                   name="work_hours"
@@ -8594,8 +8780,18 @@ const WorkOrdersPage: React.FC = () => {
           required
           rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedStartRequired') }]}
           colProps={{ span: 6 }}
-          formItemProps={formDateFormItemProps}
-          fieldProps={{ showTime: true, style: { width: '100%' }, format: 'YYYY-MM-DD HH:mm:ss' }}
+          formItemProps={{
+            ...formDateFormItemProps,
+            extra: workOrderPlannedDatesLocked
+              ? t('app.kuaizhizao.workOrder.formPlannedDatesLocked')
+              : formDateFormItemProps?.extra,
+          }}
+          fieldProps={{
+            showTime: true,
+            style: { width: '100%' },
+            format: 'YYYY-MM-DD HH:mm:ss',
+            disabled: workOrderPlannedDatesLocked,
+          }}
         />
         <ProFormDatePicker
           name="planned_end_date"
@@ -8604,13 +8800,23 @@ const WorkOrdersPage: React.FC = () => {
           required
           rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedEndRequired') }]}
           colProps={{ span: 6 }}
-          formItemProps={formDateFormItemProps}
+          formItemProps={{
+            ...formDateFormItemProps,
+            extra: workOrderPlannedDatesLocked
+              ? t('app.kuaizhizao.workOrder.formPlannedDatesLocked')
+              : formDateFormItemProps?.extra,
+          }}
           fieldProps={buildFutureDateShortcutFieldProps({
             getForm: () => formRef.current,
             fieldName: 'planned_end_date',
             baseFieldName: 'planned_start_date',
             t,
-            fieldProps: { showTime: true, style: { width: '100%' }, format: 'YYYY-MM-DD HH:mm:ss' },
+            fieldProps: {
+              showTime: true,
+              style: { width: '100%' },
+              format: 'YYYY-MM-DD HH:mm:ss',
+              disabled: workOrderPlannedDatesLocked,
+            },
           })}
         />
 
@@ -9076,10 +9282,8 @@ const WorkOrdersPage: React.FC = () => {
                   下达工单
                 </Button>
               )}
-              {(['released', '已下达', 'in_progress', '执行中'].includes(workOrderDetail.status || '') ||
-                (['completed', '已完成'].includes(workOrderDetail.status || '') &&
-                  workOrderDetail.manually_completed)) &&
-                !Number(workOrderDetail.completed_quantity || 0) && (
+              {workOrderDetail.capabilities?.revoke?.allowed === true &&
+                (workOrderPerms.canAction?.('revoke') ?? false) && (
                   <Button type="default" danger onClick={() => handleRevoke(workOrderDetail!)}>
                     撤回
                   </Button>

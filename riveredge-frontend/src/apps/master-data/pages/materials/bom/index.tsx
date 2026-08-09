@@ -16,6 +16,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, HighlightOutlined, MoreOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined, CopyOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -610,7 +611,7 @@ const BOMPage: React.FC = () => {
 
   // 用户列表（用于渲染审核人姓名）
   const [users, setUsers] = useState<User[]>([]);
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
 
   /** BOM 视图类型（与 UniTable 视图联动）：productBom=成品 | semiProductBom=半成品 | allBom=全部 */
   const bomViewTypeRef = useRef<'productBom' | 'semiProductBom' | 'allBom'>('productBom');

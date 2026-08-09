@@ -10,6 +10,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { hasReviewPermission } from '../../../../../utils/permissionContract';
 import { serviceSettlementApi, type ServiceSettlement } from '../../../services/after-sales-service';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 
 const RESOURCE = 'kuaizhizao:service-settlement';
 
@@ -23,7 +24,7 @@ const statusColor: Record<string, string> = {
 const ServiceSettlementsPage: React.FC = () => {
   const { t } = useTranslation();
   const perms = useResourcePermissions(RESOURCE);
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const canReview = hasReviewPermission(currentUser ?? undefined, RESOURCE);
   const actionRef = useRef<ActionType>();
   const [detailOpen, setDetailOpen] = useState(false);

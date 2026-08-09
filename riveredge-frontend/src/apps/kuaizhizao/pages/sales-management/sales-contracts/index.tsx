@@ -154,6 +154,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
@@ -2858,8 +2859,7 @@ const SalesContractsPage: React.FC = () => {
         title: t('app.kuaizhizao.salesContract.contractDate'),
         key: 'contract_date_valid_to_stacked',
         dataIndex: 'contract_date',
-        width: 148,
-        uniTableKeepWidth: true,
+        ...UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
         sorter: true,
         defaultSortOrder: 'descend',
         hideInSearch: true,

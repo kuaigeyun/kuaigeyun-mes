@@ -9,6 +9,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { hasReviewPermission } from '../../../../../utils/permissionContract';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   afterSalesSparePartRequisitionApi,
   type AfterSalesSparePartRequisition,
@@ -26,7 +27,7 @@ const statusColor: Record<string, string> = {
 const AfterSalesSparePartRequisitionsPage: React.FC = () => {
   const { t } = useTranslation();
   const perms = useResourcePermissions(RESOURCE);
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const canReview = hasReviewPermission(currentUser ?? undefined, RESOURCE);
   const actionRef = useRef<ActionType>();
   const [detailOpen, setDetailOpen] = useState(false);

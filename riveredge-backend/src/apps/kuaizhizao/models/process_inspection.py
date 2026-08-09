@@ -41,6 +41,7 @@ class ProcessInspection(BaseModel):
     material_code = fields.CharField(max_length=50, description="生产物料编码")
     material_name = fields.CharField(max_length=200, description="生产物料名称")
     material_spec = fields.CharField(max_length=200, null=True, description="物料规格")
+    material_unit = fields.CharField(max_length=20, null=True, description="物料单位（基础单位）")
 
     # 检验信息
     batch_number = fields.CharField(max_length=50, null=True, description="生产批次号")

@@ -249,7 +249,13 @@ async def create_reporting_record(
     - **reporting**: 报工数据
     """
     try:
-        if int(reporting.worker_id) != int(current_user.id):
+        # 代报：指定他人为生产人员，或按工作小组报工（非本人单独报工）
+        is_proxy = (
+            reporting.team_id is not None
+            or reporting.worker_id is None
+            or int(reporting.worker_id) != int(current_user.id)
+        )
+        if is_proxy:
             await ensure_permission_codes(
                 auth,
                 tenant_id,
@@ -282,7 +288,12 @@ async def create_quick_reporting_record(
     快捷报工入口（用于扫码报工、工位机报工）
     """
     try:
-        if int(reporting.worker_id) != int(current_user.id):
+        is_proxy = (
+            reporting.team_id is not None
+            or reporting.worker_id is None
+            or int(reporting.worker_id) != int(current_user.id)
+        )
+        if is_proxy:
             await ensure_permission_codes(
                 auth,
                 tenant_id,

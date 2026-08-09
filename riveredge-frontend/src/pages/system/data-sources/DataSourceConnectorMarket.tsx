@@ -4,16 +4,18 @@
  * 新建数据源时展示连接器卡片，支持分类筛选和搜索，点击后进入对应配置表单
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Card, Row, Col, Input, Radio, Space, Typography, theme } from 'antd';
+import { Modal, Card, Row, Col, Input, Radio, Space, Typography, theme, Tag } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
+import { getDataSourceDriverAvailability } from '../../../services/dataSource';
 import {
   CONNECTOR_DEFINITIONS,
   CONNECTOR_CATEGORIES,
   ConnectorDefinition,
 } from './connectors';
+import DatabaseBrandIcon from './DatabaseBrandIcon';
 
 const { Text } = Typography;
 
@@ -32,11 +34,43 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
   const { token } = theme.useToken();
   const [category, setCategory] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const [driverAvailability, setDriverAvailability] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void getDataSourceDriverAvailability()
+      .then((availability) => {
+        if (!cancelled) setDriverAvailability(availability);
+      })
+      .catch(() => {
+        if (!cancelled) setDriverAvailability({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const visibleCategories = useMemo(() => {
+    const used = new Set(
+      CONNECTOR_DEFINITIONS.map((c) => c.category).filter((c) => c !== 'domestic')
+    );
+    const hasDomestic = CONNECTOR_DEFINITIONS.some((c) => c.domestic);
+    return CONNECTOR_CATEGORIES.filter(
+      (c) =>
+        c.key === 'all' ||
+        (c.key === 'domestic' ? hasDomestic : used.has(c.key as typeof CONNECTOR_DEFINITIONS[number]['category']))
+    );
+  }, []);
 
   const filteredConnectors = useMemo(() => {
     let list = CONNECTOR_DEFINITIONS;
     if (category !== 'all') {
-      list = list.filter((c) => c.category === category);
+      if (category === 'domestic') {
+        list = list.filter((c) => c.domestic);
+      } else {
+        list = list.filter((c) => c.category === category);
+      }
     }
     if (search.trim()) {
       const kw = search.trim().toLowerCase();
@@ -61,7 +95,7 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
       open={open}
       onCancel={onClose}
       footer={null}
-      width={MODAL_CONFIG.STANDARD_WIDTH}
+      width={MODAL_CONFIG.CONNECTOR_MARKET_WIDTH}
       destroyOnHidden
     >
       <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
@@ -71,7 +105,7 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
           optionType="button"
           size="middle"
         >
-          {CONNECTOR_CATEGORIES.map((c) => (
+          {visibleCategories.map((c) => (
             <Radio.Button key={c.key} value={c.key}>
               {t(c.labelKey)}
             </Radio.Button>
@@ -92,18 +126,35 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
             }
           `}</style>
         <Row gutter={[16, 16]}>
-          {filteredConnectors.map((connector) => (
+          {filteredConnectors.map((connector) => {
+            const hasDriver = driverAvailability[connector.type] === true;
+            return (
             <Col key={connector.id} xs={24} sm={12} md={8}>
               <Card
                 className="datasource-connector-market-card"
                 hoverable
                 size="small"
                 onClick={() => handleSelect(connector)}
-                style={{ height: '100%' }}
+                style={{ height: '100%', position: 'relative' }}
               >
-                <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+                {hasDriver ? (
+                  <Tag
+                    color="success"
+                    style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      margin: 0,
+                      lineHeight: '18px',
+                      fontSize: 11,
+                    }}
+                  >
+                    {t('pages.system.dataSources.connectorMarket.driverReady')}
+                  </Tag>
+                ) : null}
+                <Space orientation="vertical" size="small" style={{ width: '100%', paddingRight: hasDriver ? 56 : 0 }}>
                   <Space>
-                    <span style={{ fontSize: 24, color: token.colorPrimary }}>{connector.icon}</span>
+                    <DatabaseBrandIcon typeOrId={connector.id} size={28} />
                     <Text strong>{t(`pages.system.dataSources.connectors.${connector.id}.name`, { defaultValue: connector.name })}</Text>
                   </Space>
                   {connector.description && (
@@ -114,7 +165,8 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
                 </Space>
               </Card>
             </Col>
-          ))}
+            );
+          })}
         </Row>
         {filteredConnectors.length === 0 && (
           <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>

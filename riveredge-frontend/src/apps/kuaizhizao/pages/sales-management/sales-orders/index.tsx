@@ -15,10 +15,12 @@ import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFor
 import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Tooltip, Dropdown, Select, Segmented, Tag, Alert, Card, Typography, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, ArrowLeftOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, StopOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   UniTableStackedPrimaryCell,
   UniTableStackedLineBadge,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -759,7 +761,7 @@ const SalesOrdersPage: React.FC = () => {
    * 加载用户列表（系统管理-用户管理-帐户管理 /core/users）
    * 无用户数据时使用空数组，不阻塞页面
    */
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
 
   React.useEffect(() => {
     const loadUsers = async () => {
@@ -2950,10 +2952,7 @@ const SalesOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.orderDate'),
       key: 'order_date_delivery_date_stacked',
       dataIndex: 'order_date',
-      width: 132,
-      uniTableKeepWidth: true,
-      resizable: false,
-      ellipsis: false,
+      ...UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
       sorter: true,
       defaultSortOrder: 'descend',
       hideInSearch: true,

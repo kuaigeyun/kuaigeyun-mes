@@ -2,9 +2,9 @@
  * UniTable 标准「主从堆叠列」：上行主信息（正常字号、略加重）、下行次信息（小号 + 次要色，可复制）。
  *
  * 与 UniTable 列宽策略配合：
- * - 列上设 `uniTablePrimaryFlex: true` + `minWidth`（勿写死 width），由主列吃剩余横向空间；
- * - 原 secondary 字段列 `hideInTable: true`，搜索/导出仍保留独立 dataIndex；
- * - 日期/金额等结构化列加 `uniTableKeepWidth: true` 或依赖 valueType 自动保护。
+ * - 列上设 `uniTablePrimaryFlex: true` + `minWidth` + 可选 `uniTablePrimaryFlexMaxWidth`；
+ * - 带「开始/结束」徽章的日期列用 `UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS`（196px）；
+ * - 更新人/时间列用 `UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS`（168px）；
  */
 
 import React from 'react';
@@ -18,8 +18,29 @@ const DOC_FOLDER_COPY_ICON_COLOR = '#d48806';
 export const UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS = {
   minWidth: 200,
   uniTablePrimaryFlex: true,
+  /** UniTable 分配剩余宽度时的上限，避免主列吃掉整表 */
+  uniTablePrimaryFlexMaxWidth: 280,
   resizable: false,
   ellipsis: false,
+} as const;
+
+/** 行内「开始/结束」徽章 + 日期 + 可选逾期徽章的最小列宽（table-layout:fixed 下须一次到位） */
+export const UNI_TABLE_STACKED_BADGE_DATE_COLUMN_WIDTH = 196;
+
+export const UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS = {
+  width: UNI_TABLE_STACKED_BADGE_DATE_COLUMN_WIDTH,
+  uniTableKeepWidth: true,
+  resizable: false,
+  ellipsis: false,
+} as const;
+
+/** 更新人 + 更新时间堆叠列宽 */
+export const UNI_TABLE_STACKED_AUDIT_COLUMN_WIDTH = 168;
+
+export const UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS = {
+  width: UNI_TABLE_STACKED_AUDIT_COLUMN_WIDTH,
+  uniTableKeepWidth: true,
+  hideInSearch: true,
 } as const;
 
 /** 与「开始/结束」行前徽章同尺寸（高 16 / 字号 10） */

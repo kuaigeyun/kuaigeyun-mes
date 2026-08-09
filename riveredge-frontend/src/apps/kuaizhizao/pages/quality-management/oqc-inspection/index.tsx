@@ -1,7 +1,7 @@
 import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormDigit, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
-import { Alert, App, Button, Descriptions, Empty, Modal, Spin, Table, Typography } from 'antd';
+import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
+import { Alert, App, Button, Card, Col, Descriptions, Empty, Modal, Row, Spin, Table, Typography } from 'antd';
 import type { DescriptionsProps, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { DeleteOutlined, EyeOutlined, PlusOutlined, RollbackOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
@@ -36,6 +36,11 @@ import InspectionTemplateConductFields from '../components/InspectionTemplateCon
 import { pickInspectionConductExtras } from '../components/inspectionTemplateUtils';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
+import {
+  InspectionConductQuantityFields,
+  normalizeInspectionConductPayload,
+} from '../../../../../components/quantity-with-unit/inspectionConductQuantities';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
@@ -915,10 +920,15 @@ const OQCInspectionPage: React.FC = () => {
               messageApi.error(t('app.kuaizhizao.quality.oqc.messages.noConductPermission'));
               return false;
             }
+            const normalized = await normalizeInspectionConductPayload(values, {
+              materialId: currentRow.material_id,
+              materialUnit: currentRow.material_unit,
+              scenario: 'sale',
+            });
             await qualityImprovementApi.oqc.conduct(currentRow.id, {
-              ...values,
-              attachments: normalizeDocumentAttachments(values.attachments),
-              ...pickInspectionConductExtras(values),
+              ...normalized,
+              attachments: normalizeDocumentAttachments(normalized.attachments),
+              ...pickInspectionConductExtras(normalized),
             });
             messageApi.success(t('app.kuaizhizao.quality.oqc.messages.conductSuccess'));
             setConductVisible(false);
@@ -926,19 +936,36 @@ const OQCInspectionPage: React.FC = () => {
             actionRef.current?.reload();
           }}
         >
+          {currentRow ? (
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <strong>{t('app.kuaizhizao.quality.common.label.materialCode')}：</strong>
+                  {currentRow.material_code}
+                </Col>
+                <Col span={12}>
+                  <strong>{t('app.kuaizhizao.quality.common.label.materialName')}：</strong>
+                  {currentRow.material_name}
+                </Col>
+              </Row>
+              <Row gutter={16} style={{ marginTop: 8 }}>
+                <Col span={24}>
+                  <strong>{t('app.kuaizhizao.quality.common.label.inspectionQty')}：</strong>
+                  {formatQuantityWithUnit(currentRow.inspection_quantity, currentRow.material_unit)}
+                </Col>
+              </Row>
+            </Card>
+          ) : null}
           <InspectionTemplateConductFields
             inspection={currentRow as Record<string, unknown>}
             photoCategory="oqc_inspection_attachments"
           />
-          <ProFormDigit
-            name="qualified_quantity"
-            label={t('app.kuaizhizao.quality.common.form.qualifiedQty')}
-            rules={[{ required: true }]}
-          />
-          <ProFormDigit
-            name="unqualified_quantity"
-            label={t('app.kuaizhizao.quality.common.form.unqualifiedQty')}
-            rules={[{ required: true }]}
+          <InspectionConductQuantityFields
+            materialId={currentRow?.material_id}
+            materialUnit={currentRow?.material_unit}
+            scenario="sale"
+            inspectionQuantity={Number(currentRow?.inspection_quantity || 0)}
+            t={t}
           />
           <ProFormSelect
             name="inspection_result"

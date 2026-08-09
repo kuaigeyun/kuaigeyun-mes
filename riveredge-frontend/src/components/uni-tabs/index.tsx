@@ -28,7 +28,8 @@ import {
   getSessionActiveKey,
   setSessionTabs,
 } from '../../stores/sessionTabsCache';
-import { getUserInfo, getTenantId, getToken } from '../../utils/auth';
+import { getTenantId, getToken } from '../../utils/auth';
+import { getSessionCurrentUser } from '../../utils/sessionCurrentUser';
 import {
   getEffectiveHome,
   getTenantBackendHome,
@@ -272,10 +273,10 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const getInitialPersistence = () => {
     if (typeof window === 'undefined') return false;
     try {
-      const userInfo = getUserInfo();
-      if (!userInfo) return false;
-      const tenantId = getTenantId() ?? userInfo?.tenant_id ?? (userInfo as any)?.tenantId;
-      const userId = userInfo?.id ?? (userInfo as any)?.user_id ?? (userInfo as any)?.uuid;
+      const user = getSessionCurrentUser();
+      if (!user) return false;
+      const tenantId = getTenantId() ?? user.tenant_id ?? (user as any)?.tenantId;
+      const userId = user.id ?? (user as any)?.user_id ?? (user as any)?.uuid;
       if (tenantId == null || userId == null) return false;
       const key = `user-preference-storage-${tenantId}-${userId}`;
       const raw = localStorage.getItem(key);

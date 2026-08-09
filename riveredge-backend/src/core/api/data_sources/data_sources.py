@@ -24,9 +24,10 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/data-sources", tags=["Core - Data Sources"])
+from core.config.data_source_type_spec import DATA_SOURCE_TYPES
+from core.utils.data_source_driver_probe import probe_data_source_driver_availability
 
-DATA_SOURCE_TYPES = ("postgresql", "mysql", "mongodb", "api")
+router = APIRouter(prefix="/data-sources", tags=["Core - Data Sources"])
 
 
 def _ic_to_ds_response(ic) -> DataSourceResponse:
@@ -117,6 +118,16 @@ async def list_data_sources(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取数据源列表失败: {str(e)}",
         )
+
+
+@router.get("/driver-availability", response_model=dict)
+async def get_data_source_driver_availability(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """检测当前后端环境各数据源类型是否已安装 Python 驱动（不发起网络连接）。"""
+    availability = probe_data_source_driver_availability()
+    return {"availability": availability}
 
 
 @router.get("/{data_source_uuid}", response_model=DataSourceResponse)

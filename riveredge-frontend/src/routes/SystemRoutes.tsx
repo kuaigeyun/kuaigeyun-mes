@@ -19,6 +19,7 @@ import PageSkeleton, { PageSkeletonProps } from '../components/page-skeleton';
 import { useGlobalStore } from '../stores/globalStore';
 import { hasAnyPermission } from '../utils/permission';
 import { useRedirectIfSystemDashboardOff } from '../hooks/useRedirectIfSystemDashboardOff';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 
 // 核心页面（立即加载，首屏必需）
 import IndexPage from '../pages';
@@ -90,7 +91,7 @@ const RoutePermissionGuard: React.FC<{ permissionCodes: string[]; children: Reac
   children,
 }) => {
   const { t } = useTranslation();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const denied = !hasAnyPermission(currentUser, permissionCodes);
   const notifiedRef = useRef(false);
   useEffect(() => {

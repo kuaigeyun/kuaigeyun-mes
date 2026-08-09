@@ -9,6 +9,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../components/uni-action';
 import { ProFormText, ProFormSwitch, ProColumns, ProFormTreeSelect, ProFormSelect, ProFormItem, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
   DeleteOutlined,
   PlusOutlined,
@@ -110,7 +111,7 @@ const CUSTOM_LAYOUT_QUERY_KEY = ['menuCustomLayout'] as const;
   
 const MenuListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const { data: backendHome } = useQuery({

@@ -10,6 +10,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProForm, ProFormItem, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, InputNumber, Input, Typography, Select, Spin, Descriptions, Empty, Upload, theme as AntdTheme } from 'antd';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   EyeOutlined,
   CheckCircleOutlined,
@@ -498,7 +499,7 @@ const InboundPage: React.FC = () => {
     [t],
   );
   const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const handledDirectConfirmKeyRef = useRef<string | null>(null);

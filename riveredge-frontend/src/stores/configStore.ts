@@ -1,7 +1,13 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { getSiteSetting, updateSiteSetting } from '../services/siteSetting';
+import { updateSiteSetting } from '../services/siteSetting';
 import { getTenantId } from '../utils/auth';
+import { queryClient } from '../queryClient';
+import {
+  buildSiteSettingQueryKey,
+  fetchSiteSettingRecord,
+  siteSettingQueryOptions,
+} from '../config/sessionQueries';
 
 /**
  * 系统配置状态接口
@@ -108,15 +114,18 @@ export const useConfigStore = create<ConfigState>()(
       initialized: false,
       
       fetchConfigs: async (force?: boolean) => {
-        const { initialized, loading } = get();
+        const { loading } = get();
         if (loading) return;
-        if (!force && initialized) return;
 
         set({ loading: true });
         try {
-          const response = await getSiteSetting();
-          const backendConfigs = flattenObject(response.settings || {});
-          // 不设 ...state.configs：后端 JSON 为增量键时，避免上一租户（或旧缓存）的 enable_* 等残留造成串租户
+          const tenantId = getTenantId();
+          const response = await queryClient.fetchQuery({
+            queryKey: buildSiteSettingQueryKey(tenantId),
+            queryFn: fetchSiteSettingRecord,
+            staleTime: force ? 0 : siteSettingQueryOptions.staleTime,
+          });
+          const backendConfigs = flattenObject(response?.settings || {});
           set({
             configs: {
               ...DEFAULT_CONFIGS,
@@ -191,7 +200,13 @@ export const useConfigStore = create<ConfigState>()(
       name: 'system-config-storage',
       /** 按当前租户隔离 localStorage，避免多组织切换或同浏览器多租户缓存串数据 */
       storage: createJSONStorage(() => tenantScopedLocalStorage),
-      partialize: (state) => ({ configs: state.configs, initialized: state.initialized }),
+      partialize: (state) => ({ configs: state.configs }),
+      /** 持久化 configs 作首帧占位；initialized 仅内存，避免跨会话跳过 /site-setting */
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.initialized = false;
+        }
+      },
     }
   )
 );

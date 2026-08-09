@@ -1,13 +1,13 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import App from './app'
 import './global.less'
 import './styles/theme-plain.less'
 import { useGlobalStore } from './stores/globalStore'
-import { defaultQueryOptions } from './config/reactQuery'
-import { seedCurrentUserFromAuthStorage } from './utils/restoredUser'
+import { queryClient } from './queryClient'
+import { purgeLegacyGlobalStoreUser, seedCurrentUserFromAuthStorage } from './utils/restoredUser'
 import './initSpinIndicator'
 import './config/dayjs'
 
@@ -61,18 +61,6 @@ if (typeof window !== 'undefined') {
   });
 }
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      ...defaultQueryOptions,
-    },
-    mutations: {
-      retry: () => false,
-      throwOnError: false,
-    },
-  },
-})
-
 const AppWrapper = import.meta.env.DEV ? (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
@@ -95,6 +83,7 @@ async function mountApp() {
   } catch {
     // 持久化损坏时不阻塞挂载
   }
+  purgeLegacyGlobalStoreUser()
   seedCurrentUserFromAuthStorage()
 
   const { prepareInitialLanguageBundle } = await import('./config/i18n')

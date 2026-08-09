@@ -861,6 +861,16 @@ class StocktakingService(AppBaseService[Stocktaking]):
             batch_no=item_data.batch_no,
             book_quantity=item_data.book_quantity,
         )
+        material_unit = str(getattr(item_data, "material_unit", None) or "").strip() or None
+        if not material_unit:
+            from apps.master_data.models.material import Material
+
+            material = await Material.get_or_none(
+                tenant_id=tenant_id,
+                id=item_data.material_id,
+                deleted_at__isnull=True,
+            )
+            material_unit = str(getattr(material, "base_unit", None) or "个") if material else "个"
         return await StocktakingItem.create(
             tenant_id=tenant_id,
             uuid=str(uuid.uuid4()),
@@ -868,6 +878,7 @@ class StocktakingService(AppBaseService[Stocktaking]):
             material_id=item_data.material_id,
             material_code=item_data.material_code,
             material_name=item_data.material_name,
+            material_unit=material_unit,
             warehouse_id=warehouse_id,
             location_id=item_data.location_id,
             location_code=item_data.location_code,

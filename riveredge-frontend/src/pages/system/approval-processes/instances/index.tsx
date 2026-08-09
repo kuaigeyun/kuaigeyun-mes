@@ -16,6 +16,7 @@ import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import { theme } from 'antd';
+import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 import {
   getApprovalInstanceList,
   getApprovalInstanceByUuid,
@@ -40,7 +41,7 @@ const ApprovalInstanceListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const actionRef = useRef<ActionType>(null);
   const approvalInstanceDetailReqRef = useRef(0);
   const [tableData, setTableData] = useState<ApprovalInstance[]>([]);

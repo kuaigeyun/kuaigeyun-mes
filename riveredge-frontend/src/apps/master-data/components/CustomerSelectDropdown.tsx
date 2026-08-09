@@ -7,6 +7,7 @@ import { UniDropdown, type UniDropdownProps } from '../../../components/uni-drop
 import type { Customer } from '../types/supply-chain';
 import { CustomerFormModal } from './CustomerFormModal';
 import { useGlobalStore } from '../../../stores/globalStore';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
   ReferenceDisplayAccessError,
   canReadReferenceResource,
@@ -64,7 +65,7 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
   ...rest
 }) => {
   const { message: messageApi } = App.useApp();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const form = Form.useFormInstance();
   const snapshotName =
     snapshotNameField === false

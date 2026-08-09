@@ -141,7 +141,10 @@ import {
   UNI_TABLE_LIFECYCLE_MIN_WIDTH,
   UNI_TABLE_OPERATION_MIN_WIDTH,
   UNI_TABLE_SELECTION_COL_WIDTH,
+  UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH,
   computeUniTableMinScrollX,
+  getUniTableColumnScrollContribution,
+  resolveUniTableColumnLayoutWidth,
 } from '../../utils/uniTableLayoutColumns'
 
 /**
@@ -208,7 +211,7 @@ function isUniTableLayoutColumn(col: any): boolean {
   )
 }
 
-/** 主文本列：去掉固定 width，配合 scroll.x=max-content 由内容决定列宽（销售订单已验证策略）。 */
+/** 主文本列：写入显式 width（minWidth），配合数值 scroll.x 首帧定宽。 */
 function isUniTableFlexTextColumn(col: any): boolean {
   if (isUniTableLayoutColumn(col)) return false
   if (col?.fixed) return false
@@ -236,25 +239,32 @@ function isUniTablePrimaryFlexColumn(col: any): boolean {
   return col?.uniTablePrimaryFlex === true
 }
 
-/** 结构化/短名列不参与「兜底 strip」，避免更新时间/金额等被拉宽 */
-function isUniTableProtectedWidthColumn(col: any): boolean {
-  if (col?.uniTableKeepWidth === true || col?.resizable === false) return true
-  const dataIndex = typeof col?.dataIndex === 'string' ? col.dataIndex : ''
-  if (dataIndex && UNI_TABLE_SHORT_NAME_FIELDS.has(dataIndex)) return true
-  if (col?.valueType && UNI_TABLE_STRUCTURED_VALUE_TYPES.has(String(col.valueType))) return true
-  return false
+function parseUniTableColumnWidthValue(width: unknown): number | undefined {
+  if (typeof width === 'number' && Number.isFinite(width)) return width
+  if (typeof width === 'string') {
+    const n = parseInt(width, 10)
+    if (Number.isFinite(n)) return n
+  }
+  return undefined
 }
 
-function stripUniTableColumnWidth(col: any): any {
-  if (col?.width == null) return col
-  const { width: _width, ...rest } = col
-  return rest
+/** 主信息 flex 列默认宽度（与 stackedPrimaryColumn UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS 一致） */
+const UNI_TABLE_PRIMARY_FLEX_DEFAULT_WIDTH = 200
+
+/** 主信息 flex 列扩展上限（无列级 uniTablePrimaryFlexMaxWidth 时生效） */
+const UNI_TABLE_PRIMARY_FLEX_DEFAULT_MAX_WIDTH = 280
+
+function resolveUniTablePrimaryFlexMaxWidth(col: any): number {
+  const fromCol =
+    parseUniTableColumnWidthValue(col?.uniTablePrimaryFlexMaxWidth) ??
+    parseUniTableColumnWidthValue(col?.maxWidth)
+  if (fromCol != null && fromCol > 0) return fromCol
+  return UNI_TABLE_PRIMARY_FLEX_DEFAULT_MAX_WIDTH
 }
 
 /**
- * 全项目列宽策略（与 scroll.x=max-content 配合）：
- * 1. 主文本列 / uniTablePrimaryFlex 列去掉 width，由内容或 minWidth 撑开；
- * 2. 若可见数据列仍全部带 width，仅从 flex 候选列释放一列（禁止误伤 dateTime/金额等定宽列）。
+ * 全项目列宽策略（与数值 scroll.x 配合，首帧即 table-layout: fixed）：
+ * 主文本 / uniTablePrimaryFlex 列写入显式 width（优先 minWidth），禁止去掉 width 后依赖 max-content 二次测量。
  */
 function hasUniTableFixedColumns(columns: any[]): boolean {
   return columns.some(
@@ -265,28 +275,66 @@ function hasUniTableFixedColumns(columns: any[]): boolean {
 function applyUniTableColumnWidthPolicy(columns: any[], preserveWidths = false): any[] {
   if (!columns?.length || preserveWidths) return columns
 
-  let result = columns.map((col) =>
-    isUniTableFlexTextColumn(col) || isUniTablePrimaryFlexColumn(col)
-      ? stripUniTableColumnWidth(col)
-      : col,
-  )
+  return columns.map((col) => {
+    if (isUniTableLayoutColumn(col)) return col
+    if (col.width != null) return col
 
-  const dataCols = result.filter((col) => !isUniTableLayoutColumn(col))
-  const allHaveWidth = dataCols.length > 0 && dataCols.every((col) => col.width != null)
-  if (!allHaveWidth) return result
-
-  let stripIdx = -1
-  for (let i = result.length - 1; i >= 0; i--) {
-    const col = result[i]
-    if (isUniTableLayoutColumn(col) || col?.fixed || isUniTableProtectedWidthColumn(col)) continue
     if (isUniTableFlexTextColumn(col) || isUniTablePrimaryFlexColumn(col)) {
-      stripIdx = i
-      break
+      const resolved =
+        parseUniTableColumnWidthValue(col.minWidth) ??
+        (isUniTablePrimaryFlexColumn(col) ? UNI_TABLE_PRIMARY_FLEX_DEFAULT_WIDTH : UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH)
+      return { ...col, width: resolved, minWidth: resolved }
+    }
+
+    const minW = parseUniTableColumnWidthValue(col.minWidth)
+    if (minW != null) return { ...col, width: minW }
+
+    return col
+  })
+}
+
+/** 在容器宽度内将剩余空间分配给 uniTablePrimaryFlex 列（ProTable 渲染前同步完成） */
+function buildPrimaryFlexWidthPatch(
+  columns: any[],
+  containerWidth: number,
+  options: { includeSelection: boolean; reserveVerticalScrollbar: boolean },
+): Record<string, number> {
+  if (containerWidth <= 0 || !columns?.length) return {}
+
+  const layoutWidth = resolveUniTableColumnLayoutWidth(
+    containerWidth,
+    options.reserveVerticalScrollbar,
+  )
+  if (layoutWidth <= 0) return {}
+
+  const baseScrollX = computeUniTableMinScrollX(columns, { includeSelection: options.includeSelection })
+  if (layoutWidth <= baseScrollX) return {}
+
+  const flexTargets: { key: string; base: number; max: number }[] = []
+  columns.forEach((col, index) => {
+    if (col?.hideInTable || !isUniTablePrimaryFlexColumn(col)) return
+    const base = getUniTableColumnScrollContribution(col)
+    flexTargets.push({
+      key: getProColumnStateKey(col, index),
+      base,
+      max: resolveUniTablePrimaryFlexMaxWidth(col),
+    })
+  })
+  if (flexTargets.length === 0) return {}
+
+  let remaining = layoutWidth - baseScrollX
+  if (remaining <= 0) return {}
+
+  const patch: Record<string, number> = {}
+  for (const { key, base, max } of flexTargets) {
+    const expandable = Math.max(0, max - base)
+    const add = Math.min(remaining, expandable)
+    if (add > 0) {
+      patch[key] = base + add
+      remaining -= add
     }
   }
-  if (stripIdx < 0) return result
-
-  return result.map((col, i) => (i === stripIdx ? stripUniTableColumnWidth(col) : col))
+  return patch
 }
 
 /** 表头单元格与表身对齐：nowrap + 可选语义 class（生命周期 / 操作列）。 */
@@ -1319,6 +1367,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const [currentViewType, setCurrentViewType] = useState<string>(defaultViewType)
   // 表格数据状态（用于其他视图）
   const [tableData, setTableData] = useState<T[]>([])
+  const [requestInFlight, setRequestInFlight] = useState(true)
+  const [containerLayoutWidth, setContainerLayoutWidth] = useState(0)
   /** 当前分页大小：用于判断当前页是否未装满（未装满则不注入 scroll.y） */
   const [currentPageSize, setCurrentPageSize] = useState<number>(defaultPageSize)
   // ⭐ 关键：使用 useProTableSearch Hook 管理搜索参数
@@ -1990,6 +2040,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     filter: Record<string, React.ReactText[] | null>
   ) => {
     const seq = ++requestSeqRef.current
+    setRequestInFlight(true)
     const {
       showLoading: liveShowLoading,
       loadingDelay: liveLoadingDelay,
@@ -2212,6 +2263,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
       return result
     } finally {
+      if (requestSeqRef.current === seq) {
+        setRequestInFlight(false)
+      }
       if (liveShowLoading && liveLoadingDelay > 0 && requestSeqRef.current === seq) {
         isLoadingRef.current = false
         if (loadingDelayTimerRef.current) {
@@ -2608,6 +2662,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       restTableVirtual,
       tableDataLength: tableData.length,
       currentPageSize,
+      requestInFlight,
     }),
     [
       allowCustomScrollY,
@@ -2617,6 +2672,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       restTableVirtual,
       tableData.length,
       currentPageSize,
+      requestInFlight,
     ],
   )
 
@@ -2633,6 +2689,35 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const emptyTableHasFixedColumns =
     isEmptyTable && hasUniTableFixedColumns(effectiveTableColumns)
   const tableHasRowSelection = enableRowSelection || !!normalizedUserRowSelection
+
+  const tableColumnsForRender = React.useMemo(() => {
+    const patch =
+      containerLayoutWidth > 0
+        ? buildPrimaryFlexWidthPatch(effectiveTableColumns, containerLayoutWidth, {
+            includeSelection: tableHasRowSelection,
+            reserveVerticalScrollbar: proTableBodyScrollYEnabled,
+          })
+        : {}
+    if (Object.keys(patch).length === 0) return effectiveTableColumns
+    return effectiveTableColumns.map((col, index) => {
+      const key = getProColumnStateKey(col, index)
+      const patchedWidth = patch[key]
+      return patchedWidth != null ? { ...col, width: patchedWidth } : col
+    })
+  }, [
+    effectiveTableColumns,
+    containerLayoutWidth,
+    tableHasRowSelection,
+    proTableBodyScrollYEnabled,
+  ])
+
+  const computedTableScrollX = React.useMemo(
+    () =>
+      computeUniTableMinScrollX(tableColumnsForRender, {
+        includeSelection: tableHasRowSelection,
+      }),
+    [tableColumnsForRender, tableHasRowSelection],
+  )
 
   const rowClickSelectionEnabled =
     !disableRowClickSelection && tableHasRowSelection && !!memoizedRowSelection
@@ -2747,7 +2832,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     measure()
-    const raf = window.requestAnimationFrame(measure)
     const ro =
       typeof ResizeObserver !== 'undefined'
         ? new ResizeObserver(() => measure())
@@ -2758,7 +2842,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     if (ro && tableWrapper) ro.observe(tableWrapper)
     window.addEventListener('resize', measure)
     return () => {
-      window.cancelAnimationFrame(raf)
       ro?.disconnect()
       window.removeEventListener('resize', measure)
     }
@@ -2774,19 +2857,25 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   React.useLayoutEffect(() => {
     const root = containerRef.current
     if (!root) return
-    const sync = () => {
-      setDataActionIconOnly(root.clientWidth < DATA_ACTION_ICON_ONLY_MAX_WIDTH)
+
+    const syncContainerLayout = () => {
+      const width = root.clientWidth
+      if (width > 0) {
+        setContainerLayoutWidth((prev) => (prev === width ? prev : width))
+      }
+      setDataActionIconOnly(width < DATA_ACTION_ICON_ONLY_MAX_WIDTH)
     }
-    sync()
+
+    syncContainerLayout()
     const ro =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => sync()) : null
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => syncContainerLayout()) : null
     ro?.observe(root)
-    window.addEventListener('resize', sync)
+    window.addEventListener('resize', syncContainerLayout)
     return () => {
       ro?.disconnect()
-      window.removeEventListener('resize', sync)
+      window.removeEventListener('resize', syncContainerLayout)
     }
-  }, [])
+  }, [currentViewType])
 
   /** natural-height：antd 在 scroll.x 下可能重设 overflow，布局后强制关闭纵向滚动避免空纵条 */
   React.useLayoutEffect(() => {
@@ -3182,7 +3271,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         .uni-table-container.uni-table-scroll-y-mode .uni-table-pro-table.uni-table-scroll-y .ant-table-header,
         .uni-table-container.uni-table-scroll-y-mode .uni-table-pro-table.uni-table-scroll-y .ant-table-body,
         .uni-table-container.uni-table-scroll-y-mode .uni-table-pro-table.uni-table-scroll-y .ant-table-content {
-          scrollbar-gutter: stable;
+          scrollbar-gutter: stable !important;
+        }
+        /* 数值 scroll.x + table-layout:fixed：表头/表体同宽，禁止 rc-table 按表身内容二次测表头列宽 */
+        .uni-table-container .uni-table-pro-table .ant-table-header table,
+        .uni-table-container .uni-table-pro-table .ant-table-body table {
+          table-layout: fixed !important;
+        }
+        .uni-table-container.uni-table-scroll-y-mode .uni-table-pro-table.uni-table-scroll-y .ant-table-header {
+          overflow: hidden !important;
         }
       `}</style>
       <div
@@ -3245,11 +3342,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               headerTitle={memoizedHeaderTitle}
               actionRef={actionRefForProTable}
               formRef={formRef}
-              columns={effectiveTableColumns}
+              columns={tableColumnsForRender}
               request={handleRequest}
               debounceTime={tableRequestDebounce}
               rowKey={rowKey}
               search={false}
+              tableLayout="fixed"
               style={{ margin: 0, padding: 0 }}
               bordered={false}
               cardBordered={!embedded}
@@ -3329,7 +3427,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     ? { ...(normalizedUserScroll || {}), x: ourScrollX }
                     : allowCustomScrollX && normalizedUserScroll?.x !== undefined
                       ? normalizedUserScroll
-                      : { ...(normalizedUserScroll || {}), x: 'max-content' as const }
+                      : { ...(normalizedUserScroll || {}), x: computedTableScrollX }
                 const useVirtual = virtualized || userVirtual === true
                 if (!useVirtual && mergedScroll?.y === undefined && listPageScrollY) {
                   mergedScroll = {
@@ -3346,25 +3444,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 if (!proTableBodyScrollYEnabled && mergedScroll?.y !== undefined) {
                   const { y: _omitScrollY, ...scrollWithoutY } = mergedScroll
                   mergedScroll = scrollWithoutY
-                }
-                /** 空表 + 固定列：必须注入数值 scroll.x（antd 固定列定位依赖列 width 与 scroll.x 一致） */
-                if (isEmptyTable && emptyTableHasFixedColumns) {
-                  const minScrollX = computeUniTableMinScrollX(effectiveTableColumns, {
-                    includeSelection: tableHasRowSelection,
-                  })
-                  if (minScrollX > 0) {
-                    const keepY = proTableBodyScrollYEnabled ? mergedScroll?.y : undefined
-                    mergedScroll =
-                      keepY != null
-                        ? ({ x: minScrollX, y: keepY } as typeof mergedScroll)
-                        : ({ x: minScrollX } as typeof mergedScroll)
-                  }
-                } else if (!proTableBodyScrollYEnabled && isEmptyTable) {
-                  if (ourScrollX != null) {
-                    mergedScroll = { x: ourScrollX } as typeof mergedScroll
-                  } else {
-                    mergedScroll = undefined
-                  }
                 }
 
                 const mergedOnRow = rowClickSelectionEnabled

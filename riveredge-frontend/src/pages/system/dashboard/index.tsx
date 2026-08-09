@@ -12,6 +12,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { localizeDashboardTodos } from '../../../utils/dashboardTodoI18n';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
   Card,
   Row,
@@ -65,7 +66,6 @@ import { useUserPreferenceStore } from '../../../stores/userPreferenceStore';
 import { getAvatarUrl, getAvatarText, getCachedAvatarUrl } from '../../../utils/avatar';
 import { useGlobalStore } from '../../../stores';
 import { useThemeStore } from '../../../stores/themeStore';
-import { getUserInfo } from '../../../utils/auth';
 import { getUserByUuid, getUserList } from '../../../services/user';
 import { getWeatherAdaptiveTint } from '../../../components/weather/weatherBackground';
 import type { WeatherData } from '../../../services/weather';
@@ -202,7 +202,7 @@ export default function DashboardPage() {
     overflowX: 'hidden',
     overflowY: 'auto',
   };
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const [currentTime, setCurrentTime] = useState(dayjs());
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
   /** 天气数据：用于首行天气区块背景渐变 */
@@ -229,12 +229,10 @@ export default function DashboardPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // 获取用户信息
-  const userInfo = useMemo(() => getUserInfo(), []);
-  const userName = currentUser?.full_name || currentUser?.username || userInfo?.full_name || userInfo?.username || t('pages.dashboard.userFallback');
+  const userName = currentUser?.full_name || currentUser?.username || t('pages.dashboard.userFallback');
 
-  const currentUsername = currentUser?.username || userInfo?.username;
-  const currentUserUuid = (currentUser as any)?.uuid || userInfo?.uuid;
+  const currentUsername = currentUser?.username;
+  const currentUserUuid = (currentUser as any)?.uuid;
 
   // 获取用户详情（优先按 uuid）
   const { data: userDetail } = useQuery({
@@ -283,8 +281,7 @@ export default function DashboardPage() {
   // 加载用户头像 - 使用与 BasicLayout 和 LockScreen 相同的逻辑
   useEffect(() => {
     const loadAvatarUrl = async () => {
-      const userInfoFromStorage = getUserInfo();
-      const avatarUuid = (currentUser as any)?.avatar || userInfoFromStorage?.avatar;
+      const avatarUuid = (currentUser as any)?.avatar;
       
       if (avatarUuid) {
         try {

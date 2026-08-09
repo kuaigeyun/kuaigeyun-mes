@@ -11,6 +11,7 @@ import { hasModulePermission, hasReviewPermission } from '../../utils/permission
 import { isAdminBypass, resolveUserForMenuPermission } from '../../utils/permission';
 import UniAuditModal, { type UniAuditHubAction } from './UniAuditModal';
 import type { UniAuditAction, UniAuditActionsMap, UniAuditEndpointMap, WorkflowStatus } from './types';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 const DEFAULT_ENDPOINTS: Record<UniAuditAction, string> = {
   submit: 'submit',
@@ -180,7 +181,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const [loadingAction, setLoadingAction] = useState<UniAuditAction | null>(null);
   const [activeAction, setActiveAction] = useState<UniAuditAction | null>(null);
   const [auditHubOpen, setAuditHubOpen] = useState(false);
-  const rawCurrentUser = useGlobalStore((s) => s.currentUser);
+  const rawCurrentUser = useCurrentUser();
   const currentUser = useMemo(() => resolveUserForMenuPermission(rawCurrentUser), [rawCurrentUser]);
   const adminOpen = isAdminBypass(currentUser);
 

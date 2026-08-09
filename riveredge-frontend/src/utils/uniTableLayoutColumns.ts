@@ -26,6 +26,44 @@ export const UNI_TABLE_SELECTION_COL_WIDTH = 48;
 /** 无 width/minWidth 时的回退列宽（空表 scroll.x 求和） */
 export const UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH = 120;
 
+/** 浏览器原生纵向滚动条宽度（模块级一次性测量，用于 scroll.y 表头列宽预算） */
+let uniTableVerticalScrollbarWidthCache: number | undefined;
+
+export function getUniTableVerticalScrollbarWidth(): number {
+  if (uniTableVerticalScrollbarWidthCache !== undefined) {
+    return uniTableVerticalScrollbarWidthCache;
+  }
+  if (typeof document === 'undefined') {
+    uniTableVerticalScrollbarWidthCache = 0;
+    return 0;
+  }
+  const outer = document.createElement('div');
+  outer.style.visibility = 'hidden';
+  outer.style.overflow = 'scroll';
+  outer.style.width = '100px';
+  outer.style.height = '100px';
+  outer.style.position = 'absolute';
+  outer.style.top = '-9999px';
+  document.body.appendChild(outer);
+  const inner = document.createElement('div');
+  inner.style.width = '100%';
+  inner.style.height = '200px';
+  outer.appendChild(inner);
+  uniTableVerticalScrollbarWidthCache = Math.max(0, outer.offsetWidth - outer.clientWidth);
+  document.body.removeChild(outer);
+  return uniTableVerticalScrollbarWidthCache;
+}
+
+/** scroll.y 下列宽分配可用宽度：容器宽 − 纵向滚动条占位（首帧预算，禁止等表体挂载后再量） */
+export function resolveUniTableColumnLayoutWidth(
+  containerWidth: number,
+  reserveVerticalScrollbar: boolean,
+): number {
+  if (containerWidth <= 0) return 0;
+  if (!reserveVerticalScrollbar) return containerWidth;
+  return Math.max(0, containerWidth - getUniTableVerticalScrollbarWidth());
+}
+
 /** 生命周期列：fixed right 时表头/表身额外 class（避免 1px 收缩锚点 CSS 与操作列重叠） */
 export const UNI_TABLE_LIFECYCLE_FIXED_RIGHT_CELL_CLASS = 'uni-table-lifecycle-fixed-right';
 

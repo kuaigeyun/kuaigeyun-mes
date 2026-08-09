@@ -118,6 +118,7 @@ class StocktakingItemBase(BaseModel):
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., description="物料编码")
     material_name: str = Field(..., description="物料名称")
+    material_unit: Optional[str] = Field(None, description="物料单位")
     warehouse_id: Optional[int] = Field(None, description="仓库ID（不传则继承盘点单头）")
     location_id: Optional[int] = Field(None, description="库位ID（可选）")
     location_code: Optional[str] = Field(None, description="库位编码（可选）")

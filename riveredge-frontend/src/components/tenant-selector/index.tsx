@@ -16,6 +16,7 @@ import { getMyTenants, switchTenant, tenantNameFromLoginResponse } from '../../s
 import { setTenantId, getTenantId, isInfraSuperAdminUser, setToken, setUserInfo } from '../../utils/auth';
 import { applyTenantSwitchSideEffects } from '../../utils/applyTenantSwitch';
 import { useGlobalStore } from '../../stores';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 const { Option } = Select;
 
@@ -32,7 +33,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
   const { token } = theme.useToken();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
   const isInfraSuperAdmin = isInfraSuperAdminUser(currentUser);
   const currentTenantId = currentUser?.tenant_id ?? getTenantId();

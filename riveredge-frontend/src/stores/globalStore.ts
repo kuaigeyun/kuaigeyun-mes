@@ -96,8 +96,8 @@ export const useGlobalStore = create<GlobalState>()(
     }),
     {
       name: 'riveredge-global-store',
-      partialize: (state) => ({ 
-        currentUser: state.currentUser,
+      partialize: (state) => ({
+        // currentUser 仅以 JWT + user_info 为真源，避免与 riveredge-global-store 双写漂移
         isLocked: state.isLocked,
         lockedPath: state.lockedPath,
       }),

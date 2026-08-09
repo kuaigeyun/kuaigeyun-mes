@@ -6,7 +6,7 @@
 
 from datetime import datetime
 from typing import Any, Dict, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from decimal import Decimal
 
 from core.schemas.base import BaseSchema
@@ -31,8 +31,10 @@ class ReportingRecordBase(BaseSchema):
     operation_id: int = Field(..., description="工序ID")
     operation_code: str = Field(..., description="工序编码")
     operation_name: str = Field(..., description="工序名称")
-    worker_id: int = Field(..., description="操作工ID（生产人员）")
-    worker_name: str = Field(..., description="操作工姓名（生产人员）")
+    worker_id: Optional[int] = Field(None, description="操作工ID（生产人员；按小组报工时可空）")
+    worker_name: Optional[str] = Field(None, description="操作工姓名（生产人员）")
+    team_id: Optional[int] = Field(None, description="工作小组ID")
+    team_name: Optional[str] = Field(None, max_length=100, description="工作小组名称")
     reported_quantity: Decimal = Field(..., description="报工数量")
     qualified_quantity: Decimal = Field(..., description="合格数量")
     unqualified_quantity: Decimal = Field(..., description="不合格数量")
@@ -50,9 +52,28 @@ class ReportingRecordCreate(ReportingRecordBase):
     """
     报工记录创建Schema
 
-    用于创建新报工记录的数据验证。
+    用于创建新报工记录的数据验证。须指定生产人员或工作小组。
     """
-    pass
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_producer(cls, data: Any):
+        if not isinstance(data, dict):
+            return data
+        has_worker = data.get("worker_id") is not None
+        has_team = data.get("team_id") is not None
+        if not has_worker and not has_team:
+            raise ValueError("须指定生产人员或工作小组")
+        if has_team:
+            name = (data.get("team_name") or "").strip()
+            if not name:
+                raise ValueError("工作小组名称必填")
+            data["team_name"] = name
+            if not (str(data.get("worker_name") or "").strip()):
+                data["worker_name"] = name
+        elif has_worker and not (str(data.get("worker_name") or "").strip()):
+            raise ValueError("生产人员姓名必填")
+        return data
 
 
 class ReportingRecordUpdate(BaseModel):
@@ -121,7 +142,9 @@ class ReportingRecordListResponse(BaseSchema):
     product_name: Optional[str] = Field(None, description="产品名称（来自工单）")
     product_code: Optional[str] = Field(None, description="产品编码（来自工单）")
     material_spec: Optional[str] = Field(None, description="产品规格（来自物料主数据）")
-    worker_name: str = Field(..., description="操作工姓名（生产人员）")
+    worker_name: Optional[str] = Field(None, description="操作工姓名（生产人员）")
+    team_id: Optional[int] = Field(None, description="工作小组ID")
+    team_name: Optional[str] = Field(None, description="工作小组名称")
     recorded_by_name: Optional[str] = Field(None, description="记录人姓名")
     reported_quantity: Decimal = Field(..., description="报工数量")
     qualified_quantity: Decimal = Field(..., description="合格数量")

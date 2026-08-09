@@ -23,6 +23,7 @@ import { QuickFilters } from './QuickFilters';
 import { AdvancedFilters } from './AdvancedFilters';
 import type { FilterGroup, FilterConfigData } from './types';
 import { convertFiltersToApiParams } from './filterUtils';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
   LEGACY_LIST_LIFECYCLE_FIELD,
   LIST_LIFECYCLE_STAGE_FIELD,
@@ -640,7 +641,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   const location = useLocation();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const { token } = theme.useToken();
   
   // 获取当前页面路径

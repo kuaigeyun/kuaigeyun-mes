@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Alert, Button, Dropdown, Spin, Tooltip, Typography, theme } from 'antd';
 import { QRCodeSVG } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { getClientDownloadQrOrigin, getTenantClientDownloads, type TenantClientDownload } from '../../services/clientRelease';
 import { getTenantId } from '../../utils/auth';
@@ -92,7 +93,7 @@ function DownloadQrCard({
 export const HeaderClientDownloadButton: React.FC = () => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const tenantId =
     getTenantId() ??
     (currentUser?.tenant_id != null ? Number(currentUser.tenant_id) : null) ??

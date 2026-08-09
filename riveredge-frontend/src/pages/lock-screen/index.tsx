@@ -14,12 +14,14 @@ import { useGlobalStore } from '../../stores';
 import { getDefaultTenantHomePath } from '../../stores/configStore';
 import { buildLoginRedirectPath } from '../../utils/tenantDomainAccess';
 import { redirectAfterLogout } from '../../utils/loginEntry';
-import { getToken, getUserInfo, setUserInfo, setTenantId } from '../../utils/auth';
+import { getToken, setUserInfo, setTenantId } from '../../utils/auth';
+import { resolveIsInfraSuperAdminSession } from '../../utils/infraSuperAdminSession';
 import { login } from '../../services/auth';
 import { infraSuperAdminLogin } from '../../services/infraAdmin';
 import { setToken } from '../../utils/auth';
 import { theme } from 'antd';
 import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../../utils/avatar';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 // 固定主题颜色（不受全局主题影响）
 const FIXED_THEME_COLOR = '#1890ff';
@@ -33,7 +35,7 @@ export default function LockScreenPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const navigate = useNavigate();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const unlockScreen = useGlobalStore((s) => s.unlockScreen);
   const lockedPath = useGlobalStore((s) => s.lockedPath);
   const [form] = Form.useForm();
@@ -43,8 +45,7 @@ export default function LockScreenPage() {
   // 获取用户头像 URL（如果有 UUID）
   useEffect(() => {
     const loadAvatarUrl = async () => {
-      const userInfo = getUserInfo();
-      let avatarUuid = (currentUser as any)?.avatar || userInfo?.avatar;
+      let avatarUuid = (currentUser as any)?.avatar;
       
       // 如果 currentUser 和 userInfo 都没有 avatar，尝试从个人资料 API 获取
       if (!avatarUuid && currentUser) {
@@ -96,8 +97,7 @@ export default function LockScreenPage() {
     setLoading(true);
     try {
       // 检查用户类型（平台超级管理员还是系统级用户）
-      const userInfo = getUserInfo();
-      const isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin';
+      const isInfraSuperAdmin = resolveIsInfraSuperAdminSession();
 
       let response;
 

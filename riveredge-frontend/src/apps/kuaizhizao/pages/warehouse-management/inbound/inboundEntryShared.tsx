@@ -11,6 +11,7 @@ import { useGlobalStore } from '../../../../../stores/globalStore';
 import { uploadMultipleFiles } from '../../../../../services/file';
 import { getUserList, searchUserDisplay, type User, type UserDisplayItem } from '../../../../../services/user';
 import { canReadUserDirectory, formatUserDisplayLabel } from '../../../../../utils/userDisplay';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 
 export const readOnlyFieldProps = {
   readOnly: true,
@@ -63,7 +64,7 @@ function userOptionFromUser(user: User) {
 export function useInboundReceiverSelect() {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const useFullUserList = canReadUserDirectory(currentUser);
 
   const [receiverUuid, setReceiverUuid] = useState<string | undefined>();

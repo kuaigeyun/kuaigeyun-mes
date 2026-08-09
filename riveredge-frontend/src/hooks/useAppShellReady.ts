@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { initLanguageFromApi, isLanguageInitialized, resetLanguageInitState } from '../config/i18n';
+import { applyLanguageFromLocalCache, isLanguageInitialized } from '../config/i18n';
 import { useGlobalStore } from '../stores/globalStore';
 import { useThemeStore } from '../stores/themeStore';
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
+import { refreshAppShellFromApi } from '../utils/appShellSessionInit';
 
 /**
- * 等待主题与语言（含 en-US 语言包、租户/个人偏好）就绪后再展示主界面，避免英文界面中文闪烁。
- * 登录切换账户或切换租户时均重新拉取，避免沿用上一会话/租户的主题与语言。
+ * 等待主题与语言就绪后再展示主界面，避免英文界面中文闪烁。
+ * 登录/切换账户：本地缓存先占位并立刻放行，云端偏好在后台刷新，不阻塞进入工作台。
  */
 export function useAppShellReady(): boolean {
   const currentUserId = useGlobalStore((s) => s.currentUser?.id);
@@ -28,37 +29,53 @@ export function useAppShellReady(): boolean {
       return;
     }
 
+    const userChanged = currentUserId != null && prevUserId !== currentUserId;
+    const tenantChanged =
+      currentUserId != null &&
+      prevUserId === currentUserId &&
+      prevTenantId !== undefined &&
+      prevTenantId !== currentTenantId;
+    const sessionChanged = userChanged || tenantChanged;
+
     let cancelled = false;
-    setLocaleReady(false);
 
     void (async () => {
-      const userChanged = currentUserId != null && prevUserId !== currentUserId;
-      const tenantChanged =
-        currentUserId != null &&
-        prevUserId === currentUserId &&
-        prevTenantId !== undefined &&
-        prevTenantId !== currentTenantId;
-
-      // 登录/切换账户/切换租户：强制重新拉取主题/偏好
-      if (userChanged || tenantChanged) {
-        useThemeStore.setState({ initialized: false, siteThemeSettings: null, loading: false });
-        resetLanguageInitState();
+      if (sessionChanged) {
+        useUserPreferenceStore.getState().rehydrateFromStorage();
+        useThemeStore.getState().applyFromLocalCache();
+        await applyLanguageFromLocalCache();
+        if (!cancelled) {
+          setLocaleReady(true);
+        }
+        void refreshAppShellFromApi({ force: true });
+        return;
       }
 
-      useUserPreferenceStore.getState().rehydrateFromStorage();
-      await Promise.all([
-        useThemeStore.getState().initFromApi(),
-        initLanguageFromApi(),
-      ]);
-      if (!cancelled) {
-        setLocaleReady(true);
+      if (themeInitialized && isLanguageInitialized()) {
+        if (!cancelled) {
+          setLocaleReady(true);
+        }
+        return;
+      }
+
+      setLocaleReady(false);
+      try {
+        await refreshAppShellFromApi();
+      } catch {
+        useUserPreferenceStore.getState().rehydrateFromStorage();
+        useThemeStore.getState().applyFromLocalCache();
+        await applyLanguageFromLocalCache();
+      } finally {
+        if (!cancelled) {
+          setLocaleReady(true);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [currentUserId, currentTenantId]);
+  }, [currentUserId, currentTenantId, themeInitialized]);
 
   return themeInitialized && localeReady && isLanguageInitialized();
 }

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { Alert, App, Button, Form, Modal, Select, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   warehouseApi,
   type EnsureOqcForSalesDeliveryLineSummary,
@@ -117,7 +118,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);

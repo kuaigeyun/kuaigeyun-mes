@@ -5,17 +5,21 @@
  */
 import type { QueryClient } from '@tanstack/react-query';
 
-const SESSION_MENU_QUERY_KEYS: readonly (readonly string[])[] = [
-  ['navigationMenuTree'],
-  ['applicationMenus'],
-  ['dashboard-menu-tree'],
-  ['businessConfig'],
-  ['tenantBackendHome'],
-  ['chatIntegrationStatus'],
+const SESSION_QUERY_ROOTS: readonly string[] = [
+  'currentUser',
+  'siteSetting',
+  'userPreference',
+  'languageListActive',
+  'navigationMenuTree',
+  'applicationMenus',
+  'dashboard-menu-tree',
+  'businessConfig',
+  'tenantBackendHome',
+  'chatIntegrationStatus',
 ];
 
 export function clearSessionScopedQueries(queryClient: QueryClient): void {
-  for (const queryKey of SESSION_MENU_QUERY_KEYS) {
-    queryClient.removeQueries({ queryKey: [...queryKey] });
+  for (const root of SESSION_QUERY_ROOTS) {
+    queryClient.removeQueries({ queryKey: [root] });
   }
 }

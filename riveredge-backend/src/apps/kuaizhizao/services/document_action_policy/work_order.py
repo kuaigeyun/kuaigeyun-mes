@@ -42,10 +42,19 @@ def _is_list_work_order_row(wo: Any) -> bool:
     return row_kind == "work_order" or row_kind == ""
 
 
+def _revoke_status_allowed(wo: Any, *, status: str) -> bool:
+    is_released = status in _RELEASED
+    is_in_progress = status in _IN_PROGRESS
+    is_completed = status in _COMPLETED
+    manually_completed = bool(getattr(wo, "manually_completed", False))
+    return is_released or is_in_progress or (is_completed and manually_completed)
+
+
 def derive_work_order_capabilities(
     wo: Any,
     *,
     has_returnable_picking: bool | None = None,
+    has_downstream_documents: bool | None = None,
 ) -> WorkOrderCapabilities:
     if not _is_list_work_order_row(wo):
         deny = _cap(False, "work_order.not_applicable")
@@ -53,6 +62,7 @@ def derive_work_order_capabilities(
             update=deny,
             delete=deny,
             release=deny,
+            revoke=deny,
             freeze=deny,
             unfreeze=deny,
             cancel=deny,
@@ -65,7 +75,6 @@ def derive_work_order_capabilities(
 
     status = _norm(getattr(wo, "status", None))
     is_frozen = bool(getattr(wo, "is_frozen", False))
-    manually_completed = bool(getattr(wo, "manually_completed", False))
     actual_start = getattr(wo, "actual_start_date", None)
     has_work = _has_work(wo)
 
@@ -102,6 +111,16 @@ def derive_work_order_capabilities(
         if is_split
         else None,
     )
+
+    revoke_status_ok = _revoke_status_allowed(wo, status=status)
+    if not revoke_status_ok:
+        revoke_cap = _cap(False, "work_order.revoke.not_allowed")
+    elif has_work:
+        revoke_cap = _cap(False, "work_order.revoke.has_work")
+    elif has_downstream_documents:
+        revoke_cap = _cap(False, "work_order.revoke.has_downstream")
+    else:
+        revoke_cap = _cap(True)
 
     freeze_allowed = not is_terminal and not is_completed and not is_frozen
     freeze_cap = _cap(
@@ -184,6 +203,7 @@ def derive_work_order_capabilities(
         update=update_cap,
         delete=delete_cap,
         release=release_cap,
+        revoke=revoke_cap,
         freeze=freeze_cap,
         unfreeze=unfreeze_cap,
         cancel=cancel_cap,
@@ -200,12 +220,18 @@ def assert_work_order_capability(
     action: str,
     *,
     has_returnable_picking: bool | None = None,
+    has_downstream_documents: bool | None = None,
 ) -> None:
-    caps = derive_work_order_capabilities(wo, has_returnable_picking=has_returnable_picking)
+    caps = derive_work_order_capabilities(
+        wo,
+        has_returnable_picking=has_returnable_picking,
+        has_downstream_documents=has_downstream_documents,
+    )
     cap_map = {
         "update": caps.update,
         "delete": caps.delete,
         "release": caps.release,
+        "revoke": caps.revoke,
         "freeze": caps.freeze,
         "unfreeze": caps.unfreeze,
         "cancel": caps.cancel,

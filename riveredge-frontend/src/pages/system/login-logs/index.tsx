@@ -18,6 +18,7 @@ import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea'
 import { ListPageTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { useListPageStatCardsVisible } from '../../../components/layout-templates/listPageStatCardsContext';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
   getLoginLogs,
   getLoginLogStats,
@@ -36,7 +37,7 @@ import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 const LoginLogsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const statCardsVisible = useListPageStatCardsVisible();
   const actionRef = useRef<ActionType>(null);
   const [stats, setStats] = useState<LoginLogStats | null>(null);

@@ -920,6 +920,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           gap: 10px;
           margin-left: auto;
           min-width: 0;
+          --riveredge-system-panel-chip-height: calc(12px * 1.4 + 8px + 2px);
         }
         .riveredge-system-settings-panel-meta {
           display: flex;
@@ -927,6 +928,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           flex-wrap: wrap;
           justify-content: flex-end;
           gap: 12px;
+          min-height: var(--riveredge-system-panel-chip-height);
           padding: 4px 12px;
           border-radius: 999px;
           font-size: 12px;
@@ -935,17 +937,50 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           background: ${startMenuTheme.panelGroupBg};
           border: 1px solid ${startMenuTheme.panelGroupBorder};
           box-shadow: ${startMenuTheme.panelGroupInsetShadow};
+          box-sizing: border-box;
         }
         .riveredge-system-settings-panel-meta-item {
           white-space: nowrap;
         }
-        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close,
-        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close .anticon {
-          color: ${startMenuTheme.panelCloseColor} !important;
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close {
+          width: var(--riveredge-system-panel-chip-height);
+          min-width: var(--riveredge-system-panel-chip-height);
+          height: var(--riveredge-system-panel-chip-height);
+          padding: 0;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          border: 1px solid ${startMenuTheme.panelGroupBorder};
+          background-color: ${startMenuTheme.panelGroupBg};
+          box-shadow: ${startMenuTheme.panelGroupInsetShadow};
+          box-sizing: border-box;
+          cursor: pointer;
+          line-height: 1;
+          font-size: 12px;
+          appearance: none;
+          -webkit-appearance: none;
+          transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
         }
-        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close:hover {
-          color: ${startMenuTheme.panelTitleColor} !important;
-          background: ${startMenuTheme.panelCloseHoverBg} !important;
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close,
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close .anticon,
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close svg {
+          color: ${startMenuTheme.panelCloseColor};
+        }
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close:hover,
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close:focus-visible,
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close:active {
+          color: ${startMenuTheme.panelCloseHoverColor} !important;
+          background-color: ${startMenuTheme.panelCloseHoverBg} !important;
+          border-color: ${startMenuTheme.panelCloseHoverBorder} !important;
+        }
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close:hover .anticon,
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close:focus-visible .anticon,
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close:active .anticon,
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close:hover svg,
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close:focus-visible svg,
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close:active svg {
+          color: ${startMenuTheme.panelCloseHoverColor} !important;
         }
         .riveredge-system-settings-panel-body {
           padding: 14px;
@@ -960,10 +995,12 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         .riveredge-system-settings-group-wrap {
           display: flex;
           flex-direction: column;
-          gap: 8px;
           min-width: 0;
         }
         .riveredge-system-settings-group {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
           border-radius: ${startMenuPanelRadius}px;
           padding: 12px;
           background: ${startMenuTheme.panelGroupBg};
@@ -972,10 +1009,11 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         }
         .riveredge-system-settings-group-title {
           font-size: 13px;
-          font-weight: 600;
-          color: ${startMenuTheme.panelGroupTitle};
+          font-weight: 700;
+          color: ${startMenuTheme.panelTitleColor};
           padding: 0 2px;
           line-height: 1.3;
+          letter-spacing: 0.01em;
         }
         .riveredge-system-settings-grid {
           display: grid;

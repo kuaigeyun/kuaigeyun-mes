@@ -8,6 +8,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, Modal, Card, theme, Tooltip, Alert, Switch } from 'antd';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   EyeOutlined,
   CheckOutlined,
@@ -170,7 +171,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const pushToPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_requisition');
   const pushToInquiryAction = resolveKuaizhizaoDocumentAction(t, 'purchase_inquiry.pull_from_requisition');
   const pullFromDemandComputationAction = resolveKuaizhizaoDocumentAction(t, 'purchase_requisition.pull_from_demand_computation');
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const purchaseRequestAuditEnabled = useAuditRequired('purchase_request', false);
   const purchaseRequisitionPerms = useResourcePermissions(PURCHASE_REQUISITION_RESOURCE);
   const navigate = useNavigate();

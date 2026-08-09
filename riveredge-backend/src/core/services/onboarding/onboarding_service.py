@@ -1016,7 +1016,7 @@ class OnboardingService:
                 "rootcloud", "casicloud", "alicloud_iot", "huaweicloud_iot", "thingsboard", "jetlinks",
                 "flux_wms", "kejian_wms", "digiwin_wms", "openwms",
             )
-            DATA_SOURCE_TYPES = ("postgresql", "mysql", "mongodb", "api")
+            from core.config.data_source_type_spec import DATA_SOURCE_TYPES
 
             def _add_imp(key: str, qs):
                 tasks[key] = asyncio.ensure_future(_safe_exists(qs))

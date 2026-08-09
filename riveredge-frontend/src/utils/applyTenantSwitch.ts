@@ -3,10 +3,9 @@
  */
 import type { QueryClient } from '@tanstack/react-query';
 import type { NavigateFunction } from 'react-router-dom';
-import { resetLanguageInitState } from '../config/i18n';
 import { useGlobalStore } from '../stores/globalStore';
-import { useThemeStore } from '../stores/themeStore';
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
+import { applyAppShellFromLocalCache, refreshAppShellFromApi } from './appShellSessionInit';
 import {
   getImmediatePostLoginHomePath,
   refinePostLoginHomeInBackground,
@@ -20,9 +19,9 @@ export function applyTenantSwitchSideEffects(
   queryClient.clear();
   useGlobalStore.getState().incrementApplicationMenuVersion();
 
-  useThemeStore.setState({ initialized: false, siteThemeSettings: null, loading: false });
-  resetLanguageInitState();
   useUserPreferenceStore.getState().rehydrateFromStorage();
+  applyAppShellFromLocalCache();
+  void refreshAppShellFromApi({ force: true });
 
   const homePath = getImmediatePostLoginHomePath();
   navigate(homePath, { replace: true });

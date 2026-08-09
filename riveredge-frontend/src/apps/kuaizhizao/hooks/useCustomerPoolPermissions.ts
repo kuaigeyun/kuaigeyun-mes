@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import { useGlobalStore } from '../../../stores/globalStore';
 import { hasModulePermission } from '../../../utils/permissionContract';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 
 const CUSTOMER_POOL_RESOURCE = 'kuaizhizao:customer-pool';
 
 export function useCustomerPoolPermissions() {
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
 
   return useMemo(
     () => ({

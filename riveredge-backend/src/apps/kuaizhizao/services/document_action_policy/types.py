@@ -209,6 +209,7 @@ class WorkOrderCapabilities(BaseModel):
     update: ActionCapability
     delete: ActionCapability
     release: ActionCapability
+    revoke: ActionCapability
     freeze: ActionCapability
     unfreeze: ActionCapability
     cancel: ActionCapability
@@ -539,6 +540,9 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "work_order.release.not_draft": "只能下达草稿状态的工单",
     "work_order.release.frozen": "工单已冻结，不能下达",
     "work_order.release.split": "已拆分主工单不可下达",
+    "work_order.revoke.not_allowed": "当前状态不可撤回工单",
+    "work_order.revoke.has_work": "工单已有完工数量，不允许撤回",
+    "work_order.revoke.has_downstream": "工单已有下游单据（如报工/领料/入库），不允许撤回",
     "work_order.freeze.already_frozen": "工单已冻结，不能重复冻结",
     "work_order.freeze.not_allowed": "当前状态不可冻结工单",
     "work_order.unfreeze.not_frozen": "工单未冻结，不能解冻",
@@ -635,7 +639,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "finished_goods_inspection.pull_from_work_order.not_allowed": "当前状态的工单不可加载成品检验",
     "finished_goods_inspection.pull_from_work_order.no_product": "工单未关联产品物料，无法加载成品检验",
     "finished_goods_inspection.pull_from_work_order.no_inspection_required": "成品物料未配置成品检验，无需加载",
-    "finished_goods_inspection.pull_from_work_order.already_pulled": "该工单已有待检验的成品检验单，删除后可再次加载",
+    "finished_goods_inspection.pull_from_work_order.already_pulled": "该工单已有成品检验单（含自动生成），无需重复下推",
     "process_inspection.pull_from_work_order.not_allowed": "当前状态的工单不可加载过程检验",
     "process_inspection.pull_from_work_order.no_product": "工单未关联产品物料，无法加载过程检验",
     "process_inspection.pull_from_work_order.no_inspection_required": "工单工序均未配置过程检验，无需加载",

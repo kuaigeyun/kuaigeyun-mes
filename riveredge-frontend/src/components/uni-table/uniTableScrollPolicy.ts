@@ -20,6 +20,8 @@ export interface UniTableScrollPolicyInput {
   tableDataLength: number
   /** 当前分页大小 */
   currentPageSize: number
+  /** 列表 request 进行中：保持与满页一致的 scroll.y，避免 natural-height ↔ 限高切换 */
+  requestInFlight?: boolean
 }
 
 /**
@@ -32,6 +34,7 @@ export function shouldUseUniTableNaturalHeight(input: UniTableScrollPolicyInput)
   if (input.fillViewportBody) return false
   if (input.allowCustomScrollY) return false
   if (input.virtualized || input.restTableVirtual) return false
+  if (input.requestInFlight) return false
 
   if (input.tableDataLength === 0 || input.tableDataLength < input.currentPageSize) {
     return true

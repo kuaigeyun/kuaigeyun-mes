@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useGlobalStore } from '../stores';
 import { buildPermissionCode } from '../utils/permissionResource';
 import { hasPermission, isAdminBypass } from '../utils/permission';
 import { hasReviewPermission } from '../utils/permissionContract';
 import { isPlatformInfraPath } from '../utils/platformScope';
 import { canInitiateCompleteCreate } from '../utils/documentWorkflowPermission';
+import { useCurrentUser } from './useCurrentUser';
 
 export type ResourcePermissionGates = {
   /** 是否已解析到资源前缀并启用按钮级权限控制 */
@@ -61,7 +61,7 @@ export function useResourcePermissions(
   options?: ResourcePermissionOptions,
 ): ResourcePermissionGates {
   const location = useLocation();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const completeSource = options?.completeCreateSourceResource?.trim() || '';
 
   return useMemo(() => {

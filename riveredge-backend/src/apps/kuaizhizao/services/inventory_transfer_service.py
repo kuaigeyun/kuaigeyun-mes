@@ -17,6 +17,7 @@ from tortoise.transactions import in_transaction
 from tortoise.expressions import F
 
 from apps.kuaizhizao.models.inventory_transfer import InventoryTransfer, InventoryTransferItem
+from apps.kuaizhizao.utils.material_unit_utils import convert_to_base_quantity
 from apps.kuaizhizao.schemas.inventory_transfer import (
     InventoryTransferCreate,
     InventoryTransferCreateWithItems,
@@ -98,6 +99,16 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         )
 
         amount = item_data.quantity * item_data.unit_price
+        material_unit = str(getattr(item_data, "material_unit", None) or "").strip() or None
+        if not material_unit:
+            from apps.master_data.models.material import Material
+
+            material = await Material.get_or_none(
+                tenant_id=tenant_id,
+                id=item_data.material_id,
+                deleted_at__isnull=True,
+            )
+            material_unit = str(getattr(material, "base_unit", None) or "个") if material else "个"
         return await InventoryTransferItem.create(
             tenant_id=tenant_id,
             uuid=str(uuid.uuid4()),
@@ -105,6 +116,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
             material_id=item_data.material_id,
             material_code=item_data.material_code,
             material_name=item_data.material_name,
+            material_unit=material_unit,
             from_warehouse_id=from_wh,
             from_storage_area_id=getattr(item_data, "from_storage_area_id", None),
             from_storage_area_code=getattr(item_data, "from_storage_area_code", None),
@@ -610,12 +622,29 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
 
             # 调用统一库存服务：从调出仓库扣减，向调入仓库增加
             from apps.kuaizhizao.services.inventory_service import InventoryService
+            from apps.master_data.models.material import Material
+
+            material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
+            materials = await Material.filter(
+                tenant_id=tenant_id,
+                id__in=material_ids,
+                deleted_at__isnull=True,
+            ).all() if material_ids else []
+            material_by_id = {int(m.id): m for m in materials}
 
             for item in items:
+                qty = Decimal(str(item.quantity or 0))
+                if qty <= 0:
+                    continue
+                base_qty = convert_to_base_quantity(
+                    material_by_id.get(item.material_id),
+                    qty,
+                    from_unit=getattr(item, "material_unit", None),
+                )
                 await InventoryService.decrease_stock(
                     tenant_id=tenant_id,
                     material_id=item.material_id,
-                    quantity=item.quantity,
+                    quantity=base_qty,
                     warehouse_id=item.from_warehouse_id,
                     batch_no=getattr(item, "batch_no", None),
                     source_type="inventory_transfer",
@@ -629,7 +658,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
                 await InventoryService.increase_stock(
                     tenant_id=tenant_id,
                     material_id=item.material_id,
-                    quantity=item.quantity,
+                    quantity=base_qty,
                     warehouse_id=item.to_warehouse_id,
                     batch_no=getattr(item, "batch_no", None),
                     source_type="inventory_transfer",

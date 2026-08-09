@@ -55,6 +55,7 @@ class ReportingRecord(BaseModel):
             ("rework_order_id",),
             ("operation_id",),
             ("worker_id",),
+            ("team_id",),
             ("status",),
             ("reported_at",),
             ("approved_at",),
@@ -78,9 +79,13 @@ class ReportingRecord(BaseModel):
     operation_code = fields.CharField(max_length=50, description="工序编码")
     operation_name = fields.CharField(max_length=200, description="工序名称")
 
-    # 操作工信息（生产人员：实际完成工序的人员）
-    worker_id = fields.IntField(description="操作工ID")
-    worker_name = fields.CharField(max_length=100, description="操作工姓名")
+    # 操作工信息（生产人员：实际完成工序的人员；按小组报工时可空）
+    worker_id = fields.IntField(null=True, description="操作工ID（生产人员；按小组报工时可空）")
+    worker_name = fields.CharField(max_length=100, null=True, description="操作工姓名（生产人员）")
+
+    # 工作小组（与生产人员二选一或同时存档；按小组报工时必填）
+    team_id = fields.IntField(null=True, description="工作小组ID")
+    team_name = fields.CharField(max_length=100, null=True, description="工作小组名称")
 
     # 记录人员：提交报工的用户；自报工时通常与生产人员为同一人，代报工时为录入人
     recorded_by = fields.IntField(null=True, description="记录人用户ID（提交报工者）")

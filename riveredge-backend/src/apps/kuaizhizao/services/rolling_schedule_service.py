@@ -150,9 +150,11 @@ def _scheduling_line_diagnostics(
     missing_station = sum(1 for op in pending if not op.assigned_station_id)
     if missing_station:
         issues.append(f"缺工位{missing_station}道工序")
-    missing_worker = sum(1 for op in pending if not op.assigned_worker_id)
+    missing_worker = sum(
+        1 for op in pending if not op.assigned_worker_id and not op.assigned_team_id
+    )
     if missing_worker:
-        issues.append(f"缺人员{missing_worker}道工序")
+        issues.append(f"缺人员/小组{missing_worker}道工序")
     return issues
 
 

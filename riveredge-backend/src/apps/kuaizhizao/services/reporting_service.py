@@ -566,17 +566,27 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not work_order:
                 raise NotFoundError(f"工单不存在: {reporting_data.work_order_id}")
 
-            try:
-                worker_id_int = int(getattr(reporting_data, "worker_id"))
-            except Exception:
-                raise ValidationError("报工操作工ID无效")
+            team_id_val = getattr(reporting_data, "team_id", None)
+            worker_id_raw = getattr(reporting_data, "worker_id", None)
+            worker_id_int: Optional[int] = None
+            if worker_id_raw is not None:
+                try:
+                    worker_id_int = int(worker_id_raw)
+                except Exception:
+                    raise ValidationError("报工操作工ID无效")
+            if worker_id_int is None and team_id_val is None:
+                raise ValidationError("须指定生产人员或工作小组")
 
             recorder = await User.get_or_none(id=int(reported_by))
             recorder_name = ""
             if recorder:
                 recorder_name = (recorder.full_name or recorder.username or "").strip() or str(recorder.username or "")
             if not recorder_name:
-                recorder_name = reporting_data.worker_name or "用户"
+                recorder_name = (
+                    reporting_data.worker_name
+                    or getattr(reporting_data, "team_name", None)
+                    or "用户"
+                )
 
             block_level = await BusinessConfigService().get_material_shortage_block_level(tenant_id)
             if block_level >= 3:
@@ -650,7 +660,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     "该工序为委外工序，请通过委外接收完成数量，不可厂内报工"
                 )
 
-            if not work_order_operation.assigned_worker_id:
+            if (
+                not work_order_operation.assigned_worker_id
+                and not getattr(work_order_operation, "assigned_team_id", None)
+            ):
                 raise ValidationError("该工序尚未派工，请先派工后再报工")
 
             # 报工会将 pending 工序隐式置为 in_progress，等同开工，须同样校验领料
@@ -892,8 +905,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 operation_id=reporting_data.operation_id,
                 operation_code=trusted_operation_code,
                 operation_name=trusted_operation_name,
-                worker_id=reporting_data.worker_id,
-                worker_name=reporting_data.worker_name,
+                worker_id=worker_id_int,
+                worker_name=(reporting_data.worker_name or getattr(reporting_data, "team_name", None) or None),
+                team_id=int(team_id_val) if team_id_val is not None else None,
+                team_name=(getattr(reporting_data, "team_name", None) or None),
                 recorded_by=int(reported_by),
                 recorded_by_name=recorder_name,
                 reported_quantity=reporting_data.reported_quantity,
@@ -1840,7 +1855,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         # 按操作工统计（前10个）
         worker_stats = {}
         for r in records:
-            worker_name = r.worker_name
+            worker_name = r.worker_name or getattr(r, "team_name", None) or "—"
             if worker_name not in worker_stats:
                 worker_stats[worker_name] = {
                     'count': 0,

@@ -15,41 +15,17 @@ from core.models.integration_config import IntegrationConfig
 from core.schemas.integration_config import IntegrationConfigCreate, IntegrationConfigUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.http import get_http_client
-from core.utils.timezone_utils import resolve_business_datetime
+from core.config.data_source_type_spec import (
+    DATA_SOURCE_CONFIG_ONLY_TYPES,
+    DATA_SOURCE_TYPE_LABELS,
+)
 
 # 系统默认数据源代码（密码从 ENV 读取，不可编辑）
 SYSTEM_DEFAULT_CODE = "system_default"
 
-# 以下类型当前仅做配置项/可达性类校验，未对目标库发起真实连接；测试「成功」不代表 TCP/认证一定可用。
-_CONFIG_ONLY_CONNECTION_TYPES = frozenset({
-    "oracle",
-    "redis",
-    "clickhouse",
-    "influxdb",
-    "doris",
-    "starrocks",
-    "elasticsearch",
-    "mysql",
-    "mongodb",
-    "Database",
-})
-
-
 def _config_only_user_message(integration_type: str) -> str:
     """对仅配置校验的类型返回明确文案，避免与真实建连成功混淆。"""
-    label_map = {
-        "oracle": "Oracle",
-        "redis": "Redis",
-        "clickhouse": "ClickHouse",
-        "influxdb": "InfluxDB",
-        "doris": "Doris",
-        "starrocks": "StarRocks",
-        "elasticsearch": "Elasticsearch",
-        "mysql": "MySQL",
-        "mongodb": "MongoDB",
-        "Database": "Database",
-    }
-    label = label_map.get(integration_type, integration_type)
+    label = DATA_SOURCE_TYPE_LABELS.get(integration_type, integration_type)
     return (
         f"{label} 配置检查通过：已校验必填项；当前版本未发起真实连接，"
         f"无法确认网络、端口与账号密码是否可用。"
@@ -410,7 +386,7 @@ class IntegrationConfigService:
                 result = await IntegrationConfigService._test_mongodb_connection(integration)
             elif integration.type == "sqlserver":
                 result = await IntegrationConfigService._test_sqlserver_connection(integration)
-            elif integration.type in ("oracle", "redis", "clickhouse", "influxdb", "doris", "starrocks", "elasticsearch"):
+            elif integration.type in DATA_SOURCE_CONFIG_ONLY_TYPES or integration.type == "Database":
                 result = await IntegrationConfigService._test_database_config_validation(integration)
             elif integration.type == "feishu":
                 result = await IntegrationConfigService._test_feishu_connection(integration)
@@ -437,7 +413,7 @@ class IntegrationConfigService:
             if isinstance(result, dict) and result.get("success") is False:
                 raise ValueError(result.get("message", "连接失败"))
 
-            if integration.type in _CONFIG_ONLY_CONNECTION_TYPES:
+            if integration.type in DATA_SOURCE_CONFIG_ONLY_TYPES or integration.type == "Database":
                 # 未真实建连：不标记为已连接，避免列表/详情出现「已连通」误导；也不写入 last_error（非失败）
                 integration.update_connection_status(False, None)
                 await integration.save()
@@ -622,7 +598,7 @@ class IntegrationConfigService:
                 result = await IntegrationConfigService._test_mongodb_connection(temp)
             elif temp.type == "sqlserver":
                 result = await IntegrationConfigService._test_sqlserver_connection(temp)
-            elif temp.type in ("oracle", "redis", "clickhouse", "influxdb", "doris", "starrocks", "elasticsearch"):
+            elif temp.type in DATA_SOURCE_CONFIG_ONLY_TYPES or temp.type == "Database":
                 result = await IntegrationConfigService._test_database_config_validation(temp)
             elif temp.type == "feishu":
                 result = await IntegrationConfigService._test_feishu_connection(temp)
@@ -651,7 +627,7 @@ class IntegrationConfigService:
                 }
             if not isinstance(result, dict):
                 result = {"message": str(result)}
-            if temp.type in _CONFIG_ONLY_CONNECTION_TYPES:
+            if temp.type in DATA_SOURCE_CONFIG_ONLY_TYPES or temp.type == "Database":
                 return {
                     "success": True,
                     "message": _config_only_user_message(temp.type),

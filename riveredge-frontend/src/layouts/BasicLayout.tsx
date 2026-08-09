@@ -105,11 +105,13 @@ import { RouteTransition } from '../components/route-transition';
 const TenantBootstrapModal = React.lazy(() => import('../components/tenant-bootstrap-modal'));
 /** AI 助手按需加载，避免动画/AntX 栈进入启动主图 */
 const AiAssistant = React.lazy(() => import('../components/ai-assistant'));
-import { getCurrentUser } from '../services/auth';
-import { getCurrentInfraSuperAdmin } from '../services/infraAdmin';
-import { getTenantById, TenantPlan } from '../services/tenant';
-import { getToken, clearAuth, getUserInfo, getTenantId, isInfraSuperAdminUser, isInfraSuperAdminFromToken } from '../utils/auth';
+import { getTenantById, getPackageConfigs } from '../services/tenant';
+import { getToken, clearAuth, getTenantId } from '../utils/auth';
+import { resolveIsInfraSuperAdminSession } from '../utils/infraSuperAdminSession';
 import { useGlobalStore } from '../stores';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useCurrentUserQuery } from '../hooks/useCurrentUserQuery';
+import { buildRestoredUserFromStorage } from '../utils/restoredUser';
 import { getLanguageList, Language } from '../services/language';
 import { LANGUAGE_MAP, applyLanguageWithPersist } from '../config/i18n';
 import i18n from '../config/i18n';
@@ -297,109 +299,36 @@ function getMenuBadgeKey(path: string | undefined): string | undefined {
 // 权限守卫组件
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const loading = useGlobalStore((s) => s.loading);
   const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
   const setLoading = useGlobalStore((s) => s.setLoading);
-  const { t } = useSafeTranslation(); // 使用安全的翻译 hook
+  const { t } = useSafeTranslation();
 
-  // 检查用户类型（平台超级管理员还是系统级用户）
-  const userInfo = getUserInfo();
-  const isInfraSuperAdmin = isInfraSuperAdminUser(userInfo) || isInfraSuperAdminFromToken();
-
-  // 获取组织 ID
-  const currentTenantId = getTenantId();
-
-
-  // 如果 currentUser 已存在且信息完整，不需要重新获取
-  // 只有在以下情况才需要获取用户信息：
-  // 1. 有 token 但没有 currentUser
-  // 注意：避免在 currentUser 已存在时重复获取，防止无限循环
-  // 租户用户由 App AuthGuard 定期拉取 /auth/me；此处仅平台超管在无 currentUser 时补拉
+  const isInfraSuperAdmin = resolveIsInfraSuperAdminSession();
   const shouldFetchUser = !!getToken() && !currentUser && isInfraSuperAdmin;
 
-  // 根据用户类型调用不同的接口
-  const { data: userData, isLoading, error } = useQuery({
-    queryKey: ['currentUser', isInfraSuperAdmin],
-    queryFn: async () => {
-      // 优先使用 userInfo 判断用户类型
-      const shouldUsePlatformAPI = isInfraSuperAdmin;
+  const { data: userData, isLoading, error } = useCurrentUserQuery({ enabled: shouldFetchUser });
 
-      if (shouldUsePlatformAPI) {
-        // 平台超级管理员：调用平台接口
-        const infraUser = await getCurrentInfraSuperAdmin();
-        const tenantId = getTenantId();
-        return {
-          id: infraUser.id,
-          username: infraUser.username,
-          email: infraUser.email,
-          full_name: infraUser.full_name,
-          is_infra_admin: true,
-          is_tenant_admin: false,
-          tenant_id: tenantId ?? undefined,
-          user_type: 'infra_superadmin' as const,
-        };
-      } else {
-        // 系统级用户：调用系统接口
-        return await getCurrentUser();
-      }
-    },
-    enabled: shouldFetchUser,
-    retry: false,
-    staleTime: useConfigStore.getState().getConfig('security.user_cache_time', 300) * 1000, // 使用配置缓存时间
-  });
-
-  // 处理查询错误
   useEffect(() => {
     if (error && getToken()) {
-      const savedUserInfo = getUserInfo();
-      if (savedUserInfo) {
-        // 从 localStorage 恢复用户信息
-        const restoredUser = {
-          id: savedUserInfo.id || 1,
-          username: savedUserInfo.username || 'admin',
-          email: savedUserInfo.email,
-          full_name: savedUserInfo.full_name,
-          is_infra_admin: isInfraSuperAdminUser(savedUserInfo) || savedUserInfo.is_infra_admin || false,
-          is_tenant_admin: savedUserInfo.is_tenant_admin || false,
-          tenant_id: savedUserInfo.tenant_id,
-          tenant_name: savedUserInfo.tenant_name,
-          permissions: Array.isArray(savedUserInfo.permissions) ? savedUserInfo.permissions : [],
-          permission_version: savedUserInfo.permission_version || 1,
-          department: savedUserInfo.department,
-          position: savedUserInfo.position,
-          roles: Array.isArray(savedUserInfo.roles) ? savedUserInfo.roles : [],
-        };
+      const restoredUser = buildRestoredUserFromStorage();
+      if (restoredUser) {
         setCurrentUser(restoredUser);
-
-        // 如果是平台超级管理员，但后端接口失败，记录警告但不阻止访问
-        if (isInfraSuperAdminUser(savedUserInfo)) {
-          console.warn('⚠️ 获取平台超级管理员信息失败，使用本地缓存:', error);
-        } else {
-          console.warn('⚠️ 获取用户信息失败，使用本地缓存:', error);
-        }
+        console.warn('⚠️ 获取用户信息失败，使用本地缓存:', error);
       } else {
-        // 没有本地缓存时，如果是401错误且不在应用页面，则清理认证信息
-        // 在应用页面时不清除认证信息，避免跳转
         const isInApp = window.location.pathname.startsWith('/apps/');
         if ((error as any)?.response?.status === 401 && !isInApp) {
-          console.error('❌ 认证已过期，请重新登录:', error);
           clearAuth();
           setCurrentUser(undefined);
-        } else if ((error as any)?.response?.status === 401 && isInApp) {
-          console.warn('⚠️ 应用页面用户信息获取失败（401），跳过清除认证信息:', error);
-        } else {
-          console.warn('⚠️ 获取用户信息失败，但保留当前状态，允许继续访问:', error);
         }
       }
     } else if (!getToken()) {
-      // 没有 token，清理认证信息
       clearAuth();
       setCurrentUser(undefined);
     }
   }, [error, setCurrentUser]);
 
-  // 处理成功获取用户数据
   useEffect(() => {
     if (userData) {
       setCurrentUser(userData);
@@ -428,6 +357,8 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, [isLoading, isPublicPath, setLoading, currentUser]);
 
   const renderAuthLoading = () => <PageLoadingFullscreen />;
+
+  const currentTenantId = getTenantId();
 
   // ⚠️ 关键修复：如果是平台超级管理员访问系统级页面，但没有选择组织，则重定向到平台首页
   // 必须放在所有 Hook 之后，避免 Hook 顺序问题
@@ -930,7 +861,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     setSystemSettingsPanelMounted(false);
     setSystemSettingsPanelExiting(false);
   }, []);
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const logout = useGlobalStore((s) => s.logout);
   const isLocked = useGlobalStore((s) => s.isLocked);
   const lockScreen = useGlobalStore((s) => s.lockScreen);
@@ -975,8 +906,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   // 获取用户头像 URL（如果有 UUID）
   useEffect(() => {
     const loadAvatarUrl = async () => {
-      const userInfo = getUserInfo();
-      const avatarUuid = (currentUser as any)?.avatar || userInfo?.avatar;
+      const avatarUuid = (currentUser as any)?.avatar;
 
       if (avatarUuid) {
         const cached = getCachedAvatarUrl(avatarUuid);
@@ -1458,7 +1388,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return Math.max(6, Math.min(24, maxRowSpan));
   }, [systemSettingsGroups]);
 
-  const isInfraSuperAdmin = isInfraSuperAdminUser(currentUser) || isInfraSuperAdminFromToken();
+  const isInfraSuperAdmin = resolveIsInfraSuperAdminSession();
 
   const { data: infraTenantInfo } = useQuery({
     queryKey: ['systemPanelTenantInfo', currentUser?.tenant_id],
@@ -1467,20 +1397,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     staleTime: 60_000,
   });
 
+  const { data: systemPanelPackageConfigs } = useQuery({
+    queryKey: ['systemPanelPackageConfigs'],
+    queryFn: getPackageConfigs,
+    enabled: systemSettingsPanelMounted && !!currentUser?.tenant_id,
+    staleTime: 300_000,
+  });
+
   const systemSettingsTenantPlan = infraTenantInfo?.plan ?? currentUser?.tenant_plan;
   const systemSettingsTenantExpiresAt = infraTenantInfo?.expires_at ?? currentUser?.tenant_expires_at;
 
   const systemSettingsPlanLabel = useMemo(() => {
     if (!systemSettingsTenantPlan) return undefined;
-    const planKeyMap: Record<string, string> = {
-      [TenantPlan.TRIAL]: 'pages.infra.tenant.planTrial',
-      [TenantPlan.BASIC]: 'pages.infra.tenant.planBasic',
-      [TenantPlan.PROFESSIONAL]: 'pages.infra.tenant.planProfessional',
-      [TenantPlan.ENTERPRISE]: 'pages.infra.tenant.planEnterprise',
-    };
-    const labelKey = planKeyMap[systemSettingsTenantPlan];
-    return labelKey ? t(labelKey) : systemSettingsTenantPlan;
-  }, [systemSettingsTenantPlan, t]);
+    const planKey = String(systemSettingsTenantPlan).toLowerCase();
+    return systemPanelPackageConfigs?.[planKey]?.name || undefined;
+  }, [systemSettingsTenantPlan, systemPanelPackageConfigs]);
 
   const systemSettingsExpiresLabel = useMemo(() => {
     if (!systemSettingsTenantExpiresAt) return '2099-12-31';
@@ -1799,8 +1730,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         panelBlurSaturate: '180%',
         panelHeaderBorder: 'rgba(255, 255, 255, 0.08)',
         panelTitleColor: 'rgba(255, 255, 255, 0.92)',
-        panelCloseColor: 'rgba(255, 255, 255, 0.85)',
-        panelCloseHoverBg: 'rgba(255, 255, 255, 0.1)',
+        panelCloseColor: 'rgba(255, 255, 255, 0.55)',
+        panelCloseHoverBg: `color-mix(in srgb, ${primary} 10%, rgb(58 62 74))`,
+        panelCloseHoverBorder: 'rgba(255, 255, 255, 0.28)',
+        panelCloseHoverColor: 'rgba(255, 255, 255, 0.92)',
         /** L2 分组 */
         panelGroupBg: 'rgba(22, 24, 30, 0.62)',
         panelGroupBorder: 'rgba(255, 255, 255, 0.14)',
@@ -1832,7 +1765,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       panelHeaderBorder: 'rgba(0, 0, 0, 0.06)',
       panelTitleColor: String(token.colorText),
       panelCloseColor: String(token.colorTextSecondary),
-      panelCloseHoverBg: 'rgba(0, 0, 0, 0.04)',
+      panelCloseHoverBg: String(siderFooterToken.colorPrimaryBgHover),
+      panelCloseHoverBorder: String(siderFooterToken.colorPrimaryBorder),
+      panelCloseHoverColor: String(token.colorText),
       /** L2 分组 */
       panelGroupBg: 'rgba(255, 255, 255, 0.58)',
       panelGroupBorder: 'rgba(15, 23, 42, 0.16)',
@@ -3571,15 +3506,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   </span>
                 </div>
               )}
-              <Button
-                type="text"
-                size="small"
+              <button
+                type="button"
                 className="riveredge-system-settings-panel-close"
                 onClick={closeSystemSettingsPanelAnimated}
                 title={t('common.close')}
                 aria-label={t('common.close')}
-                icon={<CloseOutlined />}
-              />
+              >
+                <CloseOutlined />
+              </button>
             </div>
           </div>
           <div className="riveredge-system-settings-panel-body">
@@ -3590,8 +3525,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   className="riveredge-system-settings-group-wrap"
                   style={{ gridColumn: `span ${group.groupSpan}` }}
                 >
-                  <div className="riveredge-system-settings-group-title">{group.name as React.ReactNode}</div>
                   <div className="riveredge-system-settings-group">
+                    <div className="riveredge-system-settings-group-title">{group.name as React.ReactNode}</div>
                     <div
                       className="riveredge-system-settings-grid"
                       style={{ gridTemplateColumns: `repeat(${group.itemCols}, minmax(0, 1fr))` }}

@@ -16,6 +16,7 @@ import type { CSSProperties } from 'react';
  * - SMALL_WIDTH (600)：单栏表单（无 grid 或仅 span:24）
  * - STANDARD_WIDTH (800)：双栏表单（grid + colProps span:12 等）
  * - LARGE_WIDTH (1000)：复杂表单（多块 Row/Col、多步骤、大量字段）
+ * - CONNECTOR_MARKET_WIDTH (1080)：数据源 / 应用连接器选择器（分类标签单行展示）
  * - EXTRA_LARGE_WIDTH (1400)：宽表格预览、多列确认（如 MRP 结果预览）；小屏由 maxWidth 收窄
  */
 export const MODAL_CONFIG = {
@@ -23,6 +24,8 @@ export const MODAL_CONFIG = {
   STANDARD_WIDTH: 800,
   /** 大宽度（复杂表单） */
   LARGE_WIDTH: 1000,
+  /** 连接器市场（数据源 / 应用连接器卡片选择，分类 Tab 不换行） */
+  CONNECTOR_MARKET_WIDTH: 1080,
   /** 超大宽度（宽表、多列表格确认） */
   EXTRA_LARGE_WIDTH: 1400,
   /** 小宽度（单栏） */

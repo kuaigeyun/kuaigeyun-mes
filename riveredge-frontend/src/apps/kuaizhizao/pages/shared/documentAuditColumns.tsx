@@ -1,6 +1,9 @@
 import React from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { UniTableStackedPrimaryCell } from '../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
+} from '../../../../components/uni-table/stackedPrimaryColumn';
 import { formatDateTime } from '../../../../utils/format';
 
 type Dict = Record<string, unknown>;
@@ -55,9 +58,7 @@ export function buildDocumentAuditColumns<T extends Dict>(
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 148,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
+      ...UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
       render: (_, record) => {
         const preferred = resolveDocumentPreferredAudit(record as Dict);
         return (

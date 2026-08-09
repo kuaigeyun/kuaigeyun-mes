@@ -1,4 +1,5 @@
 import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 /**
  * 报工管理页面
  *
@@ -77,10 +78,9 @@ import { createListAuditPhaseColumn } from '../../sales-management/shared/listAu
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
-import { getUserInfo } from '../../../../../utils/auth';
+import { getSessionCurrentUser } from '../../../../../utils/sessionCurrentUser';
 import { hasModulePermission } from '../../../../../utils/permissionContract';
 import { useGlobalStore } from '../../../../../stores';
-import { UniUserSelect } from '../../../../../components/uni-user-select';
 import type { User } from '../../../../../services/user';
 import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity, getReportableQuantityBreakdown } from '../../../utils/workOrderReporting';
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
@@ -88,6 +88,7 @@ import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel
 import type { PushPreviewResponse } from '../../../services/sales-order';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField';
+import { ReportingProducerField } from '../../../components/ReportingProducerField';
 import {
   isInboundWarehouseRequiredForLastOperation,
   resolveIsLastOperation,
@@ -124,7 +125,9 @@ interface ReportingRecord {
   work_order_code: string;
   work_order_name: string;
   operation_name: string;
-  worker_name: string;
+  worker_name?: string | null;
+  team_id?: number | null;
+  team_name?: string | null;
   /** 提交报工的用户姓名（代报工时为录入人） */
   recorded_by_name?: string | null;
   reported_quantity: number;
@@ -319,7 +322,7 @@ function renderReportingRowActions(nodes: React.ReactNode[], keyPrefix: string):
 
 /** 获取报工员工信息：优先使用工序派工的 assigned_worker，否则使用当前登录用户 */
 const getWorkerInfo = (operation?: any, translate?: (key: string) => string) => {
-  const user = getUserInfo();
+  const user = getSessionCurrentUser();
   if (operation?.assigned_worker_id) {
     return {
       worker_id: operation.assigned_worker_id,
@@ -534,12 +537,13 @@ const ReportingPage: React.FC = () => {
     staleTime: 0,
   });
 
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const canProxyReporting = useMemo(
     () => hasModulePermission(currentUser ?? undefined, 'kuaizhizao:production-execution-reporting', 'assign'),
     [currentUser],
   );
   const createModalProxyWorkerRef = useRef<Pick<User, 'id' | 'full_name' | 'username'> | null>(null);
+  const createModalTeamRef = useRef<{ id: number; name: string } | null>(null);
 
   const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
   const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
@@ -680,11 +684,17 @@ const ReportingPage: React.FC = () => {
   useEffect(() => {
     if (!reportingModalVisible || !canProxyReporting) {
       createModalProxyWorkerRef.current = null;
+      createModalTeamRef.current = null;
       return;
     }
     if (!reportOperationId) {
       createModalProxyWorkerRef.current = null;
-      formRef.current?.setFieldsValue({ proxy_worker_uuid: undefined });
+      createModalTeamRef.current = null;
+      formRef.current?.setFieldsValue({
+        proxy_worker_uuid: undefined,
+        producer_mode: 'worker',
+        report_team_id: undefined,
+      });
       return;
     }
     const operation = (Array.isArray(reportOperations) ? reportOperations : []).find(
@@ -693,7 +703,12 @@ const ReportingPage: React.FC = () => {
     if (!operation) return;
     const b = getWorkerInfo(operation, t);
     createModalProxyWorkerRef.current = { id: b.worker_id, full_name: b.worker_name, username: '' };
-    formRef.current?.setFieldsValue({ proxy_worker_uuid: undefined });
+    createModalTeamRef.current = null;
+    formRef.current?.setFieldsValue({
+      proxy_worker_uuid: undefined,
+      producer_mode: 'worker',
+      report_team_id: undefined,
+    });
   }, [reportingModalVisible, canProxyReporting, reportOperationId, reportOperations, t]);
 
   const reportSelectedOperation = useMemo(
@@ -908,7 +923,8 @@ const ReportingPage: React.FC = () => {
       }
       const canContinue = await ensurePickingGate(Number(workOrder.id));
       if (!canContinue) return;
-      const { worker_id, worker_name } = resolveProductionWorker(operation, createModalProxyWorkerRef.current, t);
+      const producerMode =
+        canProxyReporting && standardValues.producer_mode === 'team' ? 'team' : 'worker';
       const reportingData: any = {
         work_order_id: Number(workOrder.id),
         work_order_code: workOrder.code,
@@ -916,13 +932,31 @@ const ReportingPage: React.FC = () => {
         operation_id: Number(operation.operation_id),
         operation_code: operation.operation_code,
         operation_name: operation.operation_name,
-        worker_id,
-        worker_name,
         status: 'pending',
         reported_at: new Date().toISOString(),
         remarks: standardValues.remarks,
         work_hours: standardValues.work_hours || 0,
       };
+      if (producerMode === 'team') {
+        const team = createModalTeamRef.current;
+        const teamId = Number(team?.id ?? standardValues.report_team_id);
+        const teamName = String(team?.name || standardValues.report_team_name || '').trim();
+        if (!Number.isFinite(teamId) || teamId <= 0 || !teamName) {
+          messageApi.warning(t('app.kuaizhizao.workReporting.formWorkGroupRequired'));
+          return;
+        }
+        reportingData.team_id = teamId;
+        reportingData.team_name = teamName;
+        reportingData.worker_name = teamName;
+      } else {
+        const { worker_id, worker_name } = resolveProductionWorker(
+          operation,
+          createModalProxyWorkerRef.current,
+          t,
+        );
+        reportingData.worker_id = worker_id;
+        reportingData.worker_name = worker_name;
+      }
       if (operation.reporting_type === 'status') {
         const planQty = parseFloat(workOrder.quantity?.toString() || '0') || 0;
         const completeQty = getStatusReportingCompleteQuantity(operation, planQty);
@@ -1418,6 +1452,8 @@ const ReportingPage: React.FC = () => {
       ellipsis: true,
       sorter: true,
       hideInSearch: false,
+      render: (_, record) =>
+        String(record.worker_name || record.team_name || '').trim() || '—',
     },
     {
       title: t('app.kuaizhizao.workReporting.colQualifiedQty'),
@@ -1734,13 +1770,13 @@ const ReportingPage: React.FC = () => {
         <ProFormDigit name="operation_id" hidden fieldProps={{ precision: 0 }} />
         {canProxyReporting && (
           <Col span={24}>
-            <UniUserSelect
-              name="proxy_worker_uuid"
-              label={t('app.kuaizhizao.workReporting.formProxyWorker')}
-              placeholder={t('app.kuaizhizao.workReporting.formProxyWorkerPlaceholder')}
-              onChange={(_uuid, u) => {
-                createModalProxyWorkerRef.current =
-                  u && !Array.isArray(u) ? { id: u.id, full_name: u.full_name, username: u.username } : null;
+            <ReportingProducerField
+              colProps={{ span: 24 }}
+              onWorkerChange={(u) => {
+                createModalProxyWorkerRef.current = u;
+              }}
+              onTeamChange={(team) => {
+                createModalTeamRef.current = team;
               }}
             />
             {currentUser ? (

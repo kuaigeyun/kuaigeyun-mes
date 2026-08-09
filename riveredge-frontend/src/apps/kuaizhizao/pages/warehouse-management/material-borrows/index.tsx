@@ -29,6 +29,7 @@ import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecyc
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
@@ -834,8 +835,24 @@ const MaterialBorrowsPage: React.FC = () => {
                     dataIndex: 'material_unit',
                     width: 80,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                        <Input placeholder={t('app.kuaizhizao.warehouseOutbound.col.unit')} size="small" />
+                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
+                        {({ getFieldValue }: any) => {
+                          const materialId = getFieldValue(['items', index, 'material_id']);
+                          if (!formRef.current) return null;
+                          return (
+                            <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                              <DocumentLineUnitSelect
+                                form={formRef.current}
+                                listName="items"
+                                rowIndex={index}
+                                fields={{ quantity: 'borrow_quantity', unit: 'material_unit' }}
+                                materialId={materialId}
+                                size="small"
+                                noStyle
+                              />
+                            </AntForm.Item>
+                          );
+                        }}
                       </AntForm.Item>
                     ),
                   },

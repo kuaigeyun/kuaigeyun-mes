@@ -1080,8 +1080,13 @@ def enrich_work_order_capabilities_on_response(
     response: T,
     *,
     has_returnable_picking: bool | None = None,
+    has_downstream_documents: bool | None = None,
 ) -> T:
-    caps = derive_work_order_capabilities(wo, has_returnable_picking=has_returnable_picking)
+    caps = derive_work_order_capabilities(
+        wo,
+        has_returnable_picking=has_returnable_picking,
+        has_downstream_documents=has_downstream_documents,
+    )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
     return response
@@ -1092,13 +1097,20 @@ def enrich_work_order_list_capabilities(
     responses: List[T],
     *,
     has_returnable_picking_by_id: dict[int, bool] | None = None,
+    has_downstream_documents_by_id: dict[int, bool] | None = None,
 ) -> List[T]:
     out: List[T] = []
     lookup = has_returnable_picking_by_id or {}
+    downstream_lookup = has_downstream_documents_by_id or {}
     for wo, resp in zip(work_orders, responses):
         wo_id = getattr(wo, "id", None)
         has_returnable = lookup.get(int(wo_id)) if wo_id is not None else None
-        caps = derive_work_order_capabilities(wo, has_returnable_picking=has_returnable)
+        has_downstream = downstream_lookup.get(int(wo_id)) if wo_id is not None else None
+        caps = derive_work_order_capabilities(
+            wo,
+            has_returnable_picking=has_returnable,
+            has_downstream_documents=has_downstream,
+        )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
         else:
@@ -1106,9 +1118,16 @@ def enrich_work_order_list_capabilities(
     return out
 
 
-def enrich_work_order_list_item_dicts(item_dicts: List[dict]) -> List[dict]:
+def enrich_work_order_list_item_dicts(
+    item_dicts: List[dict],
+    *,
+    has_downstream_documents_by_id: dict[int, bool] | None = None,
+) -> List[dict]:
+    downstream_lookup = has_downstream_documents_by_id or {}
     for item in item_dicts:
-        caps = derive_work_order_capabilities(item)
+        wo_id = item.get("id")
+        has_downstream = downstream_lookup.get(int(wo_id)) if wo_id is not None else None
+        caps = derive_work_order_capabilities(item, has_downstream_documents=has_downstream)
         item["capabilities"] = caps
     return item_dicts
 

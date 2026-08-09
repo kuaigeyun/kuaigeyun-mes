@@ -30,7 +30,12 @@ class IntegrationConfigBase(BaseModel):
             'OAuth', 'API', 'Webhook', 'Database',
             'postgresql', 'mysql', 'mongodb', 'oracle', 'sqlserver',
             'redis', 'clickhouse', 'influxdb', 'doris', 'starrocks',
-            'elasticsearch', 'api',
+            'elasticsearch', 'mariadb', 'sqlite', 'tidb', 'couchbase',
+            'oceanbase', 'opengauss', 'dameng', 'kingbase', 'gaussdb',
+            'sequoiadb', 'gbase',
+            'timescaledb', 'tdengine', 'prometheus', 'opensearch', 'druid', 'trino',
+            'memcached', 'etcd', 'keydb', 'milvus', 'qdrant', 'weaviate', 'chroma',
+            'api',
             # 应用连接器：协作
             'feishu', 'dingtalk', 'wecom',
             # 应用连接器：ERP

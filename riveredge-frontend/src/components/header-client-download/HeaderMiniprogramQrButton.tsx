@@ -3,6 +3,7 @@ import { WechatOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Dropdown, Spin, Tooltip, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { getTenantHeaderMiniprogramQr } from '../../services/clientRelease';
 import { normalizeFilePreviewUrl } from '../../services/file';
@@ -14,7 +15,7 @@ const { Text } = Typography;
 export const HeaderMiniprogramQrButton: React.FC = () => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const tenantId =
     getTenantId() ??
     (currentUser?.tenant_id != null ? Number(currentUser.tenant_id) : null) ??

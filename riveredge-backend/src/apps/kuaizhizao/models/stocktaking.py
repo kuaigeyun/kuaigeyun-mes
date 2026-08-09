@@ -156,6 +156,7 @@ class StocktakingItem(BaseModel):
     material_id = fields.IntField(description="物料ID")
     material_code = fields.CharField(max_length=50, description="物料编码")
     material_name = fields.CharField(max_length=200, description="物料名称")
+    material_unit = fields.CharField(max_length=20, null=True, description="物料单位")
 
     # 仓库和库位信息
     warehouse_id = fields.IntField(description="仓库ID")

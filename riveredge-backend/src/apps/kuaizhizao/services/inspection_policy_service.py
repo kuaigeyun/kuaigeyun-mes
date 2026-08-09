@@ -69,7 +69,7 @@ async def get_quality_effective_config(tenant_id: int) -> QualityEffectiveConfig
         "auto_create": {
             "iqc_on_purchase_receipt": bool(q.get("auto_create_iqc_on_purchase_receipt", False)),
             "ipqc_on_reporting": bool(q.get("auto_create_ipqc_on_reporting", True)),
-            "fqc_on_last_reporting": bool(q.get("auto_create_fqc_on_last_reporting", True)),
+            "fqc_on_last_reporting": bool(q.get("auto_create_fqc_on_last_reporting", False)),
             "oqc_on_shipment_notice_notify": bool(q.get("auto_create_oqc_on_shipment_notice_notify", False)),
             "oqc_on_sales_delivery": bool(q.get("auto_create_oqc_on_sales_delivery", False)),
         },
@@ -98,10 +98,9 @@ def validate_quality_business_parameters(quality_params: Dict[str, Any]) -> None
     if not process and bool(quality_params.get("auto_create_ipqc_on_reporting", True)):
         raise ValidationError("未启用过程检验时，不能开启报工自动创建过程检验单")
     finished = bool(quality_params.get("finished_inspection", True))
-    fqc_auto = bool(quality_params.get("auto_create_fqc_on_last_reporting", True))
     fqc_gate = bool(quality_params.get("require_fqc_before_finished_goods_receipt", False))
-    if not finished and (fqc_auto or fqc_gate):
-        raise ValidationError("未启用成品检验时，不能开启末道报工自动创建成品检验单或成品入库门禁")
+    if not finished and fqc_gate:
+        raise ValidationError("未启用成品检验时，不能开启成品入库门禁")
 
 
 QUALITY_INSPECTION_STAGES_CONFIG_KEY = "quality_inspection_stages"

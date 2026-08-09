@@ -674,6 +674,7 @@ class WorkOrderOperationCreate(WorkOrderOperationBase):
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
+    id: Optional[int] = Field(None, description="工单工序ID（编辑清单时传入以更新既有行；新增行不传）")
     reporting_type: Optional[str] = Field(None, alias="reportingType", description="报工类型（未传则用工序档案）")
     allow_jump: Optional[bool] = Field(
         None,

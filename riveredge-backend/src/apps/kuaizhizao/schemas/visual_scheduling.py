@@ -262,6 +262,8 @@ class WorkOrderBatchUpdateDatesResult(BaseSchema):
 
     skipped_freeze_window: List[int] = Field(default_factory=list)
 
+    skipped_not_schedulable: List[int] = Field(default_factory=list)
+
     failed: List[BatchUpdateFailureItem] = Field(default_factory=list)
 
 
@@ -275,6 +277,8 @@ class OperationBatchUpdateDatesResult(BaseSchema):
     skipped_frozen: List[int] = Field(default_factory=list)
 
     skipped_freeze_window: List[int] = Field(default_factory=list)
+
+    skipped_not_schedulable: List[int] = Field(default_factory=list)
 
     failed: List[BatchUpdateFailureItem] = Field(default_factory=list)
 

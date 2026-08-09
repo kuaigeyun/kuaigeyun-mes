@@ -386,6 +386,38 @@ def _work_order_product_fields(work_order: Any) -> Dict[str, Any]:
     }
 
 
+async def _resolve_material_base_unit(tenant_id: int, material_id: Any) -> str:
+    """检验数量存储单位：物料基础单位。"""
+    try:
+        mid = int(material_id)
+    except (TypeError, ValueError):
+        return "个"
+    if mid <= 0:
+        return "个"
+    from apps.master_data.models.material import Material
+
+    mat = await Material.get_or_none(
+        tenant_id=tenant_id,
+        id=mid,
+        deleted_at__isnull=True,
+    )
+    unit = (getattr(mat, "base_unit", None) or "").strip() if mat else ""
+    return unit or "个"
+
+
+async def _ensure_inspection_material_unit(
+    tenant_id: int,
+    payload: Dict[str, Any],
+) -> None:
+    """建单/开展前补齐 material_unit（基础单位）。"""
+    unit = str(payload.get("material_unit") or "").strip()
+    if unit:
+        payload["material_unit"] = unit
+        return
+    mid = payload.get("material_id")
+    payload["material_unit"] = await _resolve_material_base_unit(tenant_id, mid)
+
+
 def _summarize_pull_preview_items(preview_items: List[Dict[str, Any]]) -> Dict[str, Any]:
     """加载候选：明细行数、可加载行数、物料摘要（供取单弹窗展示）。"""
     pushable_count = sum(
@@ -781,6 +813,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             create_data.update(
                 await _quality_inspection_initial_review_fields(tenant_id, "incoming_inspection")
             )
+            await _ensure_inspection_material_unit(tenant_id, create_data)
 
             inspection = await IncomingInspection.create(
                 tenant_id=tenant_id,
@@ -2588,6 +2621,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             create_data.update(
                 await _quality_inspection_initial_review_fields(tenant_id, "process_inspection")
             )
+            await _ensure_inspection_material_unit(tenant_id, create_data)
 
             inspection = await ProcessInspection.create(
                 tenant_id=tenant_id,
@@ -3183,6 +3217,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             initial_review_fields = await _quality_inspection_initial_review_fields(
                 tenant_id, "process_inspection"
             )
+            material_unit = await _resolve_material_base_unit(tenant_id, wf["material_id"])
             
             inspection = await ProcessInspection.create(
                 tenant_id=tenant_id,
@@ -3199,6 +3234,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 material_code=wf["material_code"],
                 material_name=wf["material_name"],
                 material_spec=wf["material_spec"],
+                material_unit=material_unit,
                 batch_number=wf["batch_number"],
                 inspection_quantity=inspection_quantity,
                 qualified_quantity=0,
@@ -3653,6 +3689,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                     material_code=wf["material_code"],
                     material_name=wf["material_name"],
                     material_spec=wf["material_spec"],
+                    material_unit=(getattr(mat, "base_unit", None) or "个") if mat else await _resolve_material_base_unit(tenant_id, wf["material_id"]),
                     batch_number=wf["batch_number"],
                     inspection_quantity=inspection_quantity,
                     qualified_quantity=qualified_quantity,
@@ -3875,6 +3912,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             create_data.update(
                 await _quality_inspection_initial_review_fields(tenant_id, "finished_goods_inspection")
             )
+            await _ensure_inspection_material_unit(tenant_id, create_data)
 
             inspection = await FinishedGoodsInspection.create(
                 tenant_id=tenant_id,
@@ -4696,12 +4734,12 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             qty = float(getattr(work_order, "quantity", 0) or 0)
 
         if pending_inspection is None and mid:
+            # 已有任意有效成品检（含末道报工自动生成）即视为已下推，避免重复建单
             pending_inspection = await FinishedGoodsInspection.filter(
                 tenant_id=tenant_id,
                 work_order_id=int(work_order.id),
-                status="待检验",
                 deleted_at__isnull=True,
-            ).first()
+            ).exclude(status="已取消").first()
 
         preview_items: List[Dict[str, Any]] = []
         if fqc_eff != "none" and qty > 0 and mid:
@@ -4928,16 +4966,17 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 if existing_by_report:
                     return FinishedGoodsInspectionResponse.model_validate(existing_by_report)
             
-            # 检查是否已存在检验单
+            # 检查是否已存在检验单（含自动生成的待检/已检，取消除外）
             existing = await FinishedGoodsInspection.filter(
                 tenant_id=tenant_id,
                 work_order_id=work_order_id,
-                status='待检验',
                 deleted_at__isnull=True,
-            ).first()
-            
+            ).exclude(status="已取消").first()
+
             if existing:
-                raise BusinessLogicError("该工单已存在待检验的检验单")
+                raise BusinessLogicError(
+                    "该工单已有成品检验单（含自动生成），无需重复下推；可在成品检验中查看"
+                )
             
             # 创建检验单
             today = today_site_str()
@@ -4953,6 +4992,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             initial_review_fields = await _quality_inspection_initial_review_fields(
                 tenant_id, "finished_goods_inspection"
             )
+            material_unit = await _resolve_material_base_unit(tenant_id, wf["material_id"])
             
             inspection = await FinishedGoodsInspection.create(
                 tenant_id=tenant_id,
@@ -4971,6 +5011,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 material_code=wf["material_code"],
                 material_name=wf["material_name"],
                 material_spec=wf["material_spec"],
+                material_unit=material_unit,
                 batch_number=wf["batch_number"],
                 inspection_quantity=inspection_qty,
                 qualified_quantity=0,
@@ -5114,6 +5155,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     material_code=wf["material_code"],
                     material_name=wf["material_name"],
                     material_spec=wf["material_spec"],
+                    material_unit=(getattr(mat, "base_unit", None) or "个") if mat else await _resolve_material_base_unit(tenant_id, wf["material_id"]),
                     batch_number=wf["batch_number"],
                     inspection_quantity=inspection_quantity,
                     qualified_quantity=qualified_quantity,

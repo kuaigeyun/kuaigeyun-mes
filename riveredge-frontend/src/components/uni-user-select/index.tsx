@@ -3,6 +3,7 @@ import { App, Form, Space, Tag } from 'antd';
 import { ProFormSelect } from '@ant-design/pro-components';
 import { useDebounceFn } from 'ahooks';
 import { NamePath } from 'antd/es/form/interface';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
   getUserList,
   resolveUserDisplay,
@@ -22,7 +23,7 @@ interface UniUserSelectProps {
   /** 表单字段名称 */
   name: NamePath;
   /** 标签 */
-  label?: string;
+  label?: React.ReactNode;
   /** 占位符 */
   placeholder?: string;
   /** 是否必填 */
@@ -107,7 +108,7 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
   ...restProps
 }) => {
   const { message } = App.useApp();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const isReadonlyMode = useProFormReadonlyMode(readonly);
   const canPick = canPickUsersForDisplay(currentUser);
   const canInteract = !isReadonlyMode && !disabled && canPick;
@@ -225,7 +226,16 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
       readonly={effectiveReadonly}
       disabled={disabled}
       width={width}
-      rules={required ? [{ required: true, message: `请选择${label}` }] : undefined}
+      rules={
+        required
+          ? [
+              {
+                required: true,
+                message: `请选择${typeof label === 'string' && label ? label : '人员'}`,
+              },
+            ]
+          : undefined
+      }
       options={options}
       fieldProps={{
         mode,

@@ -13,6 +13,7 @@ import { canViewKuaizhizaoPricing } from '../../utils/kuaizhizaoPricingPermissio
 import { resolveAmountFieldVisibility } from '../../utils/fieldMaskPermission'
 import { useUserFieldMasks } from '../../hooks/useUserFieldMasks'
 import { formatNumber } from '../../utils/format'
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 export interface AmountDisplayProps {
   /** 业务资源键（如 kuaizhizao:quotation）；与角色字段权限 resource 一致 */
@@ -49,7 +50,7 @@ export const AmountDisplay: React.FC<AmountDisplayProps> = ({
   style,
   className,
 }) => {
-  const currentUser = useGlobalStore((s) => s.currentUser)
+  const currentUser = useCurrentUser()
   const fieldMasks = useUserFieldMasks()
   const legacyResource = resource?.includes(':') ? undefined : resource
   const hasLegacyPricingAccess = canViewKuaizhizaoPricing(currentUser, legacyResource)

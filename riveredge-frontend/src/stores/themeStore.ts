@@ -221,6 +221,8 @@ interface ThemeState {
   /** 最近一次从站点设置 API 拉取的 settings，供偏好无 theme_config 时回退 */
   siteThemeSettings: Record<string, unknown> | null;
   initFromApi: () => Promise<void>;
+  /** 登录/切换账户首帧：本地偏好缓存占位，不阻塞进入工作台 */
+  applyFromLocalCache: () => void;
   applyTheme: (themeMode: ThemeMode, config?: Partial<ThemeConfig>) => void;
   /** 偏好变更时按云端 theme_config 应用；无个人配置时回退站点云端主题 */
   syncFromPreferences: (preferences: Record<string, any>) => void;
@@ -293,17 +295,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
       if (initialized || loading) return;
 
       if (!getToken() || isKuaireportSharedBrowsePath()) {
-        const cachedTheme = getThemeFromPreferenceCache();
-        if (cachedTheme) {
-          const { theme, config } = resolveThemeFromCloud({
-            theme: cachedTheme.theme,
-            theme_config: cachedTheme.theme_config,
-          });
-          applyResolvedTheme(theme, config);
-        } else {
-          applyResolvedTheme('light', normalizeThemeConfig({ ...DEFAULT_CONFIG }));
-        }
-        set({ initialized: true });
+        get().applyFromLocalCache();
         return;
       }
 
@@ -334,22 +326,23 @@ export const useThemeStore = create<ThemeState>((set, get) => {
         set({ initialized: true, loading: false, siteThemeSettings: siteSettings });
       } catch (e) {
         console.warn('Theme init failed:', e);
-        const cachedTheme = getThemeFromPreferenceCache();
-        if (cachedTheme) {
-          const { siteThemeSettings } = get();
-          const { theme, config } = resolveThemeFromCloud(
-            {
-              theme: cachedTheme.theme,
-              theme_config: cachedTheme.theme_config,
-            },
-            siteThemeSettings,
-          );
-          applyResolvedTheme(theme, config);
-        } else {
-          applyResolvedTheme('light', normalizeThemeConfig({ ...DEFAULT_CONFIG }));
-        }
-        set({ initialized: true, loading: false });
+        get().applyFromLocalCache();
+        set({ loading: false });
       }
+    },
+
+    applyFromLocalCache: () => {
+      const cachedTheme = getThemeFromPreferenceCache();
+      if (cachedTheme) {
+        const { theme, config } = resolveThemeFromCloud({
+          theme: cachedTheme.theme,
+          theme_config: cachedTheme.theme_config,
+        });
+        applyResolvedTheme(theme, config);
+      } else {
+        applyResolvedTheme('light', normalizeThemeConfig({ ...DEFAULT_CONFIG }));
+      }
+      set({ initialized: true, loading: false });
     },
 
     applyTheme: (themeMode: ThemeMode, configOverride?: Partial<ThemeConfig>) => {

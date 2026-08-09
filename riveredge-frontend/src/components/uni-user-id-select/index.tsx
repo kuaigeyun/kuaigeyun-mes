@@ -3,6 +3,7 @@ import { App, Form } from 'antd';
 import { ProFormSelect } from '@ant-design/pro-components';
 import { useDebounceFn } from 'ahooks';
 import type { NamePath } from 'antd/es/form/interface';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
   getUserList,
   resolveUserDisplay,
@@ -68,7 +69,7 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
   ...restProps
 }) => {
   const { message } = App.useApp();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const isReadonlyMode = useProFormReadonlyMode(readonly);
   const canPickDirectory = canPickUsersForDisplay(currentUser);
   const canInteract = !isReadonlyMode && !disabled && (Boolean(searchUsers) || canPickDirectory);

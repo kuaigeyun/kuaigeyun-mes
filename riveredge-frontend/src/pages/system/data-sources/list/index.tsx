@@ -16,7 +16,15 @@ import { rowActionKind } from '../../../../components/uni-action';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import DataSourceConnectorMarket from '../DataSourceConnectorMarket';
+import DatabaseBrandIcon from '../DatabaseBrandIcon';
 import type { ConnectorDefinition } from '../connectors';
+import {
+  getDataSourceTypeSelectOptions,
+  getDataSourceTypeDisplay,
+  CONNECTOR_DEFINITIONS,
+  DATA_SOURCE_STANDARD_DB_FORM_TYPES,
+  DATA_SOURCE_SEARCH_FORM_TYPES,
+} from '../connectors';
 import {
   getDataSourceList,
   getDataSourceListAllMatching,
@@ -38,15 +46,20 @@ import {
 
 type DataSourceDetail = DataSource & { related_datasets?: unknown[] };
 
-function coerceImportedDataSourceType(raw: string): CreateDataSourceData['type'] {
+function coerceImportedDataSourceType(raw: string): string {
   const lower = String(raw).trim().toLowerCase();
-  if (lower === 'postgresql' || lower === 'postgres') return 'postgresql';
-  if (lower === 'mysql') return 'mysql';
-  if (lower === 'mongodb' || lower === 'mongo') return 'mongodb';
-  if (lower === 'api') return 'API';
-  if (lower === 'oauth') return 'OAuth';
-  if (lower === 'webhook') return 'Webhook';
-  if (lower === 'database') return 'Database';
+  const aliasMap: Record<string, string> = {
+    postgres: 'postgresql',
+    mongo: 'mongodb',
+    mssql: 'sqlserver',
+    mariadb: 'mariadb',
+    presto: 'trino',
+    prestosql: 'trino',
+    es: 'elasticsearch',
+  };
+  if (aliasMap[lower]) return aliasMap[lower];
+  const known = CONNECTOR_DEFINITIONS.find((c) => c.type === lower);
+  if (known) return known.type;
   return 'postgresql';
 }
 import { getDatasetList } from '../../../../services/dataset';
@@ -62,56 +75,12 @@ const { Text, Paragraph } = Typography;
 const { useToken } = theme;
 
 /**
- * 获取数据源类型图标和颜色
+ * 获取数据源类型展示（filled Tag 颜色与文案）
  */
-const getTypeInfo = (type: string): { color: string; text: string; icon: React.ReactNode } => {
-  const typeMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
-    postgresql: { 
-      color: 'blue', 
-      text: 'PostgreSQL',
-      icon: <DatabaseOutlined />,
-    },
-    mysql: { 
-      color: 'orange', 
-      text: 'MySQL',
-      icon: <DatabaseOutlined />,
-    },
-    mongodb: { 
-      color: 'green', 
-      text: 'MongoDB',
-      icon: <DatabaseOutlined />,
-    },
-    api: { 
-      color: 'cyan', 
-      text: 'API',
-      icon: <ThunderboltOutlined />,
-    },
-    OAuth: {
-      color: 'purple',
-      text: 'OAuth',
-      icon: <ThunderboltOutlined />,
-    },
-    Webhook: {
-      color: 'magenta',
-      text: 'Webhook',
-      icon: <ThunderboltOutlined />,
-    },
-    Database: {
-      color: 'gold',
-      text: 'Database',
-      icon: <DatabaseOutlined />,
-    },
-    oracle: { color: 'red', text: 'Oracle', icon: <DatabaseOutlined /> },
-    sqlserver: { color: 'blue', text: 'SQL Server', icon: <DatabaseOutlined /> },
-    redis: { color: 'volcano', text: 'Redis', icon: <DatabaseOutlined /> },
-    clickhouse: { color: 'orange', text: 'ClickHouse', icon: <DatabaseOutlined /> },
-    influxdb: { color: 'cyan', text: 'InfluxDB', icon: <DatabaseOutlined /> },
-    doris: { color: 'geekblue', text: 'Doris', icon: <DatabaseOutlined /> },
-    starrocks: { color: 'purple', text: 'StarRocks', icon: <DatabaseOutlined /> },
-    elasticsearch: { color: 'green', text: 'Elasticsearch', icon: <DatabaseOutlined /> },
-  };
-  return typeMap[type] || { color: 'default', text: type, icon: <DatabaseOutlined /> };
-};
+const getTypeInfo = (type: string) => ({
+  ...getDataSourceTypeDisplay(type),
+  icon: <DatabaseBrandIcon typeOrId={type} size={14} />,
+});
 
 type TFunction = (key: string) => string;
 
@@ -455,7 +424,7 @@ const DataSourceListPage: React.FC = () => {
       
       const { name, code, description, type, is_active, ...restConfig } = values;
       const config = { ...restConfig };
-      if (config.username !== undefined && ['postgresql', 'mysql', 'oracle', 'sqlserver', 'clickhouse', 'influxdb', 'doris', 'starrocks', 'elasticsearch', 'Database'].includes(type)) {
+      if (config.username !== undefined && [...DATA_SOURCE_STANDARD_DB_FORM_TYPES, ...DATA_SOURCE_SEARCH_FORM_TYPES, 'oracle', 'sqlserver'].includes(type)) {
         config.user = config.username;
       }
       if (type === 'sqlserver') {
@@ -586,7 +555,7 @@ const DataSourceListPage: React.FC = () => {
                   <Tag color="blue">{t('pages.system.dataSources.systemDefault', '系统默认')}</Tag>
                 )}
               </Space>
-              <Tag color={typeInfo.color} icon={typeInfo.icon}>
+              <Tag color={typeInfo.color} variant="filled" icon={typeInfo.icon}>
                 {typeInfo.text}
               </Tag>
             </div>
@@ -677,26 +646,12 @@ const DataSourceListPage: React.FC = () => {
       dataIndex: 'type',
       width: 120,
       valueType: 'select',
-      valueEnum: {
-        postgresql: { text: 'PostgreSQL' },
-        mysql: { text: 'MySQL' },
-        mongodb: { text: 'MongoDB' },
-        oracle: { text: 'Oracle' },
-        sqlserver: { text: 'SQL Server' },
-        redis: { text: 'Redis' },
-        clickhouse: { text: 'ClickHouse' },
-        influxdb: { text: 'InfluxDB' },
-        doris: { text: 'Doris' },
-        starrocks: { text: 'StarRocks' },
-        elasticsearch: { text: 'Elasticsearch' },
-        api: { text: 'API' },
-        OAuth: { text: 'OAuth' },
-        Webhook: { text: 'Webhook' },
-        Database: { text: 'Database' },
-      },
+      valueEnum: Object.fromEntries(
+        CONNECTOR_DEFINITIONS.map((c) => [c.type, { text: c.name }]),
+      ),
       render: (_, record) => {
         const typeInfo = getTypeInfo(record.type);
-        return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
+        return <Tag color={typeInfo.color} variant="filled">{typeInfo.text}</Tag>;
       },
     },
     {
@@ -847,7 +802,7 @@ const DataSourceListPage: React.FC = () => {
       render: (_, record: DataSource) => {
         const value = record.type;
         const typeInfo = getTypeInfo(value);
-        return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
+        return <Tag color={typeInfo.color} variant="filled">{typeInfo.text}</Tag>;
       },
     },
     { title: t('pages.system.dataSources.detailColumnDescription'), dataIndex: 'description' },
@@ -1142,23 +1097,7 @@ const DataSourceListPage: React.FC = () => {
           name="type"
           label={t('pages.system.dataSources.labelType')}
           rules={[{ required: true, message: t('pages.system.dataSources.typeRequired') }]}
-          options={[
-            { label: 'PostgreSQL', value: 'postgresql' },
-            { label: 'MySQL', value: 'mysql' },
-            { label: 'MongoDB', value: 'mongodb' },
-            { label: 'Oracle', value: 'oracle' },
-            { label: 'SQL Server', value: 'sqlserver' },
-            { label: 'Redis', value: 'redis' },
-            { label: 'ClickHouse', value: 'clickhouse' },
-            { label: 'InfluxDB', value: 'influxdb' },
-            { label: 'Apache Doris', value: 'doris' },
-            { label: 'StarRocks', value: 'starrocks' },
-            { label: 'Elasticsearch', value: 'elasticsearch' },
-            { label: 'API (通用 REST)', value: 'api' },
-            { label: 'OAuth 认证', value: 'OAuth' },
-            { label: 'Webhook 回调', value: 'Webhook' },
-            { label: 'Database (通用)', value: 'Database' },
-          ]}
+          options={getDataSourceTypeSelectOptions()}
           disabled={isEdit}
           colProps={{ span: 12 }}
         />
@@ -1240,7 +1179,7 @@ const DataSourceListPage: React.FC = () => {
                 );
               }
 
-              if (['postgresql', 'mysql', 'oracle', 'clickhouse', 'influxdb', 'doris', 'starrocks', 'Database'].includes(type)) {
+              if ([...DATA_SOURCE_STANDARD_DB_FORM_TYPES, 'oracle'].includes(type)) {
                 return (
                   <>
                     <ProFormText
@@ -1254,12 +1193,25 @@ const DataSourceListPage: React.FC = () => {
                       name="port"
                       label={t('pages.system.dataSources.labelPort')}
                       placeholder={
-                        type === 'mysql' ? '3306' : 
-                        type === 'postgresql' ? '5432' :
+                        type === 'mysql' || type === 'mariadb' ? '3306' :
+                        type === 'postgresql' || type === 'timescaledb' ? '5432' :
                         type === 'oracle' ? '1521' :
                         type === 'clickhouse' ? '8123' :
                         type === 'doris' || type === 'starrocks' ? '9030' :
-                        type === 'influxdb' ? '8086' : '5432'
+                        type === 'influxdb' ? '8086' :
+                        type === 'tidb' ? '4000' :
+                        type === 'oceanbase' ? '2881' :
+                        type === 'opengauss' || type === 'gaussdb' ? '5432' :
+                        type === 'dameng' ? '5236' :
+                        type === 'kingbase' ? '54321' :
+                        type === 'gbase' ? '5258' :
+                        type === 'sequoiadb' ? '11810' :
+                        type === 'tdengine' ? '6030' :
+                        type === 'couchbase' ? '8091' :
+                        type === 'druid' ? '8082' :
+                        type === 'trino' ? '8080' :
+                        type === 'milvus' ? '19530' :
+                        '5432'
                       }
                       rules={[{ required: true, message: t('pages.system.dataSources.portRequired') }]}
                       fieldProps={{ precision: 0, style: { width: '100%' } }}
@@ -1324,7 +1276,7 @@ const DataSourceListPage: React.FC = () => {
                 );
               }
 
-              if (type === 'redis') {
+              if (type === 'redis' || type === 'keydb') {
                 return (
                   <>
                     <ProFormText
@@ -1359,7 +1311,7 @@ const DataSourceListPage: React.FC = () => {
                 );
               }
 
-              if (type === 'elasticsearch') {
+              if ((DATA_SOURCE_SEARCH_FORM_TYPES as readonly string[]).includes(type)) {
                 return (
                   <>
                     <ProFormText
@@ -1392,44 +1344,67 @@ const DataSourceListPage: React.FC = () => {
                 );
               }
 
-              if (type === 'api') {
+              if (type === 'sqlite') {
+                return (
+                  <ProFormText
+                    name="file_path"
+                    label={t('pages.system.dataSources.labelFilePath')}
+                    placeholder={t('pages.system.dataSources.filePathPlaceholder')}
+                    rules={[{ required: true, message: t('pages.system.dataSources.filePathRequired') }]}
+                    colProps={{ span: 24 }}
+                  />
+                );
+              }
+
+              if (type === 'prometheus' || type === 'memcached' || type === 'etcd' || type === 'chroma') {
                 return (
                   <>
                     <ProFormText
-                      name="base_url"
-                      label={t('pages.system.dataSources.labelBaseUrl')}
-                      placeholder={t('pages.system.dataSources.baseUrlPlaceholder')}
-                      rules={[{ required: true, message: t('pages.system.dataSources.baseUrlRequired') }]}
-                      colProps={{ span: 24 }}
-                    />
-                    <ProFormSelect
-                      name="auth_type"
-                      label={t('pages.system.dataSources.labelAuthType')}
-                      options={[
-                        { value: 'none', label: t('pages.system.dataSources.authNone') },
-                        { value: 'bearer', label: t('pages.system.dataSources.authBearer') },
-                        { value: 'basic', label: t('pages.system.dataSources.authBasic') },
-                        { value: 'header', label: t('pages.system.dataSources.authHeader') },
-                      ]}
-                      initialValue="bearer"
+                      name="host"
+                      label={t('pages.system.dataSources.labelHost')}
+                      placeholder={t('pages.system.dataSources.hostPlaceholder')}
+                      rules={[{ required: true, message: t('pages.system.dataSources.hostRequired') }]}
                       colProps={{ span: 12 }}
                     />
-                    <ProFormDependency name={['auth_type']}>
-                      {({ auth_type }) => {
-                        if (auth_type === 'bearer') {
-                          return <ProFormText.Password name="token" label={t('pages.system.dataSources.labelToken')} placeholder={t('pages.system.dataSources.passwordPlaceholderShort')} colProps={{ span: 12 }} />;
-                        }
-                        if (auth_type === 'basic') {
-                          return (
-                            <>
-                              <ProFormText name="basic_user" label={t('pages.system.dataSources.labelBasicUser')} colProps={{ span: 12 }} />
-                              <ProFormText.Password name="basic_pass" label={t('pages.system.dataSources.labelBasicPass')} colProps={{ span: 12 }} />
-                            </>
-                          );
-                        }
-                        return null;
-                      }}
-                    </ProFormDependency>
+                    <ProFormDigit
+                      name="port"
+                      label={t('pages.system.dataSources.labelPort')}
+                      placeholder={
+                        type === 'prometheus' ? '9090' :
+                        type === 'memcached' ? '11211' :
+                        type === 'etcd' ? '2379' : '8000'
+                      }
+                      rules={[{ required: true, message: t('pages.system.dataSources.portRequired') }]}
+                      fieldProps={{ precision: 0, style: { width: '100%' } }}
+                      colProps={{ span: 12 }}
+                    />
+                  </>
+                );
+              }
+
+              if (type === 'qdrant' || type === 'weaviate') {
+                return (
+                  <>
+                    <ProFormText
+                      name="host"
+                      label={t('pages.system.dataSources.labelHost')}
+                      placeholder={t('pages.system.dataSources.hostPlaceholder')}
+                      rules={[{ required: true, message: t('pages.system.dataSources.hostRequired') }]}
+                      colProps={{ span: 12 }}
+                    />
+                    <ProFormDigit
+                      name="port"
+                      label={t('pages.system.dataSources.labelPort')}
+                      placeholder={type === 'qdrant' ? '6333' : '8080'}
+                      rules={[{ required: true, message: t('pages.system.dataSources.portRequired') }]}
+                      fieldProps={{ precision: 0, style: { width: '100%' } }}
+                      colProps={{ span: 12 }}
+                    />
+                    <ProFormText.Password
+                      name="api_key"
+                      label={t('pages.system.dataSources.labelApiKey')}
+                      colProps={{ span: 24 }}
+                    />
                   </>
                 );
               }

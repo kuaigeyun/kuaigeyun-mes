@@ -9,6 +9,7 @@
 
 import { CurrentUser } from '../types/api';
 import { hasPlatformAdministrativeAuthority } from './auth';
+import { getSessionCurrentUser } from './sessionCurrentUser';
 
 export const SYSTEM_ADMIN_ROLE_CODES = ['ADMIN', 'SYSTEM_ADMIN', 'SUPER_ADMIN'] as const;
 const SYSTEM_ADMIN_ROLE_NAME = '系统管理员';
@@ -162,36 +163,9 @@ function hasAnyMenuPermission(user: CurrentUser | undefined, permissionCodes: st
   return permissionCodes.some((code) => userHasMenuPermission(user, code));
 }
 
-/** 合并 store 与 localStorage 中的权限/管理员标志，避免 /auth/me 竞态导致误判 */
+/** 菜单权限判定用户：Query 真源，不再从 user_info 补丁合并 */
 export function resolveUserForMenuPermission(user: CurrentUser | undefined): CurrentUser | undefined {
-  if (!user) return undefined;
-  if (typeof window === 'undefined') return user;
-  try {
-    const raw = localStorage.getItem('user_info');
-    if (!raw) return user;
-    const saved = JSON.parse(raw);
-    const savedPerms = Array.isArray(saved?.permissions) ? saved.permissions : [];
-    const merged: CurrentUser = { ...user };
-    if (!merged.permissions?.length && savedPerms.length) {
-      merged.permissions = savedPerms;
-    }
-    if (!merged.is_tenant_admin && saved?.is_tenant_admin) {
-      merged.is_tenant_admin = true;
-    }
-    if (!merged.is_infra_admin && saved?.is_infra_admin) {
-      merged.is_infra_admin = true;
-    }
-    if (!merged.user_type && saved?.user_type) {
-      merged.user_type = saved.user_type;
-    }
-    if (!merged.roles?.length && Array.isArray(saved?.roles) && saved.roles.length) {
-      merged.roles = saved.roles;
-    }
-    return merged;
-  } catch {
-    // ignore
-  }
-  return user;
+  return user ?? getSessionCurrentUser();
 }
 
 type PermissionMenuItem = {

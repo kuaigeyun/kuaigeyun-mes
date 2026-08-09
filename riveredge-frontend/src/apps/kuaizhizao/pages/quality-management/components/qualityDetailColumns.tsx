@@ -7,6 +7,7 @@ import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
 import { Typography } from 'antd';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import {
   renderQualityDocStatusTag,
   renderQualityQualityStatusTag,
@@ -47,21 +48,24 @@ export function buildQualityInspectionDetailMaterialColumns<T extends Record<str
 export function buildQualityInspectionDetailQuantityStatusColumns<T extends Record<string, unknown>>(
   t: TFunction,
 ): ProDescriptionsItemProps<T>[] {
+  const renderQtyWithUnit = (qty: unknown, record: T) =>
+    formatQuantityWithUnit(qty, (record as { material_unit?: string }).material_unit);
+
   return [
     {
       title: t('app.kuaizhizao.quality.common.columns.inspectionQty'),
       dataIndex: 'inspection_quantity',
-      valueType: 'digit',
+      render: (_, r) => renderQtyWithUnit(r.inspection_quantity, r),
     },
     {
       title: t('app.kuaizhizao.quality.common.columns.qualifiedQty'),
       dataIndex: 'qualified_quantity',
-      valueType: 'digit',
+      render: (_, r) => renderQtyWithUnit(r.qualified_quantity, r),
     },
     {
       title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'),
       dataIndex: 'unqualified_quantity',
-      valueType: 'digit',
+      render: (_, r) => renderQtyWithUnit(r.unqualified_quantity, r),
     },
     {
       title: t('app.kuaizhizao.quality.common.columns.inspectionStatus'),

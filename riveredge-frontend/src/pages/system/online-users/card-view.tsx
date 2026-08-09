@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { App, Card, Avatar, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, theme } from 'antd';
 import { EyeOutlined, LogoutOutlined, ReloadOutlined, UserOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
   getOnlineUsers,
   getOnlineUserStats,
@@ -36,7 +37,7 @@ const CardView: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<OnlineUser[]>([]);
   const [stats, setStats] = useState<OnlineUserStats | null>(null);

@@ -11,6 +11,7 @@ import { hasPermission } from '../../../utils/permission';
 import type { WorkCenter } from '../types/factory';
 import { factoryListItems, workCenterApi } from '../services/factory';
 import { WorkCenterFormModal } from './WorkCenterFormModal';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 
 function getWorkCenterCodeName(wc: WorkCenter | Record<string, unknown>): { code: string; name: string } {
   const row = wc as Record<string, unknown>;
@@ -57,7 +58,7 @@ export const WorkCenterSelectDropdown: React.FC<WorkCenterSelectDropdownProps> =
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const { token } = theme.useToken();
   const [internalList, setInternalList] = useState<WorkCenter[]>([]);
   const [internalLoading, setInternalLoading] = useState(false);

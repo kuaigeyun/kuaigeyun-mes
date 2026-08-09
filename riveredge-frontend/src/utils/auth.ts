@@ -151,7 +151,8 @@ export function isAuthenticated(): boolean {
  * @param token - JWT Token
  * @returns Token 载荷数据，如果解析失败返回 null
  */
-function decodeJWT(token: string): any | null {
+/** 解析 JWT payload（不验签，仅读取 sub / tenant_id 等声明） */
+export function decodeJWT(token: string): any | null {
   try {
     // JWT 格式：header.payload.signature
     const parts = token.split('.');
@@ -244,6 +245,16 @@ export function getTokenRemainingTime(token?: string | null): number {
  * 平台超级管理员身份（唯一真源：JWT `is_infra_superadmin`）。
  * 选中租户上下文不影响判定；不依赖租户 manifest RBAC。
  */
+/** JWT `sub` 对应的用户 ID；无法解析时返回 null */
+export function getTokenSubjectUserId(token?: string | null): number | null {
+  const payload = decodeJWT(token || getToken() || '');
+  if (!payload || payload.sub == null) {
+    return null;
+  }
+  const userId = Number(payload.sub);
+  return Number.isFinite(userId) && userId > 0 ? userId : null;
+}
+
 export function isInfraSuperAdminFromToken(): boolean {
   const token = getToken();
   if (!token) return false;

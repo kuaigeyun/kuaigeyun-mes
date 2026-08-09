@@ -14,9 +14,26 @@ import {
   RocketOutlined,
   InteractionOutlined,
   ApartmentOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 
-export type AppConnectorCategory = 'collaboration' | 'erp' | 'plm' | 'crm' | 'oa' | 'iot' | 'wms';
+export type AppConnectorCategory =
+  | 'collaboration'
+  | 'erp'
+  | 'plm'
+  | 'crm'
+  | 'oa'
+  | 'iot'
+  | 'wms'
+  | 'ai';
+
+/** 站点 integrations 配置类连接器（非 application_connection 表记录） */
+export const SITE_INTEGRATION_CONNECTOR_TYPES = ['deepseek'] as const;
+export type SiteIntegrationConnectorType = (typeof SITE_INTEGRATION_CONNECTOR_TYPES)[number];
+
+export function isSiteIntegrationConnector(type: string): type is SiteIntegrationConnectorType {
+  return (SITE_INTEGRATION_CONNECTOR_TYPES as readonly string[]).includes(type);
+}
 
 export interface AppConnectorDefinition {
   id: string;
@@ -439,6 +456,16 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     icon: <DatabaseOutlined />,
     defaultConfig: { base_url: '', username: '', password: '' },
   },
+  // AI（站点 integrations 配置，点击卡片打开 KU-AI 配置弹窗）
+  {
+    id: 'deepseek',
+    name: 'KU-AI DeepSeek',
+    type: 'deepseek',
+    category: 'ai',
+    description: 'DeepSeek 对话、OCR 视觉识别与 KU-AI 能力配置',
+    icon: <RobotOutlined />,
+    defaultConfig: {},
+  },
 ];
 
 export const APP_CONNECTOR_CATEGORIES = [
@@ -450,4 +477,5 @@ export const APP_CONNECTOR_CATEGORIES = [
   { key: 'oa', label: 'OA' },
   { key: 'iot', label: 'IoT' },
   { key: 'wms', label: 'WMS' },
+  { key: 'ai', label: 'AI' },
 ] as const;

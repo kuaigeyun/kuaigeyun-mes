@@ -31,15 +31,24 @@ export interface CreateWorkOrderOperationsListProps {
   disabled?: boolean
 }
 
+function operationRowKey(operation: any, index: number): string {
+  if (operation?.id != null) return `woo-${operation.id}`
+  return `new-${operation?.operation_id ?? 'x'}-${index}`
+}
+
 const SortableCreateOperationItem: React.FC<{
   operation: any
   index: number
+  sortableId: string
   disabled?: boolean
   onDelete: () => void
-}> = ({ operation, index, disabled, onDelete }) => {
+}> = ({ operation, index, sortableId, disabled, onDelete }) => {
+  const { t } = useTranslation()
   const { token } = theme.useToken()
+  const reported = Boolean(operation?.has_reporting)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: operation.operation_id,
+    id: sortableId,
+    disabled: disabled || reported,
   })
 
   const style = {
@@ -57,7 +66,7 @@ const SortableCreateOperationItem: React.FC<{
 
   return (
     <div ref={setNodeRef} style={style}>
-      {!disabled && (
+      {!disabled && !reported && (
         <div {...attributes} {...listeners} style={{ cursor: 'grab', display: 'flex' }}>
           <HolderOutlined style={{ color: token.colorTextSecondary }} />
         </div>
@@ -68,9 +77,14 @@ const SortableCreateOperationItem: React.FC<{
             {index + 1}. {operation.operation_name}
           </span>
           <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>({operation.operation_code})</span>
+          {reported && (
+            <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>
+              {t('app.kuaizhizao.workOrder.msgOpReportedLocked')}
+            </span>
+          )}
         </Space>
       </div>
-      {!disabled && (
+      {!disabled && !reported && (
         <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={onDelete} />
       )}
     </div>
@@ -93,11 +107,17 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
     })
   )
 
+  const rowKeys = selectedOperations.map((op, idx) => operationRowKey(op, idx))
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     if (over && active.id !== over.id) {
-      const oldIndex = selectedOperations.findIndex(op => op.operation_id === active.id)
-      const newIndex = selectedOperations.findIndex(op => op.operation_id === over.id)
+      const oldIndex = rowKeys.findIndex((key) => key === String(active.id))
+      const newIndex = rowKeys.findIndex((key) => key === String(over.id))
+      if (oldIndex < 0 || newIndex < 0) return
+      if (selectedOperations[oldIndex]?.has_reporting || selectedOperations[newIndex]?.has_reporting) {
+        return
+      }
 
       const newOps = arrayMove(selectedOperations, oldIndex, newIndex).map((op, idx) => ({
         ...op,
@@ -111,9 +131,13 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
     }
   }
 
-  const handleDelete = (operationId: number) => {
+  const handleDeleteAt = (index: number) => {
+    const target = selectedOperations[index]
+    if (!target || target.has_reporting) {
+      return
+    }
     const newOps = selectedOperations
-      .filter(op => op.operation_id !== operationId)
+      .filter((_, idx) => idx !== index)
       .map((op, idx) => ({
         ...op,
         sequence: idx + 1,
@@ -142,18 +166,16 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext
-        items={selectedOperations.map(op => op.operation_id)}
-        strategy={verticalListSortingStrategy}
-      >
+      <SortableContext items={rowKeys} strategy={verticalListSortingStrategy}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {selectedOperations.map((op, idx) => (
             <SortableCreateOperationItem
-              key={op.operation_id}
+              key={rowKeys[idx]}
+              sortableId={rowKeys[idx]}
               operation={op}
               index={idx}
               disabled={disabled}
-              onDelete={() => handleDelete(op.operation_id)}
+              onDelete={() => handleDeleteAt(idx)}
             />
           ))}
         </div>

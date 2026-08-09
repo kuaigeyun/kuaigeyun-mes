@@ -7,6 +7,7 @@ import { UniDropdown, type UniDropdownProps } from '../../../components/uni-drop
 import type { Supplier } from '../types/supply-chain';
 import { SupplierFormModal } from './SupplierFormModal';
 import { useGlobalStore } from '../../../stores/globalStore';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
   ReferenceDisplayAccessError,
   canReadReferenceResource,
@@ -53,7 +54,7 @@ export const SupplierSelectDropdown: React.FC<SupplierSelectDropdownProps> = ({
   ...rest
 }) => {
   const { message: messageApi } = App.useApp();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const [internalSuppliers, setInternalSuppliers] = useState<Supplier[]>([]);
   const [internalLoading, setInternalLoading] = useState(false);
   const [formOpen, setFormOpen] = useState(false);

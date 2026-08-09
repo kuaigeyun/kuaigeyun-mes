@@ -33,6 +33,12 @@ import { INBOUND_LIST_PATH, inboundWorkOrderEntryPath } from './inboundPaths';
 import type { InboundReceiptType } from './inboundHubTypes';
 import { draftDayjs, draftOptionalNumber, usePullEntryFormDraft } from '../shared/pullEntryFormDraft';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import {
+  MaterialUnitSelect,
+  fetchMaterialForUnitSelectCache,
+} from '../../../../../components/material-unit-select';
+import { recalculateQuantityOnUnitChange } from '../../../../../components/quantity-with-unit/formHelpers';
+import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 
 type PreviewLine = {
   material_id: number;
@@ -71,6 +77,10 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
   const [workOrder, setWorkOrder] = useState<Record<string, unknown> | null>(null);
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [receiptQty, setReceiptQty] = useState(0);
+  const [receiptUnit, setReceiptUnit] = useState('');
+  const [displayPendingQty, setDisplayPendingQty] = useState(0);
+  const [displayDocQty, setDisplayDocQty] = useState(0);
+  const [displayReceivedQty, setDisplayReceivedQty] = useState(0);
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
   const [receiptTime, setReceiptTime] = useState(() => dayjs());
   const [receiptNotes, setReceiptNotes] = useState('');
@@ -82,7 +92,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
   const receiptType: InboundReceiptType = preview?.inbound_doc_kind ?? 'finished_goods';
   const inboundTypeLabel = inboundReceiptTypeLabel(t, receiptType);
   const pagePath = Number.isFinite(woId) && woId > 0 ? inboundWorkOrderEntryPath(woId) : INBOUND_LIST_PATH;
-  const maxQty = Number(line?.source_pending_quantity ?? 0);
+  const maxQty = displayPendingQty > 0 ? displayPendingQty : Number(line?.source_pending_quantity ?? 0);
   const pageTitle = preview?.work_order_code
     ? `${pullFromWorkOrderAction.label} — ${preview.work_order_code}`
     : pullFromWorkOrderAction.label;
@@ -151,6 +161,12 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
         setWarehouseOptions(mapWarehouseSelectOptions(whRes));
         setPreview(previewRaw);
         setWorkOrder(woRaw as Record<string, unknown>);
+        const ln = previewRaw.lines[0];
+        const unit = ln.material_unit || '个';
+        setReceiptUnit(unit);
+        setDisplayPendingQty(Number(ln.source_pending_quantity ?? 0));
+        setDisplayDocQty(Number(ln.source_doc_quantity ?? 0));
+        setDisplayReceivedQty(Number(ln.source_received_quantity ?? 0));
         setReceiptQty(0);
         applyDraftOnce((draft) => {
           const qty = draftOptionalNumber(draft.receiptQty);
@@ -221,7 +237,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
               material_code: line.material_code,
               material_name: line.material_name,
               material_spec: line.material_spec,
-              material_unit: line.material_unit,
+              material_unit: receiptUnit || line.material_unit,
               receipt_quantity: qty,
               qualified_quantity: qty,
               unqualified_quantity: 0,
@@ -257,7 +273,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
               material_code: line.material_code,
               material_name: line.material_name,
               material_spec: line.material_spec,
-              material_unit: line.material_unit,
+              material_unit: receiptUnit || line.material_unit,
               receipt_quantity: qty,
               qualified_quantity: qty,
               unqualified_quantity: 0,
@@ -309,10 +325,42 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseInbound.col.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true, render: (v: unknown) => v || '—' },
-      { title: t('app.kuaizhizao.warehouseInbound.col.unit'), dataIndex: 'material_unit', width: 70, align: 'center' as const },
-      { title: t('app.kuaizhizao.warehouseInbound.col.plannedQty'), dataIndex: 'source_doc_quantity', width: 100, align: 'right' as const },
-      { title: t('app.kuaizhizao.warehouseInbound.col.receivedQty'), dataIndex: 'source_received_quantity', width: 90, align: 'right' as const },
-      { title: t('app.kuaizhizao.warehouseInbound.col.pendingQty'), dataIndex: 'source_pending_quantity', width: 90, align: 'right' as const },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.unit'),
+        width: 88,
+        align: 'center' as const,
+        render: () =>
+          line?.material_id ? (
+            <MaterialUnitSelect
+              materialId={line.material_id}
+              value={receiptUnit || line.material_unit}
+              size="small"
+              noStyle
+              onChange={(newUnit) => {
+                void (async () => {
+                  const material = await fetchMaterialForUnitSelectCache(line.material_id);
+                  const convert = (qty: number) =>
+                    recalculateQuantityOnUnitChange({
+                      material,
+                      currentQuantity: qty,
+                      oldUnit: receiptUnit || line.material_unit,
+                      newUnit,
+                    });
+                  setReceiptUnit(newUnit);
+                  setDisplayPendingQty(convert(displayPendingQty));
+                  setDisplayDocQty(convert(displayDocQty));
+                  setDisplayReceivedQty(convert(displayReceivedQty));
+                  setReceiptQty((prev) => convert(prev));
+                })();
+              }}
+            />
+          ) : (
+            receiptUnit || line?.material_unit || '—'
+          ),
+      },
+      { title: t('app.kuaizhizao.warehouseInbound.col.plannedQty'), width: 100, align: 'right' as const, render: () => formatQuantityWithUnit(displayDocQty, receiptUnit || line?.material_unit) },
+      { title: t('app.kuaizhizao.warehouseInbound.col.receivedQty'), width: 90, align: 'right' as const, render: () => formatQuantityWithUnit(displayReceivedQty, receiptUnit || line?.material_unit) },
+      { title: t('app.kuaizhizao.warehouseInbound.col.pendingQty'), width: 90, align: 'right' as const, render: () => formatQuantityWithUnit(displayPendingQty, receiptUnit || line?.material_unit) },
       {
         title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
         width: 150,
@@ -344,7 +392,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
         ),
       },
     ],
-    [t, warehouseId, warehouseOptions, receiptQty, maxQty],
+    [t, warehouseId, warehouseOptions, receiptQty, maxQty, line, receiptUnit, displayDocQty, displayReceivedQty, displayPendingQty],
   );
 
   return (

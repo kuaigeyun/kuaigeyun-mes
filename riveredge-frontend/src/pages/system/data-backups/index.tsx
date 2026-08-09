@@ -9,6 +9,7 @@ import React, { useState, useMemo } from 'react';
 import dayjs from 'dayjs';
 import { rowActionKind } from '../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
   ActionType,
   ProColumns,
@@ -62,7 +63,7 @@ const DataBackupsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const { Text } = Typography;
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const actionRef = React.useRef<ActionType>(null);
 
   const getStatusInfo = (status: string): { status: 'success' | 'error' | 'processing' | 'default'; text: string } => {

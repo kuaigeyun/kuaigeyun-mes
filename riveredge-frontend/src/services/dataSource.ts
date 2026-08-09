@@ -1,12 +1,11 @@
 /**
  * 数据源管理服务
  *
- * 后端已统一：数据源由「数据连接」IntegrationConfig 承载，仅 type 为 postgresql/mysql/mongodb/api 的配置。
- * 本服务请求兼容层 /core/data-sources（底层读写 IntegrationConfig），自动过滤当前组织。
+ * 后端统一由 IntegrationConfig 承载；本服务仅访问 /core/data-sources，
+ * 自动过滤直连数据库类型，不包含应用连接器或 REST API 类型。
  */
 
 import { apiRequest } from './api';
-import { getIntegrationConfigListAllMatching } from './integrationConfig';
 
 export interface DataSource {
   uuid: string;
@@ -14,7 +13,7 @@ export interface DataSource {
   name: string;
   code: string;
   description?: string;
-  type: 'OAuth' | 'API' | 'Webhook' | 'Database' | 'postgresql' | 'mysql' | 'mongodb';
+  type: string;
   config: Record<string, any>; // 已脱敏，密码不暴露
   is_active: boolean;
   is_connected: boolean;
@@ -49,7 +48,7 @@ export interface CreateDataSourceData {
   name: string;
   code: string;
   description?: string;
-  type: 'OAuth' | 'API' | 'Webhook' | 'Database' | 'postgresql' | 'mysql' | 'mongodb';
+  type: string;
   config: Record<string, any>;
   is_active?: boolean;
 }
@@ -58,7 +57,7 @@ export interface UpdateDataSourceData {
   name?: string;
   code?: string;
   description?: string;
-  type?: 'OAuth' | 'API' | 'Webhook' | 'Database' | 'postgresql' | 'mysql' | 'mongodb';
+  type?: string;
   config?: Record<string, any>;
   is_active?: boolean;
 }
@@ -71,16 +70,18 @@ export interface TestConnectionResponse {
   verification_level?: 'config_only' | 'live';
 }
 
+/** 与后端 data_sources 列表 API 的 page_size 上限一致 */
+export const DATA_SOURCE_LIST_MAX_PAGE_SIZE = 100;
+
+const DATA_SOURCE_API = '/core/data-sources';
+
 /**
  * 获取数据源列表
- * 
- * 自动过滤当前组织的数据源。
- * 
- * @param params - 查询参数
- * @returns 数据源列表
+ *
+ * 自动过滤当前组织的数据源（不含应用连接器）。
  */
 export async function getDataSourceList(params?: DataSourceListParams): Promise<DataSourceListResponse> {
-  return apiRequest<DataSourceListResponse>('/core/integration-configs', {
+  return apiRequest<DataSourceListResponse>(DATA_SOURCE_API, {
     params: {
       page: params?.page ?? 1,
       page_size: params?.page_size ?? 20,
@@ -93,25 +94,44 @@ export async function getDataSourceList(params?: DataSourceListParams): Promise<
   });
 }
 
-/** 与集成配置共用接口；按筛选条件分页拉全量（单请求 page_size 不得超过后端上限）。 */
+/** 按筛选条件拉取全部数据源（多页拼接，每页不超过 {@link DATA_SOURCE_LIST_MAX_PAGE_SIZE}） */
 export async function getDataSourceListAllMatching(
   params?: Omit<DataSourceListParams, 'page' | 'page_size'>,
 ): Promise<DataSource[]> {
-  return getIntegrationConfigListAllMatching(params) as Promise<DataSource[]>;
+  const page_size = DATA_SOURCE_LIST_MAX_PAGE_SIZE;
+  let page = 1;
+  const out: DataSource[] = [];
+  for (;;) {
+    const res = await getDataSourceList({ ...params, page, page_size });
+    out.push(...res.items);
+    if (res.items.length === 0 || res.items.length < page_size || out.length >= res.total) {
+      break;
+    }
+    page += 1;
+    if (page > 500) break;
+  }
+  return out;
+}
+
+export async function getDataSourceDriverAvailability(): Promise<Record<string, boolean>> {
+  const result = await apiRequest<{ availability: Record<string, boolean> }>(
+    `${DATA_SOURCE_API}/driver-availability`,
+  );
+  return result.availability ?? {};
 }
 
 /**
  * 获取数据源详情
  */
 export async function getDataSourceByUuid(dataSourceUuid: string): Promise<DataSource> {
-  return apiRequest<DataSource>(`/core/integration-configs/${dataSourceUuid}`);
+  return apiRequest<DataSource>(`${DATA_SOURCE_API}/${dataSourceUuid}`);
 }
 
 /**
  * 创建数据源
  */
 export async function createDataSource(data: CreateDataSourceData): Promise<DataSource> {
-  return apiRequest<DataSource>('/core/integration-configs', {
+  return apiRequest<DataSource>(DATA_SOURCE_API, {
     method: 'POST',
     data,
   });
@@ -121,7 +141,7 @@ export async function createDataSource(data: CreateDataSourceData): Promise<Data
  * 更新数据源
  */
 export async function updateDataSource(dataSourceUuid: string, data: UpdateDataSourceData): Promise<DataSource> {
-  return apiRequest<DataSource>(`/core/integration-configs/${dataSourceUuid}`, {
+  return apiRequest<DataSource>(`${DATA_SOURCE_API}/${dataSourceUuid}`, {
     method: 'PUT',
     data,
   });
@@ -131,7 +151,7 @@ export async function updateDataSource(dataSourceUuid: string, data: UpdateDataS
  * 删除数据源
  */
 export async function deleteDataSource(dataSourceUuid: string): Promise<void> {
-  return apiRequest<void>(`/core/integration-configs/${dataSourceUuid}`, {
+  return apiRequest<void>(`${DATA_SOURCE_API}/${dataSourceUuid}`, {
     method: 'DELETE',
   });
 }
@@ -140,7 +160,7 @@ export async function deleteDataSource(dataSourceUuid: string): Promise<void> {
  * 测试数据源连接
  */
 export async function testDataSourceConnection(dataSourceUuid: string): Promise<TestConnectionResponse> {
-  const result = await apiRequest<any>(`/core/integration-configs/${dataSourceUuid}/test`, {
+  const result = await apiRequest<any>(`${DATA_SOURCE_API}/${dataSourceUuid}/test`, {
     method: 'POST',
   });
   return {
@@ -205,4 +225,3 @@ export async function ensureSystemDefaultDataSource(): Promise<EnsureSystemDefau
     { method: 'POST' },
   );
 }
-

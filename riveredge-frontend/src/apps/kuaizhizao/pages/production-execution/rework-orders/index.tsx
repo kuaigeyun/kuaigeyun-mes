@@ -21,6 +21,7 @@ import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   UniPullQueryModal,
   filterByPullScope,
@@ -153,7 +154,7 @@ const ReworkOrdersPage: React.FC = () => {
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [reworkTypeOptions, setReworkTypeOptions] = useState<Array<{ label: string; value: string }>>(() => REWORK_TYPE_FALLBACK(t));

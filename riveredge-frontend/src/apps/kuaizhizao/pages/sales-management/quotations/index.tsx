@@ -1,4 +1,5 @@
 import { rowActionKind, rowActionAddFollowUpFromDocument } from '../../../../../components/uni-action';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 /**
  * 报价单管理页面
  *
@@ -853,7 +854,7 @@ const QuotationsPage: React.FC = () => {
     actionRef.current?.reload();
   }, []);
 
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const quotationPerms = useResourcePermissions(QUOTATION_RESOURCE);
   const salesContractPerms = useResourcePermissions(SALES_CONTRACT_RESOURCE);
   const permDeniedTitle = t('common.permissionDenied');

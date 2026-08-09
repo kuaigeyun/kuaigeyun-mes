@@ -165,6 +165,8 @@ interface UserPreferenceState {
   clearForLogout: () => void;
   /** 同步从当前账户缓存恢复偏好，用于登录后首帧展示；不标记 initialized，后续仍须 fetchPreferences 以数据库为准 */
   rehydrateFromStorage: () => void;
+  /** Query / 壳层 init 写入云端偏好（唯一入口，含表格列 localStorage 同步） */
+  applyPreferencesFromServer: (preferences: Record<string, any>) => void;
 }
 
 /** theme / i18n 并行 init 时共用同一次拉取，后来者 await 而非直接 return */
@@ -264,6 +266,17 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
         // 仅恢复本地缓存供首帧展示；initialized 仅在 fetchPreferences 完成后置 true，避免跳过 API 拉取
         set((s) => ({ ...s, preferences: cached }));
         syncTableColumnsToLocalStorage(cached);
+      },
+
+      applyPreferencesFromServer: (preferences) => {
+        const finalPrefs =
+          typeof preferences === 'object' && preferences !== null ? preferences : {};
+        set({
+          preferences: finalPrefs,
+          loading: false,
+          initialized: true,
+        });
+        syncTableColumnsToLocalStorage(finalPrefs);
       },
 
       updatePreferences: async (newPrefs) => {

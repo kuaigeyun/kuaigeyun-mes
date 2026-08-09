@@ -7,6 +7,7 @@ Author: Luigi Lu
 Date: 2025-01-01
 """
 
+import asyncio
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -105,6 +106,95 @@ from apps.kuaizhizao.utils.material_source_helper import (
 from loguru import logger
 from infra.services.business_config_service import BusinessConfigService
 from infra.models.user import User
+
+
+async def _batch_sop_for_master_operations(
+    tenant_id: int,
+    *,
+    product_id: Optional[int],
+    master_operation_ids: Iterable[int],
+) -> Dict[int, Any]:
+    """
+    批量解析工单工序卡所需 SOP（与 ProcessService.get_sop_for_reporting 规则一致），
+    避免按工序循环重复加载工单产品/物料。
+    """
+    from apps.master_data.models.process import SOP
+    from apps.master_data.schemas.process_schemas import SOPResponse
+
+    unique_ids = sorted({int(i) for i in master_operation_ids if i is not None})
+    if not unique_ids:
+        return {}
+
+    material_uuid: Optional[str] = None
+    group_uuid: Optional[str] = None
+    if product_id:
+        material = await Material.filter(
+            id=int(product_id),
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if material:
+            material_uuid = str(material.uuid)
+            group_id = getattr(material, "group_id", None)
+            if group_id:
+                group = await MaterialGroup.filter(
+                    id=int(group_id),
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                ).first()
+                if group:
+                    group_uuid = str(group.uuid)
+
+    material_sops: List[Any] = []
+    group_sops: List[Any] = []
+    if material_uuid:
+        material_sops = await SOP.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+            material_uuids__contains=[material_uuid],
+        ).prefetch_related("operation").all()
+    if group_uuid:
+        group_sops = await SOP.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+            material_group_uuids__contains=[group_uuid],
+        ).prefetch_related("operation").all()
+    op_sops = await SOP.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        is_active=True,
+        operation_id__in=unique_ids,
+    ).prefetch_related("operation").all()
+
+    def _pick(sops: List[Any], op_id: int) -> Any:
+        exact = sorted(
+            (s for s in sops if getattr(s, "operation_id", None) == op_id),
+            key=lambda s: str(getattr(s, "code", "") or ""),
+        )
+        if exact:
+            return exact[0]
+        unbound = sorted(
+            (s for s in sops if getattr(s, "operation_id", None) is None),
+            key=lambda s: str(getattr(s, "code", "") or ""),
+        )
+        return unbound[0] if unbound else None
+
+    result: Dict[int, Any] = {}
+    for op_id in unique_ids:
+        sop = _pick(material_sops, op_id) if material_sops else None
+        if sop is None and group_sops:
+            sop = _pick(group_sops, op_id)
+        if sop is None:
+            op_only = sorted(
+                (s for s in op_sops if getattr(s, "operation_id", None) == op_id),
+                key=lambda s: str(getattr(s, "code", "") or ""),
+            )
+            sop = op_only[0] if op_only else None
+        if sop is not None:
+            result[op_id] = SOPResponse.model_validate(sop)
+    return result
 
 
 async def _batch_default_operators_snapshots_by_master_operation_id(
@@ -221,6 +311,123 @@ WORK_ORDER_IN_PROGRESS_STATUS = (
     "IN_PROGRESS",
     "RELEASED",
 )
+
+
+_SCHEDULABLE_WO_STATUSES = frozenset({"draft", "released", "in_progress"})
+
+
+def _business_datetimes_equal(a: Any, b: Any) -> bool:
+    if a is None and b is None:
+        return True
+    if a is None or b is None:
+        return False
+    return coerce_business_datetime_to_utc(a) == coerce_business_datetime_to_utc(b)
+
+
+def _is_schedulable_work_order_status(status: Optional[str]) -> bool:
+    from apps.kuaizhizao.constants import normalize_status
+
+    normalized = normalize_status(str(status or "")).lower()
+    return normalized in _SCHEDULABLE_WO_STATUSES
+
+
+def _referenced_work_order_operation_ids(operations: Iterable[Any]) -> set[int]:
+    """从工序批量更新 payload 收集已引用的工单工序行 id。"""
+    referenced: set[int] = set()
+    for op_data in operations:
+        wo_op_id = getattr(op_data, "id", None)
+        if wo_op_id is not None:
+            referenced.add(int(wo_op_id))
+    return referenced
+
+
+def _match_existing_work_order_operation(
+    op_data: Any,
+    existing_operations: list[WorkOrderOperation],
+    used_existing_ids: set[int],
+) -> Optional[WorkOrderOperation]:
+    """匹配清单行到既有工单工序：有行 id 时只按 id；否则按主数据 operation_id（原序号）。"""
+    wo_op_id = getattr(op_data, "id", None)
+    if wo_op_id is not None:
+        target_id = int(wo_op_id)
+        for eop in existing_operations:
+            if eop.id == target_id and eop.id not in used_existing_ids and eop.deleted_at is None:
+                return eop
+        return None
+    payload_master_id = int(op_data.operation_id)
+    for eop in sorted(existing_operations, key=lambda o: (o.sequence or 0, o.id or 0)):
+        if eop.id in used_existing_ids or eop.deleted_at is not None:
+            continue
+        if int(eop.operation_id) == payload_master_id:
+            return eop
+    return None
+
+
+def _work_order_operation_ids_to_remove(
+    existing_operations: Iterable[WorkOrderOperation],
+    reported_operation_ids: set[int],
+    matched_existing_ids: set[int],
+) -> list[int]:
+    """返回应软删的工单工序 id（未报工且未匹配到新清单）。"""
+    to_remove: list[int] = []
+    for op in existing_operations:
+        if op.deleted_at is not None:
+            continue
+        if op.id in reported_operation_ids:
+            continue
+        if op.id not in matched_existing_ids:
+            to_remove.append(op.id)
+    return to_remove
+
+
+async def _soft_delete_work_order_operation_row(
+    op: WorkOrderOperation,
+    updated_by: int,
+    user_name: str,
+) -> None:
+    """软删工单工序并释放 (tenant, work_order, sequence) 唯一槽位。"""
+    op.deleted_at = now_utc()
+    op.sequence = -int(op.id)
+    op.updated_by = updated_by
+    op.updated_by_name = user_name
+    await op.save()
+
+
+def _reported_work_order_operation_content_changed(
+    existing_op: WorkOrderOperation,
+    op_data: Any,
+) -> bool:
+    """已报工工序是否被改动了业务内容（序号重排不算）。"""
+    if int(existing_op.operation_id) != int(op_data.operation_id):
+        return True
+    if str(existing_op.operation_code or "") != str(getattr(op_data, "operation_code", None) or ""):
+        return True
+    if str(existing_op.operation_name or "") != str(getattr(op_data, "operation_name", None) or ""):
+        return True
+    return False
+
+
+_PLANNED_DATES_LOCKED_WO_STATUSES = frozenset({"completed", "cancelled", "split"})
+
+
+def _is_work_order_planned_dates_locked_status(status: Optional[str]) -> bool:
+    from apps.kuaizhizao.constants import normalize_status
+
+    normalized = normalize_status(str(status or "")).lower()
+    return normalized in _PLANNED_DATES_LOCKED_WO_STATUSES
+
+
+def _assert_work_order_planned_dates_unchanged_or_editable(
+    work_order: WorkOrder,
+    update_data: Dict[str, Any],
+) -> None:
+    if not _is_work_order_planned_dates_locked_status(str(work_order.status or "")):
+        return
+    for field in ("planned_start_date", "planned_end_date"):
+        if field not in update_data:
+            continue
+        if not _business_datetimes_equal(update_data[field], getattr(work_order, field, None)):
+            raise BusinessLogicError("已结束工单不可修改计划开始或计划结束时间")
 
 
 def _normalize_naive_local_datetime(value: datetime) -> datetime:
@@ -1391,10 +1598,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             tenant_id,
             [work_order_id],
         )
+        downstream_map = await self.batch_work_orders_have_revoke_blocking_downstream(
+            tenant_id,
+            [work_order_id],
+        )
         return enrich_work_order_capabilities_on_response(
             work_order,
             response,
             has_returnable_picking=returnable_map.get(work_order_id, False),
+            has_downstream_documents=downstream_map.get(work_order_id, False),
         )
 
     async def compute_split_remaining_quantity(
@@ -2060,6 +2272,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             tenant_id,
             wo_ids_for_cap,
         )
+        downstream_by_wo = await self.batch_work_orders_have_revoke_blocking_downstream(
+            tenant_id,
+            [int(i) for i in wo_ids_for_cap],
+        )
         push_progress_by_wo: Dict[int, float] = {}
         if include_downstream_push_progress and work_orders:
             push_progress_by_wo = await self._batch_work_order_downstream_push_progress(
@@ -2103,6 +2319,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 item_dict["capabilities"] = derive_work_order_capabilities(
                     wo,
                     has_returnable_picking=returnable_by_wo.get(int(wo.id), False) if wo.id is not None else False,
+                    has_downstream_documents=downstream_by_wo.get(int(wo.id), False) if wo.id is not None else False,
                 )
                 if wo.id is not None:
                     item_dict["downstream_push_progress"] = push_progress_by_wo.get(int(wo.id), 0.0)
@@ -2265,17 +2482,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 if _dt_key in update_data and update_data[_dt_key] is not None:
                     update_data[_dt_key] = coerce_business_datetime_to_utc(update_data[_dt_key])
 
-            from apps.kuaizhizao.constants import normalize_status as _normalize_wo_status
-
-            _wo_status = _normalize_wo_status(str(work_order.status or ""))
-            if _wo_status not in ("draft", "DRAFT", "草稿"):
-                for _date_field in ("planned_start_date", "planned_end_date"):
-                    if _date_field not in update_data:
-                        continue
-                    _new_dt = update_data[_date_field]
-                    _old_dt = getattr(work_order, _date_field, None)
-                    if _new_dt != _old_dt:
-                        raise BusinessLogicError("非草稿工单不可修改计划开始或计划结束时间")
+            _assert_work_order_planned_dates_unchanged_or_editable(work_order, update_data)
 
             if "process_route_id" in update_data:
                 new_pr_id = update_data.pop("process_route_id")
@@ -2396,6 +2603,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             "updated": [],
             "skipped_frozen": [],
             "skipped_freeze_window": [],
+            "skipped_not_schedulable": [],
             "failed": [],
         }
         if not updates:
@@ -2413,6 +2621,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=wo_id)
                 if not wo:
                     result["failed"].append({"id": int(wo_id), "reason": "工单不存在"})
+                    continue
+                if not _is_schedulable_work_order_status(wo.status):
+                    wo_id_int = int(wo.id)
+                    if wo_id_int not in result["skipped_not_schedulable"]:
+                        result["skipped_not_schedulable"].append(wo_id_int)
                     continue
                 lock = None if bypass_freeze else freeze_lock_reason(wo, freeze_days)
                 if lock == "frozen":
@@ -2452,6 +2665,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             "updated": [],
             "skipped_frozen": [],
             "skipped_freeze_window": [],
+            "skipped_not_schedulable": [],
             "failed": [],
         }
         if not updates:
@@ -2473,6 +2687,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=op.work_order_id)
                 if not wo:
                     result["failed"].append({"id": int(op_id), "reason": "工单不存在"})
+                    continue
+                if not _is_schedulable_work_order_status(wo.status):
+                    wo_id_int = int(wo.id)
+                    if wo_id_int not in result["skipped_not_schedulable"]:
+                        result["skipped_not_schedulable"].append(wo_id_int)
                     continue
                 lock = freeze_lock_reason(wo, freeze_days)
                 if lock == "frozen":
@@ -4066,55 +4285,57 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         plan_qty = float(work_order.quantity or 1)
 
-        # 已领料物料种类数（首道工序用）
-        picked_material_count = 0
-        pickings = await ProductionPicking.filter(
+        from apps.kuaizhizao.services.reporting_service import sync_work_order_operations_completion
+        from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+        from apps.kuaizhizao.models.inspection_plan import InspectionPlan
+        from apps.kuaizhizao.services.operation_transfer_service import (
+            build_operation_policy_cache,
+            count_pending_process_inspections,
+            load_process_inspections_by_operation,
+            pending_process_inspection_codes,
+            resolve_operation_transfer_qualified,
+            resolve_process_inspection_card_status,
+            resolve_process_inspection_link_id,
+            sum_process_inspection_quality_quantities,
+        )
+
+        # 展开前并行拉辅助数据；完成态 sync / IPQC 补建仍串行（有写依赖）
+        pickings_task = ProductionPicking.filter(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             status="已领料",
-            deleted_at__isnull=True
+            deleted_at__isnull=True,
         ).all()
+        scrap_task = ScrapRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            status__in=["draft", "confirmed"],
+            deleted_at__isnull=True,
+        ).all()
+        pickings, scrap_records = await asyncio.gather(pickings_task, scrap_task)
+
+        picked_material_count = 0
         if pickings:
             picking_ids = [p.id for p in pickings]
             items = await ProductionPickingItem.filter(
                 tenant_id=tenant_id,
-                picking_id__in=picking_ids
+                picking_id__in=picking_ids,
             ).all()
-            material_ids = set()
-            for it in items:
-                if it.material_id and (float(it.picked_quantity or 0) > 0):
-                    material_ids.add(it.material_id)
+            material_ids = {
+                it.material_id
+                for it in items
+                if it.material_id and (float(it.picked_quantity or 0) > 0)
+            }
             picked_material_count = len(material_ids)
 
-        # 按工序汇总报废数量
-        scrap_records = await ScrapRecord.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            status__in=["draft", "confirmed"],
-            deleted_at__isnull=True
-        ).all()
-        scrap_by_op = {}
+        scrap_by_op: Dict[Any, Decimal] = {}
         for sr in scrap_records:
             k = sr.operation_id
             scrap_by_op[k] = scrap_by_op.get(k, Decimal("0")) + (sr.scrap_quantity or Decimal("0"))
 
-        operations = await WorkOrderOperation.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            deleted_at__isnull=True
-        ).order_by('sequence').all()
-
-        from apps.kuaizhizao.services.reporting_service import sync_work_order_operations_completion
-        from apps.kuaizhizao.services.quality_automation_service import QualityAutomationService
-
         await sync_work_order_operations_completion(tenant_id, work_order_id)
-        # 补建仅在展开工序时执行，避免工单列表批量 sync 并发重复建单
-        try:
-            await QualityAutomationService().maybe_backfill_missing_ipqc_for_work_order(
-                tenant_id, work_order_id
-            )
-        except Exception as e:
-            logger.warning(f"工单 {work_order_id} 补建过程检验失败: {e}")
+        # 不再在展开工序时扫描补建过程检验（严重拖慢工序卡加载）。
+        # 过程检：报工生效时自动建；成品检：入库前 ensure + 工单手工下推。
         work_order = await WorkOrder.get_or_none(
             tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True
         )
@@ -4135,47 +4356,68 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             ).order_by('sequence').all()
 
         master_op_ids = [op.operation_id for op in operations if op.operation_id is not None]
-        defect_by_master_op = await batch_get_operation_defect_types_via_table(master_op_ids)
-
-        # 工序 SOP：与报工/工位一致，按物料 → 物料组 → 工序匹配（非仅 operation_id）
         op_ids = [op.operation_id for op in operations]
-        from apps.master_data.services.process_service import ProcessService
 
-        sop_by_master_op_id: dict = {}
-        for master_op_id in {oid for oid in op_ids if oid is not None}:
-            sop_resp = await ProcessService.get_sop_for_reporting(
-                tenant_id, work_order_id, int(master_op_id)
-            )
-            if sop_resp:
-                sop_by_master_op_id[int(master_op_id)] = sop_resp
-
-        default_snap_by_master = await _batch_default_operators_snapshots_by_master_operation_id(
-            tenant_id, op_ids
+        (
+            defect_by_master_op,
+            sop_by_master_op_id,
+            default_snap_by_master,
+            outsource_rows,
+            policy_cache,
+            inspections_by_op,
+        ) = await asyncio.gather(
+            batch_get_operation_defect_types_via_table(master_op_ids),
+            _batch_sop_for_master_operations(
+                tenant_id,
+                product_id=getattr(work_order, "product_id", None),
+                master_operation_ids=op_ids,
+            ),
+            _batch_default_operators_snapshots_by_master_operation_id(tenant_id, op_ids),
+            OutsourceOrder.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).exclude(status="cancelled").all(),
+            build_operation_policy_cache(tenant_id, op_ids),
+            load_process_inspections_by_operation(tenant_id, work_order_id),
         )
-
-        from apps.kuaizhizao.models.outsource_order import OutsourceOrder
-
-        outsource_rows = await OutsourceOrder.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            deleted_at__isnull=True,
-        ).exclude(status="cancelled").all()
         outsource_by_op_id = {row.work_order_operation_id: row for row in outsource_rows}
 
-        from apps.kuaizhizao.services.operation_transfer_service import (
-            build_operation_policy_cache,
-            count_pending_process_inspections,
-            load_process_inspections_by_operation,
-            pending_process_inspection_codes,
-            resolve_operation_inspection_plan_label,
-            resolve_operation_transfer_qualified,
-            resolve_process_inspection_card_status,
-            resolve_process_inspection_link_id,
-            sum_process_inspection_quality_quantities,
-        )
-
-        policy_cache = await build_operation_policy_cache(tenant_id, op_ids)
-        inspections_by_op = await load_process_inspections_by_operation(tenant_id, work_order_id)
+        plan_ids = {
+            int(plan_id)
+            for (_mode, plan_id, _src) in policy_cache.values()
+            if plan_id is not None
+        }
+        plan_label_by_id: Dict[int, str] = {}
+        default_process_plan_label: Optional[str] = None
+        if plan_ids:
+            plans = await InspectionPlan.filter(
+                tenant_id=tenant_id,
+                id__in=list(plan_ids),
+                deleted_at__isnull=True,
+            ).all()
+            for plan in plans:
+                label = str(plan.plan_name or plan.plan_code or "检验方案").strip() or "检验方案"
+                plan_label_by_id[int(plan.id)] = label
+        if any(mode == "plan" for mode, _pid, _src in policy_cache.values()):
+            missing_labels = any(
+                mode == "plan" and (plan_id is None or int(plan_id) not in plan_label_by_id)
+                for mode, plan_id, _src in policy_cache.values()
+            )
+            if missing_labels:
+                fallback_plan = await InspectionPlan.filter(
+                    tenant_id=tenant_id,
+                    plan_type="process",
+                    deleted_at__isnull=True,
+                    is_active=True,
+                ).order_by("-created_at").first()
+                if fallback_plan:
+                    default_process_plan_label = (
+                        str(fallback_plan.plan_name or fallback_plan.plan_code or "检验方案").strip()
+                        or "检验方案"
+                    )
+                else:
+                    default_process_plan_label = "检验方案"
 
         prev_transfer = Decimal(str(plan_qty))
         result = []
@@ -4202,13 +4444,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 qc_pending = max(Decimal("0"), qualified - transfer_qualified)
 
             op_data["inspection_mode"] = mode
-            op_data["inspection_plan_label"] = (
-                await resolve_operation_inspection_plan_label(
-                    tenant_id, master_op_id, mode=mode, plan_id=plan_id
-                )
-                if mode == "plan"
-                else None
-            )
+            if mode == "plan":
+                if plan_id is not None and int(plan_id) in plan_label_by_id:
+                    op_data["inspection_plan_label"] = plan_label_by_id[int(plan_id)]
+                else:
+                    op_data["inspection_plan_label"] = default_process_plan_label or "检验方案"
+            else:
+                op_data["inspection_plan_label"] = None
             op_data["transfer_qualified_quantity"] = transfer_qualified
             op_data["qc_pending_quantity"] = qc_pending if mode == "plan" else None
             op_data["process_inspection_pending_count"] = (
@@ -4388,19 +4630,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 deleted_at__isnull=True
             ).all()
 
-            # 检查已报工的工序
+            # 检查已报工的工序（审核报工或已有完成数量）
             reported_operation_ids = set()
             for op in existing_operations:
-                # 检查该工序是否有已审核的报工记录
-                reporting_records = await ReportingRecord.filter(
+                has_approved = await ReportingRecord.filter(
                     tenant_id=tenant_id,
                     work_order_id=work_order_id,
-                    operation_id=op.operation_id,
-                    status='approved',
-                    deleted_at__isnull=True
-                ).all()
-                
-                if reporting_records:
+                    status="approved",
+                    deleted_at__isnull=True,
+                ).filter(
+                    Q(operation_id=op.operation_id) | Q(operation_id=op.id)
+                ).exists()
+                completed_qty = op.completed_quantity or Decimal("0")
+                if has_approved or completed_qty > 0:
                     reported_operation_ids.add(op.id)
 
             # 获取更新人信息
@@ -4423,30 +4665,75 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             route_empty = (OVER_REPORT_NONE, Decimal("0"))
             wo_head_t = tuple_from_model(work_order)
 
-            # 构建新工序ID集合（用于判断哪些工序需要删除）
-            new_operation_ids = {op.id for op in existing_operations if op.id not in reported_operation_ids}
-            updated_operation_ids = set()
-
-            # 处理工序更新和新增
+            existing_by_id = {op.id: op for op in existing_operations}
+            matched_existing_ids: set[int] = set()
+            matched_rows: list[tuple[Any, Optional[WorkOrderOperation], int]] = []
             for idx, op_data in enumerate(operations_data.operations, 1):
-                # 检查是否是要更新的现有工序（通过sequence匹配，且未报工）
-                existing_op = None
-                for eop in existing_operations:
-                    if eop.sequence == op_data.sequence and eop.id not in reported_operation_ids:
-                        existing_op = eop
-                        break
+                existing_op = _match_existing_work_order_operation(
+                    op_data,
+                    existing_operations,
+                    matched_existing_ids,
+                )
+                if existing_op is not None:
+                    matched_existing_ids.add(existing_op.id)
+                matched_rows.append((op_data, existing_op, idx))
 
+            for op in existing_operations:
+                if op.id in reported_operation_ids and op.id not in matched_existing_ids:
+                    raise BusinessLogicError(
+                        f"工序 {op.operation_name} 已有报工记录，不能删除"
+                    )
+
+            # 先软删未匹配的未报工工序，避免新建/重排时 sequence 冲突
+            for op_id in _work_order_operation_ids_to_remove(
+                existing_operations,
+                reported_operation_ids,
+                matched_existing_ids,
+            ):
+                await _soft_delete_work_order_operation_row(
+                    existing_by_id[op_id],
+                    updated_by,
+                    user_info["name"],
+                )
+
+            # 暂存仍保留行的 sequence，避免重排/新增时唯一约束冲突（含已报工行）
+            for op in existing_operations:
+                if op.deleted_at is not None:
+                    continue
+                op.sequence = 1_000_000 + op.id
+                await op.save(update_fields=["sequence"])
+
+            updated_operation_ids: set[int] = set()
+
+            # 处理工序更新和新增（顺序以列表下标为准）
+            for op_data, existing_op, target_sequence in matched_rows:
                 if existing_op:
-                    # 更新现有工序
+                    # 已报工：仅允许随清单重排序号，不允许改工序内容
                     if existing_op.id in reported_operation_ids:
-                        raise BusinessLogicError(f"工序 {existing_op.operation_name} 已有报工记录，不能修改")
+                        if _reported_work_order_operation_content_changed(existing_op, op_data):
+                            raise BusinessLogicError(
+                                f"工序 {existing_op.operation_name} 已有报工记录，不能修改"
+                            )
+                        existing_op.sequence = target_sequence
+                        existing_op.updated_by = updated_by
+                        existing_op.updated_by_name = user_info["name"]
+                        await existing_op.save(
+                            update_fields=[
+                                "sequence",
+                                "updated_by",
+                                "updated_by_name",
+                                "updated_at",
+                            ]
+                        )
+                        updated_operation_ids.add(existing_op.id)
+                        continue
 
                     op_id_changed = existing_op.operation_id != op_data.operation_id
                     # 更新工序信息
                     existing_op.operation_id = op_data.operation_id
                     existing_op.operation_code = op_data.operation_code
                     existing_op.operation_name = op_data.operation_name
-                    existing_op.sequence = op_data.sequence
+                    existing_op.sequence = target_sequence
                     existing_op.workshop_id = op_data.workshop_id
                     existing_op.workshop_name = op_data.workshop_name
                     existing_op.work_center_id = op_data.work_center_id
@@ -4538,7 +4825,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         operation_id=op_data.operation_id,
                         operation_code=op_data.operation_code,
                         operation_name=op_data.operation_name,
-                        sequence=op_data.sequence,
+                        sequence=target_sequence,
                         workshop_id=op_data.workshop_id,
                         workshop_name=op_data.workshop_name,
                         work_center_id=op_data.work_center_id,
@@ -4558,14 +4845,6 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         created_by_name=user_info["name"],
                     )
                     updated_operation_ids.add(new_op.id)
-
-            # 删除未更新的未报工工序
-            for op in existing_operations:
-                if op.id not in updated_operation_ids and op.id not in reported_operation_ids:
-                    op.deleted_at = now_utc()
-                    op.updated_by = updated_by
-                    op.updated_by_name = user_info["name"]
-                    await op.save()
 
             # 工序清单变更不回写工单头计划时间：头表计划开始/结束由工单更新或排程写入。
             # 若此处用工序计划结束覆盖头表，编辑工单计划时间后会被旧工序时间冲掉。
@@ -4633,6 +4912,26 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             work_order_operation.assigned_mold_name = dispatch_data.assigned_mold_name
             work_order_operation.assigned_tool_id = dispatch_data.assigned_tool_id
             work_order_operation.assigned_tool_name = dispatch_data.assigned_tool_name
+            # 展示名以 id 为准回写，避免前端缓存/列表错名导致工序卡仍显示旧人员
+            if work_order_operation.assigned_worker_id:
+                worker_info = await self.get_user_info(int(work_order_operation.assigned_worker_id))
+                resolved_name = (worker_info.get("name") or "").strip()
+                if resolved_name:
+                    work_order_operation.assigned_worker_name = resolved_name
+            else:
+                work_order_operation.assigned_worker_name = None
+            if work_order_operation.assigned_team_id:
+                from apps.master_data.models.factory import WorkGroup
+
+                team = await WorkGroup.get_or_none(
+                    tenant_id=tenant_id,
+                    id=int(work_order_operation.assigned_team_id),
+                    deleted_at__isnull=True,
+                )
+                if team and (team.name or "").strip():
+                    work_order_operation.assigned_team_name = team.name
+            else:
+                work_order_operation.assigned_team_name = None
             work_order_operation.assigned_at = resolve_business_datetime()
             work_order_operation.assigned_by = dispatched_by
             work_order_operation.assigned_by_name = user_info["name"]
@@ -5914,6 +6213,120 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 original_work_order_codes=original_codes,
             )
 
+    async def batch_work_orders_have_revoke_blocking_downstream(
+        self,
+        tenant_id: int,
+        work_order_ids: list[int],
+    ) -> dict[int, bool]:
+        """批量判断工单是否存在阻止撤回的下游单据。"""
+        ids = [int(i) for i in work_order_ids if i is not None]
+        if not ids:
+            return {}
+        blocked: set[int] = set()
+
+        report_ids = await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id__in=ids,
+            deleted_at__isnull=True,
+        ).values_list("work_order_id", flat=True)
+        blocked.update(int(i) for i in report_ids)
+
+        from apps.kuaizhizao.models.production_picking import ProductionPicking
+        from apps.kuaizhizao.models.production_return import ProductionReturn
+        from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+        from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
+        from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+
+        for model, extra_exclude in (
+            (ProductionPicking, True),
+            (ProductionReturn, True),
+            (FinishedGoodsReceipt, True),
+            (SemiFinishedGoodsReceipt, True),
+        ):
+            q = model.filter(
+                tenant_id=tenant_id,
+                work_order_id__in=ids,
+                deleted_at__isnull=True,
+            )
+            if extra_exclude:
+                q = q.exclude(status__in=["已作废", "cancelled"])
+            found = await q.values_list("work_order_id", flat=True)
+            blocked.update(int(i) for i in found)
+
+        outsource_ids = await OutsourceOrder.filter(
+            tenant_id=tenant_id,
+            work_order_id__in=ids,
+            deleted_at__isnull=True,
+        ).exclude(status="cancelled").values_list("work_order_id", flat=True)
+        blocked.update(int(i) for i in outsource_ids)
+
+        return {wid: wid in blocked for wid in ids}
+
+    async def _assert_work_order_revoke_no_downstream(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+    ) -> None:
+        """撤回前下游单据硬校验（具体原因文案）。"""
+        if await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).exists():
+            raise BusinessLogicError("工单已有报工记录，不允许撤回。只能撤回未报工的工单。")
+
+        from apps.kuaizhizao.models.production_picking import ProductionPicking
+        from apps.kuaizhizao.models.production_return import ProductionReturn
+        from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+        from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
+        from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+
+        downstream_checks = [
+            (
+                ProductionPicking.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    deleted_at__isnull=True,
+                ).exclude(status__in=["已作废", "cancelled"]).exists(),
+                "工单已有生产领料单，不允许撤回",
+            ),
+            (
+                ProductionReturn.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    deleted_at__isnull=True,
+                ).exclude(status__in=["已作废", "cancelled"]).exists(),
+                "工单已有生产退料单，不允许撤回",
+            ),
+            (
+                FinishedGoodsReceipt.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    deleted_at__isnull=True,
+                ).exclude(status__in=["已作废", "cancelled"]).exists(),
+                "工单已有成品入库单，不允许撤回",
+            ),
+            (
+                SemiFinishedGoodsReceipt.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    deleted_at__isnull=True,
+                ).exclude(status__in=["已作废", "cancelled"]).exists(),
+                "工单已有半成品入库单，不允许撤回",
+            ),
+            (
+                OutsourceOrder.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    deleted_at__isnull=True,
+                ).exclude(status="cancelled").exists(),
+                "工单已有委外单，不允许撤回",
+            ),
+        ]
+        for exists_query, message in downstream_checks:
+            if await exists_query:
+                raise BusinessLogicError(message)
+
     async def revoke_work_order(
         self,
         tenant_id: int,
@@ -5925,7 +6338,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         撤回条件：
         - 工单状态为 'released'（已下达）或 'completed'（已完成且为指定结束）
-        - 工单没有产生过报工记录
+        - 工单没有产生过报工记录及领料/入库等下游单据
 
         Args:
             tenant_id: 组织ID
@@ -5943,70 +6356,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
-            # 检查工单状态：只能撤回已下达、执行中或已完成（且为指定结束）的工单
-            if work_order.status not in ['released', 'in_progress', 'completed']:
-                raise ValidationError(f"当前工单状态不支持撤回，当前状态：{work_order.status}")
-
-            # 如果是已完成状态，必须是指定结束的工单才能撤回
-            if work_order.status == 'completed' and not work_order.manually_completed:
-                raise ValidationError("只能撤回指定结束的工单，正常完成的工单不允许撤回")
-
-            # 检查是否有报工记录
-            reporting_records = await ReportingRecord.filter(
-                tenant_id=tenant_id,
-                work_order_id=work_order_id
-            ).all()
-
-            if reporting_records:
-                raise BusinessLogicError("工单已有报工记录，不允许撤回。只能撤回未报工的工单。")
-
-            from apps.kuaizhizao.models.production_picking import ProductionPicking
-            from apps.kuaizhizao.models.production_return import ProductionReturn
-            from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
-            from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
-
-            downstream_checks = [
-                (
-                    ProductionPicking.filter(
-                        tenant_id=tenant_id,
-                        work_order_id=work_order_id,
-                        deleted_at__isnull=True,
-                    ).exclude(status__in=["已作废", "cancelled"]).exists(),
-                    "工单已有生产领料单，不允许撤回",
-                ),
-                (
-                    ProductionReturn.filter(
-                        tenant_id=tenant_id,
-                        work_order_id=work_order_id,
-                        deleted_at__isnull=True,
-                    ).exclude(status__in=["已作废", "cancelled"]).exists(),
-                    "工单已有生产退料单，不允许撤回",
-                ),
-                (
-                    FinishedGoodsReceipt.filter(
-                        tenant_id=tenant_id,
-                        work_order_id=work_order_id,
-                        deleted_at__isnull=True,
-                    ).exclude(status__in=["已作废", "cancelled"]).exists(),
-                    "工单已有成品入库单，不允许撤回",
-                ),
-                (
-                    SemiFinishedGoodsReceipt.filter(
-                        tenant_id=tenant_id,
-                        work_order_id=work_order_id,
-                        deleted_at__isnull=True,
-                    ).exclude(status__in=["已作废", "cancelled"]).exists(),
-                    "工单已有半成品入库单，不允许撤回",
-                ),
-            ]
-            for exists_query, message in downstream_checks:
-                if await exists_query:
-                    raise BusinessLogicError(message)
-
-            # 兜底保护：检查是否有产出（即便报工记录缺失）
-            completed_qty = work_order.completed_quantity or Decimal("0")
-            if completed_qty > 0:
-                raise BusinessLogicError("工单已有完工数量，不允许撤回。")
+            # 状态/完工数量门禁 + 下游单据硬校验（具体文案）
+            assert_work_order_capability(work_order, "revoke", has_downstream_documents=False)
+            await self._assert_work_order_revoke_no_downstream(tenant_id, work_order_id)
 
             # 保存原始状态用于节点时间记录
             original_status = work_order.status

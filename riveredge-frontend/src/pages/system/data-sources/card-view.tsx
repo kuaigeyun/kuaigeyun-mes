@@ -19,6 +19,8 @@ import {
   DataSourceListResponse,
   TestConnectionResponse,
 } from '../../../services/dataSource';
+import { getDataSourceTypeDisplay } from './connectors';
+import DatabaseBrandIcon from './DatabaseBrandIcon';
 import { handleError, handleSuccess, handleWarning } from '../../../utils/errorHandler';
 import { formatDateTimeBySiteSetting } from '../../../utils/format';
 import dayjs from 'dayjs';
@@ -148,31 +150,10 @@ const CardView: React.FC = () => {
   /**
    * 获取数据源类型图标和颜色
    */
-  const getTypeInfo = (type: string): { color: string; text: string; icon: React.ReactNode } => {
-    const typeMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
-      postgresql: { 
-        color: 'blue', 
-        text: 'PostgreSQL',
-        icon: <DatabaseOutlined />,
-      },
-      mysql: { 
-        color: 'orange', 
-        text: 'MySQL',
-        icon: <DatabaseOutlined />,
-      },
-      mongodb: { 
-        color: 'green', 
-        text: 'MongoDB',
-        icon: <DatabaseOutlined />,
-      },
-      api: { 
-        color: 'default', 
-        text: 'API',
-        icon: <DatabaseOutlined />,
-      },
-    };
-    return typeMap[type] || { color: 'default', text: type, icon: <DatabaseOutlined /> };
-  };
+  const getTypeInfo = (type: string) => ({
+    ...getDataSourceTypeDisplay(type),
+    icon: <DatabaseBrandIcon typeOrId={type} size={14} />,
+  });
 
   /**
    * 获取连接状态显示（i18n）
@@ -295,7 +276,7 @@ const CardView: React.FC = () => {
                 {Object.entries(stats.byType).map(([type, count]) => {
                   const typeInfo = getTypeInfo(type);
                   return (
-                    <Tag key={type} color={typeInfo.color} icon={typeInfo.icon}>
+                    <Tag key={type} color={typeInfo.color} variant="filled" icon={typeInfo.icon}>
                       {typeInfo.text}: {count}
                     </Tag>
                   );
@@ -352,7 +333,7 @@ const CardView: React.FC = () => {
                             <Text strong style={{ fontSize: 16 }}>
                               {dataSource.name}
                             </Text>
-                            <Tag color={typeInfo.color} icon={typeInfo.icon}>
+                            <Tag color={typeInfo.color} variant="filled" icon={typeInfo.icon}>
                               {typeInfo.text}
                             </Tag>
                           </div>
@@ -442,7 +423,7 @@ const CardView: React.FC = () => {
               {currentDataSource.code}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.dataSources.detailColumnType')}>
-              <Tag color={getTypeInfo(currentDataSource.type).color}>
+              <Tag color={getTypeInfo(currentDataSource.type).color} variant="filled">
                 {getTypeInfo(currentDataSource.type).text}
               </Tag>
             </Descriptions.Item>

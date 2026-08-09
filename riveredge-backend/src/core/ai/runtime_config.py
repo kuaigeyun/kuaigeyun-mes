@@ -44,10 +44,10 @@ class AiRuntimeConfig(BaseModel):
         deepseek = get_deepseek_integration(settings)
 
         if not deepseek.get("enabled"):
-            raise ValidationError("DeepSeek 集成未启用，请在站点设置 → 集成设置中开启 KU-AI")
+            raise ValidationError("DeepSeek 集成未启用，请在系统配置 → 应用连接器中开启 KU-AI")
         api_key = deepseek.get("api_key")
         if not isinstance(api_key, str) or not api_key.strip():
-            raise ValidationError("未配置 DeepSeek API Key，请在站点设置 → 集成设置中填写")
+            raise ValidationError("未配置 DeepSeek API Key，请在系统配置 → 应用连接器中填写")
 
         vision = await get_deepseek_runtime_config(tenant_id)
         custom_prompt = deepseek.get("custom_system_prompt")

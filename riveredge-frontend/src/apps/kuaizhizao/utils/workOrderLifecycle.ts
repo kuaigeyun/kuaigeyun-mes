@@ -247,3 +247,19 @@ export function isWorkOrderPlannedEndOverdue(
   }
   return dayjs(record.planned_end_date).isBefore(dayjs());
 }
+
+export function normalizeWorkOrderStatusKey(status: unknown): string {
+  const raw = String(status ?? '').trim();
+  return STATUS_TO_KEY[raw] ?? raw;
+}
+
+/** 仅草稿可修改工单头计划开始/结束时间 */
+export function isWorkOrderDraftStatus(status: unknown): boolean {
+  return normalizeWorkOrderStatusKey(status) === 'draft';
+}
+
+/** 已结束（已完成/已取消/已拆分）工单不可修改计划开始/结束时间 */
+export function isWorkOrderPlannedDatesLocked(status: unknown): boolean {
+  const key = normalizeWorkOrderStatusKey(status);
+  return key === 'completed' || key === 'cancelled' || key === 'split';
+}

@@ -20,6 +20,7 @@ import qqLogo from '../../../assets/social/qq.svg';
 import wecomLogo from '../../../assets/social/qwei.svg';
 import dingtalkLogo from '../../../assets/social/dingtalk.svg';
 import feishuLogo from '../../../assets/social/feishu.svg';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 
 // ... (other imports)
 import { 
@@ -49,9 +50,8 @@ import {
   resolveStableAvatarSeed,
   type AvatarCandidate,
 } from '../../../utils/generatedAvatar';
-import { getUserInfo, getTenantId, setTenantId, setUserInfo } from '../../../utils/auth';
-import { useGlobalStore } from '../../../stores';
-
+import { getTenantId, setTenantId } from '../../../utils/auth';
+import { getSessionCurrentUser, patchSessionCurrentUser } from '../../../utils/sessionCurrentUser';
 const { Title, Text } = Typography;
 
 const SOCIAL_BRAND = {
@@ -166,8 +166,7 @@ const UserProfilePage: React.FC = () => {
   const [wecomBindLoading, setWecomBindLoading] = useState(false);
   const [wecomUnbindLoading, setWecomUnbindLoading] = useState(false);
   const [wecomBindConfig, setWecomBindConfig] = useState<WeComWWLoginConfigResponse | null>(null);
-  const setGlobalUser = useGlobalStore((s) => s.setCurrentUser);
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
 
   const boundWecomUserid = profileData?.contact_info?.wecom_userid?.trim() || '';
 
@@ -242,10 +241,10 @@ const UserProfilePage: React.FC = () => {
       // 确保 tenant_id 已设置（从 user_info 中恢复）
       let tenantId = getTenantId();
       if (!tenantId) {
-        const userInfo = getUserInfo();
-        if (userInfo?.tenant_id) {
-          setTenantId(userInfo.tenant_id);
-          tenantId = userInfo.tenant_id; // 立即更新本地变量
+        const user = getSessionCurrentUser();
+        if (user?.tenant_id) {
+          setTenantId(user.tenant_id);
+          tenantId = user.tenant_id;
         }
       }
 
@@ -488,18 +487,7 @@ const UserProfilePage: React.FC = () => {
       await updateUserProfile({ avatar: response.uuid });
       setProfileData((prev) => (prev ? { ...prev, avatar: response.uuid } : prev));
 
-      const prevUser = currentUser;
-      if (prevUser) {
-        setGlobalUser({
-          ...prevUser,
-          avatar: response.uuid,
-        });
-      }
-      const prevLocal = getUserInfo() || {};
-      setUserInfo({
-        ...prevLocal,
-        avatar: response.uuid,
-      });
+      patchSessionCurrentUser({ avatar: response.uuid });
 
       setAvatarCandidates([]);
       setSuppressAutoAvatar(false);
@@ -562,18 +550,7 @@ const UserProfilePage: React.FC = () => {
 
       setProfileData((prev) => (prev ? { ...prev, avatar: undefined } : prev));
 
-      const prevUser = currentUser;
-      if (prevUser) {
-        setGlobalUser({
-          ...prevUser,
-          avatar: undefined,
-        });
-      }
-      const prevLocal = getUserInfo() || {};
-      setUserInfo({
-        ...prevLocal,
-        avatar: null,
-      });
+      patchSessionCurrentUser({ avatar: undefined });
       if (prevAvatarUuid) {
         setCachedAvatarUrl(prevAvatarUuid, undefined);
       }
@@ -675,23 +652,11 @@ const UserProfilePage: React.FC = () => {
         setProfileGender(updatedData.gender ?? undefined);
 
         // 同步全局用户信息（顶栏/头像/欢迎语等依赖），避免保存后仍显示旧的 username/手机号
-        const prevUser = currentUser;
-        if (prevUser) {
-          setGlobalUser({
-            ...prevUser,
-            username: updatedData.username ?? prevUser.username,
-            email: updatedData.email ?? prevUser.email,
-            full_name: updatedData.full_name ?? undefined,
-            avatar: updatedData.avatar ?? undefined,
-          });
-        }
-        const prevLocal = getUserInfo() || {};
-        setUserInfo({
-          ...prevLocal,
-          username: updatedData.username ?? prevLocal.username,
-          email: updatedData.email ?? prevLocal.email,
-          full_name: updatedData.full_name ?? null,
-          avatar: updatedData.avatar ?? null,
+        patchSessionCurrentUser({
+          username: updatedData.username,
+          email: updatedData.email,
+          full_name: updatedData.full_name ?? undefined,
+          avatar: updatedData.avatar ?? undefined,
         });
 
         // 更新表单值

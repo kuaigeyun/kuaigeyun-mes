@@ -35,6 +35,12 @@ import { warehouseApi } from '../../../services/warehouse-execution';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { formatDateBySiteSetting, formatQuantity } from '../../../../../utils/format';
+import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
+import {
+  MaterialUnitSelect,
+  fetchMaterialForUnitSelectCache,
+} from '../../../../../components/material-unit-select';
+import { recalculateQuantityOnUnitChange } from '../../../../../components/quantity-with-unit/formHelpers';
 import {
   OutboundEntryOperatorField,
   OutboundEntryRemarksSection,
@@ -289,23 +295,66 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'materialCode', width: 120 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'materialName', ellipsis: true },
       {
+        title: t('app.kuaizhizao.warehouseOutbound.col.unit'),
+        dataIndex: 'unit',
+        width: 88,
+        align: 'center' as const,
+        render: (_: unknown, line: PickLine) => (
+          <MaterialUnitSelect
+            materialId={line.materialId}
+            value={line.unit}
+            size="small"
+            noStyle
+            onChange={(newUnit) => {
+              void (async () => {
+                const material = await fetchMaterialForUnitSelectCache(line.materialId);
+                setPickLines((prev) =>
+                  prev.map((row) => {
+                    if (row.materialId !== line.materialId) return row;
+                    const convert = (qty: number) =>
+                      recalculateQuantityOnUnitChange({
+                        material,
+                        currentQuantity: qty,
+                        oldUnit: row.unit,
+                        newUnit,
+                      });
+                    const pending = convert(row.pendingQuantity);
+                    setMaxQuantities((mq) => ({ ...mq, [line.materialId]: pending }));
+                    return {
+                      ...row,
+                      unit: newUnit,
+                      requiredQuantity: convert(row.requiredQuantity),
+                      pickedQuantity: convert(row.pickedQuantity),
+                      pendingQuantity: pending,
+                      issueQuantity: convert(row.issueQuantity),
+                    };
+                  }),
+                );
+              })();
+            }}
+          />
+        ),
+      },
+      {
         title: t('app.kuaizhizao.warehouseOutbound.entry.requiredQty'),
         dataIndex: 'requiredQuantity',
-        width: 100,
+        width: 120,
         align: 'right' as const,
+        render: (value: number, line: PickLine) => formatQuantityWithUnit(value, line.unit),
       },
       {
         title: t('app.kuaizhizao.warehouseOutbound.pull.colPickedQty'),
         dataIndex: 'pickedQuantity',
-        width: 100,
+        width: 120,
         align: 'right' as const,
+        render: (value: number, line: PickLine) => formatQuantityWithUnit(value, line.unit),
       },
       {
         title: t('app.kuaizhizao.warehouseOutbound.pull.colPickableQty'),
         dataIndex: 'pendingQuantity',
-        width: 100,
+        width: 120,
         align: 'right' as const,
-        render: (value: number) => formatQuantity(value),
+        render: (value: number, line: PickLine) => formatQuantityWithUnit(value, line.unit),
       },
       {
         title: t('app.kuaizhizao.warehouseOutbound.pull.colCurrentStock'),

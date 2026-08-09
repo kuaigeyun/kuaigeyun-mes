@@ -9,6 +9,8 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID
 
+from core.config.data_source_type_spec import DATA_SOURCE_TYPES
+
 
 class DataSourceBase(BaseModel):
     """数据源基础 Schema"""
@@ -23,9 +25,8 @@ class DataSourceBase(BaseModel):
     @classmethod
     def validate_type(cls, v):
         """验证数据源类型"""
-        allowed_types = ['postgresql', 'mysql', 'mongodb', 'api']
-        if v not in allowed_types:
-            raise ValueError(f'数据源类型必须是 {allowed_types} 之一')
+        if v not in DATA_SOURCE_TYPES:
+            raise ValueError(f'数据源类型必须是 {list(DATA_SOURCE_TYPES)} 之一')
         return v
 
 

@@ -12,6 +12,7 @@ import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-co
 import { App, Button, Tag, Space, Modal, Table, Tooltip, Typography, Spin, Empty, Select, Descriptions, theme as AntdTheme } from 'antd';
 import { CheckCircleOutlined, PlayCircleOutlined, RollbackOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -190,7 +191,7 @@ const OutboundPage: React.FC = () => {
   const [executionConfig, setExecutionConfig] = useState<any>(null);
   const outboundPerms = useResourcePermissions('kuaizhizao:outbound');
   const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
 
   const [confirmPreviewOpen, setConfirmPreviewOpen] = useState(false);

@@ -18,6 +18,7 @@ import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea'
 import { DRAWER_CONFIG, ListPageTemplate } from '../../../components/layout-templates';
 import { useListPageStatCardsVisible } from '../../../components/layout-templates/listPageStatCardsContext';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
   getOperationLogs,
   getOperationLogStats,
@@ -38,7 +39,7 @@ import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 const OperationLogsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const statCardsVisible = useListPageStatCardsVisible();
   const actionRef = useRef<ActionType>(null);
   const [stats, setStats] = useState<OperationLogStats | null>(null);

@@ -8,7 +8,8 @@
 
 import { getPersistedConfigs } from '../stores/configStore';
 import { getLanguageFromPreferenceCache } from '../stores/userPreferenceStore';
-import { getTenantId, getUserInfo } from './auth';
+import { getTenantId } from './auth';
+import { getSessionCurrentUser } from './sessionCurrentUser';
 
 export const SUPPORTED_UI_LANGUAGES = ['zh-CN', 'en-US', 'zh-Hant', 'ja-JP', 'vi-VN'] as const;
 export type SupportedUiLanguage = (typeof SUPPORTED_UI_LANGUAGES)[number];
@@ -26,7 +27,7 @@ export function normalizeUiLanguage(code: unknown): SupportedUiLanguage | null {
 
 function getTenantDefaultLanguageStorageKey(): string | null {
   if (typeof window === 'undefined') return null;
-  const tenantId = getTenantId() ?? getUserInfo()?.tenant_id ?? getUserInfo()?.tenantId;
+  const tenantId = getTenantId() ?? getSessionCurrentUser()?.tenant_id;
   if (tenantId == null || String(tenantId).trim() === '') return null;
   return `${TENANT_DEFAULT_LANGUAGE_KEY_PREFIX}-${tenantId}`;
 }

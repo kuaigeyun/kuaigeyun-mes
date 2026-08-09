@@ -11,6 +11,7 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   ActionType,
   ProColumns,
@@ -106,6 +107,11 @@ import {
 import dayjs from 'dayjs';
 import {formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
+import {
+  InspectionConductQuantityFields,
+  InspectionDefectQuantityField,
+  normalizeInspectionConductPayload,
+} from '../../../../../components/quantity-with-unit/inspectionConductQuantities';
 import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
@@ -266,7 +272,7 @@ const IncomingInspectionPage: React.FC = () => {
   );
   const queryClient = useQueryClient();
   const { message: messageApi } = App.useApp();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const { token } = AntdTheme.useToken();
   const incomingInspectionDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
@@ -431,7 +437,12 @@ const IncomingInspectionPage: React.FC = () => {
   // 处理检验提交
   const handleInspectionSubmit = async (values: any) => {
     try {
-      const { standardValues, customData } = extractInspectionFormValues(values);
+      const normalized = await normalizeInspectionConductPayload(values, {
+        materialId: currentInspection?.material_id,
+        materialUnit: currentInspection?.material_unit,
+        scenario: 'purchase',
+      });
+      const { standardValues, customData } = extractInspectionFormValues(normalized);
       if (currentInspection?.id) {
         await qualityApi.incomingInspection.conduct(currentInspection.id.toString(), {
           qualified_quantity: standardValues.qualified_quantity,
@@ -1341,47 +1352,12 @@ const IncomingInspectionPage: React.FC = () => {
           photoCategory="incoming_inspection_attachments"
           stepPhotoRequired={false}
         />
-        <ProFormDigit
-          name="qualified_quantity"
-          label={t('app.kuaizhizao.quality.common.form.qualifiedQty')}
-          placeholder={t('app.kuaizhizao.quality.common.placeholder.qualifiedQty')}
-          colProps={{ span: 12 }}
-          rules={[
-            { required: true, message: t('app.kuaizhizao.quality.common.validation.requiredQualifiedQty') },
-            { type: 'number', min: 0, message: t('app.kuaizhizao.quality.common.validation.minZero') },
-            ({ getFieldValue }: any) => ({
-              validator(_: any, value: any) {
-                if (!currentInspection) return Promise.resolve();
-                const unqualifiedQuantity = getFieldValue('unqualified_quantity') || 0;
-                if (value + unqualifiedQuantity > (currentInspection.inspection_quantity || 0)) {
-                  return Promise.reject(t('app.kuaizhizao.quality.common.validation.qtySumExceeds'));
-                }
-                return Promise.resolve();
-              },
-            }),
-          ]}
-          fieldProps={{ precision: 2 }}
-        />
-        <ProFormDigit
-          name="unqualified_quantity"
-          label={t('app.kuaizhizao.quality.common.form.unqualifiedQty')}
-          placeholder={t('app.kuaizhizao.quality.common.placeholder.unqualifiedQty')}
-          colProps={{ span: 12 }}
-          rules={[
-            { required: true, message: t('app.kuaizhizao.quality.common.validation.requiredUnqualifiedQty') },
-            { type: 'number', min: 0, message: t('app.kuaizhizao.quality.common.validation.minZero') },
-            ({ getFieldValue }: any) => ({
-              validator(_: any, value: any) {
-                if (!currentInspection) return Promise.resolve();
-                const qualifiedQuantity = getFieldValue('qualified_quantity') || 0;
-                if (qualifiedQuantity + value > (currentInspection.inspection_quantity || 0)) {
-                  return Promise.reject(t('app.kuaizhizao.quality.common.validation.qtySumExceeds'));
-                }
-                return Promise.resolve();
-              },
-            }),
-          ]}
-          fieldProps={{ precision: 2 }}
+        <InspectionConductQuantityFields
+          materialId={currentInspection?.material_id}
+          materialUnit={currentInspection?.material_unit}
+          scenario="purchase"
+          inspectionQuantity={Number(currentInspection?.inspection_quantity || 0)}
+          t={t}
         />
         <ProFormTextArea
           name="nonconformance_reason"
@@ -1763,29 +1739,20 @@ const IncomingInspectionPage: React.FC = () => {
             </Row>
             <Row gutter={16} style={{ marginTop: 8 }}>
               <Col span={12}>
-                <strong>{t('app.kuaizhizao.quality.common.label.unqualifiedQty')}：</strong>{currentDefectInspection.unqualified_quantity}
+                <strong>{t('app.kuaizhizao.quality.common.label.unqualifiedQty')}：</strong>
+                {formatQuantityWithUnit(
+                  currentDefectInspection.unqualified_quantity,
+                  currentDefectInspection.material_unit,
+                )}
               </Col>
             </Row>
           </Card>
         )}
-        <ProFormDigit
-          name="defect_quantity"
-          label={t('app.kuaizhizao.quality.common.form.defectQty')}
-          placeholder={t('app.kuaizhizao.quality.common.placeholder.defectQty')}
-          rules={[
-            { required: true, message: t('app.kuaizhizao.quality.common.validation.requiredDefectQty') },
-            { type: 'number', min: 0, message: t('app.kuaizhizao.quality.common.validation.minZero') },
-            () => ({
-              validator(_: any, value: any) {
-                if (!currentDefectInspection) return Promise.resolve();
-                if (value > (currentDefectInspection.unqualified_quantity || 0)) {
-                  return Promise.reject(t('app.kuaizhizao.quality.common.validation.defectQtyExceeds'));
-                }
-                return Promise.resolve();
-              },
-            }),
-          ]}
-          fieldProps={{ precision: 2 }}
+        <InspectionDefectQuantityField
+          materialId={currentDefectInspection?.material_id}
+          materialUnit={currentDefectInspection?.material_unit}
+          maxQuantity={Number(currentDefectInspection?.unqualified_quantity || 0)}
+          t={t}
         />
         <ProFormSelect
           name="defect_type"

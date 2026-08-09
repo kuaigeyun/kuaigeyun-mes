@@ -298,6 +298,28 @@ export async function applyLanguageWithPersist(languageCode: string): Promise<vo
   await useUserPreferenceStore.getState().updatePreferences({ language: normalizedLanguage });
 }
 
+/** 登录/切换账户首帧：本地缓存语言码，不等待站点设置 API */
+export async function applyLanguageFromLocalCache(): Promise<void> {
+  await applyLanguage(resolveInitialLanguage());
+  languageInitialized = true;
+}
+
+/** 云端站点设置与个人偏好就绪后同步语言码（不再重复拉 API） */
+export async function applyAppShellLanguageFromCloud(
+  siteSettings: Record<string, unknown> | null,
+  languages: Language[] | null | undefined,
+  prefs: Record<string, unknown>,
+): Promise<void> {
+  siteLanguageSettings = siteSettings;
+  const tenantDefault = resolveTenantDefaultFromCloud(siteSettings, languages ?? null);
+  tenantDefaultLanguage = tenantDefault;
+  cacheTenantDefaultLanguage(tenantDefault);
+
+  const finalLanguage = resolveLanguageFromCloud(prefs, siteSettings, tenantDefault);
+  await applyLanguage(finalLanguage);
+  languageInitialized = true;
+}
+
 /** 登录或切换账户前调用，强制重新拉取租户/个人语言偏好 */
 export function resetLanguageInitState(): void {
   languageInitialized = false;

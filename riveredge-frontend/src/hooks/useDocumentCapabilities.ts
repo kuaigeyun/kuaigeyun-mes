@@ -1278,7 +1278,8 @@ export const QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES: Record<string, strin
   'finished_goods_inspection.pull_from_work_order.not_allowed': '当前状态的工单不可加载成品检验',
   'finished_goods_inspection.pull_from_work_order.no_product': '工单未关联产品物料，无法加载成品检验',
   'finished_goods_inspection.pull_from_work_order.no_inspection_required': '成品物料未配置成品检验，无需加载',
-  'finished_goods_inspection.pull_from_work_order.already_pulled': '该工单已有待检验的成品检验单，删除后可再次加载',
+  'finished_goods_inspection.pull_from_work_order.already_pulled':
+    '该工单已有成品检验单（含自动生成），无需重复下推',
   'process_inspection.pull_from_work_order.not_allowed': '当前状态的工单不可加载过程检验',
   'process_inspection.pull_from_work_order.no_product': '工单未关联产品物料，无法加载过程检验',
   'process_inspection.pull_from_work_order.no_inspection_required': '工单工序均未配置过程检验，无需加载',

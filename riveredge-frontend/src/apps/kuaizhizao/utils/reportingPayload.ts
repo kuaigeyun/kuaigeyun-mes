@@ -17,7 +17,18 @@ export function coerceReportingCreateStrings(
     : String(p.product_name ?? wo.product_name ?? p.work_order_code ?? wo.code ?? '');
   p.operation_code = String(p.operation_code ?? p.operationCode ?? '');
   p.operation_name = String(p.operation_name ?? p.operationName ?? '');
-  p.worker_name = String(p.worker_name ?? '');
+  if (p.worker_id == null || p.worker_id === '') {
+    delete p.worker_id;
+  }
+  if (p.team_id != null && p.team_id !== '') {
+    p.team_id = Number(p.team_id);
+    p.team_name = String(p.team_name ?? '').trim();
+    p.worker_name = String(p.worker_name || p.team_name || '').trim();
+  } else {
+    delete p.team_id;
+    delete p.team_name;
+    p.worker_name = String(p.worker_name ?? '');
+  }
   if (p.remarks == null || p.remarks === '') {
     delete p.remarks;
   } else {

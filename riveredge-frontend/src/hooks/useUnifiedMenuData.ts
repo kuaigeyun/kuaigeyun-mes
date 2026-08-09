@@ -16,13 +16,14 @@ import { createElement, useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { getMenuCustomLayout, type MenuTree, type CustomMenuLayoutNode } from '../services/menu';
-import { refreshCurrentUserInStore } from '../services/auth';
 import { extractAppCodeFromPath, resolveAppMenuGroupDisplayName } from '../utils/menuTranslation';
 import { useGlobalStore } from '../stores';
 import { useConfigStore } from '../stores/configStore';
 import { filterMenuItemsByPermission, resolveUserForMenuPermission, isAppGroupTitleItem } from '../utils/permission';
 import { isInfraSuperAdminUser, hasPlatformAdministrativeAuthority } from '../utils/auth';
+import { refetchSessionCurrentUser } from '../utils/sessionCurrentUser';
 import { NAVIGATION_MENU_TREE_QUERY_KEY, useNavigationMenuTreeQuery } from './useNavigationMenuTreeQuery';
+import { useCurrentUser } from './useCurrentUser';
 
 // 向后兼容：历史代码从本模块导入该常量
 export { NAVIGATION_MENU_TREE_QUERY_KEY };
@@ -240,7 +241,7 @@ export function useUnifiedMenuData(
     t,
     collapsed = false,
   } = options;
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   /** 未设置或非 false 时视为开启（兼容历史租户） */
   const launchWizardEnabled = useConfigStore((s) => s.configs.enable_launch_wizard !== false);
   const systemDashboardEnabled = useConfigStore((s) => s.configs.enable_system_dashboard !== false);
@@ -262,7 +263,7 @@ export function useUnifiedMenuData(
     if (!currentUser?.id) return;
     if (currentUser.is_tenant_admin || currentUser.is_infra_admin) return;
     if (menuPermissionUser?.permissions?.length) return;
-    void refreshCurrentUserInStore().catch(() => {});
+    void refetchSessionCurrentUser().catch(() => {});
   }, [currentUser?.id, currentUser?.is_tenant_admin, currentUser?.is_infra_admin, menuPermissionUser?.permissions?.length]);
 
   const { data: fullMenuTree, isLoading, refetch } = useNavigationMenuTreeQuery();

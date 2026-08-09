@@ -8,8 +8,8 @@
  */
 
 import React from 'react';
-import { useGlobalStore } from '../../stores/globalStore';
 import { hasPermission, hasAnyPermission, hasAllPermissions } from '../../utils/permission';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 export interface PermissionGuardProps {
   /** 权限代码（单个） */
@@ -42,7 +42,7 @@ export const PermissionGuard: React.FC<PermissionGuardProps> = ({
   fallback = null,
   children,
 }) => {
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
 
   let hasAccess = false;
 

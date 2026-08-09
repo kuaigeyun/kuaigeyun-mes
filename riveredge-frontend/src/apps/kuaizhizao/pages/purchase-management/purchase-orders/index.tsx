@@ -16,6 +16,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText,
 import type { DescriptionsProps } from 'antd';
 import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, List, Typography, theme, Dropdown, Descriptions, Spin, Card, Select, Switch, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
@@ -545,7 +546,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const [currencyOptions, setCurrencyOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [currencyLoading, setCurrencyLoading] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const [usersLoading, setUsersLoading] = useState(false);
 
   // 审批流程相关状态

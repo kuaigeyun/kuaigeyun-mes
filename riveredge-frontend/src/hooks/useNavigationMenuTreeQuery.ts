@@ -12,9 +12,9 @@
 import { useMemo } from 'react';
 import { layoutShellQueryOptions } from '../config/reactQuery';
 import { useQuery } from '@tanstack/react-query';
-import { useGlobalStore } from '../stores';
 import { getNavigationMenuTree, type MenuTree } from '../services/menu';
 import type { CurrentUser } from '../types/api';
+import { useCurrentUser } from './useCurrentUser';
 
 /** 与 clearSessionQueries / 各失效点共用，避免侧栏与工作台菜单缓存不一致 */
 export const NAVIGATION_MENU_TREE_QUERY_KEY = 'navigationMenuTree';
@@ -43,7 +43,7 @@ export function useNavigationMenuTreeQuery(
   options: UseNavigationMenuTreeQueryOptions = {},
 ) {
   const { enabled = true } = options;
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
 
   const queryKey = useMemo(
     () => buildNavigationMenuTreeQueryKey(currentUser),

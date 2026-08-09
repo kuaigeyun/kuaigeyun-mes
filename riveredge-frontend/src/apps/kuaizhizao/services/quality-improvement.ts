@@ -82,6 +82,8 @@ export interface OQCInspection {
   source_code: string;
   material_code: string;
   material_name: string;
+  material_unit?: string;
+  material_id?: number;
   inspection_quantity: number;
   qualified_quantity: number;
   unqualified_quantity: number;

@@ -12,3 +12,4 @@ export { useUserPreferenceStore } from './userPreferenceStore';
 export { useConfigStore } from './configStore';
 export { useSavedSearchVersionStore } from './savedSearchVersionStore';
 export { useListPageRefreshStore, LIST_PAGE_REFRESH_KEYS } from './listPageRefreshStore';
+export { useCurrentUser } from '../hooks/useCurrentUser';

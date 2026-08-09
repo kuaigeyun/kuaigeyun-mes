@@ -35,6 +35,12 @@ import {
   usePullEntryFormDraft,
 } from '../shared/pullEntryFormDraft';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import {
+  MaterialUnitSelect,
+  fetchMaterialForUnitSelectCache,
+} from '../../../../../components/material-unit-select';
+import { recalculateQuantityOnUnitChange } from '../../../../../components/quantity-with-unit/formHelpers';
+import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 
 type PreviewPicking = {
   picking_id: number;
@@ -344,8 +350,53 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseInbound.col.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true, render: (v: unknown) => v || '—' },
-      { title: t('app.kuaizhizao.warehouseInbound.col.unit'), dataIndex: 'material_unit', width: 70, align: 'center' as const },
-      { title: t('app.kuaizhizao.warehouseInbound.col.returnableQty'), dataIndex: 'picked_quantity', width: 100, align: 'right' as const },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.unit'),
+        dataIndex: 'material_unit',
+        width: 88,
+        align: 'center' as const,
+        render: (_: unknown, record: ReturnLine) =>
+          record.material_id ? (
+            <MaterialUnitSelect
+              materialId={record.material_id}
+              value={record.material_unit}
+              size="small"
+              noStyle
+              onChange={(newUnit) => {
+                void (async () => {
+                  const material = await fetchMaterialForUnitSelectCache(record.material_id!);
+                  setLines((prev) =>
+                    prev.map((row) => {
+                      if (row.key !== record.key) return row;
+                      const convert = (qty: number) =>
+                        recalculateQuantityOnUnitChange({
+                          material,
+                          currentQuantity: qty,
+                          oldUnit: row.material_unit,
+                          newUnit,
+                        });
+                      return {
+                        ...row,
+                        material_unit: newUnit,
+                        picked_quantity: convert(row.picked_quantity),
+                        return_quantity: convert(row.return_quantity),
+                      };
+                    }),
+                  );
+                })();
+              }}
+            />
+          ) : (
+            record.material_unit || '—'
+          ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.returnableQty'),
+        dataIndex: 'picked_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number, record: ReturnLine) => formatQuantityWithUnit(v, record.material_unit),
+      },
       {
         title: t('app.kuaizhizao.warehouseInbound.col.thisReturn'),
         width: 130,

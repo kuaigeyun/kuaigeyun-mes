@@ -155,6 +155,7 @@ class InventoryTransferItem(BaseModel):
     material_id = fields.IntField(description="物料ID")
     material_code = fields.CharField(max_length=50, description="物料编码")
     material_name = fields.CharField(max_length=200, description="物料名称")
+    material_unit = fields.CharField(max_length=20, null=True, description="物料单位")
 
     # 调出仓库、库区、库位信息
     from_warehouse_id = fields.IntField(description="调出仓库ID")

@@ -529,6 +529,9 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         create_fields.update(
             await _quality_inspection_initial_review_fields(tenant_id, "oqc_inspection")
         )
+        from apps.kuaizhizao.services.quality_service import _ensure_inspection_material_unit
+
+        await _ensure_inspection_material_unit(tenant_id, create_fields)
         user_info = await self.get_user_info(user_id)
         create_fields["created_by"] = user_id
         create_fields["created_by_name"] = user_info["name"]
@@ -1260,6 +1263,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         from apps.kuaizhizao.services.quality_service import (
             _resolve_inspection_template_fields,
             _quality_inspection_initial_review_fields,
+            _resolve_material_base_unit,
         )
 
         notice = await ShipmentNotice.get_or_none(
@@ -1327,6 +1331,9 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     item.material_id,
                     "oqc",
                 )
+                material_unit = str(getattr(item, "material_unit", "") or "").strip()
+                if not material_unit:
+                    material_unit = await _resolve_material_base_unit(tenant_id, item.material_id)
                 row = await OQCInspection.create(
                     tenant_id=tenant_id,
                     inspection_code=inspection_code,
@@ -1342,6 +1349,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     material_id=item.material_id,
                     material_code=item.material_code,
                     material_name=item.material_name,
+                    material_unit=material_unit,
                     inspection_quantity=item.notice_quantity,
                     status="待检验",
                     inspection_standard=template.get("inspection_standard"),
@@ -1372,6 +1380,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         from apps.kuaizhizao.services.quality_service import (
             _resolve_inspection_template_fields,
             _quality_inspection_initial_review_fields,
+            _resolve_material_base_unit,
         )
 
         delivery = await SalesDelivery.get_or_none(
@@ -1464,6 +1473,9 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     item.material_id,
                     "oqc",
                 )
+                material_unit = str(getattr(item, "material_unit", "") or "").strip()
+                if not material_unit:
+                    material_unit = await _resolve_material_base_unit(tenant_id, item.material_id)
                 row = await OQCInspection.create(
                     tenant_id=tenant_id,
                     inspection_code=inspection_code,
@@ -1479,6 +1491,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     material_id=item.material_id,
                     material_code=item.material_code,
                     material_name=item.material_name,
+                    material_unit=material_unit,
                     batch_number=item.batch_number,
                     inspection_quantity=item.delivery_quantity,
                     status="待检验",

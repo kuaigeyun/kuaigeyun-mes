@@ -25,7 +25,7 @@ from infra.infrastructure.http import get_http_client
 
 OCR_NOT_CONFIGURED_MSG = (
     "DeepSeek 对话 API 不支持图片输入。"
-    "请在站点设置 → 集成设置中配置 OCR 视觉端点（OCR Base URL 与 OCR 模型），"
+    "请在系统配置 → 应用连接器中配置 OCR 视觉端点（OCR Base URL 与 OCR 模型），"
     "例如硅基流动 https://api.siliconflow.cn/v1 + deepseek-ai/DeepSeek-OCR。"
 )
 
@@ -110,7 +110,7 @@ async def get_deepseek_runtime_config(tenant_id: int) -> Dict[str, Any]:
     site_settings = await SiteSettingService.get_settings(tenant_id)
     deepseek = get_deepseek_integration(site_settings.settings or {})
     if not deepseek.get("enabled"):
-        raise ValidationError("DeepSeek 集成未启用，请在站点设置 → 集成设置中开启 KU-AI")
+        raise ValidationError("DeepSeek 集成未启用，请在系统配置 → 应用连接器中开启 KU-AI")
     api_key = deepseek.get("api_key")
     if not isinstance(api_key, str) or not api_key.strip():
         raise ValidationError("未配置 DeepSeek API Key，无法使用 OCR")

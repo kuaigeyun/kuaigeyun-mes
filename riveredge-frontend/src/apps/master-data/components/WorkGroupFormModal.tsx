@@ -18,6 +18,7 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRuleP
 import type { WorkGroup, WorkGroupCreate, WorkGroupUpdate, WorkGroupMemberItem } from '../types/factory';
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import { workGroupFormSchemaBasic, workGroupFormSchemaRest } from '../schemas/workGroup';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 
 const PAGE_CODE = 'master-data-factory-work-group';
 
@@ -33,6 +34,7 @@ export interface WorkGroupFormModalProps {
   onClose: () => void;
   editUuid: string | null;
   onSuccess: (workGroup: WorkGroup) => void;
+  zIndex?: number;
 }
 
 export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
@@ -40,6 +42,7 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
   onClose,
   editUuid,
   onSuccess,
+  zIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -52,7 +55,7 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
   const employeeById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
 
   const isEdit = Boolean(editUuid);
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
 
   useEffect(() => {
     if (!canPickUsersForDisplay(currentUser)) {
@@ -218,6 +221,7 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
       initialValues={{ isActive: true, members: [] }}
       layout="vertical"
       grid
+      zIndex={zIndex}
     >
       <SchemaFormRenderer
         schema={workGroupFormSchemaBasic}

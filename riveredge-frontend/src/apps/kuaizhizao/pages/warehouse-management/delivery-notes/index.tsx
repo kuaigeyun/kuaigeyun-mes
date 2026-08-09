@@ -46,6 +46,8 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 import type { Material } from '../../../../master-data/types/material';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -1008,7 +1010,13 @@ const DeliveryNotesPage: React.FC = () => {
                               fillMapping={{
                                 material_code: 'mainCode',
                                 material_name: 'name',
-                                material_unit: 'baseUnit',
+                              }}
+                              onChange={(_val, material) => {
+                                if (!material || !formRef.current) return;
+                                formRef.current.setFieldValue(
+                                  ['items', index, 'material_unit'],
+                                  resolveMaterialScenarioUnit(material, 'sale'),
+                                );
                               }}
                               fallbackOption={fallback}
                               formItemProps={{ style: { margin: 0 } }}
@@ -1026,8 +1034,24 @@ const DeliveryNotesPage: React.FC = () => {
                   dataIndex: 'material_unit',
                   width: 80,
                   render: (_: any, __: any, index: number) => (
-                    <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                      <Input placeholder={t('app.kuaizhizao.warehouseOutbound.col.unit')} size="small" />
+                    <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
+                      {({ getFieldValue }: any) => {
+                        const materialId = getFieldValue(['items', index, 'material_id']);
+                        if (!formRef.current) return null;
+                        return (
+                          <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                            <DocumentLineUnitSelect
+                              form={formRef.current}
+                              listName="items"
+                              rowIndex={index}
+                              fields={{ quantity: 'notice_quantity', unit: 'material_unit' }}
+                              materialId={materialId}
+                              size="small"
+                              noStyle
+                            />
+                          </AntForm.Item>
+                        );
+                      }}
                     </AntForm.Item>
                   ),
                 },

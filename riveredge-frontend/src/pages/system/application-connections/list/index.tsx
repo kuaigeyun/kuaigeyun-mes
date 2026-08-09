@@ -52,7 +52,9 @@ import {
 } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import AppConnectorMarket from '../AppConnectorMarket';
+import KuAiConnectorConfigModal from '../KuAiConnectorConfigModal';
 import type { AppConnectorDefinition } from '../connectors';
+import { isSiteIntegrationConnector } from '../connectors';
 import {
   getApplicationConnectionList,
   getApplicationConnectionListAll,
@@ -167,6 +169,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
   const [syncingContactsUuid, setSyncingContactsUuid] = useState<string | null>(null);
   const [allConnections, setAllConnections] = useState<ApplicationConnection[]>([]);
   const [connectorMarketVisible, setConnectorMarketVisible] = useState(false);
+  const [connectorMarketInitialCategory, setConnectorMarketInitialCategory] = useState('all');
+  const [kuAiConfigVisible, setKuAiConfigVisible] = useState(false);
+  const [kuAiConnectorName, setKuAiConnectorName] = useState('');
   const connectionPerms = useResourcePermissions('system:application-connection');
   const canSyncContacts = !connectionPerms.enabled || !!connectionPerms.canAction?.('execute');
   const formRef = useRef<ProFormInstance>(null);
@@ -210,10 +215,16 @@ const ApplicationConnectionsListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentUuid(null);
+    setConnectorMarketInitialCategory('all');
     setConnectorMarketVisible(true);
   };
 
   const handleConnectorSelect = (connector: AppConnectorDefinition) => {
+    if (isSiteIntegrationConnector(connector.type)) {
+      setKuAiConnectorName(connector.name);
+      setKuAiConfigVisible(true);
+      return;
+    }
     setFormInitialValues({
       type: connector.type,
       is_active: true,
@@ -1082,6 +1093,13 @@ const ApplicationConnectionsListPage: React.FC = () => {
         open={connectorMarketVisible}
         onClose={() => setConnectorMarketVisible(false)}
         onSelect={handleConnectorSelect}
+        initialCategory={connectorMarketInitialCategory}
+      />
+
+      <KuAiConnectorConfigModal
+        open={kuAiConfigVisible}
+        connectorName={kuAiConnectorName}
+        onClose={() => setKuAiConfigVisible(false)}
       />
 
       <UniDetail

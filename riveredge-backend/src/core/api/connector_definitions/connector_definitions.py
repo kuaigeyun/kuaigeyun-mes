@@ -70,6 +70,8 @@ PRESET_APP_CONNECTORS: List[Dict[str, Any]] = [
     {"id": "digiwin_wms", "name": "鼎捷 WMS", "type": "digiwin_wms", "category": "wms", "description": "鼎捷 WMS 仓储管理系统", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
     {"id": "kejian_wms", "name": "科箭 WMS", "type": "kejian_wms", "category": "wms", "description": "科箭云仓储 WMS", "icon": "CloudOutlined", "default_config": {"base_url": "", "client_id": "", "client_secret": ""}},
     {"id": "openwms", "name": "OpenWMS", "type": "openwms", "category": "wms", "description": "OpenWMS 开源仓储管理系统", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
+    # AI（站点 integrations，非 application_connection）
+    {"id": "deepseek", "name": "KU-AI DeepSeek", "type": "deepseek", "category": "ai", "description": "DeepSeek 对话、OCR 视觉识别与 KU-AI 能力配置", "icon": "RobotOutlined", "default_config": {}},
 ]
 
 CATEGORIES = [
@@ -81,6 +83,7 @@ CATEGORIES = [
     {"key": "oa", "label": "OA"},
     {"key": "iot", "label": "IoT"},
     {"key": "wms", "label": "WMS"},
+    {"key": "ai", "label": "AI"},
 ]
 
 

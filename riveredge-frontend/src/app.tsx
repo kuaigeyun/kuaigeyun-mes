@@ -21,13 +21,20 @@ import enUS from 'antd/locale/en_US';
 import zhTW from 'antd/locale/zh_TW';
 import jaJP from 'antd/locale/ja_JP';
 import viVN from 'antd/locale/vi_VN';
-import { useQuery } from '@tanstack/react-query';
-import { currentUserQueryOptions } from './config/reactQuery';
-import { getCurrentUser } from './services/auth';
-import { getCurrentInfraSuperAdmin } from './services/infraAdmin';
-import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, getTenantId, isTokenExpired, getTokenRemainingTime, isInfraSuperAdminUser, isInfraSuperAdminFromToken } from './utils/auth';
-import { buildRestoredUserFromStorage } from './utils/restoredUser';
+import {
+  getToken,
+  clearAuth,
+  setUserInfo,
+  setTenantId,
+  getTenantId,
+  isTokenExpired,
+  getTokenRemainingTime,
+} from './utils/auth';
+import { getSessionCurrentUser } from './utils/sessionCurrentUser';
+import { buildRestoredUserFromStorage, seedCurrentUserFromAuthStorage } from './utils/restoredUser';
 import { isEquivalentCurrentUser } from './utils/currentUserSnapshot';
+import { NAVIGATION_MENU_TREE_QUERY_KEY } from './hooks/useNavigationMenuTreeQuery';
+import { queryClient } from './queryClient';
 import { refreshAccessTokenSilently } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
 import { FORM_LAYOUT } from './components/layout-templates/constants';
@@ -35,6 +42,10 @@ import { ENGLISH_UI_FONT_FAMILY } from './constants/fonts';
 import { useGlobalStore } from './stores';
 import { syncLanguageFromPreferences } from './config/i18n';
 import { useAppShellReady } from './hooks/useAppShellReady';
+import { useCurrentUserQuery } from './hooks/useCurrentUserQuery';
+import { useCurrentUser } from './hooks/useCurrentUser';
+import { useSiteSettingQuery } from './hooks/useSiteSettingQuery';
+import { useUserPreferenceQuery } from './hooks/useUserPreferenceQuery';
 import { getDefaultTenantHomePath, useConfigStore } from './stores/configStore';
 import { useUserPreferenceStore } from './stores/userPreferenceStore';
 import { getPlatformSettingsPublic } from './services/platformSettings';
@@ -58,7 +69,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const { message } = AntdApp.useApp();
   const location = useLocation();
   const navigate = useNavigate();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const loading = useGlobalStore((s) => s.loading);
   const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
   const setLoading = useGlobalStore((s) => s.setLoading);
@@ -77,16 +88,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       return;
     }
 
-    const token = getToken();
-    const restoredUser = buildRestoredUserFromStorage();
-
-    if ((token || restoredUser) && !currentUser && restoredUser) {
-      setCurrentUser(restoredUser);
-      setUserInfo(restoredUser);
-      if (restoredUser.tenant_id != null) {
-        setTenantId(restoredUser.tenant_id);
-      }
-    }
+    seedCurrentUserFromAuthStorage();
 
     initializedRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,43 +136,39 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     return !!token;
   }, [isPublicPath]);
 
-  const isInfraSuperAdmin = isInfraSuperAdminUser(getUserInfo()) || isInfraSuperAdminFromToken();
-
-  const { data: userData, isLoading, isError, error } = useQuery({
-    queryKey: ['currentUser', isInfraSuperAdmin],
-    queryFn: async () => {
-      if (isInfraSuperAdmin) {
-        const infraUser = await getCurrentInfraSuperAdmin();
-        const tenantId = getTenantId();
-        return {
-          id: infraUser.id,
-          uuid: infraUser.uuid,
-          username: infraUser.username,
-          email: infraUser.email,
-          full_name: infraUser.full_name,
-          avatar: infraUser.avatar,
-          is_infra_admin: true,
-          is_tenant_admin: false,
-          tenant_id: tenantId ?? undefined,
-          user_type: 'infra_superadmin' as const,
-        };
-      }
-      return getCurrentUser();
-    },
+  const { data: userData, isLoading, isError, error } = useCurrentUserQuery({
     enabled: shouldFetchUser,
-    retry: false,
-    ...currentUserQueryOptions,
+  });
+
+  const tenantId = currentUser?.tenant_id ?? getTenantId();
+  useSiteSettingQuery({
+    tenantId,
+    enabled: shouldFetchUser && !!currentUser && tenantId != null,
+  });
+  useUserPreferenceQuery({
+    tenantId,
+    userId: currentUser?.id,
+    enabled: shouldFetchUser && !!currentUser && tenantId != null && currentUser.id != null,
   });
 
   // 处理用户信息加载成功（唯一数据源：/auth/me）
   useEffect(() => {
     if (!userData) return;
     const prev = useGlobalStore.getState().currentUser;
+    const permissionVersionChanged =
+      prev?.permission_version != null &&
+      userData.permission_version != null &&
+      prev.permission_version !== userData.permission_version;
     if (!isEquivalentCurrentUser(prev, userData)) {
       setCurrentUser(userData);
     }
     setUserInfo(userData);
     if (userData.avatar) prefetchAvatarUrl(userData.avatar);
+    if (permissionVersionChanged) {
+      queryClient.invalidateQueries({ queryKey: [NAVIGATION_MENU_TREE_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
+      queryClient.invalidateQueries({ queryKey: ['menuCustomLayout'] });
+    }
   }, [userData, setCurrentUser]);
 
   // 用户就绪（无论来自 API 成功还是 localStorage 恢复）后统一预加载枚举缓存；
@@ -214,25 +212,10 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     setLoading(isLoading);
   }, [isLoading, isPublicPath, setLoading, currentUser]);
 
-  // 引入 useConfigStore
-  const fetchConfigs = useConfigStore((s) => s.fetchConfigs);
   const getConfig = useConfigStore((s) => s.getConfig);
   /** 拆出具体项作依赖，避免 fetchConfigs 更新后定时器仍闭包旧阈值 */
   const tokenCheckIntervalSec = useConfigStore((s) => s.configs['security.token_check_interval']);
   const inactivityTimeoutSec = useConfigStore((s) => s.configs['security.inactivity_timeout']);
-  /** 用 store 中的 tenant_id 驱动重渲染；localStorage 单独变更不会触发 React 更新 */
-  const tenantId = currentUser?.tenant_id ?? getTenantId();
-  /** 记录上次已拉取站点配置的租户：切换租户时必须 fetchConfigs(true)，避免 initialized 短路沿用上一租户内存 */
-  const lastSiteSettingTenantRef = useRef<string | number | null>(null);
-
-  useEffect(() => {
-    if (!currentUser || !tenantId || isPublicPath) return;
-    const prev = lastSiteSettingTenantRef.current;
-    // 仅真实切换租户时 force；首进页若 theme/i18n 已 hydrate，勿再强制打 /site-settings
-    const tenantChanged = prev != null && prev !== tenantId;
-    lastSiteSettingTenantRef.current = tenantId;
-    fetchConfigs(tenantChanged);
-  }, [currentUser, tenantId, isPublicPath, fetchConfigs]);
 
   // 监听用户活动；API 请求由 api.ts 在请求结束（含失败）时强制刷新活动时间
   useEffect(() => {
@@ -603,8 +586,8 @@ export default function App() {
   // 壳层就绪后预取头像 URL，缩短顶栏头像显示延迟
   useEffect(() => {
     if (!appShellReady) return;
-    const userInfo = getUserInfo();
-    const avatarUuid = (userInfo as any)?.avatar;
+    const sessionUser = getSessionCurrentUser();
+    const avatarUuid = sessionUser?.avatar;
     if (avatarUuid) prefetchAvatarUrl(avatarUuid);
   }, [appShellReady]);
 

@@ -18,6 +18,7 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { EightDDetailDrawer } from './components/EightDDetailDrawer';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   getEightDStatusText,
   resolveEightDSeverityDisplay,
@@ -42,7 +43,7 @@ const EightDReportsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const [searchParams, setSearchParams] = useSearchParams();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const actionRef = useRef<ActionType>(null);
   const createFormRef = useRef<any>(null);
   const [createVisible, setCreateVisible] = useState(false);

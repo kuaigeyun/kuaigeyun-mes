@@ -26,6 +26,7 @@ import { storageAreaApi, storageLocationApi } from '../../../../master-data/serv
 import dayjs from 'dayjs';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { DocumentLineUnitSelect, QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import {formatDateTime, formatQuantity} from '../../../../../utils/format';
@@ -74,6 +75,7 @@ interface InventoryTransferItem {
   material_id?: number;
   material_code?: string;
   material_name?: string;
+  material_unit?: string;
   from_warehouse_id?: number;
   from_storage_area_id?: number;
   from_storage_area_code?: string;
@@ -96,6 +98,7 @@ const defaultTransferItem = {
   material_id: undefined as number | undefined,
   material_code: '',
   material_name: '',
+  material_unit: '',
   quantity: undefined as number | undefined,
   unit_price: 0,
   from_storage_area_id: undefined as number | undefined,
@@ -155,6 +158,7 @@ const InventoryTransferPage: React.FC = () => {
       material_id: it.material_id,
       material_code: it.material_code || '',
       material_name: it.material_name || '',
+      material_unit: it.material_unit || '',
       from_warehouse_id: header.from_warehouse_id,
       to_warehouse_id: header.to_warehouse_id,
       from_storage_area_id: fromArea.id,
@@ -654,7 +658,16 @@ const InventoryTransferPage: React.FC = () => {
     () => [
       { title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', width: 150 },
-      { title: t('app.kuaizhizao.inventoryTransfer.formTransferQty'), dataIndex: 'quantity', width: 100, align: 'right' as const, render: formatQuantity },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 72 },
+      {
+        title: t('app.kuaizhizao.inventoryTransfer.formTransferQty'),
+        dataIndex: 'quantity',
+        width: 120,
+        align: 'right' as const,
+        render: (value: number, row: InventoryTransferItem) => (
+          <QuantityWithUnitDisplay quantity={value} unit={row.material_unit} />
+        ),
+      },
       {
         title: t('app.kuaizhizao.inventoryTransfer.colFromAreaLocation'),
         width: 160,
@@ -873,6 +886,7 @@ const InventoryTransferPage: React.FC = () => {
                                 fillMapping={{
                                   material_code: 'mainCode',
                                   material_name: 'name',
+                                  material_unit: 'baseUnit',
                                 }}
                                 fallbackOption={fallback}
                                 formItemProps={{ style: { margin: 0 } }}
@@ -880,6 +894,32 @@ const InventoryTransferPage: React.FC = () => {
                                 showAdvancedSearch
                               />
                             </div>
+                          );
+                        }}
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: t('app.kuaizhizao.warehouseOutbound.col.unit'),
+                    dataIndex: 'material_unit',
+                    width: 88,
+                    render: (_: unknown, __: unknown, index: number) => (
+                      <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
+                        {({ getFieldValue }: { getFieldValue: (name: string | (string | number)[]) => unknown }) => {
+                          const materialId = getFieldValue(['items', index, 'material_id']) as number | undefined;
+                          if (!formRef.current) return null;
+                          return (
+                            <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                              <DocumentLineUnitSelect
+                                form={formRef.current}
+                                listName="items"
+                                rowIndex={index}
+                                fields={{ quantity: 'quantity', unit: 'material_unit' }}
+                                materialId={materialId}
+                                size="small"
+                                noStyle
+                              />
+                            </AntForm.Item>
                           );
                         }}
                       </AntForm.Item>

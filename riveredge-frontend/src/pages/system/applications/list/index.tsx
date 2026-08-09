@@ -11,6 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Card, Descriptions, Dropdown, Modal, Popconfirm, Space, Switch, Tag, Typography, Alert, Divider, Menu, Breadcrumb, Tooltip, message, Row, Col, Tree, Select, Table } from 'antd';
 import { ThemedSegmented } from '../../../../components/themed-segmented';
+import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 const { Title, Paragraph, Text } = Typography;
 import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
 import { ApplicationClientReleasesPanel } from './ApplicationClientReleasesPanel';
@@ -528,7 +529,7 @@ const ApplicationListPage: React.FC = () => {
   const [appCategoryFilter, setAppCategoryFilter] = useState<AppCategoryFilter>('basic');
   /** 平台管理员默认看「全部」，否则「通用」分类会隐藏定制应用 */
   const infraCategoryDefaultAppliedRef = useRef(false);
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const canManageAppLifecycle = Boolean(currentUser?.is_infra_admin);
 
   /** static 目录通过 Vite publicDir 挂载到站点根路径，见 vite.config `publicDir` */

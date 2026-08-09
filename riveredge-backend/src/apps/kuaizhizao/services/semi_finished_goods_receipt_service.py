@@ -19,6 +19,7 @@ from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
 from apps.kuaizhizao.models.semi_finished_goods_receipt_item import SemiFinishedGoodsReceiptItem
 from apps.kuaizhizao.models.work_order import WorkOrder
+from apps.kuaizhizao.utils.material_unit_utils import convert_to_base_quantity
 from apps.kuaizhizao.schemas.warehouse import (
     SemiFinishedGoodsReceiptCreate,
     SemiFinishedGoodsReceiptItemCreate,
@@ -340,15 +341,29 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                 items = await SemiFinishedGoodsReceiptItem.filter(
                     tenant_id=tenant_id, receipt_id=receipt_id
                 ).all()
+                from apps.master_data.models.material import Material
+
+                material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
+                materials = await Material.filter(
+                    tenant_id=tenant_id,
+                    id__in=material_ids,
+                    deleted_at__isnull=True,
+                ).all() if material_ids else []
+                material_by_id = {int(m.id): m for m in materials}
                 for item in items:
                     qty = item.receipt_quantity or item.qualified_quantity or Decimal(0)
                     if qty <= 0:
                         continue
+                    base_qty = convert_to_base_quantity(
+                        material_by_id.get(item.material_id),
+                        qty,
+                        from_unit=getattr(item, "material_unit", None),
+                    )
                     wh_id = item.warehouse_id if getattr(item, "warehouse_id", None) else receipt.warehouse_id
                     await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=qty,
+                        quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         source_type="semi_finished_goods_receipt",
@@ -388,14 +403,28 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                     tenant_id=tenant_id, receipt_id=receipt_id
                 ).all()
                 wh_id = receipt.warehouse_id if receipt.warehouse_id else None
+                from apps.master_data.models.material import Material
+
+                material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
+                materials = await Material.filter(
+                    tenant_id=tenant_id,
+                    id__in=material_ids,
+                    deleted_at__isnull=True,
+                ).all() if material_ids else []
+                material_by_id = {int(m.id): m for m in materials}
                 for item in items:
                     qty = item.receipt_quantity or item.qualified_quantity or Decimal(0)
                     if qty <= 0:
                         continue
+                    base_qty = convert_to_base_quantity(
+                        material_by_id.get(item.material_id),
+                        qty,
+                        from_unit=getattr(item, "material_unit", None),
+                    )
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=qty,
+                        quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         source_type="semi_finished_goods_receipt_revoke",

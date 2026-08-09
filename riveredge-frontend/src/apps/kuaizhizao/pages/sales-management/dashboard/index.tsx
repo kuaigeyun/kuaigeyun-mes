@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { Table, Tag, Typography, Progress, Button, theme } from 'antd';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   FileTextOutlined,
   SendOutlined,
@@ -79,7 +80,7 @@ const SalesDashboard: React.FC = () => {
   const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
   const isDark = useThemeStore((s) => s.resolved.isDark);
   const isPlain = isModuleDashboardPlain(themeStyle);
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const currentUser = useCurrentUser();
   const fieldMasks = useUserFieldMasks();
   const showMoney =
     resolveAmountFieldVisibility(fieldMasks, SO, 'total_amount', canViewKuaizhizaoPricing(currentUser)) === 'show';
