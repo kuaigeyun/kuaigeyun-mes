@@ -13,7 +13,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { DeliveryDelayExceptionDetailContent } from '../components/ProductionExceptionDetailContent';
 import {
@@ -262,23 +262,18 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 250,
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
-              {t('common.detail')}
-            </Button>,
-            ...buildDeliveryDelayExceptionActionButtons({
-              record,
-              t,
-              onAction: (action) => openHandleModal(record, action),
-              keyPrefix: `delivery-delay-actions-${record.id ?? 'row'}`,
-            }),
-          ],
-          { keyPrefix: `delivery-delay-actions-${record.id ?? 'row'}` },
-        ),
+      render: (_, record) => [
+        <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+          {t('common.detail')}
+        </Button>,
+        ...buildDeliveryDelayExceptionActionButtons({
+          record,
+          t,
+          onAction: (action) => openHandleModal(record, action),
+          keyPrefix: `delivery-delay-actions-${record.id ?? 'row'}`,
+        }),
+      ],
     },
   ], SALES_DOC_LIST_FIELD_RANK), [alertLevelValueEnum, exceptionStatusValueEnum, t]);
 

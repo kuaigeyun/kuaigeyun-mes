@@ -509,12 +509,23 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             )
         keyword = str(filters.get("keyword") or "").strip()
         if keyword:
+            from apps.kuaizhizao.utils.list_item_material_keyword import (
+                header_ids_matching_item_material,
+            )
+
+            material_notice_ids = await header_ids_matching_item_material(
+                tenant_id,
+                ShipmentNoticeItem,
+                "notice_id",
+                keyword,
+            )
             query = query.filter(
                 Q(notice_code__icontains=keyword)
                 | Q(sales_order_code__icontains=keyword)
                 | Q(customer_name__icontains=keyword)
                 | Q(warehouse_name__icontains=keyword)
                 | Q(sales_delivery_code__icontains=keyword)
+                | Q(id__in=material_notice_ids)
             )
         if filters.get("notice_code"):
             code = str(filters["notice_code"]).strip()
@@ -530,6 +541,21 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         notices = await query.offset(skip).limit(limit).order_by(order_clause, "-id")
         notice_list = list(notices)
         notice_ids = [int(n.id) for n in notice_list]
+        include_items = bool(filters.get("include_items"))
+        items_by_notice: dict[int, list] = {}
+        if include_items and notice_ids:
+            from apps.kuaizhizao.schemas.shipment_notice import ShipmentNoticeItemResponse
+
+            all_items = (
+                await ShipmentNoticeItem.filter(tenant_id=tenant_id, notice_id__in=notice_ids)
+                .order_by("notice_id", "id")
+                .all()
+            )
+            for it in all_items:
+                nid = int(it.notice_id)
+                items_by_notice.setdefault(nid, []).append(
+                    ShipmentNoticeItemResponse.model_validate(it)
+                )
         has_items_by_id = await self._notice_has_items_map(tenant_id, notice_ids)
         withdrawable_by_id = await self._delivery_withdrawable_by_notice_id(tenant_id, notice_list)
         from apps.kuaizhizao.services.document_lifecycle_service import get_shipment_notice_lifecycle
@@ -537,6 +563,8 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         for r in notice_list:
             resp = ShipmentNoticeListResponse.model_validate(r)
             resp.lifecycle = get_shipment_notice_lifecycle(r)
+            if include_items:
+                resp.items = items_by_notice.get(int(r.id), [])
             list_responses.append(resp)
         enriched = await enrich_items(tenant_id, "shipment_notice", enrich_shipment_notice_list_capabilities(
             notice_list,

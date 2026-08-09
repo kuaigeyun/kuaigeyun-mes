@@ -86,7 +86,7 @@ import {
   FlagOutlined,
   LockOutlined,
   UnlockOutlined,
-  DownOutlined,
+  MoreOutlined,
   QuestionCircleOutlined,
 } from '@ant-design/icons'
 import { UniTable } from '../../../../../components/uni-table'
@@ -95,6 +95,8 @@ import {
   UniTableStackedPrimaryCell,
   UniTableStackedLineBadge,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
+  UNI_TABLE_OPERATION_STEPS_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn'
 import { useUserPreferenceStore } from '../../../../../stores/userPreferenceStore'
 import { useConfigStore } from '../../../../../stores/configStore'
@@ -326,8 +328,18 @@ import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay
 import type { Material } from '../../../../master-data/types/material'
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateTimeString } from '../../../../../utils/formDate'
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns'
-import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar'
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar'
 import { resolveDownstreamPushPercent } from '../../sales-management/shared/pushProgress'
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn'
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions'
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
+import { isManualAuditEnabled } from '../../../../../utils/auditMode'
+
+/** 工单 UniWorkflowActions 状态集合（与后端 review_status / status 对齐） */
+const WO_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft']
+const WO_WORKFLOW_PENDING_STATUSES = ['待审核', 'pending_review', 'pending_approval', 'PENDING']
+const WO_WORKFLOW_APPROVED_STATUSES = ['已通过', '审核通过', 'approved', 'APPROVED']
+const WO_WORKFLOW_REJECTED_STATUSES = ['已驳回', '审核驳回', 'rejected', 'REJECTED']
 
 const getFirstNonEmptyString = (...candidates: Array<unknown>): string | undefined => {
   for (const candidate of candidates) {
@@ -450,6 +462,11 @@ interface WorkOrder {
   work_center_name?: string
   status?: string
   priority?: string
+  review_status?: string
+  reviewer_id?: number
+  reviewer_name?: string
+  review_time?: string
+  review_remarks?: string
   planned_start_date?: string
   planned_end_date?: string
   actual_start_date?: string
@@ -521,6 +538,12 @@ interface WorkOrder {
   serial_rule_id?: number | null
   serial_split_child_count?: number | null
   downstream_push_progress?: number
+  audit?: {
+    entity_type?: string
+    phase?: string
+    enabled?: boolean
+    allowed_actions?: string[]
+  }
   capabilities?: {
     release?: { allowed: boolean; reason?: string | null }
     revoke?: { allowed: boolean; reason?: string | null }
@@ -998,7 +1021,7 @@ function renderWorkOrderBatchSerialLine(
 }
 
 /** 工单列表列结构版本：列增删改时递增，避免 HMR 下 columns useMemo 沿用旧缓存 */
-const WORK_ORDER_LIST_COLUMNS_REV = 'batch-in-product-v4-op-hint-inline'
+const WORK_ORDER_LIST_COLUMNS_REV = 'work-order-audit-phase-v1'
 
 function summarizeWorkOrderTreeChildren(record: WorkOrder) {
   const children = record.children ?? []
@@ -1110,7 +1133,29 @@ function resolveWorkOrderOperationSteps(
       row_kind: 'work_order',
       id: record.parent_work_order_id,
     } as WorkOrder)
-    return rowByKey?.get(parentKey)?.operation_steps ?? undefined
+    const parent = rowByKey?.get(parentKey)
+    if (parent?.operation_steps?.length) {
+      return parent.operation_steps
+    }
+    // 主工单工序已归档时，从兄弟拆分子行取工艺摘要
+    const sibling = (parent?.children || []).find(
+      (c) =>
+        (c.row_kind || '') === 'split' &&
+        c.id !== record.id &&
+        Array.isArray(c.operation_steps) &&
+        c.operation_steps.length > 0,
+    )
+    return sibling?.operation_steps
+  }
+  // 已拆分主工单：自身工序已归档，用拆分子工单工序展示正确工艺路线（禁止继承 BOM 上级成品工序）
+  if (kind === 'work_order' && ['split', '已拆分'].includes(record.status || '')) {
+    const child = (record.children || []).find(
+      (c) =>
+        (c.row_kind || '') === 'split' &&
+        Array.isArray(c.operation_steps) &&
+        c.operation_steps.length > 0,
+    )
+    return child?.operation_steps
   }
   return undefined
 }
@@ -1279,6 +1324,11 @@ const WorkOrdersPage: React.FC = () => {
   const { t, i18n } = useTranslation()
   const { message: messageApi } = App.useApp()
   const workOrderPerms = useResourcePermissions(WORK_ORDER_RESOURCE)
+  const workOrderAuditEnabled = useAuditRequired('work_order', false)
+  const workOrderAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<WorkOrder>({ t, auditEnabled: workOrderAuditEnabled }),
+    [t, workOrderAuditEnabled],
+  )
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal()
 
   const workOrderProductionModeImportOptions = useMemo(
@@ -1410,7 +1460,6 @@ const WorkOrdersPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [highlightPlannedEndOverdue, setHighlightPlannedEndOverdue] = useState(false)
   /** 工序列提示：页面刷新后流光引导一次 */
-  const [operationsHintShimmer, setOperationsHintShimmer] = useState(true)
 
   const [computationPullPreviewOpen, setComputationPullPreviewOpen] = useState(false)
   const [computationPullPreviewLoading, setComputationPullPreviewLoading] = useState(false)
@@ -2028,6 +2077,18 @@ const WorkOrdersPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [workOrderDetail, setWorkOrderDetail] = useState<WorkOrder | null>(null)
   const [sopSidebarOpen, setSopSidebarOpen] = useState(false)
+  const handleWorkOrderAuditSuccess = useCallback(async () => {
+    invalidateStatistics()
+    actionRef.current?.reload()
+    if (workOrderDetail?.id != null) {
+      try {
+        const updated = await workOrderApi.get(String(workOrderDetail.id))
+        setWorkOrderDetail(updated)
+      } catch {
+        /* 详情刷新失败不影响列表 */
+      }
+    }
+  }, [workOrderDetail?.id])
   useRegisterAiContext(
     drawerVisible && workOrderDetail
       ? {
@@ -6200,6 +6261,35 @@ const WorkOrdersPage: React.FC = () => {
     }
   }
 
+  const isSplitChildRevocable = (child: WorkOrder): boolean => {
+    const st = child.status || ''
+    const isDraftChild = ['draft', '草稿'].includes(st)
+    const isReleasedChild = ['released', '已下达'].includes(st)
+    const isCancelledChild = ['cancelled', '已取消'].includes(st)
+    const childHasWork = Number(child.completed_quantity || 0) > 0
+    if (isCancelledChild || isDraftChild) return true
+    return isReleasedChild && !child.actual_start_date && !childHasWork
+  }
+
+  const handleUnsplit = (record: WorkOrder) => {
+    if (record.id == null) return
+    Modal.confirm({
+      title: t('app.kuaizhizao.workOrder.modalConfirmUnsplit'),
+      content: t('app.kuaizhizao.workOrder.modalUnsplitContent'),
+      onOk: async () => {
+        try {
+          await workOrderApi.unsplit(record.id!.toString())
+          messageApi.success(t('app.kuaizhizao.workOrder.unsplitSuccess'))
+          invalidateStatistics()
+          actionRef.current?.reload()
+        } catch (error: any) {
+          messageApi.error(error.message || t('app.kuaizhizao.workOrder.unsplitFailed'))
+          throw error
+        }
+      },
+    })
+  }
+
   /**
    * 添加拆分数量输入框
    */
@@ -6623,7 +6713,6 @@ const WorkOrdersPage: React.FC = () => {
       dataIndex: 'code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       minWidth: 168,
-      uniTablePrimaryFlex: false,
       fixed: 'left',
       sorter: true,
       defaultSortOrder: 'descend',
@@ -6632,6 +6721,7 @@ const WorkOrdersPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.workOrder.colCode'),
+      key: 'code_search',
       dataIndex: 'code',
       hideInTable: true,
       sorter: true,
@@ -6768,27 +6858,14 @@ const WorkOrdersPage: React.FC = () => {
       hideInSearch: false,
     },
     {
-      title: (
-        <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-          <span>{t('app.kuaizhizao.workOrder.colOperations')}</span>
-          <Typography.Text
-            type="secondary"
-            className={
-              operationsHintShimmer ? 'wo-operations-col-hint wo-operations-col-hint--shimmer' : 'wo-operations-col-hint'
-            }
-            style={{ fontSize: 12, fontWeight: 400 }}
-            onAnimationEnd={(e) => {
-              if (e.animationName !== 'wo-operations-hint-shimmer') return
-              setOperationsHintShimmer(false)
-            }}
-          >
-            {t('app.kuaizhizao.workOrder.colOperationsHint')}
-          </Typography.Text>
-        </span>
-      ),
+      title: t('app.kuaizhizao.workOrder.colOperations'),
+      tooltip: t('app.kuaizhizao.workOrder.colOperationsHint'),
       key: 'operation_steps',
       dataIndex: 'operation_steps',
-      minWidth: 300,
+      ...UNI_TABLE_OPERATION_STEPS_COLUMN_DEFAULTS,
+      className: 'uni-table-operation-steps-cell',
+      onHeaderCell: () => ({ className: 'uni-table-operation-steps-cell' }),
+      onCell: () => ({ className: 'uni-table-operation-steps-cell' }),
       hideInSearch: true,
       render: (_, record) => {
         if (isWorkOrderGroupListRow(record)) {
@@ -6859,8 +6936,7 @@ const WorkOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.workOrder.colPlannedRange'),
       key: 'plannedRange',
       dataIndex: 'planned_start_date',
-      width: 136,
-      uniTableKeepWidth: true,
+      ...UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       render: (_, record) =>
@@ -6905,9 +6981,7 @@ const WorkOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.workOrder.colCompletionProgress'),
       dataIndex: 'downstream_push_progress',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
       render: (_, record) => {
         // 工单组无独立完工进度，避免展示误导的 0%
         if (isWorkOrderGroupListRow(record)) return null
@@ -6931,9 +7005,18 @@ const WorkOrdersPage: React.FC = () => {
       },
     })),
     {
+      ...workOrderAuditColumn,
+      render: (_: unknown, record: WorkOrder) => {
+        if (isWorkOrderGroupListRow(record)) return null
+        const original = workOrderAuditColumn.render as
+          | ((text: unknown, record: WorkOrder, index: number, action: unknown) => React.ReactNode)
+          | undefined
+        return original ? original(_, record, 0, undefined) : null
+      },
+    },
+    {
       title: t('app.kuaizhizao.workOrder.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      align: 'left' as const,
       fixed: 'right' as const,
       hideInSearch: false,
       valueType: 'select',
@@ -6982,6 +7065,10 @@ const WorkOrdersPage: React.FC = () => {
         const isCompleted = ['completed', '已完成'].includes(rawStatus)
         const isCancelled = ['cancelled', '已取消'].includes(rawStatus)
         const isSplit = ['split', '已拆分'].includes(rawStatus)
+        const isSplitChild = rowKind === 'split'
+        const splitChildren = (record.children || []).filter(
+          (c) => (c.row_kind || 'work_order') === 'split',
+        )
         const splitRemaining = Number(record.split_remaining_quantity)
         const hasSplitRemaining = isSplit && Number.isFinite(splitRemaining) && splitRemaining > 0
         const isTerminal = isCancelled || isSplit
@@ -6993,8 +7080,18 @@ const WorkOrdersPage: React.FC = () => {
           record.capabilities?.revoke?.allowed === true &&
           (workOrderPerms.canAction?.('revoke') ?? false)
 
-        // 删除条件：草稿；或者已下达且无开工无完工
-        const canDelete = isDraft || (isReleased && !record.actual_start_date && !hasWork)
+        // 删除条件：草稿；已下达且未开工；拆分子工单同上；无子单的已拆分主工单
+        const canDelete =
+          isDraft ||
+          (isReleased && !record.actual_start_date && !hasWork) ||
+          (isSplitChild && isSplitChildRevocable(record)) ||
+          (isSplit && splitChildren.length === 0)
+
+        const canUnsplit =
+          isSplit &&
+          splitChildren.length > 0 &&
+          splitChildren.every((c) => isSplitChildRevocable(c)) &&
+          (workOrderPerms.canCreate ?? false)
 
         // 指定结束条件：非已完成且非终态
         const canComplete = !isCompleted && !isTerminal
@@ -7069,6 +7166,14 @@ const WorkOrdersPage: React.FC = () => {
             }),
           )
         }
+        if (canUnsplit) {
+          derivedItems.push(
+            makeItem('unsplit', t('app.kuaizhizao.workOrder.actionUnsplit'), () => handleUnsplit(record), {
+              icon: <SplitCellsOutlined />,
+              danger: true,
+            }),
+          )
+        }
 
         const statusControlItems: any[] = []
         if (canComplete) {
@@ -7138,7 +7243,35 @@ const WorkOrdersPage: React.FC = () => {
             >
               {t('app.kuaizhizao.workOrder.actionEdit')}
             </Button>
-            {isDraft ? (
+            {workOrderAuditEnabled ? (
+              <UniWorkflowActions
+                {...rowActionKind('skip')}
+                key="wo-workflow"
+                record={record}
+                entityName={t('app.kuaizhizao.workOrder.entityName')}
+                entityType="work_order"
+                auditNodeKey="work_order"
+                unifiedAudit
+                resourcePrefix={WORK_ORDER_RESOURCE}
+                statusField="status"
+                reviewStatusField="review_status"
+                draftStatuses={WO_WORKFLOW_DRAFT_STATUSES}
+                pendingStatuses={WO_WORKFLOW_PENDING_STATUSES}
+                approvedStatuses={WO_WORKFLOW_APPROVED_STATUSES}
+                rejectedStatuses={WO_WORKFLOW_REJECTED_STATUSES}
+                theme="link"
+                size="small"
+                onSuccess={() => {
+                  void handleWorkOrderAuditSuccess()
+                }}
+                confirmMessages={{
+                  submit: isManualAuditEnabled(record.audit)
+                    ? t('app.kuaizhizao.workOrder.submitConfirmAudit')
+                    : t('app.kuaizhizao.workOrder.submitConfirmAuto'),
+                }}
+              />
+            ) : null}
+            {isDraft && (record.capabilities?.release?.allowed ?? true) ? (
               <Button
                 {...rowActionKind('release')}
                 key="release"
@@ -7157,7 +7290,13 @@ const WorkOrdersPage: React.FC = () => {
                 trigger={['click']}
                 menu={{ items: moreItems }}
               >
-                <Button {...rowActionKind('skip')} type="link" size="small" icon={<DownOutlined />}>
+                <Button
+                  {...rowActionKind('skip')}
+                  type="text"
+                  size="small"
+                  className="ant-btn-row-action"
+                  icon={<MoreOutlined />}
+                >
                   {t('app.kuaizhizao.workOrder.actionMore')}
                 </Button>
               </Dropdown>
@@ -7166,7 +7305,18 @@ const WorkOrdersPage: React.FC = () => {
         )
       },
     },
-  ], [t, dissolveGroupLoading, workOrderCustomFieldColumns, workOrderLifecycleValueEnum, WORK_ORDER_LIST_COLUMNS_REV, softReloadWorkOrderList, workOrderPerms, operationsHintShimmer])
+  ], [
+    t,
+    dissolveGroupLoading,
+    workOrderCustomFieldColumns,
+    workOrderLifecycleValueEnum,
+    WORK_ORDER_LIST_COLUMNS_REV,
+    softReloadWorkOrderList,
+    workOrderPerms,
+    workOrderAuditEnabled,
+    workOrderAuditColumn,
+    handleWorkOrderAuditSuccess,
+  ])
 
   const workOrderTableBodyColSpan = useMemo(() => {
     const visibleDataCols = columns.filter((col) => !col.hideInTable).length
@@ -7421,51 +7571,6 @@ const WorkOrdersPage: React.FC = () => {
       <style>{`
         .work-order-row-overdue td.ant-table-cell {
           background: var(--ant-color-warning-bg) !important;
-        }
-        .wo-operations-col-hint {
-          position: relative;
-          display: inline-block;
-        }
-        .wo-operations-col-hint--shimmer {
-          /* 延后 2s 开播：先等列表首屏渲染，延时期保持普通灰色文案 */
-          animation: wo-operations-hint-shimmer 1.8s ease-in-out 2s 1;
-        }
-        @keyframes wo-operations-hint-shimmer {
-          0% {
-            background-image: linear-gradient(
-              100deg,
-              var(--ant-color-text-secondary) 0%,
-              var(--ant-color-text-secondary) 38%,
-              var(--ant-color-primary) 50%,
-              var(--ant-color-text-secondary) 62%,
-              var(--ant-color-text-secondary) 100%
-            );
-            background-size: 220% 100%;
-            background-position: 100% 0;
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-          }
-          100% {
-            background-image: linear-gradient(
-              100deg,
-              var(--ant-color-text-secondary) 0%,
-              var(--ant-color-text-secondary) 38%,
-              var(--ant-color-primary) 50%,
-              var(--ant-color-text-secondary) 62%,
-              var(--ant-color-text-secondary) 100%
-            );
-            background-size: 220% 100%;
-            background-position: -100% 0;
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-          }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .wo-operations-col-hint--shimmer {
-            animation: none;
-          }
         }
       `}</style>
       <ListPageTemplate statCards={statCards}>
@@ -9277,11 +9382,36 @@ const WorkOrdersPage: React.FC = () => {
               <Button type="default" onClick={() => setSopSidebarOpen(true)}>
                 相关 SOP
               </Button>
-              {['draft', '草稿'].includes(workOrderDetail.status || '') && (
+              {workOrderAuditEnabled ? (
+                <UniWorkflowActions
+                  record={workOrderDetail}
+                  entityName={t('app.kuaizhizao.workOrder.entityName')}
+                  entityType="work_order"
+                  auditNodeKey="work_order"
+                  unifiedAudit
+                  resourcePrefix={WORK_ORDER_RESOURCE}
+                  statusField="status"
+                  reviewStatusField="review_status"
+                  draftStatuses={WO_WORKFLOW_DRAFT_STATUSES}
+                  pendingStatuses={WO_WORKFLOW_PENDING_STATUSES}
+                  approvedStatuses={WO_WORKFLOW_APPROVED_STATUSES}
+                  rejectedStatuses={WO_WORKFLOW_REJECTED_STATUSES}
+                  onSuccess={() => {
+                    void handleWorkOrderAuditSuccess()
+                  }}
+                  confirmMessages={{
+                    submit: isManualAuditEnabled(workOrderDetail.audit)
+                      ? t('app.kuaizhizao.workOrder.submitConfirmAudit')
+                      : t('app.kuaizhizao.workOrder.submitConfirmAuto'),
+                  }}
+                />
+              ) : null}
+              {['draft', '草稿'].includes(workOrderDetail.status || '') &&
+              (workOrderDetail.capabilities?.release?.allowed ?? true) ? (
                 <Button type="primary" onClick={() => handleRelease(workOrderDetail!)}>
                   下达工单
                 </Button>
-              )}
+              ) : null}
               {workOrderDetail.capabilities?.revoke?.allowed === true &&
                 (workOrderPerms.canAction?.('revoke') ?? false) && (
                   <Button type="default" danger onClick={() => handleRevoke(workOrderDetail!)}>

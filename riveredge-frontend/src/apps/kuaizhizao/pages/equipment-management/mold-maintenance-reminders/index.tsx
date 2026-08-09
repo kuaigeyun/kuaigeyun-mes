@@ -10,7 +10,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pr
 import { Button, Tag, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { moldApi } from '../../../services/equipment';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
@@ -168,17 +168,13 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
       {
         title: t('common.actions'),
         valueType: 'option',
-        width: 100,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
           perms.canRead
-            ? renderRowActionsOverflow(
-                [
-                  <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />,
-                ],
-                { keyPrefix: `mold-reminder-${record.mold_uuid ?? 'row'}` },
-              )
+            ? [
+                <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />,
+              ]
             : null,
       },
     ],
@@ -217,7 +213,6 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
           }}
           search={{ labelWidth: 'auto' }}
           pagination={{ defaultPageSize: 20 }}
-          scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
 

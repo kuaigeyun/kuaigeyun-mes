@@ -33,6 +33,13 @@ export interface ParamMeta {
   max?: number;
   /** type 为 select 时的选项 */
   selectOptions?: ParamSelectOption[];
+  /**
+   * 同组参数共用 groupKey，配置页渲染为一张卡片内的多行控件。
+   * 组标题/描述取同组首个参数的 groupNameKey / groupDescriptionKey。
+   */
+  groupKey?: string;
+  groupNameKey?: string;
+  groupDescriptionKey?: string;
 }
 
 export interface ConfigCategory {
@@ -81,6 +88,45 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
       source: 'business_config',
       sourcePath: 'parameters.common.trial_run_mode',
       type: 'boolean',
+    },
+    {
+      key: 'common.quantity_decimal_places',
+      nameKey: 'pages.system.configCenter.param.common_quantity_decimal_places',
+      descriptionKey: 'pages.system.configCenter.param.common_quantity_decimal_places_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.common.quantity_decimal_places',
+      type: 'number',
+      min: 0,
+      max: 2,
+      groupKey: 'common.numeric_precision',
+      groupNameKey: 'pages.system.configCenter.paramGroup.common_numeric_precision',
+      groupDescriptionKey: 'pages.system.configCenter.paramGroup.common_numeric_precision_desc',
+    },
+    {
+      key: 'common.price_decimal_places',
+      nameKey: 'pages.system.configCenter.param.common_price_decimal_places',
+      descriptionKey: 'pages.system.configCenter.param.common_price_decimal_places_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.common.price_decimal_places',
+      type: 'number',
+      min: 0,
+      max: 4,
+      groupKey: 'common.numeric_precision',
+      groupNameKey: 'pages.system.configCenter.paramGroup.common_numeric_precision',
+      groupDescriptionKey: 'pages.system.configCenter.paramGroup.common_numeric_precision_desc',
+    },
+    {
+      key: 'common.amount_decimal_places',
+      nameKey: 'pages.system.configCenter.param.common_amount_decimal_places',
+      descriptionKey: 'pages.system.configCenter.param.common_amount_decimal_places_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.common.amount_decimal_places',
+      type: 'number',
+      min: 0,
+      max: 2,
+      groupKey: 'common.numeric_precision',
+      groupNameKey: 'pages.system.configCenter.paramGroup.common_numeric_precision',
+      groupDescriptionKey: 'pages.system.configCenter.paramGroup.common_numeric_precision_desc',
     },
   ],
   planning: [

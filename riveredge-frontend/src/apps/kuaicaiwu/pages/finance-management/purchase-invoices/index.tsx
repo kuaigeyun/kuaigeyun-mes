@@ -14,7 +14,7 @@ import {
   type PurchaseInvoicePullPreview,
 } from '../../../services/finance/purchase-invoice';
 import { PurchaseInvoice } from '../../../types/finance/purchase-invoice';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -61,7 +61,7 @@ const TAX_RATE_OPTIONS = [
   { label: '0%', value: 0 },
 ];
 
-type PullPreviewKind = 'purchase_order' | 'purchase_receipt';
+type PullPreviewKind = 'purchase_order' | 'purchase_receipt' | 'payable';
 
 const PurchaseInvoiceList: React.FC = () => {
   const actionRef = useRef<ActionType>();
@@ -78,16 +78,19 @@ const PurchaseInvoiceList: React.FC = () => {
   const [pullForm] = Form.useForm();
   const pullFromPurchaseOrderCloseRef = useRef<(() => void) | null>(null);
   const pullFromPurchaseReceiptCloseRef = useRef<(() => void) | null>(null);
+  const pullFromPayableCloseRef = useRef<(() => void) | null>(null);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const invoiceTypeOptions = useMemo(
     () => getChineseInvoiceTypeOptions(t, { includeOther: true, includeReceipt: false }),
     [t],
   );
   const pullFromPurchaseOrderAction = getKuaicaiwuDocumentAction('purchase_invoice.pull_from_purchase_order');
   const pullFromPurchaseReceiptAction = getKuaicaiwuDocumentAction('purchase_invoice.pull_from_purchase_receipt');
+  const pullFromPayableAction = getKuaicaiwuDocumentAction('purchase_invoice.pull_from_payable');
 
   const purchaseInvoiceAuditEnabled = useAuditRequired('purchase_invoice', false);
   const purchaseInvoicePerms = useResourcePermissions(PURCHASE_INVOICE_RESOURCE);
@@ -172,7 +175,9 @@ const PurchaseInvoiceList: React.FC = () => {
       const data =
         kind === 'purchase_order'
           ? await purchaseInvoiceService.previewPullFromPurchaseOrder(sourceId)
-          : await purchaseInvoiceService.previewPullFromPurchaseReceipt(sourceId);
+          : kind === 'purchase_receipt'
+            ? await purchaseInvoiceService.previewPullFromPurchaseReceipt(sourceId)
+            : await purchaseInvoiceService.previewPullFromPayable(sourceId);
       setPullPreviewData(data);
     } catch (e: any) {
       messageApi.error(
@@ -267,6 +272,41 @@ const PurchaseInvoiceList: React.FC = () => {
   });
   pullFromPurchaseReceiptCloseRef.current = pullFromPurchaseReceiptQuery.closeModal;
 
+  const pullFromPayableQuery = useUniPullQuery<PurchaseInvoicePullCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullPurchaseInvoiceSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const res = await purchaseInvoiceService.listPayablePullCandidates({
+          skip: 0,
+          limit: 200,
+          keyword: keyword.trim() || undefined,
+        });
+        const rows = res.data || [];
+        const filtered = filterByPullScope(rows, scope, isPullPurchaseInvoiceSelectable);
+        return paginatePullRows(filtered, page, pageSize);
+      } catch (e: any) {
+        messageApi.error(
+          e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
+        );
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      if (!selected?.id) {
+        messageApi.warning(t(`${P}.selectSource`, { label: pullFromPayableAction.sourceLabel }));
+        return;
+      }
+      pullFromPayableCloseRef.current?.();
+      await openPullPreview('payable', selected.id);
+    },
+  });
+  pullFromPayableCloseRef.current = pullFromPayableQuery.closeModal;
+
   const handlePullCreateSubmit = async (values: any) => {
     if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) {
       messageApi.warning(t(`${P}.pullPreviewIncomplete`));
@@ -294,12 +334,16 @@ const PurchaseInvoiceList: React.FC = () => {
     const sourceLabel =
       pullPreviewKind === 'purchase_order'
         ? pullFromPurchaseOrderAction.sourceLabel
-        : pullFromPurchaseReceiptAction.sourceLabel;
+        : pullPreviewKind === 'purchase_receipt'
+          ? pullFromPurchaseReceiptAction.sourceLabel
+          : pullFromPayableAction.sourceLabel;
     setPullSubmitting(true);
     try {
       await purchaseInvoiceService.create({
         purchase_order_id: pullPreviewData.purchase_order_id ?? undefined,
         purchase_order_code: pullPreviewData.purchase_order_code ?? undefined,
+        payable_id: pullPreviewKind === 'payable' ? pullPreviewSourceId : pullPreviewData.payable_id,
+        payable_code: pullPreviewKind === 'payable' ? pullPreviewData.source_code : pullPreviewData.payable_code,
         supplier_id: Number(pullPreviewData.supplier_id || 0),
         supplier_name: pullPreviewData.supplier_name || '',
         source_type: pullPreviewKind,
@@ -425,8 +469,6 @@ const PurchaseInvoiceList: React.FC = () => {
         title: t('app.kuaicaiwu.common.lifecycle'),
         dataIndex: 'lifecycle_stage',
         fixed: 'right',
-        align: 'left',
-        width: 130,
         hideInSearch: true,
         render: (_, record) => {
           const lc = getChineseInvoiceLifecycle(record as unknown as Record<string, unknown>, t);
@@ -520,7 +562,9 @@ const PurchaseInvoiceList: React.FC = () => {
   const pullPreviewTargetLabel =
     pullPreviewKind === 'purchase_receipt'
       ? pullFromPurchaseReceiptAction.targetLabel
-      : pullFromPurchaseOrderAction.targetLabel;
+      : pullPreviewKind === 'payable'
+        ? pullFromPayableAction.targetLabel
+        : pullFromPurchaseOrderAction.targetLabel;
 
   const pullFormInitialValues = useMemo(() => {
     if (!pullPreviewData || !pullPreviewKind) return undefined;
@@ -530,7 +574,9 @@ const PurchaseInvoiceList: React.FC = () => {
     const sourceLabel =
       pullPreviewKind === 'purchase_order'
         ? pullFromPurchaseOrderAction.sourceLabel
-        : pullFromPurchaseReceiptAction.sourceLabel;
+        : pullPreviewKind === 'purchase_receipt'
+          ? pullFromPurchaseReceiptAction.sourceLabel
+          : pullFromPayableAction.sourceLabel;
     return {
       source_code: pullPreviewData.source_code,
       supplier_name: pullPreviewData.supplier_name,
@@ -548,8 +594,16 @@ const PurchaseInvoiceList: React.FC = () => {
     pullPreviewKind,
     pullFromPurchaseOrderAction.sourceLabel,
     pullFromPurchaseReceiptAction.sourceLabel,
+    pullFromPayableAction.sourceLabel,
     t,
   ]);
+
+  useEffect(() => {
+    const pullPayableId = (location.state as { pullPayableId?: number } | null)?.pullPayableId;
+    if (!pullPayableId) return;
+    void openPullPreview('payable', pullPayableId);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.pathname, navigate]);
 
   useEffect(() => {
     if (!pullPreviewOpen || pullPreviewLoading || !pullFormInitialValues) return;
@@ -591,7 +645,6 @@ const PurchaseInvoiceList: React.FC = () => {
         onTableDataChange={setTableRows}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices"
-        scroll={{ x: 1600 }}
         showAdvancedSearch
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolvePurchaseInvoiceListParams(searchFormValues, sort);
@@ -647,6 +700,11 @@ const PurchaseInvoiceList: React.FC = () => {
                 key: 'pull-from-pr',
                 actionKey: 'purchase_invoice.pull_from_purchase_receipt',
                 onClick: pullFromPurchaseReceiptQuery.openModal,
+              },
+              {
+                key: 'pull-from-payable',
+                actionKey: 'purchase_invoice.pull_from_payable',
+                onClick: pullFromPayableQuery.openModal,
               },
             ])}
           />,
@@ -719,11 +777,46 @@ const PurchaseInvoiceList: React.FC = () => {
         width={1180}
       />
 
+      <UniPullQueryModal<PurchaseInvoicePullCandidate>
+        open={pullFromPayableQuery.open}
+        title={pullFromPayableAction.label}
+        onCancel={pullFromPayableQuery.closeModal}
+        onOk={() => {
+          void pullFromPayableQuery.handleConfirm();
+        }}
+        rowKey="id"
+        columns={pullTableColumns}
+        dataSource={pullFromPayableQuery.dataSource}
+        loading={pullFromPayableQuery.loading}
+        confirmLoading={pullFromPayableQuery.confirmLoading}
+        selectionType={pullFromPayableQuery.selectionType}
+        selectedRowKeys={pullFromPayableQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromPayableQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromPayableQuery.isRowDisabled}
+        searchDraft={pullFromPayableQuery.searchDraft}
+        onSearchDraftChange={pullFromPayableQuery.setSearchDraft}
+        onSearchApply={pullFromPayableQuery.handleSearchApply}
+        onSearchClear={pullFromPayableQuery.handleSearchClear}
+        appliedKeyword={pullFromPayableQuery.appliedKeyword}
+        searchPlaceholder={t(`${P}.pull.searchPlaceholder`)}
+        page={pullFromPayableQuery.page}
+        pageSize={pullFromPayableQuery.pageSize}
+        total={pullFromPayableQuery.total}
+        onPageChange={pullFromPayableQuery.handlePageChange}
+        scopeOptions={pullFromPayableQuery.scopeOptions}
+        scope={pullFromPayableQuery.scope}
+        onScopeChange={pullFromPayableQuery.handleScopeChange}
+        okText={t('components.uniLifecycle.nextStep')}
+        width={1180}
+      />
+
       <Modal
         title={
           pullPreviewKind === 'purchase_receipt'
             ? pullFromPurchaseReceiptAction.label
-            : pullFromPurchaseOrderAction.label
+            : pullPreviewKind === 'payable'
+              ? pullFromPayableAction.label
+              : pullFromPurchaseOrderAction.label
         }
         open={pullPreviewOpen}
         destroyOnClose

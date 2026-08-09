@@ -180,7 +180,6 @@ const StandardCostsPage: React.FC = () => {
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.cost-management.standard-costs"
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-        scroll={{ x: 1480 }}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={COST_CRUD_PINNED_ACTIVE_FIELD}

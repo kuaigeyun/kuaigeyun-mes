@@ -111,7 +111,7 @@ class PurchaseInvoiceBase(BaseSchema):
 class PurchaseInvoiceCreate(PurchaseInvoiceBase):
     """采购发票创建schema"""
 
-    source_type: Optional[str] = Field(None, description="加载源单类型 purchase_order|purchase_receipt")
+    source_type: Optional[str] = Field(None, description="加载源单类型 purchase_order|purchase_receipt|payable")
     source_id: Optional[int] = Field(None, description="加载源单ID")
 
 
@@ -384,7 +384,7 @@ class SalesInvoiceCreate(SalesInvoiceBase):
     invoice_amount: Decimal = Field(..., ge=0, description="不含税金额")
     tax_amount: Decimal = Field(..., ge=0, description="税额")
     total_amount: Decimal = Field(..., ge=0, description="价税合计")
-    source_type: Optional[str] = Field(None, description="加载源单类型 sales_order|sales_delivery")
+    source_type: Optional[str] = Field(None, description="加载源单类型 sales_order|sales_delivery|receivable")
     source_id: Optional[int] = Field(None, description="加载源单ID")
 
 
@@ -477,6 +477,33 @@ class PartnerStatementLineResponse(BaseSchema):
     debit: float = 0
     credit: float = 0
     balance: float = 0
+    doc_id: Optional[int] = None
+
+
+class PartnerStatementLineDetailItemResponse(BaseSchema):
+    material_code: str
+    material_name: str
+    material_spec: Optional[str] = None
+    unit: str
+    quantity: float
+    unit_price: float
+    amount: float
+    qualified_quantity: Optional[float] = None
+    unqualified_quantity: Optional[float] = None
+    quality_status: Optional[str] = None
+    inspection_date: Optional[str] = None
+    inspection_passed: Optional[bool] = None
+    defect_reason: Optional[str] = None
+    process_waste_qty: Optional[float] = Field(None, description="工废数量")
+    material_waste_qty: Optional[float] = Field(None, description="料废数量")
+
+
+class PartnerStatementLineDetailResponse(BaseSchema):
+    doc_type: str
+    doc_id: int
+    doc_code: str
+    partner_name: Optional[str] = None
+    items: List[PartnerStatementLineDetailItemResponse] = Field(default_factory=list)
 
 
 class PartnerStatementSummaryResponse(BaseSchema):

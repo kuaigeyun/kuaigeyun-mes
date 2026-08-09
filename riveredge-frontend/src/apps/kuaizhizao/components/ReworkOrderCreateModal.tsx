@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { FORM_LAYOUT, MODAL_CONFIG } from '../../../components/layout-templates/constants';
+import { formDateFormItemProps } from '../../../utils/formDate';
 import { buildFutureDateShortcutFieldProps } from '../../../utils/futureDatePickerShortcuts';
 import ReworkPredefinedRouteEditor, { type ReworkRouteOperationRow } from './ReworkPredefinedRouteEditor';
 
@@ -262,6 +263,7 @@ const ReworkOrderCreateModal: React.FC<ReworkOrderCreateModalProps> = ({
         name="planned_start_date"
         label={t('app.kuaizhizao.reworkOrder.formPlannedStart')}
         placeholder={t('app.kuaizhizao.reworkOrder.formPlannedStartPlaceholder')}
+        {...formDateFormItemProps}
         fieldProps={{ showTime: true, style: { width: '100%' } }}
         colProps={{ span: 12 }}
       />
@@ -269,6 +271,7 @@ const ReworkOrderCreateModal: React.FC<ReworkOrderCreateModalProps> = ({
         name="planned_end_date"
         label={t('app.kuaizhizao.reworkOrder.formPlannedEnd')}
         placeholder={t('app.kuaizhizao.reworkOrder.formPlannedEndPlaceholder')}
+        {...formDateFormItemProps}
         fieldProps={buildFutureDateShortcutFieldProps({
           getForm: () => form,
           fieldName: 'planned_end_date',

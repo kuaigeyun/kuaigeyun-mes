@@ -41,6 +41,54 @@ from apps.kuaizhizao.utils.outsource_work_order_state import (
 )
 
 
+async def enrich_outsource_docs_with_supplier(
+    tenant_id: int,
+    docs: List[Any],
+    responses: List[Any],
+) -> List[Any]:
+    """为委外收货/退料/退货列表补齐委外供应商（来自关联委外工单）。"""
+    if not docs or not responses:
+        return responses
+
+    owo_ids = {
+        int(getattr(doc, "outsource_work_order_id", 0) or 0)
+        for doc in docs
+        if getattr(doc, "outsource_work_order_id", None)
+    }
+    owo_ids.discard(0)
+    if not owo_ids:
+        return responses
+
+    work_orders = await OutsourceWorkOrder.filter(
+        tenant_id=tenant_id,
+        id__in=list(owo_ids),
+        deleted_at__isnull=True,
+    ).all()
+    supplier_by_owo: Dict[int, Dict[str, Any]] = {}
+    for owo in work_orders:
+        name = str(getattr(owo, "supplier_name", None) or "").strip()
+        if not name:
+            continue
+        supplier_by_owo[int(owo.id)] = {
+            "supplier_id": getattr(owo, "supplier_id", None),
+            "supplier_code": getattr(owo, "supplier_code", None),
+            "supplier_name": name,
+        }
+
+    enriched: List[Any] = []
+    for doc, resp in zip(docs, responses):
+        owo_id = int(getattr(doc, "outsource_work_order_id", 0) or 0)
+        supplier = supplier_by_owo.get(owo_id)
+        if not supplier:
+            enriched.append(resp)
+            continue
+        if hasattr(resp, "model_copy"):
+            enriched.append(resp.model_copy(update=supplier))
+        else:
+            enriched.append(resp)
+    return enriched
+
+
 class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
     """
     委外收货服务类
@@ -550,9 +598,10 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
         responses = [OutsourceMaterialReceiptResponse.model_validate(receipt) for receipt in receipts]
         item_counts = {int(r.id): 1 for r in receipts}
-        return enrich_inbound_hub_list_capabilities(
+        responses = enrich_inbound_hub_list_capabilities(
             receipts, responses, "outsource_receipt", item_counts=item_counts
         )
+        return await enrich_outsource_docs_with_supplier(tenant_id, receipts, responses)
 
     async def get_material_receipt(
         self,

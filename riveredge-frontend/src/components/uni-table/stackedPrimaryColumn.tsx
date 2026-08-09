@@ -4,6 +4,8 @@
  * 与 UniTable 列宽策略配合：
  * - 列上设 `uniTablePrimaryFlex: true` + `minWidth` + 可选 `uniTablePrimaryFlexMaxWidth`；
  * - 带「开始/结束」徽章的日期列用 `UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS`（196px）；
+ * - 带徽章的日期时间列用 `UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS`（240px）；
+ * - 工序步骤轴列用 `UNI_TABLE_OPERATION_STEPS_COLUMN_DEFAULTS`（360px，单元格内横滚）；
  * - 更新人/时间列用 `UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS`（168px）；
  */
 
@@ -14,7 +16,16 @@ import { Typography, theme } from 'antd';
 /** 文档文件夹风格复制图标色（固定淡黄，不随主题色漂移） */
 const DOC_FOLDER_COPY_ICON_COLOR = '#d48806';
 
-/** 堆叠主列默认列属性（与 UniTable applyUniTableColumnWidthPolicy 配对） */
+/**
+ * 次行（标识行：单号 / 编码 + 复制 + 徽章）测量锚点。
+ *
+ * 主行可省略号截断，次行不能——单号被截断就失去了标识意义。因此列宽的下界由次行的
+ * 固有宽度决定，UniTable 按此类名实测（配套 CSS 令其 max-content，宽度不随列宽变化，
+ * 测量因此不会自反馈）。
+ */
+export const UNI_TABLE_STACKED_IDENTITY_CLASS = 'uni-table-stacked-identity';
+
+/** 堆叠主列默认列属性（与 uniTableLayoutEngine.resolveLayoutPlan 配对） */
 export const UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS = {
   minWidth: 200,
   uniTablePrimaryFlex: true,
@@ -29,6 +40,27 @@ export const UNI_TABLE_STACKED_BADGE_DATE_COLUMN_WIDTH = 196;
 
 export const UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS = {
   width: UNI_TABLE_STACKED_BADGE_DATE_COLUMN_WIDTH,
+  uniTableKeepWidth: true,
+  resizable: false,
+  ellipsis: false,
+} as const;
+
+/** 行内「开始/结束」徽章 + 日期时间（YYYY-MM-DD HH:mm:ss）+ 可选逾期徽章 */
+export const UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_WIDTH = 240;
+
+export const UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS = {
+  width: UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_WIDTH,
+  uniTableKeepWidth: true,
+  resizable: false,
+  ellipsis: false,
+} as const;
+
+/** 工单等「工序步骤轴」列：最小宽度 + 单元格内横向滚动，避免节点条带压邻列 */
+export const UNI_TABLE_OPERATION_STEPS_COLUMN_MIN_WIDTH = 360;
+
+export const UNI_TABLE_OPERATION_STEPS_COLUMN_DEFAULTS = {
+  width: UNI_TABLE_OPERATION_STEPS_COLUMN_MIN_WIDTH,
+  minWidth: UNI_TABLE_OPERATION_STEPS_COLUMN_MIN_WIDTH,
   uniTableKeepWidth: true,
   resizable: false,
   ellipsis: false,
@@ -166,12 +198,11 @@ export function UniTableStackedPrimaryCell({
         {primaryExtra}
       </div>
       <div
+        className={UNI_TABLE_STACKED_IDENTITY_CLASS}
         style={{
           display: 'flex',
           alignItems: 'center',
           columnGap: rowGap,
-          maxWidth: '100%',
-          minWidth: 0,
           marginTop: 1,
           flexWrap: 'nowrap',
         }}

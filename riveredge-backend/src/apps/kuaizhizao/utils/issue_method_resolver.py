@@ -14,6 +14,7 @@ _SOURCE_DEFAULTS = {
     "Phantom": ISSUE_METHOD_NONE,
     "Service": ISSUE_METHOD_NONE,
     "Buy": ISSUE_METHOD_BACKFLUSH,
+    "CustomerProvided": ISSUE_METHOD_PICK,
     "Make": ISSUE_METHOD_PICK,
     "Outsource": ISSUE_METHOD_PICK,
     "Configure": ISSUE_METHOD_PICK,

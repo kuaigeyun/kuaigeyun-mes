@@ -32,6 +32,9 @@ def resolve_kuaizhizao_module_action(
         return "print"
     if module_code == "work-order" and "/operations/" in p and "/dispatch" in p:
         return "assign"
+    if module_code == "work-order" and "/unsplit" in p:
+        # 与 POST /split（create）对称：具备拆分创建权即可撤销拆分
+        return "create"
     if "/revoke-approval" in p:
         return "audit"
     if "/mark-adjustment-complete" in p:
@@ -71,8 +74,11 @@ def resolve_kuaizhizao_module_action(
         return "execute"
     if module_code == "after-sales-ticket" and "/push-to-" in p:
         return "update"
-    if "/conduct" in p:
+    # revoke-conduct 含 conduct 子串：撤回检验仍走 update；执行检验走 execute
+    if "/revoke-conduct" in p:
         return "update"
+    if "/conduct" in p:
+        return "execute"
     m = (method or "").upper()
     if module_code == "after-sales-install":
         if "/tasks" in p and m == "POST":

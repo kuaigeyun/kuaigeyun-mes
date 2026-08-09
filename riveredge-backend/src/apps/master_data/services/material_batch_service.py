@@ -7,8 +7,8 @@ Author: Luigi Lu
 Date: 2026-01-27
 """
 
-from typing import List, Optional, Dict, Any
-from datetime import datetime, date
+from typing import List, Optional, Dict, Any, Union
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 from tortoise.expressions import Q
 
@@ -32,6 +32,48 @@ class MaterialBatchService:
     
     提供物料批号的 CRUD 操作和批号生成、追溯功能。
     """
+
+    @staticmethod
+    def coerce_optional_date(value: Union[date, datetime, None]) -> Optional[date]:
+        """将业务侧 date/datetime 规范为 date（批号生产日/有效期至）。"""
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        raise ValidationError(f"无效的日期值: {value!r}")
+
+    @staticmethod
+    def resolve_batch_expiry_date(
+        *,
+        material: Optional[Material],
+        production_date: Union[date, datetime, None],
+        explicit_expiry: Union[date, datetime, None] = None,
+    ) -> Optional[date]:
+        """
+        解析批号有效期至（唯一路径）。
+
+        优先级：单据/表单显式有效期 > 物料启用保质期时（生产日期 + 保质期天数）。
+        """
+        explicit = MaterialBatchService.coerce_optional_date(explicit_expiry)
+        if explicit is not None:
+            return explicit
+        if material is None or not bool(getattr(material, "shelf_life_managed", False)):
+            return None
+        days = getattr(material, "shelf_life_days", None)
+        if days is None:
+            return None
+        try:
+            days_int = int(days)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"物料保质期天数无效: {days!r}") from exc
+        if days_int < 1:
+            return None
+        prod = MaterialBatchService.coerce_optional_date(production_date)
+        if prod is None:
+            return None
+        return prod + timedelta(days=days_int)
 
     @staticmethod
     def _to_response(batch: MaterialBatch) -> MaterialBatchResponse:
@@ -101,14 +143,19 @@ class MaterialBatchService:
         if existing:
             raise ValidationError(f"物料 {material.name} 的批号 {data.batch_no} 已存在")
         
-        production_date = data.production_date
+        production_date = MaterialBatchService.coerce_optional_date(data.production_date)
+        expiry_date = MaterialBatchService.resolve_batch_expiry_date(
+            material=material,
+            production_date=production_date,
+            explicit_expiry=data.expiry_date,
+        )
         # 创建批号
         batch_payload = {
             "tenant_id": tenant_id,
             "material_id": material.id,
             "batch_no": data.batch_no,
             "production_date": production_date,
-            "expiry_date": data.expiry_date,
+            "expiry_date": expiry_date,
             "supplier_batch_no": data.supplier_batch_no,
             "quantity": data.quantity,
             "status": data.status,
@@ -446,12 +493,13 @@ class MaterialBatchService:
             "outbound_records": [
                 e.model_dump(by_alias=True)
                 for e in profile.events
-                if e.document_type == "sales_delivery"
+                if e.document_type in ("sales_delivery", "production_picking")
             ],
             "production_records": [
                 e.model_dump(by_alias=True)
                 for e in profile.events
-                if e.document_type in ("work_order", "reporting_record", "material_binding")
+                if e.document_type
+                in ("work_order", "reporting_record", "material_binding", "production_picking")
             ],
             "sales_records": [
                 e.model_dump(by_alias=True)

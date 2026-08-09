@@ -633,6 +633,7 @@ const OperationsPage: React.FC = () => {
       hideInSearch: true,
       render: (_: any, record: any) =>
         renderOperationOverReportModeMarker(
+          t,
           record.overReportMode ?? record.over_report_mode,
           record.overReportValue ?? record.over_report_value,
         ),

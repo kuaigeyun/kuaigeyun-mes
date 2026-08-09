@@ -60,6 +60,58 @@ export function isTrialRunModeEnabled(config: BusinessConfig | null | undefined)
   return Boolean(config?.parameters?.common?.trial_run_mode);
 }
 
+/** 与当前库字段 decimal_places 对齐的配置上限（配置页 max 同源） */
+export const NUMERIC_PRECISION_STORAGE_CEILING = {
+  quantity: 2,
+  price: 4,
+  amount: 2,
+} as const;
+
+export type NumericPrecisionKind = keyof typeof NUMERIC_PRECISION_STORAGE_CEILING;
+
+export type NumericPrecisionSettings = {
+  quantity: number;
+  price: number;
+  amount: number;
+};
+
+function clampDecimalPlaces(raw: unknown, defaultPlaces: number, maxPlaces: number): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return defaultPlaces;
+  return Math.max(0, Math.min(maxPlaces, Math.trunc(n)));
+}
+
+/** 从业务配置解析数值精度（默认 2；超出库字段上限则截断） */
+export function resolveNumericPrecisionFromConfig(
+  config: BusinessConfig | null | undefined,
+  kind: NumericPrecisionKind,
+): number {
+  const common = config?.parameters?.common;
+  const key =
+    kind === 'quantity'
+      ? 'quantity_decimal_places'
+      : kind === 'price'
+        ? 'price_decimal_places'
+        : 'amount_decimal_places';
+  return clampDecimalPlaces(common?.[key], 2, NUMERIC_PRECISION_STORAGE_CEILING[kind]);
+}
+
+/** 按配置小数位格式化数字（固定位，含尾零） */
+export function formatByNumericPrecision(
+  value: number | string | null | undefined,
+  places: number,
+  fallback = '-',
+): string {
+  if (value === null || value === undefined || value === '') return fallback;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  const safePlaces = Math.max(0, Math.min(6, Math.trunc(places)));
+  return n.toLocaleString('zh-CN', {
+    minimumFractionDigits: safePlaces,
+    maximumFractionDigits: safePlaces,
+  });
+}
+
 export async function updateProcessParameter(
   request: ProcessParameterUpdateRequest
 ): Promise<{ success: boolean; message: string; category: string; parameter_key: string; value: any }> {

@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemProps, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import CodeField from '../../../../../components/code-field';
-import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Checkbox, Descriptions } from 'antd';
+import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Checkbox, Descriptions, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
@@ -25,6 +25,7 @@ import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { SecureImage } from '../../../../../components/secure-image';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -32,7 +33,8 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { openPrintHtmlWindow } from '../../../../../utils/printResponseHelpers';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { formatQuantity, formatDateTimeBySiteSetting } from '../../../../../utils/format';
-import { ListPageTemplate, FormModalTemplate, flushDrawerOpen, MODAL_CONFIG, DRAWER_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, flushDrawerOpen, MODAL_CONFIG, DRAWER_CONFIG, DetailDrawerSection, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../../../../utils/modalEventIsolation';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { bomApi, materialApi } from '../../../services/material';
 import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent, BOMRelationImportEntity, BOMRelationImportWriteStrategy, BOMWhereUsedResult } from '../../../types/material';
@@ -41,7 +43,6 @@ import { batchSetFieldValues } from '../../../../../services/customField';
 
 const BOM_ISSUE_METHOD_VALUES = ['pick', 'backflush', 'none'] as const;
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { downloadFile } from '../../../../../utils';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import type { User } from '../../../../../services/user';
@@ -53,7 +54,8 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
-import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import { getMaterialUnitDisplayMapShared } from '../../../../../utils/materialUnitDisplay';
+import { useImportMaterialUnitOptions } from '../../../hooks/useImportMaterialUnitOptions';
 import {
   IMPORT_YES_NO_OPTIONS,
   pickImportExampleValue,
@@ -73,9 +75,35 @@ import { masterCrudCreatedUpdatedColumns } from '../../../utils/materialListCore
 import { isVariantSkuMaterial } from '../../../components/MaterialVariantCombinationsTable';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
 
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 const BOM_RESOURCE = 'master-data:process:engineering-bom';
+
+function resolveBomMaterialImageFileUuid(raw: unknown): string | null {
+  if (typeof raw === 'string') {
+    const val = raw.trim();
+    return /^[0-9a-fA-F-]{32,36}$/.test(val) ? val : null;
+  }
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as { uuid?: unknown; uid?: unknown };
+  const uuid = typeof obj.uuid === 'string' ? obj.uuid.trim() : '';
+  if (/^[0-9a-fA-F-]{32,36}$/.test(uuid)) return uuid;
+  const uid = typeof obj.uid === 'string' ? obj.uid.trim() : '';
+  if (/^[0-9a-fA-F-]{32,36}$/.test(uid)) return uid;
+  return null;
+}
+
+function upsertMaterialsById(prev: Material[], incoming: Material[]): Material[] {
+  if (!incoming.length) return prev;
+  const map = new Map(prev.map((m) => [m.id, m]));
+  for (const material of incoming) {
+    if (material?.id == null) continue;
+    const existing = map.get(material.id);
+    map.set(material.id, existing ? { ...existing, ...material } : material);
+  }
+  return Array.from(map.values());
+}
 
 interface BOMVersionHistoryRow {
   version: string;
@@ -319,7 +347,10 @@ function orderBomDetailBasicColumns(cols: ProDescriptionsItemProps<BOM>[]): ProD
  */
 const BOMPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const { token } = theme.useToken();
   const bomPerms = useResourcePermissions(BOM_RESOURCE);
+  /** 嵌套在 BOM 表单 Modal 内，须高于父弹窗，避免二次打开被挡住 */
+  const nestedBomModalZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const bomIssueMethodOptions = useMemo(
     () =>
       BOM_ISSUE_METHOD_VALUES.map((value) => ({
@@ -408,8 +439,8 @@ const BOMPage: React.FC = () => {
   // 批量导入加载状态
   const [batchImportLoading, setBatchImportLoading] = useState(false);
 
-  const importDictOptions = useImportDictionaryOptions(['MATERIAL_UNIT']);
-  const materialUnitImportOptions = importDictOptions.MATERIAL_UNIT ?? [];
+  const materialUnitImport = useImportMaterialUnitOptions();
+  const materialUnitImportOptions = materialUnitImport.options;
 
   const bomImportTemplate = useMemo(() => {
     const baseTemplate = buildFactoryImportTemplate(
@@ -719,26 +750,18 @@ const BOMPage: React.FC = () => {
     }
   }, [mainMaterialOptions, modalVisible, isEdit]);
 
-  /**
-   * 加载单位字典
-   */
   useEffect(() => {
-    const loadUnitDictionary = async () => {
-      try {
-        const dictionary = await getDataDictionaryByCode('MATERIAL_UNIT');
-        const items = await getDictionaryItemList(dictionary.uuid, true);
-        
-        // 创建value到label的映射
-        const valueToLabelMap: Record<string, string> = {};
-        items.forEach(item => {
-          valueToLabelMap[item.value] = item.label;
-        });
-        setUnitValueToLabel(valueToLabelMap);
-      } catch (error: any) {
-        console.error('加载单位字典失败:', error);
-      }
+    let cancelled = false;
+    getMaterialUnitDisplayMapShared()
+      .then((map) => {
+        if (!cancelled) setUnitValueToLabel(map);
+      })
+      .catch((error) => {
+        console.error('加载单位主数据失败:', error);
+      });
+    return () => {
+      cancelled = true;
     };
-    loadUnitDictionary();
   }, []);
 
   /**
@@ -1625,6 +1648,7 @@ const BOMPage: React.FC = () => {
   };
 
   const appendItemsFromMaterials = (selectedMaterials: Material[]) => {
+    setMaterials((prev) => upsertMaterialsById(prev, selectedMaterials));
     const rows = selectedMaterials.map((material) =>
       buildDefaultBomItem({
         componentId: material.id,
@@ -1670,7 +1694,7 @@ const BOMPage: React.FC = () => {
 
   const handleCopyItemsFromSourceBom = async () => {
     if (!selectedCopySource) {
-      messageApi.warning('请选择要复制的BOM版本');
+      messageApi.warning(t('app.master-data.bom.copyOtherBomItemsSelectRequired'));
       return;
     }
     const source = copySourceOptions.find((item) => item.value === selectedCopySource);
@@ -1950,7 +1974,7 @@ const BOMPage: React.FC = () => {
             ? row[headerIndexMap['unit']]?.toString().trim()
             : undefined;
         const unit = unitRaw
-          ? importDictOptions.parseDict('MATERIAL_UNIT', unitRaw) ?? unitRaw
+          ? materialUnitImport.parse(unitRaw) ?? unitRaw
           : undefined;
         const wasteRateStr =
           headerIndexMap['wasteRate'] !== undefined
@@ -2672,19 +2696,6 @@ const BOMPage: React.FC = () => {
       }
     },
     {
-      title: t('app.master-data.bom.approvalStatusTitle'),
-      dataIndex: 'approvalStatus',
-      width: 120,
-      valueType: 'select',
-      sorter: true,
-      valueEnum: { draft: { text: t('app.master-data.bom.statusDraft'), status: 'Default' }, pending: { text: t('app.master-data.bom.statusPending'), status: 'Processing' }, approved: { text: t('app.master-data.bom.statusApproved'), status: 'Success' }, rejected: { text: t('app.master-data.bom.statusRejected'), status: 'Error' } },
-      render: (_, r: any) => {
-        if (isRootRow(r)) return getApprovalStatusTag(r.approvalStatus);
-        if (r._bomApprovalStatus) return getApprovalStatusTag(r._bomApprovalStatus);
-        return '-';
-      }
-    },
-    {
       title: t('app.master-data.bom.includeObsolete'),
       dataIndex: 'includeObsolete',
       valueType: 'switch',
@@ -2696,11 +2707,31 @@ const BOMPage: React.FC = () => {
     ...bomCustomFieldColumns,
     ...masterCrudCreatedUpdatedColumns<MaterialBOMRow>(t),
     {
+      title: t('app.master-data.bom.approvalStatusTitle'),
+      dataIndex: 'approvalStatus',
+      width: UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH,
+      fixed: 'right' as const,
+      align: 'center' as const,
+      valueType: 'select',
+      sorter: false,
+      valueEnum: {
+        draft: { text: t('app.master-data.bom.statusDraft'), status: 'Default' },
+        pending: { text: t('app.master-data.bom.statusPending'), status: 'Processing' },
+        approved: { text: t('app.master-data.bom.statusApproved'), status: 'Success' },
+        rejected: { text: t('app.master-data.bom.statusRejected'), status: 'Error' },
+      },
+      render: (_, r: any) => {
+        if (isRootRow(r)) return getApprovalStatusTag(r.approvalStatus);
+        if (r._bomApprovalStatus) return getApprovalStatusTag(r._bomApprovalStatus);
+        return '-';
+      },
+    },
+    {
       title: t('app.master-data.bom.actionTitle'),
       valueType: 'option',
       width: 300,
       fixed: 'right',
-      /** 主行含「详情 + 编辑 + 设计 + 审核 + 分组更多」共 5 项，提高 directMax 避免自定义 Dropdown 被塞进二级溢出 */
+      /** 主行直出详情/编辑/设计/审核；页面自管「更多」由 uni-action 钉住，不再二次折叠 */
       uniActionRenderOptions: { directMax: 5 },
       render: (_, record: any) => {
         if (isBomItemRow(record)) return null;
@@ -3528,7 +3559,7 @@ const BOMPage: React.FC = () => {
         onFinish={handleSubmit}
         isEdit={isEdit}
         loading={formLoading}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         grid={true}
         formRef={formRef}
         initialValues={
@@ -3733,10 +3764,10 @@ const BOMPage: React.FC = () => {
               <Button
                 type="default"
                 icon={<CopyOutlined />}
-                onClick={handleOpenCopySourceModal}
+                onClick={() => void handleOpenCopySourceModal()}
                 loading={copySourceLoading}
               >
-                复制其他BOM物料
+                {t('app.master-data.bom.copyOtherBomItems')}
               </Button>
             )}
             containerStyle={{
@@ -3785,8 +3816,38 @@ const BOMPage: React.FC = () => {
                       setItemField(index, 'unit', material?.baseUnit ?? '');
                       const materialSource = getMaterialSourceTypeFromRecord(material as Material | null);
                       setItemField(index, 'sourceType', materialSource || undefined);
+                      if (material?.id != null) {
+                        setMaterials((prev) => upsertMaterialsById(prev, [material as Material]));
+                      }
                     }}
                   />
+                  );
+                },
+              },
+              {
+                title: t('app.master-data.bom.materialImage'),
+                dataIndex: 'materialImage',
+                width: 72,
+                align: 'center' as const,
+                render: (_, __, index) => {
+                  const componentId = Number(getFormItems()[index]?.componentId);
+                  const material =
+                    Number.isFinite(componentId) && componentId > 0
+                      ? materialsById.get(componentId)
+                      : undefined;
+                  const images = material?.images || [];
+                  if (!images.length) return '-';
+                  const fileUuid = resolveBomMaterialImageFileUuid(images[0]);
+                  if (!fileUuid) return '-';
+                  return (
+                    <SecureImage
+                      fileUuid={fileUuid}
+                      width={36}
+                      height={36}
+                      lazyLoad
+                      thumbSize={64}
+                      alt={material?.name || t('app.master-data.bom.materialImage')}
+                    />
                   );
                 },
               },
@@ -4049,21 +4110,25 @@ const BOMPage: React.FC = () => {
       </FormModalTemplate>
 
       <Modal
-        title="复制其他BOM物料"
+        title={t('app.master-data.bom.copyOtherBomItemsTitle')}
         open={copySourceModalVisible}
         confirmLoading={copySourceSubmitting}
+        destroyOnHidden
+        zIndex={nestedBomModalZIndex}
+        maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+        wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
         onCancel={() => {
           setCopySourceModalVisible(false);
           setSelectedCopySource(undefined);
         }}
-        onOk={handleCopyItemsFromSourceBom}
+        onOk={() => void handleCopyItemsFromSourceBom()}
       >
         <Select
           showSearch
           loading={copySourceLoading}
           value={selectedCopySource}
           style={{ width: '100%' }}
-          placeholder="请选择要复制的BOM版本"
+          placeholder={t('app.master-data.bom.copyOtherBomItemsPlaceholder')}
           options={copySourceOptions}
           onChange={(value) => setSelectedCopySource(value)}
           filterOption={(input, option) =>
@@ -4075,6 +4140,7 @@ const BOMPage: React.FC = () => {
       <UniMaterialBatchPicker
         hostResource="master-data:bom"
         open={materialPickerOpen}
+        zIndex={nestedBomModalZIndex}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendItemsFromMaterials}
       />

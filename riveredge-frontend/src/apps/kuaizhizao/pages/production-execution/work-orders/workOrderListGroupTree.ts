@@ -97,15 +97,19 @@ function attachSplitAndReworkChildren(
   const attachChild = (parent: WorkOrderListRow, child: WorkOrderListRow) => {
     if (child.id == null || parent.id == null || child.id === parent.id) return
     if (!parent.children) parent.children = []
+    const kind = child.row_kind || 'split'
+    const ownSteps =
+      Array.isArray(child.operation_steps) && child.operation_steps.length > 0
+        ? child.operation_steps
+        : undefined
     parent.children.push({
       ...child,
-      row_kind: child.row_kind || 'split',
+      row_kind: kind,
       parent_work_order_id: parent.id,
       list_tree_depth: (parent.list_tree_depth ?? 0) + 1,
+      // 仅拆分子行可回退主工单工序；返工/委外等保持自身（可空）
       operation_steps:
-        Array.isArray(child.operation_steps) && child.operation_steps.length > 0
-          ? child.operation_steps
-          : parent.operation_steps,
+        ownSteps ?? (kind === 'split' ? parent.operation_steps : child.operation_steps),
     })
     childIds.add(Number(child.id))
   }

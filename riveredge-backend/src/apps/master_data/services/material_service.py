@@ -62,9 +62,10 @@ _ACTIVE_WORK_ORDER_STATUSES = frozenset(
     {"draft", "released", "dispatched", "confirmed", "in_progress", "草稿", "已下达", "已确认", "执行中"}
 )
 
-# source_type -> 编码回退用 type_code 映射（Buy->RAW, Make/Outsource->SEMI, Phantom->SEMI, Service->SVC，已移除 Configure）
+# source_type -> 编码回退用 type_code 映射（Buy/客供->RAW, Make/Outsource->SEMI, Phantom->SEMI, Service->SVC）
 _SOURCE_TYPE_TO_TYPE_CODE = {
     "Buy": "RAW",
+    "CustomerProvided": "RAW",
     "Make": "SEMI",
     "Outsource": "SEMI",
     "Phantom": "SEMI",
@@ -2975,6 +2976,169 @@ class MaterialService:
             updated_count=updated,
             requested_count=len(uuids),
             not_found_uuids=not_found,
+        )
+
+    @staticmethod
+    async def bulk_patch_material_inspection(
+        tenant_id: int,
+        data: Any,
+    ):
+        """批量更新物料质检选项（inspection_stages 合并 + 超报字段）。"""
+        from tortoise import timezone
+        from apps.kuaizhizao.models.inspection_plan import InspectionPlan
+        from apps.kuaizhizao.services.inspection_policy_service import (
+            MATERIAL_INSPECTION_STAGE_KEYS,
+            assert_master_data_inspection_stages_allowed,
+            normalize_material_inspection_stages,
+            prepare_material_inspection_for_write,
+        )
+        from apps.master_data.schemas.material_schemas import (
+            MaterialBulkInspectionFailedItem,
+            MaterialBulkInspectionPatchResponse,
+        )
+
+        stage_plan_type = {
+            "iqc": "incoming",
+            "fqc": "finished",
+            "oqc": "outbound",
+        }
+        allowed_over_modes = frozenset({"none", "fixed", "percent"})
+
+        items = list(getattr(data, "items", None) or [])
+        if not items:
+            return MaterialBulkInspectionPatchResponse(
+                updated_count=0,
+                requested_count=0,
+                failed_items=[],
+            )
+
+        uuids = [str(getattr(it, "material_uuid", "") or "").strip() for it in items]
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            uuid__in=list({u for u in uuids if u}),
+            deleted_at__isnull=True,
+        ).all()
+        by_uuid = {str(m.uuid): m for m in materials}
+
+        plan_ids: set[int] = set()
+        for it in items:
+            stages = getattr(it, "inspection_stages", None)
+            if stages is None:
+                continue
+            for key in MATERIAL_INSPECTION_STAGE_KEYS:
+                pol = getattr(stages, key, None)
+                if pol is None:
+                    continue
+                pid = getattr(pol, "plan_id", None)
+                if pid is not None:
+                    plan_ids.add(int(pid))
+
+        plans_by_id: Dict[int, Any] = {}
+        if plan_ids:
+            plans = await InspectionPlan.filter(
+                tenant_id=tenant_id,
+                id__in=list(plan_ids),
+                deleted_at__isnull=True,
+            ).all()
+            plans_by_id = {int(p.id): p for p in plans}
+
+        now = timezone.now()
+        updated = 0
+        failed: List[MaterialBulkInspectionFailedItem] = []
+
+        for it in items:
+            uuid_s = str(getattr(it, "material_uuid", "") or "").strip()
+            if not uuid_s:
+                failed.append(
+                    MaterialBulkInspectionFailedItem(material_uuid="", reason="物料 UUID 不能为空")
+                )
+                continue
+            material = by_uuid.get(uuid_s)
+            if not material:
+                failed.append(
+                    MaterialBulkInspectionFailedItem(
+                        material_uuid=uuid_s, reason="物料不存在或已删除"
+                    )
+                )
+                continue
+
+            try:
+                patch: Dict[str, Any] = {}
+                stages_in = getattr(it, "inspection_stages", None)
+                if stages_in is not None:
+                    current = normalize_material_inspection_stages(
+                        getattr(material, "inspection_stages", None),
+                        legacy_mode=getattr(material, "inspection_mode", None),
+                        legacy_plan_id=getattr(material, "default_inspection_plan_id", None),
+                    )
+                    for key in MATERIAL_INSPECTION_STAGE_KEYS:
+                        pol = getattr(stages_in, key, None)
+                        if pol is None:
+                            continue
+                        mode = str(getattr(pol, "mode", None) or "none").strip().lower()
+                        if mode not in {"none", "simple", "plan"}:
+                            raise ValidationError(f"质检模式无效（{key}）：{mode}")
+                        plan_id = getattr(pol, "plan_id", None)
+                        if mode == "plan":
+                            if plan_id is None:
+                                raise ValidationError(f"方案质检须指定方案（{key}）")
+                            plan = plans_by_id.get(int(plan_id))
+                            if not plan:
+                                raise ValidationError(f"质检方案不存在：{plan_id}")
+                            expected = stage_plan_type[key]
+                            actual = str(getattr(plan, "plan_type", "") or "")
+                            if actual != expected:
+                                raise ValidationError(
+                                    f"方案 {getattr(plan, 'plan_code', plan_id)} 类型为 {actual}，"
+                                    f"与场景 {key}（期望 {expected}）不匹配"
+                                )
+                            current[key] = {"mode": "plan", "plan_id": int(plan_id)}
+                        else:
+                            current[key] = {"mode": mode, "plan_id": None}
+                    patch["inspection_stages"] = current
+
+                over_mode = getattr(it, "over_report_mode", None)
+                if over_mode is not None:
+                    mode_s = str(over_mode).strip().lower()
+                    if mode_s not in allowed_over_modes:
+                        raise ValidationError(f"超报方式无效：{over_mode}")
+                    patch["over_report_mode"] = mode_s
+
+                over_value = getattr(it, "over_report_value", None)
+                if over_value is not None:
+                    patch["over_report_value"] = over_value
+
+                if not patch:
+                    raise ValidationError("至少指定一项质检选项字段")
+
+                if "inspection_stages" in patch:
+                    prepare_material_inspection_for_write(patch)
+                    await assert_master_data_inspection_stages_allowed(
+                        tenant_id,
+                        material_stages=patch.get("inspection_stages"),
+                    )
+
+                update_fields = ["updated_at"]
+                for key, value in patch.items():
+                    setattr(material, key, value)
+                    update_fields.append(key)
+                material.updated_at = now
+                await material.save(update_fields=list(dict.fromkeys(update_fields)))
+                updated += 1
+            except ValidationError as e:
+                failed.append(
+                    MaterialBulkInspectionFailedItem(material_uuid=uuid_s, reason=str(e))
+                )
+            except Exception as e:
+                logger.exception("bulk_patch_material_inspection failed uuid=%s", uuid_s)
+                failed.append(
+                    MaterialBulkInspectionFailedItem(material_uuid=uuid_s, reason=str(e))
+                )
+
+        return MaterialBulkInspectionPatchResponse(
+            updated_count=updated,
+            requested_count=len(items),
+            failed_items=failed,
         )
 
     _REWRITE_MAIN_CODES_MAX = 2000
@@ -6053,11 +6217,10 @@ class MaterialService:
                         ).prefetch_related("component").all()
             
             for bom in current_bom_items:
-                # 使用预加载的component，避免重复查询
-                component = bom.component
+                # 使用预加载的 component，避免重复查询
+                component = getattr(bom, "component", None)
                 if not component:
-                    # 如果预加载失败，则查询
-                    component = await Material.get(id=bom.component_id)
+                    continue
                 current_path = f"{path}/{bom.component_id}" if path else str(bom.component_id)
                 # 开启属性的物料自动视为配置件（与列表/设计器展示一致）
                 is_cfg = getattr(bom, "is_configurable", False) or getattr(component, "variant_managed", False)
@@ -6213,12 +6376,13 @@ class MaterialService:
                     bom.waste_rate or Decimal("0.00"),
                 )
                 component_quantities[bom.component_id] += actual_qty
-                
-                component = await Material.get(id=bom.component_id)
+
+                # query 已 prefetch_related("component")，禁止再按行 Material.get
+                component = getattr(bom, "component", None)
                 result["components"].append({
                     "component_id": bom.component_id,
-                    "component_code": component.main_code,
-                    "component_name": component.name,
+                    "component_code": getattr(component, "main_code", None) or str(bom.component_id),
+                    "component_name": getattr(component, "name", "") if component else "",
                     "line_quantity": float(bom.quantity),
                     "base_quantity": float(line_base),
                     "unit_quantity": float(unit_qty),
@@ -6402,7 +6566,9 @@ class MaterialService:
         # 检查版本2中新增或修改的子件（按 path 匹配同一树位置）
         for bom2 in version2_boms:
             key2 = _row_key(bom2, bom2.id)
-            component = await Material.get(id=bom2.component_id)
+            component = getattr(bom2, "component", None)
+            if not component:
+                continue
             extra2 = _bom_extra(bom2)
             bom1 = version1_map.get(key2)
             if bom1 is None:
@@ -6465,7 +6631,9 @@ class MaterialService:
         for bom1 in version1_boms:
             key1 = _row_key(bom1, bom1.id)
             if key1 not in version2_map:
-                component = await Material.get(id=bom1.component_id)
+                component = getattr(bom1, "component", None)
+                if not component:
+                    continue
                 removed.append({
                     "component_id": bom1.component_id,
                     "component_code": component.main_code,

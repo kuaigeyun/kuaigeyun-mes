@@ -10,7 +10,7 @@ import {
   DRAWER_CONFIG,
   detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { maintenancePlanApi } from '../../../services/equipment';
 import { formatDateTime } from '../../../../../utils/format';
@@ -262,15 +262,11 @@ const MaintenanceExecutionsPage: React.FC = () => {
       {
         title: t('common.actions'),
         valueType: 'option',
-        width: 120,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
           perms.canRead
-            ? renderRowActionsOverflow(
-                [<Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />],
-                { keyPrefix: `execution-${record.uuid ?? 'row'}` },
-              )
+            ? [<Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />]
             : null,
       },
     ],
@@ -314,7 +310,6 @@ const MaintenanceExecutionsPage: React.FC = () => {
           }}
           search={{ labelWidth: 'auto' }}
           pagination={{ defaultPageSize: 20 }}
-          scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
 

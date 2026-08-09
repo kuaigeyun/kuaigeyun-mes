@@ -11,6 +11,7 @@ from apps.master_data.api.factory import router as factory_router
 from apps.master_data.api.warehouse import router as warehouse_router
 from apps.master_data.api.material import router as material_router
 from apps.master_data.api.batch_serial_rules import router as batch_serial_rules_router
+from apps.master_data.api.units import router as units_router
 from apps.master_data.api.process import router as process_router
 from apps.master_data.api.drawings import router as drawings_router
 from apps.master_data.api.supply_chain import router as supply_chain_router
@@ -26,11 +27,12 @@ router = APIRouter(tags=["App - Master Data - Overview"])
 # 但目录名使用 master_data（下划线），因为 Python 模块名不能有连字符
 
 # 注册各个模块的路由
-# 注意：batch_serial_rules 与 material 均使用 prefix=/materials，必须先注册 batch_serial_rules，
-# 否则 GET /materials/batch-rules、/materials/serial-rules 会被 material 的 /{material_uuid} 当成 UUID而 404。
+# 注意：batch_serial_rules / units 与 material 均使用 prefix=/materials，必须先注册，
+# 否则会被 material 的 /{material_uuid} 当成 UUID 而 404。
 router.include_router(factory_router)
 router.include_router(warehouse_router)
 router.include_router(batch_serial_rules_router)
+router.include_router(units_router)
 router.include_router(material_router)
 router.include_router(process_router)
 router.include_router(drawings_router)

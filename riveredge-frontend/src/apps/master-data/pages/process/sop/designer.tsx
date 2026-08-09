@@ -34,8 +34,7 @@ import FormSchemaEditor from './FormSchemaEditor';
 import type { ISchema } from '@formily/json-schema';
 import UniFlowNode from '../../../../../components/common/uni-flow-node';
 import type { SOP, SOPUpdate } from '../../../types/process';
-import { getFileByUuid, uploadMultipleFiles } from '../../../../../services/file';
-// Remove unused Text declaration
+import { buildImageUploadFileUrls, getFileByUuid, uploadMultipleFiles } from '../../../../../services/file';
 /** 垂直布局常量 */
 const LAYOUT_CENTER_X = 280;
 const LAYOUT_BASE_Y = 60;
@@ -45,6 +44,19 @@ const SOP_NODE_ATTACHMENT_EXT = new Set([
   'pdf', 'dwg', 'dxf', 'step', 'stp', 'xls', 'xlsx',
   'mp4', 'mov', 'avi',
 ]);
+const SOP_NODE_IMAGE_EXT = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']);
+
+function sopAttachmentExtLower(name: string): string {
+  const base = String(name || '').split(/[/\\]/).pop() || '';
+  const dot = base.lastIndexOf('.');
+  return dot >= 0 ? base.slice(dot + 1).toLowerCase() : '';
+}
+
+function isSopImageAttachment(name?: string, fileType?: string, fileExtension?: string): boolean {
+  const ext = sopAttachmentExtLower(name || '') || String(fileExtension || '').toLowerCase().replace(/^\./, '');
+  if (ext && SOP_NODE_IMAGE_EXT.has(ext)) return true;
+  return String(fileType || '').toLowerCase().startsWith('image/');
+}
 
 
 const nodeTypes = {
@@ -89,13 +101,26 @@ const SOPDesignerPage: React.FC = () => {
       uuids.map(async (uuid) => {
         try {
           const meta = await getFileByUuid(uuid);
-          return {
+          const name = meta.original_name || meta.name || uuid;
+          const file: UploadFile = {
             uid: uuid,
-            name: meta.original_name || meta.name || uuid,
-            status: 'done' as const,
-          } as UploadFile;
+            name,
+            status: 'done',
+            response: { uuid },
+          };
+          // img 无法带 Authorization：图片必须用带 token 的 preview URL
+          if (isSopImageAttachment(name, meta.file_type, meta.file_extension)) {
+            try {
+              const urls = await buildImageUploadFileUrls(uuid);
+              file.thumbUrl = urls.thumbUrl;
+              file.url = urls.url;
+            } catch {
+              /* 预览失败仍保留文件名，避免整条附件丢失 */
+            }
+          }
+          return file;
         } catch {
-          return { uid: uuid, name: uuid, status: 'done' as const } as UploadFile;
+          return { uid: uuid, name: uuid, status: 'done' as const, response: { uuid } } as UploadFile;
         }
       })
     );
@@ -233,11 +258,22 @@ const SOPDesignerPage: React.FC = () => {
       const uploaded = await uploadMultipleFiles([file], { category: 'sop-node-attachment' });
       const first = uploaded?.[0];
       if (!first?.uuid) throw new Error('upload failed');
+      const name = first.original_name || first.name || file.name;
       const fileItem: UploadFile = {
         uid: first.uuid,
-        name: first.original_name || first.name || file.name,
+        name,
         status: 'done',
+        response: { uuid: first.uuid },
       };
+      if (isSopImageAttachment(name, first.file_type, first.file_extension)) {
+        try {
+          const urls = await buildImageUploadFileUrls(first.uuid);
+          fileItem.thumbUrl = urls.thumbUrl;
+          fileItem.url = urls.url;
+        } catch {
+          /* 上传成功但预览 URL 失败时仍入列表 */
+        }
+      }
       setAttachmentFileList((prev) => [...prev, fileItem]);
       setNodeDataMap((prev) => {
         const current = prev[selectedNode.id] || {};
@@ -434,16 +470,23 @@ const SOPDesignerPage: React.FC = () => {
               fileList={attachmentFileList}
               customRequest={handleUploadAttachment}
               multiple
-              disabled={!selectedNode}
-              showUploadList
+              disabled={!selectedNode || attachmentLoading}
+              listType="picture"
+              showUploadList={{ showPreviewIcon: true, showRemoveIcon: true }}
               style={{ background: token.colorBgContainer }}
               beforeUpload={(file) => {
-                const ext = (file.name.split('.').pop() || '').toLowerCase();
+                const ext = sopAttachmentExtLower(file.name);
                 if (!SOP_NODE_ATTACHMENT_EXT.has(ext)) {
                   message.error(t('app.master-data.sop.nodeAttachmentTypeInvalid'));
                   return Upload.LIST_IGNORE;
                 }
                 return true;
+              }}
+              onPreview={(file) => {
+                const url = file.url || file.thumbUrl;
+                if (url) {
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                }
               }}
               onRemove={(file) => {
                 if (!selectedNode) return true;

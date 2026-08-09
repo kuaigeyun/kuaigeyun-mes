@@ -237,6 +237,7 @@ TORTOISE_ORM = {
                 "apps.master_data.models.material_code_mapping",  # 物料编码映射模型（外部编码映射到内部编码）
                 "apps.master_data.models.material_batch",  # 物料批号模型
                 "apps.master_data.models.material_serial",  # 物料序列号模型
+                "apps.master_data.models.unit",  # 物料单位与全局换算
                 "apps.master_data.models.process",  # 工艺数据模型（不良品、工序、工艺路线、SOP）
                 "apps.master_data.models.customer",  # 供应链数据模型（客户）
                 "apps.master_data.models.supplier",  # 供应链数据模型（供应商）

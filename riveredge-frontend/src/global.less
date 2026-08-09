@@ -566,120 +566,12 @@ code {
 }
 
 
-/* 两栏布局中的 uni-table 高度限制 */
+/* 两栏布局内容区骨架；UniTable 填高 / scroll / table-layout 唯一控制面见 uni-table.less */
 .two-column-layout-content {
-  /* 确保内容区使用 flex 布局 */
   display: flex !important;
   flex-direction: column !important;
   min-height: 0 !important;
   overflow: hidden !important;
-
-  /* uni-table 容器在 two-column-layout 中时，高度填满容器（natural-height 除外，见文件末尾覆盖） */
-  > .uni-table-container:not(.uni-table-natural-height) {
-    flex: 1 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    min-height: 0 !important;
-    height: 100% !important;
-
-    /* ProTable 容器 */
-    > div {
-      flex: 1 !important;
-      display: flex !important;
-      flex-direction: column !important;
-      min-height: 0 !important;
-      height: 100% !important;
-
-      /* ProTable 本身 */
-      .ant-pro-table {
-        flex: 1 !important;
-        display: flex !important;
-        flex-direction: column !important;
-        min-height: 0 !important;
-        height: 100% !important;
-
-        /* ProTable 内容区 */
-        .ant-pro-table-list-toolbar {
-          flex-shrink: 0 !important;
-        }
-
-        .ant-pro-table-container {
-          flex: 1 !important;
-          display: flex !important;
-          flex-direction: column !important;
-          min-height: 0 !important;
-          height: 100% !important;
-
-          /* 表格容器 */
-          .ant-table-wrapper {
-            flex: 1 !important;
-            display: flex !important;
-            flex-direction: column !important;
-            min-height: 0 !important;
-            height: 100% !important;
-            overflow: hidden !important;
-
-            /* 表格内容 */
-            .ant-spin-nested-loading {
-              flex: 1 !important;
-              display: flex !important;
-              flex-direction: column !important;
-              min-height: 0 !important;
-              height: 100% !important;
-              overflow: hidden !important;
-
-              .ant-spin-container {
-                flex: 1 !important;
-                display: flex !important;
-                flex-direction: column !important;
-                min-height: 0 !important;
-                height: 100% !important;
-                overflow: hidden !important;
-
-                .ant-table {
-                  display: flex !important;
-                  flex-direction: column !important;
-                  height: 100% !important;
-
-                  .ant-table-container {
-                    flex: 1 !important;
-                    display: flex !important;
-                    flex-direction: column !important;
-                    min-height: 0 !important;
-                    height: 100% !important;
-                    overflow: hidden !important;
-
-                    .ant-table-header {
-                      flex-shrink: 0 !important;
-                    }
-
-                    /* 确保表头和表体列宽一致 - 使用 table-layout: fixed */
-                    .ant-table {
-                      table-layout: fixed !important;
-                    }
-
-                    /* 确保表头和表体容器宽度一致 */
-                    .ant-table-header table,
-                    .ant-table-body table {
-                      width: 100% !important;
-                      table-layout: fixed !important;
-                    }
-
-                    .ant-table-body {
-                      flex: 1 !important;
-                      min-height: 0 !important;
-                      overflow-y: auto !important;
-                      overflow-x: auto !important;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
 }
 
 /* 高级搜索 Modal 动画统一 */
@@ -1540,18 +1432,6 @@ code {
   padding-inline: 16px !important;
 }
 
-/* Table/ProTable 纵向滚动：仅 UniTable 限高模式启用，避免 natural-height 未触达限高仍出现空纵条 */
-.uni-table-container.uni-table-scroll-y-mode .ant-table .ant-table-body {
-  overflow-y: auto !important;
-}
-
-.uni-table-container.uni-table-scroll-y-mode .ant-table .ant-table-fixed-left .ant-table-body-inner,
-.uni-table-container.uni-table-scroll-y-mode .ant-table .ant-table-fixed-right .ant-table-body-inner,
-.uni-table-container.uni-table-scroll-y-mode .ant-table .ant-table-fixed-left .ant-table-body-outer,
-.uni-table-container.uni-table-scroll-y-mode .ant-table .ant-table-fixed-right .ant-table-body-outer {
-  overflow-y: auto !important;
-}
-
 /* 指定 Modal 不显示标题左侧竖条（如工序派工等） */
 .ant-modal.form-modal-no-title-accent .ant-modal-header .ant-modal-title {
   padding-left: 0;
@@ -1674,10 +1554,13 @@ code {
   background: var(--ant-color-fill-alter) !important;
 }
 
-/* 表格横向滚动条样式（全站）；纵向 gutter 仅由 UniTable scroll-y-mode 统一控制 */
+/*
+ * 全站表格滚动条「外观」only（thumb/track）。
+ * 禁止在此写 overflow / gutter / table-layout —— UniTable / UniTableDetail 唯一控制面：
+ * components/uni-table/uni-table.less（本文末尾 @import）。
+ */
 .ant-table-wrapper .ant-table-body,
 .ant-table-wrapper .ant-table-content {
-  overflow-x: auto !important;
   scrollbar-width: thin !important;
   scrollbar-color: @scrollbar-thumb transparent !important;
 }
@@ -1703,16 +1586,6 @@ code {
 .ant-table-wrapper .ant-table-body::-webkit-scrollbar-corner,
 .ant-table-wrapper .ant-table-content::-webkit-scrollbar-corner {
   background: transparent !important;
-}
-
-/* UniTable 限高：预留纵向滚动条占位，避免表头/表体列宽抖动 */
-.uni-table-container.uni-table-scroll-y-mode .ant-table-wrapper .ant-table-body,
-.uni-table-container.uni-table-scroll-y-mode .ant-table-wrapper .ant-table-content {
-  scrollbar-gutter: stable;
-}
-.uni-table-container.uni-table-scroll-y-mode .ant-table-wrapper .ant-table-body::-webkit-scrollbar,
-.uni-table-container.uni-table-scroll-y-mode .ant-table-wrapper .ant-table-content::-webkit-scrollbar {
-  display: block;
 }
 
 /* 已移除可能导致树组件错位的 top 偏移 hack */
@@ -3184,15 +3057,7 @@ code {
     object-fit: contain;
   }
 
-  // 4. 优化表格在小屏下的表现，防止操作列被挤出
-  .ant-table {
-    .ant-table-content {
-      overflow-x: auto !important;
-      -webkit-overflow-scrolling: touch;
-    }
-  }
-
-  // 5. 缩小 Modal/Drawer 默认内边距
+  // 4. 缩小 Modal/Drawer 默认内边距
   .ant-modal-body,
   .ant-drawer-body {
     padding: 12px !important;
@@ -3212,86 +3077,4 @@ code {
 @import './styles/uni-toolbar-chrome.less';
 @import './styles/action-column.less';
 @import './styles/uni-batch-split.less';
-
-/**
- * UniTable 纵向滚动唯一控制面（与 components/uni-table/index.tsx 配对）
- * 覆盖上文全局 .ant-table-body / .ant-table-content 的 overflow-y、scrollbar-gutter、
- * ::-webkit-scrollbar 强制显示，避免「未限高仍出现纵滚条 / 表头被算进滚动区」。
- */
-.uni-table-container.uni-table-natural-height {
-  .ant-pro-table,
-  .ant-pro-card,
-  .ant-pro-card-body,
-  .ant-pro-table-container,
-  .ant-table-wrapper,
-  .ant-spin-nested-loading,
-  .ant-spin-container,
-  .ant-table,
-  .ant-table-container {
-    height: auto !important;
-    max-height: none !important;
-    flex: 0 1 auto !important;
-  }
-
-  /* scroll.x 时表头/表体同在 .ant-table-content 内，须一并关闭纵向滚动与 gutter */
-  .ant-table-header,
-  .ant-table-content,
-  .ant-table-body,
-  .ant-table-body-inner,
-  .ant-table-fixed-left .ant-table-body-inner,
-  .ant-table-fixed-right .ant-table-body-inner,
-  .ant-table-fixed-left .ant-table-body-outer,
-  .ant-table-fixed-right .ant-table-body-outer {
-    overflow-y: hidden !important;
-    max-height: none !important;
-    scrollbar-gutter: auto !important;
-    flex: none !important;
-  }
-
-  /* 覆盖上文全局 ::-webkit-scrollbar 规则：natural-height 不显示纵向滚动条 */
-  .ant-table-wrapper .ant-table-content::-webkit-scrollbar,
-  .ant-table-wrapper .ant-table-body::-webkit-scrollbar {
-    width: 0 !important;
-    display: none !important;
-  }
-  .ant-table-wrapper .ant-table-content::-webkit-scrollbar:horizontal,
-  .ant-table-wrapper .ant-table-body::-webkit-scrollbar:horizontal {
-    height: 6px !important;
-    display: block !important;
-  }
-}
-
-/* 两栏布局：未限高时不拉伸 UniTable 填满列高（否则 flex+overflow-y:auto 产生空滚动条） */
-.two-column-layout-content > .uni-table-container.uni-table-natural-height {
-  height: auto !important;
-  flex: 0 1 auto !important;
-
-  > div,
-  .ant-pro-table,
-  .ant-pro-table-container,
-  .ant-table-wrapper,
-  .ant-spin-nested-loading,
-  .ant-spin-container,
-  .ant-table,
-  .ant-table-container {
-    height: auto !important;
-    flex: 0 1 auto !important;
-  }
-
-  .ant-table-header,
-  .ant-table-content,
-  .ant-table-body,
-  .ant-table-body-inner,
-  .ant-table-fixed-left .ant-table-body-inner,
-  .ant-table-fixed-right .ant-table-body-inner {
-    flex: none !important;
-    overflow-y: hidden !important;
-    scrollbar-gutter: auto !important;
-  }
-
-  .ant-table-wrapper .ant-table-content::-webkit-scrollbar,
-  .ant-table-wrapper .ant-table-body::-webkit-scrollbar {
-    width: 0 !important;
-    display: none !important;
-  }
-}
+@import './components/uni-table/uni-table.less';

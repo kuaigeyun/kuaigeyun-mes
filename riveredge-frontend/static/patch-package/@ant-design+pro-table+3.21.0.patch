@@ -11,6 +11,20 @@ index f3b5574..3211de9 100644
  
    /**
     * 取消请求
+diff --git a/node_modules/@ant-design/pro-table/es/utils/genProColumnToColumn.js b/node_modules/@ant-design/pro-table/es/utils/genProColumnToColumn.js
+index ee293d4..a5e93e1 100644
+--- a/node_modules/@ant-design/pro-table/es/utils/genProColumnToColumn.js
++++ b/node_modules/@ant-design/pro-table/es/utils/genProColumnToColumn.js
+@@ -84,7 +84,8 @@ export function genProColumnToColumn(params, parents) {
+       // 否则，只有在服务端筛选时才使用计算的 filteredValue
+       filters && genOnFilter() == null ? filteredValue : undefined,
+       sortOrder: sorter === true ? sortOrder : undefined,
+-      fixed: config.fixed,
++      // RiverEdge: columnsMap 条目缺 fixed 时不得用 undefined 盖掉列定义上的 fixed（否则右/左固定失效）
++      fixed: config.fixed ?? columnProps.fixed,
+       width: columnProps.width || (columnProps.fixed ? 200 : undefined),
+       children: columnProps.children ? genProColumnToColumn(_objectSpread(_objectSpread({}, params), {}, {
+         columns: (columnProps === null || columnProps === void 0 ? void 0 : columnProps.children) || []
 diff --git a/node_modules/@ant-design/pro-table/lib/useFetchData.js b/node_modules/@ant-design/pro-table/lib/useFetchData.js
 index 491a76b..692def6 100644
 --- a/node_modules/@ant-design/pro-table/lib/useFetchData.js
@@ -24,3 +38,17 @@ index 491a76b..692def6 100644
  
    /**
     * 取消请求
+diff --git a/node_modules/@ant-design/pro-table/lib/utils/genProColumnToColumn.js b/node_modules/@ant-design/pro-table/lib/utils/genProColumnToColumn.js
+index 6d0acd7..14dd6d9 100644
+--- a/node_modules/@ant-design/pro-table/lib/utils/genProColumnToColumn.js
++++ b/node_modules/@ant-design/pro-table/lib/utils/genProColumnToColumn.js
+@@ -91,7 +91,8 @@ function genProColumnToColumn(params, parents) {
+       // 否则，只有在服务端筛选时才使用计算的 filteredValue
+       filters && genOnFilter() == null ? filteredValue : undefined,
+       sortOrder: sorter === true ? sortOrder : undefined,
+-      fixed: config.fixed,
++      // RiverEdge: columnsMap 条目缺 fixed 时不得用 undefined 盖掉列定义上的 fixed（否则右/左固定失效）
++      fixed: config.fixed ?? columnProps.fixed,
+       width: columnProps.width || (columnProps.fixed ? 200 : undefined),
+       children: columnProps.children ? genProColumnToColumn((0, _objectSpread2.default)((0, _objectSpread2.default)({}, params), {}, {
+         columns: (columnProps === null || columnProps === void 0 ? void 0 : columnProps.children) || []

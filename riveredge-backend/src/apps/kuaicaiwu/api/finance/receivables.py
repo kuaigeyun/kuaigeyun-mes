@@ -154,6 +154,9 @@ async def list_receivables(
         sort_order=sort_order,
     )
     enriched = await receivable_pull_service.enrich_push_receipt_capabilities(tenant_id, receivables)
+    enriched = await receivable_pull_service.enrich_push_sales_invoice_capabilities(
+        tenant_id, enriched
+    )
     items = [ReceivableResponse.model_validate(row) for row in enriched]
     return ReceivableListResponse(
         items=items,

@@ -486,8 +486,20 @@ export async function apiRequest<T = any>(
           if (typeof data.detail === 'string') {
             errorMessage = data.detail;
           } else if (Array.isArray(data.detail)) {
-            // 如果是数组，提取第一个错误信息
-            errorMessage = data.detail[0]?.msg || JSON.stringify(data.detail);
+            // Pydantic 校验：带上字段路径，避免只显示无上下文的 "Field required"
+            errorMessage =
+              data.detail
+                .map((e: { loc?: unknown[]; msg?: string }) => {
+                  const msg = e?.msg != null ? String(e.msg) : '';
+                  const locParts = Array.isArray(e?.loc)
+                    ? e.loc.filter((p) => p !== 'body' && p !== 'query' && p !== 'path').map(String)
+                    : [];
+                  const field = locParts.length ? locParts.join('.') : '';
+                  if (field && msg) return `${field}: ${msg}`;
+                  return msg || field;
+                })
+                .filter(Boolean)
+                .join('；') || JSON.stringify(data.detail);
           } else {
             // 新兼容：支持后端 detail 结构化对象 { message, trace_id }
             const detailObj = data.detail as { message?: string; trace_id?: string };

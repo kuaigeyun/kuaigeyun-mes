@@ -18,6 +18,8 @@ from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
 from apps.kuaizhizao.models.material_binding import MaterialBinding
 from apps.kuaizhizao.models.oqc_inspection import OQCInspection
 from apps.kuaizhizao.models.process_inspection import ProcessInspection
+from apps.kuaizhizao.models.production_picking import ProductionPicking
+from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
@@ -30,7 +32,10 @@ from apps.kuaizhizao.models.semi_finished_goods_receipt_item import SemiFinished
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.schemas.traceability_schemas import TraceBizStep, TraceEventResponse, TraceIdentifierType
 from apps.kuaizhizao.services.traceability.identifier_resolver import ResolvedTraceAnchor
-from apps.kuaizhizao.services.traceability.serial_match import parse_serial_numbers, serial_numbers_contain
+from apps.kuaizhizao.services.traceability.serial_match import serial_numbers_contain
+
+# 已确认发料的明细状态（与 warehouse_service 确认领料回写一致）
+_PICKED_ITEM_STATUSES = ("已领料", "已确认", "picked", "confirmed", "部分领料")
 
 
 def _hdr_receipt_code(hdr, receipt_id: int) -> str:
@@ -52,6 +57,13 @@ def _hdr_return_code(hdr, return_id: int) -> str:
     if code is not None and str(code).strip():
         return str(code).strip()
     return str(return_id)
+
+
+def _hdr_picking_code(hdr, picking_id: int) -> str:
+    code = getattr(hdr, "picking_code", None) if hdr is not None else None
+    if code is not None and str(code).strip():
+        return str(code).strip()
+    return str(picking_id)
 
 
 def _reporting_document_code(rec: ReportingRecord) -> str:
@@ -170,6 +182,7 @@ class TraceEventCollector:
         await self._collect_customer_material(tenant_id, material_id=material_id, serial_no=serial_no)
         await self._collect_finished_goods_receipts(tenant_id, material_id=material_id, serial_no=serial_no)
         await self._collect_semi_finished_receipts(tenant_id, material_id=material_id, serial_no=serial_no)
+        await self._collect_production_pickings(tenant_id, material_id=material_id, serial_no=serial_no)
         await self._collect_sales_delivery(tenant_id, material_id=material_id, serial_no=serial_no)
         await self._collect_sales_return(tenant_id, material_id=material_id, serial_no=serial_no)
 
@@ -182,6 +195,7 @@ class TraceEventCollector:
         await self._collect_customer_material(tenant_id, material_id=material_id, batch_no=batch_no)
         await self._collect_finished_goods_receipts(tenant_id, material_id=material_id, batch_no=batch_no)
         await self._collect_semi_finished_receipts(tenant_id, material_id=material_id, batch_no=batch_no)
+        await self._collect_production_pickings(tenant_id, material_id=material_id, batch_no=batch_no)
         await self._collect_sales_delivery(tenant_id, material_id=material_id, batch_no=batch_no)
         await self._collect_sales_return(tenant_id, material_id=material_id, batch_no=batch_no)
 
@@ -207,6 +221,7 @@ class TraceEventCollector:
         )
         await self._collect_finished_goods_receipts(anchor.tenant_id, work_order_id=wo.id)
         await self._collect_semi_finished_receipts(anchor.tenant_id, work_order_id=wo.id)
+        await self._collect_production_pickings(anchor.tenant_id, work_order_ids=[int(wo.id)])
 
     async def _collect_purchase_receipts(
         self,
@@ -539,8 +554,81 @@ class TraceEventCollector:
                 source_table="apps_kuaizhizao_sales_return_items",
             )
 
+    async def _collect_production_pickings(
+        self,
+        tenant_id: int,
+        *,
+        material_id: Optional[int] = None,
+        serial_no: Optional[str] = None,
+        batch_no: Optional[str] = None,
+        work_order_ids: Optional[List[int]] = None,
+    ) -> None:
+        """采集已确认的生产领料单（仓库发料单据，非上料绑定）。"""
+        q = ProductionPickingItem.filter(
+            tenant_id=tenant_id,
+            status__in=list(_PICKED_ITEM_STATUSES),
+            deleted_at__isnull=True,
+        )
+        if material_id:
+            q = q.filter(material_id=material_id)
+        if work_order_ids:
+            hdr_ids = [
+                int(p.id)
+                for p in await ProductionPicking.filter(
+                    tenant_id=tenant_id,
+                    work_order_id__in=list(work_order_ids),
+                    deleted_at__isnull=True,
+                ).all()
+            ]
+            if not hdr_ids:
+                return
+            q = q.filter(picking_id__in=hdr_ids)
+        items = await q.all()
+        if not items:
+            return
+
+        picking_ids = {int(i.picking_id) for i in items}
+        pickings: Dict[int, ProductionPicking] = {}
+        if picking_ids:
+            for p in await ProductionPicking.filter(
+                tenant_id=tenant_id,
+                id__in=list(picking_ids),
+                deleted_at__isnull=True,
+            ).all():
+                pickings[int(p.id)] = p
+
+        for item in items:
+            if serial_no and not serial_numbers_contain(getattr(item, "serial_numbers", None), serial_no):
+                continue
+            if batch_no and (getattr(item, "batch_number", None) or "") != batch_no:
+                continue
+            hdr = pickings.get(int(item.picking_id))
+            if not hdr:
+                continue
+            if hdr.work_order_id:
+                self._work_order_ids.add(int(hdr.work_order_id))
+            item_batch = (getattr(item, "batch_number", None) or "").strip() or None
+            if item_batch:
+                self._batch_nos.add(item_batch)
+            event_time = getattr(item, "picking_time", None) or getattr(hdr, "picking_time", None)
+            self._add(
+                event_id=f"production_picking-{item.picking_id}-{item.id}",
+                event_time=event_time,
+                biz_step=TraceBizStep.picking,
+                document_type="production_picking",
+                document_code=_hdr_picking_code(hdr, int(item.picking_id)),
+                document_id=int(item.picking_id),
+                material_code=getattr(item, "material_code", None),
+                material_name=getattr(item, "material_name", None),
+                quantity=getattr(item, "picked_quantity", None) or getattr(item, "required_quantity", None),
+                operator=getattr(hdr, "picker_name", None),
+                remark=getattr(item, "warehouse_name", None),
+                source_table="apps_kuaizhizao_production_picking_items",
+                related_batch_no=item_batch,
+            )
+
     async def _collect_upstream_materials(self, tenant_id: int) -> None:
-        """沿工单上料绑定反查原材料/半成品批次，并采集采购入库、代工来料及来料检验。"""
+        """沿工单领料单与上料绑定反查原材料/半成品批次，并采集采购入库、代工来料及来料检验。"""
         visited_wo: Set[int] = set()
         visited_batch: Set[str] = set(self._batch_nos)
         pending_wo: Set[int] = set(self._work_order_ids)
@@ -563,6 +651,12 @@ class TraceEventCollector:
             for binding in feedings:
                 batch_text = (getattr(binding, "batch_no", None) or "").strip()
                 if batch_text and batch_text not in visited_batch:
+                    new_batches.add(batch_text)
+
+            # 仓库生产领料单是领料真源之一；无上料绑定时仍须反查组件批次
+            await self._collect_production_pickings(tenant_id, work_order_ids=wo_ids)
+            for batch_text in self._batch_nos:
+                if batch_text not in visited_batch:
                     new_batches.add(batch_text)
 
             for batch_no in new_batches:

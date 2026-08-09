@@ -24,10 +24,11 @@ import {
   ImportOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
@@ -50,11 +51,15 @@ import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
+import {
+  applyPurchaseDocumentLineMaterialPricing,
+  resolvePurchaseDocumentMaterialLinesPricing,
+} from '../../../../master-data/utils/resolve-partner-material-price';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { downloadFile } from '../../../../../utils';
-import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
+import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions';
 
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
@@ -96,7 +101,8 @@ import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
-import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS, ratioToPushProgressPercent } from '../../sales-management/shared/DocumentPushProgressBar';
+import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { useDocumentTracking, DocumentTrackingTimelineBody } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
@@ -105,6 +111,7 @@ import { ROUTES } from '../../../constants/routes';
 import { useTranslation } from 'react-i18next';
 import { useGlobalStore } from '../../../../../stores';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { DetailAuditPhaseTitleExtra } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
@@ -147,6 +154,22 @@ const INITIAL_PR_FORM_ITEM_ROW = {
 
 const INITIAL_CREATE_ITEMS = [{ ...INITIAL_PR_FORM_ITEM_ROW }];
 
+type PurchaseRequisitionItemRow = PurchaseRequisitionItem & {
+  _rowKey: string;
+  requisition_id: number;
+  requisition_code?: string;
+  requisition_name?: string;
+  source_type?: string;
+  source_code?: string;
+  status?: string;
+  review_status?: string;
+  downstream_push_progress?: number;
+  lifecycle?: Record<string, unknown>;
+};
+
+const PURCHASE_REQUISITION_LIST_PERSISTENCE_ID =
+  'apps.kuaizhizao.pages.purchase-management.purchase-requisitions.v4';
+
 type PullDemandComputationCandidate = {
   id: number;
   computation_code?: string;
@@ -168,6 +191,7 @@ const purchaseRequisitionEditPath = (id: number | string) => `${PURCHASE_REQUISI
 
 const PurchaseRequisitionsPage: React.FC = () => {
   const { t } = useTranslation();
+  const { quantity: quantityDecimals, price: priceDecimals, amount: amountDecimals } = useNumericPrecision();
   const pushToPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_requisition');
   const pushToInquiryAction = resolveKuaizhizaoDocumentAction(t, 'purchase_inquiry.pull_from_requisition');
   const pullFromDemandComputationAction = resolveKuaizhizaoDocumentAction(t, 'purchase_requisition.pull_from_demand_computation');
@@ -196,6 +220,18 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<PurchaseRequisition[]>([]);
+  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
+    readPersistedUniTableViewType(PURCHASE_REQUISITION_LIST_PERSISTENCE_ID, 'table', [
+      'table',
+      'detailTable',
+      'help',
+    ]) as 'table' | 'detailTable' | 'help',
+  );
+  const dataViewMode = resolveDetailTableViewMode(viewTypeState);
+  const dataViewModeRef = useRef(dataViewMode);
+  useEffect(() => {
+    dataViewModeRef.current = dataViewMode;
+  }, [dataViewMode]);
   const deepLinkHandledRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -230,13 +266,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [currentReq, setCurrentReq] = useState<PurchaseRequisition | null>(null);
   const [supplierList, setSupplierList] = useState<Array<{ id: number; code?: string; name: string }>>([]);
   const createFormRef = useRef<any>(null);
+  /** 程序化回填（服务端/草稿）期间禁止 onValuesChange 写草稿，避免空价覆盖手填 */
+  const prFormHydratingRef = useRef(false);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
-  const requisitionImportDict = useImportDictionaryOptions(['MATERIAL_UNIT']);
-  const requisitionLineUnitOptions = requisitionImportDict.MATERIAL_UNIT ?? [];
+  const materialUnitImport = useImportMaterialUnitOptions();
+  const requisitionLineUnitOptions = materialUnitImport.options;
   const requisitionLineImportColumnOptions = useMemo(
     () => [
       undefined,
@@ -294,27 +332,35 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
 
   const appendRequisitionItemsFromMaterials = useCallback(
-    (selected: Material[]) => {
+    async (selected: Material[]) => {
+      if (!selected?.length) return;
       const isEmptyItemRow = (row: any) => {
         if (row == null) return true;
         if (row.material_id != null && row.material_id !== '') return false;
         const code = row.material_code;
         return code == null || String(code).trim() === '';
       };
-      const rowFromMaterial = (m: Material) => ({
-        material_id: m.id,
-        material_code: m.mainCode ?? m.code ?? '',
-        material_name: m.name ?? '',
-        material_spec: m.specification ?? '',
-        unit: m.baseUnit ?? '件',
+      const requisitionDate = createFormRef.current?.getFieldValue('requisition_date');
+      const asOf =
+        requisitionDate != null
+          ? dayjs.isDayjs(requisitionDate)
+            ? requisitionDate
+            : dayjs(requisitionDate)
+          : dayjs();
+      const priced = await resolvePurchaseDocumentMaterialLinesPricing(selected, { asOf });
+      const queue = priced.map(({ material: m, unitPrice }) => ({
+        material_id: (m as Material).id,
+        material_code: (m as Material).mainCode ?? (m as Material).code ?? '',
+        material_name: (m as Material).name ?? '',
+        material_spec: (m as Material).specification ?? '',
+        unit: resolveMaterialScenarioUnit(m as Material, 'purchase'),
         quantity: 1,
-        suggested_unit_price: 0,
+        suggested_unit_price: unitPrice,
         required_date: undefined,
         demand_computation_item_id: undefined,
         supplier_id: undefined,
         notes: undefined,
-      });
-      const queue = selected.map(rowFromMaterial);
+      }));
       const items = [...(createFormRef.current?.getFieldValue('items') ?? [])].map((row: any) => ({ ...row }));
       for (let i = 0; i < items.length && queue.length > 0; i++) {
         if (isEmptyItemRow(items[i])) {
@@ -338,7 +384,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           const materialCode = String(row[0] || '').trim();
           const spec = String(row[1] || '').trim();
           const unitRaw = String(row[2] || '').trim();
-          const unit = requisitionImportDict.parseDict('MATERIAL_UNIT', unitRaw) || unitRaw;
+          const unit = materialUnitImport.parse(unitRaw) || unitRaw;
           const quantity = parseFloat(row[3]) || 0;
           const suggestedPrice = parseFloat(row[4]) || 0;
           const requiredDate = row[5];
@@ -369,7 +415,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       messageApi.success(t('app.kuaizhizao.salesOrder.importSuccessItems', { count: newItems.length }));
       setImportModalVisible(false);
     },
-    [messageApi, requisitionImportDict, t],
+    [messageApi, materialUnitImport, t],
   );
 
   const handleCopyRequisitionCode = useCallback(
@@ -391,8 +437,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
       setPreviewCode(null);
       setEffectiveRuleCode(null);
       setEffectiveAutoGen(null);
-      createFormRef.current?.resetFields();
+      // 先取出草稿，避免回填服务端空价时 onValuesChange 把草稿冲掉
+      const draftSnapshot =
+        prFormDraftKey ? getDocumentFormDraft<Record<string, unknown>>(prFormDraftKey) : null;
+      prFormHydratingRef.current = true;
       try {
+        createFormRef.current?.resetFields();
         const detail = await getPurchaseRequisition(id);
         const status = (detail.status ?? '').toString().trim();
         if (!['草稿', 'draft', 'DRAFT'].includes(status)) {
@@ -400,41 +450,40 @@ const PurchaseRequisitionsPage: React.FC = () => {
           navigate(PURCHASE_REQUISITION_LIST_PATH);
           return;
         }
-        setTimeout(() => {
-          const baseValues = {
-            requisition_code: detail.requisition_code ?? '',
-            requisition_name: detail.requisition_name,
-            requisition_date: detail.requisition_date ? dayjs(detail.requisition_date) : dayjs(),
-            applicant_name: detail.applicant_name ?? '',
-            required_date: detail.required_date ? dayjs(detail.required_date) : undefined,
-            notes: detail.notes,
-            attachments: mapAttachmentsToUploadList(detail.attachments),
-            items:
-              detail.items && detail.items.length > 0
-                ? detail.items.map((it) => ({
-                    material_id: it.material_id,
-                    material_code: it.material_code ?? '',
-                    material_name: it.material_name ?? '',
-                    material_spec: it.material_spec ?? '',
-                    unit: it.unit ?? '件',
-                    quantity: Number(it.quantity ?? 1),
-                    suggested_unit_price: Number(it.suggested_unit_price ?? 0),
-                    required_date: it.required_date ? dayjs(it.required_date) : undefined,
-                    demand_computation_item_id: it.demand_computation_item_id,
-                    supplier_id: it.supplier_id,
-                    notes: it.notes,
-                  }))
-                : [{ ...INITIAL_PR_FORM_ITEM_ROW }],
-          };
-          createFormRef.current?.setFieldsValue(baseValues);
-          const draft = prFormDraftKey ? getDocumentFormDraft(prFormDraftKey) : null;
-          if (draft && Object.keys(draft).length > 0) {
-            createFormRef.current?.setFieldsValue(draft);
-          }
-        }, 0);
+        const baseValues = {
+          requisition_code: detail.requisition_code ?? '',
+          requisition_name: detail.requisition_name,
+          requisition_date: detail.requisition_date ? dayjs(detail.requisition_date) : dayjs(),
+          applicant_name: detail.applicant_name ?? '',
+          required_date: detail.required_date ? dayjs(detail.required_date) : undefined,
+          notes: detail.notes,
+          attachments: mapAttachmentsToUploadList(detail.attachments),
+          items:
+            detail.items && detail.items.length > 0
+              ? detail.items.map((it) => ({
+                  material_id: it.material_id,
+                  material_code: it.material_code ?? '',
+                  material_name: it.material_name ?? '',
+                  material_spec: it.material_spec ?? '',
+                  unit: it.unit ?? '件',
+                  quantity: Number(it.quantity ?? 1),
+                  suggested_unit_price: Number(it.suggested_unit_price ?? 0),
+                  required_date: it.required_date ? dayjs(it.required_date) : undefined,
+                  demand_computation_item_id: it.demand_computation_item_id,
+                  supplier_id: it.supplier_id,
+                  notes: it.notes,
+                }))
+              : [{ ...INITIAL_PR_FORM_ITEM_ROW }],
+        };
+        createFormRef.current?.setFieldsValue(baseValues);
+        if (draftSnapshot && Object.keys(draftSnapshot).length > 0) {
+          createFormRef.current?.setFieldsValue(draftSnapshot);
+        }
       } catch {
         messageApi.error(t('app.kuaizhizao.purchaseRequisition.loadFailed'));
         navigate(PURCHASE_REQUISITION_LIST_PATH);
+      } finally {
+        prFormHydratingRef.current = false;
       }
     },
     [messageApi, ensureSupplierList, navigate, t, prFormDraftKey],
@@ -465,17 +514,34 @@ const PurchaseRequisitionsPage: React.FC = () => {
     return 0;
   }, [purchaseRequestAuditEnabled]);
 
+  const applyCreateFormDefaults = useCallback(
+    (values: Record<string, unknown>) => {
+      prFormHydratingRef.current = true;
+      try {
+        createFormRef.current?.setFieldsValue(values);
+      } finally {
+        prFormHydratingRef.current = false;
+      }
+    },
+    [],
+  );
+
   const initPurchaseRequisitionCreateForm = useCallback(async () => {
     void ensureSupplierList();
     const draft = prFormDraftKey ? getDocumentFormDraft(prFormDraftKey) : null;
     if (draft && Object.keys(draft).length > 0) {
-      setTimeout(() => createFormRef.current?.setFieldsValue(draft), 0);
+      applyCreateFormDefaults(draft);
       return;
     }
     setPreviewCode(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
-    createFormRef.current?.resetFields();
+    prFormHydratingRef.current = true;
+    try {
+      createFormRef.current?.resetFields();
+    } finally {
+      prFormHydratingRef.current = false;
+    }
     try {
       const config = await getCodeRulePageConfig('kuaizhizao-purchase-requisition');
       const autoGen = config?.autoGenerate ?? isAutoGenerateEnabled('kuaizhizao-purchase-requisition');
@@ -487,70 +553,57 @@ const PurchaseRequisitionsPage: React.FC = () => {
           const res = await testGenerateCode({ rule_code: ruleCode });
           const preview = res.code;
           setPreviewCode(preview ?? null);
-          setTimeout(() => {
-            createFormRef.current?.setFieldsValue({
-              requisition_code: preview ?? '',
-              requisition_date: dayjs(),
-              items: initialCreateItems,
-            });
-          }, 100);
-        } catch (e) {
-          console.warn('采购申请编号预生成失败:', e);
-          setPreviewCode(null);
-          setTimeout(() => {
-            createFormRef.current?.setFieldsValue({
-              requisition_date: dayjs(),
-              items: initialCreateItems,
-            });
-          }, 100);
-        }
-      } else {
-        setPreviewCode(null);
-        setTimeout(() => {
-          createFormRef.current?.setFieldsValue({
+          applyCreateFormDefaults({
+            requisition_code: preview ?? '',
             requisition_date: dayjs(),
             items: initialCreateItems,
           });
-        }, 100);
+        } catch (e) {
+          console.warn('采购申请编号预生成失败:', e);
+          setPreviewCode(null);
+          applyCreateFormDefaults({
+            requisition_date: dayjs(),
+            items: initialCreateItems,
+          });
+        }
+      } else {
+        setPreviewCode(null);
+        applyCreateFormDefaults({
+          requisition_date: dayjs(),
+          items: initialCreateItems,
+        });
       }
     } catch {
       const ruleCode = getPageRuleCode('kuaizhizao-purchase-requisition');
       setEffectiveRuleCode(ruleCode ?? null);
       setEffectiveAutoGen(isAutoGenerateEnabled('kuaizhizao-purchase-requisition'));
       if (isAutoGenerateEnabled('kuaizhizao-purchase-requisition') && ruleCode) {
-        testGenerateCode({ rule_code: ruleCode })
-          .then((res) => {
-            const preview = res.code;
-            setPreviewCode(preview ?? null);
-            setTimeout(() => {
-              createFormRef.current?.setFieldsValue({
-                requisition_code: preview ?? '',
-                requisition_date: dayjs(),
-                items: initialCreateItems,
-              });
-            }, 100);
-          })
-          .catch((e) => {
-            console.warn('采购申请编号预生成失败:', e);
-            setPreviewCode(null);
-            setTimeout(() => {
-              createFormRef.current?.setFieldsValue({
-                requisition_date: dayjs(),
-                items: initialCreateItems,
-              });
-            }, 100);
-          });
-      } else {
-        setPreviewCode(null);
-        setTimeout(() => {
-          createFormRef.current?.setFieldsValue({
+        try {
+          const res = await testGenerateCode({ rule_code: ruleCode });
+          const preview = res.code;
+          setPreviewCode(preview ?? null);
+          applyCreateFormDefaults({
+            requisition_code: preview ?? '',
             requisition_date: dayjs(),
             items: initialCreateItems,
           });
-        }, 100);
+        } catch (e) {
+          console.warn('采购申请编号预生成失败:', e);
+          setPreviewCode(null);
+          applyCreateFormDefaults({
+            requisition_date: dayjs(),
+            items: initialCreateItems,
+          });
+        }
+      } else {
+        setPreviewCode(null);
+        applyCreateFormDefaults({
+          requisition_date: dayjs(),
+          items: initialCreateItems,
+        });
       }
     }
-  }, [ensureSupplierList, prFormDraftKey]);
+  }, [ensureSupplierList, prFormDraftKey, applyCreateFormDefaults, initialCreateItems]);
 
   const handleCreate = () => {
     navigate(PURCHASE_REQUISITION_CREATE_PATH);
@@ -1396,9 +1449,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
       dataIndex: 'downstream_push_progress',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
       render: (_, record) => (
         <DocumentPushProgressBar percent={resolveRequisitionPushPercent(record)} />
       ),
@@ -1438,7 +1489,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
       key: 'lifecycle',
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       fixed: 'right',
-      align: 'center',
       hideInSearch: false,
       valueEnum: lifecycleValueEnum,
       render: (_, record) => (
@@ -1510,6 +1560,123 @@ const PurchaseRequisitionsPage: React.FC = () => {
       },
     },
   ], SALES_DOC_LIST_FIELD_RANK), [t, purchaseRequestAuditEnabled, purchaseRequisitionAuditColumn, lifecycleValueEnum, handleDetail, handleEdit, handleDeleteOne, resolveRequisitionPushPercent, detailVisible, currentReq?.id, invalidateMenuBadgeCounts]);
+
+  const detailTableColumns: ProColumns<PurchaseRequisitionItemRow>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.col.nameAndCode'),
+        key: 'requisition_code',
+        dataIndex: 'requisition_code',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
+        hideInSearch: false,
+        fieldProps: { placeholder: t('app.kuaizhizao.purchaseRequisition.col.code') },
+        render: (_, record) => (
+          <UniTableStackedPrimaryCell
+            primary={String(record.requisition_name ?? '')}
+            secondary={String(record.requisition_code ?? '')}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.col.code'),
+        dataIndex: 'requisition_code',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.col.name'),
+        dataIndex: 'requisition_name',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.col.materialName'),
+        key: 'material_display',
+        dataIndex: 'material_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        render: (_, record) => (
+          <MaterialStackedCell
+            material_name={record.material_name}
+            material_code={record.material_code}
+            material_spec={record.material_spec}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.col.materialCode'),
+        dataIndex: 'material_code',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.col.quantity'),
+        dataIndex: 'quantity',
+        width: 120,
+        align: 'right',
+        render: (val: unknown, record) => (
+          <QuantityWithUnitDisplay quantity={val} unit={record.unit} />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.col.suggestedPrice'),
+        dataIndex: 'suggested_unit_price',
+        width: 100,
+        align: 'right',
+        render: (text: unknown) =>
+          text != null ? `¥${formatNumber(text, priceDecimals)}` : '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+        key: 'line_amount',
+        width: 110,
+        align: 'right',
+        render: (_: unknown, record) => {
+          const qty = Number(record.quantity ?? 0);
+          const price = Number(record.suggested_unit_price ?? 0);
+          return `¥${formatNumber(qty * price, amountDecimals)}`;
+        },
+      },
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.col.requiredDate'),
+        dataIndex: 'required_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_: unknown, row) =>
+          row.required_date ? formatDateTime(row.required_date, 'YYYY-MM-DD') : '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+        key: 'line_push_progress',
+        ...DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
+        render: (_: unknown, record) => {
+          const ordered = Number(record.quantity ?? 0);
+          const pushed =
+            Number(record.converted_quantity_confirmed ?? 0) +
+            Number(record.converted_quantity_draft ?? 0);
+          const percent = ratioToPushProgressPercent(pushed, ordered);
+          return (
+            <DocumentPushProgressBar
+              percent={percent}
+              tooltip={t('app.kuaizhizao.salesManagement.pushProgress.percentOnly', { percent })}
+            />
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.col.lifecycle'),
+        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+        fixed: 'right',
+        hideInSearch: false,
+        valueEnum: lifecycleValueEnum,
+        render: (_: unknown, record) => (
+          <ListUniLifecycleCell
+            lifecycle={getPurchaseRequisitionLifecycle(record as PurchaseRequisition, purchaseRequestAuditEnabled)}
+            withSubStages
+          />
+        ),
+      },
+    ],
+    [t, lifecycleValueEnum, purchaseRequestAuditEnabled, priceDecimals, amountDecimals],
+  );
 
   const renderPurchaseRequisitionForm = () => (
     <>
@@ -1653,6 +1820,16 @@ const PurchaseRequisitionsPage: React.FC = () => {
                                         ['items', index, 'unit'],
                                         resolveMaterialScenarioUnit(material, 'purchase'),
                                       );
+                                      void applyPurchaseDocumentLineMaterialPricing(
+                                        createFormRef.current,
+                                        index,
+                                        material,
+                                        {
+                                          asOfField: 'requisition_date',
+                                          unitPriceField: 'suggested_unit_price',
+                                          includeTaxRate: false,
+                                        },
+                                      );
                                     }}
                                     fallbackOption={fallback}
                                     formItemProps={{ style: { margin: 0 } }}
@@ -1726,7 +1903,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                         ]}
                         style={{ margin: 0 }}
                       >
-                        <InputNumber placeholder={t('app.kuaizhizao.purchaseRequisition.form.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+                        <InputNumber placeholder={t('app.kuaizhizao.purchaseRequisition.form.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
                   },
@@ -1745,7 +1922,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                         {({ getFieldValue }: any) => {
                           return (
                             <AntForm.Item name={[index, 'suggested_unit_price']} style={{ margin: 0 }}>
-                              <InputNumber placeholder="0" min={0} precision={2} style={{ width: 80 }} size="small" />
+                              <InputNumber placeholder="0" min={0} precision={priceDecimals} style={{ width: 80 }} size="small" />
                             </AntForm.Item>
                           );
                         }}
@@ -1854,6 +2031,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 submitter={false}
                 scrollToFirstError
                 onFinish={handleModalSubmit}
+                onValuesChange={() => {
+                  if (prFormHydratingRef.current || !prFormDraftKey) return;
+                  const values = createFormRef.current?.getFieldsValue?.(true);
+                  if (values && Object.keys(values).length > 0) {
+                    setDocumentFormDraft(prFormDraftKey, values);
+                  }
+                }}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];
                   const errText = first?.errors?.filter(Boolean)[0];
@@ -1891,8 +2075,30 @@ const PurchaseRequisitionsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle={t('app.kuaizhizao.menu.purchase-management.purchase-requisitions')}
-          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-requisitions.v3"
+          columnPersistenceId={PURCHASE_REQUISITION_LIST_PERSISTENCE_ID}
           actionRef={actionRef}
+          viewTypes={['table', 'detailTable', 'help']}
+          defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
+          helpViewConfig={{
+            content: (
+              <div style={{ lineHeight: 1.8 }}>
+                <p>
+                  <strong>{t('components.uniTable.viewTable')}</strong>
+                  {t('app.kuaizhizao.purchaseRequisition.helpTableView')}
+                </p>
+                <p>
+                  <strong>{t('components.uniTable.viewDetailTable')}</strong>
+                  {t('app.kuaizhizao.purchaseRequisition.helpDetailTableView')}
+                </p>
+              </div>
+            ),
+          }}
+          onViewTypeChange={(v) => {
+            dataViewModeRef.current = resolveDetailTableViewMode(v as 'table' | 'detailTable' | 'help');
+            setViewTypeState(v as 'table' | 'detailTable' | 'help');
+            setTimeout(() => actionRef.current?.reload(), 0);
+          }}
+          detailTableColumns={detailTableColumns}
           request={async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
             const s = searchFormValues ?? {};
             const lifecycleParams = resolvePurchaseRequisitionListLifecycleParams(
@@ -1911,6 +2117,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
               source_type: s.source_type,
               required_date_from: s.required_date_from,
               required_date_to: s.required_date_to,
+              include_items: dataViewModeRef.current === 'detail',
             };
             if (fuzzyKeyword) {
               apiParams.keyword = fuzzyKeyword;
@@ -1930,20 +2137,60 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 : apiParams.created_start_date;
             }
             const res = await listPurchaseRequisitions(apiParams);
-            tableRowsRef.current = res.data || [];
-            return {
-              data: res.data || [],
-              total: res.total || 0,
-              success: res.success ?? true,
-            };
+            const requisitions = res.data || [];
+            const total = res.total || 0;
+            if (dataViewModeRef.current === 'order') {
+              tableRowsRef.current = requisitions;
+              return { data: requisitions, success: res.success ?? true, total };
+            }
+            const flatRows = flattenDocumentDetailRows<PurchaseRequisition, PurchaseRequisitionItem>({
+              headers: requisitions,
+              getHeaderId: (h) => h.id,
+              getItems: (h) => h.items,
+              buildRowKey: (h, item, index) =>
+                item?.id
+                  ? `req-${h.id}-item-${item.id}`
+                  : `req-${h.id}-idx-${index}`,
+              mapItemRow: (h, item) => ({
+                ...item,
+                requisition_id: h.id ?? 0,
+                requisition_code: h.requisition_code,
+                requisition_name: h.requisition_name,
+                source_type: h.source_type,
+                source_code: h.source_code,
+                status: h.status,
+                review_status: h.review_status,
+                downstream_push_progress: h.downstream_push_progress,
+                lifecycle: h.lifecycle,
+              }),
+              mapEmptyHeaderRow: (h) => ({
+                requisition_id: h.id ?? 0,
+                requisition_code: h.requisition_code,
+                requisition_name: h.requisition_name,
+                material_id: 0,
+                material_code: '-',
+                material_name: '-',
+                unit: '',
+                quantity: 0,
+                suggested_unit_price: 0,
+                status: h.status,
+                review_status: h.review_status,
+                lifecycle: h.lifecycle,
+              }),
+            }) as PurchaseRequisitionItemRow[];
+            tableRowsRef.current = requisitions;
+            return { data: flatRows, success: res.success ?? true, total };
           }}
           onTableDataChange={(rows) => {
-            tableRowsRef.current = rows;
+            if (dataViewModeRef.current === 'order') {
+              tableRowsRef.current = rows as PurchaseRequisition[];
+            }
           }}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           columns={columns}
-          rowKey="id"
+          rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
+          enableRowSelection={viewTypeState !== 'detailTable'}
           showAdvancedSearch={true}
           skipFuzzyPinyinClientFilter
           pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
@@ -2498,7 +2745,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                           dataIndex: 'suggested_unit_price',
                           width: 140,
                           align: 'right',
-                          render: (v: number) => `¥${Number(v || 0).toFixed(2)}`,
+                          render: (v: number) => `¥${Number(v || 0).toFixed(priceDecimals)}`,
                         },
                         {
                           title: t('app.kuaizhizao.purchaseRequisition.col.requiredDate'),
@@ -2564,6 +2811,7 @@ const ConvertForm: React.FC<{
   }>;
 }> = ({ items, unconvertedIds, suppliers, formRef }) => {
   const { t } = useTranslation();
+  const { quantity: quantityDecimals, price: priceDecimals, amount: amountDecimals } = useNumericPrecision();
   const fallbackSupplierId = suppliers[0]?.id || 0;
   const [selected, setSelected] = useState<number[]>(unconvertedIds);
   const [batchSupplierId, setBatchSupplierId] = useState<number>(() => {
@@ -2598,7 +2846,10 @@ const ConvertForm: React.FC<{
   const formatLineAmount = (itemId: number) => {
     const qty = quantities[itemId] ?? 0;
     const price = unitPrices[itemId] ?? 0;
-    return (qty * price).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (qty * price).toLocaleString('zh-CN', {
+      minimumFractionDigits: amountDecimals,
+      maximumFractionDigits: amountDecimals,
+    });
   };
 
   const applyBatchToSelected = () => {
@@ -2736,6 +2987,7 @@ const ConvertForm: React.FC<{
               record.id != null && !record.purchase_order_id ? (
                 <InputNumber
                   min={0.01}
+                  precision={quantityDecimals}
                   value={quantities[record.id] ?? Number(record.quantity ?? 0)}
                   onChange={(v) => setQuantities((prev) => ({ ...prev, [record.id!]: Number(v) || 0 }))}
                   style={{ width: 100 }}
@@ -2752,7 +3004,7 @@ const ConvertForm: React.FC<{
               record.id != null && !record.purchase_order_id ? (
                 <InputNumber
                   min={0}
-                  precision={4}
+                  precision={priceDecimals}
                   value={unitPrices[record.id] ?? Number(record.suggested_unit_price ?? 0)}
                   onChange={(v) => setUnitPrices((prev) => ({ ...prev, [record.id!]: Number(v) || 0 }))}
                   style={{ width: 100 }}

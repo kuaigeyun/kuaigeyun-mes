@@ -1,4 +1,4 @@
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 销售预测页面
  *
@@ -41,9 +41,9 @@ import {
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle'
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut'
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts'
-import { UniTable } from '../../../../../components/uni-table'
+import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table'
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate'
-import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions'
+import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions'
 import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues'
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
@@ -62,15 +62,18 @@ import {
   DOCUMENT_DETAIL_TABLE_PROPS,
 } from '../../../components/document-detail-table/documentDetailTable'
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment'
-import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../shared/DocumentPushProgressBar'
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../shared/DocumentPushProgressBar'
 import { salesForecastComputationPushPercent } from '../shared/pushProgress'
 import { resolveDocumentPreferredAudit } from '../../shared/documentAuditColumns'
+import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 )
 
 const SALES_FORECAST_RESOURCE = 'kuaizhizao:sales-forecast'
 const SALES_FORECAST_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-forecasts'
+const SALES_FORECAST_LIST_PERSISTENCE_ID =
+  'apps.kuaizhizao.pages.sales-management.sales-forecasts.v2'
 const SALES_FORECAST_CREATE_PATH = `${SALES_FORECAST_LIST_PATH}/new`
 const salesForecastEditPath = (id: number) => `${SALES_FORECAST_LIST_PATH}/${id}/edit`
 import type { Material } from '../../../../master-data/types/material'
@@ -136,8 +139,13 @@ export default function SalesForecastsPage() {
   const actionRef = useRef<ActionType>();
   const queryClient = useQueryClient();
 
-  /** 视图切换缓存：始终请求 include_items=true，切换视图时从缓存转换，避免重复请求（与销售订单一致） */
-  const lastForecastsCacheRef = useRef<{ forecasts: SalesForecast[]; total: number; paramsKey: string } | null>(null)
+  /** 视图切换缓存：明细模式才请求 include_items */
+  const lastForecastsCacheRef = useRef<{
+    forecasts: SalesForecast[];
+    total: number;
+    paramsKey: string;
+    includeItems: boolean;
+  } | null>(null)
   const invalidateForecastCache = () => {
     lastForecastsCacheRef.current = null
   }
@@ -156,13 +164,21 @@ export default function SalesForecastsPage() {
 
   const { token } = AntdTheme.useToken()
   const forecastDetailDrawerZIndex = token.zIndexPopupBase
-  const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
-  const tableRowsRef = useRef<ForecastTableRow[]>([]);
+  const tableRowsRef = useRef<SalesForecast[]>([]);
 
-  // 与 UniTable viewTypes 同步：table=单据维度；明细表格 / 帮助 走明细数据维度
-  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>('table');
-  const dataViewMode = viewTypeState === 'table' ? 'order' : 'detail';
+  // 与 UniTable viewTypes 同步：table=单据维度；detailTable=明细数据维度
+  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
+    readPersistedUniTableViewType(SALES_FORECAST_LIST_PERSISTENCE_ID, 'table', [
+      'table',
+      'detailTable',
+      'help',
+    ]) as 'table' | 'detailTable' | 'help',
+  )
+  const dataViewMode = resolveDetailTableViewMode(viewTypeState);
   const dataViewModeRef = useRef(dataViewMode);
+  useEffect(() => {
+    dataViewModeRef.current = dataViewMode;
+  }, [dataViewMode]);
 
   /**
    * 将含有 items 的预测单据拍平为明细行，用于“明细视图”
@@ -188,8 +204,8 @@ export default function SalesForecastsPage() {
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false)
   const [productScope, setProductScope] = useState<'make' | 'all'>('make')
   const [importModalVisible, setImportModalVisible] = useState(false)
-  const forecastImportDict = useImportDictionaryOptions(['MATERIAL_UNIT'])
-  const forecastLineUnitOptions = forecastImportDict.MATERIAL_UNIT ?? []
+  const materialUnitImport = useImportMaterialUnitOptions()
+  const forecastLineUnitOptions = materialUnitImport.options
   const forecastLineImportColumnOptions = useMemo(
     () => [undefined, undefined, forecastLineUnitOptions, undefined, undefined, undefined],
     [forecastLineUnitOptions],
@@ -320,7 +336,7 @@ export default function SalesForecastsPage() {
   const [matrixRows, setMatrixRows] = useState<any[]>([])
   const auditEnabled = useAuditRequired('sales_forecast', false)
   const salesForecastAuditColumn = useMemo(
-    () => createListAuditPhaseColumn<ForecastTableRow>({ t, auditEnabled }),
+    () => createListAuditPhaseColumn<SalesForecast>({ t, auditEnabled }),
     [t, auditEnabled],
   )
   const forecastPerms = useResourcePermissions(SALES_FORECAST_RESOURCE)
@@ -336,39 +352,20 @@ export default function SalesForecastsPage() {
     trackingRefreshKey,
   );
 
-  const toFlatRows = (data: SalesForecast[]) => {
-    const map = new Map<string, number>();
-    const rows: (SalesForecast & { item?: SalesForecastItem; itemIndex?: number; _rowKey?: string })[] = [];
-    data.forEach((forecast) => {
-      const items = forecast.items || (forecast as any).forecast_items || [];
-      if (items.length === 0) {
-        const rowKey = `order-${forecast.id}-empty`;
-        if (forecast.id) map.set(rowKey, forecast.id);
-        rows.push({ ...forecast, _rowKey: rowKey });
-      } else {
-        items.forEach((item: any, index: number) => {
-          const rowKey = item.id ? `order-${forecast.id}-item-${item.id}` : `order-${forecast.id}-idx-${index}`;
-          if (forecast.id) map.set(rowKey, forecast.id);
-          rows.push({
-            ...forecast,
-            item,
-            itemIndex: index,
-            _rowKey: rowKey,
-          });
-        });
-      }
-    });
-    rowKeyToOrderIdRef.current = map;
-    return rows;
+  type SalesForecastItemRow = SalesForecastItem & {
+    _rowKey: string;
+    forecast_id: number;
+    forecast_code?: string;
+    forecast_name?: string;
+    forecast_type?: string;
+    forecast_period?: string;
+    start_date?: string;
+    end_date?: string;
+    status?: string;
+    review_status?: string;
+    planning_pushed_to_computation?: boolean;
+    capabilities?: SalesForecast['capabilities'];
   };
-
-  const renderSalesForecastRowActions = (nodes: React.ReactNode[], keyPrefix: string): React.ReactNode => {
-    return renderRowActionsOverflow(nodes, keyPrefix);
-  };
-
-  useEffect(() => {
-    // Basic initialization if needed
-  }, [])
 
   /**
    * 处理新建销售预测
@@ -420,7 +417,7 @@ export default function SalesForecastsPage() {
           const materialCode = String(row[0] || '').trim();
           const spec = String(row[1] || '').trim();
           const unitRaw = String(row[2] || '').trim();
-          const unit = forecastImportDict.parseDict('MATERIAL_UNIT', unitRaw) || unitRaw;
+          const unit = materialUnitImport.parse(unitRaw) || unitRaw;
           const quantity = parseFloat(row[3]) || 0;
           const forecastDate = row[4];
           const notes = String(row[5] || '').trim();
@@ -449,7 +446,7 @@ export default function SalesForecastsPage() {
       messageApi.success(t('app.kuaizhizao.salesForecast.importItemsSuccess', { count: newItems.length }));
       setImportModalVisible(false);
     },
-    [defaultForecastItem, defaultUnit, forecastImportDict, messageApi, t],
+    [defaultForecastItem, defaultUnit, materialUnitImport, messageApi, t],
   );
 
 
@@ -767,16 +764,14 @@ export default function SalesForecastsPage() {
       ...new Set(
         keys
           .map((k) => {
-            const mappedId = rowKeyToOrderIdRef.current.get(String(k));
-            if (mappedId != null) return mappedId;
             const numericId = Number(k);
             return Number.isFinite(numericId) ? numericId : undefined;
           })
           .filter((id): id is number => id != null)
       ),
     ];
-    const deleteCount = dataViewMode === 'order' ? keys.length : orderIds.length;
-    const finalIds = dataViewMode === 'order' ? keys.map(k => Number(k)) : orderIds;
+    const deleteCount = keys.length;
+    const finalIds = orderIds;
 
     if (finalIds.length === 0) {
       messageApi.warning(t('common.selectToDelete'));
@@ -802,22 +797,9 @@ export default function SalesForecastsPage() {
   }
 
   const handleDelete = async (keys: React.Key[]) => {
-    const orderIds = [
-      ...new Set(
-        keys
-          .map((k) => {
-            const mappedId = rowKeyToOrderIdRef.current.get(String(k));
-            if (mappedId != null) return mappedId;
-            const numericId = Number(k);
-            return Number.isFinite(numericId) ? numericId : undefined;
-          })
-          .filter((id): id is number => id != null)
-      ),
-    ];
-    const deleteCount = dataViewMode === 'order' ? keys.length : orderIds.length;
     modalApi.confirm({
       title: t('common.confirmDelete'),
-      content: t('app.kuaizhizao.salesForecast.deleteConfirmContent', { count: deleteCount }),
+      content: t('app.kuaizhizao.salesForecast.deleteConfirmContent', { count: keys.length }),
       okText: t('common.delete'),
       okButtonProps: { danger: true },
       cancelText: t('common.cancel'),
@@ -1060,34 +1042,7 @@ export default function SalesForecastsPage() {
     return 'default';
   };
 
-  type ForecastTableRow = SalesForecast & {
-    item?: SalesForecastItem;
-    itemIndex?: number;
-    _rowKey?: string;
-  };
-
-  /** 单据级列：明细视图下首行 rowSpan 合并 */
-  const orderLevelCellProps = (
-    renderContent?: (value: unknown, record: ForecastTableRow) => React.ReactNode,
-  ): Pick<ProColumns<ForecastTableRow>, 'render' | 'onCell'> => ({
-    render: (text, record) => {
-      const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
-      if (!isFirst && dataViewMode === 'detail') return { children: null, props: { rowSpan: 0 } };
-      const content = renderContent ? renderContent(text, record) : text;
-      return content;
-    },
-    onCell: (record) => {
-      if (dataViewMode === 'order') return {};
-      const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
-      if (isFirst) {
-        const rowCount = record.items?.length || 1;
-        return { rowSpan: rowCount };
-      }
-      return { rowSpan: 0 };
-    },
-  });
-
-  const calcForecastTotalQuantity = (record: ForecastTableRow) => {
+  const calcForecastTotalQuantity = (record: SalesForecast) => {
     const items = record.items || (record as { forecast_items?: SalesForecastItem[] }).forecast_items || [];
     return items.reduce((sum, item) => sum + Number(item.forecast_quantity ?? 0), 0);
   };
@@ -1108,7 +1063,7 @@ export default function SalesForecastsPage() {
     return statusMap[status] || status;
   };
 
-  const columns: ProColumns<ForecastTableRow>[] = [
+  const columns: ProColumns<SalesForecast>[] = [
     {
       title: t('app.kuaizhizao.salesForecast.colForecastPrimary'),
       key: 'forecast_code',
@@ -1117,12 +1072,12 @@ export default function SalesForecastsPage() {
       fixed: 'left',
       sorter: true,
       fieldProps: { placeholder: t('app.kuaizhizao.salesForecast.enterForecastCode') },
-      ...orderLevelCellProps((_text, record) => (
+      render: (_text, record) => (
         <UniTableStackedPrimaryCell
           primary={String(record.forecast_name ?? '')}
           secondary={String(record.forecast_code ?? '')}
         />
-      )),
+      ),
     },
     {
       title: t('app.kuaizhizao.salesForecast.forecastName'),
@@ -1135,18 +1090,18 @@ export default function SalesForecastsPage() {
       title: t('app.kuaizhizao.salesForecast.forecastPeriod'),
       dataIndex: 'forecast_period',
       valueType: 'select',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+      width: 120,
       sorter: true,
       valueEnum: {
         WEEKLY: { text: t('app.kuaizhizao.salesForecast.period.weekly') },
         MONTHLY: { text: t('app.kuaizhizao.salesForecast.period.monthly') },
         QUARTERLY: { text: t('app.kuaizhizao.salesForecast.period.quarterly') },
       },
-      ...orderLevelCellProps((_text, record) => (
+      render: (_text, record) => (
         <Tag color={getForecastPeriodTagColor(record.forecast_period)} bordered={false}>
           {formatForecastPeriod(record.forecast_period)}
         </Tag>
-      )),
+      ),
     },
     {
       title: t('app.kuaizhizao.salesForecast.forecastType'),
@@ -1154,11 +1109,11 @@ export default function SalesForecastsPage() {
       width: 100,
       hideInSearch: true,
       sorter: true,
-      ...orderLevelCellProps((_text, record) => (
+      render: (_text, record) => (
         <Tag color="blue" bordered={false}>
           {record.forecast_type || '-'}
         </Tag>
-      )),
+      ),
     },
     {
       title: t('app.kuaizhizao.salesForecast.startDate'),
@@ -1170,7 +1125,7 @@ export default function SalesForecastsPage() {
       sorter: true,
       defaultSortOrder: 'descend',
       hideInSearch: true,
-      ...orderLevelCellProps((_text, record) => {
+      render: (_text, record) => {
         const startDateText = record.start_date ? formatDateTime(record.start_date, 'YYYY-MM-DD') : '-';
         const endDateText = record.end_date ? formatDateTime(record.end_date, 'YYYY-MM-DD') : '-';
         return (
@@ -1183,7 +1138,7 @@ export default function SalesForecastsPage() {
             secondaryBadge={t('common.end')}
           />
         );
-      }),
+      },
     },
     {
       title: t('app.kuaizhizao.salesForecast.endDate'),
@@ -1193,9 +1148,8 @@ export default function SalesForecastsPage() {
       uniTableKeepWidth: true,
       hideInSearch: true,
       hideInTable: true,
-      ...orderLevelCellProps((_text, record) =>
+      render: (_text, record) =>
         record.end_date ? formatDateTime(record.end_date, 'YYYY-MM-DD') : '-',
-      ),
     },
     {
       title: t('app.kuaizhizao.salesForecast.totalQuantity'),
@@ -1203,17 +1157,13 @@ export default function SalesForecastsPage() {
       width: 100,
       align: 'right' as const,
       hideInSearch: true,
-      hideInTable: dataViewMode === 'detail',
-      ...orderLevelCellProps((_text, record) => formatQuantity(calcForecastTotalQuantity(record))),
+      render: (_text, record) => formatQuantity(calcForecastTotalQuantity(record)),
     },
     {
       title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
       dataIndex: 'computation_push_progress',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      hideInTable: dataViewMode === 'detail',
-      ...orderLevelCellProps((_text, record) => {
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
+      render: (_text, record) => {
         const percent = salesForecastComputationPushPercent(record.planning_pushed_to_computation);
         return (
           <DocumentPushProgressBar
@@ -1226,7 +1176,7 @@ export default function SalesForecastsPage() {
             })}
           />
         );
-      }),
+      },
     },
     {
       title: t('common.dateRange'),
@@ -1241,75 +1191,13 @@ export default function SalesForecastsPage() {
       },
     },
     {
-      title: t('app.kuaizhizao.salesForecast.material'),
-      key: 'material_name',
-      dataIndex: ['item', 'material_name'],
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      hideInSearch: true,
-      hideInTable: dataViewMode === 'order',
-      render: (_, record) => (
-        <MaterialStackedCell
-          material_name={record.item?.material_name}
-          material_code={record.item?.material_code}
-          material_spec={record.item?.material_spec}
-        />
-      ),
-    },
-    {
-      title: t('app.kuaizhizao.salesForecast.materialCode'),
-      dataIndex: ['item', 'material_code'],
-      hideInSearch: true,
-      hideInTable: true,
-    },
-    {
-      title: t('app.kuaizhizao.salesForecast.materialName'),
-      dataIndex: ['item', 'material_name'],
-      hideInSearch: true,
-      hideInTable: true,
-    },
-    {
-      title: t('app.kuaizhizao.salesForecast.materialSpec'),
-      dataIndex: ['item', 'material_spec'],
-      hideInSearch: true,
-      hideInTable: true,
-    },
-    {
-      title: t('app.kuaizhizao.salesForecast.forecastQuantity'),
-      dataIndex: ['item', 'forecast_quantity'],
-      width: 100,
-      align: 'right' as const,
-      hideInSearch: true,
-      hideInTable: dataViewMode === 'order',
-      render: (_, record) => record.item?.forecast_quantity ?? '-',
-    },
-    {
-      title: t('app.kuaizhizao.salesForecast.forecastDate'),
-      dataIndex: ['item', 'forecast_date'],
-      width: 132,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      hideInTable: dataViewMode === 'order',
-      render: (_, record) =>
-        record.item?.forecast_date ? formatDateTime(record.item.forecast_date, 'YYYY-MM-DD') : '-',
-    },
-    {
-      title: t('app.kuaizhizao.salesForecast.confidenceLevel'),
-      dataIndex: ['item', 'confidence_level'],
-      width: 90,
-      align: 'right' as const,
-      hideInSearch: true,
-      hideInTable: dataViewMode === 'order',
-      render: (_, record) =>
-        record.item?.confidence_level != null ? `${record.item.confidence_level}%` : '-',
-    },
-    {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       width: 148,
       uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
-      ...orderLevelCellProps((_text, record) => {
+      render: (_text, record) => {
         const preferred = resolveDocumentPreferredAudit(record as Record<string, unknown>);
         return (
           <UniTableStackedPrimaryCell
@@ -1319,14 +1207,13 @@ export default function SalesForecastsPage() {
             primaryBold={false}
           />
         );
-      }),
+      },
     },
     ...(salesForecastAuditColumn ? [salesForecastAuditColumn] : []),
     {
       title: t('app.kuaizhizao.salesForecast.lifecycleColumn'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       valueType: 'select',
-      align: 'left' as const,
       fixed: 'right' as const,
       valueEnum: {
         草稿: { text: t('app.kuaizhizao.salesForecast.statusDraft') },
@@ -1337,22 +1224,18 @@ export default function SalesForecastsPage() {
         已驳回: { text: t('app.kuaizhizao.salesForecast.statusRejected') },
         已取消: { text: t('documentStatus.cancelled') },
       },
-      ...orderLevelCellProps((_text, record) => (
+      render: (_text, record) => (
         <ListUniLifecycleCell
           lifecycle={getSalesForecastLifecycle(record, auditEnabled, t)}
           withSubStages
         />
-      )),
+      ),
     },
     {
       title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
-      width: 200,
       render: (_, record) => {
-        const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
-        if (!isFirst && dataViewMode === 'detail') return { children: null, props: { rowSpan: 0 } };
-        
         const canEdit = record.capabilities?.update?.allowed === true && forecastPerms.canUpdate
         const canDelete = record.capabilities?.delete?.allowed === true && forecastPerms.canDelete
         const parts: React.ReactNode[] = [
@@ -1415,35 +1298,151 @@ export default function SalesForecastsPage() {
             </Button>,
           );
         }
-        return renderSalesForecastRowActions(parts, `sf-${record.id ?? record._rowKey ?? 'row'}`);
-      },
-      onCell: (record) => {
-        if (dataViewMode === 'order') return {};
-        const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
-        if (isFirst) {
-          const rowCount = record.items?.length || 1;
-          return { rowSpan: rowCount };
-        }
-        return { rowSpan: 0 };
+        return parts;
       },
     },
   ];
+
+  const detailTableColumns: ProColumns<SalesForecastItemRow>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.salesForecast.colForecastPrimary'),
+        key: 'forecast_code',
+        dataIndex: 'forecast_code',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
+        hideInSearch: false,
+        fieldProps: { placeholder: t('app.kuaizhizao.salesForecast.enterForecastCode') },
+        render: (_, record) => (
+          <UniTableStackedPrimaryCell
+            primary={String(record.forecast_name ?? '')}
+            secondary={String(record.forecast_code ?? '')}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.salesForecast.forecastName'),
+        dataIndex: 'forecast_name',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesForecast.forecastPeriod'),
+        dataIndex: 'forecast_period',
+        width: 120,
+        hideInSearch: true,
+        render: (_, record) => (
+          <Tag color={getForecastPeriodTagColor(record.forecast_period)} bordered={false}>
+            {formatForecastPeriod(record.forecast_period)}
+          </Tag>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.salesForecast.forecastType'),
+        dataIndex: 'forecast_type',
+        width: 100,
+        hideInSearch: true,
+        render: (_, record) => (
+          <Tag color="blue" bordered={false}>
+            {record.forecast_type || '-'}
+          </Tag>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.salesForecast.material'),
+        key: 'material_name',
+        dataIndex: 'material_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        hideInSearch: true,
+        render: (_, record) => (
+          <MaterialStackedCell
+            material_name={record.material_name}
+            material_code={record.material_code}
+            material_spec={record.material_spec}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.salesForecast.materialCode'),
+        dataIndex: 'material_code',
+        hideInTable: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesForecast.forecastQuantity'),
+        dataIndex: 'forecast_quantity',
+        width: 100,
+        align: 'right' as const,
+        hideInSearch: true,
+        render: (_, record) => formatQuantity(record.forecast_quantity),
+      },
+      {
+        title: t('app.kuaizhizao.salesForecast.forecastDate'),
+        dataIndex: 'forecast_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, record) =>
+          record.forecast_date ? formatDateTime(record.forecast_date, 'YYYY-MM-DD') : '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesForecast.confidenceLevel'),
+        dataIndex: 'confidence_level',
+        width: 90,
+        align: 'right' as const,
+        hideInSearch: true,
+        render: (_, record) =>
+          record.confidence_level != null ? `${record.confidence_level}%` : '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesForecast.lifecycleColumn'),
+        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+        fixed: 'right' as const,
+        hideInSearch: false,
+        valueType: 'select',
+        valueEnum: {
+          草稿: { text: t('app.kuaizhizao.salesForecast.statusDraft') },
+          已下推: { text: t('app.kuaizhizao.salesForecast.statusPushed') },
+          已生效: { text: t('app.kuaizhizao.salesForecast.lifecycleEffective') },
+          执行中: { text: t('app.kuaizhizao.salesForecast.lifecycleExecuting') },
+          已完成: { text: t('app.kuaizhizao.salesForecast.lifecycleCompleted') },
+          已驳回: { text: t('app.kuaizhizao.salesForecast.statusRejected') },
+          已取消: { text: t('documentStatus.cancelled') },
+        },
+        render: (_text, record) => (
+          <ListUniLifecycleCell
+            lifecycle={getSalesForecastLifecycle(
+              {
+                status: record.status,
+                review_status: record.review_status,
+                planning_pushed_to_computation: record.planning_pushed_to_computation,
+              } as SalesForecast,
+              auditEnabled,
+              t,
+            )}
+            withSubStages
+          />
+        ),
+      },
+    ],
+    [auditEnabled, t],
+  );
+
   const alignedColumns = useMemo(
     () => alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK),
-    [columns],
+    [columns, salesForecastAuditColumn, auditEnabled, t],
   );
 
   const selectedForecastForToolbar = useMemo(() => {
     if (selectedRowKeys.length !== 1) return null;
     const selectedKey = String(selectedRowKeys[0]);
-    return tableRowsRef.current.find((row) => String(row.id ?? row._rowKey ?? '') === selectedKey) ?? null;
+    return tableRowsRef.current.find((row) => String(row.id) === selectedKey) ?? null;
   }, [selectedRowKeys]);
 
   const selectedForecastsForBatch = useMemo(
     () =>
       selectedRowKeys
-        .map((key) => tableRowsRef.current.find((row) => String(row.id ?? row._rowKey ?? '') === String(key)))
-        .filter((row): row is ForecastTableRow => row != null),
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is SalesForecast => row != null),
     [selectedRowKeys],
   );
 
@@ -1937,13 +1936,14 @@ export default function SalesForecastsPage() {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<any>
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-forecasts"
+          columnPersistenceId={SALES_FORECAST_LIST_PERSISTENCE_ID}
           actionRef={actionRef}
           formRef={tableSearchFormRef}
-          rowKey={viewTypeState === 'table' ? 'id' : '_rowKey'}
+          rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
           columns={alignedColumns}
+          detailTableColumns={detailTableColumns}
           viewTypes={['table', 'detailTable', 'help']}
-          defaultViewType="table"
+          defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
           helpViewConfig={{
             content: (
               <div style={{ lineHeight: 1.8 }}>
@@ -1953,9 +1953,9 @@ export default function SalesForecastsPage() {
             ),
           }}
           onViewTypeChange={(v) => {
-            const nextMode = v === 'table' ? 'order' : 'detail';
-            dataViewModeRef.current = nextMode;
+            dataViewModeRef.current = resolveDetailTableViewMode(v as 'table' | 'detailTable' | 'help');
             setViewTypeState(v as 'table' | 'detailTable' | 'help');
+            setSelectedRowKeys([]);
             setTimeout(() => actionRef.current?.reload(), 0);
           }}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -1963,10 +1963,11 @@ export default function SalesForecastsPage() {
             const { sortBy, sortOrder } = extractProTableSort(sort);
             const orderBy =
               sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+            const needItems = dataViewModeRef.current === 'detail';
             const apiParams: SalesForecastListParams = {
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
               limit: params.pageSize ?? 20,
-              include_items: true,
+              include_items: needItems,
               order_by: orderBy,
             };
             if (sf.forecast_period) apiParams.forecast_period = sf.forecast_period as string;
@@ -2000,24 +2001,75 @@ export default function SalesForecastsPage() {
               apiParams.start_date = formatDateTime(sf.start_date, 'YYYY-MM-DD');
             if (sf.end_date) apiParams.end_date = formatDateTime(sf.end_date, 'YYYY-MM-DD');
 
-            const paramsKey = JSON.stringify(apiParams);
+            const paramsKey = JSON.stringify({ ...apiParams, include_items: needItems });
+
+            const formatListResponse = (forecasts: SalesForecast[], total: number) => {
+              if (dataViewModeRef.current === 'order') {
+                tableRowsRef.current = forecasts;
+                return { data: forecasts, success: true, total };
+              }
+              const flatRows = flattenDocumentDetailRows<SalesForecast, SalesForecastItem>({
+                headers: forecasts,
+                getHeaderId: (h) => h.id,
+                getItems: (h) => h.items ?? (h as { forecast_items?: SalesForecastItem[] }).forecast_items,
+                buildRowKey: (h, item, index) =>
+                  item?.id
+                    ? `forecast-${h.id}-item-${item.id}`
+                    : `forecast-${h.id}-idx-${index}`,
+                mapItemRow: (h, item) => ({
+                  ...item,
+                  forecast_id: h.id ?? 0,
+                  forecast_code: h.forecast_code,
+                  forecast_name: h.forecast_name,
+                  forecast_type: h.forecast_type,
+                  forecast_period: h.forecast_period,
+                  start_date: h.start_date,
+                  end_date: h.end_date,
+                  status: h.status,
+                  review_status: h.review_status,
+                  planning_pushed_to_computation: h.planning_pushed_to_computation,
+                  capabilities: h.capabilities,
+                }),
+                mapEmptyHeaderRow: (h) => ({
+                  forecast_id: h.id ?? 0,
+                  forecast_code: h.forecast_code,
+                  forecast_name: h.forecast_name,
+                  forecast_type: h.forecast_type,
+                  forecast_period: h.forecast_period,
+                  start_date: h.start_date,
+                  end_date: h.end_date,
+                  status: h.status,
+                  review_status: h.review_status,
+                  planning_pushed_to_computation: h.planning_pushed_to_computation,
+                  capabilities: h.capabilities,
+                  material_code: '-',
+                  material_name: '-',
+                  forecast_quantity: 0,
+                }),
+              }) as SalesForecastItemRow[];
+              tableRowsRef.current = forecasts;
+              return { data: flatRows, success: true, total };
+            };
 
             try {
+              const cached = lastForecastsCacheRef.current;
+              if (cached && cached.paramsKey === paramsKey) {
+                const canServeFromCache = needItems ? cached.includeItems : true;
+                if (canServeFromCache) {
+                  return formatListResponse(cached.forecasts, cached.total);
+                }
+              }
+
               const res = await listSalesForecasts(apiParams);
               const forecasts: SalesForecast[] = Array.isArray(res.data) ? res.data : [];
               const total: number = res.total ?? forecasts.length;
-              lastForecastsCacheRef.current = { forecasts, total, paramsKey };
-
-              const mode = dataViewModeRef.current;
-              if (mode === 'order') {
-                const map = new Map<string, number>();
-                forecasts.forEach((f) => {
-                  if (f.id != null) map.set(String(f.id), f.id);
-                });
-                rowKeyToOrderIdRef.current = map;
-                return { data: forecasts, success: true, total };
-              }
-              return { data: toFlatRows(forecasts), success: true, total };
+              lastForecastsCacheRef.current = {
+                forecasts,
+                total,
+                paramsKey,
+                includeItems: needItems,
+              };
+              return formatListResponse(forecasts, total);
             } catch (e: any) {
               messageApi.error(e?.message || t('common.loadFailed'));
               return { data: [], success: false, total: 0 };
@@ -2051,7 +2103,7 @@ export default function SalesForecastsPage() {
               ])}
             />,
           ]}
-          showDeleteButton
+          showDeleteButton={viewTypeState !== 'detailTable'}
           onDelete={executeDeleteByKeys}
           deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
           toolBarActionsAfterDelete={[
@@ -2068,8 +2120,7 @@ export default function SalesForecastsPage() {
                 revoke: withdrawSalesForecastApproval,
               }}
               resolveIdFromKey={(key) => {
-                const raw = rowKeyToOrderIdRef.current.get(String(key));
-                const id = raw ?? Number(key);
+                const id = Number(key);
                 return Number.isFinite(id) && id > 0 ? id : null;
               }}
               onSuccess={() => {
@@ -2093,8 +2144,7 @@ export default function SalesForecastsPage() {
                 openPrint({ documentType: 'sales_forecast', documentId: id });
               }}
               resolveId={(key) => {
-                const raw = rowKeyToOrderIdRef.current.get(String(key));
-                const id = raw ?? Number(key);
+                const id = Number(key);
                 return Number.isFinite(id) && id > 0 ? id : null;
               }}
               labels={{
@@ -2114,7 +2164,9 @@ export default function SalesForecastsPage() {
           showExportButton={true}
           onExport={handleExport}
           onTableDataChange={(rows) => {
-            tableRowsRef.current = rows;
+            if (dataViewModeRef.current === 'order') {
+              tableRowsRef.current = rows as SalesForecast[];
+            }
           }}
         />
       </ListPageTemplate>

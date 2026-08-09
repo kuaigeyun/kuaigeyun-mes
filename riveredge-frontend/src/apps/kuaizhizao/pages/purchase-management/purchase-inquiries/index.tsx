@@ -10,11 +10,12 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormDatePicker, Pr
 import { App, Button, Col, DatePicker, Descriptions, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Spin, Switch, Table, Tag, Tooltip, Typography, Alert } from 'antd';
 import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FormOutlined, PlusOutlined, SwapOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, FORM_LAYOUT, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -33,8 +34,10 @@ import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../..
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
-import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
+import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -74,6 +77,7 @@ import {
 import { listPurchaseRequisitions, previewPushToInquiry, type PurchaseRequisition, type DocumentPushPreview } from '../../../services/purchase-requisition';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { formatDateTime, formatNumber, formatQuantity } from '../../../../../utils/format';
+import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -101,12 +105,40 @@ const PURCHASE_INQUIRY_LIST_FIELD_RANK = {
   buyer_name: 59.4,
 };
 
+type PurchaseInquiryItemRow = PurchaseInquiryItem & {
+  _rowKey: string;
+  inquiry_id: number;
+  inquiry_code?: string;
+  inquiry_name?: string;
+  source_code?: string;
+  buyer_name?: string;
+  quote_deadline?: string;
+  status?: string;
+  review_status?: string;
+};
+
+const PURCHASE_INQUIRY_LIST_PERSISTENCE_ID =
+  'apps.kuaizhizao.pages.purchase-management.purchase-inquiries.v3';
+
 const PurchaseInquiriesPage: React.FC = () => {
   const { t } = useTranslation();
+  const { quantity: quantityDecimals, price: priceDecimals } = useNumericPrecision();
   const { message, modal } = App.useApp();
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>();
   const tableRowsRef = useRef<PurchaseInquiry[]>([]);
+  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
+    readPersistedUniTableViewType(PURCHASE_INQUIRY_LIST_PERSISTENCE_ID, 'table', [
+      'table',
+      'detailTable',
+      'help',
+    ]) as 'table' | 'detailTable' | 'help',
+  );
+  const dataViewMode = resolveDetailTableViewMode(viewTypeState);
+  const dataViewModeRef = useRef(dataViewMode);
+  useEffect(() => {
+    dataViewModeRef.current = dataViewMode;
+  }, [dataViewMode]);
   const auditEnabled = useAuditRequired('kuaizhizao', 'purchase-inquiry');
   const purchaseInquiryPerms = useResourcePermissions(PURCHASE_INQUIRY_RESOURCE);
   const pullFromRequisitionAction = resolveKuaizhizaoDocumentAction(t, 'purchase_inquiry.pull_from_requisition');
@@ -721,9 +753,7 @@ const PurchaseInquiriesPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
       dataIndex: 'downstream_push_progress',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
       render: (_, r) => <DocumentPushProgressBar percent={resolveInquiryPushPercent(r)} />,
     },
     {
@@ -757,10 +787,7 @@ const PurchaseInquiriesPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.purchaseInquiry.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      width: 170,
       fixed: 'right',
-      uniTableKeepWidth: true,
-      align: 'left',
       valueType: 'select',
       valueEnum: purchaseInquiryLifecycleValueEnum,
       render: (_, record) => (
@@ -897,6 +924,108 @@ const PurchaseInquiriesPage: React.FC = () => {
     [auditEnabled, detail, detailOpen, message, modal, openCompare, purchaseInquiryAuditColumn, purchaseInquiryLifecycleValueEnum, purchaseInquiryPerms.canDelete, purchaseInquiryPerms.canUpdate, resolveInquiryPushPercent, t],
   );
 
+  const detailTableColumns: ProColumns<PurchaseInquiryItemRow>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.colNameInquiryCode'),
+        key: 'inquiry_code',
+        dataIndex: 'inquiry_code',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
+        hideInSearch: false,
+        fieldProps: { placeholder: t('app.kuaizhizao.purchaseInquiry.colInquiryCode') },
+        render: (_, record) => (
+          <UniTableStackedPrimaryCell
+            primary={String(record.inquiry_name ?? '')}
+            secondary={String(record.inquiry_code ?? '')}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.colInquiryCode'),
+        dataIndex: 'inquiry_code',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.colName'),
+        dataIndex: 'inquiry_name',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.colMaterialName'),
+        key: 'material_display',
+        dataIndex: 'material_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        render: (_, record) => (
+          <MaterialStackedCell
+            material_name={record.material_name}
+            material_code={record.material_code}
+            material_spec={record.material_spec}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.colMaterialCode'),
+        dataIndex: 'material_code',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.quantity'),
+        dataIndex: 'quantity',
+        width: 120,
+        align: 'right',
+        render: (val: unknown, record) => (
+          <QuantityWithUnitDisplay quantity={val} unit={record.unit} />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.requiredDate'),
+        dataIndex: 'required_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_: unknown, row) =>
+          row.required_date ? formatDateTime(row.required_date, 'YYYY-MM-DD') : '-',
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline'),
+        dataIndex: 'quote_deadline',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_: unknown, row) =>
+          row.quote_deadline ? formatDateTime(row.quote_deadline, 'YYYY-MM-DD') : '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+        key: 'line_push_progress',
+        ...DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
+        render: (_: unknown, record) => {
+          const percent = resolveInquiryPushPercent({
+            status: record.status,
+          } as PurchaseInquiry);
+          return <DocumentPushProgressBar percent={percent} />;
+        },
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.colLifecycle'),
+        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+        fixed: 'right',
+        hideInSearch: false,
+        valueEnum: purchaseInquiryLifecycleValueEnum,
+        render: (_, record) => (
+          <ListUniLifecycleCell
+            lifecycle={getPurchaseInquiryLifecycle({
+              status: record.status,
+              review_status: record.review_status,
+            } as Record<string, unknown>)}
+          />
+        ),
+      },
+    ],
+    [purchaseInquiryLifecycleValueEnum, resolveInquiryPushPercent, t],
+  );
+
   const request = useCallback(
     async (
       params: Record<string, unknown>,
@@ -915,6 +1044,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         limit: (params.pageSize as number) || 20,
         ...lifecycleParams,
         order_by: orderBy,
+        include_items: dataViewModeRef.current === 'detail',
       };
       if (fuzzyKeyword) {
         apiParams.keyword = fuzzyKeyword;
@@ -944,8 +1074,43 @@ const PurchaseInquiriesPage: React.FC = () => {
           : apiParams.created_start_date;
       }
       const list = await listPurchaseInquiries(apiParams);
-      tableRowsRef.current = list.data ?? [];
-      return { data: list.data ?? [], success: true, total: list.total ?? list.data?.length ?? 0 };
+      const inquiries = list.data ?? [];
+      tableRowsRef.current = inquiries;
+      if (dataViewModeRef.current === 'order') {
+        return { data: inquiries, success: true, total: list.total ?? inquiries.length };
+      }
+      const flatRows = flattenDocumentDetailRows<PurchaseInquiry, PurchaseInquiryItem>({
+        headers: inquiries,
+        getHeaderId: (h) => h.id,
+        getItems: (h) => h.items,
+        buildRowKey: (h, item, index) =>
+          item?.id ? `inq-${h.id}-item-${item.id}` : `inq-${h.id}-idx-${index}`,
+        mapItemRow: (h, item) => ({
+          ...item,
+          inquiry_id: h.id ?? 0,
+          inquiry_code: h.inquiry_code,
+          inquiry_name: h.inquiry_name,
+          source_code: h.source_code,
+          buyer_name: h.buyer_name,
+          quote_deadline: h.quote_deadline,
+          status: h.status,
+          review_status: h.review_status,
+        }),
+        mapEmptyHeaderRow: (h) => ({
+          inquiry_id: h.id ?? 0,
+          inquiry_code: h.inquiry_code,
+          inquiry_name: h.inquiry_name,
+          material_id: 0,
+          material_code: '-',
+          material_name: '-',
+          unit: '',
+          quantity: 0,
+          status: h.status,
+          review_status: h.review_status,
+          quote_deadline: h.quote_deadline,
+        }),
+      }) as PurchaseInquiryItemRow[];
+      return { data: flatRows, success: true, total: list.total ?? inquiries.length };
     },
     [],
   );
@@ -1265,7 +1430,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             style={{ margin: 0 }}
             rules={[{ required: true, message: t('common.required') }]}
           >
-            <InputNumber min={0} precision={2} style={{ width: '100%' }} size="small" />
+            <InputNumber min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
           </Form.Item>
         ),
       },
@@ -1278,7 +1443,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             style={{ margin: 0 }}
             rules={[{ required: true, message: t('common.required') }]}
           >
-            <InputNumber min={0} precision={4} style={{ width: '100%' }} size="small" />
+            <InputNumber min={0} precision={priceDecimals} style={{ width: '100%' }} size="small" />
           </Form.Item>
         ),
       },
@@ -1292,7 +1457,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         ),
       },
     ],
-    [t],
+    [t, quantityDecimals, priceDecimals],
   );
 
   const compareColumns = useMemo(
@@ -1372,18 +1537,42 @@ const PurchaseInquiriesPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<PurchaseInquiry>
         actionRef={actionRef}
-        rowKey="id"
+        rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
         columns={columns}
         request={request}
-        onTableDataChange={(rows) => {
-          tableRowsRef.current = rows;
+        viewTypes={['table', 'detailTable', 'help']}
+        defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
+        helpViewConfig={{
+          content: (
+            <div style={{ lineHeight: 1.8 }}>
+              <p>
+                <strong>{t('components.uniTable.viewTable')}</strong>
+                {t('app.kuaizhizao.purchaseInquiry.helpTableView')}
+              </p>
+              <p>
+                <strong>{t('components.uniTable.viewDetailTable')}</strong>
+                {t('app.kuaizhizao.purchaseInquiry.helpDetailTableView')}
+              </p>
+            </div>
+          ),
         }}
-        columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-inquiries.v2"
+        onViewTypeChange={(v) => {
+          dataViewModeRef.current = resolveDetailTableViewMode(v as 'table' | 'detailTable' | 'help');
+          setViewTypeState(v as 'table' | 'detailTable' | 'help');
+          setTimeout(() => actionRef.current?.reload(), 0);
+        }}
+        detailTableColumns={detailTableColumns}
+        onTableDataChange={(rows) => {
+          if (dataViewModeRef.current === 'order') {
+            tableRowsRef.current = rows as PurchaseInquiry[];
+          }
+        }}
+        columnPersistenceId={PURCHASE_INQUIRY_LIST_PERSISTENCE_ID}
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
         pinnedTabsValueEnum={purchaseInquiryLifecycleValueEnum}
         showAdvancedSearch={true}
         skipFuzzyPinyinClientFilter
-        enableRowSelection
+        enableRowSelection={viewTypeState !== 'detailTable'}
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton

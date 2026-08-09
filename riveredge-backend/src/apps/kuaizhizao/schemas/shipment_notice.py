@@ -99,7 +99,9 @@ class ShipmentNoticeResponse(ShipmentNoticeBase):
 
 class ShipmentNoticeListResponse(ShipmentNoticeResponse):
     """发货通知单列表响应schema"""
-    pass
+    items: Optional[List["ShipmentNoticeItemResponse"]] = Field(
+        None, description="通知明细（include_items 时返回）"
+    )
 
 
 class ShipmentNoticeListPaginatedResponse(BaseSchema):

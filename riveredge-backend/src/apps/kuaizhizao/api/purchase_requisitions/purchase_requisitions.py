@@ -89,7 +89,8 @@ async def list_requisitions(
         None, description="生命周期阶段（与列表展示一致，如 草稿、已通过）"
     ),
     source_type: Optional[str] = Query(None),
-    keyword: Optional[str] = Query(None, description="模糊：编号/名称/来源编码/申请人"),
+    keyword: Optional[str] = Query(None, description="模糊：编号/名称/来源编码/申请人/物料"),
+    include_items: bool = Query(False, description="是否附带申请明细（明细表格视图）"),
     requisition_code: Optional[str] = Query(None),
     requisition_name: Optional[str] = Query(None),
     required_date_from: Optional[date] = Query(None),
@@ -120,6 +121,7 @@ async def list_requisitions(
         created_start_date=created_start_date,
         created_end_date=created_end_date,
         order_by=safe_order_by,
+        include_items=include_items,
     )
 
 

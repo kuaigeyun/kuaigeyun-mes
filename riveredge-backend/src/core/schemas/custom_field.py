@@ -159,6 +159,18 @@ class BatchSetFieldValuesRequest(BaseModel):
     values: List[CustomFieldValueRequest] = Field(..., description="字段值列表")
 
 
+class BatchGetFieldValuesRequest(BaseModel):
+    """批量读取多条记录的自定义字段值（列表页 enrich）。"""
+
+    record_table: str = Field(..., min_length=1, max_length=50, description="关联表名")
+    record_ids: List[int] = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="关联记录 ID 列表（单次最多 500）",
+    )
+
+
 class CustomFieldPageConfigResponse(BaseModel):
     """
     自定义字段页面配置响应 Schema

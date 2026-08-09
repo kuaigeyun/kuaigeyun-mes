@@ -1,5 +1,5 @@
 """
-业财集成钩子：会计事件链路 + 单据关联（供 kuaizhizao 仓库/委外等触发）。
+业财集成钩子：会计事件链路 + 单据关联（供 kuaizhizao 仓库/委外/订单等触发）。
 """
 
 from __future__ import annotations
@@ -10,6 +10,13 @@ from typing import Any, Optional
 from loguru import logger
 
 from apps.kuaicaiwu.services.accounting_event_service import AccountingEventService
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str, to_site_date
+
+_MONEY = Decimal("0.01")
+
+
+def _q_money(value: Decimal | float | int | str) -> Decimal:
+    return Decimal(str(value or 0)).quantize(_MONEY)
 
 
 async def record_finance_accounting_event(
@@ -104,3 +111,214 @@ async def link_finance_document_relation(
             target_id,
             e,
         )
+
+
+async def _resolve_bank_account_label(
+    tenant_id: int, bank_account_id: Optional[int]
+) -> tuple[Optional[int], Optional[str]]:
+    if not bank_account_id:
+        return None, None
+    from apps.kuaicaiwu.models.bank_account import BankAccount
+
+    account = await BankAccount.get_or_none(
+        tenant_id=tenant_id, id=bank_account_id, deleted_at__isnull=True
+    )
+    if not account:
+        return bank_account_id, None
+    label = f"{account.bank_name} {account.account_number}".strip()
+    return account.id, label or account.account_name
+
+
+async def _existing_order_prepayment_relation(
+    tenant_id: int, source_type: str, source_id: int, target_type: str
+) -> bool:
+    from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+    return await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        source_type=source_type,
+        source_id=source_id,
+        target_type=target_type,
+    ).exists()
+
+
+async def ensure_prepayment_payment_for_purchase_order(
+    *,
+    tenant_id: int,
+    order_id: int,
+    order_code: str,
+    supplier_id: int,
+    supplier_name: str,
+    prepayment_amount: Optional[Decimal],
+    prepayment_bank_account_id: Optional[int],
+    operator_id: int,
+) -> Optional[int]:
+    """采购订单审核/确认后：按 prepayment_amount 自动生成预付付款单（幂等）。"""
+    amount = _q_money(prepayment_amount or 0)
+    if amount <= 0:
+        return None
+
+    if await _existing_order_prepayment_relation(
+        tenant_id, "purchase_order", order_id, "payment"
+    ):
+        logger.info(
+            "采购订单 %s 已存在预付付款单关联，跳过重复生成", order_code
+        )
+        return None
+
+    try:
+        from apps.common.base_service import AppBaseService
+        from apps.kuaicaiwu.models.payment import Payment
+
+        user_info = await AppBaseService().get_user_info(operator_id)
+        bank_account_id, bank_account_label = await _resolve_bank_account_label(
+            tenant_id, prepayment_bank_account_id
+        )
+        today = today_site_str()
+        count = await Payment.filter(tenant_id=tenant_id).count()
+        payment_code = f"PK{today}{count + 1:04d}"
+        biz_date = to_site_date(resolve_business_datetime())
+
+        payment = await Payment.create(
+            tenant_id=tenant_id,
+            payment_code=payment_code,
+            supplier_id=supplier_id,
+            supplier_name=supplier_name,
+            total_amount=amount,
+            settled_amount=Decimal("0.00"),
+            unsettled_amount=amount,
+            payment_date=biz_date,
+            payment_method="银行转账" if bank_account_id else "其他",
+            bank_account=bank_account_label,
+            bank_account_id=bank_account_id,
+            settlement_type="prepayment",
+            status="Confirmed",
+            notes=f"采购订单 {order_code} 审核通过自动生成预付付款单",
+            created_by=operator_id,
+            created_by_name=user_info["name"],
+            updated_by=operator_id,
+            updated_by_name=user_info["name"],
+        )
+
+        await link_finance_document_relation(
+            tenant_id=tenant_id,
+            source_type="purchase_order",
+            source_id=order_id,
+            source_code=order_code,
+            target_type="payment",
+            target_id=payment.id,
+            target_code=payment.payment_code,
+            relation_desc="采购订单审核通过自动生成预付付款单",
+            created_by=operator_id,
+        )
+        await record_finance_accounting_event(
+            tenant_id=tenant_id,
+            event_type="PURCHASE_ORDER_TO_PREPAYMENT",
+            business_type="payment",
+            source_doc_type="purchase_order",
+            source_doc_id=order_id,
+            source_doc_code=order_code,
+            target_doc_type="Payment",
+            target_doc_id=payment.id,
+            target_doc_code=payment.payment_code,
+            amount=amount,
+            operator_id=operator_id,
+            notes=f"采购订单 {order_code} 自动生成预付付款单",
+        )
+        return payment.id
+    except Exception as e:
+        logger.error(
+            "采购订单 %s 自动生成预付付款单失败: %s", order_code, e
+        )
+        return None
+
+
+async def ensure_prepayment_receipt_for_sales_order(
+    *,
+    tenant_id: int,
+    order_id: int,
+    order_code: str,
+    customer_id: int,
+    customer_name: str,
+    prepayment_amount: Optional[Decimal],
+    prepayment_bank_account_id: Optional[int],
+    operator_id: int,
+) -> Optional[int]:
+    """销售订单审核通过后：按 prepayment_amount 自动生成预收收款单（幂等）。"""
+    amount = _q_money(prepayment_amount or 0)
+    if amount <= 0:
+        return None
+
+    if await _existing_order_prepayment_relation(
+        tenant_id, "sales_order", order_id, "receipt"
+    ):
+        logger.info(
+            "销售订单 %s 已存在预收收款单关联，跳过重复生成", order_code
+        )
+        return None
+
+    try:
+        from apps.common.base_service import AppBaseService
+        from apps.kuaicaiwu.models.receipt import Receipt
+
+        user_info = await AppBaseService().get_user_info(operator_id)
+        bank_account_id, bank_account_label = await _resolve_bank_account_label(
+            tenant_id, prepayment_bank_account_id
+        )
+        today = today_site_str()
+        count = await Receipt.filter(tenant_id=tenant_id).count()
+        receipt_code = f"SK{today}{count + 1:04d}"
+        biz_date = to_site_date(resolve_business_datetime())
+
+        receipt = await Receipt.create(
+            tenant_id=tenant_id,
+            receipt_code=receipt_code,
+            customer_id=customer_id,
+            customer_name=customer_name,
+            total_amount=amount,
+            settled_amount=Decimal("0.00"),
+            unsettled_amount=amount,
+            receipt_date=biz_date,
+            payment_method="银行转账" if bank_account_id else "其他",
+            bank_account=bank_account_label,
+            bank_account_id=bank_account_id,
+            settlement_type="prepayment",
+            status="Confirmed",
+            notes=f"销售订单 {order_code} 审核通过自动生成预收收款单",
+            created_by=operator_id,
+            created_by_name=user_info["name"],
+            updated_by=operator_id,
+            updated_by_name=user_info["name"],
+        )
+
+        await link_finance_document_relation(
+            tenant_id=tenant_id,
+            source_type="sales_order",
+            source_id=order_id,
+            source_code=order_code,
+            target_type="receipt",
+            target_id=receipt.id,
+            target_code=receipt.receipt_code,
+            relation_desc="销售订单审核通过自动生成预收收款单",
+            created_by=operator_id,
+        )
+        await record_finance_accounting_event(
+            tenant_id=tenant_id,
+            event_type="SALES_ORDER_TO_PREPAYMENT",
+            business_type="receipt",
+            source_doc_type="sales_order",
+            source_doc_id=order_id,
+            source_doc_code=order_code,
+            target_doc_type="Receipt",
+            target_doc_id=receipt.id,
+            target_doc_code=receipt.receipt_code,
+            amount=amount,
+            operator_id=operator_id,
+            notes=f"销售订单 {order_code} 自动生成预收收款单",
+        )
+        return receipt.id
+    except Exception as e:
+        logger.error(
+            "销售订单 %s 自动生成预收收款单失败: %s", order_code, e
+        )
+        return None

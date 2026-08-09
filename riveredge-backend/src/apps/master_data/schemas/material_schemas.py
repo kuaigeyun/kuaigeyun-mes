@@ -210,7 +210,7 @@ class MaterialBase(BaseModel):
         None,
         alias="sourceType",
         max_length=20,
-        description="物料来源类型（Make/Buy/Phantom/Outsource/Service）",
+        description="物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Service）",
     )
     source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式），自制件含 manufacturing_mode、工艺路线、BOM等；采购件含供应商；委外件含委外供应商/工序等")
     
@@ -261,7 +261,7 @@ class MaterialCreate(MaterialBase):
         ...,
         alias="sourceType",
         max_length=20,
-        description="物料来源类型（Make/Buy/Phantom/Outsource/Service）",
+        description="物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Service）",
     )
 
     @validator("source_type")
@@ -319,7 +319,7 @@ class MaterialUpdate(BaseModel):
     defaults: Optional[Dict[str, Any]] = Field(None, description="默认值设置（JSON格式）")
 
     # 物料来源控制（与 MaterialBase 一致，支持更新时保存）
-    source_type: Optional[str] = Field(None, alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource）")
+    source_type: Optional[str] = Field(None, alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Service）")
     source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式）")
 
     # 质检选项
@@ -634,6 +634,76 @@ class MaterialBatchFieldUpdateResponse(BaseModel):
     updated_count: int = Field(..., description="成功更新的物料数量")
     requested_count: int = Field(..., description="请求中的 UUID 数量（去重后）")
     not_found_uuids: List[str] = Field(default_factory=list, description="未找到或未匹配的 UUID")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialBulkInspectionPatchItem(BaseModel):
+    """批量更新单条物料质检选项（分场景策略 / 超报）。未传字段保持原值。"""
+
+    material_uuid: str = Field(..., alias="materialUuid", description="物料 UUID")
+    inspection_stages: Optional[MaterialInspectionStagesSchema] = Field(
+        None,
+        alias="inspectionStages",
+        description="分场景质检策略（仅覆盖传入的场景）",
+    )
+    over_report_mode: Optional[str] = Field(
+        None,
+        alias="overReportMode",
+        max_length=20,
+        description="超报方式：none|fixed|percent",
+    )
+    over_report_value: Optional[Decimal] = Field(
+        None,
+        alias="overReportValue",
+        ge=0,
+        description="超报数值（固定值或百分比）",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def at_least_one_patch_field(self) -> "MaterialBulkInspectionPatchItem":
+        if (
+            self.inspection_stages is None
+            and self.over_report_mode is None
+            and self.over_report_value is None
+        ):
+            raise ValueError("至少指定一项质检选项字段")
+        return self
+
+
+class MaterialBulkInspectionPatchRequest(BaseModel):
+    """批量更新物料质检选项（导入 / 批量调整）。"""
+
+    items: List[MaterialBulkInspectionPatchItem] = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="按物料的质检选项补丁列表",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialBulkInspectionFailedItem(BaseModel):
+    """批量质检选项更新失败项"""
+
+    material_uuid: str = Field(..., alias="materialUuid", description="物料 UUID")
+    reason: str = Field(..., description="失败原因")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialBulkInspectionPatchResponse(BaseModel):
+    """批量更新物料质检选项结果"""
+
+    updated_count: int = Field(..., description="成功更新数量")
+    requested_count: int = Field(..., description="请求条目数")
+    failed_items: List[MaterialBulkInspectionFailedItem] = Field(
+        default_factory=list,
+        description="失败明细",
+    )
 
     model_config = ConfigDict(populate_by_name=True)
 

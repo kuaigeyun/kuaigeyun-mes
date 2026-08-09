@@ -12,8 +12,9 @@ import {
   defaultValueSpec,
   type InspectionTemplateStepItem,
 } from '../../../types/inspectionStepSpec';
-import { getFileDownloadUrl } from '../../../../../services/file';
 import { valueTypeOptions } from '../../../components/InspectionStepValueSpecFields';
+import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
+import type { DocumentAttachmentFile } from '../../../utils/documentAttachments';
 import {
   getConductStepResults,
   getInspectionTemplateSource,
@@ -78,7 +79,7 @@ const InspectionTemplateConductResultsTable: React.FC<InspectionTemplateConductR
     key: string;
     index: number;
     step: InspectionTemplateStepItem;
-    entry: { value?: unknown; judgment?: string };
+    entry: { value?: unknown; judgment?: string; photos?: DocumentAttachmentFile[] };
   };
 
   const rows: Row[] = steps.map((step, idx) => {
@@ -172,14 +173,17 @@ const InspectionTemplateConductResultsTable: React.FC<InspectionTemplateConductR
           {
             title: t('app.kuaizhizao.quality.template.stepPhoto'),
             key: 'photos',
-            width: 100,
+            width: 160,
             render: (_, row) => {
               const photos = row.entry.photos;
               if (!Array.isArray(photos) || photos.length === 0) return '-';
+              // 只读 SecureImage：禁止裸 /files/{uuid}/download（浏览器请求带不上租户上下文）
               return (
-                <a href={photos[0].url || (photos[0].uid ? getFileDownloadUrl(photos[0].uid) : '#')} target="_blank" rel="noreferrer">
-                  {t('app.kuaizhizao.quality.template.stepPhotoCount', { count: photos.length })}
-                </a>
+                <LineAttachmentsUpload
+                  category="inspection_step_photos"
+                  value={photos}
+                  readOnly
+                />
               );
             },
           },

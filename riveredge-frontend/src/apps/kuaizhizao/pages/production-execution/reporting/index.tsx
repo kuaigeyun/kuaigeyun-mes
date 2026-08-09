@@ -1,4 +1,4 @@
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 /**
  * 报工管理页面
@@ -314,10 +314,6 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       span: col.span ?? 1,
     };
   });
-}
-
-function renderReportingRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 /** 获取报工员工信息：优先使用工序派工的 assigned_worker，否则使用当前登录用户 */
@@ -1535,11 +1531,9 @@ const ReportingPage: React.FC = () => {
     ...reportingCustomFieldColumns,
     {
       title: t('common.actions'),
-      width: 200,
       fixed: 'right',
       hideInSearch: true,
-      render: (_, record) =>
-        renderReportingRowActions(renderReportingRowActionNodes(record), `rr-${record.id}`),
+      render: (_, record) => renderReportingRowActionNodes(record),
     },
   ], [t, reportingAuditColumn, reportingStatusValueEnum, reportingCustomFieldColumns]);
 
@@ -1685,7 +1679,6 @@ const ReportingPage: React.FC = () => {
           }
         }}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.workReporting.deleteSelectedConfirm', { count })}
-        scroll={{ x: 1700 }}
         onRow={(record) => ({
           onClick: () => void handleDetail(record),
           style: { cursor: 'pointer' },

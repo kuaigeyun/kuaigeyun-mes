@@ -217,6 +217,23 @@ export async function getFieldValues(recordTable: string, recordId: number): Pro
 }
 
 /**
+ * 批量获取多条记录的自定义字段值（列表 enrich）
+ * @returns key 为 recordId 字符串，value 为 { fieldCode: value }
+ */
+export async function batchGetFieldValues(
+  recordTable: string,
+  recordIds: number[],
+): Promise<Record<string, Record<string, any>>> {
+  const ids = Array.from(new Set(recordIds.map((id) => Number(id)).filter((id) => Number.isFinite(id))));
+  if (!ids.length) return {};
+  const result = await apiRequest<Record<string, Record<string, any>>>('/core/custom-fields/values/batch-get', {
+    method: 'POST',
+    data: { record_table: recordTable, record_ids: ids },
+  });
+  return result && typeof result === 'object' ? result : {};
+}
+
+/**
  * 获取关联对象类型的下拉选项
  *
  * 用于自定义字段「关联对象」类型，根据关联表和显示字段加载选项。

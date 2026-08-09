@@ -535,7 +535,6 @@ export const AssemblyTemplatesTab: React.FC = () => {
           };
         }}
         locale={{ emptyText: t('app.kuaizhizao.assemblyTemplate.listEmpty') }}
-        scroll={{ x: 1400 }}
       />
 
       <FormModalTemplate

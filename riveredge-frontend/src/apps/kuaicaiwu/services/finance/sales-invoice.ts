@@ -5,11 +5,13 @@ import type { SalesInvoice, SalesInvoiceListParams } from '../../types/finance/s
 export type { SalesInvoice, SalesInvoiceListParams };
 
 export type SalesInvoicePullPreview = DocumentPushPreview & {
-  source_type?: 'sales_order' | 'sales_delivery';
+  source_type?: 'sales_order' | 'sales_delivery' | 'receivable';
   customer_id?: number;
   customer_name?: string;
   sales_order_id?: number | null;
   sales_order_code?: string | null;
+  receivable_id?: number;
+  receivable_code?: string;
   price_type?: 'tax_inclusive' | 'tax_exclusive' | string;
 };
 
@@ -49,6 +51,16 @@ export const salesInvoiceService = {
   previewPullFromSalesDelivery: async (deliveryId: number) =>
     apiRequest<SalesInvoicePullPreview>(
       `/apps/kuaicaiwu/sales-invoices/from-sales-delivery/${deliveryId}/pull-preview`,
+      { method: 'GET' },
+    ),
+  listReceivablePullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+    apiRequest<{ data: SalesInvoicePullCandidate[]; total: number; success: boolean }>(
+      '/apps/kuaicaiwu/sales-invoices/pull-candidates/receivables',
+      { method: 'GET', params },
+    ),
+  previewPullFromReceivable: async (receivableId: number) =>
+    apiRequest<SalesInvoicePullPreview>(
+      `/apps/kuaicaiwu/sales-invoices/from-receivable/${receivableId}/pull-preview`,
       { method: 'GET' },
     ),
 };

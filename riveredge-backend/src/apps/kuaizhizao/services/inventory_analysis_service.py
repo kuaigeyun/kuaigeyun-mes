@@ -236,8 +236,7 @@ class InventoryAnalysisService:
             if ts and (mid not in last_outbound or ts > last_outbound[mid]):
                 last_outbound[mid] = ts
 
-        materials = []
-        total_value = Decimal("0")
+        candidate_rows: List[Dict[str, Any]] = []
         now = resolve_business_datetime()
         for mid, data in inv_by_material.items():
             qty = data["quantity"]
@@ -247,17 +246,35 @@ class InventoryAnalysisService:
             if last and last >= cutoff:
                 continue
             days_since = (now - last).days if last else days_threshold + 1
-            mat = await Material.get_or_none(tenant_id=tenant_id, id=mid)
-            value = data["inventory_value"]
+            candidate_rows.append({
+                "material_id": mid,
+                "quantity": qty,
+                "inventory_value": data["inventory_value"],
+                "last": last,
+                "days_since": days_since,
+            })
+
+        mat_map: Dict[int, Any] = {}
+        if candidate_rows:
+            mat_ids = [int(r["material_id"]) for r in candidate_rows]
+            mats = await Material.filter(tenant_id=tenant_id, id__in=mat_ids).all()
+            mat_map = {int(m.id): m for m in mats}
+
+        materials = []
+        total_value = Decimal("0")
+        for row in candidate_rows:
+            mid = int(row["material_id"])
+            mat = mat_map.get(mid)
+            value = row["inventory_value"]
             total_value += value
             materials.append({
                 "material_id": mid,
                 "material_code": getattr(mat, "main_code", None) or getattr(mat, "code", str(mid)),
-                "material_name": getattr(mat, "name", ""),
-                "inventory_quantity": float(qty),
+                "material_name": getattr(mat, "name", "") if mat else "",
+                "inventory_quantity": float(row["quantity"]),
                 "inventory_value": float(value),
-                "last_outbound_date": to_api_isoformat(last) if last else None,
-                "days_since_last_outbound": days_since,
+                "last_outbound_date": to_api_isoformat(row["last"]) if row["last"] else None,
+                "days_since_last_outbound": row["days_since"],
             })
 
         materials.sort(key=lambda x: x["inventory_value"], reverse=True)
@@ -282,10 +299,22 @@ class InventoryAnalysisService:
         inv_by_material = await self._inventory_value_by_material(tenant_id)
         total_cost = sum(v["inventory_value"] for v in inv_by_material.values())
 
+        mat_map: Dict[int, Any] = {}
+        if inv_by_material:
+            mats = await Material.filter(
+                tenant_id=tenant_id,
+                id__in=list(inv_by_material.keys()),
+            ).all()
+            mat_map = {int(m.id): m for m in mats}
+
         by_category: Dict[str, Decimal] = {}
         for mid, data in inv_by_material.items():
-            mat = await Material.get_or_none(tenant_id=tenant_id, id=mid)
-            cat = getattr(mat, "material_type", None) or getattr(mat, "category", None) or "未分类"
+            mat = mat_map.get(int(mid))
+            cat = (
+                (getattr(mat, "material_type", None) or getattr(mat, "category", None) or "未分类")
+                if mat
+                else "未分类"
+            )
             by_category[str(cat)] = by_category.get(str(cat), Decimal("0")) + data["inventory_value"]
 
         by_category_rows = [

@@ -34,7 +34,7 @@ class DefectRecord(BaseModel):
         defect_quantity: 不良品数量
         defect_type: 不良品类型（dimension/appearance/function/material/other）
         defect_reason: 不良品原因
-        disposition: 处理方式（quarantine/rework/scrap/accept/other）
+        disposition: 处理方式（quarantine/rework/scrap/accept/downgrade/other）
         quarantine_location: 隔离位置（当处理方式为隔离时使用）
         rework_order_id: 返工单ID（当处理方式为返工时关联）
         scrap_record_id: 报废记录ID（当处理方式为报废时关联）
@@ -102,12 +102,19 @@ class DefectRecord(BaseModel):
     defect_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="不良品数量")
     defect_type = fields.CharField(max_length=20, default="other", description="不良品类型（dimension/appearance/function/material/other）")
     defect_reason = fields.TextField(description="不良品原因")
-    disposition = fields.CharField(max_length=20, default="quarantine", description="处理方式（quarantine/rework/scrap/accept/other）")
+    disposition = fields.CharField(max_length=20, default="quarantine", description="处理方式（quarantine/rework/scrap/accept/downgrade/other）")
 
     # 处理相关信息
     quarantine_location = fields.CharField(max_length=200, null=True, description="隔离位置（当处理方式为隔离时使用）")
     rework_order_id = fields.IntField(null=True, description="返工单ID（当处理方式为返工时关联）")
     scrap_record_id = fields.IntField(null=True, description="报废记录ID（当处理方式为报废时关联）")
+    downgrade_material_id = fields.IntField(null=True, description="降级回用目标原料物料ID")
+    downgrade_material_code = fields.CharField(max_length=50, null=True, description="降级回用目标原料编码")
+    downgrade_material_name = fields.CharField(max_length=200, null=True, description="降级回用目标原料名称")
+    downgrade_material_unit = fields.CharField(max_length=20, null=True, description="降级回用目标原料单位")
+    downgrade_warehouse_id = fields.IntField(null=True, description="降级回用入库仓库ID")
+    downgrade_warehouse_name = fields.CharField(max_length=100, null=True, description="降级回用入库仓库名称")
+    other_inbound_id = fields.IntField(null=True, description="降级回用生成的其他入库单ID")
 
     # 状态信息
     status = fields.CharField(max_length=20, default="draft", description="状态（draft/processed/cancelled）")

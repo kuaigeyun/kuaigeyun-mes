@@ -25,7 +25,7 @@ import {
   ClockCircleOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { UniTable } from '../../../../../components/uni-table';
 import { apiRequest } from '../../../../../services/api';
 import { sumInventoryPickOptionQty } from '../outbound/outboundConfirmInventoryOptions';
@@ -46,7 +46,7 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import {
   DocumentPushProgressBar,
-  DOCUMENT_PROGRESS_COLUMN_WIDTH,
+  DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
   ratioToPushProgressPercent,
 } from '../../sales-management/shared/DocumentPushProgressBar';
 
@@ -543,9 +543,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
     {
       title: t('app.kuaizhizao.warehouseCommon.colDeliveryFulfillment'),
       dataIndex: 'fulfillment_progress',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
       // 送达进度仅产线补料有「已送/需求」语义；线边备料执行是仓内拣料，不展示以免整列全为 -
       hideInTable: taskType !== 'material_call',
       render: (_, r) => {
@@ -634,13 +632,11 @@ const BatchingTaskQueue: React.FC<Props> = ({
     ...buildDocumentAuditColumns<BatchingTaskRow>(t),
     {
       title: t('app.kuaizhizao.warehouseCommon.colActions'),
-      width: 200,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
         const actions: React.ReactNode[] = [];
         const st = record.status === 'picking' ? 'processing' : record.status;
-        const keyPrefix = `material-center-${record.task_type}-${record.task_id}`;
         if (record.task_type === 'proactive_prep') {
           if ((record.kitting_rate ?? 0) > 0) {
             actions.push(
@@ -654,7 +650,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
               </Button>,
             );
           }
-          return renderRowActionsOverflow(actions, { keyPrefix });
+          return actions;
         }
         if (record.task_type === 'material_call') {
           if (canRead) {
@@ -714,7 +710,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
               </Button>,
             );
           }
-          return actions.length ? renderRowActionsOverflow(actions, { keyPrefix }) : null;
+          return actions.length ? actions : null;
         }
         if (record.task_type === 'batching_draft') {
           if (canRead) {
@@ -752,7 +748,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
               </Button>,
             );
           }
-          return renderRowActionsOverflow(actions, { keyPrefix });
+          return actions;
         }
         if (record.task_type === 'backflush_alert') {
           if (canRead) {
@@ -778,7 +774,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
               {t('app.kuaizhizao.batchingCenter.retryBackflush')}
             </Button>,
           );
-          return renderRowActionsOverflow(actions, { keyPrefix });
+          return actions;
         }
         return null;
       },
@@ -1003,7 +999,6 @@ const BatchingTaskQueue: React.FC<Props> = ({
         columnPersistenceId={`apps.kuaizhizao.pages.warehouse-management.batching-center.tasks.${taskType}.v3`}
         showAdvancedSearch
         polling={false}
-        scroll={{ x: 1400 }}
         showCreateButton={Boolean(onCreate)}
         onCreate={onCreate}
         createButtonText={t('app.kuaizhizao.batchingCenter.createBatchingOrder')}

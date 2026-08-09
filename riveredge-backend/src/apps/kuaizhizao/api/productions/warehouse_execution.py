@@ -93,6 +93,8 @@ from apps.kuaizhizao.schemas.warehouse import (
     WorkOrderInboundPreviewResponse,
     ProductionReturnPreviewResponse,
     SalesOrderReturnPreviewResponse,
+    SalesDeliveryReturnPreviewResponse,
+    CustomerOutboundBatchOption,
     PurchaseReceiptCreate,
     PurchaseReceiptUpdate,
     PurchaseReceiptResponse,
@@ -622,8 +624,8 @@ async def warehouse_dashboard_summary(
 @router.post("/production-pickings/quick-pick", response_model=ProductionPickingResponse, summary="Quick picking from work order")
 async def quick_pick_from_work_order(
     work_order_id: int = Query(..., description="工单ID"),
-    warehouse_id: Optional[int] = Query(None, description="仓库ID（可选，如果不提供则使用物料默认仓库）"),
-    warehouse_name: Optional[str] = Query(None, description="仓库名称（可选）"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID（与 warehouse_name 至少填一）"),
+    warehouse_name: Optional[str] = Query(None, description="仓库名称（与 warehouse_id 至少填一）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ProductionPickingResponse:
@@ -631,8 +633,7 @@ async def quick_pick_from_work_order(
     一键领料：从工单下推，根据BOM自动生成领料需求
 
     - **work_order_id**: 工单ID
-    - **warehouse_id**: 仓库ID（可选）
-    - **warehouse_name**: 仓库名称（可选）
+    - **warehouse_id** / **warehouse_name**: 出库仓库（至少指定其一）
     - **current_user**: 当前用户
     - **tenant_id**: 当前组织ID
 
@@ -640,7 +641,7 @@ async def quick_pick_from_work_order(
     1. 获取工单信息
     2. 根据工单产品获取BOM
     3. 根据BOM和工单数量计算物料需求
-    4. 创建生产领料单和明细
+    4. 创建生产领料单和明细（无仓库或无明细时直接失败，不落空头单）
 
     返回创建的生产领料单信息。
     """
@@ -3527,6 +3528,7 @@ async def pull_sales_delivery_from_order(
     - **line_warehouses**: 行级出库仓库 {item_id: warehouse_id}（推荐）
     - **warehouse_id**: 出库仓库ID（未传 line_warehouses 时必填）
     - **warehouse_name**: 出库仓库名称（可选）
+    - **notes**: 出库备注（可选，仓库出库详情可见）
     """
     from apps.kuaizhizao.services.sales_order_service import SalesOrderService
 
@@ -3548,6 +3550,10 @@ async def pull_sales_delivery_from_order(
                 continue
         if not line_warehouses:
             line_warehouses = None
+    notes_raw = request.get('notes')
+    notes = str(notes_raw).strip() if notes_raw is not None else None
+    if notes == "":
+        notes = None
 
     if not line_warehouses and not warehouse_id:
         raise ValidationError("必须提供出库仓库ID或行级出库仓库")
@@ -3560,6 +3566,7 @@ async def pull_sales_delivery_from_order(
         warehouse_id=int(warehouse_id) if warehouse_id is not None else None,
         warehouse_name=warehouse_name,
         line_warehouses=line_warehouses,
+        notes=notes,
     )
     delivery_id = result.get("delivery_id")
     if not delivery_id:
@@ -3890,6 +3897,83 @@ async def pull_sales_return_from_sales_order(
     )
 
 
+@router.get(
+    "/sales-returns/sales-delivery-preview",
+    response_model=SalesDeliveryReturnPreviewResponse,
+    summary="Preview sales return lines from sales delivery",
+)
+async def preview_sales_delivery_return(
+    sales_delivery_id: int = Query(..., description="销售出库单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesDeliveryReturnPreviewResponse:
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=int(sales_delivery_id),
+    )
+    return await SalesReturnService().get_sales_delivery_return_preview(
+        tenant_id=tenant_id,
+        sales_delivery_id=sales_delivery_id,
+    )
+
+
+@router.post(
+    "/sales-returns/pull-from-sales-delivery",
+    response_model=SalesReturnResponse,
+    summary="Push sales return from sales delivery",
+)
+async def pull_sales_return_from_sales_delivery(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnResponse:
+    sales_delivery_id = request.get("sales_delivery_id")
+    warehouse_id = request.get("warehouse_id")
+    warehouse_name = request.get("warehouse_name")
+    return_quantities = request.get("return_quantities")
+    return_code = request.get("return_code")
+
+    if not sales_delivery_id:
+        raise ValidationError("必须提供销售出库单ID")
+    if not warehouse_id:
+        raise ValidationError("必须提供退货仓库ID")
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=int(sales_delivery_id),
+    )
+
+    return await SalesReturnService().pull_from_sales_delivery(
+        tenant_id=tenant_id,
+        sales_delivery_id=int(sales_delivery_id),
+        created_by=current_user.id,
+        warehouse_id=int(warehouse_id),
+        warehouse_name=warehouse_name,
+        return_quantities=return_quantities if isinstance(return_quantities, dict) else None,
+        return_code=return_code if return_code else None,
+    )
+
+
+@router.get(
+    "/sales-returns/customer-outbound-batches",
+    response_model=List[CustomerOutboundBatchOption],
+    summary="List customer outbound batches available for sales return",
+)
+async def list_customer_outbound_batches_for_sales_return(
+    customer_id: int = Query(..., description="客户ID"),
+    material_id: Optional[int] = Query(None, description="物料ID（可选）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[CustomerOutboundBatchOption]:
+    rows = await SalesReturnService().list_customer_outbound_batches_for_return(
+        tenant_id=tenant_id,
+        customer_id=int(customer_id),
+        material_id=int(material_id) if material_id is not None else None,
+    )
+    return [CustomerOutboundBatchOption.model_validate(row) for row in rows]
+
+
 @router.get("/sales-returns", response_model=SalesReturnListPaginatedResponse, summary="List sales returns")
 async def list_sales_returns(
     skip: int = Query(0, ge=0, description="跳过数量"),
@@ -3898,7 +3982,8 @@ async def list_sales_returns(
     sales_delivery_id: Optional[int] = Query(None, description="销售出库单ID筛选"),
     customer_id: Optional[int] = Query(None, description="客户ID筛选"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
-    keyword: Optional[str] = Query(None, description="关键词（退货单号、客户、出库单、订单、仓库）"),
+    keyword: Optional[str] = Query(None, description="关键词（退货单号、客户、出库单、订单、仓库、物料）"),
+    include_items: bool = Query(False, description="是否附带退货明细（明细表格视图）"),
     return_code: Optional[str] = Query(None, description="退货单号（模糊）"),
     sales_delivery_code: Optional[str] = Query(None, description="出库单号（模糊）"),
     sales_order_code: Optional[str] = Query(None, description="销售订单号（模糊）"),
@@ -3932,6 +4017,7 @@ async def list_sales_returns(
         'created_start_date': created_start_date,
         'created_end_date': created_end_date,
         'order_by': safe_order_by,
+        'include_items': include_items,
     }
     result = await SalesReturnService().list_sales_returns(
         tenant_id=tenant_id,
@@ -4494,7 +4580,8 @@ async def list_purchase_returns(
     purchase_receipt_id: Optional[int] = Query(None, description="采购入库单ID筛选"),
     supplier_id: Optional[int] = Query(None, description="供应商ID筛选"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
-    keyword: Optional[str] = Query(None, description="关键词（退货单号、供应商、入库单、订单、仓库）"),
+    keyword: Optional[str] = Query(None, description="关键词（退货单号、供应商、入库单、订单、仓库、物料）"),
+    include_items: bool = Query(False, description="是否附带退货明细（明细表格视图）"),
     return_code: Optional[str] = Query(None, description="退货单号（模糊）"),
     purchase_receipt_code: Optional[str] = Query(None, description="采购入库单号（模糊）"),
     purchase_order_code: Optional[str] = Query(None, description="采购订单号（模糊）"),
@@ -4526,6 +4613,7 @@ async def list_purchase_returns(
         'created_start_date': created_start_date,
         'created_end_date': created_end_date,
         'order_by': safe_order_by,
+        'include_items': include_items,
     }
     result = await PurchaseReturnService().list_purchase_returns(
         tenant_id=tenant_id,

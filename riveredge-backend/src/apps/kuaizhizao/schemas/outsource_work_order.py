@@ -314,6 +314,9 @@ class OutsourceMaterialReceiptResponse(OutsourceMaterialReceiptBase):
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    supplier_id: Optional[int] = Field(None, description="委外供应商ID（由委外工单解析）")
+    supplier_code: Optional[str] = Field(None, description="委外供应商编码（由委外工单解析）")
+    supplier_name: Optional[str] = Field(None, description="委外供应商名称（由委外工单解析）")
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="入库 Hub capabilities（document_action_policy）",
     )
@@ -447,6 +450,9 @@ class OutsourceMaterialReturnResponse(OutsourceMaterialReturnBase):
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    supplier_id: Optional[int] = Field(None, description="委外供应商ID（由委外工单解析）")
+    supplier_code: Optional[str] = Field(None, description="委外供应商编码（由委外工单解析）")
+    supplier_name: Optional[str] = Field(None, description="委外供应商名称（由委外工单解析）")
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="入库 Hub capabilities（document_action_policy）",
     )
@@ -515,6 +521,9 @@ class OutsourceProductReturnResponse(OutsourceProductReturnBase):
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    supplier_id: Optional[int] = Field(None, description="委外供应商ID（由委外工单解析）")
+    supplier_code: Optional[str] = Field(None, description="委外供应商编码（由委外工单解析）")
+    supplier_name: Optional[str] = Field(None, description="委外供应商名称（由委外工单解析）")
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="入库 Hub capabilities（document_action_policy）",
     )

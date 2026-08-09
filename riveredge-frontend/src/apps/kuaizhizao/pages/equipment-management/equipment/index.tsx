@@ -1,4 +1,4 @@
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 设备管理页面
  *
@@ -90,10 +90,6 @@ import {
 } from '../../../utils/equipmentListCore';
 
 const EQUIPMENT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_equipment';
-
-function renderEquipmentRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, { keyPrefix });
-}
 
 interface Equipment {
   id?: number;
@@ -868,11 +864,9 @@ const EquipmentPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      width: 200,
       fixed: 'right',
       hideInSearch: true,
-      render: (_, record) =>
-        renderEquipmentRowActions(renderEquipmentRowNodes(record), `eq-${record.uuid ?? 'row'}`),
+      render: (_, record) => renderEquipmentRowNodes(record),
     },
   ], SALES_DOC_LIST_FIELD_RANK);
   }, [
@@ -1112,7 +1106,6 @@ const EquipmentPage: React.FC = () => {
             }
           }}
           toolbar={{ actions: [equipmentCardToolbar] }}
-          scroll={{ x: 2000 }}
         />
       </ListPageTemplate>
 

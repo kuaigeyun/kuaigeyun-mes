@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Card, Col, DatePicker, Form, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -31,6 +31,7 @@ import {
 import { inboundReceiptTypeLabel } from './inboundHubTypes';
 import { INBOUND_LIST_PATH, inboundWorkOrderEntryPath } from './inboundPaths';
 import type { InboundReceiptType } from './inboundHubTypes';
+import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
 import { draftDayjs, draftOptionalNumber, usePullEntryFormDraft } from '../shared/pullEntryFormDraft';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import {
@@ -64,6 +65,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
   const { woId: woIdParam } = useParams<{ woId: string }>();
   const woId = Number(woIdParam);
   const navigate = useNavigate();
+  const location = useLocation();
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_work_order');
@@ -99,8 +101,12 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
 
   const leavePage = useCallback(() => {
     clearDraft();
-    navigate(INBOUND_LIST_PATH);
-  }, [clearDraft, navigate]);
+    navigateLeavingPullEntry(
+      navigate,
+      INBOUND_LIST_PATH,
+      pullEntryTabKey(location.pathname, location.search),
+    );
+  }, [clearDraft, navigate, location.pathname, location.search]);
 
   useEffect(() => {
     bindSnapshot(() => ({
@@ -301,14 +307,17 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
       invalidateMenuBadgeCounts();
       clearDraft();
       if (mode === 'confirm') {
-        navigate(INBOUND_LIST_PATH, {
-          state: {
+        navigateLeavingPullEntry(
+          navigate,
+          INBOUND_LIST_PATH,
+          pullEntryTabKey(location.pathname, location.search),
+          {
             inboundDirectConfirm: {
               id: Number(createdId),
               receipt_type: receiptType,
             },
           },
-        });
+        );
       } else {
         leavePage();
       }

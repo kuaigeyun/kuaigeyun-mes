@@ -7,7 +7,7 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Typography, Modal, Spin, Alert, Table, Empty, Form } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
-import { EyeOutlined, DollarOutlined, PlusOutlined } from '@ant-design/icons';
+import { EyeOutlined, DollarOutlined, PlusOutlined, FileTextOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import {
     payableService,
@@ -55,7 +55,7 @@ import type { PayableListParams } from '../../../types/finance/payable';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   DocumentPushProgressBar,
-  DOCUMENT_PROGRESS_COLUMN_WIDTH,
+  DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
 } from '../../../../kuaizhizao/pages/sales-management/shared/DocumentPushProgressBar';
 import { payablePaymentPushPercent } from '../../../../kuaizhizao/pages/sales-management/shared/pushProgress';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
@@ -63,6 +63,7 @@ import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const P = 'app.kuaicaiwu.payable';
 const PAYABLE_RESOURCE = 'kuaicaiwu:payable';
+const PURCHASE_INVOICE_RESOURCE = 'kuaicaiwu:purchase-invoice';
 
 type PullPreviewKind = 'purchase_order' | 'purchase_receipt';
 
@@ -94,6 +95,7 @@ const PayableList: React.FC = () => {
 
     const payableAuditEnabled = useAuditRequired('payable', false);
     const payablePerms = useResourcePermissions(PAYABLE_RESOURCE);
+    const purchaseInvoicePerms = useResourcePermissions(PURCHASE_INVOICE_RESOURCE);
     const payableAuditBatchHandlers = useMemo(
         () => createUniAuditBatchHandlers('payable'),
         [],
@@ -173,10 +175,14 @@ const PayableList: React.FC = () => {
             notes: values.notes,
             attachments: normalizeDocumentAttachments(values.attachments),
         };
-        await payableService.createPayable(data);
+        const created = await payableService.createPayable(data);
         messageApi.success(t('common.createSuccess'));
         setCreateModalVisible(false);
         actionRef.current?.reload();
+        if (created?.id) {
+            navigate(`/apps/kuaicaiwu/finance-management/payables/${created.id}`);
+        }
+        return true;
     };
 
     const resetPullPreview = () => {
@@ -549,9 +555,7 @@ const PayableList: React.FC = () => {
         {
             title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
             dataIndex: 'payment_push_progress',
-            width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-            uniTableKeepWidth: true,
-            hideInSearch: true,
+            ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
             render: (_, record) => {
                 const percent = payablePaymentPushPercent(record.paid_amount, record.total_amount);
                 return (
@@ -569,8 +573,6 @@ const PayableList: React.FC = () => {
             title: t('app.kuaicaiwu.common.lifecycle'),
             dataIndex: 'lifecycle_stage',
             fixed: 'right',
-            align: 'left',
-            width: 130,
             hideInSearch: true,
             render: (_, record) => {
                 const lc = getPayableLifecycle(record as unknown as Record<string, unknown>, t);
@@ -626,14 +628,30 @@ const PayableList: React.FC = () => {
                                 type="link"
                                 size="small"
                                 icon={<DollarOutlined />}
-                                onClick={() => navigate(`/apps/kuaicaiwu/finance-management/payables/${record.id}`)}
+                                onClick={() => navigate('/apps/kuaicaiwu/finance-management/payments', {
+                                    state: { pullPayableId: record.id },
+                                })}
                             >
                                 {t('app.kuaicaiwu.common.pay')}
                             </Button>
                         ) : null,
+                        record.capabilities?.push_purchase_invoice?.allowed !== false &&
+                        purchaseInvoicePerms.canCreate ? (
+                            <Button {...rowActionKind('execute')}
+                                key="invoice"
+                                type="link"
+                                size="small"
+                                icon={<FileTextOutlined />}
+                                onClick={() => navigate('/apps/kuaicaiwu/finance-management/purchase-invoices', {
+                                    state: { pullPayableId: record.id },
+                                })}
+                            >
+                                {t('app.kuaicaiwu.payable.createInvoice')}
+                            </Button>
+                        ) : null,
                     ].filter(Boolean) as React.ReactNode[],
         },
-    ], [t, navigate, supplierOptions, payablePerms]);
+    ], [t, navigate, supplierOptions, payablePerms, purchaseInvoicePerms]);
 
     return (
         <ListPageTemplate>
@@ -642,7 +660,6 @@ const PayableList: React.FC = () => {
                 actionRef={actionRef}
                 columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
                 columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payables"
-                scroll={{ x: 1680 }}
                 request={async (params, sort, _filter, searchFormValues) => {
                     const { current, pageSize } = params;
                     const listParams = resolvePayableListParams(searchFormValues, sort);

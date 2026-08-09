@@ -561,7 +561,6 @@ const StocktakingPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
-      align: 'left',
       hideInSearch: true,
       render: (_, record) => {
         const lifecycle = getStocktakingLifecycle(record as Record<string, unknown>, t);
@@ -862,7 +861,6 @@ const StocktakingPage: React.FC = () => {
           }
         }}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.stocktaking.deleteConfirm', { count })}
-        scroll={{ x: 2200 }}
       />
 
       {/* 创建盘点单Modal */}

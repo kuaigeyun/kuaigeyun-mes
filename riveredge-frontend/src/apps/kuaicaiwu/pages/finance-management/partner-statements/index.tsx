@@ -6,6 +6,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
   App,
+  Alert,
   Button,
   Modal,
   Typography,
@@ -385,7 +386,6 @@ const PartnerStatementsPage: React.FC = () => {
       onRowSelectionChange={setCustomerSelectedRowKeys}
       rowKey="id"
       columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Customer"
-      scroll={{ x: 1200 }}
       showAdvancedSearch
       search={{ labelWidth: 100 }}
       showCreateButton
@@ -432,7 +432,6 @@ const PartnerStatementsPage: React.FC = () => {
       onRowSelectionChange={setSupplierSelectedRowKeys}
       rowKey="id"
       columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Supplier"
-      scroll={{ x: 1200 }}
       showAdvancedSearch
       search={{ labelWidth: 100 }}
       showCreateButton
@@ -472,6 +471,12 @@ const PartnerStatementsPage: React.FC = () => {
 
   return (
     <>
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message={t(`${PS}.dataSourceNote`)}
+      />
       <MultiTabListPageTemplate
         activeTabKey={activeTab}
         onTabChange={(k) => setActiveTab(k as 'Customer' | 'Supplier')}

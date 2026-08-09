@@ -13,7 +13,7 @@
  *
  * **重要**：传入的 **`toolBarRender` 会被剥离后只在左侧复用**：其返回值并入 `headerTitle`，**不会**出现在 ProTable 默认右侧工具栏；传给 `ProTable` 的 `toolBarRender` 由本组件重写，仅负责同步选中行并渲染 **3.2** 内建按钮。
  *
- * 4. **表格**：右侧固定列顺序由 `normalizeFixedRightColumnOrder` 规范 — **uni-lifecycle**（`lifecycle_stage` / `lifecycle`）、**uni-action**（`uni-action` 模块约定，固定列垫后）。
+ * 4. **表格**：固定列由布局引擎契约（`normalizeFixedColumnOrder` + 数值 `scroll.x` + 显式 width）对齐 antd 原生 sticky 列；右固定组内 **uni-lifecycle** → **uni-action**。
  *    **主从堆叠列**（减横滚）：见 `stackedPrimaryColumn.tsx` — `UniTableStackedPrimaryCell` + `uniTablePrimaryFlex` + `UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS`。
  *    **行点击选中**（唯一控制源）：只要启用行选择（`enableRowSelection` 或 `rowSelection`），默认点击表身切换勾选；用 `disableRowClickSelection` 关闭。
  * 5. **详情 uni-detail**：列表侧由 `onDetail`、行内操作列等与页面级 **uni-detail**（如 `DetailDrawerTemplate`）配合；本文件不渲染详情壳。
@@ -117,9 +117,8 @@ const useProTableSearch = () => {
 import { useConfigStore } from '../../stores/configStore'
 import { useListPageStatCardsContext } from '../layout-templates/listPageStatCardsContext'
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore'
-import { useAntdResizableHeader } from 'use-antd-resizable-header'
-import 'use-antd-resizable-header/dist/style.css'
 import { TableContext } from '@ant-design/pro-table/es/Store/Provide'
+/* 布局 CSS 唯一入口：global.less @import uni-table.less（禁止本文件再引一份） */
 import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../utils/format'
 import { useNewShortcut } from '../../hooks/useNewShortcut'
 import { usePagePermissionResource } from '../../hooks/usePagePermissionResource'
@@ -127,7 +126,12 @@ import { useResourcePermissions } from '../../hooks/useResourcePermissions'
 import { withSingleNewShortcutHint } from '../../utils/globalNewShortcut'
 import { DictionaryLabel } from '../dictionary-label'
 import { stableJsonForQueryKey } from '../../utils/tableQueryKey'
-import { isUniTableOperationColumn, renderUniTableOperationCell } from '../uni-action'
+import {
+  isUniTableOperationColumn,
+  renderUniTableOperationCell,
+  ROW_ACTIONS_STRIP_CLASS,
+} from '../uni-action'
+import { UNI_TABLE_STACKED_IDENTITY_CLASS } from './stackedPrimaryColumn'
 import { LIST_PAGE_TABLE_SCROLL, getViewportHeightExpr } from '../layout-templates/constants'
 import {
   shouldEnableUniTableBodyScrollY,
@@ -135,209 +139,53 @@ import {
 } from './uniTableScrollPolicy'
 import {
   getUniTableLifecycleCellClassName,
+  isUniTableDetailProgressColumn,
   isUniTableLifecycleColumn,
+  resolveUniTableDetailProgressColumnWidth,
   resolveUniTableLifecycleColumnWidth,
   resolveUniTableOperationColumnWidth,
-  UNI_TABLE_LIFECYCLE_MIN_WIDTH,
+  resolveUniTableOperationWidthFromContent,
+  resolveUniTablePrimaryFlexWidthFromContent,
   UNI_TABLE_OPERATION_MIN_WIDTH,
   UNI_TABLE_SELECTION_COL_WIDTH,
-  UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH,
-  computeUniTableMinScrollX,
-  getUniTableColumnScrollContribution,
-  resolveUniTableColumnLayoutWidth,
 } from '../../utils/uniTableLayoutColumns'
+import {
+  resolveLayoutPlan,
+  hasUniTableFixedColumns,
+  hasUniTableFixedLeftColumns,
+  normalizeFixedColumnOrder,
+  ensureDetailProgressImmediatelyBeforeLifecycle,
+  buildDefaultColumnsStateMap,
+  mergeColumnsStateWithCodeContract,
+  lockCodeOwnedFixedInColumnsState,
+  stripColumnsStateForPersistence,
+  writePersistedColumnsState,
+  clearPersistedColumnsState,
+} from './uniTableLayoutEngine'
+import {
+  readPersistedUniTableViewType,
+  writePersistedUniTableViewType,
+  uniTableViewTypePreferencePath,
+  UNI_TABLE_VIEW_TYPE_HELP,
+} from './uniTableViewPreference'
+import {
+  columnsStatePreferenceSignature,
+  readAccountColumnsState,
+  uniTableColumnsPreferenceField,
+} from './uniTableColumnPreference'
 
-/**
- * 右侧固定列必须连续排在列定义末尾；规范顺序：其它 right 固定列 → 生命周期（lifecycle_stage / lifecycle）→ 操作列。
- * 避免列设置持久化 order 与拖拽把生命周期挤到操作列右侧或中间。
- */
-function normalizeFixedRightColumnOrder<T extends Record<string, any>>(columns: T[]): T[] {
-  if (!columns?.length) return columns
-  const rest: T[] = []
-  const fixedRight: T[] = []
-  for (const col of columns) {
-    if ((col as any).fixed === 'right') fixedRight.push(col)
-    else rest.push(col)
-  }
-  if (fixedRight.length <= 1) return columns
+export { readPersistedUniTableViewType } from './uniTableViewPreference'
 
-  const isLifecycle = (c: any) => isUniTableLifecycleColumn(c)
-
-  fixedRight.sort((a: any, b: any) => {
-    const rank = (c: any) => (isUniTableOperationColumn(c) ? 2 : isLifecycle(c) ? 1 : 0)
-    return rank(a) - rank(b)
-  })
-  return [...rest, ...fixedRight]
-}
-
-function applyLifecycleColumnAlignLeft<T extends Record<string, any>>(columns: T[]): T[] {
+/** 执行状态（生命周期）列与审核状态列同为单徽章列：统一居中，页面自写的 align 一律覆盖 */
+function applyLifecycleColumnAlign<T extends Record<string, any>>(columns: T[]): T[] {
   if (!columns?.length) return columns
   return columns.map((col: any) => {
     if (!isUniTableLifecycleColumn(col)) return col
-    return { ...col, align: 'left' as const }
+    return { ...col, align: 'center' as const }
   })
 }
 
-/** 短人名类字段保留页面 width（如销售员/采购员），不做内容撑宽。 */
-const UNI_TABLE_SHORT_NAME_FIELDS = new Set([
-  'salesman_name',
-  'buyer_name',
-  'operator_name',
-  'user_name',
-  'creator_name',
-  'updater_name',
-  'auditor_name',
-])
-
-const UNI_TABLE_STRUCTURED_VALUE_TYPES = new Set([
-  'date',
-  'dateTime',
-  'dateRange',
-  'time',
-  'money',
-  'digit',
-  'digitRange',
-  'select',
-  'progress',
-  'index',
-  'indexBorder',
-])
-
-function isUniTableLayoutColumn(col: any): boolean {
-  return (
-    col?.hideInTable === true ||
-    isUniTableOperationColumn(col) ||
-    isUniTableLifecycleColumn(col)
-  )
-}
-
-/** 主文本列：写入显式 width（minWidth），配合数值 scroll.x 首帧定宽。 */
-function isUniTableFlexTextColumn(col: any): boolean {
-  if (isUniTableLayoutColumn(col)) return false
-  if (col?.fixed) return false
-  if (col?.resizable === false || col?.uniTableKeepWidth === true) return false
-
-  const dataIndex = typeof col?.dataIndex === 'string' ? col.dataIndex : ''
-  if (!dataIndex) return false
-  if (UNI_TABLE_SHORT_NAME_FIELDS.has(dataIndex)) return false
-  if (col?.valueType && UNI_TABLE_STRUCTURED_VALUE_TYPES.has(String(col.valueType))) return false
-  if (/(^code$|_code$)/.test(dataIndex)) return false
-
-  if (
-    /_(name|title|remark|description|desc|note|notes|comment|address|specification)$|^(name|title|remark|description|note|comment)$/.test(
-      dataIndex,
-    )
-  ) {
-    return true
-  }
-
-  return col?.ellipsis === true && !col?.valueType
-}
-
-/** 页面标记的主信息列：释放 width、保留 minWidth，用于吃掉表格剩余横向空间（如客户/名称） */
-function isUniTablePrimaryFlexColumn(col: any): boolean {
-  return col?.uniTablePrimaryFlex === true
-}
-
-function parseUniTableColumnWidthValue(width: unknown): number | undefined {
-  if (typeof width === 'number' && Number.isFinite(width)) return width
-  if (typeof width === 'string') {
-    const n = parseInt(width, 10)
-    if (Number.isFinite(n)) return n
-  }
-  return undefined
-}
-
-/** 主信息 flex 列默认宽度（与 stackedPrimaryColumn UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS 一致） */
-const UNI_TABLE_PRIMARY_FLEX_DEFAULT_WIDTH = 200
-
-/** 主信息 flex 列扩展上限（无列级 uniTablePrimaryFlexMaxWidth 时生效） */
-const UNI_TABLE_PRIMARY_FLEX_DEFAULT_MAX_WIDTH = 280
-
-function resolveUniTablePrimaryFlexMaxWidth(col: any): number {
-  const fromCol =
-    parseUniTableColumnWidthValue(col?.uniTablePrimaryFlexMaxWidth) ??
-    parseUniTableColumnWidthValue(col?.maxWidth)
-  if (fromCol != null && fromCol > 0) return fromCol
-  return UNI_TABLE_PRIMARY_FLEX_DEFAULT_MAX_WIDTH
-}
-
-/**
- * 全项目列宽策略（与数值 scroll.x 配合，首帧即 table-layout: fixed）：
- * 主文本 / uniTablePrimaryFlex 列写入显式 width（优先 minWidth），禁止去掉 width 后依赖 max-content 二次测量。
- */
-function hasUniTableFixedColumns(columns: any[]): boolean {
-  return columns.some(
-    (c) => !c.hideInTable && (c.fixed === 'left' || c.fixed === 'right'),
-  )
-}
-
-function applyUniTableColumnWidthPolicy(columns: any[], preserveWidths = false): any[] {
-  if (!columns?.length || preserveWidths) return columns
-
-  return columns.map((col) => {
-    if (isUniTableLayoutColumn(col)) return col
-    if (col.width != null) return col
-
-    if (isUniTableFlexTextColumn(col) || isUniTablePrimaryFlexColumn(col)) {
-      const resolved =
-        parseUniTableColumnWidthValue(col.minWidth) ??
-        (isUniTablePrimaryFlexColumn(col) ? UNI_TABLE_PRIMARY_FLEX_DEFAULT_WIDTH : UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH)
-      return { ...col, width: resolved, minWidth: resolved }
-    }
-
-    const minW = parseUniTableColumnWidthValue(col.minWidth)
-    if (minW != null) return { ...col, width: minW }
-
-    return col
-  })
-}
-
-/** 在容器宽度内将剩余空间分配给 uniTablePrimaryFlex 列（ProTable 渲染前同步完成） */
-function buildPrimaryFlexWidthPatch(
-  columns: any[],
-  containerWidth: number,
-  options: { includeSelection: boolean; reserveVerticalScrollbar: boolean },
-): Record<string, number> {
-  if (containerWidth <= 0 || !columns?.length) return {}
-
-  const layoutWidth = resolveUniTableColumnLayoutWidth(
-    containerWidth,
-    options.reserveVerticalScrollbar,
-  )
-  if (layoutWidth <= 0) return {}
-
-  const baseScrollX = computeUniTableMinScrollX(columns, { includeSelection: options.includeSelection })
-  if (layoutWidth <= baseScrollX) return {}
-
-  const flexTargets: { key: string; base: number; max: number }[] = []
-  columns.forEach((col, index) => {
-    if (col?.hideInTable || !isUniTablePrimaryFlexColumn(col)) return
-    const base = getUniTableColumnScrollContribution(col)
-    flexTargets.push({
-      key: getProColumnStateKey(col, index),
-      base,
-      max: resolveUniTablePrimaryFlexMaxWidth(col),
-    })
-  })
-  if (flexTargets.length === 0) return {}
-
-  let remaining = layoutWidth - baseScrollX
-  if (remaining <= 0) return {}
-
-  const patch: Record<string, number> = {}
-  for (const { key, base, max } of flexTargets) {
-    const expandable = Math.max(0, max - base)
-    const add = Math.min(remaining, expandable)
-    if (add > 0) {
-      patch[key] = base + add
-      remaining -= add
-    }
-  }
-  return patch
-}
-
-/** 表头单元格与表身对齐：nowrap + 可选语义 class（生命周期 / 操作列）。 */
+/** 表头语义 class（nowrap 由 uni-table.less 唯一控制，禁止再注 inline style）。 */
 function mergeUniTableHeaderCell(col: any, cellClassName?: string): any {
   const userOnHeaderCell = col.onHeaderCell
   return {
@@ -351,10 +199,6 @@ function mergeUniTableHeaderCell(col: any, cellClassName?: string): any {
       return {
         ...base,
         ...(mergedClass ? { className: mergedClass } : {}),
-        style: {
-          whiteSpace: 'nowrap',
-          ...(base.style || {}),
-        },
       }
     },
   }
@@ -376,7 +220,7 @@ function applyUniTableHeaderCellPolicy(columns: any[]): any[] {
 
 function finalizeUniTableColumns(columns: any[]): any[] {
   return applyUniTableHeaderCellPolicy(
-    applyLifecycleColumnAlignLeft(normalizeFixedRightColumnOrder(columns)),
+    applyLifecycleColumnAlign(normalizeFixedColumnOrder(columns)),
   )
 }
 
@@ -394,61 +238,6 @@ function withToolbarItemKeys(nodes: ReactNode[], keyPrefix: string): ReactNode[]
   })
 }
 
-/** 与 ProTable genColumnKey / 列设置持久化 key 一致（无 key 且无 dataIndex 时用列下标） */
-function getProColumnStateKey(col: any, columnIndex: number): string {
-  const key = col?.key ?? col?.dataIndex
-  if (key != null && key !== '') {
-    return Array.isArray(key) ? key.join('-') : String(key)
-  }
-  return String(columnIndex)
-}
-
-/**
- * 按当前列定义中「规范化后的右侧固定列」顺序写入 order，用于覆盖 localStorage 里错误的相对顺序。
- * ProTable 合并规则为 merge(defaultValue, storage)，storage 会盖住 default，故必须在持久化层纠偏。
- */
-function buildFixedRightColumnOrderOverlay(columns: any[]): Record<string, { order: number }> {
-  if (!columns?.length) return {}
-  const normalized = normalizeFixedRightColumnOrder(columns)
-  const out: Record<string, { order: number }> = {}
-  let o = 1_000_000
-  for (let i = 0; i < normalized.length; i++) {
-    const col = normalized[i]
-    if (col?.fixed !== 'right') continue
-    const k = getProColumnStateKey(col, i)
-    out[k] = { order: o++ }
-  }
-  return out
-}
-
-/**
- * ProTable：若存在 columnsState.defaultValue，会用它整段替代「从 columns 推导的 defaultColumnKeyMap」，
- * 故必须给出**完整**列 key 映射，再为右侧固定列写入递增 order（生命周期在操作列左侧）。
- */
-function buildDefaultColumnsStateMap(columns: any[]): Record<string, any> {
-  const map: Record<string, any> = {}
-  columns.forEach((col: any, index: number) => {
-    const columnKey = getProColumnStateKey(col, index)
-    map[columnKey] = {
-      show: true,
-      fixed: col.fixed,
-      disable: col.disable,
-    }
-  })
-  let order = 900_000
-  columns.forEach((col: any, index: number) => {
-    if (col?.fixed !== 'right') return
-    const columnKey = getProColumnStateKey(col, index)
-    map[columnKey] = {
-      ...map[columnKey],
-      order: order++,
-      fixed: 'right',
-      show: true,
-    }
-  })
-  return map
-}
-
 /** 列展示重置按钮：同时恢复列显示和列宽到系统默认（需在 ProTable 内部渲染以访问 TableContext） */
 function TableColumnResetButton({
   onResetResizable,
@@ -464,9 +253,9 @@ function TableColumnResetButton({
     onResetResizable()
   }
   return (
-    <a onClick={handleClick} className="ant-pro-table-column-setting-action-rest-button" style={{ marginLeft: 8 }}>
+    <Button type="link" size="small" className="uni-table-column-setting-reset" onClick={handleClick}>
       {t('components.uniTable.columnReset', '重置')}
-    </a>
+    </Button>
   )
 }
 
@@ -1347,6 +1136,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const getConfig = useConfigStore((s) => s.getConfig);
   const getPreference = useUserPreferenceStore((s) => s.getPreference);
   const syncTablePreference = useUserPreferenceStore((s) => s.syncTablePreference);
+  const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
   const statCardsCtx = useListPageStatCardsContext();
   const screens = Grid.useBreakpoint()
   const isMobile = !screens.md && screens.xs // 手机端判定：小于 768px 且有 xs
@@ -1363,8 +1153,20 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   /** 已 patch @ant-design/pro-table：`debounceTime != null ? debounceTime : 30`，0 为同步触发 */
   const tableRequestDebounce = restProps.debounceTime ?? 0
 
-  // 视图类型状态（支持内置类型及 customViews 的 key）
-  const [currentViewType, setCurrentViewType] = useState<string>(defaultViewType)
+  const viewTypePersistenceId = columnPersistenceId || undefined
+
+  // 视图类型状态（支持内置类型及 customViews 的 key）；恢复用户上次非 help 视图
+  const [currentViewType, setCurrentViewType] = useState<string>(() => {
+    if (!viewTypePersistenceId) return defaultViewType
+    const fromPref = useUserPreferenceStore
+      .getState()
+      .getPreference<string | undefined>(uniTableViewTypePreferencePath(viewTypePersistenceId), undefined)
+    if (fromPref && fromPref !== UNI_TABLE_VIEW_TYPE_HELP && viewTypes.includes(fromPref)) {
+      return fromPref
+    }
+    return readPersistedUniTableViewType(viewTypePersistenceId, defaultViewType, viewTypes)
+  })
+  const viewTypeSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 表格数据状态（用于其他视图）
   const [tableData, setTableData] = useState<T[]>([])
   const [requestInFlight, setRequestInFlight] = useState(true)
@@ -1387,6 +1189,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const internalFormRef = useRef<ProFormInstance>()
   const containerRef = useRef<HTMLDivElement>(null)
   const [dataActionIconOnly, setDataActionIconOnly] = useState(false)
+  /** 操作列 key → 实测内容宽度；见 utils/uniTableLayoutColumns.ts 的两段式推导 */
+  const [measuredOperationWidths, setMeasuredOperationWidths] = useState<Record<string, number>>({})
+  /** 堆叠主列 key → 不可截断内容（标识行 + 树形缩进）的实测宽度下界 */
+  const [measuredPrimaryFlexWidths, setMeasuredPrimaryFlexWidths] = useState<Record<string, number>>(
+    {},
+  )
   const buttonContainerRef = useRef<HTMLDivElement>(null)
   const tableBodyPaneRef = useRef<HTMLDivElement>(null)
 
@@ -1513,6 +1321,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const loadingDelayTimerRef = useRef<NodeJS.Timeout | null>(null)
   const isLoadingRef = useRef(false)
   const columnsSyncDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  /** 卸载时 flush，避免 800ms 防抖被 clearTimeout 丢掉导致只留本机 LS */
+  const pendingColumnsSyncRef = useRef<{
+    tableId: string
+    field: string
+    columns: Record<string, Partial<ColumnsState>>
+  } | null>(null)
+  const pendingViewTypeSyncRef = useRef<{ tableId: string; viewType: string } | null>(null)
   /** 避免每个列表页挂载都抢跑 pinyin-pro；聚焦模糊搜索框时再预加载 */
   const pinyinWarmupRef = useRef(false)
 
@@ -1562,13 +1377,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   // 明细表格视图使用 detailTableColumns，否则使用 columns
   const effectiveColumns = React.useMemo(() => {
-    if (currentViewType === 'detailTable' && detailTableColumns && detailTableColumns.length > 0) {
-      return detailTableColumns
-    }
-    return columns
+    const base =
+      currentViewType === 'detailTable' && detailTableColumns && detailTableColumns.length > 0
+        ? detailTableColumns
+        : columns
+    return ensureDetailProgressImmediatelyBeforeLifecycle(base as Record<string, unknown>[]) as ProColumns<T>[]
   }, [currentViewType, columns, detailTableColumns])
 
-  // 检测是否为操作列（用于操作列样式与宽度处理；与 normalizeFixedRightColumnOrder 共用判定）
+  // 检测是否为操作列（用于操作列样式与宽度处理；与 normalizeFixedColumnOrder 共用判定）
   const isOperationColumn = (col: any) => isUniTableOperationColumn(col)
   // 为 date/dateTime 列注入站点格式的展示，使站点设置中的日期格式在单据表格中生效
   const processedColumns = React.useMemo(() => {
@@ -1599,6 +1415,19 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           render: (val: any) => <DictionaryLabel dictionaryCode="unit" value={val} />,
         }
       }
+      /** 明细表格下推进度列：与执行状态同宽、右固定，禁止页面/持久化漂移 */
+      if (isUniTableDetailProgressColumn(col)) {
+        const { width: _w, minWidth: _mw, ...progressRest } = col
+        return {
+          ...progressRest,
+          fixed: 'right' as const,
+          width: resolveUniTableDetailProgressColumnWidth(),
+          minWidth: resolveUniTableDetailProgressColumnWidth(),
+          resizable: false,
+          align: 'center' as const,
+          uniTableKeepWidth: true,
+        }
+      }
       /** 生命周期列统一策略：固定收缩锚点 + 最小宽度，屏蔽历史固定宽度带来的留白。 */
       if (isUniTableLifecycleColumn(col)) {
         const { width: _w, minWidth: _mw, ...lifecycleRest } = col
@@ -1606,8 +1435,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         const lifecycleCellClass = getUniTableLifecycleCellClassName(lifecycleRest)
         return {
           ...lifecycleRest,
-          width: resolveUniTableLifecycleColumnWidth(lifecycleRest),
-          minWidth: UNI_TABLE_LIFECYCLE_MIN_WIDTH,
+          width: resolveUniTableLifecycleColumnWidth(),
+          minWidth: resolveUniTableLifecycleColumnWidth(),
           resizable: false,
           onCell: (record: any, rowIndex?: number) => {
             const base =
@@ -1623,19 +1452,24 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         const {
           uniActionRenderOptions,
           render: baseRender,
-          width: pageWidth,
+          width: _pageWidth,
           minWidth: _minWidth,
           ...rest
         } = col
-        const resolvedWidth = resolveUniTableOperationColumnWidth({
-          width: pageWidth,
-          minWidth: UNI_TABLE_OPERATION_MIN_WIDTH,
-          fixed: rest.fixed,
-        })
+        // 稳定 key：避免无 dataIndex 时用列下标，columnsState / sticky 右固定错位
+        const operationColumnKey = String(rest.key ?? 'option')
+        // 宽度真源是实测内容宽；页面自写的 pageWidth 已在此丢弃（禁止第二真源）
+        const resolvedWidth =
+          measuredOperationWidths[operationColumnKey] ??
+          resolveUniTableOperationColumnWidth({
+            fixed: rest.fixed,
+            uniActionRenderOptions,
+          })
         return {
           ...rest,
+          key: operationColumnKey,
           width: resolvedWidth,
-          minWidth: UNI_TABLE_OPERATION_MIN_WIDTH,
+          minWidth: resolvedWidth ?? UNI_TABLE_OPERATION_MIN_WIDTH,
           resizable: false,
           render: baseRender
             ? (...args: any[]) => {
@@ -1652,37 +1486,57 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             : undefined,
         }
       }
+      /**
+       * 堆叠主列：宽度下界取「页面预算」与「不可截断内容实测宽」的较大者。
+       * 只放宽下界，不改 uniTablePrimaryFlex 的余量分配（仍由布局引擎按 max 扩宽）。
+       */
+      if (col.uniTablePrimaryFlex === true) {
+        const primaryFlexKey = String(
+          col.key ?? (Array.isArray(col.dataIndex) ? col.dataIndex.join('.') : col.dataIndex) ?? '',
+        )
+        const measuredFloor = measuredPrimaryFlexWidths[primaryFlexKey]
+        const userOnCell = col.onCell
+        const tagged = {
+          ...col,
+          onCell: (record: any, rowIndex?: number) => {
+            const base = typeof userOnCell === 'function' ? userOnCell(record, rowIndex) || {} : {}
+            return {
+              ...base,
+              className: `uni-table-primary-flex-cell ${base.className || ''}`.trim(),
+              'data-uni-flex-col': primaryFlexKey,
+            }
+          },
+        }
+        if (measuredFloor == null) return tagged
+        const declaredMinWidth = typeof col.minWidth === 'number' ? col.minWidth : 0
+        const declaredWidth = typeof col.width === 'number' ? col.width : undefined
+        return {
+          ...tagged,
+          minWidth: Math.max(declaredMinWidth, measuredFloor),
+          ...(declaredWidth != null && declaredWidth < measuredFloor
+            ? { width: measuredFloor }
+            : {}),
+        }
+      }
       return col
     })
-    // 列宽策略保持稳定，不随空表/有数据态切换，避免固定列在首次加载与刷新时抖动
-    return applyUniTableColumnWidthPolicy(mapped, false)
-  }, [effectiveColumns, dateFormatKey, permissionGates])
+    // 列宽由 resolveLayoutPlan（uniTableLayoutEngine）统一物化，此处只产出语义列
+    return mapped
+  }, [
+    effectiveColumns,
+    dateFormatKey,
+    permissionGates,
+    measuredOperationWidths,
+    measuredPrimaryFlexWidths,
+  ])
 
-  // 全项目统一策略：结构化列保留页面 width；主文本列由 applyUniTableColumnWidthPolicy 释放 width；
+  // 全项目统一策略：结构化列保留页面 width；主文本列由布局引擎分配 primary flex；
   // 不启用拖拽改宽与本地列宽持久化，避免「代码 width」与 localStorage 双控制源竞争。
-  const columnsForResize = React.useMemo(() => [], [])
-
-  // 列宽拖拽 hook（仅表格视图时生效，与 ProTable 列设置共存）
   const tableId = columnPersistenceId ?? headerTitle
-  const { components: resizableComponents, resizableColumns, tableWidth, resetColumns, refresh } = useAntdResizableHeader({
-    columns: columnsForResize,
-    columnsState: undefined,
-  })
 
-  const handleColumnReset = React.useCallback(() => {
-    if (tableId) {
-      try {
-        localStorage.removeItem(`ui.tables.${tableId}.columnsWidth`)
-      } catch (_) {}
-      resetColumns(true)
-      refresh()
-      syncTablePreference(tableId, { columns: {}, columnsWidth: {} }).catch(() => {})
-    }
-  }, [tableId, resetColumns, refresh, syncTablePreference])
-
-  // 操作列：不换行；列宽与 scroll 交由 antd（见下方 mergedScroll）
+  // 操作列：不换行；列宽与 scroll 由布局引擎统一产出
   const effectiveTableColumns = React.useMemo(() => {
-    const baseCols = resizableColumns.length > 0 ? resizableColumns : processedColumns.filter((c: any) => !isOperationColumn(c) && !c.hideInTable)
+    const baseCols = processedColumns.filter((c: any) => !isOperationColumn(c) && !c.hideInTable)
     const opCols = processedColumns.filter((c: any) => isOperationColumn(c))
     if (opCols.length === 0 && !processedColumns.some(c => c.hideInTable)) {
       return finalizeUniTableColumns(baseCols)
@@ -1700,6 +1554,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       if (opIndices.includes(i)) {
         const opCol = opCols[opIdx++]
         const baseOnCell = opCol.onCell
+        // 标出所属列，供列宽实测按列聚合（一张表可有多个操作列）
+        const opColKey = String(opCol.key ?? 'option')
         const mergedOnCell =
           baseOnCell && typeof baseOnCell === 'function'
             ? (record: any, rowIndex?: number) => {
@@ -1711,11 +1567,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     whiteSpace: 'nowrap',
                     ...(base?.style || {}),
                   },
+                  'data-uni-op-col': opColKey,
                 }
               }
             : () => ({
                 className: 'uni-table-operation-cell',
                 style: { whiteSpace: 'nowrap' },
+                'data-uni-op-col': opColKey,
               })
         result.push({
           ...opCol,
@@ -1731,7 +1589,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
     }
     return finalizeUniTableColumns(result)
-  }, [resizableColumns, processedColumns])
+  }, [processedColumns])
 
   // 导入配置：显式模板优先；仅 autoGenerateImportConfig 时从 columns 生成
   const effectiveImportConfig = React.useMemo(() => {
@@ -1796,42 +1654,27 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     return translatePathTitle(location.pathname, t)?.trim() || undefined
   }, [importTemplateName, headerTitle, location.pathname, t])
 
-  /** 仅列拖拽开启时使用 hook 算出的 tableWidth；否则不注入数值 scroll.x，交给 antd 默认策略 */
-  const effectiveTableWidth: number | string | undefined =
-    resizableColumns.length > 0 && tableWidth != null ? tableWidth : undefined
+  /** 与 mergedColumnsStateProp.persistenceKey 一致；明细表格独立持久化，禁止污染列表列序 */
+  const isDetailTableColumns = currentViewType === 'detailTable'
+  const columnsPersistenceFullKey = React.useMemo(() => {
+    const base =
+      (userColumnsState as any)?.persistenceKey ??
+      (tableId != null && tableId !== '' ? `ui.tables.${tableId}.columns` : undefined)
+    if (!base) return undefined
+    return isDetailTableColumns ? `${base}::detailTable` : base
+  }, [userColumnsState, tableId, isDetailTableColumns])
+  const columnsPreferenceField = uniTableColumnsPreferenceField(isDetailTableColumns)
 
-  /** 合并列状态：为右侧固定列写入默认 order，保证生命周期在操作列左侧（与 normalizeFixedRightColumnOrder 一致） */
-  const mergedColumnsStateProp = React.useMemo(() => {
-    const columnDefaults = buildDefaultColumnsStateMap(effectiveTableColumns)
-    const user = userColumnsState || {}
-    return {
-      ...user,
-      persistenceType: 'localStorage' as const,
-      persistenceKey:
-        user.persistenceKey ?? (tableId ? `ui.tables.${tableId}.columns` : undefined),
-      defaultValue: {
-        ...columnDefaults,
-        ...(user.defaultValue || {}),
-      },
-      onChange: (map: Record<string, any> | undefined) => {
-        if (map) user.onChange?.(map as Record<string, ColumnsState>)
-        if (!tableId || !map) return
-        const columnsSnapshot = map
-        if (columnsSyncDebounceRef.current) clearTimeout(columnsSyncDebounceRef.current)
-        columnsSyncDebounceRef.current = setTimeout(() => {
-          columnsSyncDebounceRef.current = null
-          syncTablePreference(tableId, { columns: columnsSnapshot }).catch(() => {})
-        }, 800)
-      },
-    }
-  }, [tableId, effectiveTableColumns, userColumnsState, syncTablePreference])
+  /** 账号偏好中的列快照（登录后拉取 / 他端同步后写入）；与视图偏好同一真源 */
+  const serverColumnsPreference = useUserPreferenceStore((s) => {
+    if (!tableId) return undefined
+    const tablePref = s.preferences?.ui?.tables?.[tableId]
+    if (!tablePref || typeof tablePref !== 'object') return undefined
+    const cols = tablePref[columnsPreferenceField]
+    return cols && typeof cols === 'object' ? cols : undefined
+  })
 
-  /** 与 mergedColumnsStateProp.persistenceKey 一致，用于纠偏 localStorage 中的列 order */
-  const columnsPersistenceFullKey =
-    (userColumnsState as any)?.persistenceKey ??
-    (tableId != null && tableId !== '' ? `ui.tables.${tableId}.columns` : undefined)
-
-  /** 列结构签名：内容不变时避免因 columns 引用抖动重复打补丁 */
+  /** 列结构签名：内容不变时避免因 columns 引用抖动重复合并 */
   const columnStructureSig = React.useMemo(
     () =>
       JSON.stringify(
@@ -1846,61 +1689,152 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     [effectiveTableColumns],
   )
 
-  /**
-   * ProTable 对列设置的合并为 merge(defaultValue, localStorage)，用户历史持久化会盖住默认 order，
-   * 仅靠 normalize 列顺序无法纠正展示。此处按规范重写右侧固定列的 order。
-   *
-   * 关键时序优化：
-   * - 首次挂载时，在 render 阶段同步写入 localStorage，使 ProTable 首次渲染读到的就是
-   *   已纠偏的值，无需再触发 epoch 重挂载（消除首屏白屏/回弹感）。
-   * - 之后若 key/结构签名改变，再走 effect 路径 + epoch++，与原有行为一致。
-   */
-  const applyColumnsOrderOverlay = React.useCallback((): boolean => {
-    if (typeof window === 'undefined' || !columnsPersistenceFullKey || !effectiveTableColumns?.length) return false
-    try {
-      const raw = window.localStorage.getItem(columnsPersistenceFullKey)
-      if (!raw) return false
-      const m = JSON.parse(raw) as Record<string, any>
-      const overlay = buildFixedRightColumnOrderOverlay(effectiveTableColumns)
-      const keys = Object.keys(overlay)
-      if (keys.length === 0) return false
-      const next = { ...m }
-      let changed = false
-      for (const k of keys) {
-        const want = overlay[k]?.order
-        if (want == null) continue
-        const cur = next[k]?.order
-        if (cur !== want) {
-          next[k] = { ...(next[k] || {}), order: want }
-          changed = true
-        }
-      }
-      if (changed) {
-        window.localStorage.setItem(columnsPersistenceFullKey, JSON.stringify(next))
-      }
-      return changed
-    } catch {
-      return false
-    }
-  }, [columnsPersistenceFullKey, effectiveTableColumns])
+  const [columnsStateValue, setColumnsStateValue] = React.useState<Record<string, ColumnsState>>(() =>
+    mergeColumnsStateWithCodeContract(
+      effectiveTableColumns,
+      readAccountColumnsState(tableId, columnsPersistenceFullKey, isDetailTableColumns),
+    ),
+  )
 
-  const columnsStatePatchSigRef = React.useRef<string | null>(null)
-  const [columnsStatePatchEpoch, setColumnsStatePatchEpoch] = React.useState(0)
-  const currentPatchSig = `${columnsPersistenceFullKey ?? ''}::${columnStructureSig}`
-  // 仅在首次挂载时同步纠偏（render 阶段）；后续 sig 变化由下方 effect 负责
-  if (columnsStatePatchSigRef.current === null && columnsPersistenceFullKey && effectiveTableColumns?.length) {
-    columnsStatePatchSigRef.current = currentPatchSig
-    applyColumnsOrderOverlay()
-  }
-
+  const columnStructureSigRef = React.useRef(columnStructureSig)
+  const columnsPersistenceKeyRef = React.useRef(columnsPersistenceFullKey)
   React.useLayoutEffect(() => {
-    // 首次挂载已在 render 阶段完成纠偏，跳过
-    if (columnsStatePatchSigRef.current === currentPatchSig) return
-    columnsStatePatchSigRef.current = currentPatchSig
-    if (applyColumnsOrderOverlay()) {
-      setColumnsStatePatchEpoch((e) => e + 1)
+    const keyChanged = columnsPersistenceKeyRef.current !== columnsPersistenceFullKey
+    const structureChanged = columnStructureSigRef.current !== columnStructureSig
+    if (!keyChanged && !structureChanged) return
+    columnsPersistenceKeyRef.current = columnsPersistenceFullKey
+    columnStructureSigRef.current = columnStructureSig
+    if (keyChanged) {
+      setColumnsStateValue(
+        mergeColumnsStateWithCodeContract(
+          effectiveTableColumns,
+          readAccountColumnsState(tableId, columnsPersistenceFullKey, isDetailTableColumns),
+        ),
+      )
+      return
     }
-  }, [currentPatchSig, applyColumnsOrderOverlay])
+    setColumnsStateValue((prev) =>
+      mergeColumnsStateWithCodeContract(
+        effectiveTableColumns,
+        stripColumnsStateForPersistence(prev) as Record<string, Partial<ColumnsState>>,
+      ),
+    )
+  }, [
+    columnStructureSig,
+    effectiveTableColumns,
+    columnsPersistenceFullKey,
+    tableId,
+    isDetailTableColumns,
+  ])
+
+  /** 服务端列偏好到达或变更后灌入表格（勿依赖本地 columnsState，避免编辑中被旧云端快照打回） */
+  React.useEffect(() => {
+    if (!tableId || serverColumnsPreference === undefined) return
+    const stripped = stripColumnsStateForPersistence(
+      serverColumnsPreference as Record<string, ColumnsState>,
+    ) as Record<string, Partial<ColumnsState>>
+    if (!stripped || Object.keys(stripped).length === 0) {
+      setColumnsStateValue((prev) => {
+        const defaults = buildDefaultColumnsStateMap(effectiveTableColumns)
+        const defaultsSig = columnsStatePreferenceSignature(
+          stripColumnsStateForPersistence(defaults),
+        )
+        const currentSig = columnsStatePreferenceSignature(stripColumnsStateForPersistence(prev))
+        if (defaultsSig === currentSig) return prev
+        clearPersistedColumnsState(columnsPersistenceFullKey)
+        return defaults
+      })
+      return
+    }
+    setColumnsStateValue((prev) => {
+      const next = mergeColumnsStateWithCodeContract(effectiveTableColumns, stripped)
+      const nextSig = columnsStatePreferenceSignature(stripColumnsStateForPersistence(next))
+      const currentSig = columnsStatePreferenceSignature(stripColumnsStateForPersistence(prev))
+      if (nextSig === currentSig) return prev
+      writePersistedColumnsState(columnsPersistenceFullKey, next)
+      return next
+    })
+  }, [tableId, serverColumnsPreference, effectiveTableColumns, columnsPersistenceFullKey])
+
+  /** columnsState：持久化 show/order；fixed 由代码契约注入（禁止 LS overlay + remount） */
+  const mergedColumnsStateProp = React.useMemo(() => {
+    const columnDefaults = buildDefaultColumnsStateMap(effectiveTableColumns)
+    const lockedValue = lockCodeOwnedFixedInColumnsState(
+      columnsStateValue,
+      effectiveTableColumns,
+    )
+    const user = userColumnsState || {}
+    return {
+      ...user,
+      value: lockedValue,
+      defaultValue: columnDefaults,
+      onChange: (map: Record<string, ColumnsState> | undefined) => {
+        const merged = mergeColumnsStateWithCodeContract(
+          effectiveTableColumns,
+          stripColumnsStateForPersistence(map) as Record<string, Partial<ColumnsState>>,
+        )
+        setColumnsStateValue(merged)
+        writePersistedColumnsState(columnsPersistenceFullKey, merged)
+        user.onChange?.(merged)
+        if (!tableId) return
+        const columnsPayload = stripColumnsStateForPersistence(merged) as Record<
+          string,
+          Partial<ColumnsState>
+        >
+        pendingColumnsSyncRef.current = {
+          tableId,
+          field: columnsPreferenceField,
+          columns: columnsPayload,
+        }
+        if (columnsSyncDebounceRef.current) clearTimeout(columnsSyncDebounceRef.current)
+        columnsSyncDebounceRef.current = setTimeout(() => {
+          columnsSyncDebounceRef.current = null
+          const pending = pendingColumnsSyncRef.current
+          pendingColumnsSyncRef.current = null
+          if (!pending) return
+          syncTablePreference(pending.tableId, {
+            [pending.field]: pending.columns,
+          }).catch((err) => {
+            console.error('[UniTable] sync column preference failed', err)
+          })
+        }, 800)
+      },
+      // UniTable 自管 LS（仅 show/order）；禁止 ProTable 再读写含 fixed 的 persistence
+      persistenceKey: undefined,
+      persistenceType: undefined,
+    }
+  }, [
+    tableId,
+    effectiveTableColumns,
+    userColumnsState,
+    columnsStateValue,
+    columnsPersistenceFullKey,
+    columnsPreferenceField,
+    syncTablePreference,
+  ])
+
+  const handleColumnReset = React.useCallback(() => {
+    const defaults = buildDefaultColumnsStateMap(effectiveTableColumns)
+    setColumnsStateValue(defaults)
+    clearPersistedColumnsState(columnsPersistenceFullKey)
+    if (tableId) {
+      try {
+        localStorage.removeItem(`ui.tables.${tableId}.columnsWidth`)
+      } catch (_) {}
+      syncTablePreference(tableId, {
+        [columnsPreferenceField]: {},
+        columnsWidth: {},
+      }).catch((err) => {
+        console.error('[UniTable] reset column preference failed', err)
+      })
+    }
+  }, [
+    tableId,
+    effectiveTableColumns,
+    columnsPersistenceFullKey,
+    columnsPreferenceField,
+    syncTablePreference,
+  ])
 
   /**
    * 将按钮容器移动到 ant-pro-table 内部
@@ -1985,7 +1919,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }, [reloadAndRestWithTanstackCacheBust])
 
   /**
-   * 组件卸载时清除防抖定时器和 loading 延迟定时器
+   * 组件卸载：清搜索/loading 防抖；列/视图偏好防抖改为立即 flush，禁止丢弃未上传的账号偏好
    */
   useEffect(() => {
     return () => {
@@ -1997,6 +1931,35 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
       if (columnsSyncDebounceRef.current) {
         clearTimeout(columnsSyncDebounceRef.current)
+        columnsSyncDebounceRef.current = null
+      }
+      const pendingColumns = pendingColumnsSyncRef.current
+      pendingColumnsSyncRef.current = null
+      if (pendingColumns) {
+        useUserPreferenceStore
+          .getState()
+          .syncTablePreference(pendingColumns.tableId, {
+            [pendingColumns.field]: pendingColumns.columns,
+          })
+          .catch((err) => {
+            console.error('[UniTable] flush column preference on unmount failed', err)
+          })
+      }
+      if (viewTypeSyncDebounceRef.current) {
+        clearTimeout(viewTypeSyncDebounceRef.current)
+        viewTypeSyncDebounceRef.current = null
+      }
+      const pendingView = pendingViewTypeSyncRef.current
+      pendingViewTypeSyncRef.current = null
+      if (pendingView) {
+        useUserPreferenceStore
+          .getState()
+          .updatePreferences({
+            [uniTableViewTypePreferencePath(pendingView.tableId)]: pendingView.viewType,
+          })
+          .catch((err) => {
+            console.error('[UniTable] flush viewType preference on unmount failed', err)
+          })
       }
     }
   }, [])
@@ -2280,13 +2243,28 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const mergedToolbarOptions = (restProps.options || (restProps.toolbar as any)?.options || {}) as any
 
   /**
-   * 处理视图类型切换
+   * 处理视图类型切换；非 help 视图写入用户偏好（LS + 服务端）
    */
   const handleViewTypeChange = (viewType: string) => {
     setCurrentViewType(viewType)
     if (onViewTypeChange) {
       onViewTypeChange(viewType)
     }
+    if (!viewTypePersistenceId || viewType === UNI_TABLE_VIEW_TYPE_HELP) return
+    writePersistedUniTableViewType(viewTypePersistenceId, viewType)
+    pendingViewTypeSyncRef.current = { tableId: viewTypePersistenceId, viewType }
+    if (viewTypeSyncDebounceRef.current) clearTimeout(viewTypeSyncDebounceRef.current)
+    viewTypeSyncDebounceRef.current = setTimeout(() => {
+      viewTypeSyncDebounceRef.current = null
+      const pending = pendingViewTypeSyncRef.current
+      pendingViewTypeSyncRef.current = null
+      if (!pending) return
+      updatePreferences({
+        [uniTableViewTypePreferencePath(pending.tableId)]: pending.viewType,
+      }).catch((err) => {
+        console.error('[UniTable] sync viewType preference failed', err)
+      })
+    }, 400)
   }
 
   /** 3.1 左侧功能按钮区：`headerTitle` 内容（含 uni-batch、下推类按钮约定落此区）。 */
@@ -2585,11 +2563,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       return userRowSelection as
         | ({
             columnWidth?: number
+            fixed?: boolean | 'left' | 'right'
           } & Record<string, unknown>)
         | undefined
     }
     const rowSelectionObj = userRowSelection as {
       columnWidth?: number
+      fixed?: boolean | 'left' | 'right'
     } & Record<string, unknown>
     if (rowSelectionObj.columnWidth != null) return rowSelectionObj
     return {
@@ -2597,6 +2577,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       columnWidth: UNI_TABLE_SELECTION_COL_WIDTH,
     }
   }, [restProps])
+
+  /** 有左固定列时勾选列一并固定（antd 原生契约）；调用方显式 fixed 优先 */
+  const selectionFixedForNativePin = React.useMemo(() => {
+    const userFixed =
+      normalizedUserRowSelection && typeof normalizedUserRowSelection === 'object'
+        ? normalizedUserRowSelection.fixed
+        : undefined
+    if (userFixed !== undefined) return userFixed
+    return hasUniTableFixedLeftColumns(effectiveTableColumns) ? true : undefined
+  }, [normalizedUserRowSelection, effectiveTableColumns])
 
   const memoizedRowSelection = React.useMemo(
     () =>
@@ -2614,17 +2604,28 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 : UNI_TABLE_SELECTION_COL_WIDTH,
             selectedRowKeys,
             onChange: handleRowSelectionChange,
+            ...(selectionFixedForNativePin !== undefined
+              ? { fixed: selectionFixedForNativePin }
+              : {}),
             ...(rowSelectionGetCheckboxProps
               ? { getCheckboxProps: rowSelectionGetCheckboxProps }
               : {}),
           }
-        : normalizedUserRowSelection,
+        : normalizedUserRowSelection && typeof normalizedUserRowSelection === 'object'
+          ? {
+              ...normalizedUserRowSelection,
+              ...(selectionFixedForNativePin !== undefined
+                ? { fixed: selectionFixedForNativePin }
+                : {}),
+            }
+          : normalizedUserRowSelection,
     [
       enableRowSelection,
       normalizedUserRowSelection,
       selectedRowKeys,
       handleRowSelectionChange,
       rowSelectionGetCheckboxProps,
+      selectionFixedForNativePin,
     ],
   )
 
@@ -2690,34 +2691,24 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     isEmptyTable && hasUniTableFixedColumns(effectiveTableColumns)
   const tableHasRowSelection = enableRowSelection || !!normalizedUserRowSelection
 
-  const tableColumnsForRender = React.useMemo(() => {
-    const patch =
-      containerLayoutWidth > 0
-        ? buildPrimaryFlexWidthPatch(effectiveTableColumns, containerLayoutWidth, {
-            includeSelection: tableHasRowSelection,
-            reserveVerticalScrollbar: proTableBodyScrollYEnabled,
-          })
-        : {}
-    if (Object.keys(patch).length === 0) return effectiveTableColumns
-    return effectiveTableColumns.map((col, index) => {
-      const key = getProColumnStateKey(col, index)
-      const patchedWidth = patch[key]
-      return patchedWidth != null ? { ...col, width: patchedWidth } : col
-    })
-  }, [
-    effectiveTableColumns,
-    containerLayoutWidth,
-    tableHasRowSelection,
-    proTableBodyScrollYEnabled,
-  ])
-
-  const computedTableScrollX = React.useMemo(
+  const layoutPlan = React.useMemo(
     () =>
-      computeUniTableMinScrollX(tableColumnsForRender, {
+      resolveLayoutPlan({
+        columns: effectiveTableColumns,
+        containerWidth: containerLayoutWidth,
         includeSelection: tableHasRowSelection,
+        scrollYEnabled: proTableBodyScrollYEnabled,
       }),
-    [tableColumnsForRender, tableHasRowSelection],
+    [
+      effectiveTableColumns,
+      containerLayoutWidth,
+      tableHasRowSelection,
+      proTableBodyScrollYEnabled,
+    ],
   )
+
+  const tableColumnsForRender = layoutPlan.columns
+  const computedTableScrollX = layoutPlan.scrollX
 
   const rowClickSelectionEnabled =
     !disableRowClickSelection && tableHasRowSelection && !!memoizedRowSelection
@@ -2845,14 +2836,75 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       ro?.disconnect()
       window.removeEventListener('resize', measure)
     }
+    // 依赖列结构签名而非 effectiveTableColumns：实测会改列宽并生成新 columns 引用，
+    // 若再依赖 columns 会在树表展开时 useLayoutEffect → setState → 同步死循环。
   }, [
     policyScrollYEnabled,
     tableData,
     currentViewType,
-    effectiveTableColumns,
+    columnStructureSig,
     showDelayedLoading,
     currentPageSize,
   ])
+
+  /**
+   * 操作列宽度实测：动作条是 max-content，量到的是内容固有宽度，不随列宽变化，
+   * 所以「量 → 定宽 → 再量」不会自反馈。放在 useLayoutEffect 里，
+   * 首帧的槽位预算在浏览器绘制前就被实测值替换，用户看不到跳变。
+   */
+  React.useLayoutEffect(() => {
+    const root = containerRef.current
+    if (!root) return
+
+    const commit = (
+      measured: Record<string, number>,
+      setter: React.Dispatch<React.SetStateAction<Record<string, number>>>,
+    ) => {
+      if (Object.keys(measured).length === 0) return
+      setter((prev) => {
+        const changed = Object.keys(measured).some((k) => prev[k] !== measured[k])
+        return changed ? { ...prev, ...measured } : prev
+      })
+    }
+
+    const measure = () => {
+      const operationWidths: Record<string, number> = {}
+      root.querySelectorAll<HTMLElement>('td[data-uni-op-col]').forEach((cell) => {
+        const colKey = cell.dataset.uniOpCol
+        if (!colKey) return
+        const strip = cell.querySelector<HTMLElement>(`.${ROW_ACTIONS_STRIP_CLASS}`)
+        if (!strip) return
+        const width = resolveUniTableOperationWidthFromContent(
+          strip.getBoundingClientRect().width,
+        )
+        if (!(width > 0)) return
+        operationWidths[colKey] = Math.max(operationWidths[colKey] ?? 0, width)
+      })
+      commit(operationWidths, setMeasuredOperationWidths)
+
+      const primaryFlexWidths: Record<string, number> = {}
+      root.querySelectorAll<HTMLElement>('td[data-uni-flex-col]').forEach((cell) => {
+        const colKey = cell.dataset.uniFlexCol
+        if (!colKey) return
+        const identity = cell.querySelector<HTMLElement>(`.${UNI_TABLE_STACKED_IDENTITY_CLASS}`)
+        if (!identity) return
+        // 标识行右缘相对单元格左缘：天然含左内边距与树形缩进
+        const width = resolveUniTablePrimaryFlexWidthFromContent(
+          identity.getBoundingClientRect().right - cell.getBoundingClientRect().left,
+        )
+        if (!(width > 0)) return
+        primaryFlexWidths[colKey] = Math.max(primaryFlexWidths[colKey] ?? 0, width)
+      })
+      commit(primaryFlexWidths, setMeasuredPrimaryFlexWidths)
+    }
+
+    measure()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null
+    const tbody = root.querySelector('.ant-table-tbody')
+    if (ro && tbody) ro.observe(tbody)
+    return () => ro?.disconnect()
+    // 同 viewport 实测：不可依赖 effectiveTableColumns（实测改宽会换新引用 → 同步死循环）
+  }, [tableData, columnStructureSig, currentViewType, showDelayedLoading])
 
   React.useLayoutEffect(() => {
     const root = containerRef.current
@@ -2876,46 +2928,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       window.removeEventListener('resize', syncContainerLayout)
     }
   }, [currentViewType])
-
-  /** natural-height：antd 在 scroll.x 下可能重设 overflow，布局后强制关闭纵向滚动避免空纵条 */
-  React.useLayoutEffect(() => {
-    if (proTableBodyScrollYEnabled) return
-    const root = containerRef.current
-    if (!root) return
-
-    const applyNaturalHeightScroll = () => {
-      root
-        .querySelectorAll<HTMLElement>(
-          '.ant-table-header, .ant-table-content, .ant-table-body, .ant-table-body-inner, .ant-table-fixed-left .ant-table-body-inner, .ant-table-fixed-right .ant-table-body-inner',
-        )
-        .forEach((el) => {
-          el.style.overflowY = 'hidden'
-          el.style.maxHeight = 'none'
-          el.style.scrollbarGutter = 'stable'
-          if (isEmptyTable && !emptyTableHasFixedColumns) {
-            el.style.setProperty('overflow-x', 'hidden', 'important')
-          } else {
-            el.style.removeProperty('overflow-x')
-          }
-        })
-    }
-
-    applyNaturalHeightScroll()
-    const ro =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => applyNaturalHeightScroll())
-        : null
-    const tableHost = root.querySelector('.ant-table-wrapper')
-    if (ro && tableHost) ro.observe(tableHost)
-    return () => ro?.disconnect()
-  }, [
-    proTableBodyScrollYEnabled,
-    isEmptyTable,
-    emptyTableHasFixedColumns,
-    tableData,
-    currentViewType,
-    showDelayedLoading,
-  ])
 
   React.useLayoutEffect(() => {
     if (!enableRowSelection || selectedRowKeys.length === 0) return
@@ -3109,192 +3121,20 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   return (
     <>
-      <style>{`
-        /* 统一 UniTable 容器样式，确保所有页面间距一致 */
-        .uni-table-container {
-          position: relative;
-          padding: 0;
-          margin: 0;
-          width: 100%;
-        }
-        /* ProTable 外框：ProCard 默认用 colorSplit 过浅，统一为次级边框色 */
-        .uni-table-container:not(.uni-table-embedded) .uni-table-pro-table.ant-pro-table > .ant-pro-card.ant-pro-card-border,
-        .uni-table-container:not(.uni-table-embedded) .uni-table-alt-view-shell > .ant-pro-card.ant-pro-card-border {
-          border: 1px solid var(--ant-colorBorderSecondary, var(--ant-colorBorder)) !important;
-          border-radius: var(--ant-borderRadiusLG, var(--ant-borderRadius, 6px)) !important;
-          overflow: hidden;
-        }
-        /* 表头 + 表身外框（不含工具栏、分页） */
-        .uni-table-container:not(.uni-table-embedded) .uni-table-pro-table .ant-table-container {
-          border: 1px solid var(--ant-colorBorderSecondary, var(--ant-colorBorder));
-          border-radius: var(--ant-borderRadius, 6px);
-          overflow: hidden;
-        }
-        .uni-table-container.uni-table-embedded .ant-pro-card {
-          border: none !important;
-          box-shadow: none !important;
-          background: transparent !important;
-        }
-        .uni-table-container.uni-table-embedded .ant-pro-card .ant-pro-card-body {
-          padding: 0 !important;
-        }
-        .uni-table-container.uni-table-embedded .uni-table-pro-table {
-          margin: 0 !important;
-        }
-        .uni-table-container.uni-table-embedded .ant-pro-table-list-toolbar-container {
-          padding-block: 0 8px !important;
-        }
-        /* 表身行高/内边距由 ProTable size="small"（antd Table 密度）统一控制，勿在此覆盖 padding */
-        .uni-table-container .ant-table-tbody > tr > td {
-          border-bottom-color: rgba(0, 0, 0, 0.12) !important;
-        }
-        /* scroll.x / 固定列时 rc-table 注入的测量行：折叠占位，避免表头与首行数据之间出现白缝 */
-        .uni-table-container .ant-table-tbody > tr.ant-table-measure-row {
-          height: 0 !important;
-          line-height: 0 !important;
-          visibility: collapse;
-        }
-        .uni-table-container .ant-table-tbody > tr.ant-table-measure-row > .ant-table-measure-cell {
-          height: 0 !important;
-          padding: 0 !important;
-          border: none !important;
-          line-height: 0 !important;
-          font-size: 0 !important;
-          overflow: hidden !important;
-        }
-        .uni-table-container .ant-table-tbody > tr.ant-table-measure-row .ant-table-measure-cell-content {
-          height: 0 !important;
-          overflow: hidden !important;
-        }
-        /**
-         * 表身单元格默认不换行（贴合原生 antd 单行表格风格）。
-         * 表头同步相同 nowrap / 语义 class，避免表头与表身列宽计算不一致导致轻微错位。
-         */
-        .uni-table-container .ant-table-tbody > tr > td:not(.uni-table-operation-cell):not(.uni-table-lifecycle-cell),
-        .uni-table-container .ant-table-thead > tr > th:not(.uni-table-operation-cell):not(.uni-table-lifecycle-cell) {
-          white-space: nowrap;
-        }
-        .uni-table-container .ant-table-tbody > tr > td.uni-table-operation-cell,
-        .uni-table-container .ant-table-thead > tr > th.uni-table-operation-cell {
-          white-space: nowrap;
-        }
-        .uni-table-container .ant-table-tbody > tr > td.uni-table-lifecycle-cell,
-        .uni-table-container .ant-table-thead > tr > th.uni-table-lifecycle-cell {
-          white-space: nowrap;
-        }
-        /* 非 fixed：收缩锚点；fixed right 由列 width 控制，禁止 1px 以免与操作列重叠 */
-        .uni-table-container .ant-table-tbody > tr > td.uni-table-lifecycle-cell:not(.uni-table-lifecycle-fixed-right),
-        .uni-table-container .ant-table-thead > tr > th.uni-table-lifecycle-cell:not(.uni-table-lifecycle-fixed-right) {
-          width: 1px;
-          max-width: fit-content;
-        }
-        .uni-table-container .uni-table-pro-table .ant-table-thead .ant-table-column-sorters,
-        .uni-table-container .uni-table-pro-table .ant-table-thead .ant-table-column-title {
-          white-space: nowrap;
-        }
-        /* 工具栏置于表头 tooltip 之上，避免排序提示挡住批量操作等按钮 */
-        .uni-table-container .ant-pro-table-list-toolbar {
-          position: relative;
-          z-index: 3;
-        }
-        /* 无 string headerTitle 时仍展示 3.1 功能按钮行（新建/批量等） */
-        .uni-table-container.uni-table-has-list-toolbar .ant-pro-table-list-toolbar-container {
-          display: flex !important;
-          min-height: 32px;
-        }
-        /* 卡片/看板等 alt 视图：工具栏与内容区之间分隔线（对齐表格外框 border 色） */
-        .uni-table-container .uni-table-alt-view-toolbar {
-          border-bottom: 1px solid var(--ant-colorBorderSecondary, var(--ant-colorBorder));
-          padding-bottom: 12px;
-          margin-bottom: 16px;
-        }
-        /* 排序提示默认向下弹出（见 showSorterTooltip），避免遮挡上方工具栏 */
-        .uni-table-container .ant-table-thead .ant-table-column-sorters-tooltip-target-sorter .ant-table-column-sorter {
-          margin-inline-start: 4px;
-        }
-        /* 未限高（natural-height）：纵向滚动由 UniTable 统一关闭，覆盖 global.less 全局表格规则 */
-        .uni-table-container.uni-table-natural-height .ant-pro-table,
-        .uni-table-container.uni-table-natural-height .ant-pro-card,
-        .uni-table-container.uni-table-natural-height .ant-pro-card-body,
-        .uni-table-container.uni-table-natural-height .ant-pro-table-container,
-        .uni-table-container.uni-table-natural-height .ant-table-wrapper,
-        .uni-table-container.uni-table-natural-height .ant-spin-nested-loading,
-        .uni-table-container.uni-table-natural-height .ant-spin-container,
-        .uni-table-container.uni-table-natural-height .ant-table,
-        .uni-table-container.uni-table-natural-height .ant-table-container {
-          height: auto !important;
-          max-height: none !important;
-          flex: 0 1 auto !important;
-        }
-        /* 未限高时不拉伸 UniTable 填满列高（否则 flex+overflow-y:auto 产生空滚动条） */
-        .uni-table-container.uni-table-natural-height .ant-table-content,
-        .uni-table-container.uni-table-natural-height .ant-table-body,
-        .uni-table-container.uni-table-natural-height .ant-table-body-inner,
-        .uni-table-container.uni-table-natural-height .ant-table-fixed-left .ant-table-body-inner,
-        .uni-table-container.uni-table-natural-height .ant-table-fixed-right .ant-table-body-inner,
-        .uni-table-container.uni-table-natural-height .ant-table-header {
-          overflow-y: hidden !important;
-          max-height: none !important;
-          scrollbar-gutter: stable !important;
-          flex: none !important;
-        }
-        .uni-table-container.uni-table-natural-height .ant-table-wrapper .ant-table-content::-webkit-scrollbar,
-        .uni-table-container.uni-table-natural-height .ant-table-wrapper .ant-table-body::-webkit-scrollbar {
-          width: 0 !important;
-          display: none !important;
-        }
-        .uni-table-container.uni-table-natural-height .ant-table-wrapper .ant-table-content::-webkit-scrollbar:horizontal,
-        .uni-table-container.uni-table-natural-height .ant-table-wrapper .ant-table-body::-webkit-scrollbar:horizontal {
-          height: 6px !important;
-          display: block !important;
-        }
-        /* 空表且无固定列：关闭横向滚动，避免仅表头时出现空横条 */
-        .uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-content,
-        .uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-body,
-        .uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-body-inner,
-        .uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-fixed-left .ant-table-body-inner,
-        .uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-fixed-right .ant-table-body-inner {
-          overflow-x: hidden !important;
-        }
-        /* 空表有固定列：保留 scroll 容器以维持表头对齐，仅隐藏横向滚动条外观 */
-        .uni-table-container.uni-table-natural-height.uni-table-empty.uni-table-empty-has-fixed .ant-table-wrapper .ant-table-content::-webkit-scrollbar:horizontal,
-        .uni-table-container.uni-table-natural-height.uni-table-empty.uni-table-empty-has-fixed .ant-table-wrapper .ant-table-body::-webkit-scrollbar:horizontal {
-          height: 0 !important;
-          display: none !important;
-        }
-        .uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-wrapper .ant-table-content::-webkit-scrollbar:horizontal,
-        .uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-wrapper .ant-table-body::-webkit-scrollbar:horizontal {
-          height: 0 !important;
-          display: none !important;
-        }
-        /* 已限高（scroll.y）：表头/表体同步预留纵向滚动条占位，避免列宽抖动 */
-        .uni-table-container.uni-table-scroll-y-mode .uni-table-pro-table.uni-table-scroll-y .ant-table-header,
-        .uni-table-container.uni-table-scroll-y-mode .uni-table-pro-table.uni-table-scroll-y .ant-table-body,
-        .uni-table-container.uni-table-scroll-y-mode .uni-table-pro-table.uni-table-scroll-y .ant-table-content {
-          scrollbar-gutter: stable !important;
-        }
-        /* 数值 scroll.x + table-layout:fixed：表头/表体同宽，禁止 rc-table 按表身内容二次测表头列宽 */
-        .uni-table-container .uni-table-pro-table .ant-table-header table,
-        .uni-table-container .uni-table-pro-table .ant-table-body table {
-          table-layout: fixed !important;
-        }
-        .uni-table-container.uni-table-scroll-y-mode .uni-table-pro-table.uni-table-scroll-y .ant-table-header {
-          overflow: hidden !important;
-        }
-      `}</style>
       <div
         ref={containerRef}
-        className={`uni-table-container${embedded ? ' uni-table-embedded' : ''}${proTableBodyScrollYEnabled ? ' uni-table-scroll-y-mode' : ' uni-table-natural-height'}${isEmptyTable ? ' uni-table-empty' : ''}${emptyTableHasFixedColumns ? ' uni-table-empty-has-fixed' : ''}${hasListToolbarActions ? ' uni-table-has-list-toolbar' : ''}`}
-        style={{
-          position: 'relative',
-          padding: isMobile ? '0 8px' : 0,
-          margin: 0,
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          boxSizing: 'border-box',
-          ...(fillViewportBody ? { flex: 1, minHeight: 0 } : {}),
-        }}
+        className={[
+          'uni-table-container',
+          embedded ? 'uni-table-embedded' : '',
+          layoutPlan.mode === 'scrollY' ? 'uni-table-scroll-y-mode' : 'uni-table-natural-height',
+          isEmptyTable ? 'uni-table-empty' : '',
+          emptyTableHasFixedColumns ? 'uni-table-empty-has-fixed' : '',
+          hasListToolbarActions ? 'uni-table-has-list-toolbar' : '',
+          fillViewportBody ? 'uni-table-fill-viewport' : '',
+          isMobile ? 'uni-table-mobile' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
           {showSearchToolbarRow ? (
@@ -3338,7 +3178,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               }}
             >
               <ProTable<T>
-              key={`uni-pt-cols-${String(columnsPersistenceFullKey ?? 'np')}-${columnsStatePatchEpoch}`}
+              key={`uni-pt-cols-${String(columnsPersistenceFullKey ?? 'np')}`}
               headerTitle={memoizedHeaderTitle}
               actionRef={actionRefForProTable}
               formRef={formRef}
@@ -3397,23 +3237,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 } = restProps
                 const mergedProTableClassName = [
                   'uni-table-pro-table',
-                  proTableBodyScrollYEnabled ? 'uni-table-scroll-y' : '',
+                  layoutPlan.mode === 'scrollY' ? 'uni-table-scroll-y' : '',
                   userTableClassName,
                 ]
                   .filter(Boolean)
                   .join(' ')
-                const mergedComponents =
-                  resizableColumns.length > 0
-                    ? {
-                        ...(userComponents || {}),
-                        header: {
-                          ...(userComponents?.header || {}),
-                          cell: resizableComponents.header.cell,
-                        },
-                      }
-                    : userComponents
-                /** 统一滚动策略：默认忽略页面旧式 scroll.x/scroll.y，仅保留白名单开关。 */
-                const ourScrollX = effectiveTableWidth
+                /** 统一滚动策略：scroll.x 仅来自布局引擎；scroll.y 由策略层决定。 */
                 const normalizedUserScroll =
                   (!allowCustomScrollY || !allowCustomScrollX) && userScroll
                     ? ({
@@ -3423,11 +3252,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                       } as typeof userScroll)
                     : userScroll
                 let mergedScroll =
-                  ourScrollX != null
-                    ? { ...(normalizedUserScroll || {}), x: ourScrollX }
-                    : allowCustomScrollX && normalizedUserScroll?.x !== undefined
-                      ? normalizedUserScroll
-                      : { ...(normalizedUserScroll || {}), x: computedTableScrollX }
+                  allowCustomScrollX && normalizedUserScroll?.x !== undefined
+                    ? normalizedUserScroll
+                    : { ...(normalizedUserScroll || {}), x: computedTableScrollX }
                 const useVirtual = virtualized || userVirtual === true
                 if (!useVirtual && mergedScroll?.y === undefined && listPageScrollY) {
                   mergedScroll = {
@@ -3450,6 +3277,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   ? mergeOnRowWithRowClickSelection
                   : userOnRow
 
+                // sticky 仅表示页内粘性表头，与列固定无关；有固定列时禁止默认强开
                 return {
                   ...otherProps,
                   className: mergedProTableClassName,
@@ -3458,10 +3286,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                       target: 'sorter-icon',
                       placement: 'bottom',
                     },
-                  ...(proTableBodyScrollYEnabled && userSticky !== undefined ? { sticky: userSticky } : {}),
+                  ...(userSticky !== undefined ? { sticky: userSticky } : {}),
                   ...(mergedOnRow ? { onRow: mergedOnRow } : {}),
                   ...(useVirtual ? { virtual: true } : userVirtual !== undefined ? { virtual: userVirtual } : {}),
-                  components: mergedComponents,
+                  ...(userComponents ? { components: userComponents } : {}),
                   ...(mergedScroll != null ? { scroll: mergedScroll } : {}),
                 }
               })()}

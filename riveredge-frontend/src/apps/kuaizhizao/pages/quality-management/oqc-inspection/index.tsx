@@ -129,7 +129,8 @@ const OQCInspectionPage: React.FC = () => {
   const pullFromSalesDeliveryAction = resolveKuaizhizaoDocumentAction(t, 'oqc_inspection.pull_from_sales_delivery');
   const { message: messageApi } = App.useApp();
   const oqcPerms = useResourcePermissions(OQC_RESOURCE);
-  const { canCreate, canUpdate } = oqcPerms;
+  const { canCreate, canAction } = oqcPerms;
+  const canConduct = canAction?.('execute') ?? false;
   const oqcAuditEnabled = useAuditRequired('oqc_inspection', false);
   const oqcAuditColumn = useMemo(
     () => createListAuditPhaseColumn<OQCInspection>({ t, auditEnabled: oqcAuditEnabled }),
@@ -916,7 +917,7 @@ const OQCInspectionPage: React.FC = () => {
           }}
           onFinish={async (values) => {
             if (!currentRow?.id) return;
-            if (!canUpdate) {
+            if (!canConduct) {
               messageApi.error(t('app.kuaizhizao.quality.oqc.messages.noConductPermission'));
               return false;
             }

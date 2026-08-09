@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { LifecycleStageBadge } from '../../../../../components/uni-lifecycle';
 import type { LifecycleResult } from '../../../../../components/uni-lifecycle/types';
 import { translateLifecycleResult } from '../../../../../utils/globalLifecycleI18n';
 
@@ -13,12 +13,16 @@ export function resolveLifecycleDisplayLabel(lifecycle: LifecycleResult): string
   return stages.filter((s) => s.status === 'done').at(-1)?.label ?? '-';
 }
 
-/** 列表「生命周期」列统一渲染（仅业务主轴，不含审核态） */
+/**
+ * 列表「当前阶段」列统一渲染。
+ * 唯一控制源：LifecycleStageBadge（徽章；无进度圆环；不含审核态）。
+ */
 export function ListUniLifecycleCell({
   lifecycle,
   withSubStages = false,
 }: {
   lifecycle: LifecycleResult;
+  /** 为 true 时徽章 hover 展示子阶段链路 */
   withSubStages?: boolean;
 }) {
   const { t, i18n } = useTranslation();
@@ -27,19 +31,17 @@ export function ListUniLifecycleCell({
     [lifecycle, t, i18n.language],
   );
   const displayLabel = resolveLifecycleDisplayLabel(translated);
+  const subStages = withSubStages ? translated.subStages : undefined;
+
   return (
-    <UniLifecycle
-      percent={translated.percent}
+    <LifecycleStageBadge
       stageName={displayLabel}
       status={translated.status}
-      statusClass={translated.statusClass}
-      flowClass={translated.flowClass}
-      subStages={withSubStages ? translated.subStages : undefined}
-      subPercent={translated.subPercent}
+      percent={translated.percent}
+      subStages={subStages}
       subLabel={translated.subLabel}
-      showLabel
-      size="small"
-      showCircleTooltip={false}
+      subPercent={translated.subPercent}
+      showTooltip={Boolean(subStages?.length)}
     />
   );
 }

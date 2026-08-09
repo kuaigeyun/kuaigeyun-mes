@@ -10,6 +10,7 @@ export {
   ROW_ACTIONS_DIRECT_MAX,
   ROW_ACTIONS_INLINE_GAP,
   ROW_ACTIONS_MIN_PRIMARY_VISIBLE,
+  ROW_ACTIONS_STRIP_CLASS,
   renderRowActionsOverflow,
 } from './overflow'
 export { renderUniTableOperationCell } from './renderCell'

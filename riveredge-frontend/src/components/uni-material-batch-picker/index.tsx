@@ -16,7 +16,7 @@ import { materialGroupApi } from '../../apps/master-data/services/material';
 import type { Material } from '../../apps/master-data/types/material';
 import { SecureImage } from '../secure-image';
 import { UniTableStackedPrimaryCell } from '../uni-table/stackedPrimaryColumn';
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../services/dataDictionary';
+import { getMaterialUnitDisplayMapShared } from '../../utils/materialUnitDisplay';
 import type { UniMaterialBatchPickerProps } from './types';
 import {
   fetchBatchMaterialHasBom,
@@ -75,15 +75,10 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
 
   const loadUnits = useCallback(async () => {
     try {
-      const dict = await getDataDictionaryByCode('MATERIAL_UNIT');
-      const items = await getDictionaryItemList(dict.uuid, true);
-      const map: Record<string, string> = {};
-      items.forEach((item) => {
-        map[item.value] = item.label;
-      });
+      const map = await getMaterialUnitDisplayMapShared();
       setUnitsMap(map);
     } catch (error) {
-      console.error('Failed to load material units dictionary:', error);
+      console.error('Failed to load material unit catalog:', error);
     }
   }, []);
 
@@ -115,17 +110,24 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
           sourceType: st,
         });
         if (seq !== fetchSeqRef.current) return;
-        const arr: Material[] = res.items.map((item) => ({
-          id: item.id as number,
-          uuid: item.uuid ?? '',
-          name: item.name ?? '',
-          code: item.code ?? undefined,
-          mainCode: (item.extra?.main_code as string) ?? item.code ?? '',
-          specification: (item.extra?.specification as string) ?? undefined,
-          baseUnit: (item.extra?.base_unit as string) ?? undefined,
-          sourceType: (item.extra?.source_type as string) ?? undefined,
-          groupId: item.extra?.group_id as number | undefined,
-        }));
+        const arr: Material[] = res.items.map((item) => {
+          const rawImages = item.extra?.images
+          const images = Array.isArray(rawImages)
+            ? (rawImages as Material['images'])
+            : undefined
+          return {
+            id: item.id as number,
+            uuid: item.uuid ?? '',
+            name: item.name ?? '',
+            code: item.code ?? undefined,
+            mainCode: (item.extra?.main_code as string) ?? item.code ?? '',
+            specification: (item.extra?.specification as string) ?? undefined,
+            baseUnit: (item.extra?.base_unit as string) ?? undefined,
+            sourceType: (item.extra?.source_type as string) ?? undefined,
+            groupId: item.extra?.group_id as number | undefined,
+            images,
+          } as Material
+        });
         setList(arr);
         setTotalHint(res.total);
       } catch (err) {

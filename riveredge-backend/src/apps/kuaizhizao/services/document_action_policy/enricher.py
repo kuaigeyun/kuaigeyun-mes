@@ -594,20 +594,98 @@ def enrich_demand_list_capabilities(
     return out
 
 
-def enrich_purchase_requisition_capabilities_on_response(req: Any, response: T) -> T:
-    caps = derive_purchase_requisition_capabilities(req)
+async def purchase_requisition_linked_po_by_ids(
+    tenant_id: int,
+    requisition_ids: List[int],
+) -> Dict[int, bool]:
+    """批量判定采购申请是否已有明细转采购订单（行上 PO 或下游反查）。"""
+    ids = [int(rid) for rid in requisition_ids if rid]
+    if not ids:
+        return {}
+    from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisitionItem
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    linked: Dict[int, bool] = {rid: False for rid in ids}
+    items = await PurchaseRequisitionItem.filter(
+        tenant_id=tenant_id,
+        requisition_id__in=ids,
+    ).all()
+    item_to_req: Dict[int, int] = {}
+    unchecked_item_ids: List[int] = []
+    for it in items:
+        rid = int(it.requisition_id)
+        iid = int(it.id)
+        item_to_req[iid] = rid
+        if it.purchase_order_id:
+            linked[rid] = True
+        else:
+            unchecked_item_ids.append(iid)
+    if unchecked_item_ids:
+        linked_sources = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            source_type="PurchaseRequisition",
+            source_id__in=unchecked_item_ids,
+            deleted_at__isnull=True,
+        ).values_list("source_id", flat=True)
+        for source_id in linked_sources:
+            rid = item_to_req.get(int(source_id))
+            if rid is not None:
+                linked[rid] = True
+    return linked
+
+
+async def purchase_requisition_has_linked_purchase_order(
+    tenant_id: int,
+    requisition_id: int,
+) -> bool:
+    linked = await purchase_requisition_linked_po_by_ids(tenant_id, [int(requisition_id)])
+    return bool(linked.get(int(requisition_id), False))
+
+
+def enrich_purchase_requisition_capabilities_on_response(
+    req: Any,
+    response: T,
+    *,
+    has_linked_purchase_order: bool = False,
+) -> T:
+    caps = derive_purchase_requisition_capabilities(
+        req,
+        has_linked_purchase_order=has_linked_purchase_order,
+    )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
     return response
 
 
-def enrich_purchase_requisition_list_capabilities(
+async def enrich_purchase_requisition_detail_capabilities(
+    tenant_id: int,
+    req: Any,
+    response: T,
+) -> T:
+    has_linked = await purchase_requisition_has_linked_purchase_order(
+        tenant_id, int(req.id)
+    )
+    return enrich_purchase_requisition_capabilities_on_response(
+        req,
+        response,
+        has_linked_purchase_order=has_linked,
+    )
+
+
+async def enrich_purchase_requisition_list_capabilities(
+    tenant_id: int,
     reqs: List[Any],
     responses: List[T],
 ) -> List[T]:
+    req_ids = [int(getattr(r, "id", 0) or 0) for r in reqs]
+    linked_map = await purchase_requisition_linked_po_by_ids(tenant_id, req_ids)
     out: List[T] = []
     for req_model, resp in zip(reqs, responses):
-        caps = derive_purchase_requisition_capabilities(req_model)
+        rid = int(getattr(req_model, "id", 0) or 0)
+        caps = derive_purchase_requisition_capabilities(
+            req_model,
+            has_linked_purchase_order=linked_map.get(rid, False),
+        )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
         else:
@@ -1081,11 +1159,13 @@ def enrich_work_order_capabilities_on_response(
     *,
     has_returnable_picking: bool | None = None,
     has_downstream_documents: bool | None = None,
+    audit_required: bool | None = None,
 ) -> T:
     caps = derive_work_order_capabilities(
         wo,
         has_returnable_picking=has_returnable_picking,
         has_downstream_documents=has_downstream_documents,
+        audit_required=audit_required,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -1098,6 +1178,7 @@ def enrich_work_order_list_capabilities(
     *,
     has_returnable_picking_by_id: dict[int, bool] | None = None,
     has_downstream_documents_by_id: dict[int, bool] | None = None,
+    audit_required: bool | None = None,
 ) -> List[T]:
     out: List[T] = []
     lookup = has_returnable_picking_by_id or {}
@@ -1110,6 +1191,7 @@ def enrich_work_order_list_capabilities(
             wo,
             has_returnable_picking=has_returnable,
             has_downstream_documents=has_downstream,
+            audit_required=audit_required,
         )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))

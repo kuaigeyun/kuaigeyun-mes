@@ -161,6 +161,8 @@ export interface PurchaseOrderListParams {
   pullable_only?: boolean;
   /** 加载目标：purchase_order_change */
   pull_target?: 'purchase_order_change';
+  /** 附带订单明细（明细表格视图） */
+  include_items?: boolean;
 }
 
 export interface PurchaseOrderListResponse {

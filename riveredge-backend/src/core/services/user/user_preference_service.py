@@ -18,6 +18,11 @@ from infra.exceptions.exceptions import NotFoundError
 # 出现在 patch 顶层时整段替换（不清空未提交的兄弟键，如 ui.tables）
 _REPLACE_TOP_LEVEL_KEYS: FrozenSet[str] = frozenset({"theme_config"})
 
+# 任意层级整段替换：表格列偏好是完整快照，深合并会导致隐藏列无法真正覆盖/重置
+_REPLACE_DICT_KEYS: FrozenSet[str] = frozenset(
+    {"theme_config", "columns", "columnsDetailTable", "columnsWidth"}
+)
+
 
 def merge_preferences_patch(
     existing: Dict[str, Any] | None,
@@ -27,7 +32,7 @@ def merge_preferences_patch(
     将客户端 patch 合并进已有 preferences。
 
     - 普通对象：递归深合并（并发写不同子树互不覆盖）
-    - theme_config：整段替换（需能清空 siderBgColor 等字段）
+    - theme_config / columns*：整段替换（列偏好为完整快照，需能清空）
     - 标量：直接覆盖
     """
     out: Dict[str, Any] = dict(existing or {})
@@ -35,7 +40,7 @@ def merge_preferences_patch(
         return out
 
     for key, value in patch.items():
-        if key in _REPLACE_TOP_LEVEL_KEYS:
+        if key in _REPLACE_DICT_KEYS or key in _REPLACE_TOP_LEVEL_KEYS:
             out[key] = value
         elif isinstance(value, dict) and isinstance(out.get(key), dict):
             out[key] = merge_preferences_patch(out.get(key), value)

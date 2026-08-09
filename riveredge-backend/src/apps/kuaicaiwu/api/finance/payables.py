@@ -153,7 +153,7 @@ async def list_payables(
         sort_field=sort_field,
         sort_order=sort_order,
     )
-    enriched = await payable_pull_service.enrich_push_payment_capabilities(tenant_id, payables)
+    enriched = await payable_pull_service.enrich_push_capabilities(tenant_id, payables)
     items = [PayableResponse.model_validate(row) for row in enriched]
     return PayableListResponse(
         items=items,

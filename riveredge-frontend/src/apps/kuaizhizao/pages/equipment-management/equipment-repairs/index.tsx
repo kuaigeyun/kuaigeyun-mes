@@ -13,7 +13,7 @@ import {
   MODAL_CONFIG,
   detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { equipmentFaultApi } from '../../../services/equipment';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -269,7 +269,6 @@ const EquipmentRepairsPage: React.FC = () => {
       {
         title: t('common.actions'),
         valueType: 'option',
-        width: 160,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => {
@@ -291,7 +290,7 @@ const EquipmentRepairsPage: React.FC = () => {
               </Button>
             ) : null,
           ];
-          return renderRowActionsOverflow(actions, { keyPrefix: `repair-${record.uuid ?? 'row'}` });
+          return actions;
         },
       },
     ],
@@ -330,7 +329,6 @@ const EquipmentRepairsPage: React.FC = () => {
           }}
           search={{ labelWidth: 'auto' }}
           pagination={{ defaultPageSize: 20 }}
-          scroll={{ x: 1400 }}
         />
       </ListPageTemplate>
 

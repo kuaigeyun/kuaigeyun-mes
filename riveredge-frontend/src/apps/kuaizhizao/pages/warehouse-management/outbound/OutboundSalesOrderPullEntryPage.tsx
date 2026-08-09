@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Card, Col, DatePicker, Form, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -15,6 +15,7 @@ import {
   mergeRecordMaps,
   usePullEntryFormDraft,
 } from '../shared/pullEntryFormDraft';
+import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
 import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   DocumentFormPageLayout,
@@ -45,6 +46,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
   const { soId: soIdParam } = useParams<{ soId: string }>();
   const salesOrderId = Number(soIdParam);
   const navigate = useNavigate();
+  const location = useLocation();
   const { message: messageApi } = App.useApp();
   const operatorHook = useOutboundOperatorSelect();
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -145,8 +147,12 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
 
   const leavePage = useCallback(() => {
     clearDraft();
-    navigate(OUTBOUND_LIST_PATH);
-  }, [clearDraft, navigate]);
+    navigateLeavingPullEntry(
+      navigate,
+      OUTBOUND_LIST_PATH,
+      pullEntryTabKey(location.pathname, location.search),
+    );
+  }, [clearDraft, navigate, location.pathname, location.search]);
 
   useEffect(() => {
     bindSnapshot(() => ({
@@ -294,6 +300,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
       const created = await pushSalesOrderToDelivery(salesOrderId, {
         delivery_quantities: deliveryQuantities,
         line_warehouses: lineWarehouses,
+        notes: notes.trim() || undefined,
       });
       if (created?.delivery_id == null) {
         messageApi.error(t('app.kuaizhizao.warehouseOutbound.entry.noDeliveryId'));
@@ -308,20 +315,23 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
         warehouse_name: whOpt?.name,
         delivery_time: deliveryTime?.toISOString(),
         deliverer_name: operatorHook.receiverName.trim() || undefined,
-        notes: notes.trim() || undefined,
+        // 备注已在下推创建时写入，避免 update 覆盖掉来源说明
         attachments: normalizeDocumentAttachments(attachments),
       });
       invalidateMenuBadgeCounts();
       clearDraft();
       if (mode === 'confirm') {
-        navigate(OUTBOUND_LIST_PATH, {
-          state: {
+        navigateLeavingPullEntry(
+          navigate,
+          OUTBOUND_LIST_PATH,
+          pullEntryTabKey(location.pathname, location.search),
+          {
             outboundDirectConfirm: {
               id: Number(created.delivery_id),
               outbound_type: 'sales_delivery',
             },
           },
-        });
+        );
       } else {
         messageApi.success(
           created.message ||

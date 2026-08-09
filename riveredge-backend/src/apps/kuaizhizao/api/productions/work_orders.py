@@ -1157,6 +1157,26 @@ async def split_work_order(
     )
 
 
+@router.post(
+    "/work-orders/{work_order_id}/unsplit",
+    response_model=WorkOrderResponse,
+    summary="Unsplit work order",
+)
+async def unsplit_work_order(
+    work_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderResponse:
+    """
+    撤销拆分：删除全部未执行的拆分子工单，并恢复主工单状态与工序。
+    """
+    return await WorkOrderService().unsplit_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        updated_by=current_user.id,
+    )
+
+
 @router.post("/work-orders/{work_order_id}/freeze", response_model=WorkOrderResponse, summary="Freeze work order")
 async def freeze_work_order(
     work_order_id: int,

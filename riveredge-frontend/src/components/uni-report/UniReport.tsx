@@ -265,7 +265,6 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
           onExport={handleExport}
           showPrintButton={showPrintButton}
           onPrint={handlePrint}
-          scroll={{ x: 1200 }}
           bordered={template.bordered ?? true}
           size={template.tableSize ?? 'small'}
           summary={tableSummary}

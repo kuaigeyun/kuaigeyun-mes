@@ -12,15 +12,18 @@ SOURCE_TYPE_MAKE = "Make"
 SOURCE_TYPE_BUY = "Buy"
 SOURCE_TYPE_PHANTOM = "Phantom"
 SOURCE_TYPE_OUTSOURCE = "Outsource"
+SOURCE_TYPE_CUSTOMER_PROVIDED = "CustomerProvided"
 SOURCE_TYPE_SERVICE = "Service"
 
 LEGACY_SOURCE_TYPE_CONFIGURE = "Configure"
 
+# 展示顺序：自制 → 采购 → 委外 → 虚拟 → 客供 → 服务
 CANONICAL_SOURCE_TYPES = [
     SOURCE_TYPE_MAKE,
     SOURCE_TYPE_BUY,
-    SOURCE_TYPE_PHANTOM,
     SOURCE_TYPE_OUTSOURCE,
+    SOURCE_TYPE_PHANTOM,
+    SOURCE_TYPE_CUSTOMER_PROVIDED,
     SOURCE_TYPE_SERVICE,
 ]
 
@@ -58,6 +61,7 @@ def require_canonical_material_source_type(
     name_part = f" {material_name}" if material_name else ""
     id_part = f"物料 {identity}" if identity else "物料"
     raise ValidationError(
-        f"{id_part}{name_part} 未配置有效的物料来源类型（Make/Buy/Phantom/Outsource/Service），"
+        f"{id_part}{name_part} 未配置有效的物料来源类型"
+        "（Make/Buy/Outsource/Phantom/CustomerProvided/Service），"
         "请在物料主数据中维护 source_type 后再操作"
     )

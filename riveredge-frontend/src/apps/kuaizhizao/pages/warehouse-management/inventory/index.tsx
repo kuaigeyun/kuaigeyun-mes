@@ -498,7 +498,6 @@ const InventoryPage: React.FC = () => {
         rowKey="id"
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
-        scroll={{ x: 1560 }}
       />
     </ListPageTemplate>
   );

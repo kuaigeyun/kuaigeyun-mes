@@ -107,6 +107,37 @@ export function parseImportCodedCell(
   return v;
 }
 
+/**
+ * 列表/详情展示字典存库值：先按 code 查 label，再按 label 反查，最后回落原文。
+ * 与 {@link parseImportCodedCell} 存库策略对称，兼容导入时以中文 label 落库的情况。
+ */
+export function resolveDictionaryDisplayLabel(
+  labelByCode: ImportCodeLabelMap | undefined,
+  value?: string | null,
+  emptyDisplay = '—',
+): string {
+  const v = String(value ?? '').trim();
+  if (!v) return emptyDisplay;
+  if (!labelByCode || Object.keys(labelByCode).length === 0) return v;
+
+  if (Object.prototype.hasOwnProperty.call(labelByCode, v)) {
+    return labelByCode[v];
+  }
+
+  const byLowerCode = Object.keys(labelByCode).find((code) => code.toLowerCase() === v.toLowerCase());
+  if (byLowerCode) return labelByCode[byLowerCode];
+
+  const byLabel = Object.entries(labelByCode).find(([, label]) => String(label).trim() === v);
+  if (byLabel) return byLabel[1];
+
+  const byLabelLower = Object.entries(labelByCode).find(
+    ([, label]) => String(label).trim().toLowerCase() === v.toLowerCase(),
+  );
+  if (byLabelLower) return byLabelLower[1];
+
+  return v;
+}
+
 export function buildImportDictionaryOptionPack(
   labelByCode: ImportCodeLabelMap,
 ): ImportDictionaryOptionPack {

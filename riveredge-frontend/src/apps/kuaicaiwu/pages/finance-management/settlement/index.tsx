@@ -4,6 +4,7 @@ import type { ActionType } from '@ant-design/pro-components';
 import { ProColumns } from '@ant-design/pro-components';
 import { Modal, message, Space, InputNumber, Divider, Typography, Row, Col, Alert, Button, Spin, Table, Empty } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { MultiTabListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -35,14 +36,37 @@ const C = 'app.kuaicaiwu.common';
 const formatSettleMoney = (value: number) =>
   `¥${Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+const parsePositiveInt = (raw: string | null): number | null => {
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+};
+
 const SettlementPage: React.FC = () => {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const settlementPerms = useResourcePermissions(SETTLEMENT_RESOURCE);
   const receivableActionRef = useRef<ActionType>();
   const receiptActionRef = useRef<ActionType>();
   const payableActionRef = useRef<ActionType>();
   const paymentActionRef = useRef<ActionType>();
-  const [activeTab, setActiveTab] = useState('receivable');
+  const [activeTab, setActiveTab] = useState(() =>
+    searchParams.get('tab') === 'payable' ? 'payable' : 'receivable',
+  );
+  const [focusSupplierId, setFocusSupplierId] = useState<number | null>(() =>
+    parsePositiveInt(searchParams.get('supplierId')),
+  );
+  const [focusCustomerId, setFocusCustomerId] = useState<number | null>(() =>
+    parsePositiveInt(searchParams.get('customerId')),
+  );
+  const [focusPaymentId, setFocusPaymentId] = useState<number | null>(() =>
+    parsePositiveInt(searchParams.get('paymentId')),
+  );
+  const [focusReceiptId, setFocusReceiptId] = useState<number | null>(() =>
+    parsePositiveInt(searchParams.get('receiptId')),
+  );
+  const [focusPaymentCode, setFocusPaymentCode] = useState<string>('');
+  const [focusReceiptCode, setFocusReceiptCode] = useState<string>('');
   const [selectedReceivable, setSelectedReceivable] = useState<Record<string, unknown> | null>(null);
   const [selectedReceipt, setSelectedReceipt] = useState<Record<string, unknown> | null>(null);
   const [selectedPayable, setSelectedPayable] = useState<Record<string, unknown> | null>(null);
@@ -56,6 +80,60 @@ const SettlementPage: React.FC = () => {
   const [helpOpen, setHelpOpen] = useState(false);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadFocusDocs = async () => {
+      if (focusPaymentId) {
+        try {
+          const payment = await paymentService.getPayment(focusPaymentId);
+          if (cancelled) return;
+          if (Number(payment.unsettled_amount ?? 0) <= 0) {
+            message.info(t(`${P}.focusDocAlreadySettled`));
+            setFocusPaymentId(null);
+            setFocusPaymentCode('');
+          } else {
+            setFocusPaymentCode(String(payment.payment_code || ''));
+            if (!focusSupplierId && payment.supplier_id != null) {
+              setFocusSupplierId(Number(payment.supplier_id));
+            }
+          }
+        } catch {
+          if (!cancelled) {
+            setFocusPaymentId(null);
+            setFocusPaymentCode('');
+          }
+        }
+      }
+      if (focusReceiptId) {
+        try {
+          const receipt = await receiptService.getReceipt(focusReceiptId);
+          if (cancelled) return;
+          if (Number(receipt.unsettled_amount ?? 0) <= 0) {
+            message.info(t(`${P}.focusDocAlreadySettled`));
+            setFocusReceiptId(null);
+            setFocusReceiptCode('');
+          } else {
+            setFocusReceiptCode(String(receipt.receipt_code || ''));
+            if (!focusCustomerId && receipt.customer_id != null) {
+              setFocusCustomerId(Number(receipt.customer_id));
+            }
+          }
+        } catch {
+          if (!cancelled) {
+            setFocusReceiptId(null);
+            setFocusReceiptCode('');
+          }
+        }
+      }
+    };
+    void loadFocusDocs();
+    return () => {
+      cancelled = true;
+    };
+    // 仅随入口单据 ID 解析一次上下文
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusPaymentId, focusReceiptId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,6 +185,92 @@ const SettlementPage: React.FC = () => {
     setApPreviewData(null);
     setSettleAmount(0);
   }, []);
+
+  const clearFocusContext = useCallback(() => {
+    setFocusSupplierId(null);
+    setFocusCustomerId(null);
+    setFocusPaymentId(null);
+    setFocusReceiptId(null);
+    setFocusPaymentCode('');
+    setFocusReceiptCode('');
+    if (searchParams.toString()) {
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (activeTab === 'payable' && (focusSupplierId || focusPaymentId)) {
+      payableActionRef.current?.reload();
+      paymentActionRef.current?.reload();
+    }
+  }, [activeTab, focusSupplierId, focusPaymentId]);
+
+  useEffect(() => {
+    if (activeTab === 'receivable' && (focusCustomerId || focusReceiptId)) {
+      receivableActionRef.current?.reload();
+      receiptActionRef.current?.reload();
+    }
+  }, [activeTab, focusCustomerId, focusReceiptId]);
+
+  useEffect(() => {
+    if (!selectedPayable || !focusPaymentId || selectedPayment) return;
+    if (
+      focusSupplierId != null &&
+      Number(selectedPayable.supplier_id) !== focusSupplierId
+    ) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const payment = await paymentService.getPayment(focusPaymentId);
+        if (cancelled) return;
+        if (Number(payment.unsettled_amount ?? 0) <= 0) return;
+        if (
+          selectedPayable.supplier_id != null &&
+          Number(payment.supplier_id) !== Number(selectedPayable.supplier_id)
+        ) {
+          return;
+        }
+        setSelectedPayment(payment as unknown as Record<string, unknown>);
+      } catch {
+        /* 入口付款单不可用时忽略自动匹配 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPayable, focusPaymentId, focusSupplierId, selectedPayment]);
+
+  useEffect(() => {
+    if (!selectedReceivable || !focusReceiptId || selectedReceipt) return;
+    if (
+      focusCustomerId != null &&
+      Number(selectedReceivable.customer_id) !== focusCustomerId
+    ) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const receipt = await receiptService.getReceipt(focusReceiptId);
+        if (cancelled) return;
+        if (Number(receipt.unsettled_amount ?? 0) <= 0) return;
+        if (
+          selectedReceivable.customer_id != null &&
+          Number(receipt.customer_id) !== Number(selectedReceivable.customer_id)
+        ) {
+          return;
+        }
+        setSelectedReceipt(receipt as unknown as Record<string, unknown>);
+      } catch {
+        /* 入口收款单不可用时忽略自动匹配 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedReceivable, focusReceiptId, focusCustomerId, selectedReceipt]);
 
   useEffect(() => {
     if (!selectedReceivable?.id || !selectedReceipt?.id) {
@@ -527,9 +691,24 @@ const SettlementPage: React.FC = () => {
     }
   }, [activeTab, selectedPayable?.id]);
 
+  const partnerCustomerId = selectedReceivable?.customer_id
+    ? Number(selectedReceivable.customer_id)
+    : focusCustomerId;
+  const partnerSupplierId = selectedPayable?.supplier_id
+    ? Number(selectedPayable.supplier_id)
+    : focusSupplierId;
+
   const receivableSettlement = (
     <>
       <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t(`${P}.arAlertExtended`)} />
+      {focusReceiptCode ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={t(`${P}.focusedReceipt`, { code: focusReceiptCode })}
+        />
+      ) : null}
       {selectedReceivable ? (
         <Alert
           type="success"
@@ -549,9 +728,7 @@ const SettlementPage: React.FC = () => {
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
-            skipFuzzyPinyinClientFilter
-            scroll={{ x: 720 }}
-            request={async (params, sort, _filter, searchFormValues) => {
+            skipFuzzyPinyinClientFilterrequest={async (params, sort, _filter, searchFormValues) => {
               const { current, pageSize } = params;
               const listParams = resolveReceivableListParams(searchFormValues, sort);
               const apiParams: ReceivableListParams = {
@@ -559,6 +736,9 @@ const SettlementPage: React.FC = () => {
                 limit: pageSize || 20,
                 pending_settlement: true,
                 ...listParams,
+                ...(listParams.customer_id == null && focusCustomerId != null
+                  ? { customer_id: focusCustomerId }
+                  : {}),
               };
               try {
                 const res = await receivableService.listReceivables(apiParams);
@@ -586,18 +766,17 @@ const SettlementPage: React.FC = () => {
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:2"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
-            skipFuzzyPinyinClientFilter
-            scroll={{ x: 560 }}
-            request={async (params, sort, _filter, searchFormValues) => {
+            skipFuzzyPinyinClientFilterrequest={async (params, sort, _filter, searchFormValues) => {
+              if (partnerCustomerId == null) {
+                return { data: [], total: 0, success: true };
+              }
               const { current, pageSize } = params;
               const listParams = resolveReceiptListParams(searchFormValues, sort);
               const apiParams: ReceiptListParams = {
                 skip: ((current || 1) - 1) * (pageSize || 20),
                 limit: pageSize || 20,
                 unsettled_only: true,
-                ...(selectedReceivable?.customer_id
-                  ? { customer_id: Number(selectedReceivable.customer_id) }
-                  : {}),
+                customer_id: partnerCustomerId,
                 ...listParams,
               };
               try {
@@ -614,6 +793,11 @@ const SettlementPage: React.FC = () => {
               }
             }}
             columns={receiptColumns}
+            locale={{
+              emptyText: partnerCustomerId != null
+                ? undefined
+                : t(`${P}.selectReceivableFirst`),
+            }}
           />
         </Col>
       </Row>
@@ -644,6 +828,14 @@ const SettlementPage: React.FC = () => {
   const payableSettlement = (
     <>
       <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t(`${P}.apAlertExtended`)} />
+      {focusPaymentCode ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={t(`${P}.focusedPayment`, { code: focusPaymentCode })}
+        />
+      ) : null}
       {selectedPayable ? (
         <Alert
           type="success"
@@ -663,9 +855,7 @@ const SettlementPage: React.FC = () => {
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payable"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
-            skipFuzzyPinyinClientFilter
-            scroll={{ x: 720 }}
-            request={async (params, sort, _filter, searchFormValues) => {
+            skipFuzzyPinyinClientFilterrequest={async (params, sort, _filter, searchFormValues) => {
               const { current, pageSize } = params;
               const listParams = resolvePayableListParams(searchFormValues, sort);
               const apiParams: PayableListParams = {
@@ -673,6 +863,9 @@ const SettlementPage: React.FC = () => {
                 limit: pageSize || 20,
                 pending_settlement: true,
                 ...listParams,
+                ...(listParams.supplier_id == null && focusSupplierId != null
+                  ? { supplier_id: focusSupplierId }
+                  : {}),
               };
               try {
                 const res = await payableService.listPayables(apiParams);
@@ -700,18 +893,17 @@ const SettlementPage: React.FC = () => {
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payment"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
-            skipFuzzyPinyinClientFilter
-            scroll={{ x: 560 }}
-            request={async (params, sort, _filter, searchFormValues) => {
+            skipFuzzyPinyinClientFilterrequest={async (params, sort, _filter, searchFormValues) => {
+              if (partnerSupplierId == null) {
+                return { data: [], total: 0, success: true };
+              }
               const { current, pageSize } = params;
               const listParams = resolvePaymentListParams(searchFormValues, sort);
               const apiParams: PaymentListParams = {
                 skip: ((current || 1) - 1) * (pageSize || 20),
                 limit: pageSize || 20,
                 unsettled_only: true,
-                ...(selectedPayable?.supplier_id
-                  ? { supplier_id: Number(selectedPayable.supplier_id) }
-                  : {}),
+                supplier_id: partnerSupplierId,
                 ...listParams,
               };
               try {
@@ -728,6 +920,11 @@ const SettlementPage: React.FC = () => {
               }
             }}
             columns={paymentColumns}
+            locale={{
+              emptyText: partnerSupplierId != null
+                ? undefined
+                : t(`${P}.selectPayableFirst`),
+            }}
           />
         </Col>
       </Row>
@@ -759,6 +956,7 @@ const SettlementPage: React.FC = () => {
     setActiveTab(key);
     resetArSelection();
     resetApSelection();
+    clearFocusContext();
   };
 
   const tabBarExtraContent = useMemo(

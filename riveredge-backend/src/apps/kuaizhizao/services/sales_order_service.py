@@ -2452,6 +2452,21 @@ class SalesOrderService:
                 )
                 demand_synced = False
             result = await self.get_sales_order_by_id(tenant_id, sales_order_id)
+            order_row = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
+            from apps.kuaicaiwu.services.finance_integration_hooks import (
+                ensure_prepayment_receipt_for_sales_order,
+            )
+
+            await ensure_prepayment_receipt_for_sales_order(
+                tenant_id=tenant_id,
+                order_id=sales_order_id,
+                order_code=order_row.order_code,
+                customer_id=order_row.customer_id,
+                customer_name=order_row.customer_name,
+                prepayment_amount=order_row.prepayment_amount,
+                prepayment_bank_account_id=order_row.prepayment_bank_account_id,
+                operator_id=approved_by,
+            )
             auto_push_result = await self._try_auto_push_order_to_computation(
                 tenant_id=tenant_id,
                 sales_order_id=sales_order_id,
@@ -3786,6 +3801,7 @@ class SalesOrderService:
         warehouse_id: Optional[int] = None,
         warehouse_name: Optional[str] = None,
         line_warehouses: Optional[Dict[int, int]] = None,
+        notes: Optional[str] = None,
     ) -> Dict[str, Any]:
         """下推销售订单到销售出库"""
         order = await SalesOrder.get_or_none(
@@ -3832,6 +3848,7 @@ class SalesOrderService:
                     delivery_quantities=group_qty,
                     warehouse_id=int(wh_id),
                     warehouse_name=wh_name,
+                    notes=notes,
                 )
                 created_deliveries.append(delivery)
         else:
@@ -3851,6 +3868,7 @@ class SalesOrderService:
                 delivery_quantities=qty_map,
                 warehouse_id=int(warehouse_id),
                 warehouse_name=wh_name,
+                notes=notes,
             )
             created_deliveries.append(delivery)
 

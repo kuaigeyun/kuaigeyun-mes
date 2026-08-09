@@ -69,6 +69,6 @@ export interface PurchaseInvoiceCreateData {
     payable_code?: string;
     notes?: string;
     attachments?: unknown;
-    source_type?: 'purchase_order' | 'purchase_receipt';
+    source_type?: 'purchase_order' | 'purchase_receipt' | 'payable';
     source_id?: number;
 }

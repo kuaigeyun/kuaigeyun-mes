@@ -327,9 +327,22 @@ export function judgeStepValueClient(
   const vt = normalizeValueType(valueType);
   const spec = { ...defaultValueSpec(vt), ...(valueSpec || {}) };
 
+  // 缺陷多选：未选/空选即无缺陷 → 合格
+  if (vt === 'multi_select') {
+    const selected = new Set((Array.isArray(value) ? value : []).map(String));
+    const defectValues = new Set(
+      ((spec.options as Array<{ value: string; defect?: boolean }>) || [])
+        .filter((o) => o.defect)
+        .map((o) => String(o.value)),
+    );
+    for (const v of selected) {
+      if (defectValues.has(v)) return 'fail';
+    }
+    return 'pass';
+  }
+
   if (value === undefined || value === null || value === '') {
-    if (vt === 'multi_select' && Array.isArray(value) && value.length === 0) return null;
-    if (vt !== 'multi_select') return null;
+    return null;
   }
 
   if (vt === 'boolean') {
@@ -343,19 +356,6 @@ export function judgeStepValueClient(
     const hit = opts.find((o) => String(o.value) === String(value));
     if (!hit) return null;
     return hit.result === 'fail' ? 'fail' : 'pass';
-  }
-
-  if (vt === 'multi_select') {
-    const selected = new Set((Array.isArray(value) ? value : []).map(String));
-    const defectValues = new Set(
-      ((spec.options as Array<{ value: string; defect?: boolean }>) || [])
-        .filter((o) => o.defect)
-        .map((o) => String(o.value)),
-    );
-    for (const v of selected) {
-      if (defectValues.has(v)) return 'fail';
-    }
-    return 'pass';
   }
 
   if (vt === 'numeric') {

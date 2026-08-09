@@ -7,6 +7,8 @@ Author: RiverEdge Team
 Date: 2026-02-22
 """
 
+from __future__ import annotations
+
 from datetime import datetime, date
 from typing import Optional, List
 from pydantic import Field
@@ -83,7 +85,9 @@ class ReceiptNoticeResponse(ReceiptNoticeBase):
 
 class ReceiptNoticeListResponse(ReceiptNoticeResponse):
     """收货通知单列表响应schema"""
-    pass
+    items: Optional[List["ReceiptNoticeItemResponse"]] = Field(
+        None, description="通知明细（include_items 时返回）"
+    )
 
 
 class ReceiptNoticeListPaginatedResponse(BaseSchema):

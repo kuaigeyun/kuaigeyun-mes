@@ -15,8 +15,24 @@ function readCfbEntryText(cfb: CFB.CFB$Container, path: string): string | null {
   return null;
 }
 
-function decodeXmlEntities(text: string): string {
+function codePointToChar(code: number, fallback: string): string {
+  if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) return fallback;
+  try {
+    return String.fromCodePoint(code);
+  } catch {
+    return fallback;
+  }
+}
+
+/** OOXML 合法：中文等常被写成 &#29238; / &#x7236;，须还原为字符（openpyxl 会解，SheetJS 也会） */
+export function decodeXmlEntities(text: string): string {
   return text
+    .replace(/&#x([0-9a-fA-F]+);/g, (full, hex: string) =>
+      codePointToChar(Number.parseInt(hex, 16), full),
+    )
+    .replace(/&#([0-9]+);/g, (full, dec: string) =>
+      codePointToChar(Number.parseInt(dec, 10), full),
+    )
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')

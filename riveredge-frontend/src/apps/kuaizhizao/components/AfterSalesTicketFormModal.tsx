@@ -335,9 +335,9 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
       message.warning(t('app.kuaizhizao.afterSalesTicket.selectSalesOrderItems'));
       return;
     }
-    const selected = sourceOrderItems.filter((it) =>
-      selectedSourceItemKeys.includes(Number(it.id)),
-    );
+    // Table rowKey 为 String(id)，selectedRowKeys 可能是 string；统一按字符串匹配
+    const selectedKeySet = new Set(selectedSourceItemKeys.map(String));
+    const selected = sourceOrderItems.filter((it) => selectedKeySet.has(String(it.id)));
     if (!selected.length) {
       message.warning(t('app.kuaizhizao.afterSalesTicket.selectSalesOrderItems'));
       return;

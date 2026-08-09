@@ -14,7 +14,7 @@ import type { NavigateFunction } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { AmountDisplay } from '../../../../../../components/permission';
 import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../../constants/fieldPermissionResources';
-import { DictionaryLabel } from '../../../../../../components/dictionary-label';
+import { MaterialUnitLabel } from '../../../../../../components/material-unit-label';
 import { MaterialBomIndicator } from '../../../../components/MaterialBomIndicator';
 import { MaterialInventoryIndicator } from '../../../../components/MaterialInventoryIndicator';
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
@@ -555,7 +555,7 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 title: t('app.kuaizhizao.salesOrder.unit'),
                 dataIndex: 'material_unit',
                 width: 80,
-                render: (v: string) => <DictionaryLabel dictionaryCode="MATERIAL_UNIT" value={v} />,
+                render: (v: string) => <MaterialUnitLabel value={v} />,
               },
               {
                 title: t('app.kuaizhizao.salesOrder.bomCheck'),

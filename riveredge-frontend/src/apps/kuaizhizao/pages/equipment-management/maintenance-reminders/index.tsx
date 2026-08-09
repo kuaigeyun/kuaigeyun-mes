@@ -574,7 +574,6 @@ const MaintenanceRemindersPage: React.FC = () => {
             {t(`${P}.batchMarkRead`, { count: selectedRows.length })}
           </Button>,
         ]}
-        scroll={{ x: 1600 }}
               />
             ),
           },
@@ -602,7 +601,6 @@ const MaintenanceRemindersPage: React.FC = () => {
                 }}
                 search={{ labelWidth: 'auto' }}
                 pagination={{ defaultPageSize: 20 }}
-                scroll={{ x: 1200 }}
               />
             ),
           },

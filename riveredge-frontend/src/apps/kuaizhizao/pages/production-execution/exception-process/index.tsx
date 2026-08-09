@@ -1,4 +1,4 @@
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 异常处理流程管理页面
  *
@@ -414,37 +414,32 @@ const ExceptionProcessPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 200,
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
-              {t('common.detail')}
-            </Button>,
-            record.process_status === 'pending' ? (
-              <Button {...rowActionKind('audit')} key="approve" onClick={() => openAssignModal(record)}>
-                {t(`${P}.action.assign`)}
-              </Button>
-            ) : null,
-            record.process_status === 'processing' ? (
-              <Button {...rowActionKind('audit')} key="transition" onClick={() => openStepTransitionModal(record)}>
-                {t(`${P}.action.transition`)}
-              </Button>
-            ) : null,
-            record.process_status === 'processing' ? (
-              <Button key="resolve" {...rowActionKind('audit')} onClick={() => openResolveModal(record)}>
-                {t(`${P}.lifecycleNext.resolve`)}
-              </Button>
-            ) : null,
-            ['pending', 'processing'].includes(record.process_status || '') ? (
-              <Button key="reject" {...rowActionKind('reject')} onClick={() => handleCancel(record)}>
-                {t(`${P}.action.cancel`)}
-              </Button>
-            ) : null,
-          ],
-          { keyPrefix: `exception-process-actions-${record.id ?? 'row'}` },
-        ),
+      render: (_, record) => [
+        <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+          {t('common.detail')}
+        </Button>,
+        record.process_status === 'pending' ? (
+          <Button {...rowActionKind('audit')} key="approve" onClick={() => openAssignModal(record)}>
+            {t(`${P}.action.assign`)}
+          </Button>
+        ) : null,
+        record.process_status === 'processing' ? (
+          <Button {...rowActionKind('audit')} key="transition" onClick={() => openStepTransitionModal(record)}>
+            {t(`${P}.action.transition`)}
+          </Button>
+        ) : null,
+        record.process_status === 'processing' ? (
+          <Button key="resolve" {...rowActionKind('audit')} onClick={() => openResolveModal(record)}>
+            {t(`${P}.lifecycleNext.resolve`)}
+          </Button>
+        ) : null,
+        ['pending', 'processing'].includes(record.process_status || '') ? (
+          <Button key="reject" {...rowActionKind('reject')} onClick={() => handleCancel(record)}>
+            {t(`${P}.action.cancel`)}
+          </Button>
+        ) : null,
+      ],
     },
   ], [t, getExceptionTypeTag, getStepTag, getStatusTag, processStatusValueEnum]);
 

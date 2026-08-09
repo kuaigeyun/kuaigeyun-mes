@@ -57,12 +57,19 @@ export interface DefectLedgerItem {
   work_order_code?: string;
   operation_name?: string;
   product_name?: string;
+  product_id?: number;
   defect_quantity: number;
   defect_type: string;
   defect_reason: string;
   disposition: string;
   status: string;
   created_at?: string;
+  downgrade_material_id?: number;
+  downgrade_material_code?: string;
+  downgrade_material_name?: string;
+  downgrade_warehouse_id?: number;
+  downgrade_warehouse_name?: string;
+  other_inbound_id?: number;
   incoming_inspection_id?: number;
   incoming_inspection_code?: string;
   process_inspection_id?: number;
@@ -178,7 +185,15 @@ export const qualityImprovementApi = {
       ),
     updateDisposition: async (
       id: number,
-      data: { disposition: string; status?: string; quarantine_location?: string; remarks?: string }
+      data: {
+        disposition: string;
+        status?: string;
+        quarantine_location?: string;
+        downgrade_material_id?: number;
+        downgrade_warehouse_id?: number;
+        remarks?: string;
+        attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
+      }
     ) =>
       apiRequest(`/apps/kuaizhizao/nonconforming-ledger/${id}/disposition`, {
         method: 'PUT',

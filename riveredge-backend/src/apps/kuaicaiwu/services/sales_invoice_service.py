@@ -11,6 +11,7 @@ from tortoise.queryset import Q
 
 from apps.common.base_service import AppBaseService
 from apps.kuaicaiwu.models.invoice import Invoice
+from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE, normalize_price_type
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -37,6 +38,8 @@ class SalesInvoiceService(AppBaseService[Invoice]):
     )
 
     _SD_ELIGIBLE_STATUSES = frozenset({"已出库", "已完成", "部分出库", "SHIPPED", "COMPLETED"})
+
+    _RECEIVABLE_ELIGIBLE_REVIEW = frozenset({"已审核"})
 
     def _derive_pull_capability(
         self,
@@ -106,6 +109,85 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 if sid is not None:
                     result[sid] = result.get(sid, Decimal("0")) + Decimal(str(inv.total_amount or 0))
         return result
+
+    async def _sum_pushed_totals_by_receivable(
+        self,
+        tenant_id: int,
+        receivable_ids: List[int],
+        code_by_id: Dict[int, str],
+    ) -> Dict[int, Decimal]:
+        result: Dict[int, Decimal] = {rid: Decimal("0") for rid in receivable_ids}
+        if not receivable_ids:
+            return result
+
+        counted_invoice_ids: set[int] = set()
+
+        direct_rows = await Invoice.filter(
+            tenant_id=tenant_id,
+            receivable_id__in=receivable_ids,
+            category="OUT",
+            deleted_at__isnull=True,
+        ).exclude(status__in=list(self._EXCLUDED_INVOICE_STATUSES))
+        for inv in direct_rows:
+            rid = int(inv.receivable_id)
+            if rid in result:
+                result[rid] = result.get(rid, Decimal("0")) + Decimal(str(inv.total_amount or 0))
+                counted_invoice_ids.add(int(inv.id))
+
+        relations = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="receivable",
+            source_id__in=receivable_ids,
+            target_type="sales_invoice",
+        ).all()
+        relation_by_invoice: Dict[int, int] = {
+            int(r.target_id): int(r.source_id) for r in relations if r.target_id and r.source_id
+        }
+        orphan_invoice_ids = [
+            iid for iid in relation_by_invoice if iid not in counted_invoice_ids
+        ]
+        if orphan_invoice_ids:
+            linked = await Invoice.filter(
+                tenant_id=tenant_id,
+                id__in=orphan_invoice_ids,
+                category="OUT",
+                deleted_at__isnull=True,
+            ).exclude(status__in=list(self._EXCLUDED_INVOICE_STATUSES))
+            for inv in linked:
+                sid = relation_by_invoice.get(int(inv.id))
+                if sid is not None:
+                    result[sid] = result.get(sid, Decimal("0")) + Decimal(str(inv.total_amount or 0))
+                    counted_invoice_ids.add(int(inv.id))
+
+        codes = [c for c in code_by_id.values() if c]
+        if codes:
+            code_to_id = {str(v).strip(): k for k, v in code_by_id.items() if v}
+            orphan_rows = await Invoice.filter(
+                tenant_id=tenant_id,
+                category="OUT",
+                source_document_code__in=codes,
+                deleted_at__isnull=True,
+            ).exclude(status__in=list(self._EXCLUDED_INVOICE_STATUSES))
+            for inv in orphan_rows:
+                if int(inv.id) in counted_invoice_ids:
+                    continue
+                sid = code_to_id.get(str(inv.source_document_code or "").strip())
+                if sid is not None:
+                    result[sid] = result.get(sid, Decimal("0")) + Decimal(str(inv.total_amount or 0))
+        return result
+
+    def _receivable_source_allowed(self, receivable: Any) -> bool:
+        review = str(
+            (receivable.get("review_status") if isinstance(receivable, dict) else getattr(receivable, "review_status", ""))
+            or ""
+        ).strip()
+        total_raw = (
+            receivable.get("total_amount")
+            if isinstance(receivable, dict)
+            else getattr(receivable, "total_amount", 0)
+        )
+        total = Decimal(str(total_raw or 0))
+        return review in self._RECEIVABLE_ELIGIBLE_REVIEW and total > 0
 
     def _build_preview_item(
         self,
@@ -177,6 +259,45 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 source_id=did,
                 source_code=code,
                 customer_name=str(getattr(delivery, "customer_name", "") or ""),
+                quantity=total,
+                pushed=pushed,
+            )
+        ]
+
+    async def _build_preview_items_for_receivable(
+        self,
+        tenant_id: int,
+        receivable: Any,
+        *,
+        pushed: Optional[Decimal] = None,
+    ) -> List[Dict[str, Any]]:
+        rid = int(receivable["id"] if isinstance(receivable, dict) else receivable.id)
+        code = str(
+            (receivable.get("receivable_code") if isinstance(receivable, dict) else getattr(receivable, "receivable_code", None))
+            or rid
+        )
+        total_raw = (
+            receivable.get("total_amount")
+            if isinstance(receivable, dict)
+            else getattr(receivable, "total_amount", 0)
+        )
+        total = Decimal(str(total_raw or 0))
+        if total <= 0:
+            return []
+        if pushed is None:
+            pushed_map = await self._sum_pushed_totals_by_receivable(
+                tenant_id, [rid], {rid: code}
+            )
+            pushed = pushed_map.get(rid, Decimal("0"))
+        customer_name = str(
+            (receivable.get("customer_name") if isinstance(receivable, dict) else getattr(receivable, "customer_name", ""))
+            or ""
+        )
+        return [
+            self._build_preview_item(
+                source_id=rid,
+                source_code=code,
+                customer_name=customer_name,
                 quantity=total,
                 pushed=pushed,
             )
@@ -285,6 +406,48 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             "sales_order_id": getattr(delivery, "sales_order_id", None),
             "sales_order_code": getattr(delivery, "sales_order_code", None),
             "price_type": price_type,
+        }
+
+    async def preview_pull_from_receivable(
+        self,
+        tenant_id: int,
+        receivable_id: int,
+    ) -> Dict[str, Any]:
+        receivable = await Receivable.get_or_none(
+            tenant_id=tenant_id, id=receivable_id, deleted_at__isnull=True
+        )
+        if not receivable:
+            raise NotFoundError(f"应收单不存在: {receivable_id}")
+
+        source_allowed = self._receivable_source_allowed(receivable)
+        preview_items = await self._build_preview_items_for_receivable(tenant_id, receivable)
+        allowed, reason = self._derive_pull_capability(
+            source_allowed=source_allowed,
+            preview_items=preview_items,
+            not_allowed_reason="sales_invoice.pull_from_receivable.not_allowed",
+            no_lines_reason="sales_invoice.pull_from_receivable.no_lines",
+            already_pulled_reason="sales_invoice.pull_from_receivable.already_pulled",
+        )
+        code = str(receivable.receivable_code or receivable_id)
+        pushable = float(preview_items[0]["max_push_quantity"]) if preview_items else 0.0
+        return {
+            "target_type": "sales_invoice",
+            "source_type": "receivable",
+            "source_id": receivable_id,
+            "source_code": code,
+            "summary": (
+                f"将从应收单 {code} 创建销项发票（可开票 ¥{pushable:,.2f}）"
+                if preview_items and allowed
+                else f"应收单 {code} 当前不可加载销项发票"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": not allowed,
+            "blocking_reason": reason,
+            "tip": "价税合计不可超过可开票金额；删除未审核销项发票后，可开票金额自动回退。",
+            "customer_id": receivable.customer_id,
+            "customer_name": receivable.customer_name,
+            "receivable_id": receivable.id,
+            "receivable_code": code,
         }
 
     async def list_sales_order_pull_candidates(
@@ -421,6 +584,72 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             )
         return {"data": rows, "total": total, "success": True}
 
+    async def list_receivable_pull_candidates(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        query = Receivable.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            total_amount__gt=0,
+        )
+        kw = str(keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(receivable_code__icontains=kw) | Q(customer_name__icontains=kw)
+            )
+        total = await query.count()
+        receivables = await query.offset(skip).limit(limit).order_by("-created_at")
+        receivable_ids = [int(r.id) for r in receivables]
+        if not receivable_ids:
+            return {"data": [], "total": total, "success": True}
+
+        code_by_id = {int(r.id): str(r.receivable_code or r.id) for r in receivables}
+        pushed_map = await self._sum_pushed_totals_by_receivable(
+            tenant_id, receivable_ids, code_by_id
+        )
+
+        rows: List[Dict[str, Any]] = []
+        for receivable in receivables:
+            rid = int(receivable.id)
+            preview_items = await self._build_preview_items_for_receivable(
+                tenant_id,
+                receivable,
+                pushed=pushed_map.get(rid, Decimal("0")),
+            )
+            allowed, reason = self._derive_pull_capability(
+                source_allowed=self._receivable_source_allowed(receivable),
+                preview_items=preview_items,
+                not_allowed_reason="sales_invoice.pull_from_receivable.not_allowed",
+                no_lines_reason="sales_invoice.pull_from_receivable.no_lines",
+                already_pulled_reason="sales_invoice.pull_from_receivable.already_pulled",
+            )
+            code = str(receivable.receivable_code or rid)
+            name = str(getattr(receivable, "customer_name", "") or "").strip()
+            label = f"{code} - {name}" if name else code
+            rows.append(
+                {
+                    "id": rid,
+                    "code": label,
+                    "receivable_code": code,
+                    "customer_name": receivable.customer_name,
+                    "source_status": receivable.status,
+                    "review_status": receivable.review_status,
+                    "source_date": str(getattr(receivable, "business_date", "") or ""),
+                    "amount": float(receivable.total_amount or 0),
+                    "capabilities": {
+                        "pull_sales_invoice": {
+                            "allowed": allowed,
+                            "reason": reason,
+                        }
+                    },
+                }
+            )
+        return {"data": rows, "total": total, "success": True}
+
     async def assert_pull_create_allowed(
         self,
         tenant_id: int,
@@ -433,6 +662,8 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             preview = await self.preview_pull_from_sales_order(tenant_id, source_id)
         elif source_type == "sales_delivery":
             preview = await self.preview_pull_from_sales_delivery(tenant_id, source_id)
+        elif source_type == "receivable":
+            preview = await self.preview_pull_from_receivable(tenant_id, source_id)
         else:
             raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
         if preview.get("has_blocking_issues"):

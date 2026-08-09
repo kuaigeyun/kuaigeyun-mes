@@ -1,7 +1,7 @@
 /**
  * 其他入库单管理页面
  *
- * 提供其他入库单的创建、查看、确认和管理功能（盘盈/样品/报废/其他）
+ * 提供其他入库单的创建、查看、确认和管理功能（盘盈/调拨/样品/报废/其他）
  * 支持批号规则选择与自动生成批号
  *
  * @author RiverEdge Team
@@ -68,6 +68,7 @@ const REASON_TYPES_FALLBACK = [
   { value: '调拨', label: '调拨' },
   { value: '样品', label: '样品' },
   { value: '报废', label: '报废' },
+  { value: '降级回用', label: '降级回用' },
   { value: '其他', label: '其他' },
 ];
 
@@ -77,6 +78,7 @@ const REASON_TYPE_I18N: Record<string, string> = {
   '调拨入库': 'app.kuaizhizao.warehouseOtherInbound.reason.transfer',
   '样品': 'app.kuaizhizao.warehouseOtherInbound.reason.sample',
   '报废': 'app.kuaizhizao.warehouseOtherInbound.reason.scrap',
+  '降级回用': 'app.kuaizhizao.warehouseOtherInbound.reason.downgrade',
   '其他': 'app.kuaizhizao.warehouseOtherInbound.reason.other',
 };
 
@@ -249,15 +251,17 @@ const OtherInboundPage: React.FC = () => {
         const options = items
           .sort((a, b) => a.sort_order - b.sort_order)
           .map((it) => {
-            const value = normalizeReasonTypeValue(it.value) || it.value;
-            return { label: it.label, value };
+            const value = normalizeReasonTypeValue(it.value) || String(it.value || '').trim();
+            const label = String(it.label || value).trim() || value;
+            return { label, value };
           })
           .filter((opt) => {
+            if (!opt.value) return false;
             if (seen.has(opt.value)) return false;
             seen.add(opt.value);
             return true;
           });
-        setReasonTypeOptions(options);
+        setReasonTypeOptions(options.length ? options : fallbackReasonTypeOptions);
       } catch {
         setReasonTypeOptions(fallbackReasonTypeOptions);
       } finally {
@@ -374,7 +378,6 @@ const OtherInboundPage: React.FC = () => {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.lifecycle'),
         dataIndex: 'lifecycle_stage',
         fixed: 'right',
-        align: 'left',
         hideInSearch: true,
         render: (_, record) => {
           const lifecycle = getOtherInboundLifecycle(record as Record<string, unknown>, t);
@@ -617,7 +620,8 @@ const OtherInboundPage: React.FC = () => {
       const { standardValues, customData } = extractOtherInboundFormValues(values);
       const created = await warehouseApi.otherInbound.create({
         inbound_code: standardValues.inbound_code,
-        reason_type: standardValues.reason_type,
+        // 字典可能存「调拨入库」，提交前归一为 schema 枚举「调拨」
+        reason_type: normalizeReasonTypeValue(standardValues.reason_type) || standardValues.reason_type,
         reason_desc: standardValues.reason_desc,
         warehouse_id: standardValues.warehouse_id,
         warehouse_name: warehouseName,
@@ -905,7 +909,6 @@ const OtherInboundPage: React.FC = () => {
               {t('components.uniAction.print')}
             </Button>,
           ]}
-          scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
 
@@ -994,7 +997,10 @@ const OtherInboundPage: React.FC = () => {
                 loading={reasonTypeLoading}
                 style={{ width: '100%' }}
                 options={reasonTypeOptions}
-                quickCreate={{ label: t('app.kuaizhizao.warehouseOtherInbound.field.dictManage'), onClick: () => navigate('/system/data-dictionaries') }}
+                quickCreate={{
+                  label: t('app.kuaizhizao.warehouseOtherInbound.field.dictManage'),
+                  onClick: () => navigate('/system/data-dictionaries?keyword=INBOUND_REASON_TYPE'),
+                }}
               />
             </ProFormItem>
           </Col>

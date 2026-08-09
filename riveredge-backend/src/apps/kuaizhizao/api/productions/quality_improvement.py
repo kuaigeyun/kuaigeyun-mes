@@ -106,6 +106,13 @@ _OQC_UPDATE = Depends(
         required_permissions=["kuaizhizao:quality-management-oqc-inspection:update"],
     )
 )
+_OQC_EXECUTE = Depends(
+    require_access(
+        "kuaizhizao.quality-management-oqc-inspection",
+        "execute",
+        required_permissions=["kuaizhizao:quality-management-oqc-inspection:execute"],
+    )
+)
 _OQC_DELETE = Depends(
     require_access(
         "kuaizhizao.quality-management-oqc-inspection",
@@ -552,7 +559,7 @@ async def get_oqc_inspection(
 async def conduct_oqc_inspection(
     payload: OQCInspectionConduct,
     inspection_id: int = Path(...),
-    _auth= _OQC_UPDATE,
+    _auth=_OQC_EXECUTE,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> OQCInspectionResponse:

@@ -11,7 +11,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pr
 import { Button, Tag, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { toolApi } from '../../../services/equipment';
 import { formatDateTime } from '../../../../../utils/format';
@@ -261,21 +261,17 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
       {
         title: t('common.actions'),
         valueType: 'option',
-        width: 100,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
           perms.canRead
-            ? renderRowActionsOverflow(
-                [
-                  <Button
-                    key="detail"
-                    {...rowActionKind('read')}
-                    onClick={() => handleMaintenanceDetail(record)}
-                  />,
-                ],
-                { keyPrefix: `tool-maint-reminder-${record.tool_uuid ?? 'row'}` },
-              )
+            ? [
+                <Button
+                  key="detail"
+                  {...rowActionKind('read')}
+                  onClick={() => handleMaintenanceDetail(record)}
+                />,
+              ]
             : null,
       },
     ],
@@ -329,21 +325,17 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
       {
         title: t('common.actions'),
         valueType: 'option',
-        width: 100,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
           perms.canRead
-            ? renderRowActionsOverflow(
-                [
-                  <Button
-                    key="detail"
-                    {...rowActionKind('read')}
-                    onClick={() => handleCalibrationDetail(record)}
-                  />,
-                ],
-                { keyPrefix: `tool-calib-reminder-${record.tool_uuid ?? 'row'}` },
-              )
+            ? [
+                <Button
+                  key="detail"
+                  {...rowActionKind('read')}
+                  onClick={() => handleCalibrationDetail(record)}
+                />,
+              ]
             : null,
       },
     ],
@@ -404,7 +396,6 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
                 }}
                 search={{ labelWidth: 'auto' }}
                 pagination={{ defaultPageSize: 20 }}
-                scroll={{ x: 1200 }}
               />
             ),
           },
@@ -448,7 +439,6 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
                 }}
                 search={{ labelWidth: 'auto' }}
                 pagination={{ defaultPageSize: 20 }}
-                scroll={{ x: 1000 }}
               />
             ),
           },

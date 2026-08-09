@@ -17,6 +17,12 @@ from tortoise import timezone as tortoise_timezone
 
 from apps.common.audit_actor import apply_update_audit
 from apps.common.base_service import AppBaseService
+from apps.kuaicaiwu.constants.finance_source_types import (
+    PAYABLE_SOURCE_OUTSOURCE_RECEIPT,
+    PAYABLE_SOURCE_PURCHASE_RECEIPT,
+    PAYABLE_SOURCE_PURCHASE_RETURN,
+    RECEIVABLE_SOURCE_SALES_RETURN,
+)
 from apps.kuaicaiwu.models.partner_statement import PartnerStatement
 from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaicaiwu.models.payment import Payment
@@ -38,6 +44,46 @@ def _q_money(value: Decimal | float | int | str) -> Decimal:
     return Decimal(str(value or 0)).quantize(_MONEY)
 
 
+def _is_refund_voucher(settlement_type: Optional[str], total_amount: Decimal) -> bool:
+    return (settlement_type or "normal") == "refund" or total_amount < 0
+
+
+def _abs_money(value: Decimal | float | int | str) -> Decimal:
+    return abs(_q_money(value))
+
+
+def _extract_waste_quantities(other_checks: Any) -> Tuple[Optional[float], Optional[float]]:
+    """从检验 other_checks JSON 提取工废/料废数量。"""
+    if not isinstance(other_checks, dict):
+        return None, None
+
+    def _pick(*keys: str) -> Optional[float]:
+        for key in keys:
+            val = other_checks.get(key)
+            if val is not None and val != "":
+                try:
+                    return float(val)
+                except (TypeError, ValueError):
+                    continue
+        return None
+
+    process_waste = _pick("process_waste_qty", "process_waste", "工废", "工废数量")
+    material_waste = _pick("material_waste_qty", "material_waste", "料废", "料废数量")
+    return process_waste, material_waste
+
+
+def _inspection_passed(inspection: Any) -> Optional[bool]:
+    if inspection is None:
+        return None
+    result = str(getattr(inspection, "inspection_result", "") or "").strip()
+    quality = str(getattr(inspection, "quality_status", "") or "").strip()
+    if result in ("合格", "通过") or quality == "合格":
+        return True
+    if result in ("不合格", "未通过", "拒收") or quality == "不合格":
+        return False
+    return None
+
+
 def period_to_date_range(period: str) -> Tuple[date, date]:
     """YYYY-MM -> (月初, 月末)"""
     try:
@@ -53,7 +99,18 @@ def period_to_date_range(period: str) -> Tuple[date, date]:
 
 
 class PartnerStatementService(AppBaseService[PartnerStatement]):
-    """往来对账单服务"""
+    """往来对账单服务
+
+    对账单明细行 doc_type 与前端展示说明（唯一文案来源）：
+    - 应收单：销售出库/开票等正向应收
+    - 收款单：客户正常收款（贷方）
+    - 收款退款：settlement_type=refund 或负金额收款（借方冲回）
+    - 销售退货：销售退货关联红字应收（贷方冲减）
+    - 应付单：采购入库/委外等正向应付
+    - 付款单：供应商正常付款（贷方）
+    - 付款退款：settlement_type=refund 或负金额付款（借方冲回）
+    - 采购退货：采购退货关联红字应付（贷方冲减）
+    """
 
     async def _get_tenant_company_name(self, tenant_id: int) -> str:
         tenant = await Tenant.get_or_none(id=tenant_id)
@@ -92,25 +149,57 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
     async def _sum_debits_before(
         self, tenant_id: int, partner_id: int, partner_type: str, before_date: date
     ) -> Decimal:
+        total = Decimal("0")
         if partner_type == "Customer":
             rows = await Receivable.filter(
                 tenant_id=tenant_id,
                 customer_id=partner_id,
                 business_date__lt=before_date,
                 deleted_at__isnull=True,
-            ).exclude(review_status__in=_EXCLUDED_REVIEW).all()
+            ).exclude(review_status__in=_EXCLUDED_REVIEW).exclude(
+                source_type=RECEIVABLE_SOURCE_SALES_RETURN
+            ).all()
+            total += sum((r.total_amount for r in rows), Decimal("0"))
+
+            receipts = await Receipt.filter(
+                tenant_id=tenant_id,
+                customer_id=partner_id,
+                receipt_date__lt=before_date,
+                status="Confirmed",
+                deleted_at__isnull=True,
+            ).all()
+            for r in receipts:
+                amt = _q_money(r.total_amount)
+                if _is_refund_voucher(getattr(r, "settlement_type", None), amt):
+                    total += _abs_money(amt)
         else:
             rows = await Payable.filter(
                 tenant_id=tenant_id,
                 supplier_id=partner_id,
                 business_date__lt=before_date,
                 deleted_at__isnull=True,
-            ).exclude(review_status__in=_EXCLUDED_REVIEW).all()
-        return _q_money(sum((r.total_amount for r in rows), Decimal("0")))
+            ).exclude(review_status__in=_EXCLUDED_REVIEW).exclude(
+                source_type=PAYABLE_SOURCE_PURCHASE_RETURN
+            ).all()
+            total += sum((p.total_amount for p in rows), Decimal("0"))
+
+            payments = await Payment.filter(
+                tenant_id=tenant_id,
+                supplier_id=partner_id,
+                payment_date__lt=before_date,
+                status="Confirmed",
+                deleted_at__isnull=True,
+            ).all()
+            for p in payments:
+                amt = _q_money(p.total_amount)
+                if _is_refund_voucher(getattr(p, "settlement_type", None), amt):
+                    total += _abs_money(amt)
+        return _q_money(total)
 
     async def _sum_credits_before(
         self, tenant_id: int, partner_id: int, partner_type: str, before_date: date
     ) -> Decimal:
+        total = Decimal("0")
         if partner_type == "Customer":
             rows = await Receipt.filter(
                 tenant_id=tenant_id,
@@ -119,6 +208,19 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                 status="Confirmed",
                 deleted_at__isnull=True,
             ).all()
+            for r in rows:
+                amt = _q_money(r.total_amount)
+                if not _is_refund_voucher(getattr(r, "settlement_type", None), amt):
+                    total += _abs_money(amt)
+
+            return_rows = await Receivable.filter(
+                tenant_id=tenant_id,
+                customer_id=partner_id,
+                business_date__lt=before_date,
+                deleted_at__isnull=True,
+                source_type=RECEIVABLE_SOURCE_SALES_RETURN,
+            ).exclude(review_status__in=_EXCLUDED_REVIEW).all()
+            total += sum((r.total_amount for r in return_rows), Decimal("0"))
         else:
             rows = await Payment.filter(
                 tenant_id=tenant_id,
@@ -127,7 +229,20 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                 status="Confirmed",
                 deleted_at__isnull=True,
             ).all()
-        return _q_money(sum((r.total_amount for r in rows), Decimal("0")))
+            for p in rows:
+                amt = _q_money(p.total_amount)
+                if not _is_refund_voucher(getattr(p, "settlement_type", None), amt):
+                    total += _abs_money(amt)
+
+            return_rows = await Payable.filter(
+                tenant_id=tenant_id,
+                supplier_id=partner_id,
+                business_date__lt=before_date,
+                deleted_at__isnull=True,
+                source_type=PAYABLE_SOURCE_PURCHASE_RETURN,
+            ).exclude(review_status__in=_EXCLUDED_REVIEW).all()
+            total += sum((p.total_amount for p in return_rows), Decimal("0"))
+        return _q_money(total)
 
     async def _calc_opening_balance(
         self, tenant_id: int, partner_id: int, partner_type: str, start_date: date
@@ -162,25 +277,33 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                 deleted_at__isnull=True,
             ).order_by("receipt_date", "id").all()
             for r in receivables:
+                amt = _abs_money(r.total_amount)
+                is_return = r.source_type == RECEIVABLE_SOURCE_SALES_RETURN
                 lines.append({
                     "date": to_api_isoformat(r.business_date),
                     "sort_date": r.business_date,
-                    "doc_type": "应收单",
+                    "doc_type": "销售退货" if is_return else "应收单",
                     "doc_code": r.receivable_code,
-                    "summary": r.notes or f"应收 {r.source_code or ''}".strip(),
-                    "debit": float(_q_money(r.total_amount)),
-                    "credit": 0.0,
+                    "summary": r.notes or (
+                        f"销售退货 {r.source_code or ''}".strip()
+                        if is_return
+                        else f"应收 {r.source_code or ''}".strip()
+                    ),
+                    "debit": 0.0 if is_return else float(amt),
+                    "credit": float(amt) if is_return else 0.0,
                     "doc_id": r.id,
                 })
             for r in receipts:
+                amt = _abs_money(r.total_amount)
+                is_refund = _is_refund_voucher(getattr(r, "settlement_type", None), r.total_amount)
                 lines.append({
                     "date": to_api_isoformat(r.receipt_date),
                     "sort_date": r.receipt_date,
-                    "doc_type": "收款单",
+                    "doc_type": "收款退款" if is_refund else "收款单",
                     "doc_code": r.receipt_code,
-                    "summary": r.notes or "收款",
-                    "debit": 0.0,
-                    "credit": float(_q_money(r.total_amount)),
+                    "summary": r.notes or ("收款退款" if is_refund else "收款"),
+                    "debit": float(amt) if is_refund else 0.0,
+                    "credit": 0.0 if is_refund else float(amt),
                     "doc_id": r.id,
                 })
         else:
@@ -200,25 +323,40 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                 deleted_at__isnull=True,
             ).order_by("payment_date", "id").all()
             for p in payables:
-                lines.append({
+                amt = _abs_money(p.total_amount)
+                is_return = p.source_type == PAYABLE_SOURCE_PURCHASE_RETURN
+                line: Dict[str, Any] = {
                     "date": to_api_isoformat(p.business_date),
                     "sort_date": p.business_date,
-                    "doc_type": "应付单",
+                    "doc_type": "采购退货" if is_return else "应付单",
                     "doc_code": p.payable_code,
-                    "summary": p.notes or f"应付 {p.source_code or ''}".strip(),
-                    "debit": float(_q_money(p.total_amount)),
-                    "credit": 0.0,
+                    "summary": p.notes or (
+                        f"采购退货 {p.source_code or ''}".strip()
+                        if is_return
+                        else f"应付 {p.source_code or ''}".strip()
+                    ),
+                    "debit": 0.0 if is_return else float(amt),
+                    "credit": float(amt) if is_return else 0.0,
                     "doc_id": p.id,
-                })
+                }
+                if p.source_type == PAYABLE_SOURCE_PURCHASE_RECEIPT and p.source_id:
+                    line["inbound_detail_doc_type"] = "purchase_receipt"
+                    line["inbound_detail_doc_id"] = int(p.source_id)
+                elif p.source_type == PAYABLE_SOURCE_OUTSOURCE_RECEIPT and p.source_id:
+                    line["inbound_detail_doc_type"] = "outsource_material_receipt"
+                    line["inbound_detail_doc_id"] = int(p.source_id)
+                lines.append(line)
             for p in payments:
+                amt = _abs_money(p.total_amount)
+                is_refund = _is_refund_voucher(getattr(p, "settlement_type", None), p.total_amount)
                 lines.append({
                     "date": to_api_isoformat(p.payment_date),
                     "sort_date": p.payment_date,
-                    "doc_type": "付款单",
+                    "doc_type": "付款退款" if is_refund else "付款单",
                     "doc_code": p.payment_code,
-                    "summary": p.notes or "付款",
-                    "debit": 0.0,
-                    "credit": float(_q_money(p.total_amount)),
+                    "summary": p.notes or ("付款退款" if is_refund else "付款"),
+                    "debit": float(amt) if is_refund else 0.0,
+                    "credit": 0.0 if is_refund else float(amt),
                     "doc_id": p.id,
                 })
         lines.sort(key=lambda x: (x["sort_date"], x["doc_type"], x.get("doc_id", 0)))
@@ -470,6 +608,148 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             raise BusinessLogicError("仅草稿状态的对账单可删除")
         obj.deleted_at = tortoise_timezone.now()
         await obj.save()
+
+    _PURCHASE_RECEIPT_DOC_TYPES = frozenset({
+        "purchase_receipt", "采购入库", "purchase_receipts",
+    })
+    _OUTSOURCE_RECEIPT_DOC_TYPES = frozenset({
+        "outsource_material_receipt", "委外收货", "outsource_receipt",
+    })
+
+    def _normalize_inbound_doc_type(self, doc_type: str) -> str:
+        normalized = (doc_type or "").strip()
+        if normalized in self._PURCHASE_RECEIPT_DOC_TYPES:
+            return "purchase_receipt"
+        if normalized in self._OUTSOURCE_RECEIPT_DOC_TYPES:
+            return "outsource_material_receipt"
+        raise ValidationError(
+            "doc_type 仅支持 purchase_receipt/采购入库 或 outsource_material_receipt/委外收货"
+        )
+
+    async def get_statement_line_detail(
+        self, tenant_id: int, doc_type: str, doc_id: int
+    ) -> Dict[str, Any]:
+        """返回采购入库或委外收货明细行（含质检字段），供对账单入库明细弹窗。"""
+        kind = self._normalize_inbound_doc_type(doc_type)
+        if kind == "purchase_receipt":
+            return await self._build_purchase_receipt_line_detail(tenant_id, doc_id)
+        return await self._build_outsource_receipt_line_detail(tenant_id, doc_id)
+
+    async def _build_purchase_receipt_line_detail(
+        self, tenant_id: int, receipt_id: int
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+        from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+
+        receipt = await PurchaseReceipt.get_or_none(
+            tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+        )
+        if not receipt:
+            raise NotFoundError(f"采购入库单不存在: {receipt_id}")
+
+        items = await PurchaseReceiptItem.filter(
+            tenant_id=tenant_id, receipt_id=receipt_id, deleted_at__isnull=True
+        ).order_by("id").all()
+        inspections = await IncomingInspection.filter(
+            tenant_id=tenant_id,
+            purchase_receipt_id=receipt_id,
+            deleted_at__isnull=True,
+        ).all()
+        inspection_by_material: Dict[int, IncomingInspection] = {}
+        for insp in inspections:
+            mid = int(insp.material_id)
+            if mid not in inspection_by_material:
+                inspection_by_material[mid] = insp
+
+        detail_items: List[Dict[str, Any]] = []
+        for item in items:
+            insp = inspection_by_material.get(int(item.material_id))
+            process_waste, material_waste = _extract_waste_quantities(
+                getattr(insp, "other_checks", None) if insp else None
+            )
+            inspection_date = None
+            if insp and insp.inspection_time:
+                inspection_date = to_api_isoformat(insp.inspection_time)
+            detail_items.append({
+                "material_code": item.material_code,
+                "material_name": item.material_name,
+                "material_spec": item.material_spec,
+                "unit": item.material_unit,
+                "quantity": float(item.receipt_quantity or 0),
+                "unit_price": float(item.unit_price or 0),
+                "amount": float(item.total_amount or 0),
+                "qualified_quantity": float(item.qualified_quantity or 0),
+                "unqualified_quantity": float(item.unqualified_quantity or 0),
+                "quality_status": item.quality_status,
+                "inspection_date": inspection_date,
+                "inspection_passed": _inspection_passed(insp),
+                "defect_reason": getattr(insp, "nonconformance_reason", None) if insp else None,
+                "process_waste_qty": process_waste,
+                "material_waste_qty": material_waste,
+            })
+
+        return {
+            "doc_type": "purchase_receipt",
+            "doc_id": receipt.id,
+            "doc_code": receipt.receipt_code,
+            "partner_name": receipt.supplier_name,
+            "items": detail_items,
+        }
+
+    async def _build_outsource_receipt_line_detail(
+        self, tenant_id: int, receipt_id: int
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.outsource_work_order import (
+            OutsourceMaterialReceipt,
+            OutsourceWorkOrder,
+        )
+
+        receipt = await OutsourceMaterialReceipt.get_or_none(
+            tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+        )
+        if not receipt:
+            raise NotFoundError(f"委外收货单不存在: {receipt_id}")
+
+        work_order = await OutsourceWorkOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=receipt.outsource_work_order_id,
+            deleted_at__isnull=True,
+        )
+        unit_price = Decimal(str(work_order.unit_price or 0)) if work_order else Decimal("0")
+        qty = Decimal(str(receipt.qualified_quantity or receipt.quantity or 0))
+        amount = (qty * unit_price).quantize(_MONEY)
+        inspection_date = (
+            to_api_isoformat(receipt.received_at) if receipt.received_at else None
+        )
+        unqualified = Decimal(str(receipt.unqualified_quantity or 0))
+        passed = unqualified <= 0 if receipt.received_at else None
+
+        detail_items = [{
+            "material_code": work_order.product_code if work_order else "",
+            "material_name": work_order.product_name if work_order else "",
+            "material_spec": None,
+            "unit": receipt.unit,
+            "quantity": float(receipt.quantity or 0),
+            "unit_price": float(unit_price),
+            "amount": float(amount),
+            "qualified_quantity": float(receipt.qualified_quantity or 0),
+            "unqualified_quantity": float(receipt.unqualified_quantity or 0),
+            "quality_status": "合格" if passed else ("不合格" if passed is False else None),
+            "inspection_date": inspection_date,
+            "inspection_passed": passed,
+            "defect_reason": receipt.remarks,
+            "process_waste_qty": None,
+            "material_waste_qty": float(unqualified) if unqualified > 0 else None,
+        }]
+
+        return {
+            "doc_type": "outsource_material_receipt",
+            "doc_id": receipt.id,
+            "doc_code": receipt.code,
+            "partner_name": work_order.supplier_name if work_order else None,
+            "items": detail_items,
+        }
 
     def _statement_export_context(self, obj: PartnerStatement) -> Dict[str, Any]:
         details = obj.transaction_details or {}

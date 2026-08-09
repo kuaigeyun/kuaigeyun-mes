@@ -148,6 +148,7 @@ const TRACEABILITY_NODE_TYPE_I18N: Record<string, string> = {
   sales_delivery: 'app.kuaizhizao.quality.traceability.nodeType.salesDelivery',
   sales_return: 'app.kuaizhizao.quality.traceability.nodeType.salesReturn',
   material_binding: 'app.kuaizhizao.quality.traceability.nodeType.materialBinding',
+  production_picking: 'app.kuaizhizao.quality.traceability.nodeType.productionPicking',
 };
 
 export function formatTraceEventRemark(remark: string | undefined | null, t: TFunction): string {
@@ -211,6 +212,9 @@ export function buildTraceabilityNodePath(node: TraceabilityNodeLike): string | 
   }
   if (docType === 'semi_finished_goods_receipt' && docId) {
     return `/apps/kuaizhizao/warehouse-management/inbound?semi_receipt_id=${docId}`;
+  }
+  if (docType === 'production_picking' && docId) {
+    return `/apps/kuaizhizao/warehouse-management/outbound?outbound_type=production_picking&id=${docId}`;
   }
 
   return null;

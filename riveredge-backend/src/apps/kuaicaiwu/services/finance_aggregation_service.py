@@ -145,6 +145,40 @@ class FinanceAggregationService:
         from apps.kuaicaiwu.models.receipt import Receipt
         from apps.kuaicaiwu.models.receivable import Receivable
 
+        ids_by_type: Dict[str, set[int]] = {}
+        for step in steps:
+            if step.get("status") != "linked" or not step.get("document_id"):
+                continue
+            step_type = str(step.get("step_type") or step.get("document_type") or "").lower()
+            ids_by_type.setdefault(step_type, set()).add(int(step["document_id"]))
+
+        async def _load_map(model, ids: set[int], **extra_filters):
+            if not ids:
+                return {}
+            rows = await model.filter(
+                tenant_id=tenant_id,
+                id__in=list(ids),
+                deleted_at__isnull=True,
+                **extra_filters,
+            ).all()
+            return {int(r.id): r for r in rows}
+
+        (
+            receivable_map,
+            receipt_map,
+            payable_map,
+            payment_map,
+            sales_invoice_map,
+            purchase_invoice_map,
+        ) = await asyncio.gather(
+            _load_map(Receivable, ids_by_type.get("receivable", set())),
+            _load_map(Receipt, ids_by_type.get("receipt", set())),
+            _load_map(Payable, ids_by_type.get("payable", set())),
+            _load_map(Payment, ids_by_type.get("payment", set())),
+            _load_map(Invoice, ids_by_type.get("sales_invoice", set()), category="OUT"),
+            _load_map(PurchaseInvoice, ids_by_type.get("purchase_invoice", set())),
+        )
+
         enriched: List[Dict[str, Any]] = []
         for step in steps:
             payload = dict(step)
@@ -155,7 +189,7 @@ class FinanceAggregationService:
             step_type = str(payload.get("step_type") or payload.get("document_type") or "").lower()
             triplet: Optional[Dict[str, float]] = None
             if step_type == "receivable":
-                row = await Receivable.get_or_none(tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True)
+                row = receivable_map.get(doc_id)
                 if row:
                     triplet = self._build_finance_amount_triplet(
                         doc_type=step_type,
@@ -164,7 +198,7 @@ class FinanceAggregationService:
                         remaining=Decimal(str(row.remaining_amount or 0)),
                     )
             elif step_type == "receipt":
-                row = await Receipt.get_or_none(tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True)
+                row = receipt_map.get(doc_id)
                 if row:
                     triplet = self._build_finance_amount_triplet(
                         doc_type=step_type,
@@ -173,7 +207,7 @@ class FinanceAggregationService:
                         remaining=Decimal(str(row.unsettled_amount or 0)),
                     )
             elif step_type == "payable":
-                row = await Payable.get_or_none(tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True)
+                row = payable_map.get(doc_id)
                 if row:
                     triplet = self._build_finance_amount_triplet(
                         doc_type=step_type,
@@ -182,7 +216,7 @@ class FinanceAggregationService:
                         remaining=Decimal(str(row.remaining_amount or 0)),
                     )
             elif step_type == "payment":
-                row = await Payment.get_or_none(tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True)
+                row = payment_map.get(doc_id)
                 if row:
                     triplet = self._build_finance_amount_triplet(
                         doc_type=step_type,
@@ -191,9 +225,7 @@ class FinanceAggregationService:
                         remaining=Decimal(str(row.unsettled_amount or 0)),
                     )
             elif step_type == "sales_invoice":
-                row = await Invoice.get_or_none(
-                    tenant_id=tenant_id, id=doc_id, category="OUT", deleted_at__isnull=True
-                )
+                row = sales_invoice_map.get(doc_id)
                 if row:
                     total = Decimal(str(row.total_amount or 0))
                     triplet = self._build_finance_amount_triplet(
@@ -203,7 +235,7 @@ class FinanceAggregationService:
                         remaining=total,
                     )
             elif step_type == "purchase_invoice":
-                row = await PurchaseInvoice.get_or_none(tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True)
+                row = purchase_invoice_map.get(doc_id)
                 if row:
                     total = Decimal(str(row.total_amount or 0))
                     triplet = self._build_finance_amount_triplet(

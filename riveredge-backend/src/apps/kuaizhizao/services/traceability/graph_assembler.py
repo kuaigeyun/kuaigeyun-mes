@@ -31,6 +31,7 @@ _DOC_LABELS = {
     "oqc_inspection": "出货检验",
     "defect_record": "不合格品",
     "material_binding": "物料绑定",
+    "production_picking": "生产领料",
     "reporting_record": "报工",
 }
 
@@ -90,7 +91,7 @@ class TraceGraphAssembler:
             ntype = ev.document_type
             if ev.document_type in ("purchase_receipt", "finished_goods_receipt", "semi_finished_goods_receipt", "customer_material_registration"):
                 ntype = "inbound"
-            elif ev.document_type in ("sales_delivery",):
+            elif ev.document_type in ("sales_delivery", "production_picking"):
                 ntype = "outbound"
             elif ev.document_type in ("sales_return",):
                 ntype = "inbound"
@@ -146,6 +147,16 @@ class TraceGraphAssembler:
                     ) and child.document_id:
                         child_nid = _node_id(child.document_type, child.document_code)
                         add_edge(wo_nid, child_nid, "检验")
+                    if child.document_type == "production_picking" and child.document_id:
+                        child_nid = _node_id(child.document_type, child.document_code)
+                        add_edge(wo_nid, child_nid, "领料")
+
+        for ev in events:
+            if ev.document_type == "production_picking" and ev.related_batch_no:
+                batch_nid = _node_id("batch", ev.related_batch_no)
+                ensure_node(batch_nid, ev.related_batch_no, "batch", {"batch_no": ev.related_batch_no})
+                pick_nid = _node_id(ev.document_type, ev.document_code)
+                add_edge(batch_nid, pick_nid, "生产领料")
 
         for ev in events:
             if ev.document_type == "purchase_receipt" and ev.document_id:

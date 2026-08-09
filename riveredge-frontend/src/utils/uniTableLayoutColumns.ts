@@ -6,19 +6,76 @@
  */
 
 import { isUniTableOperationColumn } from '../components/uni-action/operationColumn';
+import { resolveRowActionInlineSlots } from '../components/uni-action/overflow';
 import {
   LEGACY_LIST_LIFECYCLE_FIELD,
   LIST_LIFECYCLE_STAGE_FIELD,
 } from './listLifecycleStage';
 
-/** 生命周期列：非 fixed 时的收缩锚点（配合 minWidth + CSS fit-content） */
-export const UNI_TABLE_LIFECYCLE_WIDTH_ANCHOR = 1;
+/**
+ * 状态徽章列统一宽度：审核状态与执行状态（生命周期）等单徽章列共用这一个真源。
+ * 两列必须等宽等对齐，各写各的数字就会漂移。消费方见
+ * `sales-management/shared/listAuditPhaseColumn.tsx` 与本文件的生命周期列宽推导。
+ */
+export const UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH = 96;
 
-/** 生命周期列最小宽度 */
-export const UNI_TABLE_LIFECYCLE_MIN_WIDTH = 80;
+/**
+ * 操作列宽度布局令牌（1280 视口 / small 表格 / type="link" + 图标，Playwright 实测）：
+ * 单槽按**最宽单动作**预算——四字标签 92px（双字实测 64px），
+ * 「更多」按钮 70px、Space 间距 4px、单元格左右内边距 8+8=16px。
+ * 改令牌即同步改列宽；禁止在页面或引擎里另写数字。
+ */
+const ROW_ACTION_SLOT_PX = 92;
+const ROW_ACTION_MORE_BTN_PX = 70;
+const ROW_ACTION_GAP_PX = 4;
+export const UNI_TABLE_OPERATION_CELL_PADDING_PX = 16;
 
-/** 操作列最小宽度 */
-export const UNI_TABLE_OPERATION_MIN_WIDTH = 120;
+/**
+ * 操作列宽度的推导分两段，同属一条链、不是两个真源：
+ *
+ * 1. 首帧预算 `resolveUniTableOperationWidthForSlots`：还没有 DOM 可量时，按槽位契约
+ *    取「每槽都是最宽单动作」的上界，保证首帧不裁剪内容。
+ * 2. 最终真源 `resolveUniTableOperationWidthFromContent`：UniTable 在 useLayoutEffect
+ *    里量出该列各行动作条的实际内容宽（取最大值），在浏览器绘制前替换掉预算。
+ *
+ * 只用第 1 段会让所有操作列一律按最坏情况撑宽（1280 视口下 374px，而两字三动作实际只要
+ * 200px）；只用第 2 段则首帧无宽可用。列宽必须覆盖 nowrap 内容——否则内容溢出单元格、
+ * 把滚动区 scrollWidth 撑得比表格宽，多出的滚动距离会把 sticky 右固定列拖离右缘，
+ * 并在 scroll.y 的表头/表体双表结构下产生错位。
+ */
+export function resolveUniTableOperationWidthForSlots(slots: number): number {
+  const controls = slots + 1; // 主行槽位 + 「更多」
+  return (
+    slots * ROW_ACTION_SLOT_PX +
+    ROW_ACTION_MORE_BTN_PX +
+    (controls - 1) * ROW_ACTION_GAP_PX +
+    UNI_TABLE_OPERATION_CELL_PADDING_PX
+  );
+}
+
+/** 实测动作条内容宽 → 列宽（`.uni-table-operation-actions` 为 max-content，不随列宽变化） */
+export function resolveUniTableOperationWidthFromContent(contentPx: number): number {
+  return Math.ceil(contentPx) + UNI_TABLE_OPERATION_CELL_PADDING_PX;
+}
+
+/** 单元格右内边距（堆叠主列实测已含左内边距与树形缩进，只需补右侧） */
+const UNI_TABLE_CELL_TRAILING_PADDING_PX = 8;
+
+/**
+ * 堆叠主列（`uniTablePrimaryFlex`）的宽度下界 = 不可截断内容的实测宽度。
+ *
+ * 入参是「标识行右边缘 − 单元格左边缘」，因此天然含左内边距与树形缩进；
+ * 主行文案可省略号截断，不计入下界。页面声明的 minWidth 只是首帧预算，
+ * 实测值更大时以实测为准——否则单号会被压出单元格，画到相邻列上。
+ */
+export function resolveUniTablePrimaryFlexWidthFromContent(requiredPx: number): number {
+  return Math.ceil(requiredPx) + UNI_TABLE_CELL_TRAILING_PADDING_PX;
+}
+
+/** 首帧预算宽度（directMax 未声明时的槽位契约结果） */
+export const UNI_TABLE_OPERATION_MIN_WIDTH = resolveUniTableOperationWidthForSlots(
+  resolveRowActionInlineSlots(),
+);
 
 /** 勾选列宽度（空表 scroll.x 求和） */
 export const UNI_TABLE_SELECTION_COL_WIDTH = 48;
@@ -87,6 +144,17 @@ export function isUniTableLifecycleColumnFixedRight(col: unknown): boolean {
   return (col as { fixed?: unknown }).fixed === 'right';
 }
 
+/** 明细表格下推进度列：须 spread `DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS`（含 uniTableDetailProgressColumn） */
+export function isUniTableDetailProgressColumn(col: unknown): boolean {
+  if (!col || typeof col !== 'object') return false;
+  return (col as { uniTableDetailProgressColumn?: unknown }).uniTableDetailProgressColumn === true;
+}
+
+/** 明细表格下推进度列宽：与执行状态徽章列同宽 */
+export function resolveUniTableDetailProgressColumnWidth(): number {
+  return UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH;
+}
+
 /** 与 UniTable 内生命周期列判定一致（key 或 dataIndex） */
 export function isUniTableLifecycleColumn(col: unknown): boolean {
   if (!col || typeof col !== 'object') return false;
@@ -101,24 +169,31 @@ export function isUniTableLifecycleColumn(col: unknown): boolean {
   );
 }
 
-/** 生命周期列注入 ProTable 的 width（fixed right 须用 minWidth，否则固定列定位重叠） */
-export function resolveUniTableLifecycleColumnWidth(col: { fixed?: unknown }): number {
-  if (isUniTableLifecycleColumnFixedRight(col)) {
-    return UNI_TABLE_LIFECYCLE_MIN_WIDTH;
-  }
-  return UNI_TABLE_LIFECYCLE_WIDTH_ANCHOR;
+/** 生命周期（执行状态）列宽：与审核状态列同宽，无论是否右固定 */
+export function resolveUniTableLifecycleColumnWidth(): number {
+  return UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH;
 }
 
-/** 操作列注入 ProTable 的 width；非 fixed right 返回 undefined 由内容撑开 */
+/**
+ * 操作列注入 ProTable 的 width；非 fixed right 返回 undefined 由内容撑开。
+ *
+ * 唯一真源 = 该列自己的槽位契约（`uniActionRenderOptions.directMax` → 槽位数 → 宽度）。
+ * 页面列定义里的 `width` / `minWidth` 一律忽略：它们与折叠契约无关，
+ * 保留就会形成第二真源（页面写 200 而契约需要更宽 → 内容溢出撑坏滚动几何）。
+ */
 export function resolveUniTableOperationColumnWidth(col: {
-  width?: unknown;
-  minWidth?: unknown;
   fixed?: unknown;
+  uniActionRenderOptions?: unknown;
 }): number | undefined {
   if (col.fixed !== 'right') return undefined;
-  const pageWidth = parseUniTableColumnWidth(col.width);
-  const minWidth = parseUniTableColumnWidth(col.minWidth) ?? UNI_TABLE_OPERATION_MIN_WIDTH;
-  return Math.max(pageWidth ?? 0, minWidth);
+  const options = col.uniActionRenderOptions;
+  const directMax =
+    options && typeof options === 'object'
+      ? (options as { directMax?: unknown }).directMax
+      : undefined;
+  return resolveUniTableOperationWidthForSlots(
+    resolveRowActionInlineSlots(typeof directMax === 'number' ? directMax : undefined),
+  );
 }
 
 export function getUniTableLifecycleCellClassName(col: { fixed?: unknown }): string {
@@ -136,9 +211,10 @@ export function getUniTableColumnScrollContribution(col: unknown): number {
   if (c.hideInTable) return 0;
 
   if (isUniTableLifecycleColumn(col)) {
-    const resolved = parseUniTableColumnWidth(c.width);
-    if (resolved != null && resolved >= UNI_TABLE_LIFECYCLE_MIN_WIDTH) return resolved;
-    return resolveUniTableLifecycleColumnWidth(c);
+    return resolveUniTableLifecycleColumnWidth();
+  }
+  if (isUniTableDetailProgressColumn(col)) {
+    return resolveUniTableDetailProgressColumnWidth();
   }
   if (isUniTableOperationColumn(col)) {
     const resolved = parseUniTableColumnWidth(c.width);

@@ -149,6 +149,7 @@ class EmployeePerformanceConfigService:
         if not config:
             raise NotFoundError(f"绩效配置 {config_id} 不存在")
         await config.update_from_dict({"deleted_at": resolve_business_datetime()})
+        await config.save()
 
 
 class PieceRateService:
@@ -409,6 +410,7 @@ class HourlyRateService:
         if not rate:
             raise NotFoundError(f"工时单价 {rate_id} 不存在")
         await rate.update_from_dict({"deleted_at": resolve_business_datetime()})
+        await rate.save()
 
 
 class KPIDefinitionService:
@@ -500,3 +502,4 @@ class KPIDefinitionService:
         if not kpi:
             raise NotFoundError(f"KPI 指标 {kpi_id} 不存在")
         await kpi.update_from_dict({"deleted_at": resolve_business_datetime()})
+        await kpi.save()

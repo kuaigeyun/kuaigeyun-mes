@@ -43,6 +43,8 @@ from apps.master_data.schemas.material_schemas import (
     MaterialBatchMoveGroupRequest, MaterialBatchMoveGroupResponse,
     MaterialBatchUpdateProcessRouteRequest, MaterialBatchUpdateSourceTypeRequest,
     MaterialBulkDefaultsPatchRequest,
+    MaterialBulkInspectionPatchRequest,
+    MaterialBulkInspectionPatchResponse,
     MaterialBatchFieldUpdateResponse,
     MaterialRewriteMainCodesRequest, MaterialRewriteMainCodesResponse,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
@@ -1877,6 +1879,28 @@ async def bulk_patch_material_defaults(
     """
     try:
         return await MaterialService.bulk_patch_material_defaults(tenant_id, data)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/batch-inspection",
+    response_model=MaterialBulkInspectionPatchResponse,
+    summary="Bulk patch material inspection stages and over-report",
+)
+async def bulk_patch_material_inspection(
+    data: MaterialBulkInspectionPatchRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    批量更新物料质检选项（IQC/FQC/OQC 分场景策略、超报方式/数值）。
+
+    每条仅覆盖传入的场景；未传场景保持原值。方案须与场景类型匹配
+    （iqc→incoming，fqc→finished，oqc→outbound）。
+    """
+    try:
+        return await MaterialService.bulk_patch_material_inspection(tenant_id, data)
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

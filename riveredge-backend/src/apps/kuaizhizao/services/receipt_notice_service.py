@@ -315,12 +315,23 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             )
         keyword = str(filters.get("keyword") or "").strip()
         if keyword:
+            from apps.kuaizhizao.utils.list_item_material_keyword import (
+                header_ids_matching_item_material,
+            )
+
+            material_notice_ids = await header_ids_matching_item_material(
+                tenant_id,
+                ReceiptNoticeItem,
+                "notice_id",
+                keyword,
+            )
             query = query.filter(
                 Q(notice_code__icontains=keyword)
                 | Q(purchase_order_code__icontains=keyword)
                 | Q(supplier_name__icontains=keyword)
                 | Q(warehouse_name__icontains=keyword)
                 | Q(purchase_receipt_code__icontains=keyword)
+                | Q(id__in=material_notice_ids)
             )
         if filters.get("notice_code"):
             code = str(filters["notice_code"]).strip()
@@ -339,6 +350,19 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         notices = await query.offset(skip).limit(limit).order_by(order_clause, "-id")
         notice_list = list(notices)
         notice_ids = [int(n.id) for n in notice_list if n.id is not None]
+        include_items = bool(filters.get("include_items"))
+        items_by_notice: dict[int, list] = {}
+        if include_items and notice_ids:
+            all_items = (
+                await ReceiptNoticeItem.filter(tenant_id=tenant_id, notice_id__in=notice_ids)
+                .order_by("notice_id", "id")
+                .all()
+            )
+            for it in all_items:
+                nid = int(it.notice_id)
+                items_by_notice.setdefault(nid, []).append(
+                    ReceiptNoticeItemResponse.model_validate(it)
+                )
         items_map = await self._notice_has_items_map(tenant_id, notice_ids)
         withdraw_map = await self._receipt_withdrawable_by_notice_id(tenant_id, notice_list)
         receipt_status_map = await self._purchase_receipt_status_by_notice_id(tenant_id, notice_list)
@@ -351,6 +375,8 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
                 r,
                 purchase_receipt_status=receipt_status_map.get(int(r.id)) if r.id is not None else None,
             )
+            if include_items:
+                resp.items = items_by_notice.get(int(r.id), [])
             list_responses.append(resp)
         enriched = enrich_receipt_notice_list_capabilities(
             notice_list,

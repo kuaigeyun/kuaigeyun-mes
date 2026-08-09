@@ -259,6 +259,28 @@ class InventoryService:
         return None
 
     @staticmethod
+    def _apply_batch_ledger_dates(
+        batch,
+        *,
+        material,
+        ledger_production_date: Optional[date],
+        ledger_expiry_date: Optional[date],
+    ) -> None:
+        """首次写入生产日/有效期至；已有值不覆盖。有效期按物料保质期或单据显式值解析。"""
+        from apps.master_data.services.material_batch_service import MaterialBatchService
+
+        if ledger_production_date is not None and batch.production_date is None:
+            batch.production_date = ledger_production_date
+        if batch.expiry_date is None:
+            resolved = MaterialBatchService.resolve_batch_expiry_date(
+                material=material,
+                production_date=batch.production_date,
+                explicit_expiry=ledger_expiry_date,
+            )
+            if resolved is not None:
+                batch.expiry_date = resolved
+
+    @staticmethod
     async def _material_batch_increase_or_restore(
         tenant_id: int,
         material_id: int,
@@ -270,6 +292,8 @@ class InventoryService:
         source_doc_id: Optional[int] = None,
         source_doc_code: Optional[str] = None,
         ledger_production_date: Optional[date] = None,
+        ledger_expiry_date: Optional[date] = None,
+        material=None,
         warehouse_id: Optional[int] = None,
         warehouse_name: Optional[str] = None,
     ) -> None:
@@ -278,6 +302,8 @@ class InventoryService:
         仅查未删行会误判为不存在，insert 会撞唯一约束。
         """
         from apps.master_data.models.material_batch import MaterialBatch
+        from apps.master_data.models.material import Material
+        from apps.master_data.services.material_batch_service import MaterialBatchService
 
         bn = InventoryService._normalize_batch_no_for_ledger(batch_no)
         own = InventoryService._ownership_filter(ownership_type, customer_id)
@@ -285,6 +311,10 @@ class InventoryService:
         wh_name = (str(warehouse_name or "").strip() or None)
         if wh_id > 0 and not wh_name:
             wh_name = await InventoryService._resolve_warehouse_name(wh_id)
+        if material is None:
+            material = await Material.get_or_none(
+                tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
+            )
 
         batch = await MaterialBatch.filter(
             tenant_id=tenant_id,
@@ -318,10 +348,20 @@ class InventoryService:
                 batch.source_doc_id = source_doc_id
             if source_doc_code:
                 batch.source_doc_code = source_doc_code
-            if ledger_production_date is not None and batch.production_date is None:
-                batch.production_date = ledger_production_date
+            InventoryService._apply_batch_ledger_dates(
+                batch,
+                material=material,
+                ledger_production_date=ledger_production_date,
+                ledger_expiry_date=ledger_expiry_date,
+            )
             await batch.save()
             return
+        create_production_date = ledger_production_date
+        create_expiry_date = MaterialBatchService.resolve_batch_expiry_date(
+            material=material,
+            production_date=create_production_date,
+            explicit_expiry=ledger_expiry_date,
+        )
         try:
             await MaterialBatch.create(
                 tenant_id=tenant_id,
@@ -329,7 +369,8 @@ class InventoryService:
                 batch_no=bn,
                 quantity=quantity,
                 status="in_stock",
-                production_date=ledger_production_date,
+                production_date=create_production_date,
+                expiry_date=create_expiry_date,
                 ownership_type=own["ownership_type"],
                 customer_id=own["customer_id"],
                 customer_name=customer_name,
@@ -375,8 +416,12 @@ class InventoryService:
             batch.status = "in_stock"
             if wh_name and not str(batch.warehouse_name or "").strip():
                 batch.warehouse_name = wh_name
-            if ledger_production_date is not None and batch.production_date is None:
-                batch.production_date = ledger_production_date
+            InventoryService._apply_batch_ledger_dates(
+                batch,
+                material=material,
+                ledger_production_date=ledger_production_date,
+                ledger_expiry_date=ledger_expiry_date,
+            )
             await batch.save()
 
     @staticmethod
@@ -456,6 +501,7 @@ class InventoryService:
         customer_id: Optional[int] = None,
         customer_name: Optional[str] = None,
         ledger_production_date: Optional[date] = None,
+        ledger_expiry_date: Optional[date] = None,
         movement_type: Optional[str] = None,
         from_warehouse_id: Optional[int] = None,
         from_warehouse_name: Optional[str] = None,
@@ -470,11 +516,14 @@ class InventoryService:
         增加库存（不开启独立事务）。
         """
         try:
+            from apps.master_data.services.material_batch_service import MaterialBatchService
+
             quantity = Decimal(str(quantity or 0))
             to_wh_id = to_warehouse_id if to_warehouse_id is not None else warehouse_id
             to_wh_name = to_warehouse_name
             from_wh_id = from_warehouse_id
             from_wh_name = from_warehouse_name
+            ledger_expiry_date = MaterialBatchService.coerce_optional_date(ledger_expiry_date)
             # 根据 warehouse_type 决定写入目标
             use_line_side = False
             wh = None
@@ -563,6 +612,8 @@ class InventoryService:
                     source_doc_id=source_doc_id,
                     source_doc_code=source_doc_code,
                     ledger_production_date=ledger_production_date,
+                    ledger_expiry_date=ledger_expiry_date,
+                    material=material,
                     warehouse_id=main_wh_id,
                     warehouse_name=main_wh_name,
                 )
@@ -710,6 +761,7 @@ class InventoryService:
         customer_id: Optional[int] = None,
         customer_name: Optional[str] = None,
         ledger_production_date: Optional[date] = None,
+        ledger_expiry_date: Optional[date] = None,
         movement_type: Optional[str] = None,
         from_warehouse_id: Optional[int] = None,
         from_warehouse_name: Optional[str] = None,
@@ -739,6 +791,7 @@ class InventoryService:
             customer_id=customer_id,
             customer_name=customer_name,
             ledger_production_date=ledger_production_date,
+            ledger_expiry_date=ledger_expiry_date,
             movement_type=movement_type,
             from_warehouse_id=from_warehouse_id,
             from_warehouse_name=from_warehouse_name,

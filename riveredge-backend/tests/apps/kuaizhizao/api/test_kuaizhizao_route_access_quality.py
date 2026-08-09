@@ -29,10 +29,19 @@ def test_quality_and_warehouse_execution_path_modules(path: str, module: str) ->
     assert resolver(path) == module
 
 
-def test_conduct_maps_to_update() -> None:
+def test_conduct_maps_to_execute() -> None:
     action = resolve_kuaizhizao_module_action(
         "POST",
         "/api/v1/apps/kuaizhizao/process-inspections/1/conduct",
+        module_code="quality-management-process-inspection",
+    )
+    assert action == "execute"
+
+
+def test_revoke_conduct_maps_to_update() -> None:
+    action = resolve_kuaizhizao_module_action(
+        "POST",
+        "/api/v1/apps/kuaizhizao/process-inspections/1/revoke-conduct",
         module_code="quality-management-process-inspection",
     )
     assert action == "update"

@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Card, Col, DatePicker, Form, Input, InputNumber, Modal, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -56,12 +56,14 @@ import {
   mergeRecordMaps,
   usePullEntryFormDraft,
 } from '../shared/pullEntryFormDraft';
+import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 const InboundPoPullEntryPage: React.FC = () => {
   const { poId: poIdParam } = useParams<{ poId: string }>();
   const poId = Number(poIdParam);
   const navigate = useNavigate();
+  const location = useLocation();
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
   const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_receipt.pull_from_purchase_order');
@@ -113,8 +115,12 @@ const InboundPoPullEntryPage: React.FC = () => {
 
   const leavePage = useCallback(() => {
     clearDraft();
-    navigate(INBOUND_LIST_PATH);
-  }, [clearDraft, navigate]);
+    navigateLeavingPullEntry(
+      navigate,
+      INBOUND_LIST_PATH,
+      pullEntryTabKey(location.pathname, location.search),
+    );
+  }, [clearDraft, navigate, location.pathname, location.search]);
 
   useEffect(() => {
     bindSnapshot(() => ({
@@ -477,15 +483,18 @@ const InboundPoPullEntryPage: React.FC = () => {
       invalidateMenuBadgeCounts();
       clearDraft();
       if (mode === 'confirm') {
-        navigate(INBOUND_LIST_PATH, {
-          state: {
+        navigateLeavingPullEntry(
+          navigate,
+          INBOUND_LIST_PATH,
+          pullEntryTabKey(location.pathname, location.search),
+          {
             inboundDirectConfirm: {
               id: Number(created.id),
               receipt_type: 'purchase',
               purchaseReceiptHandoff: buildHandoff(),
             },
           },
-        });
+        );
       } else {
         messageApi.success(
           t('app.kuaizhizao.warehouseInbound.entry.purchase.draftCreated', {

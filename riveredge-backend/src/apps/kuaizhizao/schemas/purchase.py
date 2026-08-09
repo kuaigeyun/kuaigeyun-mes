@@ -52,6 +52,9 @@ class PurchaseOrderBase(BaseSchema):
     fee_details: Optional[List[dict]] = Field(None, description="费用明细 (JSON)")
     total_fee_amount: Decimal = Field(default=Decimal(0), ge=0, description="总费用金额")
 
+    prepayment_amount: Optional[Decimal] = Field(None, ge=0, description="预付款金额")
+    prepayment_bank_account_id: Optional[int] = Field(None, description="预付款银行账户ID")
+
 
 class PurchaseOrderCreate(PurchaseOrderBase):
     """采购订单创建Schema"""
@@ -259,6 +262,7 @@ class PurchaseOrderListParams(BaseModel):
     order_by: Optional[str] = None
     pullable_only: Optional[bool] = None
     pull_target: Optional[str] = None
+    include_items: bool = False
     skip: int = 0
     limit: int = 20
 

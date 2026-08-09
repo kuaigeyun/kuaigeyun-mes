@@ -1,20 +1,26 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { ProFormMoney, ProFormSelect } from '@ant-design/pro-components';
+import { ProFormMoney, ProFormSelect, ProFormDatePicker, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { App, Tag, Typography } from 'antd';
+import { App, Button, Tag, Typography } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { FormModalTemplate, MultiTabListPageTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import { apiRequest } from '../../../../../services/api';
 import { receiptService, type ReceiptListParams } from '../../../services/finance/receipt';
 import { paymentService, type PaymentListParams } from '../../../services/finance/payment';
+import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { documentReconciliationService } from '../../../services/finance/document-reconciliation';
 import { prepaymentService } from '../../../services/finance/prepayment';
 import { receivableService } from '../../../services/finance/receivable';
 import { payableService } from '../../../services/finance/payable';
 import { useTranslation } from 'react-i18next';
 import { formatSettlementType } from '../../../utils/financeUiLabels';
-import { buildVoucherStatusEnum } from '../../../utils/financeSharedOptions';
+import { buildVoucherStatusEnum, assertBankAccountForTransfer, getPaymentMethodOptions, BANK_TRANSFER_PAYMENT_METHOD, isBankTransferPaymentMethod } from '../../../utils/financeSharedOptions';
+import { formatDateTime } from '../../../../../utils/format';
+import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
+import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import type { TFunction } from 'i18next';
 import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
@@ -54,6 +60,9 @@ const PrepaymentsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('balance');
   const [applyReceiptVisible, setApplyReceiptVisible] = useState(false);
   const [applyPaymentVisible, setApplyPaymentVisible] = useState(false);
+  const [createReceiptVisible, setCreateReceiptVisible] = useState(false);
+  const [createPaymentVisible, setCreatePaymentVisible] = useState(false);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [selectedReceipt, setSelectedReceipt] = useState<PrepaymentRow | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<PrepaymentRow | null>(null);
   const [receivableOptions, setReceivableOptions] = useState<{ label: string; value: number; remaining: number }[]>([]);
@@ -61,6 +70,15 @@ const PrepaymentsPage: React.FC = () => {
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
   const prepaymentPerms = useResourcePermissions(PREPAYMENT_RESOURCE);
+  const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
+  const bankAccountOptions = useMemo(
+    () => bankAccounts.map((a) => ({
+      label: `${a.bank_name || ''} ${a.account_number || ''}`.trim() || String(a.id),
+      value: a.id,
+      account_number: a.account_number,
+    })),
+    [bankAccounts],
+  );
 
   const { data: balances } = useQuery({
     queryKey: ['prepaymentBalances'],
@@ -71,11 +89,13 @@ const PrepaymentsPage: React.FC = () => {
     let cancelled = false;
     (async () => {
       try {
-        const [customerRes, supplierRes] = await Promise.all([
+        const [customerRes, supplierRes, bankRes] = await Promise.all([
           apiRequest<unknown>('/apps/master-data/supply-chain/customers', { params: { limit: 1000, is_active: true } }),
           apiRequest<unknown>('/apps/master-data/supply-chain/suppliers', { params: { limit: 1000, is_active: true } }),
+          bankAccountService.list({ skip: 0, limit: 500, is_active: true }),
         ]);
         if (cancelled) return;
+        setBankAccounts(bankRes?.data || []);
         const mapOptions = (res: unknown) => {
           const list = Array.isArray(res) ? res : (res as { data?: unknown[]; items?: unknown[] })?.data ?? (res as { items?: unknown[] })?.items ?? [];
           return (Array.isArray(list) ? list : []).map((row: { id: number; name?: string; customer_name?: string; supplier_name?: string; code?: string }) => ({
@@ -335,7 +355,6 @@ const PrepaymentsPage: React.FC = () => {
             columns={balanceColumns}
             showAdvancedSearch
             skipFuzzyPinyinClientFilter
-            scroll={{ x: 720 }}
             request={async (params, sort, _filter, searchFormValues) => {
               const { current, pageSize } = params;
               const listParams = resolvePrepaymentBalanceListParams(searchFormValues, sort);
@@ -370,7 +389,6 @@ const PrepaymentsPage: React.FC = () => {
             columns={balanceColumns}
             showAdvancedSearch
             skipFuzzyPinyinClientFilter
-            scroll={{ x: 720 }}
             request={async (params, sort, _filter, searchFormValues) => {
               const { current, pageSize } = params;
               const listParams = resolvePrepaymentBalanceListParams(searchFormValues, sort);
@@ -408,7 +426,6 @@ const PrepaymentsPage: React.FC = () => {
           rowKey="id"
           columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.receipts"
           columns={receiptColumns}
-          scroll={{ x: 1680 }}
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
           pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
@@ -437,7 +454,18 @@ const PrepaymentsPage: React.FC = () => {
             }
           }}
           pagination={{ pageSize: 20 }}
-          toolBarRender={false}
+          toolBarRender={() => [
+            prepaymentPerms.canUpdate ? (
+              <Button
+                key="create-prepayment-receipt"
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => setCreateReceiptVisible(true)}
+              >
+                {t(`${P}.createPreReceipt`)}
+              </Button>
+            ) : null,
+          ].filter(Boolean)}
         />
       ),
     },
@@ -451,7 +479,6 @@ const PrepaymentsPage: React.FC = () => {
           rowKey="id"
           columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.payments"
           columns={paymentColumns}
-          scroll={{ x: 1680 }}
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
           pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
@@ -480,11 +507,22 @@ const PrepaymentsPage: React.FC = () => {
             }
           }}
           pagination={{ pageSize: 20 }}
-          toolBarRender={false}
+          toolBarRender={() => [
+            prepaymentPerms.canUpdate ? (
+              <Button
+                key="create-prepayment-payment"
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => setCreatePaymentVisible(true)}
+              >
+                {t(`${P}.createPrePayment`)}
+              </Button>
+            ) : null,
+          ].filter(Boolean)}
         />
       ),
     },
-  ], [balanceColumns, messageApi, paymentColumns, receiptColumns, t]);
+  ], [balanceColumns, bankAccountOptions, messageApi, paymentColumns, paymentMethodOptions, prepaymentPerms.canUpdate, receiptColumns, t]);
 
   return (
     <>
@@ -568,6 +606,148 @@ const PrepaymentsPage: React.FC = () => {
           max={selectedPayment ? Number(selectedPayment.unsettled_amount) : undefined}
           rules={[{ required: true }]}
         />
+      </FormModalTemplate>
+
+      <FormModalTemplate
+        title={t(`${P}.createPreReceipt`)}
+        open={createReceiptVisible}
+        onClose={() => setCreateReceiptVisible(false)}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        initialValues={{
+          receipt_date: dayjs(),
+          payment_method: BANK_TRANSFER_PAYMENT_METHOD,
+          settlement_type: 'prepayment',
+        }}
+        onFinish={async (values) => {
+          try {
+            assertBankAccountForTransfer(values.payment_method, values.bank_account_id, t);
+          } catch (e: unknown) {
+            messageApi.warning((e as Error).message);
+            return false;
+          }
+          const bank = bankAccountOptions.find((o) => o.value === values.bank_account_id);
+          await receiptService.create({
+            customer_id: values.customer_id,
+            customer_name: customerOptions.find((o) => o.value === values.customer_id)?.label || '',
+            total_amount: values.total_amount,
+            receipt_date: formatDateTime(values.receipt_date || dayjs(), 'YYYY-MM-DD'),
+            payment_method: values.payment_method,
+            bank_account_id: values.bank_account_id,
+            bank_account: bank?.account_number,
+            settlement_type: 'prepayment',
+            notes: values.notes,
+            attachments: normalizeDocumentAttachments(values.attachments),
+          });
+          messageApi.success(t(`${P}.createPreReceiptSuccess`));
+          reloadBalanceTables();
+          receiptRef.current?.reload();
+          setCreateReceiptVisible(false);
+          return true;
+        }}
+      >
+        <ProFormSelect
+          name="customer_id"
+          label={t('app.kuaicaiwu.common.customer')}
+          rules={[{ required: true }]}
+          options={customerOptions}
+          showSearch
+        />
+        <ProFormDatePicker
+          name="receipt_date"
+          label={t(`${P}.col.receiptDate`)}
+          rules={[{ required: true }]}
+          fieldProps={{ style: { width: '100%' } }}
+        />
+        <ProFormMoney name="total_amount" label={t(`${P}.col.receiptAmount`)} min={0.01} rules={[{ required: true }]} />
+        <ProFormSelect name="payment_method" label={t('app.kuaicaiwu.receipt.paymentMethod')} options={paymentMethodOptions} rules={[{ required: true }]} />
+        <ProFormSelect
+          name="bank_account_id"
+          label={t('app.kuaicaiwu.receipt.bankAccount')}
+          options={bankAccountOptions}
+          rules={[
+            ({ getFieldValue }) => ({
+              validator: async (_, value) => {
+                if (!isBankTransferPaymentMethod(getFieldValue('payment_method'))) return;
+                if (value) return;
+                throw new Error(t('app.kuaicaiwu.receipt.bankAccountRequired'));
+              },
+            }),
+          ]}
+          extra={bankAccountOptions.length === 0 ? t('app.kuaicaiwu.receipt.bankAccountEmptyHint') : undefined}
+        />
+        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
+        <DocumentAttachmentsField name="attachments" />
+      </FormModalTemplate>
+
+      <FormModalTemplate
+        title={t(`${P}.createPrePayment`)}
+        open={createPaymentVisible}
+        onClose={() => setCreatePaymentVisible(false)}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        initialValues={{
+          payment_date: dayjs(),
+          payment_method: BANK_TRANSFER_PAYMENT_METHOD,
+          settlement_type: 'prepayment',
+        }}
+        onFinish={async (values) => {
+          try {
+            assertBankAccountForTransfer(values.payment_method, values.bank_account_id, t);
+          } catch (e: unknown) {
+            messageApi.warning((e as Error).message);
+            return false;
+          }
+          const bank = bankAccountOptions.find((o) => o.value === values.bank_account_id);
+          await paymentService.create({
+            supplier_id: values.supplier_id,
+            supplier_name: supplierOptions.find((o) => o.value === values.supplier_id)?.label || '',
+            total_amount: values.total_amount,
+            payment_date: formatDateTime(values.payment_date || dayjs(), 'YYYY-MM-DD'),
+            payment_method: values.payment_method,
+            bank_account_id: values.bank_account_id,
+            bank_account: bank?.account_number,
+            settlement_type: 'prepayment',
+            notes: values.notes,
+            attachments: normalizeDocumentAttachments(values.attachments),
+          });
+          messageApi.success(t(`${P}.createPrePaymentSuccess`));
+          reloadBalanceTables();
+          paymentRef.current?.reload();
+          setCreatePaymentVisible(false);
+          return true;
+        }}
+      >
+        <ProFormSelect
+          name="supplier_id"
+          label={t('app.kuaicaiwu.common.supplier')}
+          rules={[{ required: true }]}
+          options={supplierOptions}
+          showSearch
+        />
+        <ProFormDatePicker
+          name="payment_date"
+          label={t(`${P}.col.paymentDate`)}
+          rules={[{ required: true }]}
+          fieldProps={{ style: { width: '100%' } }}
+        />
+        <ProFormMoney name="total_amount" label={t(`${P}.col.paymentAmount`)} min={0.01} rules={[{ required: true }]} />
+        <ProFormSelect name="payment_method" label={t('app.kuaicaiwu.payment.paymentMethod')} options={paymentMethodOptions} rules={[{ required: true }]} />
+        <ProFormSelect
+          name="bank_account_id"
+          label={t('app.kuaicaiwu.payment.bankAccount')}
+          options={bankAccountOptions}
+          rules={[
+            ({ getFieldValue }) => ({
+              validator: async (_, value) => {
+                if (!isBankTransferPaymentMethod(getFieldValue('payment_method'))) return;
+                if (value) return;
+                throw new Error(t('app.kuaicaiwu.payment.bankAccountRequired'));
+              },
+            }),
+          ]}
+          extra={bankAccountOptions.length === 0 ? t('app.kuaicaiwu.payment.bankAccountEmptyHint') : undefined}
+        />
+        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
+        <DocumentAttachmentsField name="attachments" />
       </FormModalTemplate>
     </>
   );

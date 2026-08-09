@@ -372,7 +372,6 @@ const BarcodeMappingRulesPage: React.FC = () => {
         }}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
-        scroll={{ x: 1400 }}
       />
 
       {/* 创建/编辑 Modal */}

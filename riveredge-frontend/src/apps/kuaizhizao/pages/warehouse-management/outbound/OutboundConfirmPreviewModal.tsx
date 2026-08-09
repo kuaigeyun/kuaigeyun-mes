@@ -46,6 +46,17 @@ function inventoryLookupKey(
   return Number(it.material_id);
 }
 
+/**
+ * 生产领料确认数量：待领时 issue 写入 required_quantity、picked_quantity=0；
+ * 不可用 `picked ?? required`（0 不会落到 required，会导致明细被滤空）。
+ */
+function productionPickingConfirmQty(it: Record<string, unknown>): number {
+  const picked = Number(it.picked_quantity);
+  if (Number.isFinite(picked) && picked > 0) return picked;
+  const required = Number(it.required_quantity);
+  return Number.isFinite(required) && required > 0 ? required : 0;
+}
+
 function lineWarehouseId(
   it: Record<string, unknown>,
   fallbackWhId: number,
@@ -164,7 +175,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       return items.filter((it) => Number(it.delivery_quantity ?? 0) > 0);
     }
     if (outboundType === 'production_picking') {
-      return items.filter((it) => Number(it.picked_quantity ?? it.required_quantity ?? 0) > 0);
+      return items.filter((it) => productionPickingConfirmQty(it) > 0);
     }
     if (outboundType === 'other_outbound') {
       return items.filter((it) => Number(it.outbound_quantity ?? 0) > 0);
@@ -457,7 +468,8 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       return `${it.delivery_quantity ?? ''}${it.material_unit ? ` ${it.material_unit}` : ''}`;
     }
     if (outboundType === 'production_picking') {
-      return `${it.picked_quantity ?? it.required_quantity ?? ''}${it.material_unit ? ` ${it.material_unit}` : ''}`;
+      const qty = productionPickingConfirmQty(it);
+      return `${qty || ''}${it.material_unit ? ` ${it.material_unit}` : ''}`;
     }
     if (outboundType === 'other_outbound') {
       return `${it.outbound_quantity ?? ''}${it.material_unit ? ` ${it.material_unit}` : ''}`;
@@ -471,7 +483,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   const lineOutboundQty = (it: Record<string, unknown>): number => {
     if (outboundType === 'sales_delivery') return Number(it.delivery_quantity ?? 0);
     if (outboundType === 'production_picking') {
-      return Number(it.picked_quantity ?? it.required_quantity ?? 0);
+      return productionPickingConfirmQty(it);
     }
     if (outboundType === 'other_outbound') return Number(it.outbound_quantity ?? 0);
     if (outboundType === 'material_borrow') return Number(it.borrow_quantity ?? 0);
@@ -592,9 +604,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
           const lineId = Number(it.id);
           const meta = materialMeta[lineId];
           if (!meta?.serialManaged) return '—';
-          const qty = Number(
-            it.delivery_quantity ?? it.picked_quantity ?? it.outbound_quantity ?? it.borrow_quantity ?? 0,
-          );
+          const qty = lineOutboundQty(it);
           const opts = serialOptionsByLineId[lineId] ?? [];
           const materialLabel = [it.material_code, it.material_name].filter(Boolean).join(' - ');
           return (
@@ -691,9 +701,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       const lineId = Number(it.id);
       const meta = materialMeta[lineId];
       const lookupKey = inventoryLookupKey(outboundType, it);
-      const qty = Number(
-        it.delivery_quantity ?? it.picked_quantity ?? it.outbound_quantity ?? it.borrow_quantity ?? 0,
-      );
+      const qty = lineOutboundQty(it);
       const opts = batchOptionsByMaterialId[lookupKey] ?? [];
 
       if (!meta?.batchManaged) {
@@ -866,7 +874,20 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       {record ? (
         <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
           {t('app.kuaizhizao.warehouseOutbound.detail.docNo')}：
-          <Typography.Text strong>{outboundDocumentCode(record)}</Typography.Text>
+          <Typography.Text strong>
+            {outboundDocumentCode({
+              ...record,
+              ...(detail
+                ? {
+                    picking_code: (detail.picking_code as string | undefined) ?? record.picking_code,
+                    delivery_code: (detail.delivery_code as string | undefined) ?? record.delivery_code,
+                    outbound_code: (detail.outbound_code as string | undefined) ?? record.outbound_code,
+                    borrow_code: (detail.borrow_code as string | undefined) ?? record.borrow_code,
+                    issue_code: (detail.issue_code as string | undefined) ?? record.issue_code,
+                  }
+                : null),
+            })}
+          </Typography.Text>
         </Typography.Text>
       ) : null}
       <Form form={form} component={false}>

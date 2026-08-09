@@ -170,7 +170,6 @@ const LineSideWarehousePage: React.FC = () => {
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         params={{ warehouse_id: selectedWarehouseId }}
-        scroll={{ x: 1280 }}
         toolBarRender={() => [
           <Select
             key="warehouse-select"

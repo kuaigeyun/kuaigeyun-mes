@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Card, DatePicker, Form, InputNumber, Select, Space, Steps, Tag } from 'antd';
+import { App, Button, Card, DatePicker, Form, InputNumber, Select, Space, Steps, Tag, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { LinkOutlined, SearchOutlined } from '@ant-design/icons';
@@ -345,6 +345,7 @@ const DocumentReconciliationPage: React.FC = () => {
 
   const gapPanel = (
     <>
+      <Alert type="info" showIcon style={{ marginBottom: 16 }} message={t(`${D}.queryHint`)} />
       {gapSummary.gap_count != null ? (
         <Card size="small" style={{ marginBottom: 16 }}>
           {t(`${D}.summary`, {
@@ -365,8 +366,12 @@ const DocumentReconciliationPage: React.FC = () => {
         loading={loading}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
-        scroll={{ x: 1280 }}
         pagination={{ pageSize: 20 }}
+        locale={{
+          emptyText: gapQueryContextRef.current
+            ? undefined
+            : t(`${D}.gapEmptyBeforeQuery`),
+        }}
       />
     </>
   );

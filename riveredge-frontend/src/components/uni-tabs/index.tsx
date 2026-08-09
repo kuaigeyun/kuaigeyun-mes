@@ -585,10 +585,17 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    * 移除标签
    */
   const removeTab = useCallback((targetKey: string) => {
+    const targetPathname = tabPathname(targetKey);
     removeCustomPageTitle(targetKey);
+    removeCustomPageTitle(targetPathname);
     setTabs((prevTabs) => {
-      const newTabs = prevTabs.filter((tab) => tab.key !== targetKey);
-      return newTabs;
+      const matchKey =
+        prevTabs.find((tab) => tab.key === targetKey)?.key ??
+        prevTabs.find((tab) => tabPathname(tab.key) === targetPathname)?.key;
+      if (!matchKey) return prevTabs;
+      removeCustomPageTitle(matchKey);
+      removeCustomPageTitle(tabPathname(matchKey));
+      return prevTabs.filter((tab) => tab.key !== matchKey);
     });
   }, []);
 
@@ -779,15 +786,19 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   }, []);
 
   /**
-   * 返回时关闭当前标签：当通过 state.closeTab 指定要关闭的标签时，移除该标签并清除 state
+   * 返回时关闭当前标签：state.closeTab 指定要关闭的标签；剥离 closeTab 后保留其余 state
+   *（如入库/出库加载页的 *DirectConfirm，避免一并清空导致确认弹窗无法打开）
    */
   useEffect(() => {
-    const state = location.state as { closeTab?: string } | null;
-    if (state?.closeTab) {
-      removeTab(state.closeTab);
-      const search = location.search ? location.search : '';
-      navigate(location.pathname + search, { replace: true, state: {} });
-    }
+    const state = location.state as ({ closeTab?: string } & Record<string, unknown>) | null;
+    if (!state?.closeTab) return;
+    const { closeTab, ...rest } = state;
+    removeTab(closeTab);
+    const search = location.search ? location.search : '';
+    navigate(location.pathname + search, {
+      replace: true,
+      state: Object.keys(rest).length > 0 ? rest : {},
+    });
   }, [location.pathname, location.search, location.state, removeTab, navigate]);
 
   /**
@@ -1293,7 +1304,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         {content}
       </TabRouteCache>
     ) : (
-      <RouteTransition>{content}</RouteTransition>
+      // 无建单标签时：刷新仅 remount 当前列表路由，不波及 keep-alive
+      <RouteTransition key={`route-refresh-${refreshKey}`}>{content}</RouteTransition>
     );
 
   // 如果没有标签，直接渲染子组件
@@ -1308,7 +1320,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   return (
     <>
       <style>{`
-        /* 标签栏样式优化 - 支持自定义背景色（支持透明度） */
+        /* 标签栏样式优化：半透明背景只画在 .uni-tabs-header 一层，避免嵌套叠色 */
         .uni-tabs-header .ant-tabs {
           margin: 0 !important;
           margin-bottom: 0 !important;
@@ -1316,7 +1328,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           border-bottom: none !important;
           box-shadow: none !important;
           outline: none !important;
-          background: ${tabsBgColor} !important;
+          background: transparent !important;
           padding-top: 2px !important;
           padding-left: 8px !important;
         }
@@ -1380,13 +1392,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           display: none !important;
           border-bottom: none !important;
         }
-        /* Chrome 式标签样式 - 所有标签都有顶部圆角 - 支持自定义背景色（支持透明度） */
+        /* Chrome 式标签：未激活透明，透出总栏背景；激活态用内容区实色 */
         .uni-tabs-container .ant-tabs-tab {
           margin: 0 !important;
           padding: 6px 16px 8px !important;
           border: none !important;
           border-bottom: none !important;
-          background: ${tabsBgColor} !important;
+          background: transparent !important;
           border-top-left-radius: ${tabRadius}px !important;
           border-top-right-radius: ${tabRadius}px !important;
           border-bottom-left-radius: 0 !important;
@@ -1552,7 +1564,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           flex-direction: column;
           overflow: visible !important;
         }
-        /* 标签栏头部背景色 - 支持自定义背景色（支持透明度） */
+        /* 标签栏总背景：唯一着色层（支持半透明）；子节点一律透明避免叠色 */
         .uni-tabs-header {
           background: ${tabsBgColor} !important;
           flex-shrink: 0;
@@ -1564,22 +1576,14 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           overflow: visible !important;
           border-bottom: none !important;
         }
-        /* 确保背景色生效 - 增加选择器优先级，支持深色模式 */
         div.uni-tabs-header {
           background: ${tabsBgColor} !important;
         }
-        /* 标签栏容器背景色 - 支持自定义背景色（支持透明度） */
-        .uni-tabs-container {
-          background: ${tabsBgColor} !important;
-        }
-        .uni-tabs-container .ant-tabs-nav {
-          background: ${tabsBgColor} !important;
-        }
-        .uni-tabs-container .ant-tabs-nav-wrap {
-          background: ${tabsBgColor} !important;
-        }
+        .uni-tabs-container,
+        .uni-tabs-container .ant-tabs-nav,
+        .uni-tabs-container .ant-tabs-nav-wrap,
         .uni-tabs-container .ant-tabs-nav-list {
-          background: ${tabsBgColor} !important;
+          background: transparent !important;
         }
         /* 确保单个标签时也没有底部间距 */
         .uni-tabs-container .ant-tabs-nav {
@@ -2271,9 +2275,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
             )}
           </div>
         </div>
+        {/*
+          禁止用 content-refresh key 整树 remount：会连带拆掉所有建单 keep-alive。
+          有建单标签时：列表刷新在 TabRouteCache 非建单分支；建单刷新按 refreshToken 单标签重置。
+          无建单标签时：RouteTransition 自带 route-refresh key。
+        */}
         <div
           className={`uni-tabs-content${isDashboardScrollPage ? ' uni-tabs-content-dashboard' : ''}${isBusinessBoardAnalysisPage ? ' uni-tabs-content-business-board' : ''}`}
-          key={`content-refresh-${refreshKey}`}
         >
           {isHMIPage ? (
             <div className="uni-tabs-content-hmi-container">

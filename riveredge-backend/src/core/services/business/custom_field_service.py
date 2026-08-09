@@ -366,6 +366,53 @@ class CustomFieldService:
             result[field.code] = value_obj.get_stored_value(field.field_type) if value_obj else None
         
         return result
+
+    @staticmethod
+    async def batch_get_field_values(
+        tenant_id: int,
+        record_table: str,
+        record_ids: List[int],
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        批量获取多条记录的自定义字段值。
+
+        Returns:
+            Dict[str, Dict[str, Any]]: key 为 record_id 字符串，value 为 {field_code: value}
+        """
+        ids = sorted({int(rid) for rid in record_ids if rid is not None})
+        if not ids:
+            return {}
+
+        fields = await CustomFieldService.get_fields_by_table(
+            tenant_id, record_table, is_active=True
+        )
+        if not fields:
+            return {str(rid): {} for rid in ids}
+
+        field_ids = [f.id for f in fields]
+        value_rows = await CustomFieldValue.filter(
+            custom_field_id__in=field_ids,
+            tenant_id=tenant_id,
+            record_table=record_table,
+            record_id__in=ids,
+            deleted_at__isnull=True,
+        ).all()
+
+        by_record: Dict[int, Dict[int, Any]] = {}
+        for row in value_rows:
+            by_record.setdefault(int(row.record_id), {})[int(row.custom_field_id)] = row
+
+        result: Dict[str, Dict[str, Any]] = {}
+        for rid in ids:
+            row_map = by_record.get(rid, {})
+            packed: Dict[str, Any] = {}
+            for field in fields:
+                value_obj = row_map.get(int(field.id))
+                packed[field.code] = (
+                    value_obj.get_stored_value(field.field_type) if value_obj else None
+                )
+            result[str(rid)] = packed
+        return result
     
     @staticmethod
     async def batch_set_field_values(

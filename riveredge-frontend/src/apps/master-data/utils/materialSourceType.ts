@@ -1,7 +1,14 @@
 import type { TFunction } from 'i18next';
 
-/** 物料来源类型可选值（不含已废弃的 Configure） */
-export const MATERIAL_SOURCE_TYPE_VALUES = ['Make', 'Buy', 'Outsource', 'Phantom', 'Service'] as const;
+/** 物料来源类型可选值（不含已废弃的 Configure）；顺序：自制→采购→委外→虚拟→客供→服务 */
+export const MATERIAL_SOURCE_TYPE_VALUES = [
+  'Make',
+  'Buy',
+  'Outsource',
+  'Phantom',
+  'CustomerProvided',
+  'Service',
+] as const;
 
 export type MaterialSourceTypeValue = (typeof MATERIAL_SOURCE_TYPE_VALUES)[number];
 
@@ -10,6 +17,7 @@ const SOURCE_TYPE_I18N_KEY: Record<string, string> = {
   Buy: 'app.master-data.materialForm.sourceBuy',
   Outsource: 'app.master-data.materialForm.sourceOutsource',
   Phantom: 'app.master-data.materialForm.sourcePhantom',
+  CustomerProvided: 'app.master-data.materialForm.sourceCustomerProvided',
   Service: 'app.master-data.materialForm.sourceService',
 };
 
@@ -19,6 +27,7 @@ export const MATERIAL_SOURCE_TYPE_TAG_COLORS: Record<string, string> = {
   Buy: 'green',
   Phantom: 'default',
   Outsource: 'orange',
+  CustomerProvided: 'purple',
   Service: 'cyan',
 };
 
@@ -39,8 +48,11 @@ const SOURCE_TYPE_IMPORT_ALIASES: Record<string, MaterialSourceTypeValue> = {
   外協: 'Outsource',
   虚拟件: 'Phantom',
   虛擬件: 'Phantom',
-  服务: 'Service',
+  客供料: 'CustomerProvided',
+  客供: 'CustomerProvided',
+  客户供料: 'CustomerProvided',
   服務: 'Service',
+  服务: 'Service',
 };
 
 /** Configure 已废弃，展示与业务逻辑归并为 Buy */

@@ -37,8 +37,9 @@ from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderI
 from apps.kuaizhizao.services.purchase_service import PurchaseService
 from apps.kuaizhizao.utils.material_source_helper import SOURCE_TYPE_BUY
 from apps.kuaizhizao.services.document_action_policy.enricher import (
-    enrich_purchase_requisition_capabilities_on_response,
+    enrich_purchase_requisition_detail_capabilities,
     enrich_purchase_requisition_list_capabilities,
+    purchase_requisition_has_linked_purchase_order,
 )
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 from apps.kuaizhizao.services.document_action_policy.purchase_requisition import (
@@ -305,7 +306,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         resp.lifecycle = get_purchase_requisition_lifecycle(req, audit_required=audit_required)
         from core.services.approval.audit_record_enricher import enrich_record
 
-        resp = enrich_purchase_requisition_capabilities_on_response(req, resp)
+        resp = await enrich_purchase_requisition_detail_capabilities(tenant_id, req, resp)
         return await enrich_record(tenant_id, "purchase_request", resp)
 
     async def _batch_requisition_items_count(
@@ -425,8 +426,13 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         created_start_date: Optional[date] = None,
         created_end_date: Optional[date] = None,
         order_by: Optional[str] = None,
+        include_items: bool = False,
     ) -> Dict[str, Any]:
         """列表查询，返回 { data, total, success }"""
+        from apps.kuaizhizao.utils.list_item_material_keyword import (
+            header_ids_matching_item_material,
+        )
+
         query = PurchaseRequisition.filter(
             tenant_id=tenant_id, deleted_at__isnull=True
         )
@@ -437,11 +443,18 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             query = query.filter(source_type=source_type)
         kw = (keyword or "").strip()
         if kw:
+            material_req_ids = await header_ids_matching_item_material(
+                tenant_id,
+                PurchaseRequisitionItem,
+                "requisition_id",
+                kw,
+            )
             query = query.filter(
                 Q(requisition_code__icontains=kw)
                 | Q(requisition_name__icontains=kw)
                 | Q(source_code__icontains=kw)
                 | Q(applicant_name__icontains=kw)
+                | Q(id__in=material_req_ids)
             )
         rc = (requisition_code or "").strip()
         if rc:
@@ -491,6 +504,21 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
         req_ids = [req.id for req in reqs if req.id is not None]
 
+        items_by_req: Dict[int, List[PurchaseRequisitionItemResponse]] = {}
+        if include_items and req_ids:
+            all_items = (
+                await PurchaseRequisitionItem.filter(
+                    tenant_id=tenant_id, requisition_id__in=req_ids
+                )
+                .order_by("requisition_id", "id")
+                .all()
+            )
+            for it in all_items:
+                rid = int(it.requisition_id)
+                items_by_req.setdefault(rid, []).append(
+                    PurchaseRequisitionItemResponse.model_validate(it)
+                )
+
         items_count_map = await self._batch_requisition_items_count(tenant_id, req_ids)
         item_totals_map = await self._batch_requisition_item_totals(tenant_id, req_ids)
         from apps.kuaizhizao.services.document_lifecycle_service import (
@@ -514,9 +542,11 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             resp.lifecycle = get_purchase_requisition_lifecycle(
                 req, milestones=None, audit_required=audit_required
             )
+            if include_items:
+                resp.items = items_by_req.get(int(req.id), [])
             result.append(resp)
 
-        enriched = enrich_purchase_requisition_list_capabilities(reqs, result)
+        enriched = await enrich_purchase_requisition_list_capabilities(tenant_id, reqs, result)
         from core.services.approval.audit_record_enricher import enrich_data_payload
 
         return await enrich_data_payload(tenant_id, "purchase_request", {
@@ -870,26 +900,14 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
 
-        assert_purchase_requisition_capability(req, "revoke_approval")
-
-        items = await PurchaseRequisitionItem.filter(
-            tenant_id=tenant_id, requisition_id=requisition_id, deleted_at__isnull=True
-        ).all()
-        if any(it.purchase_order_id for it in items):
-            raise BusinessLogicError("采购申请已有明细转采购订单，不能撤销审核")
-
-        from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
-
-        req_item_ids = [it.id for it in items]
-        if req_item_ids:
-            linked_po_item = await PurchaseOrderItem.filter(
-                tenant_id=tenant_id,
-                source_type="PurchaseRequisition",
-                source_id__in=req_item_ids,
-                deleted_at__isnull=True,
-            ).exists()
-            if linked_po_item:
-                raise BusinessLogicError("采购申请已有明细转采购订单，不能撤销审核")
+        has_linked_po = await purchase_requisition_has_linked_purchase_order(
+            tenant_id, requisition_id
+        )
+        assert_purchase_requisition_capability(
+            req,
+            "revoke_approval",
+            has_linked_purchase_order=has_linked_po,
+        )
 
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "purchase_request"

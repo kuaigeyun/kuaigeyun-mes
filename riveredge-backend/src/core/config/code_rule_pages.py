@@ -52,6 +52,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-receipt-notice": "SHTZ",        # 收货通知单
     "kuaizhizao-sales-forecast": "XSYC",        # 销售预测
     "kuaizhizao-demand-plan": "XQJH",           # 需求计划（手工计划）
+    "kuaizhizao-demand-computation": "XQJS",    # 需求计算（MRP）
     "kuaizhizao-sales-return": "XSTH",          # 销售退货
     "kuaizhizao-warehouse-inbound": "LL",       # 领料
     "kuaizhizao-warehouse-production-return": "TL",       # 生产退料
@@ -648,6 +649,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "DEMAND_PLAN_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-demand-computation",
+        "page_name": "需求计算",
+        "page_path": "/apps/kuaizhizao/plan-management/demand-computation",
+        "code_field": "computation_code",
+        "code_field_label": "需求计算编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "DEMAND_COMPUTATION_CODE",
         "allow_manual_edit": True,
     },
     # 快格轻制造 - 仓储管理
@@ -1571,6 +1584,9 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     "PURCHASE_RECEIPT_CODE": ("apps.kuaizhizao.models.purchase_receipt", "PurchaseReceipt", "receipt_code"),
     "PURCHASE_RETURN_CODE": ("apps.kuaizhizao.models.purchase_return", "PurchaseReturn", "return_code"),
     "SALES_ORDER_CHANGE_CODE": ("apps.kuaizhizao.models.sales_order_change_order", "SalesOrderChangeOrder", "change_code"),
+    "WORK_ORDER_CODE": ("apps.kuaizhizao.models.work_order", "WorkOrder", "code"),
+    "REWORK_ORDER_CODE": ("apps.kuaizhizao.models.rework_order", "ReworkOrder", "code"),
+    "OUTSOURCE_WORK_ORDER_CODE": ("apps.kuaizhizao.models.outsource_work_order", "OutsourceWorkOrder", "code"),
     "OQC_INSPECTION_CODE": ("apps.kuaizhizao.models.oqc_inspection", "OQCInspection", "inspection_code"),
     "EIGHT_D_REPORT_CODE": ("apps.kuaizhizao.models.quality_8d_report", "Quality8DReport", "report_code"),
     "DEFECT_RECORD_CODE": ("apps.kuaizhizao.models.defect_record", "DefectRecord", "code"),
@@ -1625,6 +1641,11 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     "COST_CALCULATION_CODE": ("apps.kuaicaiwu.models.cost_calculation", "CostCalculation", "calculation_no"),
     "COST_RULE_CODE": ("apps.kuaicaiwu.models.cost_rule", "CostRule", "code"),
     "SALES_ORDER_CODE": ("apps.kuaizhizao.models.sales_order", "SalesOrder", "order_code"),
+    "DEMAND_COMPUTATION_CODE": (
+        "apps.kuaizhizao.models.demand_computation",
+        "DemandComputation",
+        "computation_code",
+    ),
     "RD_PROJECT_CODE": ("apps.kuaiplm.models.rd_project", "RdProject", "project_code"),
     "DELIVERY_PROJECT_CODE": ("apps.kuaiplm.models.rd_project", "RdProject", "project_code"),
     "ALERT_RULE_CODE": ("apps.kuaizhizao.models.inventory_alert", "InventoryAlertRule", "code"),

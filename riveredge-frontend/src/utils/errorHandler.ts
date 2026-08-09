@@ -26,7 +26,13 @@ export function formatFastApiDetail(detail: unknown): string {
         if (typeof e === 'string') return e;
         if (typeof e === 'object') {
           const m = e.msg ?? e.message;
+          const locParts = Array.isArray(e.loc)
+            ? e.loc.filter((p: unknown) => p !== 'body' && p !== 'query' && p !== 'path').map(String)
+            : [];
+          const field = locParts.length ? locParts.join('.') : '';
+          if (field && m != null && String(m).trim()) return `${field}: ${String(m)}`;
           if (m != null && String(m).trim()) return String(m);
+          return field;
         }
         return '';
       })

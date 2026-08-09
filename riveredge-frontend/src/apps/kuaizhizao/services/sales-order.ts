@@ -526,6 +526,8 @@ export interface PushToDeliveryRequest {
   line_warehouses?: Record<number, number>;
   warehouse_id?: number;
   warehouse_name?: string;
+  /** 出库备注，写入销售出库单 notes，仓库出库详情可见 */
+  notes?: string;
 }
 
 export async function previewPushSalesOrderToDelivery(salesOrderId: number): Promise<PushPreviewResponse> {

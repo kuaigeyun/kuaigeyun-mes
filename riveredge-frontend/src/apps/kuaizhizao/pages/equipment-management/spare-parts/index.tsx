@@ -20,7 +20,7 @@ import { FormModalTemplate, MODAL_CONFIG, MultiTabListPageTemplate } from '../..
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { sparePartApi } from '../../../services/equipment';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { getSparePartInventoryLifecycle } from '../../../utils/equipmentLifecycle';
@@ -260,60 +260,55 @@ const SparePartsPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        width: 240,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) =>
-          renderRowActionsOverflow(
-            [
-              perms.canRead ? (
-                <Button key="detail" {...rowActionKind('read')} onClick={() => void handleDetail(record)}>
-                  {t('common.detail')}
-                </Button>
-              ) : null,
-              perms.canUpdate ? (
-                <Button key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)}>
-                  {t('common.edit')}
-                </Button>
-              ) : null,
-              perms.canUpdate ? (
-                <Button
-                  key="adjust"
-                  {...rowActionKind('update')}
-                  onClick={() => {
-                    setAdjustTarget(record);
-                    setAdjustModalVisible(true);
-                    adjustFormRef.current?.resetFields();
-                    adjustFormRef.current?.setFieldsValue({
-                      operation_type: 'in',
-                      warehouse_location: '默认库位',
-                    });
-                  }}
-                >
-                  {t(`${P}.action.adjustStock`)}
-                </Button>
-              ) : null,
-              perms.canDelete ? (
-                <Button
-                  key="delete"
-                  {...rowActionKind('delete')}
-                  onClick={() => {
-                    Modal.confirm({
-                      title: t('common.deleteTitle'),
-                      onOk: () => {
-                        if (record.id != null) {
-                          void handleDelete([record.id]);
-                        }
-                      },
-                    });
-                  }}
-                >
-                  {t('common.delete')}
-                </Button>
-              ) : null,
-            ],
-            `spare-part-actions-${record.id ?? 'row'}`,
-          ),
+        render: (_, record) => [
+          perms.canRead ? (
+            <Button key="detail" {...rowActionKind('read')} onClick={() => void handleDetail(record)}>
+              {t('common.detail')}
+            </Button>
+          ) : null,
+          perms.canUpdate ? (
+            <Button key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)}>
+              {t('common.edit')}
+            </Button>
+          ) : null,
+          perms.canUpdate ? (
+            <Button
+              key="adjust"
+              {...rowActionKind('update')}
+              onClick={() => {
+                setAdjustTarget(record);
+                setAdjustModalVisible(true);
+                adjustFormRef.current?.resetFields();
+                adjustFormRef.current?.setFieldsValue({
+                  operation_type: 'in',
+                  warehouse_location: '默认库位',
+                });
+              }}
+            >
+              {t(`${P}.action.adjustStock`)}
+            </Button>
+          ) : null,
+          perms.canDelete ? (
+            <Button
+              key="delete"
+              {...rowActionKind('delete')}
+              onClick={() => {
+                Modal.confirm({
+                  title: t('common.deleteTitle'),
+                  onOk: () => {
+                    if (record.id != null) {
+                      void handleDelete([record.id]);
+                    }
+                  },
+                });
+              }}
+            >
+              {t('common.delete')}
+            </Button>
+          ) : null,
+        ],
       },
     ], SALES_DOC_LIST_FIELD_RANK),
     [t, perms, activeStatusValueEnum, handleDetail],

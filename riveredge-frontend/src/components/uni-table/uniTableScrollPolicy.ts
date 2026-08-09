@@ -3,7 +3,7 @@
  *
  * 与以下配对，页面层不得再手写 scroll.y 或分散判断：
  * - `components/uni-table/index.tsx`（注入 scroll.y / natural-height class）
- * - `global.less`（`.uni-table-natural-height` / `.uni-table-scroll-y-mode`）
+ * - `components/uni-table/uni-table.less`（natural / scrollY 唯一 CSS 控制面）
  * - `layout-templates/constants.ts`（`getListPageTableScrollOffsetPx` 视口扣减）
  */
 

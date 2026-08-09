@@ -41,6 +41,7 @@ _DOC_TYPE_ZH = {
     "oqc_inspection": "出货检验",
     "defect_record": "不合格品",
     "material_binding": "物料绑定",
+    "production_picking": "生产领料",
     "reporting_record": "报工记录",
 }
 
@@ -94,7 +95,12 @@ class TraceReportService:
 
         production_events = [
             e for e in profile.events
-            if e.document_type in ("work_order", "material_binding", "reporting_record")
+            if e.document_type in (
+                "work_order",
+                "material_binding",
+                "reporting_record",
+                "production_picking",
+            )
         ]
         quality_events = [
             e for e in profile.events
@@ -109,6 +115,7 @@ class TraceReportService:
                 "semi_finished_goods_receipt",
                 "sales_delivery",
                 "sales_return",
+                "production_picking",
             )
         ]
 

@@ -371,11 +371,22 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if params.keyword:
             keyword = params.keyword.strip()
             if keyword:
+                material_order_ids = (
+                    await PurchaseOrderItem.filter(tenant_id=tenant_id)
+                    .filter(
+                        Q(material_code__icontains=keyword)
+                        | Q(material_name__icontains=keyword)
+                        | Q(material_spec__icontains=keyword)
+                    )
+                    .distinct()
+                    .values_list("order_id", flat=True)
+                )
                 query = query.filter(
                     Q(order_code__icontains=keyword)
                     | Q(supplier_name__icontains=keyword)
                     | Q(buyer_name__icontains=keyword)
                     | Q(notes__icontains=keyword)
+                    | Q(id__in=list(material_order_ids))
                 )
 
         # 加载建采购变更：与 is_source_order_locked_for_direct_edit / create_change_order 粗过滤对齐
@@ -424,11 +435,23 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             order_clause = "-updated_at"
         orders = await query.offset(skip).limit(limit).order_by(order_clause, "-id")
 
-        # 为每个订单加载明细（简化版，只返回基本信息）
         # 不能直接 model_validate(order)：order.items 是 ReverseRelation，会导致 Pydantic 校验失败
         order_ids = [order.id for order in orders]
         totals_by_order = await self._batch_order_receipt_totals(tenant_id, order_ids)
         downstream_totals_by_order = await self._batch_order_downstream_totals(tenant_id, order_ids)
+
+        items_by_order: Dict[int, List[PurchaseOrderItem]] = {}
+        material_fallback: Dict[int, Dict[str, str]] = {}
+        if params.include_items and order_ids:
+            all_items = (
+                await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id__in=order_ids)
+                .order_by("order_id", "id")
+                .all()
+            )
+            for it in all_items:
+                items_by_order.setdefault(int(it.order_id), []).append(it)
+            material_fallback = await self._load_material_fallback_for_po_items(tenant_id, all_items)
+
         result = []
         for order in orders:
             totals = totals_by_order.get(order.id, {})
@@ -463,6 +486,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             order_data['receipt_progress'] = receipt_progress
             resp = PurchaseOrderListResponse.model_construct(**order_data)
             resp.items = []
+            if params.include_items:
+                for item in items_by_order.get(int(order.id), []):
+                    item_resp = PurchaseOrderItemResponse.model_validate(item)
+                    material_code, material_name = self._resolve_po_item_material_display(
+                        item, material_fallback
+                    )
+                    item_resp.material_code = material_code
+                    item_resp.material_name = material_name
+                    resp.items.append(item_resp)
             resp.items_count = items_count
             resp.downstream_push_progress = downstream_push_progress
             resp.received_total = received_total
@@ -1092,6 +1124,23 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         await order.update_from_dict(update_dict).save()
 
+        if update_dict.get("status") == DocumentStatus.CONFIRMED.value:
+            await order.refresh_from_db()
+            from apps.kuaicaiwu.services.finance_integration_hooks import (
+                ensure_prepayment_payment_for_purchase_order,
+            )
+
+            await ensure_prepayment_payment_for_purchase_order(
+                tenant_id=tenant_id,
+                order_id=order_id,
+                order_code=order.order_code,
+                supplier_id=order.supplier_id,
+                supplier_name=order.supplier_name,
+                prepayment_amount=order.prepayment_amount,
+                prepayment_bank_account_id=order.prepayment_bank_account_id,
+                operator_id=approved_by,
+            )
+
         return await self.get_purchase_order_by_id(tenant_id, order_id)
 
     async def revoke_purchase_order_approval(
@@ -1182,6 +1231,22 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             'notes': order.notes + f"\n确认备注：{confirm_data.confirm_remarks or ''}",
             'updated_by': confirmed_by
         }).save()
+
+        await order.refresh_from_db()
+        from apps.kuaicaiwu.services.finance_integration_hooks import (
+            ensure_prepayment_payment_for_purchase_order,
+        )
+
+        await ensure_prepayment_payment_for_purchase_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            order_code=order.order_code,
+            supplier_id=order.supplier_id,
+            supplier_name=order.supplier_name,
+            prepayment_amount=order.prepayment_amount,
+            prepayment_bank_account_id=order.prepayment_bank_account_id,
+            operator_id=confirmed_by,
+        )
 
         return await self.get_purchase_order_by_id(tenant_id, order_id)
 

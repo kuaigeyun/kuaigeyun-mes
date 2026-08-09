@@ -7,6 +7,7 @@
  */
 
 import React, { useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import {
@@ -58,9 +59,15 @@ const DataDictionaryListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
+  const [searchParams] = useSearchParams();
   const actionRef = useRef<ActionType>(null);
   const itemFormRef = useRef<ProFormInstance>();
   const dataDictionaryDetailReqRef = useRef(0);
+  const searchParamsRef = useRef<Record<string, unknown> | undefined>(undefined);
+  const urlKeyword = String(searchParams.get('keyword') || searchParams.get('code') || '').trim();
+  if (urlKeyword && searchParamsRef.current === undefined) {
+    searchParamsRef.current = { keyword: urlKeyword };
+  }
 
   const dataDictionaryDetailDescColumns = useMemo<ProDescriptionsItemProps<DataDictionary>[]>(
     () => [
@@ -551,6 +558,7 @@ const DataDictionaryListPage: React.FC = () => {
         <UniTable<DataDictionary>
         columnPersistenceId="pages.system.data-dictionaries.list"
         actionRef={actionRef}
+        searchParamsRef={searchParamsRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
           // 处理搜索参数

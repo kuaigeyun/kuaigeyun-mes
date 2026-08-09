@@ -9,11 +9,13 @@ import {
 const PURCHASE_INVOICE_API = '/apps/kuaicaiwu/purchase-invoices';
 
 export type PurchaseInvoicePullPreview = DocumentPushPreview & {
-  source_type?: 'purchase_order' | 'purchase_receipt';
+  source_type?: 'purchase_order' | 'purchase_receipt' | 'payable';
   supplier_id?: number;
   supplier_name?: string;
   purchase_order_id?: number | null;
   purchase_order_code?: string | null;
+  payable_id?: number;
+  payable_code?: string;
 };
 
 export type PurchaseInvoicePullCandidate = {
@@ -77,6 +79,18 @@ export const purchaseInvoiceService = {
   previewPullFromPurchaseReceipt: async (receiptId: number) =>
     apiRequest<PurchaseInvoicePullPreview>(
       `${PURCHASE_INVOICE_API}/from-purchase-receipt/${receiptId}/pull-preview`,
+      { method: 'GET' },
+    ),
+
+  listPayablePullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+    apiRequest<{ data: PurchaseInvoicePullCandidate[]; total: number; success: boolean }>(
+      `${PURCHASE_INVOICE_API}/pull-candidates/payables`,
+      { method: 'GET', params },
+    ),
+
+  previewPullFromPayable: async (payableId: number) =>
+    apiRequest<PurchaseInvoicePullPreview>(
+      `${PURCHASE_INVOICE_API}/from-payable/${payableId}/pull-preview`,
       { method: 'GET' },
     ),
 };

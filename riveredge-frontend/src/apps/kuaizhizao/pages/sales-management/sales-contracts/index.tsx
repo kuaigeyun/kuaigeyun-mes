@@ -128,6 +128,7 @@ import {
 
 import dayjs from 'dayjs';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 
 import {
 
@@ -150,11 +151,12 @@ import {
 
 } from '../../../../../components/layout-templates';
 
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
+  MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
@@ -181,6 +183,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
+import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions';
 import {
   salesContractCapabilityReasonMessage,
   salesContractBatchDeleteAllowed,
@@ -223,6 +226,7 @@ import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import salesContractApi, {
   type SalesContract,
   type SalesContractChange,
+  type SalesContractItem,
   type SalesContractPaymentSummary,
   type SalesContractPushPreviewResponse,
 } from '../../../services/sales-contract';
@@ -236,11 +240,12 @@ import {
   SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
-import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../shared/DocumentPushProgressBar';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS, ratioToPushProgressPercent } from '../shared/DocumentPushProgressBar';
 import { salesContractOrderPushPercent } from '../shared/pushProgress';
 import { buildDescriptionItemsFromColumns } from '../shared/descriptionItems';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { testGenerateCode, getCodeRulePageConfig, generateCode } from '../../../../../services/codeRule';
 import SalesContractTermsManageModal from './SalesContractTermsManageModal';
@@ -335,6 +340,20 @@ const SALES_CONTRACT_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-contra
 const SALES_CONTRACT_CREATE_PATH = `${SALES_CONTRACT_LIST_PATH}/new`;
 const salesContractEditPath = (id: number) => `${SALES_CONTRACT_LIST_PATH}/${id}/edit`;
 
+type SalesContractItemRow = SalesContractItem & {
+  _rowKey: string;
+  contract_id: number;
+  contract_code?: string;
+  customer_name?: string;
+  contract_date?: string;
+  status?: string;
+  review_status?: string;
+  lifecycle?: Record<string, unknown>;
+};
+
+const SALES_CONTRACT_LIST_PERSISTENCE_ID =
+  'apps.kuaizhizao.pages.sales-management.sales-contracts.v2';
+
 type PullQuotationCandidate = {
   id: number;
   quotation_code: string;
@@ -407,13 +426,24 @@ const SalesContractsPage: React.FC = () => {
     }),
     [t],
   );
+  const materialUnitImport = useImportMaterialUnitOptions();
   const contractImportDict = useImportDictionaryOptions([
-    'MATERIAL_UNIT',
     'CURRENCY',
     'SHIPPING_METHOD',
     'PAYMENT_TERMS',
   ]);
-  const contractLineUnitOptions = contractImportDict.MATERIAL_UNIT ?? [];
+  const contractLineUnitOptions = materialUnitImport.options;
+  const contractImportDictBag = useMemo(
+    () => ({
+      ...contractImportDict,
+      MATERIAL_UNIT: materialUnitImport.options,
+      parseDict: (code: string, raw?: string | null) =>
+        code === 'MATERIAL_UNIT'
+          ? materialUnitImport.parse(raw)
+          : contractImportDict.parseDict(code, raw),
+    }),
+    [contractImportDict, materialUnitImport.options, materialUnitImport.parse],
+  );
   const contractLineImportColumnOptions = useMemo(
     () => [
       undefined,
@@ -427,8 +457,8 @@ const SalesContractsPage: React.FC = () => {
     [contractLineUnitOptions],
   );
   const contractListImportTemplate = useMemo(
-    () => buildContractListImportTemplate(t, contractImportDict),
-    [t, i18n.language, contractImportDict],
+    () => buildContractListImportTemplate(t, contractImportDictBag),
+    [t, i18n.language, contractImportDictBag],
   );
   const contractImportHeaders = useMemo(
     () => [
@@ -468,6 +498,18 @@ const SalesContractsPage: React.FC = () => {
   );
 
   const actionRef = useRef<ActionType>();
+  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
+    readPersistedUniTableViewType(SALES_CONTRACT_LIST_PERSISTENCE_ID, 'table', [
+      'table',
+      'detailTable',
+      'help',
+    ]) as 'table' | 'detailTable' | 'help',
+  );
+  const dataViewMode = resolveDetailTableViewMode(viewTypeState);
+  const dataViewModeRef = useRef(dataViewMode);
+  useEffect(() => {
+    dataViewModeRef.current = dataViewMode;
+  }, [dataViewMode]);
 
   const formRef = useRef<ProFormInstance>();
 
@@ -944,7 +986,7 @@ const SalesContractsPage: React.FC = () => {
       importHeaderMap: contractListImportTemplate.importHeaderMap,
       customers: customerList,
       materials: materialList,
-      parseDict: contractImportDict.parseDict,
+      parseDict: contractImportDictBag.parseDict,
     });
 
     if (errors.length > 0) {
@@ -1438,7 +1480,7 @@ const SalesContractsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesOrder.reviewStatus'),
         dataIndex: 'review_status',
-        width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+        width: 120,
         render: (v: string) => {
           const approved = v === 'APPROVED' || v === '已通过' || v === '审核通过';
           const rejected = v === 'REJECTED' || v === '已驳回';
@@ -2939,9 +2981,7 @@ const SalesContractsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
         dataIndex: 'order_push_progress',
-        width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
+        ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
         render: (_, r) => {
           const totalQty = Number(r.total_quantity ?? 0);
           const releasedQty = Number(r.released_quantity ?? 0);
@@ -2970,8 +3010,6 @@ const SalesContractsPage: React.FC = () => {
         dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
 
         fixed: 'right',
-
-        align: 'left',
 
         valueType: 'select',
 
@@ -3057,6 +3095,131 @@ const SalesContractsPage: React.FC = () => {
   const alignedListColumns = useMemo(
     () => alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK),
     [columns],
+  );
+
+  const detailTableColumns: ProColumns<SalesContractItemRow>[] = useMemo(
+    () => [
+      {
+        title: `${t('app.kuaizhizao.salesContract.customer')} / ${t('app.kuaizhizao.salesContract.contractCode')}`,
+        key: 'contract_code',
+        dataIndex: 'contract_code',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
+        hideInSearch: false,
+        fieldProps: { placeholder: t('app.kuaizhizao.salesContract.contractCode') },
+        render: (_, record) => (
+          <UniTableStackedPrimaryCell
+            primary={String(record.customer_name ?? '')}
+            secondary={String(record.contract_code ?? '')}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.salesContract.contractCode'),
+        dataIndex: 'contract_code',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.materialName'),
+        key: 'material_display',
+        dataIndex: 'material_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        render: (_, record) => (
+          <MaterialStackedCell
+            material_name={record.material_name}
+            material_code={record.material_code}
+            material_spec={record.material_spec}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.materialCode'),
+        dataIndex: 'material_code',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesContract.contractQuantity'),
+        dataIndex: 'contract_quantity',
+        width: 120,
+        align: 'right',
+        render: (val: unknown, record) => (
+          <QuantityWithUnitDisplay quantity={val} unit={record.material_unit} />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.salesContract.unitPrice'),
+        dataIndex: 'unit_price',
+        width: 100,
+        align: 'right',
+        render: (_, r) =>
+          `¥${Number(r.unit_price ?? 0).toLocaleString('zh-CN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
+      },
+      {
+        title: t('app.kuaizhizao.salesContract.contractAmount'),
+        dataIndex: 'total_amount',
+        width: 110,
+        align: 'right',
+        render: (_, r) =>
+          `¥${Number(r.total_amount ?? 0).toLocaleString('zh-CN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.deliveryDate'),
+        dataIndex: 'delivery_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_: unknown, row) =>
+          row.delivery_date ? formatDateTime(row.delivery_date, 'YYYY-MM-DD') : '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesContract.contractDate'),
+        dataIndex: 'contract_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_: unknown, row) =>
+          row.contract_date ? formatDateTime(row.contract_date, 'YYYY-MM-DD') : '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+        key: 'line_release_progress',
+        ...DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
+        render: (_: unknown, record) => {
+          const ordered = Number(record.contract_quantity ?? 0);
+          const released = Number(record.released_quantity ?? 0);
+          const percent = ratioToPushProgressPercent(released, ordered);
+          return (
+            <DocumentPushProgressBar
+              percent={percent}
+              tooltip={t('app.kuaizhizao.salesManagement.pushProgress.orderReleaseTooltip', {
+                percent,
+                pushed: released,
+                total: ordered,
+              })}
+            />
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.lifecycle'),
+        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+        fixed: 'right',
+        hideInSearch: false,
+        valueEnum: contractLifecycleValueEnum,
+        render: (_, record) => (
+          <ListUniLifecycleCell
+            lifecycle={getSalesContractLifecycle(record as Record<string, unknown>, t)}
+          />
+        ),
+      },
+    ],
+    [contractLifecycleValueEnum, t],
   );
 
 
@@ -3384,13 +3547,57 @@ const SalesContractsPage: React.FC = () => {
 
         actionRef={actionRef}
 
-        rowKey="id"
+        rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
 
         permissionResource={SALES_CONTRACT_RESOURCE}
 
-        columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-contracts"
+        columnPersistenceId={SALES_CONTRACT_LIST_PERSISTENCE_ID}
 
         columns={alignedListColumns}
+
+        viewTypes={['table', 'detailTable', 'help']}
+
+        defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
+
+        helpViewConfig={{
+
+          content: (
+
+            <div style={{ lineHeight: 1.8 }}>
+
+              <p>
+
+                <strong>{t('components.uniTable.viewTable')}</strong>
+
+                {t('app.kuaizhizao.salesContract.helpTableView')}
+
+              </p>
+
+              <p>
+
+                <strong>{t('components.uniTable.viewDetailTable')}</strong>
+
+                {t('app.kuaizhizao.salesContract.helpDetailTableView')}
+
+              </p>
+
+            </div>
+
+          ),
+
+        }}
+
+        onViewTypeChange={(v) => {
+
+          dataViewModeRef.current = resolveDetailTableViewMode(v as 'table' | 'detailTable' | 'help');
+
+          setViewTypeState(v as 'table' | 'detailTable' | 'help');
+
+          setTimeout(() => actionRef.current?.reload(), 0);
+
+        }}
+
+        detailTableColumns={detailTableColumns}
 
         showAdvancedSearch
 
@@ -3400,7 +3607,7 @@ const SalesContractsPage: React.FC = () => {
 
         onRowSelectionChange={setSelectedRowKeys}
 
-        enableRowSelection
+        enableRowSelection={viewTypeState !== 'detailTable'}
 
         headerTitle={
 
@@ -3547,16 +3754,56 @@ const SalesContractsPage: React.FC = () => {
 
             order_by: orderBy,
 
+            include_items: dataViewModeRef.current === 'detail',
+
           });
 
-          return { data: res.items || [], success: true, total: res.total || 0 };
+          const contracts = res.items || [];
+          tableRowsRef.current = contracts;
+          if (dataViewModeRef.current === 'order') {
+            return { data: contracts, success: true, total: res.total || 0 };
+          }
+          const flatRows = flattenDocumentDetailRows<SalesContract, SalesContractItem>({
+            headers: contracts,
+            getHeaderId: (h) => h.id,
+            getItems: (h) => h.items,
+            buildRowKey: (h, item, index) =>
+              item?.id ? `sc-${h.id}-item-${item.id}` : `sc-${h.id}-idx-${index}`,
+            mapItemRow: (h, item) => ({
+              ...item,
+              contract_id: h.id ?? 0,
+              contract_code: h.contract_code,
+              customer_name: h.customer_name,
+              contract_date: h.contract_date,
+              status: h.status,
+              review_status: h.review_status,
+              lifecycle: h.lifecycle,
+            }),
+            mapEmptyHeaderRow: (h) => ({
+              contract_id: h.id ?? 0,
+              contract_code: h.contract_code,
+              customer_name: h.customer_name,
+              material_id: 0,
+              material_code: '-',
+              material_name: '-',
+              material_unit: '',
+              contract_quantity: 0,
+              unit_price: 0,
+              total_amount: 0,
+              status: h.status,
+              review_status: h.review_status,
+              contract_date: h.contract_date,
+              lifecycle: h.lifecycle,
+            }),
+          }) as SalesContractItemRow[];
+          return { data: flatRows, success: true, total: res.total || 0 };
 
         }}
         onTableDataChange={(rows) => {
-          tableRowsRef.current = rows;
+          if (dataViewModeRef.current === 'order') {
+            tableRowsRef.current = rows as SalesContract[];
+          }
         }}
-
-        scroll={{ x: 'max-content' }}
 
       />
 

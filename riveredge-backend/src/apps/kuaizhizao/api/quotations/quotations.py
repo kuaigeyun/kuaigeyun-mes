@@ -112,7 +112,8 @@ async def list_quotations(
     customer_id: Optional[int] = Query(None, description="客户 ID"),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
-    keyword: Optional[str] = Query(None, description="关键词搜索（编号、系列、客户、销售员）"),
+    keyword: Optional[str] = Query(None, description="关键词搜索（编号、系列、客户、销售员、物料）"),
+    include_items: bool = Query(False, description="是否附带报价明细（明细表格视图）"),
     quotation_code: Optional[str] = Query(None, description="报价单编号（模糊）"),
     customer_name: Optional[str] = Query(None, description="客户名称（模糊）"),
     quotation_series_code: Optional[str] = Query(None, description="报价系列编码（精确）"),
@@ -159,6 +160,7 @@ async def list_quotations(
             pullable_only=pullable_only,
             pull_target=pull_target,
             current_user=current_user,
+            include_items=include_items,
         )
         payloads = [row.model_dump() for row in result.data]
         masked_payloads = await PermissionPolicyService.apply_field_masks_to_list(

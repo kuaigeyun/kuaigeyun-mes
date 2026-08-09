@@ -1382,7 +1382,6 @@ const SuperAdminTenantList: React.FC = () => {
           };
         }
       }}
-      scroll={{ x: 1400 }}
       expandable={{ defaultExpandAllRows: true }}
         />
       </ListPageTemplate>

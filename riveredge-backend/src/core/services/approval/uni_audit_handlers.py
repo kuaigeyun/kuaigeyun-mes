@@ -207,6 +207,58 @@ async def _dispatch_sales_delivery(
     _unsupported("sales_delivery", action)
 
 
+async def _dispatch_production_picking(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.warehouse_service import ProductionPickingService
+
+    svc = ProductionPickingService()
+    if action == "submit":
+        return await svc.submit_production_picking(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_production_picking(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_production_picking(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_production_picking_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_production_picking_approval(tenant_id, entity_id, user_id)
+    _unsupported("production_picking", action)
+
+
+async def _dispatch_work_order(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+    svc = WorkOrderService()
+    if action == "submit":
+        return await svc.submit_work_order(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_work_order(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_work_order(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_work_order_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_work_order_approval(tenant_id, entity_id, user_id)
+    _unsupported("work_order", action)
+
+
 async def _dispatch_sales_return(
     action: str,
     *,
@@ -742,6 +794,8 @@ HANDLERS: Dict[str, DispatchFn] = {
     "quotation": _dispatch_quotation,
     "shipment_notice": _dispatch_shipment_notice,
     "sales_delivery": _dispatch_sales_delivery,
+    "production_picking": _dispatch_production_picking,
+    "work_order": _dispatch_work_order,
     "sales_return": _dispatch_sales_return,
     "sales_contract_change": _dispatch_sales_contract_change,
     "demand": _dispatch_demand,

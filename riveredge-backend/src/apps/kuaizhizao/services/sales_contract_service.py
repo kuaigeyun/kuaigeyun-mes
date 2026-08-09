@@ -530,6 +530,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         end_date: Optional[date] = None,
         order_by: Optional[str] = None,
         pullable_only: Optional[bool] = None,
+        include_items: bool = False,
     ) -> SalesContractListResponse:
         qs = SalesContract.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if status:
@@ -544,11 +545,22 @@ class SalesContractService(AppBaseService[SalesContract]):
             qs = qs.filter(contract_date__lte=end_date)
         if keyword and str(keyword).strip():
             kw = str(keyword).strip()
+            from apps.kuaizhizao.utils.list_item_material_keyword import (
+                header_ids_matching_item_material,
+            )
+
+            material_contract_ids = await header_ids_matching_item_material(
+                tenant_id,
+                SalesContractItem,
+                "contract_id",
+                kw,
+            )
             qs = qs.filter(
                 Q(contract_code__icontains=kw)
                 | Q(customer_name__icontains=kw)
                 | Q(quotation_code__icontains=kw)
                 | Q(salesman_name__icontains=kw)
+                | Q(id__in=material_contract_ids)
             )
         if contract_code and contract_code.strip():
             qs = qs.filter(contract_code__icontains=contract_code.strip())
@@ -562,10 +574,26 @@ class SalesContractService(AppBaseService[SalesContract]):
         total = await qs.count()
         order_clause = order_by if order_by else "-contract_date"
         rows = await qs.order_by(order_clause, "-id").offset(skip).limit(limit)
-        await self._reconcile_stale_contract_releases(tenant_id, list(rows))
+        row_list = list(rows)
+        contract_line_items_by_id: dict[int, list] = {}
+        if include_items and row_list:
+            contract_ids = [int(r.id) for r in row_list if r.id is not None]
+            if contract_ids:
+                line_rows = (
+                    await SalesContractItem.filter(
+                        tenant_id=tenant_id,
+                        contract_id__in=contract_ids,
+                    )
+                    .order_by("contract_id", "id")
+                    .all()
+                )
+                for it in line_rows:
+                    cid = int(it.contract_id)
+                    contract_line_items_by_id.setdefault(cid, []).append(it)
+        await self._reconcile_stale_contract_releases(tenant_id, row_list)
         capability_ctx_by_contract_id: dict[int, dict[str, Any]] = {}
         if rows:
-            contract_ids = [int(r.id) for r in rows if r.id is not None]
+            contract_ids = [int(r.id) for r in row_list if r.id is not None]
             item_rows = await SalesContractItem.filter(
                 tenant_id=tenant_id,
                 contract_id__in=contract_ids,
@@ -581,7 +609,7 @@ class SalesContractService(AppBaseService[SalesContract]):
                 released_qty = Decimal(str(it.get("released_quantity") or 0))
                 if contract_qty - released_qty > Decimal("0"):
                     has_releasable_map[contract_id] = True
-            for r in rows:
+            for r in row_list:
                 if r.id is None:
                     continue
                 rem_qty, rem_amt = self._remaining(r)
@@ -600,9 +628,12 @@ class SalesContractService(AppBaseService[SalesContract]):
             [
                 self._contract_to_response(
                     r,
+                    items=contract_line_items_by_id.get(int(r.id or 0))
+                    if include_items
+                    else None,
                     capability_ctx=capability_ctx_by_contract_id.get(int(r.id or 0)),
                 )
-                for r in rows
+                for r in row_list
             ],
         )
         return SalesContractListResponse(

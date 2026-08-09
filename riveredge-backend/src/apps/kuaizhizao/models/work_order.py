@@ -107,6 +107,13 @@ class WorkOrder(BaseModel):
     # 状态和优先级
     status = fields.CharField(max_length=20, description="工单状态", default="draft")
     priority = fields.CharField(max_length=10, description="优先级", default="normal")
+
+    # 审核信息（UniAudit；默认关闭时创建写已通过，开启后走提交/审驳）
+    reviewer_id = fields.IntField(null=True, description="审核人ID")
+    reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
+    review_time = fields.DatetimeField(null=True, description="审核时间")
+    review_status = fields.CharField(max_length=20, null=True, description="审核状态")
+    review_remarks = fields.TextField(null=True, description="审核备注")
     
     # 指定结束标记
     manually_completed = fields.BooleanField(default=False, description="是否指定结束（true:手动指定结束, false:正常完成）")

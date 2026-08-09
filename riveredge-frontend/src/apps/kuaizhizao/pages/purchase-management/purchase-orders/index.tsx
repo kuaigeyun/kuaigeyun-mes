@@ -12,7 +12,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
 import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, List, Typography, theme, Dropdown, Descriptions, Spin, Card, Select, Switch, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -25,6 +25,7 @@ import {
   pickImportExampleValue,
 } from '../../../../../utils/loadImportDictionaryValues';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions';
 import {
   buildImportPriceTypeOptions,
   parseImportPriceType,
@@ -35,10 +36,12 @@ import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } f
 import { mapSystemDictionaryItemOptions, resolveSystemDictionaryItemLabel } from '../../../../../utils/systemDictionaryI18n';
 import { getFileDownloadUrl } from '../../../../../services/file';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
+  UniTableStackedLineBadge,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
@@ -134,11 +137,11 @@ import {
 } from '../../../../../hooks/useDocumentCapabilities';
 import { listPurchaseOrderChangesByOrder, type PurchaseOrderChange } from '../../../services/purchase-order-change';
 import LandingCostAllocationModal from './LandingCostAllocationModal';
+import { bankAccountService, type BankAccount } from '../../../../kuaicaiwu/services/finance/bank-account';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import {
-  getMaterialDefaultTaxRate,
-  pickPurchaseUnitPrice,
-  resolveSupplierPurchasePricesBatch,
+  applyPurchaseDocumentLineMaterialPricing,
+  resolvePurchaseDocumentMaterialLinesPricing,
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -167,10 +170,16 @@ import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
-import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar';
+import {
+  DocumentPushProgressBar,
+  DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
+  DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
+  ratioToPushProgressPercent,
+} from '../../sales-management/shared/DocumentPushProgressBar';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
   purchaseOrderBatchPushReceiptNoticeAllowed,
@@ -211,6 +220,23 @@ const PO_WORKFLOW_REJECTED_STATUSES = [
   DocumentStatus.REJECTED,
   ReviewStatusEnum.REJECTED,
 ];
+
+/** 采购明细行（订单 + 明细合并，用于明细表格平铺） */
+type PurchaseOrderItemRow = PurchaseOrderItem & {
+  _rowKey: string;
+  purchase_order_id: number;
+  order_code?: string;
+  supplier_name?: string;
+  buyer_name?: string;
+  order_date?: string;
+  delivery_date?: string;
+  total_quantity?: number;
+  total_amount?: number;
+  status?: string;
+  review_status?: string;
+  receipt_progress?: number;
+  downstream_push_progress?: number;
+};
 
 /** 指标卡迷你图默认序列：模块级稳定引用，避免每次 render 新数组触发图表无限 update（G2 interval 报错） */
 const PO_STAT_SPARKLINE_ARRIVAL = [60, 75, 80, 78, 85, 90, 88];
@@ -336,6 +362,7 @@ const purchaseOrderEditPath = (id: number) => `${PURCHASE_ORDER_LIST_PATH}/${id}
 
 const PurchaseOrdersPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const { quantity: quantityDecimals, price: priceDecimals, amount: amountDecimals } = useNumericPrecision();
   const kuaiaiAvailable = useKuaiaiEntryAvailable();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const purchaseOrderAuditEnabled = useAuditRequired('purchase_order', false);
@@ -361,10 +388,31 @@ const PurchaseOrdersPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   /** 列表当前页数据（唯一源：UniTable onTableDataChange，与表格展示一致） */
   const [tableOrders, setTableOrders] = useState<PurchaseOrder[]>([]);
+  const purchaseOrderListPersistenceId =
+    'apps.kuaizhizao.pages.purchase-management.purchase-orders.v5';
+  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
+    readPersistedUniTableViewType(purchaseOrderListPersistenceId, 'table', [
+      'table',
+      'detailTable',
+      'help',
+    ]) as 'table' | 'detailTable' | 'help',
+  );
+  const dataViewMode = viewTypeState === 'table' ? 'order' : 'detail';
+  const dataViewModeRef = useRef(dataViewMode);
+  useEffect(() => {
+    dataViewModeRef.current = dataViewMode;
+  }, [dataViewMode]);
+  const lastOrdersCacheRef = useRef<{
+    orders: PurchaseOrder[];
+    total: number;
+    baseParamsKey: string;
+    includeItems: boolean;
+  } | null>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
 
-  const purchaseOrderImportDict = useImportDictionaryOptions(['CURRENCY', 'ORDER_TYPE', 'MATERIAL_UNIT']);
-  const purchaseOrderLineUnitOptions = purchaseOrderImportDict.MATERIAL_UNIT ?? [];
+  const materialUnitImport = useImportMaterialUnitOptions();
+  const purchaseOrderImportDict = useImportDictionaryOptions(['CURRENCY', 'ORDER_TYPE']);
+  const purchaseOrderLineUnitOptions = materialUnitImport.options;
   const purchaseOrderLineImportColumnOptions = useMemo(
     () => [undefined, undefined, purchaseOrderLineUnitOptions, undefined, undefined, undefined],
     [purchaseOrderLineUnitOptions],
@@ -545,6 +593,14 @@ const PurchaseOrdersPage: React.FC = () => {
   const [orderTypeLoading, setOrderTypeLoading] = useState(false);
   const [currencyOptions, setCurrencyOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [currencyLoading, setCurrencyLoading] = useState(false);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const bankAccountOptions = useMemo(
+    () => bankAccounts.map((a) => ({
+      label: `${a.bank_name || ''} ${a.account_number || ''}`.trim() || String(a.id),
+      value: a.id,
+    })),
+    [bankAccounts],
+  );
   const [users, setUsers] = useState<User[]>([]);
   const currentUser = useCurrentUser();
   const [usersLoading, setUsersLoading] = useState(false);
@@ -586,8 +642,17 @@ const PurchaseOrdersPage: React.FC = () => {
         setUsersLoading(false);
       }
     };
+    const loadBankAccounts = async () => {
+      try {
+        const res = await bankAccountService.list({ limit: 500, is_active: true });
+        setBankAccounts(res.data || []);
+      } catch {
+        setBankAccounts([]);
+      }
+    };
     loadSuppliers();
     loadUsers();
+    loadBankAccounts();
   }, [currentUser]);
 
   const purchaseOrderSupplierSearchOptions = useMemo(
@@ -660,40 +725,26 @@ const PurchaseOrdersPage: React.FC = () => {
       const supplierId = formRef.current?.getFieldValue('supplier_id');
       const orderDate = formRef.current?.getFieldValue('order_date');
       const asOf = orderDate != null ? (dayjs.isDayjs(orderDate) ? orderDate : dayjs(orderDate)) : dayjs();
+      const priceType = String(formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive');
 
-      const resolveMap = new Map<number, Awaited<ReturnType<typeof resolveSupplierPurchasePricesBatch>>[number]>();
-      if (supplierId && selected.length) {
-        try {
-          const items = await resolveSupplierPurchasePricesBatch(
-            Number(supplierId),
-            selected.map((m) => m.id),
-            asOf,
-          );
-          selected.forEach((m, i) => {
-            if (items[i]) resolveMap.set(m.id, items[i]);
-          });
-        } catch {
-          /* 回退物料默认价 */
-        }
-      }
+      const priced = await resolvePurchaseDocumentMaterialLinesPricing(selected, {
+        supplierId: supplierId ? Number(supplierId) : undefined,
+        asOf,
+        priceType,
+      });
 
       const current = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
-      const newRows = selected.map((m) => {
-        const resolved = resolveMap.get(m.id);
-        const taxR = resolved?.taxRate != null ? Number(resolved.taxRate) : getMaterialDefaultTaxRate(m);
-        const price = pickPurchaseUnitPrice(m, resolved);
-        return {
-          material_id: m.id,
-          material_code: m.mainCode ?? m.code ?? '',
-          material_name: m.name ?? '',
-          material_spec: m.specification ?? '',
-          unit: resolveMaterialScenarioUnit(m, 'purchase'),
-          ordered_quantity: 1,
-          unit_price: price,
-          tax_rate: taxR,
-          required_date: defaultDate,
-        };
-      });
+      const newRows = priced.map(({ material: m, unitPrice, taxRate }) => ({
+        material_id: (m as Material).id,
+        material_code: (m as Material).mainCode ?? (m as Material).code ?? '',
+        material_name: (m as Material).name ?? '',
+        material_spec: (m as Material).specification ?? '',
+        unit: resolveMaterialScenarioUnit(m as Material, 'purchase'),
+        ordered_quantity: 1,
+        unit_price: unitPrice,
+        tax_rate: taxRate,
+        required_date: defaultDate,
+      }));
       const firstRow = current?.[0];
       const firstRowEmpty =
         current.length === 1 &&
@@ -722,8 +773,7 @@ const PurchaseOrdersPage: React.FC = () => {
           const materialCode = String(row[0] || '').trim();
           const spec = String(row[1] || '').trim();
           const unitRaw = String(row[2] || '').trim();
-          const unit =
-            purchaseOrderImportDict.parseDict('MATERIAL_UNIT', unitRaw) || unitRaw;
+          const unit = materialUnitImport.parse(unitRaw) || unitRaw;
           const quantity = parseFloat(row[3]) || 0;
           const price = parseFloat(row[4]) || 0;
           const requiredDate = row[5];
@@ -757,7 +807,7 @@ const PurchaseOrdersPage: React.FC = () => {
       messageApi.success(t('app.kuaizhizao.salesOrder.importSuccessItems', { count: newItems.length }));
       setImportModalVisible(false);
     },
-    [messageApi, purchaseOrderImportDict, t],
+    [messageApi, materialUnitImport, t],
   );
 
   // 下推退货 Modal 相关详情状态
@@ -770,7 +820,7 @@ const PurchaseOrdersPage: React.FC = () => {
 
   /** 列表列顺序：金额/数量/时间在前；生命周期固定倒数第二；操作列最后（与 UI_Standard 一致） */
   const purchaseOrderCustomFieldColumns = generatePurchaseOrderCustomFieldColumns();
-  const columns: ProColumns<PurchaseOrder>[] = useMemo(() => alignProColumns<PurchaseOrder>([
+  const orderColumns: ProColumns<PurchaseOrder>[] = useMemo(() => alignProColumns<PurchaseOrder>([
     {
       title: t('app.kuaizhizao.purchaseOrder.col.orderDate'),
       dataIndex: 'order_date_range',
@@ -845,7 +895,7 @@ const PurchaseOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.purchaseOrder.col.buyer'),
       dataIndex: 'buyer_name',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+      width: 120,
       sorter: true,
       ellipsis: true,
       hideInSearch: true,
@@ -873,9 +923,7 @@ const PurchaseOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
       dataIndex: 'downstream_push_progress',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
       render: (_: any, record: PurchaseOrder) => (
         <DocumentPushProgressBar percent={Number(record.downstream_push_progress ?? 0)} />
       ),
@@ -883,9 +931,7 @@ const PurchaseOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.purchaseOrder.col.receiptProgress'),
       dataIndex: 'receipt_progress',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
       render: (_: any, record: PurchaseOrder) => {
         const percent = Number(record.receipt_progress ?? 0);
         return (
@@ -932,7 +978,6 @@ const PurchaseOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.purchaseOrder.col.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       fixed: 'right',
-      align: 'left',
       valueType: 'select',
       valueEnum: lifecycleValueEnum,
       render: (_: any, record: PurchaseOrder) => (
@@ -1001,6 +1046,177 @@ const PurchaseOrdersPage: React.FC = () => {
       },
     },
   ], SALES_DOC_LIST_FIELD_RANK), [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderAuditColumn, purchaseOrderCustomFieldColumns, purchaseOrderPerms, purchaseOrderSupplierSearchOptions, detailDrawerVisible, orderDetail?.id]);
+
+  /**
+   * 明细表格列序按声明顺序（标识 → 物料 → 数量金额 → 到货 → 交期 → 状态）。
+   * 禁止套用主单列表的 SALES_DOC_LIST_FIELD_RANK，否则会把明细字段打散。
+   */
+  const detailTableColumns: ProColumns<PurchaseOrderItemRow>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.supplierAndOrder'),
+        key: 'order_code',
+        dataIndex: 'order_code',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
+        hideInSearch: false,
+        fieldProps: { placeholder: t('app.kuaizhizao.purchaseOrder.col.orderCode') },
+        render: (_, record) => (
+          <UniTableStackedPrimaryCell
+            primary={String(record.supplier_name ?? '')}
+            secondary={String(record.order_code ?? '')}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.supplier'),
+        dataIndex: 'supplier_id',
+        hideInTable: true,
+        valueType: 'select',
+        fieldProps: {
+          showSearch: true,
+          optionFilterProp: 'label',
+          options: purchaseOrderSupplierSearchOptions,
+          placeholder: t('app.kuaizhizao.purchaseOrder.col.supplier'),
+        },
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.materialName'),
+        key: 'material_display',
+        dataIndex: 'material_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        render: (_, record) => (
+          <MaterialStackedCell
+            material_name={record.material_name}
+            material_code={record.material_code}
+            material_spec={record.material_spec}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.materialCode'),
+        dataIndex: 'material_code',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.spec'),
+        dataIndex: 'material_spec',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.quantity'),
+        dataIndex: 'ordered_quantity',
+        width: 120,
+        align: 'right',
+        render: (val: unknown, record: PurchaseOrderItemRow) => (
+          <QuantityWithUnitDisplay quantity={val} unit={record.unit} />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.unitPrice'),
+        dataIndex: 'unit_price',
+        width: 100,
+        align: 'right',
+        render: (text: unknown) => `¥${formatAmount(text)}`,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.totalPrice'),
+        dataIndex: 'total_price',
+        width: 110,
+        align: 'right',
+        render: (text: unknown) => `¥${formatAmount(text)}`,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.receivedQty'),
+        dataIndex: 'received_quantity',
+        width: 90,
+        align: 'right',
+        render: (text: unknown) => formatQuantity(text),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.outstandingQty'),
+        dataIndex: 'outstanding_quantity',
+        width: 90,
+        align: 'right',
+        render: (text: unknown) => formatQuantity(text),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.requiredDelivery'),
+        dataIndex: 'required_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_: unknown, row: PurchaseOrderItemRow) => {
+          const raw = row.required_date;
+          const text = raw ? formatDateTime(raw, 'YYYY-MM-DD') : '-';
+          const overdue = isPurchaseOrderDeliveryOverdue(
+            {
+              delivery_date: row.required_date || row.delivery_date,
+              status: row.status,
+              review_status: row.review_status,
+            } as PurchaseOrder,
+            purchaseOrderAuditEnabled,
+          );
+          return (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+              <span>{text}</span>
+              {overdue ? (
+                <UniTableStackedLineBadge tone="danger">
+                  {t('app.kuaizhizao.purchaseOrder.overdueBadge')}
+                </UniTableStackedLineBadge>
+              ) : null}
+            </span>
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.lineReceiptProgress'),
+        key: 'line_receipt_progress',
+        dataIndex: 'line_receipt_progress',
+        ...DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
+        render: (_: unknown, record: PurchaseOrderItemRow) => {
+          const ordered = Number(record.ordered_quantity ?? 0);
+          const received = Number(record.received_quantity ?? 0);
+          const percent = ratioToPushProgressPercent(received, ordered);
+          return (
+            <DocumentPushProgressBar
+              percent={percent}
+              tooltip={t('app.kuaizhizao.purchaseOrder.col.receiptProgressTip', {
+                received: formatQuantity(received),
+                ordered: formatQuantity(ordered),
+                percent,
+              })}
+            />
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.lifecycle'),
+        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+        fixed: 'right',
+        hideInSearch: false,
+        valueType: 'select',
+        valueEnum: lifecycleValueEnum,
+        render: (_: unknown, record: PurchaseOrderItemRow) => {
+          const orderRecord = {
+            id: record.purchase_order_id,
+            status: record.status,
+            review_status: record.review_status,
+            receipt_progress: record.receipt_progress,
+            downstream_push_progress: record.downstream_push_progress,
+          } as PurchaseOrder;
+          return (
+            <ListUniLifecycleCell
+              lifecycle={getPurchaseOrderLifecycle(orderRecord, purchaseOrderAuditEnabled, t)}
+            />
+          );
+        },
+      },
+    ],
+    [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderSupplierSearchOptions],
+  );
+
+  const columns = (dataViewMode === 'detail' ? detailTableColumns : orderColumns) as ProColumns<any>[];
 
   const [pushToInvoiceLoading, setPushToInvoiceLoading] = useState(false);
 
@@ -1821,6 +2037,8 @@ const PurchaseOrdersPage: React.FC = () => {
           supplier_phone: detail.supplier_phone,
           order_date: detail.order_date,
           delivery_date: detail.delivery_date,
+          prepayment_amount: detail.prepayment_amount,
+          prepayment_bank_account_id: detail.prepayment_bank_account_id,
           order_type: detail.order_type || '标准采购',
           price_type: 'tax_exclusive',
           buyer_id: detail.buyer_id,
@@ -2581,6 +2799,26 @@ const PurchaseOrdersPage: React.FC = () => {
           </Col>
         </Row>
         <Row gutter={16}>
+          <Col span={6}>
+            <ProForm.Item
+              name="prepayment_amount"
+              label={t('app.kuaizhizao.purchaseOrder.form.prepaymentAmount')}
+            >
+              <InputNumber min={0} precision={2} style={{ width: '100%' }} placeholder={t('app.kuaizhizao.purchaseOrder.form.prepaymentAmountPlaceholder')} />
+            </ProForm.Item>
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="prepayment_bank_account_id"
+              label={t('app.kuaizhizao.purchaseOrder.form.prepaymentBankAccount')}
+              options={bankAccountOptions}
+              showSearch
+              allowClear
+              placeholder={t('app.kuaizhizao.purchaseOrder.form.prepaymentBankAccountPlaceholder')}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
           <Col span={12}>
             <ProForm.Item
               name="supplier_id"
@@ -2772,6 +3010,12 @@ const PurchaseOrdersPage: React.FC = () => {
                                   ['items', index, 'unit'],
                                   resolveMaterialScenarioUnit(material, 'purchase'),
                                 );
+                                void applyPurchaseDocumentLineMaterialPricing(
+                                  formRef.current,
+                                  index,
+                                  material,
+                                  { asOfField: 'order_date', unitPriceField: 'unit_price' },
+                                );
                               }}
                               fallbackOption={fallback}
                               formItemProps={{ style: { margin: 0 } }}
@@ -2829,7 +3073,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     ...DOCUMENT_DETAIL_NUM_COL,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'ordered_quantity']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.salesOrder.quantityMinHint') }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder={t('app.kuaizhizao.purchaseOrder.form.quantity')} min={0} precision={2} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
+                        <InputNumber placeholder={t('app.kuaizhizao.purchaseOrder.form.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                       </AntForm.Item>
                     ),
                   },
@@ -2851,7 +3095,7 @@ const PurchaseOrdersPage: React.FC = () => {
                             <InputNumber
                               placeholder={showTaxColumns ? t('app.kuaizhizao.purchaseOrder.col.taxUnitPrice') : t('app.kuaizhizao.purchaseOrder.col.unitPrice')}
                               min={0}
-                              precision={2}
+                              precision={priceDecimals}
                               prefix="¥"
                               style={{ width: '100%' }}
                               size={DOCUMENT_DETAIL_CONTROL_SIZE}
@@ -2875,7 +3119,7 @@ const PurchaseOrdersPage: React.FC = () => {
                                 const price = Number(row?.unit_price) || 0;
                                 const taxRate = Number(row?.tax_rate) || 0;
                                 const exclAmt = price > 0 ? (qty * price) / (1 + taxRate / 100) : 0;
-                                return <span>¥{exclAmt.toFixed(2)}</span>;
+                                return <span>¥{exclAmt.toFixed(amountDecimals)}</span>;
                               }}
                             </AntForm.Item>
                           ),
@@ -2916,7 +3160,7 @@ const PurchaseOrdersPage: React.FC = () => {
                                 const taxRate = Number(row?.tax_rate) || 0;
                                 const exclAmt = price > 0 ? (qty * price) / (1 + taxRate / 100) : 0;
                                 const taxAmt = exclAmt * (taxRate / 100);
-                                return <span>¥{taxAmt.toFixed(2)}</span>;
+                                return <span>¥{taxAmt.toFixed(amountDecimals)}</span>;
                               }}
                             </AntForm.Item>
                           ),
@@ -2937,7 +3181,7 @@ const PurchaseOrdersPage: React.FC = () => {
                           const exclAmt = showTaxColumns && price > 0 ? (qty * price) / (1 + taxRate / 100) : qty * price;
                           const taxAmt = showTaxColumns ? exclAmt * (taxRate / 100) : 0;
                           const totalIncl = exclAmt + taxAmt;
-                          return <span>¥{totalIncl.toFixed(2)}</span>;
+                          return <span>¥{totalIncl.toFixed(amountDecimals)}</span>;
                         }}
                       </AntForm.Item>
                     ),
@@ -3093,16 +3337,54 @@ const PurchaseOrdersPage: React.FC = () => {
       `}</style>
       <ListPageTemplate statCards={statCards}>
         <UniTable<PurchaseOrder>
-          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-orders.v3"
+          columnPersistenceId={purchaseOrderListPersistenceId}
           headerTitle={t('app.kuaizhizao.menu.purchase-management.purchase-orders')}
           formRef={tableSearchFormRef}
           actionRef={actionRef}
-          rowKey="id"
-          rowClassName={(record) =>
-            highlightDeliveryOverdue && isPurchaseOrderDeliveryOverdue(record, purchaseOrderAuditEnabled)
+          viewTypes={['table', 'detailTable', 'help']}
+          defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
+          onViewTypeChange={(v) => {
+            const nextMode = v === 'table' ? 'order' : 'detail';
+            dataViewModeRef.current = nextMode;
+            setViewTypeState(v as 'table' | 'detailTable' | 'help');
+            setSelectedRowKeys([]);
+            setTimeout(() => actionRef.current?.reload(), 0);
+          }}
+          detailTableColumns={detailTableColumns}
+          helpViewConfig={{
+            content: (
+              <div style={{ lineHeight: 1.8 }}>
+                <p>
+                  <strong>{t('components.uniTable.viewTable')}</strong>
+                  {t('app.kuaizhizao.purchaseOrder.helpTableView')}
+                </p>
+                <p>
+                  <strong>{t('components.uniTable.viewDetailTable')}</strong>
+                  {t('app.kuaizhizao.purchaseOrder.helpDetailTableView')}
+                </p>
+              </div>
+            ),
+          }}
+          rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
+          rowClassName={(record) => {
+            if (!highlightDeliveryOverdue) return '';
+            if (dataViewMode === 'order') {
+              return isPurchaseOrderDeliveryOverdue(record as PurchaseOrder, purchaseOrderAuditEnabled)
+                ? 'purchase-order-row-overdue'
+                : '';
+            }
+            const row = record as PurchaseOrderItemRow;
+            return isPurchaseOrderDeliveryOverdue(
+              {
+                delivery_date: row.required_date || row.delivery_date,
+                status: row.status,
+                review_status: row.review_status,
+              } as PurchaseOrder,
+              purchaseOrderAuditEnabled,
+            )
               ? 'purchase-order-row-overdue'
-              : ''
-          }
+              : '';
+          }}
           columns={columns}
           showAdvancedSearch={true}
           skipFuzzyPinyinClientFilter
@@ -3137,11 +3419,11 @@ const PurchaseOrdersPage: React.FC = () => {
               disabledReason={purchaseOrderToolbarPushDisabledReason}
             />,
           ]}
-          enableRowSelection
+          enableRowSelection={viewTypeState !== 'detailTable'}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           onTableDataChange={setTableOrders}
-          showDeleteButton
+          showDeleteButton={viewTypeState !== 'detailTable'}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.purchaseOrder.confirmBatchDelete', { count })}
           toolBarActionsAfterDelete={[
@@ -3195,7 +3477,7 @@ const PurchaseOrdersPage: React.FC = () => {
               size="middle"
             />,
           ]}
-          showImportButton={true}
+          showImportButton={viewTypeState !== 'detailTable'}
           onImport={handleListImport}
           importHeaders={purchaseOrderImportTemplate.importHeaders}
           importExampleRow={purchaseOrderImportTemplate.importExampleRow}
@@ -3204,26 +3486,79 @@ const PurchaseOrdersPage: React.FC = () => {
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              let items = await fetchAllListItems((p) => listPurchaseOrders(p));
+              const flattenOrders = (orders: PurchaseOrder[]): Array<Record<string, unknown>> => {
+                if (dataViewModeRef.current !== 'detail') {
+                  return orders as Array<Record<string, unknown>>;
+                }
+                const flatRows: Array<Record<string, unknown>> = [];
+                for (const order of orders) {
+                  const items = order.items ?? [];
+                  if (items.length === 0) {
+                    flatRows.push({
+                      _rowKey: `order-${order.id}-empty`,
+                      purchase_order_id: order.id,
+                      order_code: order.order_code,
+                      supplier_name: order.supplier_name,
+                      material_code: '-',
+                      material_name: '-',
+                      ordered_quantity: 0,
+                    });
+                  } else {
+                    items.forEach((item, idx) => {
+                      flatRows.push({
+                        ...item,
+                        _rowKey: item.id
+                          ? `order-${order.id}-item-${item.id}`
+                          : `order-${order.id}-idx-${idx}`,
+                        purchase_order_id: order.id,
+                        order_code: order.order_code,
+                        supplier_name: order.supplier_name,
+                        buyer_name: order.buyer_name,
+                        order_date: order.order_date,
+                        delivery_date: order.delivery_date,
+                        status: order.status,
+                        review_status: order.review_status,
+                      });
+                    });
+                  }
+                }
+                return flatRows;
+              };
+
+              let orders = await fetchAllListItems((p) =>
+                listPurchaseOrders({
+                  ...p,
+                  include_items: dataViewModeRef.current === 'detail',
+                }),
+              );
+              let toExport: Array<Record<string, unknown>>;
               if (type === 'currentPage' && pageData?.length) {
-                items = pageData;
+                toExport = pageData as Array<Record<string, unknown>>;
               } else if (type === 'selected' && keys?.length) {
-                items = items.filter((d) => d.id != null && keys.includes(d.id));
+                if (dataViewModeRef.current === 'detail') {
+                  toExport = flattenOrders(orders).filter((r) => keys.includes(String(r._rowKey)));
+                } else {
+                  toExport = (orders as PurchaseOrder[]).filter(
+                    (d) => d.id != null && keys.includes(d.id),
+                  ) as Array<Record<string, unknown>>;
+                }
+              } else {
+                toExport = flattenOrders(orders);
               }
-              if (items.length === 0) {
+              if (toExport.length === 0) {
                 messageApi.warning(t('common.noDataToExport'));
                 return;
               }
               await downloadRecordsAsXlsx(
-                items as Array<Record<string, unknown>>,
+                toExport,
                 `purchase-orders-${new Date().toISOString().slice(0, 10)}.xlsx`,
               );
-              messageApi.success(t('common.exportSuccess', { count: items.length }));
+              messageApi.success(t('common.exportSuccess', { count: toExport.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
-          showSyncButton
+          showSyncButton={viewTypeState !== 'detailTable'}
           onSync={() => setSyncModalVisible(true)}
           toolbar={{ actions: [purchaseOrderHighlightOverdueToolbar] }}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -3270,13 +3605,106 @@ const PurchaseOrdersPage: React.FC = () => {
                   ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
                   : apiParams.created_start_date;
               }
-              const response = await listPurchaseOrders(apiParams as Parameters<typeof listPurchaseOrders>[0]);
-              const enriched = await enrichPurchaseOrderRecordsWithCustomFields(response.data || []);
-              return {
-                data: enriched,
-                success: response.success !== false,
-                total: response.total || 0,
+              apiParams.include_items = dataViewModeRef.current === 'detail';
+              const baseParamsKey = JSON.stringify({
+                skip: apiParams.skip,
+                limit: apiParams.limit,
+                status: apiParams.status,
+                review_status: apiParams.review_status,
+                supplier_id: apiParams.supplier_id,
+                order_code: apiParams.order_code,
+                keyword: apiParams.keyword,
+                order_date_from: apiParams.order_date_from,
+                order_date_to: apiParams.order_date_to,
+                delivery_date_from: apiParams.delivery_date_from,
+                delivery_date_to: apiParams.delivery_date_to,
+                created_start_date: apiParams.created_start_date,
+                created_end_date: apiParams.created_end_date,
+                order_by: apiParams.order_by,
+              });
+              const needItems = apiParams.include_items === true;
+
+              const toFlatRows = (orders: PurchaseOrder[]): PurchaseOrderItemRow[] => {
+                const flatRows: PurchaseOrderItemRow[] = [];
+                for (const order of orders) {
+                  const items = order.items ?? [];
+                  if (items.length === 0) {
+                    flatRows.push({
+                      _rowKey: `order-${order.id}-empty`,
+                      purchase_order_id: order.id ?? 0,
+                      order_code: order.order_code,
+                      supplier_name: order.supplier_name,
+                      buyer_name: order.buyer_name,
+                      order_date: order.order_date,
+                      delivery_date: order.delivery_date,
+                      total_quantity: order.total_quantity,
+                      total_amount: order.total_amount,
+                      status: order.status,
+                      review_status: order.review_status,
+                      receipt_progress: order.receipt_progress,
+                      downstream_push_progress: order.downstream_push_progress,
+                      material_id: 0,
+                      material_code: '-',
+                      material_name: '-',
+                      ordered_quantity: 0,
+                      unit: '',
+                      unit_price: 0,
+                      total_price: 0,
+                    } as PurchaseOrderItemRow);
+                  } else {
+                    items.forEach((item, idx) => {
+                      flatRows.push({
+                        ...item,
+                        _rowKey: item.id
+                          ? `order-${order.id}-item-${item.id}`
+                          : `order-${order.id}-idx-${idx}`,
+                        purchase_order_id: order.id ?? 0,
+                        order_code: order.order_code,
+                        supplier_name: order.supplier_name,
+                        buyer_name: order.buyer_name,
+                        order_date: order.order_date,
+                        delivery_date: order.delivery_date,
+                        total_quantity: order.total_quantity,
+                        total_amount: order.total_amount,
+                        status: order.status,
+                        review_status: order.review_status,
+                        receipt_progress: order.receipt_progress,
+                        downstream_push_progress: order.downstream_push_progress,
+                      } as PurchaseOrderItemRow);
+                    });
+                  }
+                }
+                return flatRows;
               };
+
+              const formatListResponse = async (orders: PurchaseOrder[], total: number) => {
+                if (dataViewModeRef.current === 'order') {
+                  const enriched = await enrichPurchaseOrderRecordsWithCustomFields(orders);
+                  return { data: enriched, success: true, total };
+                }
+                return { data: toFlatRows(orders), success: true, total };
+              };
+
+              const cached = lastOrdersCacheRef.current;
+              if (cached && cached.baseParamsKey === baseParamsKey) {
+                const canServeFromCache = needItems ? cached.includeItems : true;
+                if (canServeFromCache) {
+                  return formatListResponse(cached.orders, cached.total);
+                }
+              }
+
+              const response = await listPurchaseOrders(
+                apiParams as Parameters<typeof listPurchaseOrders>[0],
+              );
+              const orders = response.data || [];
+              const total = response.total || 0;
+              lastOrdersCacheRef.current = {
+                orders,
+                total,
+                baseParamsKey,
+                includeItems: needItems,
+              };
+              return formatListResponse(orders, total);
             } catch (error) {
               messageApi.error(t('app.kuaizhizao.purchaseOrder.listFailed'));
               return {
@@ -3286,7 +3714,6 @@ const PurchaseOrdersPage: React.FC = () => {
               };
             }
           }}
-          scroll={{ x: 1400 }}
         />
       </ListPageTemplate>
 

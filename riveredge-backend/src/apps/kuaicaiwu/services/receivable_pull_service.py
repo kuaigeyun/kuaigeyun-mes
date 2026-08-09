@@ -529,3 +529,56 @@ class ReceivablePullService(AppBaseService[Receivable]):
             }
             enriched.append(payload)
         return enriched
+
+    async def enrich_push_sales_invoice_capabilities(
+        self,
+        tenant_id: int,
+        receivables: List[Any],
+    ) -> List[Dict[str, Any]]:
+        """为应收单列表补充下推销项发票 capability（实际创建销项发票在销项发票页加载）。"""
+        from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
+
+        if not receivables:
+            return []
+
+        sales_invoice_pull = SalesInvoiceService()
+        receivable_ids = [
+            int(rec["id"] if isinstance(rec, dict) else rec.id) for rec in receivables
+        ]
+        code_by_id = {
+            int(rec["id"] if isinstance(rec, dict) else rec.id): str(
+                (rec.get("receivable_code") if isinstance(rec, dict) else getattr(rec, "receivable_code", None))
+                or (rec["id"] if isinstance(rec, dict) else rec.id)
+            )
+            for rec in receivables
+        }
+        pushed_map = await sales_invoice_pull._sum_pushed_totals_by_receivable(
+            tenant_id, receivable_ids, code_by_id
+        )
+
+        enriched: List[Dict[str, Any]] = []
+        for rec in receivables:
+            rid = int(rec["id"] if isinstance(rec, dict) else rec.id)
+            preview_items = await sales_invoice_pull._build_preview_items_for_receivable(
+                tenant_id,
+                rec,
+                pushed=pushed_map.get(rid, Decimal("0")),
+            )
+            allowed, reason = sales_invoice_pull._derive_pull_capability(
+                source_allowed=sales_invoice_pull._receivable_source_allowed(rec),
+                preview_items=preview_items,
+                not_allowed_reason="sales_invoice.pull_from_receivable.not_allowed",
+                no_lines_reason="sales_invoice.pull_from_receivable.no_lines",
+                already_pulled_reason="sales_invoice.pull_from_receivable.already_pulled",
+            )
+            payload = dict(rec) if isinstance(rec, dict) else (
+                rec.model_dump() if hasattr(rec, "model_dump") else dict(rec)
+            )
+            existing_caps = dict(payload.get("capabilities") or {})
+            existing_caps["push_sales_invoice"] = {
+                "allowed": allowed,
+                "reason": reason,
+            }
+            payload["capabilities"] = existing_caps
+            enriched.append(payload)
+        return enriched

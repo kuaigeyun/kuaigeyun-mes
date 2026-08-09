@@ -112,7 +112,11 @@ const AdaptiveScrollDetailTable: React.FC<
 
   return (
     <div ref={wrapRef} className="uni-table-detail-scroll">
-      <Table {...tableProps} scroll={scroll} />
+      <Table
+        {...tableProps}
+        tableLayout={scrollX != null ? 'fixed' : tableProps.tableLayout}
+        scroll={scroll}
+      />
     </div>
   );
 };

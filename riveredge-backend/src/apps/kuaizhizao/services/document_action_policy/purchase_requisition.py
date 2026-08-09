@@ -38,13 +38,20 @@ def _normalize_review_status(review_status: Any) -> str:
 
 
 def _is_revoke_approval_allowed(status: Any) -> bool:
+    """仅已通过且未转单语义可撤审；部分/全部转单一律不可。"""
     normalized = normalize_status(_norm(status))
     return normalized in (
         DocumentStatus.AUDITED.value,
         DocumentStatus.CONFIRMED.value,
+        "已通过",
+    )
+
+
+def _status_implies_linked_purchase_order(status: Any) -> bool:
+    normalized = normalize_status(_norm(status))
+    return normalized in (
         DocumentStatus.PARTIAL_CONVERTED.value,
         DocumentStatus.FULL_CONVERTED.value,
-        "已通过",
     )
 
 
@@ -90,9 +97,10 @@ def derive_purchase_requisition_capabilities(
         else None,
     )
 
-    revoke_allowed = _is_revoke_approval_allowed(status) and not has_linked_purchase_order
+    linked_po = bool(has_linked_purchase_order) or _status_implies_linked_purchase_order(status)
+    revoke_allowed = _is_revoke_approval_allowed(status) and not linked_po
     revoke_reason = None
-    if has_linked_purchase_order:
+    if linked_po:
         revoke_reason = "purchase_requisition.revoke_approval.has_purchase_order"
     elif not _is_revoke_approval_allowed(status):
         revoke_reason = "purchase_requisition.revoke_approval.not_allowed"
@@ -123,8 +131,16 @@ def derive_purchase_requisition_capabilities(
     )
 
 
-def assert_purchase_requisition_capability(req: Any, action: str) -> None:
-    caps = derive_purchase_requisition_capabilities(req)
+def assert_purchase_requisition_capability(
+    req: Any,
+    action: str,
+    *,
+    has_linked_purchase_order: bool = False,
+) -> None:
+    caps = derive_purchase_requisition_capabilities(
+        req,
+        has_linked_purchase_order=has_linked_purchase_order,
+    )
     cap_map = {
         "update": caps.update,
         "delete": caps.delete,

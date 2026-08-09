@@ -33,7 +33,7 @@ import {
   PrintTemplateRenderResponse,
 } from '../../../../services/printTemplate';
 import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../../config/printTemplateSchemas';
-import { EMPTY_HTML_TEMPLATE } from '../../../../utils/printTemplateDefaults';
+import { EMPTY_HTML_TEMPLATE, EMPTY_VISUAL_PRINT_CONFIG } from '../../../../utils/printTemplateDefaults';
 import {
   resolvePresetPrintTemplateDescription,
   resolvePresetPrintTemplateName,
@@ -334,7 +334,7 @@ const PrintTemplateListPage: React.FC = () => {
           type: values.type,
           description: values.description,
           content: EMPTY_HTML_TEMPLATE,
-          config: { document_type: values.document_type },
+          config: EMPTY_VISUAL_PRINT_CONFIG(values.document_type),
           is_active: values.is_active !== false,
         };
         await createPrintTemplate(data);

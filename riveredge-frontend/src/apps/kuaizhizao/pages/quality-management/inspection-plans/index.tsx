@@ -508,7 +508,6 @@ const InspectionPlansPage: React.FC = () => {
           }
         }}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.plans.messages.deleteConfirm', { count })}
-        scroll={{ x: 1600 }}
       />
 
       <FormModalTemplate

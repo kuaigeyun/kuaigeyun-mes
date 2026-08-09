@@ -36,6 +36,22 @@ export const ROW_ACTIONS_DIRECT_MAX = 3
  */
 export const ROW_ACTIONS_MIN_PRIMARY_VISIBLE = 3
 
+/**
+ * 动作条测量锚点：UniTable 按此类名量出操作列的实际内容宽并据以定列宽。
+ * 配套 CSS 令其 max-content，宽度不随列宽变化，测量因此不会自反馈。
+ */
+export const ROW_ACTIONS_STRIP_CLASS = 'uni-table-operation-actions'
+
+/**
+ * 主行槽位数（唯一公式）：渲染折叠与操作列宽度必须消费同一个值，
+ * 否则「直出几个」与「列宽够放几个」会成为两个互相竞争的真源。
+ * 列宽推导见 `utils/uniTableLayoutColumns.ts`。
+ */
+export function resolveRowActionInlineSlots(directMax?: number): number {
+  const max = typeof directMax === 'number' && Number.isFinite(directMax) ? directMax : ROW_ACTIONS_DIRECT_MAX
+  return Math.max(1, max - 1, ROW_ACTIONS_MIN_PRIMARY_VISIBLE)
+}
+
 /** 列表操作列内联按钮横向间距（Ant Design Space） */
 export const ROW_ACTIONS_INLINE_GAP = 4
 
@@ -286,6 +302,42 @@ function parseOverflowArgs(directMaxOrOptions?: number | RenderRowActionsOverflo
 }
 
 /**
+ * 页面自带的「更多」类 Dropdown（已有 menu.items）。
+ * 绝不能再被系统溢出折进第二层「更多」，否则菜单项只剩不可点的「更多」文案。
+ */
+function isSelfManagedMenuDropdown(node: React.ReactNode): boolean {
+  if (!React.isValidElement(node)) return false
+  if (node.type !== Dropdown) return false
+  const items = (node.props as { menu?: { items?: unknown } } | undefined)?.menu?.items
+  return Array.isArray(items)
+}
+
+function mergeOverflowIntoSelfManagedDropdown(
+  dropdown: React.ReactElement,
+  overflow: React.ReactNode[],
+  keyPrefix: string,
+): React.ReactElement {
+  const props = dropdown.props as {
+    menu?: { items?: Array<Record<string, unknown> | null | undefined>; [k: string]: unknown }
+    [k: string]: unknown
+  }
+  const existing = Array.isArray(props.menu?.items) ? [...props.menu.items] : []
+  const extras = overflow.map((node, i) => toMenuItem(node, `${keyPrefix}-merged-${i}`))
+  const needsDivider =
+    existing.some((it) => it != null && (it as { type?: string }).type !== 'divider') &&
+    extras.length > 0
+  const items = needsDivider
+    ? [...existing, { type: 'divider', key: `${keyPrefix}-merged-divider` }, ...extras]
+    : [...existing, ...extras]
+  return React.cloneElement(dropdown, {
+    menu: {
+      ...props.menu,
+      items,
+    },
+  })
+}
+
+/**
  * 列表操作列：统一顺序；禁用项隐藏；需要溢出时主行至少 ROW_ACTIONS_MIN_PRIMARY_VISIBLE 个可点操作，其余进「更多」。
  */
 export function renderRowActionsOverflow(
@@ -296,67 +348,92 @@ export function renderRowActionsOverflow(
   const { directMax, ctx } = parseOverflowArgs(directMaxOrOptions)
   const sorted = normalizeAndSortActions(nodes, ctx)
   const enabled = dedupeInlineRowIcons(sorted.filter(isClickableVisibleAction))
-  /** 原先为 directMax-1 留「更多」一格；抬高下限为 4，避免禁项隐藏后主行过空 */
-  const primarySlotsBeforeMore = Math.max(1, directMax - 1, ROW_ACTIONS_MIN_PRIMARY_VISIBLE)
+  /** 主行槽位：与操作列宽度共用 resolveRowActionInlineSlots，禁止在此另写公式 */
+  const primarySlotsBeforeMore = resolveRowActionInlineSlots(directMax)
 
   if (enabled.length === 0) {
     return null
   }
 
-  const keyedEnabled = withRowActionKeys(enabled, keyPrefix)
+  /**
+   * 钉住主行、不进系统「更多」：
+   * 1) 页面自管 Dropdown（已有菜单）——再折会叠成「更多里套更多」
+   * 2) skip 且无可静态识别交互的自管组件（如 UniWorkflowActions）
+   *
+   * 自管 Dropdown 不占主行动作槽位（它本身就是溢出容器）；其余钉住项仍从槽位扣除。
+   */
+  const isPinnedInlineAction = (node: React.ReactNode): boolean =>
+    isSelfManagedMenuDropdown(node) ||
+    (readExplicitActionKind(node) === 'skip' && !findInteractiveElement(node))
 
-  // 自管组件（skip 且外层无可静态识别交互）若折叠进“更多”会变成不可执行菜单项；
-  // 这类节点始终保持主行直出。
-  const hasInlineOnlySkipComponent = enabled.some((node) => {
-    if (readExplicitActionKind(node) !== 'skip') return false
-    return !findInteractiveElement(node)
-  })
-  if (hasInlineOnlySkipComponent) {
+  const pinnedSlotConsumers = enabled.filter(
+    (node) => isPinnedInlineAction(node) && !isSelfManagedMenuDropdown(node),
+  ).length
+  const collapsibleSlots = Math.max(0, primarySlotsBeforeMore - pinnedSlotConsumers)
+
+  const inline: React.ReactNode[] = []
+  const overflow: React.ReactNode[] = []
+  let usedSlots = 0
+  for (const node of enabled) {
+    if (isPinnedInlineAction(node)) {
+      inline.push(node)
+      continue
+    }
+    if (usedSlots < collapsibleSlots) {
+      inline.push(node)
+      usedSlots += 1
+      continue
+    }
+    overflow.push(node)
+  }
+
+  let finalInline = inline
+  if (overflow.length > 0) {
+    const selfManagedIdx = inline.findIndex((node) => isSelfManagedMenuDropdown(node))
+    if (selfManagedIdx >= 0 && React.isValidElement(inline[selfManagedIdx])) {
+      const merged = mergeOverflowIntoSelfManagedDropdown(
+        inline[selfManagedIdx] as React.ReactElement,
+        overflow,
+        keyPrefix,
+      )
+      finalInline = [
+        ...inline.slice(0, selfManagedIdx),
+        merged,
+        ...inline.slice(selfManagedIdx + 1),
+      ]
+      return (
+        <Space
+          className={ROW_ACTIONS_STRIP_CLASS}
+          align="center"
+          size={ROW_ACTIONS_INLINE_GAP}
+          wrap={false}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          {withRowActionKeys(finalInline, keyPrefix)}
+        </Space>
+      )
+    }
+  }
+
+  if (overflow.length === 0) {
     return (
       <Space
+        className={ROW_ACTIONS_STRIP_CLASS}
         align="center"
         size={ROW_ACTIONS_INLINE_GAP}
         wrap={false}
         style={{ whiteSpace: 'nowrap' }}
       >
-        {keyedEnabled}
+        {withRowActionKeys(finalInline, keyPrefix)}
       </Space>
     )
   }
 
-  if (enabled.length <= primarySlotsBeforeMore) {
-    return (
-      <Space
-        align="center"
-        size={ROW_ACTIONS_INLINE_GAP}
-        wrap={false}
-        style={{ whiteSpace: 'nowrap' }}
-      >
-        {keyedEnabled}
-      </Space>
-    )
-  }
-
-  const inline = enabled.slice(0, primarySlotsBeforeMore)
-  const overflow = enabled.slice(primarySlotsBeforeMore)
-  // 若溢出区仅 1 个动作，直接平铺展示，避免把单个按钮折叠进“更多”。
-  if (overflow.length <= 1) {
-    return (
-      <Space
-        align="center"
-        size={ROW_ACTIONS_INLINE_GAP}
-        wrap={false}
-        style={{ whiteSpace: 'nowrap' }}
-      >
-        {keyedEnabled}
-      </Space>
-    )
-  }
-
-  const keyedInline = withRowActionKeys(inline, keyPrefix)
+  const keyedInline = withRowActionKeys(finalInline, keyPrefix)
 
   return (
     <Space
+      className={ROW_ACTIONS_STRIP_CLASS}
       align="center"
       size={ROW_ACTIONS_INLINE_GAP}
       wrap={false}

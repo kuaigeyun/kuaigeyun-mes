@@ -254,7 +254,6 @@ const EmployeeConfigsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1500 }}
           enableRowSelection={true}
           showDeleteButton={true}
           onDelete={async (keys) => {
@@ -284,11 +283,20 @@ const EmployeeConfigsPage: React.FC = () => {
         }}
         formRef={formRef as React.RefObject<ProFormInstance>}
         onFinish={async (values) => {
+          let calcMode = values.calc_mode || 'time';
+          // 填了默认计件单价却仍为「计时」时，自动改为混合，避免计件金额算成 0
+          if (
+            calcMode === 'time' &&
+            values.default_piece_rate != null &&
+            Number(values.default_piece_rate) > 0
+          ) {
+            calcMode = 'mixed';
+          }
           const payload = {
             employee_id: values.employee_id,
             employee_name: employees.find((e) => e.id === values.employee_id)?.full_name,
-            calc_mode: values.calc_mode || 'time',
-            piece_rate_mode: values.piece_rate_mode,
+            calc_mode: calcMode,
+            piece_rate_mode: values.piece_rate_mode || (calcMode === 'time' ? undefined : 'default'),
             hourly_rate: values.hourly_rate,
             default_piece_rate: values.default_piece_rate,
             base_salary: values.base_salary,

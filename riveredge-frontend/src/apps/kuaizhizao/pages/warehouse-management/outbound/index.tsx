@@ -49,7 +49,7 @@ import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRa
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   DocumentPushProgressBar,
-  DOCUMENT_PROGRESS_COLUMN_WIDTH,
+  DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
   ratioToPushProgressPercent,
 } from '../../sales-management/shared/DocumentPushProgressBar';
 import {
@@ -60,8 +60,12 @@ import {
 import { fetchOutboundHubList } from './outboundListAggregate';
 import { withdrawOutboundDocument, deleteOutboundDocument } from './outboundHubWithdraw';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { isAdminBypass } from '../../../../../utils/permission';
 import { useGlobalStore } from '../../../../../stores';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { isManualAuditEnabled } from '../../../../../utils/auditMode';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import {
   type OutboundHubOrder,
   type OutboundIssueType,
@@ -112,6 +116,13 @@ function outboundDocumentTrackingType(
 
 const SALES_DELIVERY_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_deliveries';
 const PRODUCTION_PICKING_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_production_pickings';
+const OUTBOUND_RESOURCE = 'kuaizhizao:outbound';
+
+/** UniWorkflowActions 状态集合（与后端 review_status / status 对齐；领料/销售出库共用） */
+const OUTBOUND_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft'];
+const OUTBOUND_WORKFLOW_PENDING_STATUSES = ['待审核', 'pending_review', 'pending_approval', 'PENDING'];
+const OUTBOUND_WORKFLOW_APPROVED_STATUSES = ['已通过', '审核通过', 'approved', 'APPROVED'];
+const OUTBOUND_WORKFLOW_REJECTED_STATUSES = ['已驳回', '审核驳回', 'rejected', 'REJECTED'];
 
 const OutboundPage: React.FC = () => {
   const { t } = useTranslation();
@@ -196,6 +207,52 @@ const OutboundPage: React.FC = () => {
 
   const [confirmPreviewOpen, setConfirmPreviewOpen] = useState(false);
   const [confirmPreviewRecord, setConfirmPreviewRecord] = useState<OutboundOrder | null>(null);
+  const handledDirectConfirmKeyRef = useRef<string | null>(null);
+  const productionPickingAuditEnabled = useAuditRequired('production_picking', false);
+  const salesDeliveryAuditEnabled = useAuditRequired('sales_delivery', false);
+  const outboundAuditColumnEnabled = productionPickingAuditEnabled || salesDeliveryAuditEnabled;
+  const outboundAuditColumn = useMemo(
+    () =>
+      createListAuditPhaseColumn<OutboundOrder>({
+        t,
+        auditEnabled: outboundAuditColumnEnabled,
+      }),
+    [t, outboundAuditColumnEnabled],
+  );
+
+  const handleProductionPickingAuditSuccess = useCallback(async () => {
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+    if (currentOrder?.outbound_type === 'production_picking' && currentOrder.id != null) {
+      try {
+        const updated = await warehouseApi.productionPicking.get(String(currentOrder.id));
+        setCurrentOrder({
+          ...(updated as OutboundOrder),
+          outbound_type: 'production_picking',
+        });
+        setOutboundTrackingRefreshKey((k) => k + 1);
+      } catch {
+        /* 详情刷新失败不影响列表 */
+      }
+    }
+  }, [currentOrder, invalidateMenuBadgeCounts]);
+
+  const handleSalesDeliveryAuditSuccess = useCallback(async () => {
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+    if (currentOrder?.outbound_type === 'sales_delivery' && currentOrder.id != null) {
+      try {
+        const updated = await warehouseApi.salesDelivery.get(String(currentOrder.id));
+        setCurrentOrder({
+          ...(updated as OutboundOrder),
+          outbound_type: 'sales_delivery',
+        });
+        setOutboundTrackingRefreshKey((k) => k + 1);
+      } catch {
+        /* 详情刷新失败不影响列表 */
+      }
+    }
+  }, [currentOrder, invalidateMenuBadgeCounts]);
 
   const outboundDocTrackingType = currentOrder ? outboundDocumentTrackingType(currentOrder) : undefined;
   const outboundTracking = useDocumentTracking(outboundDocTrackingType, currentOrder?.id, outboundTrackingRefreshKey);
@@ -225,9 +282,12 @@ const OutboundPage: React.FC = () => {
   useEffect(() => {
     const dc = (location.state as OutboundPullEntryNavigationState | null)?.outboundDirectConfirm;
     if (!dc?.id || !dc.outbound_type) return;
-    navigate(location.pathname, { replace: true, state: null });
+    const key = `${dc.outbound_type}:${dc.id}`;
+    if (handledDirectConfirmKeyRef.current === key) return;
+    handledDirectConfirmKeyRef.current = key;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
     openConfirmPreview({ id: dc.id, outbound_type: dc.outbound_type });
-  }, [location.pathname, location.state, navigate, openConfirmPreview]);
+  }, [location.pathname, location.search, location.state, navigate, openConfirmPreview]);
 
   const handleCreate = () => {
     quickPullRef.current?.open('work_order');
@@ -353,9 +413,38 @@ const OutboundPage: React.FC = () => {
   };
 
   const listRowsRef = useRef<Map<string, OutboundOrder>>(new Map());
+  /** 列表数据写入 ref 后递增，驱动选中行解析重算（避免仅改 ref 时打印按钮不刷新） */
+  const [listRowsVersion, setListRowsVersion] = useState(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const outboundRowKey = (record: OutboundOrder) => `${record.outbound_type}::${record.id}`;
+
+  const parseOutboundRowKey = useCallback((key: React.Key): { type: string; id: number } | null => {
+    const raw = String(key ?? '');
+    const sep = raw.indexOf('::');
+    if (sep <= 0) return null;
+    const type = raw.slice(0, sep);
+    const id = Number(raw.slice(sep + 2));
+    if (!type || !Number.isFinite(id) || id <= 0) return null;
+    return { type, id };
+  }, []);
+
+  const resolveOutboundRowByKey = useCallback(
+    (key: React.Key): OutboundOrder | undefined => {
+      const raw = String(key ?? '');
+      const direct = listRowsRef.current.get(raw);
+      if (direct) return direct;
+      const parsed = parseOutboundRowKey(key);
+      if (!parsed) return undefined;
+      for (const row of listRowsRef.current.values()) {
+        if (String(row.outbound_type) === parsed.type && Number(row.id) === parsed.id) {
+          return row;
+        }
+      }
+      return undefined;
+    },
+    [parseOutboundRowKey, listRowsVersion],
+  );
 
   const getOutboundConfirmLabel = (record: OutboundOrder) =>
     record.outbound_type === 'production_picking'
@@ -390,12 +479,20 @@ const OutboundPage: React.FC = () => {
     return undefined;
   };
 
-  const isOutboundDeletable = (record: OutboundOrder) =>
-    isOutboundConfirmable(record) &&
-    (record.outbound_type === 'production_picking' ||
-      record.outbound_type === 'sales_delivery' ||
-      record.outbound_type === 'other_outbound' ||
-      record.outbound_type === 'material_borrow');
+  const isOutboundDeletable = (record: OutboundOrder) => {
+    if (record.outbound_type === 'production_picking') {
+      const st = String(record.status || '').trim();
+      return ['待领料', '待审核', '草稿', 'draft', '已取消'].includes(st);
+    }
+    if (record.outbound_type === 'sales_delivery') {
+      const st = String(record.status || '').trim();
+      return ['待出库', '待审核', '草稿', 'draft', '已取消'].includes(st);
+    }
+    return (
+      isOutboundConfirmable(record) &&
+      (record.outbound_type === 'other_outbound' || record.outbound_type === 'material_borrow')
+    );
+  };
 
   const isOutboundPrintable = useCallback(
     (record: OutboundOrder) =>
@@ -409,15 +506,25 @@ const OutboundPage: React.FC = () => {
   const selectedOutboundForBatch = useMemo(
     () =>
       selectedRowKeys
-        .map((key) => listRowsRef.current.get(String(key)))
+        .map((key) => resolveOutboundRowByKey(key))
         .filter((row): row is OutboundOrder => row != null),
-    [selectedRowKeys],
+    [selectedRowKeys, resolveOutboundRowByKey],
   );
 
-  const canToolbarPrint =
-    selectedRowKeys.length === 1 &&
-    !!selectedOutboundForBatch[0] &&
-    isOutboundPrintable(selectedOutboundForBatch[0]);
+  const canToolbarPrint = useMemo(() => {
+    if (!outboundPerms.canPrint || selectedRowKeys.length !== 1) return false;
+    const row = selectedOutboundForBatch[0];
+    if (row) return isOutboundPrintable(row);
+    // listRowsRef 偶发未命中时，仍按复合 rowKey 判断类型是否可打印
+    const parsed = parseOutboundRowKey(selectedRowKeys[0]);
+    return !!parsed && !!outboundTypeToPrintDocumentType(parsed.type as OutboundOrder['outbound_type']);
+  }, [
+    outboundPerms.canPrint,
+    selectedRowKeys,
+    selectedOutboundForBatch,
+    isOutboundPrintable,
+    parseOutboundRowKey,
+  ]);
 
   const handleDelete = (record: OutboundOrder) => {
     const code = outboundDocumentCode(record);
@@ -445,7 +552,7 @@ const OutboundPage: React.FC = () => {
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     const rows = keys
-      .map((k) => listRowsRef.current.get(String(k)))
+      .map((k) => resolveOutboundRowByKey(k))
       .filter((r): r is OutboundOrder => !!r && isOutboundDeletable(r));
     if (rows.length === 0) {
       messageApi.warning(t('app.kuaizhizao.warehouseCommon.batchDeleteNoneDeletable'));
@@ -510,6 +617,7 @@ const OutboundPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.deliveryQty'), dataIndex: 'delivery_quantity', width: 100, align: 'right' as const },
       { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 60 },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'), dataIndex: 'batch_number', width: 100 },
       { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes' },
     ],
     [t],
@@ -586,9 +694,7 @@ const OutboundPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.outboundProgress'),
       dataIndex: 'fulfillment_progress',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
       render: (_, record) => {
         let done = 0;
         let required = 0;
@@ -626,7 +732,7 @@ const OutboundPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.time'),
+      title: t('app.kuaizhizao.warehouseOutbound.col.operatorPerson'),
       key: 'biz_time_operator',
       dataIndex: 'biz_time_operator',
       width: 148,
@@ -646,11 +752,11 @@ const OutboundPage: React.FC = () => {
       },
     },
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
+    ...(outboundAuditColumnEnabled ? [outboundAuditColumn] : []),
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
-      align: 'left',
       hideInSearch: true,
       render: (_, record) => {
         const lifecycle = getOutboundLifecycle(record as Record<string, unknown>, t);
@@ -671,7 +777,7 @@ const OutboundPage: React.FC = () => {
     ...productionPickingCustomFieldColumns,
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.actions'),
-      width: 220,
+      width: 260,
       fixed: 'right',
       render: (_, record) => (
         <Space wrap>
@@ -689,6 +795,62 @@ const OutboundPage: React.FC = () => {
               {t('app.kuaizhizao.packingBinding.title')}
             </Button>
           )}
+          {record.outbound_type === 'production_picking' && productionPickingAuditEnabled ? (
+            <UniWorkflowActions
+              {...rowActionKind('skip')}
+              key="pp-workflow"
+              record={record}
+              entityName={t('app.kuaizhizao.warehouseOutbound.picking.entityName')}
+              entityType="production_picking"
+              auditNodeKey="production_picking"
+              unifiedAudit
+              resourcePrefix={OUTBOUND_RESOURCE}
+              statusField="status"
+              reviewStatusField="review_status"
+              draftStatuses={OUTBOUND_WORKFLOW_DRAFT_STATUSES}
+              pendingStatuses={OUTBOUND_WORKFLOW_PENDING_STATUSES}
+              approvedStatuses={OUTBOUND_WORKFLOW_APPROVED_STATUSES}
+              rejectedStatuses={OUTBOUND_WORKFLOW_REJECTED_STATUSES}
+              theme="link"
+              size="small"
+              onSuccess={() => {
+                void handleProductionPickingAuditSuccess();
+              }}
+              confirmMessages={{
+                submit: isManualAuditEnabled(record.audit)
+                  ? t('app.kuaizhizao.warehouseOutbound.picking.submitConfirmAudit')
+                  : t('app.kuaizhizao.warehouseOutbound.picking.submitConfirmAuto'),
+              }}
+            />
+          ) : null}
+          {record.outbound_type === 'sales_delivery' && salesDeliveryAuditEnabled ? (
+            <UniWorkflowActions
+              {...rowActionKind('skip')}
+              key="sd-workflow"
+              record={record}
+              entityName={t('app.kuaizhizao.warehouseOutbound.delivery.entityName')}
+              entityType="sales_delivery"
+              auditNodeKey="sales_delivery"
+              unifiedAudit
+              resourcePrefix={OUTBOUND_RESOURCE}
+              statusField="status"
+              reviewStatusField="review_status"
+              draftStatuses={OUTBOUND_WORKFLOW_DRAFT_STATUSES}
+              pendingStatuses={OUTBOUND_WORKFLOW_PENDING_STATUSES}
+              approvedStatuses={OUTBOUND_WORKFLOW_APPROVED_STATUSES}
+              rejectedStatuses={OUTBOUND_WORKFLOW_REJECTED_STATUSES}
+              theme="link"
+              size="small"
+              onSuccess={() => {
+                void handleSalesDeliveryAuditSuccess();
+              }}
+              confirmMessages={{
+                submit: isManualAuditEnabled(record.audit)
+                  ? t('app.kuaizhizao.warehouseOutbound.delivery.submitConfirmAudit')
+                  : t('app.kuaizhizao.warehouseOutbound.delivery.submitConfirmAuto'),
+              }}
+            />
+          ) : null}
           {isOutboundConfirmable(record) && record.outbound_type !== 'outsource_issue' && (
             <Tooltip
               title={getOutboundConfirmBlockedReason(record)}
@@ -742,6 +904,12 @@ const OutboundPage: React.FC = () => {
       currentUser,
       salesDeliveryCustomFieldColumns,
       productionPickingCustomFieldColumns,
+      outboundAuditColumn,
+      outboundAuditColumnEnabled,
+      productionPickingAuditEnabled,
+      salesDeliveryAuditEnabled,
+      handleProductionPickingAuditSuccess,
+      handleSalesDeliveryAuditSuccess,
     ],
   );
 
@@ -807,24 +975,7 @@ const OutboundPage: React.FC = () => {
         />,
       );
     }
-    if (currentOrder.notes) {
-      nodes.push(
-        <Descriptions
-          key="notes"
-          column={3}
-          size="small"
-          style={nodes.length > 0 ? { marginTop: 16 } : undefined}
-          items={[
-            {
-              key: 'notes',
-              label: t('app.kuaizhizao.common.fieldNotes'),
-              span: 3,
-              children: currentOrder.notes,
-            },
-          ]}
-        />,
-      );
-    }
+    // 备注已展示在基本信息区，不再 supplementary 重复
     if (currentOrder.outbound_type === 'sales_delivery' && currentOrder.id) {
       nodes.push(
         <div key="oqc" style={{ marginTop: nodes.length > 0 ? 16 : undefined }}>
@@ -909,6 +1060,7 @@ const OutboundPage: React.FC = () => {
               next.set(outboundRowKey(row), row);
             }
             listRowsRef.current = next;
+            setListRowsVersion((v) => v + 1);
             return result;
           } catch {
             messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadListFailed'));
@@ -952,8 +1104,23 @@ const OutboundPage: React.FC = () => {
                   icon={<PrinterOutlined />}
                   disabled={!canToolbarPrint}
                   onClick={() => {
-                    const row = selectedOutboundForBatch[0];
-                    if (row) handlePrint(row);
+                    const key = selectedRowKeys[0];
+                    const row =
+                      selectedOutboundForBatch[0] ??
+                      (key != null ? resolveOutboundRowByKey(key) : undefined);
+                    if (row) {
+                      handlePrint(row);
+                      return;
+                    }
+                    const parsed = key != null ? parseOutboundRowKey(key) : null;
+                    const docType = parsed
+                      ? outboundTypeToPrintDocumentType(parsed.type as OutboundOrder['outbound_type'])
+                      : null;
+                    if (parsed && docType) {
+                      openPrint({ documentType: docType, documentId: parsed.id });
+                      return;
+                    }
+                    messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.printNotSupported'));
                   }}
                 >
                   {t('components.uniAction.print')}
@@ -961,7 +1128,6 @@ const OutboundPage: React.FC = () => {
               ]
             : []
         }
-        scroll={{ x: 2000 }}
       />
 
       <OutboundQuickPullModals ref={quickPullRef} onSuccess={() => actionRef.current?.reload()} />
@@ -989,6 +1155,54 @@ const OutboundPage: React.FC = () => {
         extra={
           currentOrder ? (
             <Space>
+              {currentOrder.outbound_type === 'production_picking' && productionPickingAuditEnabled ? (
+                <UniWorkflowActions
+                  record={currentOrder}
+                  entityName={t('app.kuaizhizao.warehouseOutbound.picking.entityName')}
+                  entityType="production_picking"
+                  auditNodeKey="production_picking"
+                  unifiedAudit
+                  resourcePrefix={OUTBOUND_RESOURCE}
+                  statusField="status"
+                  reviewStatusField="review_status"
+                  draftStatuses={OUTBOUND_WORKFLOW_DRAFT_STATUSES}
+                  pendingStatuses={OUTBOUND_WORKFLOW_PENDING_STATUSES}
+                  approvedStatuses={OUTBOUND_WORKFLOW_APPROVED_STATUSES}
+                  rejectedStatuses={OUTBOUND_WORKFLOW_REJECTED_STATUSES}
+                  onSuccess={() => {
+                    void handleProductionPickingAuditSuccess();
+                  }}
+                  confirmMessages={{
+                    submit: isManualAuditEnabled(currentOrder.audit)
+                      ? t('app.kuaizhizao.warehouseOutbound.picking.submitConfirmAudit')
+                      : t('app.kuaizhizao.warehouseOutbound.picking.submitConfirmAuto'),
+                  }}
+                />
+              ) : null}
+              {currentOrder.outbound_type === 'sales_delivery' && salesDeliveryAuditEnabled ? (
+                <UniWorkflowActions
+                  record={currentOrder}
+                  entityName={t('app.kuaizhizao.warehouseOutbound.delivery.entityName')}
+                  entityType="sales_delivery"
+                  auditNodeKey="sales_delivery"
+                  unifiedAudit
+                  resourcePrefix={OUTBOUND_RESOURCE}
+                  statusField="status"
+                  reviewStatusField="review_status"
+                  draftStatuses={OUTBOUND_WORKFLOW_DRAFT_STATUSES}
+                  pendingStatuses={OUTBOUND_WORKFLOW_PENDING_STATUSES}
+                  approvedStatuses={OUTBOUND_WORKFLOW_APPROVED_STATUSES}
+                  rejectedStatuses={OUTBOUND_WORKFLOW_REJECTED_STATUSES}
+                  onSuccess={() => {
+                    void handleSalesDeliveryAuditSuccess();
+                  }}
+                  confirmMessages={{
+                    submit: isManualAuditEnabled(currentOrder.audit)
+                      ? t('app.kuaizhizao.warehouseOutbound.delivery.submitConfirmAudit')
+                      : t('app.kuaizhizao.warehouseOutbound.delivery.submitConfirmAuto'),
+                  }}
+                />
+              ) : null}
               {isOutboundConfirmable(currentOrder) && currentOrder.outbound_type !== 'outsource_issue' && (
                 <Tooltip title={getOutboundConfirmBlockedReason(currentOrder)}>
                   <Button
@@ -1068,6 +1282,20 @@ const OutboundPage: React.FC = () => {
                   label: t('app.kuaizhizao.warehouseOutbound.col.totalSku'),
                   children: currentOrder.total_items ?? '-',
                 },
+                ...(currentOrder.notes
+                  ? [
+                      {
+                        key: 'notes',
+                        label: t('app.kuaizhizao.common.fieldNotes'),
+                        span: 3 as const,
+                        children: (
+                          <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
+                            {currentOrder.notes}
+                          </Typography.Paragraph>
+                        ),
+                      },
+                    ]
+                  : []),
               ]}
             />
           ) : undefined

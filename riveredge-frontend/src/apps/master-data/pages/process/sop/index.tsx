@@ -49,6 +49,11 @@ import type { MaterialListResponse } from '../../../types/material';
 import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import {
+  MATERIAL_SELECT_OPTION_ITEM_HEIGHT,
+  MaterialSelectOptionContent,
+  formatMaterialSelectLabel,
+} from '../../../../../components/uni-material-select';
+import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
@@ -103,7 +108,17 @@ const SOPPage: React.FC = () => {
   const [operationsLoading, setOperationsLoading] = useState(false);
   // 物料组/物料/工艺路线（绑定与载入用）
   const [materialGroups, setMaterialGroups] = useState<{ uuid: string; code: string; name: string }[]>([]);
-  const [materials, setMaterials] = useState<{ uuid: string; code: string; name: string }[]>([]);
+  const [materials, setMaterials] = useState<
+    Array<{
+      uuid: string;
+      code: string;
+      mainCode?: string;
+      name: string;
+      specification?: string;
+      model?: string;
+      images?: Array<string | { uuid?: string; uid?: string }>;
+    }>
+  >([]);
   const [routes, setRoutes] = useState<{ uuid: string; code: string; name: string }[]>([]);
   const [existingSopsForCheck, setExistingSopsForCheck] = useState<SOP[]>([]);
   const [sopPreviewCode, setSopPreviewCode] = useState<string | null>(null);
@@ -228,8 +243,12 @@ const SOPPage: React.FC = () => {
         setMaterials(
           rawMats.map((m: any) => ({
             uuid: m.uuid,
-            code: m.mainCode ?? m.code ?? '',
+            code: m.mainCode ?? m.main_code ?? m.code ?? '',
+            mainCode: m.mainCode ?? m.main_code ?? m.code ?? '',
             name: m.name ?? '',
+            specification: m.specification ?? undefined,
+            model: m.model ?? undefined,
+            images: Array.isArray(m.images) ? m.images : undefined,
           }))
         );
         setRoutes(
@@ -1014,7 +1033,10 @@ const SOPPage: React.FC = () => {
     {
       title: t('app.master-data.sop.codeLabel'),
       dataIndex: 'code',
-      copyable: true,width: 150,
+      // 与系统左固定单号列一致：168 + ellipsis，避免长编号溢出叠到名称列
+      copyable: true,
+      width: 168,
+      ellipsis: true,
       fixed: 'left',
       sorter: true,
       hideInSearch: true,
@@ -1072,8 +1094,22 @@ const SOPPage: React.FC = () => {
       valueType: 'select',
       fieldProps: {
         placeholder: t('app.master-data.sop.filterMaterialPlaceholder'),
-        options: materials.map((m: any) => ({ label: `${m.mainCode ?? m.code ?? ''} - ${m.name ?? ''}`, value: m.uuid })),
+        options: materials.map((m: any) => ({
+          label: formatMaterialSelectLabel(m),
+          value: m.uuid,
+        })),
         showSearch: true,
+        listItemHeight: MATERIAL_SELECT_OPTION_ITEM_HEIGHT,
+        popupMatchSelectWidth: 480,
+        optionRender: (option: { value?: string | number; label?: React.ReactNode }) => {
+          const material = materials.find((m: any) => m.uuid === option.value);
+          return (
+            <MaterialSelectOptionContent
+              material={material as Record<string, unknown> | undefined}
+              fallbackLabel={option.label}
+            />
+          );
+        },
       },
     },
     {
@@ -1416,10 +1452,27 @@ const SOPPage: React.FC = () => {
                 label={t('app.master-data.sop.bindMaterials')}
                 placeholder={t('app.master-data.sop.bindMaterialPlaceholder')}
                 mode="multiple"
-                options={materials.map(m => ({ label: `${(m as any).mainCode ?? (m as any).code ?? ''} - ${(m as any).name}`, value: m.uuid }))}
+                options={materials.map((m) => ({
+                  label: formatMaterialSelectLabel(m as Record<string, unknown>),
+                  value: m.uuid,
+                }))}
                 fieldProps={{
                   showSearch: true,
-                  filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()),
+                  filterOption: (i: string, o: any) =>
+                    String(o?.label ?? '')
+                      .toLowerCase()
+                      .includes((i || '').toLowerCase()),
+                  listItemHeight: MATERIAL_SELECT_OPTION_ITEM_HEIGHT,
+                  popupMatchSelectWidth: 480,
+                  optionRender: (option: { value?: string | number; label?: React.ReactNode }) => {
+                    const material = materials.find((m: any) => m.uuid === option.value);
+                    return (
+                      <MaterialSelectOptionContent
+                        material={material as Record<string, unknown> | undefined}
+                        fallbackLabel={option.label}
+                      />
+                    );
+                  },
                   onChange: (value: string[]) => handleBindingScopeChange(value, undefined),
                 }}
               />

@@ -622,9 +622,7 @@ const SalesOrderChangesPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrderChange.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      width: 170,
       fixed: 'right',
-      uniTableKeepWidth: true,
       valueType: 'select',
       valueEnum: orderChangeLifecycleValueEnum,
       render: (_, record) => (

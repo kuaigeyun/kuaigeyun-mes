@@ -67,6 +67,12 @@ class SalesOrder(BaseModel):
     contract_code = fields.CharField(max_length=50, null=True, description="关联销售合同编码")
     is_release_order = fields.BooleanField(default=False, description="是否为框架合同释放单")
 
+    # 预收款（审核通过后自动生成预收收款单）
+    prepayment_amount = fields.DecimalField(
+        max_digits=12, decimal_places=2, null=True, description="预收款金额"
+    )
+    prepayment_bank_account_id = fields.IntField(null=True, description="预收款银行账户ID")
+
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
 

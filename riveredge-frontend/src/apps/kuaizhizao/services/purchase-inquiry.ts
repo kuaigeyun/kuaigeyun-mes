@@ -132,6 +132,8 @@ export async function listPurchaseInquiries(params: {
   created_end_date?: string;
   source_id?: number;
   order_by?: string;
+  /** 明细表格视图才需要附带 items；普通列表勿开 */
+  include_items?: boolean;
 } = {}): Promise<{ data: PurchaseInquiry[]; total: number; success: boolean }> {
   return apiRequest('/apps/kuaizhizao/purchase-inquiries', { method: 'GET', params });
 }

@@ -290,7 +290,6 @@ const DeliveryNotesPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
-      align: 'left',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
@@ -1250,7 +1249,6 @@ const DeliveryNotesPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1300 }}
         />
       </ListPageTemplate>
 

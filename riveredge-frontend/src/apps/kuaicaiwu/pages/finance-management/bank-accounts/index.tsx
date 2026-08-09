@@ -190,7 +190,6 @@ const BankAccountsPage: React.FC = () => {
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.bank-accounts"
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-        scroll={{ x: 1480 }}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={FINANCE_CRUD_PINNED_ACTIVE_FIELD}

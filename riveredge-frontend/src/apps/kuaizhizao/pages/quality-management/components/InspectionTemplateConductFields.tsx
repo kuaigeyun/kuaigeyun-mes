@@ -169,10 +169,13 @@ const TypedStepFields: React.FC<{
   const skipValueRule = () => ({
     validator(_: unknown, value: unknown) {
       if (isNa || isDerived) return Promise.resolve();
-      if (value === undefined || value === null || value === '') {
+      // 缺陷多选：未选缺陷项即为合格，允许空值/空数组
+      if (vt === 'multi_select') {
+        if (value === undefined || value === null) return Promise.resolve();
+        if (Array.isArray(value)) return Promise.resolve();
         return Promise.reject(new Error(t('app.kuaizhizao.quality.template.valueRequired', { label })));
       }
-      if (vt === 'multi_select' && Array.isArray(value) && value.length === 0) {
+      if (value === undefined || value === null || value === '') {
         return Promise.reject(new Error(t('app.kuaizhizao.quality.template.valueRequired', { label })));
       }
       return Promise.resolve();
@@ -291,6 +294,7 @@ const TypedStepFields: React.FC<{
         <ProFormCheckbox.Group
           name={[...basePath, 'value']}
           label={t('app.kuaizhizao.quality.template.selectValue')}
+          initialValue={[]}
           rules={[skipValueRule()]}
           options={((spec.options as Array<{ value: string; label: string; defect?: boolean }>) || []).map((o) => ({
             value: o.value,

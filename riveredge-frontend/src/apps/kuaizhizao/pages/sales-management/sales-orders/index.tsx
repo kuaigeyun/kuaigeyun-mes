@@ -11,10 +11,10 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { LIST_PAGE_REFRESH_KEYS, useListPageRefreshStore } from '../../../../../stores/listPageRefreshStore';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Tooltip, Dropdown, Select, Segmented, Tag, Alert, Card, Typography, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, ArrowLeftOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, StopOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   UniTableStackedPrimaryCell,
@@ -35,7 +35,7 @@ import { MaterialUnitSelect } from '../../../../../components/material-unit-sele
 import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { DictionaryLabel } from '../../../../../components/dictionary-label';
+import { MaterialUnitLabel } from '../../../../../components/material-unit-label';
 import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { deferConvertLineItemsByPriceType, setFormPriceType } from '../../../../../utils/priceTypeSwitch';
@@ -45,6 +45,7 @@ import {
   pickImportExampleValue,
 } from '../../../../../utils/loadImportDictionaryValues';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions';
 import {
   buildImportPriceTypeOptions,
   DEFAULT_SALES_PRICE_TYPE,
@@ -71,7 +72,12 @@ import {
   getSalesCommonFormLabels,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
-import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../shared/DocumentPushProgressBar';
+import {
+  DocumentPushProgressBar,
+  DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
+  DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
+  ratioToPushProgressPercent,
+} from '../shared/DocumentPushProgressBar';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
@@ -173,6 +179,7 @@ import {
 } from '../../../services/sales-order';
 import { listQuotations, type Quotation, type QuotationCapabilities } from '../../../services/quotation';
 import { salesContractApi, type SalesContract, type SalesContractCapabilities } from '../../../services/sales-contract';
+import { bankAccountService, type BankAccount } from '../../../../kuaicaiwu/services/finance/bank-account';
 import {
   quotationCapabilityAllowed,
   quotationCapabilityReasonMessage,
@@ -241,7 +248,7 @@ function salesOrderCatchMessage(error: unknown, fallback: string): string {
   );
 }
 
-/** 销售明细行（订单 + 明细合并，用于平铺表格） */
+/** 销售明细行（订单 + 明细合并，用于明细表格平铺） */
 type SalesOrderItemRow = SalesOrderItem & {
   _rowKey: string;
   sales_order_id: number;
@@ -259,6 +266,7 @@ type SalesOrderItemRow = SalesOrderItem & {
   review_status?: string;
   pushed_to_computation?: boolean;
   lifecycle?: Record<string, unknown>;
+  invoice_progress?: number;
   has_shippable_products?: boolean;
   shippable_quantity?: number;
   /** 生命周期阶段名，用于卡片分组 */
@@ -639,10 +647,6 @@ const SalesOrdersPage: React.FC = () => {
     () => createListAuditPhaseColumn<SalesOrder>({ t, auditEnabled }),
     [t, auditEnabled],
   );
-  const salesOrderLineAuditColumn = useMemo(
-    () => createListAuditPhaseColumn<SalesOrderItemRow>({ t, auditEnabled }),
-    [t, auditEnabled],
-  );
   const salesNodeEnabled = {
     sales_order: true,
     demand_computation: true,
@@ -651,7 +655,14 @@ const SalesOrdersPage: React.FC = () => {
     invoice: true,
   };
   // 与 UniTable viewTypes 同步：table=订单维度；其余视图键（明细表格、帮助）走明细数据维度
-  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>('table');
+  const salesOrderListPersistenceId = 'apps.kuaizhizao.pages.sales-management.sales-orders.v4';
+  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
+    readPersistedUniTableViewType(salesOrderListPersistenceId, 'table', [
+      'table',
+      'detailTable',
+      'help',
+    ]) as 'table' | 'detailTable' | 'help',
+  );
   const dataViewMode = viewTypeState === 'table' ? 'order' : 'detail';
   /** 视图模式 ref：切换时同步更新，确保 reload 时 request 使用正确模式（避免 setState 异步导致返回订单级数据） */
   const dataViewModeRef = useRef(dataViewMode);
@@ -713,8 +724,9 @@ const SalesOrdersPage: React.FC = () => {
   const [highlightDeliveryOverdue, setHighlightDeliveryOverdue] = useState(false);
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
   const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const salesOrderImportDict = useImportDictionaryOptions(['CURRENCY', 'MATERIAL_UNIT']);
-  const salesOrderLineUnitOptions = salesOrderImportDict.MATERIAL_UNIT ?? [];
+  const materialUnitImport = useImportMaterialUnitOptions();
+  const salesOrderImportDict = useImportDictionaryOptions(['CURRENCY']);
+  const salesOrderLineUnitOptions = materialUnitImport.options;
   const salesOrderLineImportColumnOptions = useMemo(
     () => [undefined, undefined, salesOrderLineUnitOptions, undefined, undefined, undefined],
     [salesOrderLineUnitOptions],
@@ -722,6 +734,14 @@ const SalesOrdersPage: React.FC = () => {
 
   /** 付款条件字典选项（数据字典 PAYMENT_TERMS） */
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const bankAccountOptions = useMemo(
+    () => bankAccounts.map((a) => ({
+      label: `${a.bank_name || ''} ${a.account_number || ''}`.trim() || String(a.id),
+      value: a.id,
+    })),
+    [bankAccounts],
+  );
 
   /**
    * 加载产品列表（仅表单页需要，避免列表首屏并发请求）
@@ -777,6 +797,13 @@ const SalesOrdersPage: React.FC = () => {
     };
     void loadUsers();
   }, [currentUser]);
+
+  React.useEffect(() => {
+    if (!isFormPage) return;
+    bankAccountService.list({ limit: 500, is_active: true })
+      .then((res) => setBankAccounts(res.data || []))
+      .catch(() => setBankAccounts([]));
+  }, [isFormPage]);
 
   /**
    * 加载发货方式、付款条件数据字典
@@ -1441,6 +1468,7 @@ const SalesOrdersPage: React.FC = () => {
   const [pushShipmentNoticeWarehouseOptions, setPushShipmentNoticeWarehouseOptions] = useState<Array<{ label: string; value: number }>>([]);
   const [pushShipmentNoticeLineWh, setPushShipmentNoticeLineWh] = useState<Record<number, number>>({});
   const [pushReturnLineBatch, setPushReturnLineBatch] = useState<Record<number, string>>({});
+  const [pushDeliveryNotes, setPushDeliveryNotes] = useState('');
 
   const resolvePushPreviewModalTitle = (
     targetType: NonNullable<PushPreviewResponse['target_type']>,
@@ -1477,6 +1505,7 @@ const SalesOrdersPage: React.FC = () => {
     setPushShipmentNoticeWarehouseOptions([]);
     setPushShipmentNoticeLineWh({});
     setPushReturnLineBatch({});
+    setPushDeliveryNotes('');
     const ensureWorkCentersLoaded = async () => {
       if (workCenterList.length > 0) return;
       try {
@@ -1738,6 +1767,7 @@ const SalesOrdersPage: React.FC = () => {
         const res = await pushPreviewAction.doPush({
           delivery_quantities: deliveryQuantities,
           line_warehouses: lineWarehouses,
+          notes: pushDeliveryNotes.trim() || undefined,
         });
         messageApi.success(res?.message || t('app.kuaizhizao.salesOrder.deliveryCreated'));
       } else if (pushPreviewData.target_type === 'sales_return') {
@@ -1917,8 +1947,11 @@ const SalesOrdersPage: React.FC = () => {
     showPushPreviewModal(
       'sales_delivery',
       () => previewPushSalesOrderToDelivery(id),
-      (payload?: { delivery_quantities?: Record<number, number> }) =>
-        pushSalesOrderToDelivery(id, payload),
+      (payload?: {
+        delivery_quantities?: Record<number, number>;
+        line_warehouses?: Record<number, number>;
+        notes?: string;
+      }) => pushSalesOrderToDelivery(id, payload),
       () => refreshDrawerOrder(id),
       id,
     );
@@ -2527,7 +2560,7 @@ const SalesOrdersPage: React.FC = () => {
         const materialCode = String(row[0] || '').trim();
         const spec = String(row[1] || '').trim();
         const unitRaw = String(row[2] || '').trim();
-        const unit = salesOrderImportDict.parseDict('MATERIAL_UNIT', unitRaw) || unitRaw;
+        const unit = materialUnitImport.parse(unitRaw) || unitRaw;
         const quantity = parseFloat(row[3]) || 0;
         const price = parseFloat(row[4]) || 0;
         const deliveryDate = row[5];
@@ -3011,7 +3044,7 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.salesman'),
       dataIndex: 'salesman_name',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+      width: 120,
       sorter: true,
       hideInSearch: true,
       render: (_: unknown, record: SalesOrder) => normalizeUserDisplayName(record.salesman_name) || '-',
@@ -3044,9 +3077,7 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
       dataIndex: 'work_order_push_progress',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
       render: (_: unknown, record: SalesOrder) => {
         const totalQty = Number(record.total_quantity ?? 0);
         const pushedQty = Number(record.pushed_work_order_quantity ?? 0);
@@ -3068,9 +3099,7 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.deliveryProgress'),
       dataIndex: 'delivery_progress',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
       render: (_: unknown, record: SalesOrder) => (
         <DocumentPushProgressBar
           percent={record.delivery_progress ?? 0}
@@ -3085,7 +3114,6 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      align: 'left' as const,
       fixed: 'right' as const,
       valueType: 'select',
       valueEnum: lifecycleValueEnum,
@@ -3143,6 +3171,9 @@ const SalesOrdersPage: React.FC = () => {
     },
   ];
 
+  /**
+   * 明细表格列序按声明顺序；禁止套用主单列表 SALES_DOC_LIST_FIELD_RANK。
+   */
   const detailColumns: ProColumns<SalesOrderItemRow>[] = [
     {
       title: t('app.kuaizhizao.salesOrder.colOrderPrimary'),
@@ -3174,7 +3205,7 @@ const SalesOrdersPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.salesOrder.material'),
-      key: 'material_name',
+      key: 'material_display',
       dataIndex: 'material_name',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       render: (_, record) => (
@@ -3206,7 +3237,7 @@ const SalesOrdersPage: React.FC = () => {
       width: 72,
       hideInTable: true,
       render: (_: unknown, row: SalesOrderItemRow) => (
-        <DictionaryLabel dictionaryCode="MATERIAL_UNIT" value={row.material_unit} />
+        <MaterialUnitLabel value={row.material_unit} />
       ),
     },
     {
@@ -3221,9 +3252,41 @@ const SalesOrdersPage: React.FC = () => {
         </span>
       ),
     },
-    { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const, render: (val: any) => <AmountDisplay resource={SO} fieldName="unit_price" value={val} /> },
-    { title: t('app.kuaizhizao.salesOrder.taxRate'), dataIndex: 'tax_rate', width: 70, align: 'right' as const, render: (val: any) => val ?? 0 },
-    { title: t('app.kuaizhizao.salesOrder.inclAmount'), dataIndex: 'item_amount', width: 100, align: 'right' as const, render: (val: any) => <AmountDisplay resource={SO} fieldName="amount_with_tax" value={val} /> },
+    {
+      title: t('app.kuaizhizao.salesOrder.unitPrice'),
+      dataIndex: 'unit_price',
+      width: 90,
+      align: 'right' as const,
+      render: (val: any) => <AmountDisplay resource={SO} fieldName="unit_price" value={val} />,
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.taxRate'),
+      dataIndex: 'tax_rate',
+      width: 70,
+      align: 'right' as const,
+      render: (val: any) => val ?? 0,
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.inclAmount'),
+      dataIndex: 'item_amount',
+      width: 100,
+      align: 'right' as const,
+      render: (val: any) => <AmountDisplay resource={SO} fieldName="amount_with_tax" value={val} />,
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.deliveredQty'),
+      dataIndex: 'delivered_quantity',
+      width: 90,
+      align: 'right' as const,
+      render: (text: any) => text ?? 0,
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.remainingQty'),
+      dataIndex: 'remaining_quantity',
+      width: 90,
+      align: 'right' as const,
+      render: (text: any) => text ?? 0,
+    },
     {
       title: t('app.kuaizhizao.salesOrder.deliveryDate'),
       dataIndex: 'delivery_date',
@@ -3246,18 +3309,44 @@ const SalesOrdersPage: React.FC = () => {
         );
       },
     },
-    { title: t('app.kuaizhizao.salesOrder.deliveredQty'), dataIndex: 'delivered_quantity', width: 90, align: 'right' as const, render: (text: any) => text ?? 0 },
-    { title: t('app.kuaizhizao.salesOrder.remainingQty'), dataIndex: 'remaining_quantity', width: 90, align: 'right' as const, render: (text: any) => text ?? 0 },
     {
       title: t('app.kuaizhizao.salesOrder.bomCheck'),
       key: 'bom_check',
-      width: 70,
-      render: (_: unknown, record: SalesOrderItemRow) => <MaterialBomIndicator materialId={record.material_id} />,
+      dataIndex: 'bom_check',
+      width: 80,
+      uniTableKeepWidth: true,
+      resizable: false,
+      align: 'center' as const,
+      hideInSearch: true,
+      render: (_: unknown, record: SalesOrderItemRow) => (
+        <MaterialBomIndicator materialId={record.material_id} />
+      ),
     },
-    salesOrderLineAuditColumn,
+    {
+      title: t('app.kuaizhizao.salesOrder.deliveryProgress'),
+      key: 'line_delivery_progress',
+      dataIndex: 'line_delivery_progress',
+      ...DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
+      render: (_: unknown, record: SalesOrderItemRow) => {
+        const required = Number(record.required_quantity ?? record.order_quantity ?? 0);
+        const delivered = Number(record.delivered_quantity ?? 0);
+        const percent = ratioToPushProgressPercent(delivered, required);
+        return (
+          <DocumentPushProgressBar
+            percent={percent}
+            tooltip={t('app.kuaizhizao.salesOrder.col.deliveryProgressTip', {
+              delivered: formatQuantity(delivered),
+              required: formatQuantity(required),
+              percent,
+            })}
+          />
+        );
+      },
+    },
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+      fixed: 'right' as const,
       hideInSearch: false,
       valueType: 'select',
       valueEnum: lifecycleValueEnum,
@@ -3269,23 +3358,20 @@ const SalesOrdersPage: React.FC = () => {
           has_shippable_products: record.has_shippable_products,
           shippable_quantity: record.shippable_quantity,
           delivery_progress: record.delivery_progress,
+          lifecycle: record.lifecycle,
+          invoice_progress: record.invoice_progress,
         } as SalesOrder;
         const lifecycle = getSalesOrderLifecycle(orderRecord, auditEnabled, t);
         return <ListUniLifecycleCell lifecycle={lifecycle} withSubStages />;
       },
     },
-    // 明细表格视图以每行订单明细为展示维度，纯查看用途，不提供操作按钮
   ];
   const alignedOrderColumns = useMemo(
     () => alignProColumns(orderColumns, SALES_DOC_LIST_FIELD_RANK),
     [orderColumns],
   );
-  const alignedDetailColumns = useMemo(
-    () => alignProColumns(detailColumns, SALES_DOC_LIST_FIELD_RANK),
-    [detailColumns],
-  );
 
-  const columns = (dataViewMode === 'detail' ? alignedDetailColumns : alignedOrderColumns) as any[];
+  const columns = (dataViewMode === 'detail' ? detailColumns : alignedOrderColumns) as any[];
 
   /** 较昨日对比：显示 +x / -x 格式 */
   const renderDOD = (today?: number, yesterday?: number) => {
@@ -3557,6 +3643,26 @@ const SalesOrdersPage: React.FC = () => {
             placeholder={t('app.kuaizhizao.salesOrder.selectShippingMethod')}
             formRef={formRef}
             valueEqualsLabel={false}
+          />
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={6}>
+          <ProForm.Item
+            name="prepayment_amount"
+            label={t('app.kuaizhizao.salesOrder.prepaymentAmount')}
+          >
+            <InputNumber min={0} precision={2} style={{ width: '100%' }} placeholder={t('app.kuaizhizao.salesOrder.prepaymentAmountPlaceholder')} />
+          </ProForm.Item>
+        </Col>
+        <Col span={12}>
+          <ProFormSelect
+            name="prepayment_bank_account_id"
+            label={t('app.kuaizhizao.salesOrder.prepaymentBankAccount')}
+            options={bankAccountOptions}
+            showSearch
+            allowClear
+            placeholder={t('app.kuaizhizao.salesOrder.prepaymentBankAccountPlaceholder')}
           />
         </Col>
       </Row>
@@ -4246,14 +4352,14 @@ const SalesOrdersPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
         <SalesOrderIndicatorsProvider>
         <UniTable
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-orders.v3"
+          columnPersistenceId={salesOrderListPersistenceId}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           onTableDataChange={handleTableDataChange}
           formRef={tableSearchFormRef}
           headerTitle={t('app.kuaizhizao.salesOrder.title')}
           viewTypes={['table', 'detailTable', 'help']}
-          defaultViewType="table"
+          defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
           onViewTypeChange={(v) => {
             const nextMode = v === 'table' ? 'order' : 'detail';
             dataViewModeRef.current = nextMode;
@@ -4334,7 +4440,7 @@ const SalesOrdersPage: React.FC = () => {
             });
             const needItems = apiParams.include_items === true;
 
-            const toFlatRows = (orders: SalesOrder[]) => {
+            const toFlatRows = (orders: SalesOrder[]): SalesOrderItemRow[] => {
               const map = new Map<string, number>();
               const flatRows: SalesOrderItemRow[] = [];
               for (const order of orders) {
@@ -4363,6 +4469,8 @@ const SalesOrdersPage: React.FC = () => {
                     pushed_to_computation: order.pushed_to_computation,
                     has_shippable_products: order.has_shippable_products,
                     shippable_quantity: order.shippable_quantity,
+                    lifecycle: order.lifecycle,
+                    invoice_progress: order.invoice_progress,
                     material_code: '-',
                     material_name: '-',
                     required_quantity: 0,
@@ -4370,7 +4478,9 @@ const SalesOrdersPage: React.FC = () => {
                   } as SalesOrderItemRow);
                 } else {
                   items.forEach((item: SalesOrderItem, idx: number) => {
-                    const rowKey = item.id ? `order-${order.id}-item-${item.id}` : `order-${order.id}-idx-${idx}`;
+                    const rowKey = item.id
+                      ? `order-${order.id}-item-${item.id}`
+                      : `order-${order.id}-idx-${idx}`;
                     map.set(rowKey, order.id ?? 0);
                     flatRows.push({
                       ...item,
@@ -4392,11 +4502,13 @@ const SalesOrdersPage: React.FC = () => {
                       pushed_to_computation: order.pushed_to_computation,
                       has_shippable_products: order.has_shippable_products,
                       shippable_quantity: order.shippable_quantity,
+                      lifecycle: order.lifecycle,
+                      invoice_progress: order.invoice_progress,
                       material_code: item.material_code ?? '',
                       material_name: item.material_name ?? '',
                       material_spec: item.material_spec ?? '',
                       material_unit: item.material_unit ?? '',
-                      required_quantity: item.required_quantity ?? 0,
+                      required_quantity: item.required_quantity ?? item.order_quantity ?? 0,
                       unit_price: item.unit_price,
                       tax_rate: item.tax_rate,
                       item_amount: item.item_amount,
@@ -4543,33 +4655,41 @@ const SalesOrdersPage: React.FC = () => {
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const orders = await fetchAllListItems((p) => listSalesOrders({ ...p, include_items: true }));
-              const flatRows: SalesOrderItemRow[] = [];
-              for (const order of orders) {
-                const items = order.items ?? [];
-                if (items.length === 0) {
-                  flatRows.push({
-                    _rowKey: `order-${order.id}-empty`,
-                    sales_order_id: order.id,
-                    order_code: order.order_code,
-                    customer_name: order.customer_name,
-                    material_code: '-',
-                    material_name: '-',
-                    required_quantity: 0,
-                    delivery_date: order.delivery_date ?? '',
-                  } as SalesOrderItemRow);
-                } else {
-                  items.forEach((item: SalesOrderItem, idx: number) => {
+              const flattenOrders = (orders: SalesOrder[]): SalesOrderItemRow[] => {
+                const flatRows: SalesOrderItemRow[] = [];
+                for (const order of orders) {
+                  const items = order.items ?? [];
+                  if (items.length === 0) {
                     flatRows.push({
-                      ...item,
-                      _rowKey: item.id ? `order-${order.id}-item-${item.id}` : `order-${order.id}-idx-${idx}`,
-                      sales_order_id: order.id,
+                      _rowKey: `order-${order.id}-empty`,
+                      sales_order_id: order.id ?? 0,
                       order_code: order.order_code,
                       customer_name: order.customer_name,
+                      material_code: '-',
+                      material_name: '-',
+                      required_quantity: 0,
+                      delivery_date: order.delivery_date ?? '',
                     } as SalesOrderItemRow);
-                  });
+                  } else {
+                    items.forEach((item: SalesOrderItem, idx: number) => {
+                      flatRows.push({
+                        ...item,
+                        _rowKey: item.id
+                          ? `order-${order.id}-item-${item.id}`
+                          : `order-${order.id}-idx-${idx}`,
+                        sales_order_id: order.id ?? 0,
+                        order_code: order.order_code,
+                        customer_name: order.customer_name,
+                      } as SalesOrderItemRow);
+                    });
+                  }
                 }
-              }
+                return flatRows;
+              };
+              const orders = await fetchAllListItems((p) =>
+                listSalesOrders({ ...p, include_items: true }),
+              );
+              const flatRows = flattenOrders(orders);
               let toExport = flatRows;
               if (type === 'currentPage' && pageData?.length) {
                 toExport = pageData as SalesOrderItemRow[];
@@ -4962,6 +5082,7 @@ const SalesOrdersPage: React.FC = () => {
           setPushShipmentNoticeWarehouseOptions([]);
           setPushShipmentNoticeLineWh({});
           setPushReturnLineBatch({});
+          setPushDeliveryNotes('');
         }}
         okText={t('app.kuaizhizao.salesOrder.confirmPush')}
         cancelText={t('common.cancel')}
@@ -5621,6 +5742,21 @@ const SalesOrdersPage: React.FC = () => {
                 pagination={false}
                 style={{ marginBottom: 8 }}
               />
+            ) : null}
+            {pushPreviewData.target_type === 'sales_delivery' ? (
+              <div style={{ marginTop: 12 }}>
+                <Typography.Text strong style={{ display: 'block', marginBottom: 6 }}>
+                  {t('app.kuaizhizao.salesOrder.pushDeliveryNotes')}
+                </Typography.Text>
+                <Input.TextArea
+                  value={pushDeliveryNotes}
+                  onChange={(e) => setPushDeliveryNotes(e.target.value)}
+                  placeholder={t('app.kuaizhizao.salesOrder.pushDeliveryNotesPlaceholder')}
+                  rows={2}
+                  maxLength={500}
+                  showCount
+                />
+              </div>
             ) : null}
             {pushPreviewData.tip && (
               <p style={{ marginTop: 8, color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>

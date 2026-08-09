@@ -76,7 +76,7 @@ import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifec
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
 import { demandComputationPushPercent } from '../../sales-management/shared/pushProgress';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -88,6 +88,10 @@ import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../..
 import dayjs from 'dayjs';
 import {formatDateTime as formatDateTimeValue, formatQuantity} from '../../../../../utils/format';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import {
+  getMaterialUnitDisplayMapShared,
+  resolveMaterialUnitLabel,
+} from '../../../../../utils/materialUnitDisplay';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -254,6 +258,7 @@ const DemandManagementPage: React.FC = () => {
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [demandTrackingRefreshKey, setDemandTrackingRefreshKey] = useState(0);
   const [dictLabelMap, setDictLabelMap] = useState<Record<string, Record<string, string>>>({});
+  const [unitLabelMap, setUnitLabelMap] = useState<Record<string, string>>({});
 
   const demandTracking = useDocumentTracking(
     drawerVisible && currentDemand?.id != null ? 'demand' : undefined,
@@ -287,7 +292,7 @@ const DemandManagementPage: React.FC = () => {
   useEffect(() => {
     const loadDicts = async () => {
       const result: Record<string, Record<string, string>> = {};
-      const codes = ['SHIPPING_METHOD', 'PAYMENT_TERMS', 'MATERIAL_UNIT'];
+      const codes = ['SHIPPING_METHOD', 'PAYMENT_TERMS'];
       for (const code of codes) {
         try {
           const dict = await getDataDictionaryByCode(code);
@@ -304,6 +309,20 @@ const DemandManagementPage: React.FC = () => {
       setDictLabelMap(result);
     };
     loadDicts();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getMaterialUnitDisplayMapShared()
+      .then((map) => {
+        if (!cancelled) setUnitLabelMap(map);
+      })
+      .catch(() => {
+        if (!cancelled) setUnitLabelMap({});
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleCopy = useCallback(
@@ -764,9 +783,7 @@ const DemandManagementPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
       dataIndex: 'computation_push_progress',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
       render: (_: unknown, record: Demand) => {
         const percent = demandComputationPushPercent(record.pushed_to_computation);
         return (
@@ -823,7 +840,6 @@ const DemandManagementPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      align: 'center' as const,
       fixed: 'right' as const,
       hideInSearch: false,
       valueEnum: demandPlanLifecycleValueEnum,
@@ -1074,7 +1090,7 @@ const DemandManagementPage: React.FC = () => {
         title: t('app.kuaizhizao.salesOrder.unit'),
         dataIndex: 'material_unit',
         width: 80,
-        render: (v: string) => getDictLabel(dictLabelMap, 'MATERIAL_UNIT', v) || v || '-',
+        render: (v: string) => resolveMaterialUnitLabel(v, unitLabelMap) || v || '-',
       },
       { title: t('app.kuaizhizao.planReports.colRequirementQty'), dataIndex: 'required_quantity', width: 100, align: 'right' as const , render: formatQuantity },
       ...(demandType === 'sales_forecast'
@@ -1088,7 +1104,7 @@ const DemandManagementPage: React.FC = () => {
             { title: t('app.kuaizhizao.salesOrder.remainingQty'), dataIndex: 'remaining_quantity', width: 100, align: 'right' as const },
           ]),
     ],
-    [dictLabelMap, t]
+    [unitLabelMap, t]
   );
 
   const recalcHistoryColumns = useMemo(

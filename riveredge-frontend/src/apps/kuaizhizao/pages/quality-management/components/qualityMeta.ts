@@ -10,6 +10,7 @@ export const QUALITY_DISPOSAL_I18N: Record<string, string> = {
   quarantine: 'app.kuaizhizao.quality.common.disposal.quarantine',
   rework: 'app.kuaizhizao.quality.common.disposal.rework',
   scrap: 'app.kuaizhizao.quality.common.disposal.scrap',
+  downgrade: 'app.kuaizhizao.quality.common.disposal.downgrade',
   other: 'app.kuaizhizao.quality.common.disposal.other',
 };
 
@@ -125,11 +126,33 @@ export function getQualityDisposalFallbackOptions(t: TFunction, keys: string[]) 
 }
 
 export function getQualityIncomingDisposalFallback(t: TFunction) {
-  return getQualityDisposalFallbackOptions(t, ['return', 'accept', 'quarantine', 'other']);
+  return getQualityDisposalFallbackOptions(t, ['return', 'accept', 'quarantine', 'downgrade', 'other']);
 }
 
 export function getQualityFinishedDisposalFallback(t: TFunction) {
-  return getQualityDisposalFallbackOptions(t, ['rework', 'scrap', 'accept', 'quarantine', 'other']);
+  return getQualityDisposalFallbackOptions(t, ['rework', 'scrap', 'accept', 'quarantine', 'downgrade', 'other']);
+}
+
+/** 字典项与 fallback canonical 选项合并，保证新处置方式在旧字典下仍可选 */
+export function mergeQualityDisposalOptions(
+  dictOptions: Array<{ label: string; value: string }>,
+  fallbackOptions: Array<{ label: string; value: string }>,
+): Array<{ label: string; value: string }> {
+  const seen = new Set<string>();
+  const merged: Array<{ label: string; value: string }> = [];
+  for (const opt of dictOptions) {
+    if (!seen.has(opt.value)) {
+      seen.add(opt.value);
+      merged.push(opt);
+    }
+  }
+  for (const opt of fallbackOptions) {
+    if (!seen.has(opt.value)) {
+      seen.add(opt.value);
+      merged.push(opt);
+    }
+  }
+  return merged;
 }
 
 export function getQualityPlanTypeFallback(t: TFunction) {

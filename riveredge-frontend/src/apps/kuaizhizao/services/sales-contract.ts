@@ -352,13 +352,30 @@ export interface PullSalesContractFromQuotationResponse {
 
 
 
+export interface SalesContractListParams extends Record<string, unknown> {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  contract_code?: string;
+  status?: string;
+  contract_type?: string;
+  customer_id?: number;
+  start_date?: string;
+  end_date?: string;
+  order_by?: string;
+  /** 明细表格视图：附带合同明细 */
+  include_items?: boolean;
+}
+
+
+
 const BASE = '/apps/kuaizhizao/sales-contracts';
 
 
 
 export const salesContractApi = {
 
-  list: (params?: Record<string, unknown>) =>
+  list: (params?: SalesContractListParams) =>
 
     apiRequest<{ items: SalesContract[]; total: number }>(BASE, { params }),
 

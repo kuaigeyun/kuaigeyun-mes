@@ -225,9 +225,12 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         item_counts = await batch_document_item_counts(
             tenant_id, SemiFinishedGoodsReceiptItem, "receipt_id", [r.id for r in receipts]
         )
-        return enrich_inbound_hub_list_capabilities(
+        responses = enrich_inbound_hub_list_capabilities(
             receipts, responses, "semi_finished_goods", item_counts=item_counts
         )
+        from apps.kuaizhizao.services.warehouse_service import enrich_production_receipts_with_customer
+
+        return await enrich_production_receipts_with_customer(tenant_id, receipts, responses)
 
     async def confirm_receipt(
         self,
@@ -372,6 +375,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                         work_order_id=receipt.work_order_id,
                         work_order_code=receipt.work_order_code,
                         ledger_production_date=to_site_date(receipt_time),
+                        ledger_expiry_date=getattr(item, "expiry_date", None),
                         movement_type="semi_fg_receipt",
                         to_warehouse_id=wh_id,
                         idempotency_key=f"semi_finished_goods_receipt:{receipt_id}:inc:{item.id}",

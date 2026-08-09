@@ -51,7 +51,7 @@ import type {
   PartnerPriceVariantLine,
 } from '../../../types/partner-price-book';
 import type { Material } from '../../../types/material';
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import { useMaterialUnitOptions } from '../../../hooks/useMaterialUnitOptions';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { convertUnitPriceByPriceType } from '../../../utils/resolve-partner-material-price';
 import { formatDateTime } from '../../../../../utils/format';
@@ -148,35 +148,10 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
   const [aliasLocked, setAliasLocked] = useState(false);
   const [partnerOptions, setPartnerOptions] = useState<{ label: string; value: number }[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [unitOptions, setUnitOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [unitOptionsLoading, setUnitOptionsLoading] = useState(false);
+  const { options: unitOptions, isLoading: unitOptionsLoading } = useMaterialUnitOptions();
   const [materialAllowedUnits, setMaterialAllowedUnits] = useState<string[]>([]);
   const watchedUnit = Form.useWatch('unit', form);
   const detailReqRef = useRef(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setUnitOptionsLoading(true);
-        const dictionary = await getDataDictionaryByCode('MATERIAL_UNIT');
-        const items = await getDictionaryItemList(dictionary.uuid, true);
-        if (cancelled) return;
-        setUnitOptions(
-          items
-            .sort((a, b) => a.sort_order - b.sort_order)
-            .map((item) => ({ label: item.label, value: item.value })),
-        );
-      } catch {
-        if (!cancelled) setUnitOptions([]);
-      } finally {
-        if (!cancelled) setUnitOptionsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const unitSelectOptions = useMemo(() => {
     const filtered =

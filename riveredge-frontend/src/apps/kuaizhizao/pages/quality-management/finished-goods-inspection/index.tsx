@@ -8,7 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
@@ -84,6 +84,7 @@ import { qualityApi } from '../../../services/production';
 import type { PushPreviewResponse } from '../../../services/sales-order';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
 import InspectionTemplateConductResultsTable from '../components/InspectionTemplateConductResultsTable';
+import QualityInspectionDetailAttachments from '../components/QualityInspectionDetailAttachments';
 import InspectionDetailQualityActions from '../components/InspectionDetailQualityActions';
 import { pickInspectionConductExtras } from '../components/inspectionTemplateUtils';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -93,7 +94,7 @@ import { downloadFile } from '../../../services/common';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
 import { finishedGoodsReworkPushPercent } from '../../sales-management/shared/pushProgress';
 import {
   buildQualityInspectionDocStatusValueEnum,
@@ -132,12 +133,14 @@ import {
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import {
   getQualityFinishedDisposalFallback,
+  mergeQualityDisposalOptions,
   renderQualityResultTag,
   renderQualityDocStatusTag,
   renderQualityQualityStatusTag,
   getQualityDefectTypeOptions,
   qualityInspectionUniAuditProps,
 } from '../components/qualityMeta';
+import { DowngradeDispositionFields } from '../components/DowngradeDispositionFields';
 import {
   filterDeletableQualityInspectionRecords,
   filterRevokeConductQualityInspectionRecords,
@@ -174,10 +177,6 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       span: col.span ?? 1,
     };
   });
-}
-
-function renderFinishedRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 // 成品检验接口定义
@@ -323,7 +322,12 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           return;
         }
         const items = await getDictionaryItemList(dict.uuid, true);
-        setDisposalOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+        setDisposalOptions(
+          mergeQualityDisposalOptions(
+            items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })),
+            disposalFallback,
+          ),
+        );
       } catch {
         setDisposalOptions(disposalFallback);
       } finally {
@@ -689,6 +693,8 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           defect_type: values.defect_type,
           defect_reason: values.defect_reason,
           disposition: values.disposition,
+          downgrade_material_id: values.downgrade_material_id,
+          downgrade_warehouse_id: values.downgrade_warehouse_id,
           remarks: values.remarks,
         });
       }
@@ -1106,9 +1112,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
         dataIndex: 'pushed_rework_quantity',
-        width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
+        ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
         render: (_, record) => {
           const percent = finishedGoodsReworkPushPercent(
             record.pushed_rework_quantity,
@@ -1132,7 +1136,6 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       title: t('app.kuaizhizao.quality.common.columns.lifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
-      align: 'left',
       hideInSearch: true,
       render: (_, record) => {
         const lifecycle = getIncomingInspectionLifecycle(record as Record<string, unknown>);
@@ -1152,11 +1155,9 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.quality.common.columns.actions'),
       key: 'action',
-      width: 240,
       fixed: 'right',
       hideInSearch: true,
-      render: (_, record) =>
-        renderFinishedRowActions(renderFinishedRowNodes(record), `fg-${record.id ?? 'row'}`),
+      render: (_, record) => renderFinishedRowNodes(record),
     },
   ], SALES_DOC_LIST_FIELD_RANK),
     [t, finishedAuditColumn, inspectionCustomFieldColumns, inspectionDocStatusValueEnum, inspectionQualityStatusValueEnum],
@@ -1317,7 +1318,6 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           />,
         ]}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.finished.messages.deleteConfirm', { count })}
-        scroll={{ x: 1900 }}
       />
 
       <FormModalTemplate
@@ -1556,6 +1556,13 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                 <InspectionTemplateConductResultsTable inspection={inspectionDetail as Record<string, unknown>} />
               </DetailDrawerSection>
 
+              {Array.isArray(inspectionDetail.attachments) && inspectionDetail.attachments.length > 0 ? (
+                <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.attachments')}>
+                  <QualityInspectionDetailAttachments attachments={inspectionDetail.attachments} />
+                </DetailDrawerSection>
+              ) : null}
+
+
               <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.operationLog')}>
                 {finishedTracking.loading && (
                   <div style={{ textAlign: 'center', padding: 24 }}>
@@ -1640,6 +1647,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
             quickCreate={{ label: t('app.kuaizhizao.quality.common.form.dataDictionaryManage'), onClick: () => navigate('/system/data-dictionaries') }}
           />
         </ProFormItem>
+        <DowngradeDispositionFields />
         <ProFormTextArea
           name="remarks"
           label={t('app.kuaizhizao.quality.common.form.remarks')}

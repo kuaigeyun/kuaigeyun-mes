@@ -132,6 +132,9 @@ class SalesOrderBase(BaseSchema):
     is_release_order: bool = Field(False, description="是否为框架合同释放单")
     currency_code: Optional[str] = Field("CNY", max_length=20, description="币种代码（默认 CNY）")
     
+    prepayment_amount: Optional[Decimal] = Field(None, ge=0, description="预收款金额")
+    prepayment_bank_account_id: Optional[int] = Field(None, description="预收款银行账户ID")
+
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     

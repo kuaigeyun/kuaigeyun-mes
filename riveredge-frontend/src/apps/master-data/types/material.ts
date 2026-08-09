@@ -146,7 +146,7 @@ export interface Material {
   isActive: boolean;
   defaults?: MaterialDefaults; // 默认值设置
   codeAliases?: MaterialCodeAlias[]; // 编号别名列表
-  sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource）
+  sourceType?: string; // 物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Service）
   source_type?: string; // 物料来源类型（向后兼容）
   sourceTypes?: string[]; // 物料来源类型（多选）
   source_types?: string[]; // 物料来源类型（多选，向后兼容）
@@ -167,6 +167,8 @@ export interface Material {
   over_report_mode?: string;
   overReportValue?: number;
   over_report_value?: number;
+  /** 物料附件（图片/文件 UUID 或 { uuid/uid }） */
+  images?: Array<string | { uuid?: string; uid?: string; name?: string; url?: string }>;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -275,7 +277,7 @@ export interface MaterialCreate {
   // 默认值设置
   defaults?: MaterialDefaults;
   // 物料来源控制
-  sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource）
+  sourceType?: string; // 物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Service）
   sourceTypes?: string[]; // 物料来源类型（多选）
   sourceConfig?: Record<string, any>; // 物料来源相关配置
 }
@@ -305,7 +307,7 @@ export interface MaterialUpdate {
   // 默认值设置
   defaults?: MaterialDefaults;
   // 物料来源控制
-  sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource）
+  sourceType?: string; // 物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Service）
   sourceTypes?: string[]; // 物料来源类型（多选）
   sourceConfig?: Record<string, any>; // 物料来源相关配置
   /** 自制件默认工艺路线 FK（产品工艺页保存） */
@@ -321,7 +323,7 @@ export interface MaterialListParams {
   keyword?: string;
   code?: string;
   name?: string;
-  sourceType?: string; // 物料来源类型（Make/Buy/Outsource/Phantom）
+  sourceType?: string; // 物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Service）
   /** 按物料主键精确查询（BOM 列表按引用补齐名称） */
   ids?: number[];
   /** 后端：main_code | name | created_at | updated_at */
@@ -366,6 +368,27 @@ export interface MaterialBulkDefaultsPatchPayload {
   maxStock?: number;
   defaultSalePrice?: number;
   defaultLocation?: string;
+}
+
+/** POST /materials/batch-inspection — 单条质检选项补丁 */
+export interface MaterialBulkInspectionPatchItem {
+  materialUuid: string;
+  inspectionStages?: Partial<
+    Record<'iqc' | 'fqc' | 'oqc', { mode: 'none' | 'simple' | 'plan'; planId?: number | null }>
+  >;
+  overReportMode?: 'none' | 'fixed' | 'percent';
+  overReportValue?: number;
+}
+
+/** POST /materials/batch-inspection */
+export interface MaterialBulkInspectionPatchPayload {
+  items: MaterialBulkInspectionPatchItem[];
+}
+
+export interface MaterialBulkInspectionPatchResult {
+  updated_count: number;
+  requested_count: number;
+  failed_items: Array<{ material_uuid?: string; materialUuid?: string; reason: string }>;
 }
 
 /** POST /materials/{uuid}/generate-variants */

@@ -113,6 +113,8 @@ class NonconformingDispositionUpdate(BaseSchema):
     disposition: str = Field(..., description="处置方式")
     status: Optional[str] = Field(None, description="台账状态")
     quarantine_location: Optional[str] = Field(None, description="隔离库位")
+    downgrade_material_id: Optional[int] = Field(None, description="降级回用目标原料物料ID")
+    downgrade_warehouse_id: Optional[int] = Field(None, description="降级回用入库仓库ID")
     remarks: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 

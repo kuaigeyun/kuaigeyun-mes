@@ -73,6 +73,12 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
 
 PERMISSION_CODE_DISPLAY_LABELS: dict[str, str] = {
     "kuaizhizao:rework-order:release": "下达",
+    "kuaizhizao:inbound:execute": "确认入库",
+    "kuaizhizao:outbound:execute": "确认出库",
+    "kuaizhizao:quality-management-incoming-inspection:execute": "检验",
+    "kuaizhizao:quality-management-process-inspection:execute": "检验",
+    "kuaizhizao:quality-management-finished-goods-inspection:execute": "检验",
+    "kuaizhizao:quality-management-oqc-inspection:execute": "检验",
     "haoligo:equipment-documents-acceptance:submit": "调试",
     "haoligo:equipment-documents-acceptance:execute": "试产",
     "haoligo:equipment-documents-acceptance:complete": "台账结案",

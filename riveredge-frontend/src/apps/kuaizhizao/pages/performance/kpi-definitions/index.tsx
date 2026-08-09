@@ -210,7 +210,6 @@ const KpiDefinitionsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1280 }}
           enableRowSelection={true}
           showDeleteButton={true}
           onDelete={async (keys) => {

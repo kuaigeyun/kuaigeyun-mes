@@ -77,6 +77,12 @@ class PurchaseOrder(BaseModel):
     source_type = fields.CharField(max_length=50, null=True, description="来源类型 (MRP/LRP)")
     source_id = fields.IntField(null=True, description="来源ID")
 
+    # 预付款（审核通过后自动生成预付付款单）
+    prepayment_amount = fields.DecimalField(
+        max_digits=12, decimal_places=2, null=True, description="预付款金额"
+    )
+    prepayment_bank_account_id = fields.IntField(null=True, description="预付款银行账户ID")
+
     # 备注
     notes = fields.TextField(null=True, description="备注")
 

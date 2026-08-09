@@ -1,1 +1,0 @@
-import{t}from"./clearSessionQueries-DKxl7gZm.js";async function n(o){return t("/core/operation-logs",{params:o})}async function r(o){return t("/core/operation-logs/statistics",{params:o})}async function a(o){return t(`/core/operation-logs/${o}`)}export{a,n as b,r as g};

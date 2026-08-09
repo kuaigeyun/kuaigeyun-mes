@@ -241,13 +241,11 @@ const ToolRepairSchemesPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        width: 200,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
           renderEquipmentMasterRowActions({
             record,
-            keyPrefix: `tool-repair-scheme-actions-${record.id ?? 'row'}`,
             t,
             canRead: perms.canRead,
             canUpdate: perms.canUpdate,

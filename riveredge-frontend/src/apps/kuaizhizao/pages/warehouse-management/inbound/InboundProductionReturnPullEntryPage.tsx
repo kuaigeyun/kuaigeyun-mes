@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Card, Col, DatePicker, Form, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -34,6 +34,7 @@ import {
   draftOptionalNumber,
   usePullEntryFormDraft,
 } from '../shared/pullEntryFormDraft';
+import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import {
   MaterialUnitSelect,
@@ -75,6 +76,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
   const { workOrderId: woIdParam } = useParams<{ workOrderId: string }>();
   const workOrderId = Number(woIdParam);
   const navigate = useNavigate();
+  const location = useLocation();
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
   const pullFromProductionReturnAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_work_order_for_production_return');
@@ -122,8 +124,12 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
 
   const leavePage = useCallback(() => {
     clearDraft();
-    navigate(INBOUND_LIST_PATH);
-  }, [clearDraft, navigate]);
+    navigateLeavingPullEntry(
+      navigate,
+      INBOUND_LIST_PATH,
+      pullEntryTabKey(location.pathname, location.search),
+    );
+  }, [clearDraft, navigate, location.pathname, location.search]);
 
   const applyPickingSelection = useCallback(
     (nextPickingId: number | null, qtyByItemId?: Record<number, number>, pickingsSource?: PreviewPicking[]) => {
@@ -319,14 +325,17 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
       invalidateMenuBadgeCounts();
       clearDraft();
       if (mode === 'confirm') {
-        navigate(INBOUND_LIST_PATH, {
-          state: {
+        navigateLeavingPullEntry(
+          navigate,
+          INBOUND_LIST_PATH,
+          pullEntryTabKey(location.pathname, location.search),
+          {
             inboundDirectConfirm: {
               id: Number(created.id),
               receipt_type: 'production_return',
             },
           },
-        });
+        );
       } else {
         messageApi.success(
           t('app.kuaizhizao.warehouseInbound.entry.productionReturn.draftCreated', {

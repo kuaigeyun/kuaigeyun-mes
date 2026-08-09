@@ -65,14 +65,29 @@ export function renderOperationReportingTypeMarker(
   );
 }
 
+export function getOperationOverReportModeText(
+  t: TFunction,
+  mode?: string | null,
+): string {
+  const normalized = normalizeOperationOverReportMode(mode);
+  if (normalized === 'fixed') return t('field.operation.overReportModeFixed');
+  if (normalized === 'percent') return t('field.operation.overReportModePercent');
+  return t('field.operation.overReportModeNone');
+}
+
 export function renderOperationOverReportModeMarker(
+  t: TFunction,
   mode?: string | null,
   value?: number | string | null,
 ): React.ReactNode {
   const normalized = normalizeOperationOverReportMode(mode);
-  if (normalized === 'none') return '-';
+  const baseLabel = getOperationOverReportModeText(t, normalized);
+  if (normalized === 'none') {
+    return React.createElement(MarkerTag, { color: 'default' }, baseLabel);
+  }
   const numeric = Number(value ?? 0) || 0;
-  const label = normalized === 'fixed' ? `+${numeric}` : `${numeric}%`;
+  const detail = normalized === 'fixed' ? ` +${numeric}` : ` ${numeric}%`;
+  const label = numeric > 0 ? `${baseLabel}${detail}` : baseLabel;
   return React.createElement(
     MarkerTag,
     { color: OVER_REPORT_MODE_MARKER_COLOR[normalized] },

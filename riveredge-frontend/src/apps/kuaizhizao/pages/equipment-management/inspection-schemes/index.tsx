@@ -267,13 +267,11 @@ const InspectionSchemesPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        width: 200,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
           renderEquipmentMasterRowActions({
             record,
-            keyPrefix: `inspection-scheme-actions-${record.id ?? 'row'}`,
             t,
             canRead: perms.canRead,
             canUpdate: perms.canUpdate,

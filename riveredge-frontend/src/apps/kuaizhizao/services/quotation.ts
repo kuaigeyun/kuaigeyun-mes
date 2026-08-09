@@ -137,6 +137,8 @@ export interface QuotationListParams {
   pullable_only?: boolean;
   /** 加载目标单据类型：销售订单 / 销售合同 */
   pull_target?: 'sales_order' | 'sales_contract';
+  /** 明细表格视图：附带报价明细 */
+  include_items?: boolean;
 }
 
 export interface QuotationListResponse {

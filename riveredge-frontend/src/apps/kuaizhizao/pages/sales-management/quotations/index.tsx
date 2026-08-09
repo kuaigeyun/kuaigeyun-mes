@@ -19,11 +19,12 @@ import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pr
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Card, Switch, Alert } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { UniTable, invalidateUniTableListCache } from '../../../../../components/uni-table';
+import { UniTable, invalidateUniTableListCache, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniBatchButton, UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
@@ -67,6 +68,7 @@ import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import { AmountDisplay } from '../../../../../components/permission';
 import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
+import { MaterialUnitLabel } from '../../../../../components/material-unit-label';
 import {
   listQuotations,
   getQuotation,
@@ -89,6 +91,7 @@ import {
   createQuotationRevision,
   recordQuotationPrint,
   Quotation,
+  type QuotationItem,
 } from '../../../services/quotation';
 import { getSalesOrder, type SalesOrder } from '../../../services/sales-order';
 import { salesContractApi } from '../../../services/sales-contract';
@@ -104,6 +107,7 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import dayjs from 'dayjs';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -121,6 +125,7 @@ import {
   pickImportExampleValue,
 } from '../../../../../utils/loadImportDictionaryValues';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions';
 import { useConfigStore } from '../../../../../stores/configStore';
 import { useGlobalStore } from '../../../../../stores';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -160,11 +165,12 @@ import {
   SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
-import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../shared/DocumentPushProgressBar';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS } from '../shared/DocumentPushProgressBar';
 import { quotationDownstreamPushPercent } from '../shared/pushProgress';
 import { buildDescriptionItemsFromColumns } from '../shared/descriptionItems';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 const QUOTATION_LIST_PATH = '/apps/kuaizhizao/sales-management/quotations';
@@ -244,6 +250,22 @@ const LINKED_DOCUMENT_DRAWER_WIDTH = '45%';
 
 /** 列表树形行（antd Table children） */
 type QuotationTableRow = Quotation & { children?: QuotationTableRow[] };
+
+type QuotationItemRow = QuotationItem & {
+  _rowKey: string;
+  quotation_id: number;
+  quotation_code?: string;
+  customer_name?: string;
+  quotation_date?: string;
+  status?: string;
+  review_status?: string;
+  sales_order_id?: number;
+  contract_id?: number;
+  lifecycle?: Record<string, unknown>;
+  conversion_downstream_missing?: boolean;
+};
+
+const QUOTATION_LIST_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.quotations.v2';
 
 /** 同一系列的分组键：优先后端 series_code；否则从编号剥 `-Vn` 后缀 */
 function quotationSeriesGroupKey(r: Quotation): string {
@@ -612,6 +634,18 @@ const QuotationsPage: React.FC = () => {
     return typeof c === 'string' && c.trim() !== '' ? c.trim() : 'CNY';
   });
   const actionRef = useRef<ActionType>(null);
+  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
+    readPersistedUniTableViewType(QUOTATION_LIST_PERSISTENCE_ID, 'table', [
+      'table',
+      'detailTable',
+      'help',
+    ]) as 'table' | 'detailTable' | 'help',
+  );
+  const dataViewMode = resolveDetailTableViewMode(viewTypeState);
+  const dataViewModeRef = useRef(dataViewMode);
+  useEffect(() => {
+    dataViewModeRef.current = dataViewMode;
+  }, [dataViewMode]);
   const lastQuotationsFlatCacheRef = useRef<Quotation[]>([]);
   const pendingListReloadRef = useRef(false);
   const queryClient = useQueryClient();
@@ -621,13 +655,13 @@ const QuotationsPage: React.FC = () => {
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const invalidateSalesOrderList = useInvalidateSalesOrderList();
 
+  const materialUnitImport = useImportMaterialUnitOptions();
   const quotationImportDict = useImportDictionaryOptions([
     'CURRENCY',
     'SHIPPING_METHOD',
     'PAYMENT_TERMS',
-    'MATERIAL_UNIT',
   ]);
-  const quotationLineUnitOptions = quotationImportDict.MATERIAL_UNIT ?? [];
+  const quotationLineUnitOptions = materialUnitImport.options;
   const quotationLineImportColumnOptions = useMemo(
     () => [undefined, undefined, quotationLineUnitOptions, undefined, undefined, undefined],
     [quotationLineUnitOptions],
@@ -1086,7 +1120,7 @@ const QuotationsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.quotation.colSalesman'),
       dataIndex: 'salesman_name',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
+      width: 120,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
@@ -1144,9 +1178,7 @@ const QuotationsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
       dataIndex: 'downstream_push_progress',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
       render: (_, r) => {
         const percent = quotationDownstreamPushPercent(r);
         return (
@@ -1168,7 +1200,6 @@ const QuotationsPage: React.FC = () => {
       title: t('app.kuaizhizao.quotation.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       fixed: 'right',
-      align: 'left',
       order: 40,
       valueType: 'select',
       valueEnum: quotationLifecycleValueEnum,
@@ -1252,6 +1283,132 @@ const QuotationsPage: React.FC = () => {
     },
   ];
   const alignedListColumns = alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK);
+
+  const detailTableColumns: ProColumns<QuotationItemRow>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.quotation.colCustomerQuotation'),
+        key: 'quotation_code',
+        dataIndex: 'quotation_code',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
+        hideInSearch: false,
+        fieldProps: { placeholder: t('app.kuaizhizao.quotation.colQuotationCode') },
+        render: (_, record) => (
+          <UniTableStackedPrimaryCell
+            primary={String(record.customer_name ?? '')}
+            secondary={String(record.quotation_code ?? '')}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.quotation.colQuotationCode'),
+        dataIndex: 'quotation_code',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.quotation.import.materialName'),
+        key: 'material_display',
+        dataIndex: 'material_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        render: (_, record) => (
+          <MaterialStackedCell
+            material_name={record.material_name}
+            material_code={record.material_code}
+            material_spec={record.material_spec}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.quotation.import.materialCode'),
+        dataIndex: 'material_code',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.quotation.import.quantity'),
+        dataIndex: 'quote_quantity',
+        width: 120,
+        align: 'right',
+        render: (val: unknown, record) => (
+          <QuantityWithUnitDisplay quantity={val} unit={record.material_unit} />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.quotation.import.unitPrice'),
+        dataIndex: 'unit_price',
+        width: 100,
+        align: 'right',
+        render: (_, record) => (
+          <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="unit_price" value={record.unit_price} />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.quotation.colTotalAmount'),
+        dataIndex: 'total_amount',
+        width: 110,
+        align: 'right',
+        render: (_, record) => (
+          <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="total_amount" value={record.total_amount} />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.quotation.colQuotationDate'),
+        dataIndex: 'quotation_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_: unknown, row) =>
+          row.quotation_date ? formatDateTime(row.quotation_date, 'YYYY-MM-DD') : '-',
+      },
+      {
+        title: t('app.kuaizhizao.quotation.import.deliveryDate'),
+        dataIndex: 'delivery_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_: unknown, row) =>
+          row.delivery_date ? formatDateTime(row.delivery_date, 'YYYY-MM-DD') : '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+        key: 'line_push_progress',
+        dataIndex: 'line_push_progress',
+        ...DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
+        render: (_: unknown, record) => {
+          const percent = quotationDownstreamPushPercent({
+            status: record.status,
+            sales_order_id: record.sales_order_id,
+            contract_id: record.contract_id,
+          });
+          return (
+            <DocumentPushProgressBar
+              percent={percent}
+              tooltip={t('app.kuaizhizao.salesManagement.pushProgress.downstreamTooltip', {
+                percent,
+                status: percent >= 100
+                  ? t('app.kuaizhizao.salesManagement.pushProgress.pushed')
+                  : t('app.kuaizhizao.salesManagement.pushProgress.notPushed'),
+              })}
+            />
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.quotation.colLifecycle'),
+        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+        fixed: 'right',
+        hideInSearch: false,
+        valueEnum: quotationLifecycleValueEnum,
+        render: (_, record) => (
+          <ListUniLifecycleCell
+            lifecycle={getQuotationLifecycle(record, quotationAuditRequired, t)}
+            withSubStages
+          />
+        ),
+      },
+    ],
+    [quotationAuditRequired, quotationLifecycleValueEnum, t],
+  );
 
   // columns 定义已合并
 
@@ -1344,7 +1501,7 @@ const QuotationsPage: React.FC = () => {
         const materialCode = String(row[0] || '').trim();
         const spec = String(row[1] || '').trim();
         const unitRaw = String(row[2] || '').trim();
-        const unit = quotationImportDict.parseDict('MATERIAL_UNIT', unitRaw) || unitRaw;
+        const unit = materialUnitImport.parse(unitRaw) || unitRaw;
         const quantity = parseFloat(row[3]) || 0;
         const price = parseFloat(row[4]) || 0;
         const deliveryDate = row[5];
@@ -3576,7 +3733,7 @@ const QuotationsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           className="kuaizhizao-quotations-table"
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.quotations"
+          columnPersistenceId={QUOTATION_LIST_PERSISTENCE_ID}
           permissionResource={QUOTATION_FIELD_RESOURCE}
           tanstackQuery={{
             queryKeyPrefix: ['apps.kuaizhizao.pages.sales-management.quotations', listScopeFilter],
@@ -3586,8 +3743,30 @@ const QuotationsPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.quotation.title')}
           formRef={tableSearchFormRef}
           actionRef={actionRef}
-          rowKey="id"
+          rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
           columns={alignedListColumns}
+          viewTypes={['table', 'detailTable', 'help']}
+          defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
+          helpViewConfig={{
+            content: (
+              <div style={{ lineHeight: 1.8 }}>
+                <p>
+                  <strong>{t('components.uniTable.viewTable')}</strong>
+                  {t('app.kuaizhizao.quotation.helpTableView')}
+                </p>
+                <p>
+                  <strong>{t('components.uniTable.viewDetailTable')}</strong>
+                  {t('app.kuaizhizao.quotation.helpDetailTableView')}
+                </p>
+              </div>
+            ),
+          }}
+          onViewTypeChange={(v) => {
+            dataViewModeRef.current = resolveDetailTableViewMode(v as 'table' | 'detailTable' | 'help');
+            setViewTypeState(v as 'table' | 'detailTable' | 'help');
+            setTimeout(() => actionRef.current?.reload(), 0);
+          }}
+          detailTableColumns={detailTableColumns}
           onTableDataChange={handleTableDataChange}
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
@@ -3617,7 +3796,7 @@ const QuotationsPage: React.FC = () => {
               disabledReason={quotationPushDisabledReason}
             />,
           ]}
-          enableRowSelection
+          enableRowSelection={viewTypeState !== 'detailTable'}
           rowSelectionGetCheckboxProps={quotationRowSelectionGetCheckboxProps}
           showDeleteButton
           onDelete={handleBatchDelete}
@@ -3772,13 +3951,60 @@ const QuotationsPage: React.FC = () => {
                 end_date: endDate,
                 order_by: orderBy,
                 list_scope: listScopeFilterRef.current,
+                include_items: dataViewModeRef.current === 'detail',
               });
               setListTotal(response.total ?? 0);
               const flat = response.data || [];
               lastQuotationsFlatCacheRef.current = flat;
               setTableQuotationsFlat(flat);
+              if (dataViewModeRef.current === 'order') {
+                return {
+                  data: buildQuotationSeriesTree(flat),
+                  success: true,
+                  total: response.total ?? 0,
+                };
+              }
+              const flatRows = flattenDocumentDetailRows<Quotation, QuotationItem>({
+                headers: flat,
+                getHeaderId: (h) => h.id,
+                getItems: (h) => h.items,
+                buildRowKey: (h, item, index) =>
+                  item?.id ? `qt-${h.id}-item-${item.id}` : `qt-${h.id}-idx-${index}`,
+                mapItemRow: (h, item) => ({
+                  ...item,
+                  quotation_id: h.id ?? 0,
+                  quotation_code: h.quotation_code,
+                  customer_name: h.customer_name,
+                  quotation_date: h.quotation_date,
+                  status: h.status,
+                  review_status: h.review_status,
+                  sales_order_id: h.sales_order_id,
+                  contract_id: h.contract_id,
+                  lifecycle: h.lifecycle,
+                  conversion_downstream_missing: h.conversion_downstream_missing,
+                }),
+                mapEmptyHeaderRow: (h) => ({
+                  quotation_id: h.id ?? 0,
+                  quotation_code: h.quotation_code,
+                  customer_name: h.customer_name,
+                  material_id: 0,
+                  material_code: '-',
+                  material_name: '-',
+                  material_unit: '',
+                  quote_quantity: 0,
+                  unit_price: 0,
+                  total_amount: 0,
+                  status: h.status,
+                  review_status: h.review_status,
+                  quotation_date: h.quotation_date,
+                  sales_order_id: h.sales_order_id,
+                  contract_id: h.contract_id,
+                  lifecycle: h.lifecycle,
+                  conversion_downstream_missing: h.conversion_downstream_missing,
+                }),
+              }) as QuotationItemRow[];
               return {
-                data: buildQuotationSeriesTree(flat),
+                data: flatRows,
                 success: true,
                 total: response.total ?? 0,
               };
@@ -3788,10 +4014,14 @@ const QuotationsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          expandable={{
-            defaultExpandAllRows: true,
-            indentSize: 16,
-          }}
+          expandable={
+            dataViewMode === 'order'
+              ? {
+                  defaultExpandAllRows: true,
+                  indentSize: 16,
+                }
+              : undefined
+          }
         />
       </ListPageTemplate>
 
@@ -3943,7 +4173,7 @@ const QuotationsPage: React.FC = () => {
                           width: 72,
                           ellipsis: true,
                           ...QUOTATION_DETAIL_TEXT_COL,
-                          render: (v: string) => <DictionaryLabel dictionaryCode="MATERIAL_UNIT" value={v} />,
+                          render: (v: string) => <MaterialUnitLabel value={v} />,
                         },
                         { title: t('app.kuaizhizao.quotation.form.quoteQuantity'), dataIndex: 'quote_quantity', width: 100, ...QUOTATION_DETAIL_NUM_COL },
                         {

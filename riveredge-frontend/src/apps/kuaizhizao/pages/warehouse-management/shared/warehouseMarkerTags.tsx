@@ -12,6 +12,7 @@ const WAREHOUSE_REASON_TYPE_COLORS: Record<string, string> = {
   调拨: 'processing',
   样品: 'geekblue',
   报废: 'error',
+  降级回用: 'cyan',
   其他: 'default',
 };
 

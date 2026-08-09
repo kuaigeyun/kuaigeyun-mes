@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from core.services.approval.audit_binding_service import AuditBindingService
+from core.services.approval.audit_capability_gate import gate_audit_allowed_actions
 from core.services.approval.audit_phase import derive_audit_phase
 
 RecordLike = Union[Dict[str, Any], Any]
@@ -18,6 +19,12 @@ def _read_status(
     if isinstance(item, dict):
         return item.get(status_field), item.get(review_status_field)
     return getattr(item, status_field, None), getattr(item, review_status_field, None)
+
+
+def _read_capabilities(item: RecordLike) -> Any:
+    if isinstance(item, dict):
+        return item.get("capabilities")
+    return getattr(item, "capabilities", None)
 
 
 def _apply_audit(
@@ -35,6 +42,12 @@ def _apply_audit(
         review_status,
         enabled=enabled,
     )
+    # capabilities 先于 audit 写入时须再裁剪，避免按钮门禁被冲掉
+    caps = _read_capabilities(item)
+    if caps is not None:
+        gated = gate_audit_allowed_actions(audit, caps)
+        if gated is not None:
+            audit = gated
     if isinstance(item, dict):
         item["audit"] = audit
         return item

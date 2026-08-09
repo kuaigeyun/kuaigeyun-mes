@@ -16,7 +16,8 @@ function extractActionNodes(rendered: React.ReactNode): React.ReactNode[] | null
 
 /**
  * UniTable 操作列 render 的单一入口：数组 / Space 多子项 / 单树 均走统一规范化与溢出策略。
- * 已预调用 `renderRowActionsOverflow` 的结果也会拆出子按钮并重新过滤权限，避免「更多」布局绕过 RBAC。
+ * 折叠只在这里发生——页面 render 只负责产出动作节点，自己再折一次会让第一次的「更多」
+ * 下拉被当成普通动作收进第二层菜单，里面的动作将无法点击。
  */
 export function renderUniTableOperationCell(
   rendered: React.ReactNode,

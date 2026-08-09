@@ -15,6 +15,7 @@ from core.schemas.custom_field import (
     CustomFieldValueRequest,
     CustomFieldValueResponse,
     BatchSetFieldValuesRequest,
+    BatchGetFieldValuesRequest,
     CustomFieldPageConfigResponse,
 )
 from core.services.business.custom_field_service import CustomFieldService
@@ -437,6 +438,20 @@ async def batch_set_field_values(
         values=values
     )
     return result
+
+
+@router.post("/values/batch-get", response_model=Dict[str, Dict[str, Any]])
+async def batch_get_field_values(
+    data: BatchGetFieldValuesRequest,
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_custom_field_read),
+):
+    """批量获取多条记录的自定义字段值（列表页列展示）。"""
+    return await CustomFieldService.batch_get_field_values(
+        tenant_id=tenant_id,
+        record_table=data.record_table,
+        record_ids=data.record_ids,
+    )
 
 
 @router.get("/values/{record_table}/{record_id}", response_model=Dict[str, Any])

@@ -162,18 +162,22 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
     "incoming_inspection_attachments": (
         "kuaizhizao:quality-management-incoming-inspection:create",
         "kuaizhizao:quality-management-incoming-inspection:update",
+        "kuaizhizao:quality-management-incoming-inspection:execute",
     ),
     "process_inspection_attachments": (
         "kuaizhizao:quality-management-process-inspection:create",
         "kuaizhizao:quality-management-process-inspection:update",
+        "kuaizhizao:quality-management-process-inspection:execute",
     ),
     "finished_goods_inspection_attachments": (
         "kuaizhizao:quality-management-finished-goods-inspection:create",
         "kuaizhizao:quality-management-finished-goods-inspection:update",
+        "kuaizhizao:quality-management-finished-goods-inspection:execute",
     ),
     "oqc_inspection_attachments": (
         "kuaizhizao:quality-management-oqc-inspection:create",
         "kuaizhizao:quality-management-oqc-inspection:update",
+        "kuaizhizao:quality-management-oqc-inspection:execute",
     ),
     "nonconforming_ledger_attachments": (
         "kuaizhizao:quality-management-nonconforming-ledger:create",

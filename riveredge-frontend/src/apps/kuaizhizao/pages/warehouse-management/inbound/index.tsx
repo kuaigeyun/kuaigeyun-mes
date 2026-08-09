@@ -65,7 +65,7 @@ import {formatDateBySiteSetting, formatDateTimeBySiteSetting, formatQuantity} fr
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import {
   DocumentPushProgressBar,
-  DOCUMENT_PROGRESS_COLUMN_WIDTH,
+  DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
   ratioToPushProgressPercent,
 } from '../../sales-management/shared/DocumentPushProgressBar';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
@@ -1413,6 +1413,10 @@ const InboundPage: React.FC = () => {
   ]);
 
   const handleConfirm = async (record: InboundOrder) => {
+    if (!(inboundPerms.canAction?.('execute') ?? false)) {
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.noConfirmExecutePermission'));
+      return;
+    }
     if (!isInboundConfirmable(record)) {
       messageApi.warning(
         inboundConfirmCapabilityReasonMessage(record, t) ||
@@ -1610,12 +1614,14 @@ const InboundPage: React.FC = () => {
    * 表格列定义
    */
   const getInboundStackedPrimary = (record: InboundOrder): string => {
-    if (record.receipt_type === 'customer_material' && (record as any).customer_name) {
-      return String((record as any).customer_name);
+    // 主体优先业务对方：客户 / 供应商（采购、委外）；再回落源单号，最后才是仓库
+    if (record.customer_name) {
+      return String(record.customer_name);
     }
-    if (record.receipt_type === 'purchase' && record.supplier_name) {
+    if (record.supplier_name) {
       return String(record.supplier_name);
     }
+    if (record.outsource_work_order_code) return String(record.outsource_work_order_code);
     if (record.work_order_code) return String(record.work_order_code);
     if (record.picking_code) return String(record.picking_code);
     if (record.warehouse_name) return String(record.warehouse_name);
@@ -1696,9 +1702,7 @@ const InboundPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseInbound.col.receiptProgress'),
       dataIndex: 'receipt_progress',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
       render: (_, record) => {
         let required = Number(record.total_quantity ?? 0);
         const posted = isInboundStockPosted(record);
@@ -1729,7 +1733,7 @@ const InboundPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('app.kuaizhizao.warehouseInbound.col.time'),
+      title: t('app.kuaizhizao.warehouseInbound.col.receiver'),
       key: 'biz_time_operator',
       dataIndex: 'biz_time_operator',
       width: 148,
@@ -1738,8 +1742,8 @@ const InboundPage: React.FC = () => {
       sorter: true,
       render: (_, record) => (
         <UniTableStackedPrimaryCell
-          primary={formatInboundDateTimeDisplay(record)}
-          secondary={resolveInboundHubOperator(record) || '-'}
+          primary={resolveInboundHubOperator(record) || '-'}
+          secondary={formatInboundDateTimeDisplay(record)}
           secondaryCopyable={false}
           primaryBold={false}
         />
@@ -1750,7 +1754,6 @@ const InboundPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseInbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
-      align: 'left',
       hideInSearch: true,
       render: (_, record) => {
         const lifecycle = getInboundLifecycle(record as Record<string, unknown>);
@@ -1778,7 +1781,9 @@ const InboundPage: React.FC = () => {
         const posted = isInboundStockPosted(record);
         const confirmable = isInboundConfirmable(record);
         const confirmReason = inboundConfirmCapabilityReasonMessage(record, t);
-        const canConfirm = confirmable && (inboundPerms.canAction?.('approve') ?? false);
+        // 确认入库与后端 /confirm → execute、出库确认一致；勿用 approve（审核）
+        const hasConfirmPerm = inboundPerms.canAction?.('execute') ?? false;
+        const canConfirm = confirmable && hasConfirmPerm;
         const nodes: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)} />,
         ];
@@ -1809,14 +1814,19 @@ const InboundPage: React.FC = () => {
               {record.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn') : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
             </Button>
           );
-          if (
-            inboundPerms.canDelete &&
-            isInboundDeletable(record)
-          ) {
-            nodes.push(
-              <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDelete(record)} />
-            );
-          }
+        } else if (!posted && confirmable && !hasConfirmPerm) {
+          nodes.push(
+            <Button
+              {...rowActionKind('execute')}
+              {...rowActionLabelKeep()}
+              key="confirm-disabled-perm"
+              disabled
+              title={t('app.kuaizhizao.warehouseInbound.msg.noConfirmExecutePermission')}
+              data-row-action-visible-when-disabled
+            >
+              {record.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn') : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
+            </Button>
+          );
         } else if (!posted && confirmReason) {
           nodes.push(
             <Button
@@ -1828,6 +1838,11 @@ const InboundPage: React.FC = () => {
             >
               {record.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn') : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
             </Button>
+          );
+        }
+        if (inboundPerms.canDelete && isInboundDeletable(record)) {
+          nodes.push(
+            <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDelete(record)} />
           );
         }
         if (posted && (inboundPerms.canAction?.('revoke') ?? false)) {
@@ -2147,7 +2162,6 @@ const InboundPage: React.FC = () => {
               ]
             : []
         }
-        scroll={{ x: 2000 }}
       />
 
       <InboundQuickPullModals
@@ -2496,7 +2510,8 @@ const InboundPage: React.FC = () => {
         extra={
           currentOrder ? (
             <Space>
-              {isInboundConfirmable(currentOrder) ? (
+              {isInboundConfirmable(currentOrder) &&
+              (inboundPerms.canAction?.('execute') ?? false) ? (
                 <>
                   {isEditablePurchaseReceipt(currentOrder) && (
                     <Button onClick={handleSavePurchaseReceiptQuantities} loading={savingPurchaseReceipt}>
@@ -2513,6 +2528,18 @@ const InboundPage: React.FC = () => {
                       : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
                   </Button>
                 </>
+              ) : isInboundConfirmable(currentOrder) &&
+                !(inboundPerms.canAction?.('execute') ?? false) ? (
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  disabled
+                  title={t('app.kuaizhizao.warehouseInbound.msg.noConfirmExecutePermission')}
+                >
+                  {currentOrder.receipt_type === 'production_return'
+                    ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn')
+                    : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
+                </Button>
               ) : !isInboundStockPosted(currentOrder) &&
                 inboundConfirmCapabilityReasonMessage(currentOrder, t) ? (
                 <Button
@@ -2569,6 +2596,9 @@ const InboundPage: React.FC = () => {
                     </StatusTag>
                   ),
                 },
+                ...(currentOrder.customer_name
+                  ? [{ key: 'customer', label: t('app.kuaizhizao.warehouseInbound.col.customer'), children: currentOrder.customer_name }]
+                  : []),
                 ...(currentOrder.supplier_name
                   ? [{ key: 'supplier', label: t('app.kuaizhizao.warehouseInbound.field.supplier'), children: currentOrder.supplier_name }]
                   : []),

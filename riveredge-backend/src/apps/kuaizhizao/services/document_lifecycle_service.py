@@ -586,15 +586,26 @@ def get_work_order_lifecycle(
             "milestones": milestones,
         }
 
-    # 草稿
+    # 草稿（审核开启时先走提交/通过，再下达）
     if status in ("draft", "草稿"):
+        review = _norm(getattr(work_order, "review_status", None) or "")
+        if review in ("待审核", "pending_review", "pending_approval", "PENDING"):
+            draft_suggestions = ["等待审核"]
+        elif review in ("已驳回", "审核驳回", "rejected", "REJECTED"):
+            draft_suggestions = ["修改后重新提交审核"]
+        elif review in ("已通过", "审核通过", "approved", "APPROVED"):
+            draft_suggestions = ["下达工单"]
+        elif review in ("草稿", "draft", "DRAFT"):
+            draft_suggestions = ["提交审核"]
+        else:
+            draft_suggestions = ["下达工单"]
         return {
             "current_stage_key": "draft",
             "current_stage_name": "草稿",
             "status": "normal",
             "main_stages": _build_main_stages(WORK_ORDER_MAIN_STAGES, "draft"),
             "sub_stages": None,
-            "next_step_suggestions": ["下达工单"],
+            "next_step_suggestions": draft_suggestions,
             "milestones": milestones,
         }
 
@@ -2353,6 +2364,8 @@ def get_stocktaking_lifecycle(
 # 生产领料单生命周期（待领料→已领料→已取消）
 # ---------------------------------------------------------------------------
 PRODUCTION_PICKING_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "pending_review", "label": "待审核"},
     {"key": "pending_picking", "label": "待领料"},
     {"key": "completed", "label": "已领料"},
     {"key": "cancelled", "label": "已取消"},
@@ -2363,14 +2376,16 @@ def get_production_picking_lifecycle(
     record: Any,
     milestones: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    """生产领料单生命周期（待领料→已领料；与出库 Hub「确认出库」对齐）。"""
+    """生产领料单生命周期（草稿/待审核→待领料→已领料；与 UniAudit + 出库 Hub 对齐）。"""
     status = _norm(getattr(record, "status", None))
     milestones = milestones or []
     status_map = {
+        "草稿": "draft",
+        "draft": "draft",
+        "待审核": "pending_review",
+        "pending_review": "pending_review",
         "待领料": "pending_picking",
         "pending": "pending_picking",
-        "draft": "pending_picking",
-        "草稿": "pending_picking",
         "已领料": "completed",
         "completed": "completed",
         "已完成": "completed",
@@ -2379,11 +2394,20 @@ def get_production_picking_lifecycle(
     }
     key = status_map.get(status, "pending_picking")
     stage_name_map = {
+        "draft": "草稿",
+        "pending_review": "待审核",
         "pending_picking": "待领料",
         "completed": "已领料",
         "cancelled": "已取消",
     }
     stage_name = stage_name_map.get(key, status or "待领料")
+    suggestions: List[str] = []
+    if key == "draft":
+        suggestions = ["提交审核"]
+    elif key == "pending_review":
+        suggestions = ["审核"]
+    elif key == "pending_picking":
+        suggestions = ["确认领料"]
     return {
         "current_stage_key": key,
         "current_stage_name": stage_name,
@@ -2392,7 +2416,7 @@ def get_production_picking_lifecycle(
             PRODUCTION_PICKING_MAIN_STAGES, key, is_exception=(key == "cancelled")
         ),
         "sub_stages": None,
-        "next_step_suggestions": ["确认领料"] if key == "pending_picking" else [],
+        "next_step_suggestions": suggestions,
         "milestones": milestones,
     }
 

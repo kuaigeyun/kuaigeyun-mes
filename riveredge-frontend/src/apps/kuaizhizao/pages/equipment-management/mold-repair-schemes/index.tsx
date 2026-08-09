@@ -484,8 +484,6 @@ const MoldRepairSchemesPage: React.FC = () => {
 
         key: 'action',
 
-        width: 200,
-
         fixed: 'right',
 
         hideInSearch: true,
@@ -495,8 +493,6 @@ const MoldRepairSchemesPage: React.FC = () => {
           renderEquipmentMasterRowActions({
 
             record,
-
-            keyPrefix: `mold-repair-scheme-actions-${record.id ?? 'row'}`,
 
             t,
 

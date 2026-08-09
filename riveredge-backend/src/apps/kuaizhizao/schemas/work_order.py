@@ -51,6 +51,13 @@ class WorkOrderBase(BaseSchema):
     # 状态和优先级
     status: str = Field("draft", description="工单状态")
     priority: str = Field("normal", description="优先级")
+
+    # 审核信息（UniAudit）
+    reviewer_id: Optional[int] = Field(None, description="审核人ID")
+    reviewer_name: Optional[str] = Field(None, description="审核人姓名")
+    review_time: Optional[datetime] = Field(None, description="审核时间")
+    review_status: Optional[str] = Field(None, description="审核状态")
+    review_remarks: Optional[str] = Field(None, description="审核备注")
     
     # 指定结束标记
     manually_completed: bool = Field(False, description="是否指定结束（true:手动指定结束, false:正常完成）")

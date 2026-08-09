@@ -60,8 +60,8 @@ const HourlyRatesPage: React.FC = () => {
     }
     employeePerformanceApi.getHourlyRate(editId).then((r) => {
       formRef.current?.setFieldsValue({
-        department_id: r.department_id,
-        position_id: r.position_id,
+        department_id: r.department_id ?? '',
+        position_id: r.position_id ?? '',
         rate: r.rate,
         is_active: r.is_active !== false,
       });
@@ -203,7 +203,6 @@ const HourlyRatesPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1280 }}
           enableRowSelection={true}
           showDeleteButton={true}
           onDelete={async (keys) => {
@@ -233,17 +232,23 @@ const HourlyRatesPage: React.FC = () => {
         }}
         formRef={formRef as React.RefObject<ProFormInstance>}
         onFinish={async (values) => {
-          const deptId = values.department_id || undefined;
-          const posId = values.position_id || undefined;
+          const deptId =
+            values.department_id == null || values.department_id === ''
+              ? null
+              : Number(values.department_id);
+          const posId =
+            values.position_id == null || values.position_id === ''
+              ? null
+              : Number(values.position_id);
           const payload = {
             department_id: deptId,
             department_name: deptId
-              ? departments.find((d) => d.id === deptId)?.name
-              : undefined,
+              ? departments.find((d) => d.id === deptId)?.name ?? null
+              : null,
             position_id: posId,
             position_name: posId
-              ? positions.find((p) => p.id === posId)?.name
-              : undefined,
+              ? positions.find((p) => p.id === posId)?.name ?? null
+              : null,
             rate: values.rate,
             is_active: values.is_active !== false,
           };
@@ -264,16 +269,22 @@ const HourlyRatesPage: React.FC = () => {
         <ProFormSelect
           name="department_id"
           label={t('app.kuaizhizao.performance.common.columns.department')}
-          options={[{ label: t('app.kuaizhizao.performance.common.form.notSpecified'), value: null }, ...departments.map((d) => ({ label: d.name, value: d.id }))]}
+          options={[
+            { label: t('app.kuaizhizao.performance.common.form.notSpecified'), value: '' },
+            ...departments.map((d) => ({ label: d.name, value: d.id })),
+          ]}
+          fieldProps={{ allowClear: true }}
           colProps={{ span: 12 }}
-          disabled={!!editId}
         />
         <ProFormSelect
           name="position_id"
           label={t('app.kuaizhizao.performance.common.columns.position')}
-          options={[{ label: t('app.kuaizhizao.performance.common.form.notSpecified'), value: null }, ...positions.map((p) => ({ label: p.name, value: p.id }))]}
+          options={[
+            { label: t('app.kuaizhizao.performance.common.form.notSpecified'), value: '' },
+            ...positions.map((p) => ({ label: p.name, value: p.id })),
+          ]}
+          fieldProps={{ allowClear: true }}
           colProps={{ span: 12 }}
-          disabled={!!editId}
         />
         <ProFormDigit name="rate" label={t('app.kuaizhizao.performance.hourlyRates.form.rate')} rules={[{ required: true }]} min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
         <ProFormSwitch name="is_active" label={t('app.kuaizhizao.performance.common.form.active')} colProps={{ span: 12 }} />

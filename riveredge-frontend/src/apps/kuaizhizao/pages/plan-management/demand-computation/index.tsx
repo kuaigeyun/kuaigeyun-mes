@@ -1,4 +1,4 @@
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 统一需求计算页面
  *
@@ -138,7 +138,7 @@ import { readinessFieldHelpI18nKey } from './readinessFieldHelp'
 import { buildDemandPushPreviewSummary } from './pushPreviewSummary'
 import { renderPushPreviewTargetBadge } from './pushPreviewTargetBadge'
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns'
-import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar'
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar'
 import { resolveDownstreamPushPercent } from '../../sales-management/shared/pushProgress'
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment'
 import {formatDateBySiteSetting, formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format'
@@ -245,10 +245,6 @@ type PullSalesForecastCandidate = {
 /** 明细表列宽合计下限，保证横滚与「尽量不换行」 */
 const DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH = 1920
 
-function renderDemandComputationRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix)
-}
-
 function normalizeComputationSourceNote(computation: DemandComputation | undefined, t: TFunction): string {
   const raw = String(computation?.notes || '').trim()
   if (!raw) return ''
@@ -285,6 +281,7 @@ const MATERIAL_SOURCE_TAG_COLORS: Record<string, string> = {
   Buy: 'green',
   Phantom: 'orange',
   Outsource: 'purple',
+  CustomerProvided: 'magenta',
   Service: 'geekblue',
 }
 
@@ -2482,9 +2479,7 @@ const DemandComputationPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
       dataIndex: 'downstream_push_progress',
-      width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
       render: (_, record) => {
         const percent = resolveDownstreamPushPercent(record.downstream_push_progress)
         return (
@@ -2502,7 +2497,6 @@ const DemandComputationPage: React.FC = () => {
       title: t('app.kuaizhizao.demandComputation.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       fixed: 'right',
-      align: 'center',
       hideInSearch: false,
       valueType: 'select',
       valueEnum: demandComputationLifecycleValueEnum,
@@ -2526,7 +2520,6 @@ const DemandComputationPage: React.FC = () => {
       title: t('app.kuaizhizao.demandComputation.colActions'),
       key: 'option',
       valueType: 'option',
-      width: 200,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
@@ -2551,7 +2544,7 @@ const DemandComputationPage: React.FC = () => {
             </Button>
           )
         }
-        return renderDemandComputationRowActions(parts, `dc-${record.id ?? 'row'}`)
+        return parts
       },
     },
     ], SALES_DOC_LIST_FIELD_RANK),

@@ -9,7 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
@@ -179,10 +179,6 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       span: col.span ?? 1,
     };
   });
-}
-
-function renderOoRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 const OO_STAT_SPARK_1 = [2, 3, 4, 3, 5, 4, 6];
@@ -1045,8 +1041,9 @@ export const OutsourceOrdersTable: React.FC = () => {
       ...buildDocumentAuditColumns<OutsourceOrder>(t),
       {
         title: t('app.kuaizhizao.outsourceOrder.colLifecycle'),
+        // 搜索仍绑 status；key 声明列身份，UniTable 据此给出与审核状态列一致的宽度与对齐
+        key: 'lifecycle',
         dataIndex: 'status',
-        width: 140,
         fixed: 'right',
         hideInSearch: false,
         valueType: 'select',
@@ -1069,11 +1066,9 @@ export const OutsourceOrdersTable: React.FC = () => {
       ...outsourceCustomFieldColumns,
       {
         title: t('common.actions'),
-        width: 200,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) =>
-          renderOoRowActions(renderOoRowActionNodes(record), `oo-${record.id ?? 'row'}`),
+        render: (_, record) => renderOoRowActionNodes(record),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
     [outsourceCustomFieldColumns, outsourceOrderLifecycleValueEnum, supplierSearchValueEnum, t],
@@ -1203,7 +1198,6 @@ export const OutsourceOrdersTable: React.FC = () => {
         skipFuzzyPinyinClientFilter
         pinnedTabsField="status"
         pinnedTabsValueEnum={outsourceOrderLifecycleValueEnum}
-        scroll={{ x: 1800 }}
         onRow={(record) => ({
           onClick: () => void handleDetail(record),
           style: { cursor: 'pointer' },

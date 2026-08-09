@@ -952,7 +952,6 @@ const DrawingsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1200 }}
           onRow={(record) => ({
             onClick: () => selectRowForPreview(record),
             style: { cursor: 'pointer' },

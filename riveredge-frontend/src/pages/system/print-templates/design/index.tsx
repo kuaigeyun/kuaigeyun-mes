@@ -229,6 +229,8 @@ type DesignerNodeSchema =
   | { id: string; type: 'field'; key: string; label: string; showLabel?: boolean; style?: BlockStyle }
   | { id: string; type: 'if'; condition: string; content: string }
   | { id: string; type: 'for'; item: string; collection: string; template: string }
+  /** 预置专业版式遗留 HTML（Jinja）；可视化配置真源仍走 designer_json */
+  | { id: string; type: 'html'; content: string }
   | { id: string; type: 'qrcode'; key: string; size: number; style?: BlockStyle }
   | { id: string; type: 'barcode'; key: string; format: string; height: number; style?: BlockStyle }
   | { id: string; type: 'image'; url: string; width: number; height: number; keepRatio?: boolean; style?: BlockStyle }
@@ -2928,17 +2930,27 @@ const PrintTemplateDesignPage: React.FC = () => {
                 isDragging={!!activeDragId}
               />
             )}
-            {(blk.type === 'if' || blk.type === 'for' || blk.type === 'detail_table') && (
+            {(blk.type === 'if' || blk.type === 'for' || blk.type === 'detail_table' || blk.type === 'html') && (
               <LogicBlock
-                title={blk.type === 'if' ? t('pages.system.printTemplatesDesign.compIf') : blk.type === 'for' ? t('pages.system.printTemplatesDesign.compFor') : t('pages.system.printTemplatesDesign.compDetailTable')}
+                title={
+                  blk.type === 'if'
+                    ? t('pages.system.printTemplatesDesign.compIf')
+                    : blk.type === 'for'
+                      ? t('pages.system.printTemplatesDesign.compFor')
+                      : blk.type === 'html'
+                        ? t('pages.system.printTemplatesDesign.compHtml')
+                        : t('pages.system.printTemplatesDesign.compDetailTable')
+                }
                 body={
                   blk.type === 'if'
                     ? `{% if ${blk.condition} %}${blk.content}{% endif %}`
                     : blk.type === 'for'
                       ? `{% for ${blk.item} in ${blk.collection} %}${blk.template}{% endfor %}`
-                      : blk.type === 'detail_table'
-                        ? `collection=${blk.collection}, columns=${blk.columns.length}`
-                        : ''
+                      : blk.type === 'html'
+                        ? t('pages.system.printTemplatesDesign.compHtmlHint')
+                        : blk.type === 'detail_table'
+                          ? `collection=${blk.collection}, columns=${blk.columns.length}`
+                          : ''
                 }
                 selected={isSelected}
                 onSelect={() => setSelectedBlockId(blk.id)}
@@ -3586,6 +3598,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                     {selectedBlock.type === 'seal_overlay' && t('pages.system.printTemplatesDesign.compSealOverlay')}
                     {selectedBlock.type === 'if' && t('pages.system.printTemplatesDesign.compIf')}
                     {selectedBlock.type === 'for' && t('pages.system.printTemplatesDesign.compFor')}
+                    {selectedBlock.type === 'html' && t('pages.system.printTemplatesDesign.compHtml')}
                     {selectedBlock.type === 'detail_table' && t('pages.system.printTemplatesDesign.compDetailTable')}
                   </span>
                   <Space>
@@ -3868,6 +3881,20 @@ const PrintTemplateDesignPage: React.FC = () => {
                       <Input value={selectedBlock.item} placeholder={t('pages.system.printTemplatesDesign.itemVar')} onChange={e => updateSelectedBlock({ item: e.target.value })} />
                       <Input value={selectedBlock.collection} placeholder={t('pages.system.printTemplatesDesign.collectionVar')} onChange={e => updateSelectedBlock({ collection: e.target.value })} />
                       <Input.TextArea value={selectedBlock.template} placeholder={t('pages.system.printTemplatesDesign.itemTemplate')} onChange={e => updateSelectedBlock({ template: e.target.value })} />
+                    </Space>
+                  )}
+                  {selectedBlock.type === 'html' && (
+                    <Space orientation="vertical" style={{ width: '100%' }}>
+                      <div style={{ background: token.colorFillTertiary, padding: '8px 12px', borderRadius: 6, fontSize: 12, color: token.colorTextSecondary }}>
+                        {t('pages.system.printTemplatesDesign.compHtmlHint')}
+                      </div>
+                      <Input.TextArea
+                        rows={12}
+                        value={selectedBlock.content}
+                        placeholder={t('pages.system.printTemplatesDesign.content')}
+                        onChange={e => updateSelectedBlock({ content: e.target.value })}
+                        style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: 12 }}
+                      />
                     </Space>
                   )}
                   {selectedBlock.type === 'detail_table' && (

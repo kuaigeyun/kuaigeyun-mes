@@ -20,6 +20,8 @@ _PATH_MODULE_RULES: tuple[tuple[str, str], ...] = (
     # BOM / 工程变更：manifest 为 process:engineering-bom（须先于泛化 /materials）
     ("/bom-change-records", "process:engineering-bom"),
     ("/materials/bom", "process:engineering-bom"),
+    ("/materials/unit-conversions", "material-unit"),
+    ("/materials/units", "material-unit"),
     ("/warehouses", "warehouse:warehouse"),
     ("/storage-areas", "warehouse:storage-area"),
     ("/storage-locations", "warehouse:storage-location"),

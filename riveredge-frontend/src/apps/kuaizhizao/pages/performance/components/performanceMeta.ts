@@ -119,6 +119,7 @@ export function renderYesNoTag(t: TFunction, value?: boolean): React.ReactNode {
 }
 
 export function buildPerformanceSalaryReportColumns(t: TFunction): ProColumns[] {
+  const statusEnum = getPerformanceSummaryStatusValueEnum(t);
   return [
     { title: t('app.kuaizhizao.performance.common.columns.employee'), dataIndex: 'employee_name', width: 120 },
     { title: t('app.kuaizhizao.performance.common.columns.period'), dataIndex: 'period', width: 100 },
@@ -128,13 +129,35 @@ export function buildPerformanceSalaryReportColumns(t: TFunction): ProColumns[] 
     { title: t('app.kuaizhizao.performance.common.columns.pieceAmount'), dataIndex: 'piece_amount', valueType: 'money', width: 110, align: 'right' },
     { title: t('app.kuaizhizao.performance.common.columns.kpiCoefficient'), dataIndex: 'kpi_coefficient', width: 90, align: 'right' },
     { title: t('app.kuaizhizao.performance.common.columns.totalAmount'), dataIndex: 'total_amount', valueType: 'money', width: 120, align: 'right' },
-    { title: t('app.kuaizhizao.performance.common.columns.status'), dataIndex: 'status', width: 90 },
+    {
+      title: t('app.kuaizhizao.performance.common.columns.status'),
+      dataIndex: 'status',
+      width: 100,
+      valueEnum: statusEnum,
+      render: (_, row) => {
+        const key = String(row?.status ?? '');
+        return statusEnum[key]?.text ?? (key || '-');
+      },
+    },
   ];
 }
 
 export function buildPerformanceEfficiencyReportColumns(t: TFunction): ProColumns[] {
   return [
     { title: t('app.kuaizhizao.performance.reports.columns.workerName'), dataIndex: 'worker_name', width: 140 },
-    { title: t('app.kuaizhizao.performance.reports.columns.totalQty'), dataIndex: 'total_qty', valueType: 'digit', width: 120, align: 'right' },
+    {
+      title: t('app.kuaizhizao.performance.reports.columns.totalQty'),
+      dataIndex: 'total_pieces',
+      valueType: 'digit',
+      width: 120,
+      align: 'right',
+      // 兼容列持久化旧 key total_qty 与后端双字段
+      render: (_, row) => {
+        const v = row?.total_pieces ?? row?.total_qty;
+        return v == null || v === '' ? '-' : v;
+      },
+    },
+    { title: t('app.kuaizhizao.performance.reports.columns.totalHours'), dataIndex: 'total_hours', valueType: 'digit', width: 100, align: 'right' },
+    { title: t('app.kuaizhizao.performance.reports.columns.piecesPerHour'), dataIndex: 'pieces_per_hour', valueType: 'digit', width: 120, align: 'right' },
   ];
 }

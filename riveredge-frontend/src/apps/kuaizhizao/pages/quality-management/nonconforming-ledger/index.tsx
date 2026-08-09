@@ -34,6 +34,7 @@ import {
   getQualityNcLedgerStatusValueEnum,
   renderNcLedgerStatusTag,
 } from '../components/qualityMeta';
+import { DowngradeDispositionFields } from '../components/DowngradeDispositionFields';
 
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
 const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
@@ -215,6 +216,24 @@ const NonconformingLedgerPage: React.FC = () => {
         valueEnum: getQualityDispositionValueEnum(t),
       },
       {
+        title: t('app.kuaizhizao.quality.nc.columns.downgradeMaterial'),
+        dataIndex: 'downgrade_material_name',
+        width: 160,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, row) =>
+          row.downgrade_material_name
+            ? `${row.downgrade_material_code || ''} ${row.downgrade_material_name}`.trim()
+            : '-',
+      },
+      {
+        title: t('app.kuaizhizao.quality.nc.columns.otherInbound'),
+        dataIndex: 'other_inbound_id',
+        width: 100,
+        hideInSearch: true,
+        render: (_, row) => (row.other_inbound_id ? `#${row.other_inbound_id}` : '-'),
+      },
+      {
         title: t('app.kuaizhizao.quality.common.columns.status'),
         dataIndex: 'status',
         width: 100,
@@ -247,6 +266,8 @@ const NonconformingLedgerPage: React.FC = () => {
                         formRef.current?.setFieldsValue({
                           disposition: row.disposition,
                           status: row.status,
+                          downgrade_material_id: row.downgrade_material_id,
+                          downgrade_warehouse_id: row.downgrade_warehouse_id,
                           attachments: mapAttachmentsToUploadList(row.attachments),
                         }),
                       50,
@@ -333,6 +354,7 @@ const NonconformingLedgerPage: React.FC = () => {
             }
             await qualityImprovementApi.nonconformingLedger.updateDisposition(currentRow.id, {
               ...values,
+              status: values.disposition === 'downgrade' ? 'processed' : values.status,
               attachments: normalizeDocumentAttachments(values.attachments),
             });
             messageApi.success(t('app.kuaizhizao.quality.nc.messages.updateDispositionSuccess'));
@@ -347,6 +369,7 @@ const NonconformingLedgerPage: React.FC = () => {
             valueEnum={getQualityDispositionValueEnum(t)}
             rules={[{ required: true }]}
           />
+          <DowngradeDispositionFields />
           <ProFormSelect
             name="status"
             label={t('app.kuaizhizao.quality.nc.form.ledgerStatus')}

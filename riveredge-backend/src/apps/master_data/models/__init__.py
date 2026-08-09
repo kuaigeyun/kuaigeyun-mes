@@ -12,6 +12,7 @@ from .bom_change import BOMChange
 from .material_code_mapping import MaterialCodeMapping
 from .material_batch import MaterialBatch
 from .material_serial import MaterialSerial
+from .unit import MaterialUnit, MaterialUnitConversion
 from .process import DefectType, Operation, ProcessRoute, SOP
 from .process_route_change import ProcessRouteChange
 from .drawing import EngineeringDrawing
@@ -46,6 +47,8 @@ __all__ = [
     "MaterialCodeMapping",
     "MaterialBatch",
     "MaterialSerial",
+    "MaterialUnit",
+    "MaterialUnitConversion",
     "DefectType",
     "Operation",
     "ProcessRoute",

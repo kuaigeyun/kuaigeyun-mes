@@ -1205,7 +1205,9 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                       </Tag>
                     ) : row.pickingPartial ? (
                       <Tag style={{ margin: 0 }} color="gold">
-                        {t('app.kuaizhizao.workOrder.tagPickingPartial')}
+                        {t('app.kuaizhizao.workOrder.tagPickingPartial', {
+                          defaultValue: '部分领料',
+                        })}
                       </Tag>
                     ) : null
                     const backflushTag =

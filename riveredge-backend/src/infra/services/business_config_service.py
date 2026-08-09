@@ -174,6 +174,9 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "parameters.common.quantity_decimal_places": {"type": "number", "min": 0, "max": 2},
+    "parameters.common.price_decimal_places": {"type": "number", "min": 0, "max": 4},
+    "parameters.common.amount_decimal_places": {"type": "number", "min": 0, "max": 2},
     "parameters.purchase.tolerance_percentage": {"type": "number", "min": 0, "max": 100},
     "parameters.purchase.price_fluctuation_limit_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.work_order.material_shortage_block_level": {"type": "number", "min": 0, "max": 3},
@@ -253,6 +256,9 @@ PROCESS_KEYS = {
 # 参数设置：具体业务值（数值、阈值、功能开关）
 PARAMETER_KEYS = {
     "parameters.common.trial_run_mode",
+    "parameters.common.quantity_decimal_places",
+    "parameters.common.price_decimal_places",
+    "parameters.common.amount_decimal_places",
     "parameters.work_order.allow_production_without_material",
     "parameters.work_order.auto_generate",
     "parameters.work_order.priority",
@@ -310,6 +316,9 @@ PARAMETER_KEYS = {
 # 已实装并在后端有明确生效点的配置项（用于前端禁用"假开关"）
 IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.common.trial_run_mode",
+    "parameters.common.quantity_decimal_places",
+    "parameters.common.price_decimal_places",
+    "parameters.common.amount_decimal_places",
     "parameters.procurement.require_purchase_requisition",
     "parameters.work_order.picking_issue_strategy",
     "parameters.work_order.picking_confirm_warehouse_only",
@@ -400,6 +409,10 @@ DEFAULT_PRODUCTION_PICKING_CONFIRM_ROLE_CODES = {
 DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     "common": {
         "trial_run_mode": False,
+        # 数量/单价/金额小数位（ERP 惯例分项；默认 2；上限对齐当前库字段）
+        "quantity_decimal_places": 2,
+        "price_decimal_places": 2,
+        "amount_decimal_places": 2,
     },
     "work_order": {
         "auto_generate": True,
@@ -745,6 +758,40 @@ class BusinessConfigService:
         """是否开启试运营模式（试运营期间部分业务校验可放宽，具体规则由各领域按需接入）。"""
         config = await self.get_business_config(tenant_id)
         return bool(config["parameters"].get("common", {}).get("trial_run_mode", False))
+
+    async def _get_decimal_places_param(
+        self,
+        tenant_id: int,
+        key: str,
+        *,
+        default: int,
+        max_places: int,
+    ) -> int:
+        config = await self.get_business_config(tenant_id)
+        raw = config["parameters"].get("common", {}).get(key, default)
+        try:
+            places = int(raw)
+        except (TypeError, ValueError):
+            places = default
+        return max(0, min(max_places, places))
+
+    async def get_quantity_decimal_places(self, tenant_id: int) -> int:
+        """数量小数位（默认 2，上限 2，对齐主流数量 Decimal 字段）。"""
+        return await self._get_decimal_places_param(
+            tenant_id, "quantity_decimal_places", default=2, max_places=2
+        )
+
+    async def get_price_decimal_places(self, tenant_id: int) -> int:
+        """单价小数位（默认 2，上限 4，对齐采购单价 Decimal 字段）。"""
+        return await self._get_decimal_places_param(
+            tenant_id, "price_decimal_places", default=2, max_places=4
+        )
+
+    async def get_amount_decimal_places(self, tenant_id: int) -> int:
+        """金额小数位（默认 2，上限 2，对齐金额 Decimal 字段）。"""
+        return await self._get_decimal_places_param(
+            tenant_id, "amount_decimal_places", default=2, max_places=2
+        )
 
     async def allow_production_without_material(self, tenant_id: int) -> bool:
         return (await self.get_material_shortage_block_level(tenant_id)) <= 0

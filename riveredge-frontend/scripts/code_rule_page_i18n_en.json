@@ -353,6 +353,10 @@
       "pageName": "Demand Plans",
       "codeFieldLabel": "Demand plan code"
     },
+    "kuaizhizao-demand-computation": {
+      "pageName": "Demand Computation",
+      "codeFieldLabel": "Demand computation code"
+    },
     "kuaizhizao-warehouse-inbound": {
       "pageName": "Production Material Issues",
       "codeFieldLabel": "Material issue code"

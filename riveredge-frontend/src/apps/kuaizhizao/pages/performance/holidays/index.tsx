@@ -231,7 +231,6 @@ const HolidaysPage: React.FC = () => {
           showAdvancedSearch={true}
           skipFuzzyPinyinClientFilter
           pinnedTabsField={PERFORMANCE_PINNED_ACTIVE_FIELD}
-          scroll={{ x: 1280 }}
           pagination={{ defaultPageSize: 20, showSizeChanger: true }}
           showCreateButton
           createButtonText={t('app.kuaizhizao.performance.holidays.createButton')}

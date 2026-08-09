@@ -447,7 +447,6 @@ const VariantAttributesPage: React.FC = () => {
           search={{
             labelWidth: 'auto',
           }}
-          scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
 

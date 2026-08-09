@@ -11,11 +11,12 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, Descriptions, Form, Input, InputNumber, Modal, Row, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Col, Descriptions, Form, InputNumber, Modal, Row, Space, Table, Tag, Typography } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import CodeField from '../../../../../components/code-field';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
@@ -39,6 +40,7 @@ import {
 } from '../../../utils/warehouseListCore';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 
 interface MaterialReturn {
   id?: number;
@@ -97,6 +99,7 @@ const MaterialReturnsPage: React.FC = () => {
   const [returnDetail, setReturnDetail] = useState<MaterialReturnDetail | null>(null);
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [createSubmitting, setCreateSubmitting] = useState(false);
   const formRef = useRef<any>(null);
   const [borrowList, setBorrowList] = useState<any[]>([]);
   const [borrowLoading, setBorrowLoading] = useState(false);
@@ -275,7 +278,7 @@ const MaterialReturnsPage: React.FC = () => {
     [t],
   );
 
-  const handleCreateSubmit = async (values: any) => {
+  const createMaterialReturn = async (values: any, andConfirm: boolean) => {
     if (!selectedBorrowDetail) {
       messageApi.error(t('app.kuaizhizao.warehouseMaterialReturn.msg.selectBorrow'));
       throw new Error(t('app.kuaizhizao.warehouseMaterialReturn.msg.selectBorrow'));
@@ -296,26 +299,69 @@ const MaterialReturnsPage: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.warehouseMaterialReturn.msg.needValidReturnQty'));
       throw new Error(t('app.kuaizhizao.warehouseMaterialReturn.msg.needValidReturnQty'));
     }
+    setCreateSubmitting(true);
     try {
-      await warehouseApi.materialReturn.create({
+      const created = await warehouseApi.materialReturn.create({
         return_code: values.return_code,
         borrow_id: selectedBorrowDetail.borrow_id,
         borrow_code: selectedBorrowDetail.borrow_code,
         warehouse_id: selectedBorrowDetail.warehouse_id,
         warehouse_name: selectedBorrowDetail.warehouse_name,
+        returner_id: values.returner_id != null ? Number(values.returner_id) : undefined,
         returner_name: values.returner_name,
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
         items: validItems,
       });
-      messageApi.success(t('app.kuaizhizao.warehouseMaterialReturn.msg.createSuccess'));
+      const createdId = (created as any)?.id;
+      if (andConfirm) {
+        if (!createdId) {
+          throw new Error(t('app.kuaizhizao.warehouseMaterialReturn.msg.createMissingId'));
+        }
+        await warehouseApi.materialReturn.confirm(String(createdId));
+        messageApi.success(t('app.kuaizhizao.warehouseMaterialReturn.msg.createAndConfirmSuccess'));
+      } else {
+        messageApi.success(t('app.kuaizhizao.warehouseMaterialReturn.msg.createSuccess'));
+      }
       setCreateModalVisible(false);
       invalidateMenuBadgeCounts();
-
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.warehouseMaterialReturn.msg.createFailed'));
+      messageApi.error(
+        error.message
+          || (andConfirm
+            ? t('app.kuaizhizao.warehouseMaterialReturn.msg.createAndConfirmFailed')
+            : t('app.kuaizhizao.warehouseMaterialReturn.msg.createFailed')),
+      );
       throw error;
+    } finally {
+      setCreateSubmitting(false);
+    }
+  };
+
+  /** Ctrl+S / 主按钮：仅保存为待归还 */
+  const handleCreateSubmit = async (values: any) => {
+    await createMaterialReturn(values, false);
+  };
+
+  /** 保存并确认归还（正式入库） */
+  const handleCreateAndConfirm = async () => {
+    const inst = formRef.current;
+    if (!inst || typeof inst.validateFields !== 'function') {
+      messageApi.warning(t('components.layoutTemplates.formModal.formNotReady'));
+      return;
+    }
+    try {
+      const values = await inst.validateFields();
+      await createMaterialReturn(values, true);
+    } catch (error: any) {
+      if (error?.errorFields) {
+        const first = error.errorFields?.[0];
+        const text = first?.errors?.filter(Boolean)[0];
+        messageApi.error(text || t('components.layoutTemplates.formModal.checkFormHint'));
+        return;
+      }
+      // createMaterialReturn 已提示业务错误
     }
   };
 
@@ -421,7 +467,6 @@ const MaterialReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.warehouseMaterialReturn.col.lifecycle'),
         dataIndex: 'lifecycle_stage',
         fixed: 'right',
-        align: 'left',
         hideInSearch: true,
         render: (_, record) => {
           const lifecycle = getMaterialReturnLifecycle(record as Record<string, unknown>, t);
@@ -608,7 +653,6 @@ const MaterialReturnsPage: React.FC = () => {
               {t('components.uniAction.print')}
             </Button>,
           ]}
-          scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
 
@@ -648,7 +692,28 @@ const MaterialReturnsPage: React.FC = () => {
         onClose={() => setCreateModalVisible(false)}
         formRef={formRef}
         onFinish={handleCreateSubmit}
-        submitText={t('app.kuaizhizao.warehouseMaterialReturn.action.saveDraft')}
+        loading={createSubmitting}
+        submitHidden
+        extraFooter={
+          <Button
+            loading={createSubmitting}
+            onClick={() => {
+              const inst = formRef.current;
+              if (!inst || typeof inst.submit !== 'function') {
+                messageApi.warning(t('components.layoutTemplates.formModal.formNotReady'));
+                return;
+              }
+              inst.submit();
+            }}
+          >
+            {t('app.kuaizhizao.warehouseMaterialReturn.action.save') + SUBMIT_SHORTCUT_HINT}
+          </Button>
+        }
+        extraFooterAfter={
+          <Button type="primary" loading={createSubmitting} onClick={() => void handleCreateAndConfirm()}>
+            {t('app.kuaizhizao.warehouseMaterialReturn.action.saveAndConfirm')}
+          </Button>
+        }
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}
       >
@@ -702,11 +767,22 @@ const MaterialReturnsPage: React.FC = () => {
             </div>
           </>
         )}
+        <Form.Item name="returner_id" hidden />
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormItem name="returner_name" label={t('app.kuaizhizao.warehouseMaterialReturn.field.returner')}>
-              <Input placeholder={t('app.kuaizhizao.warehouseMaterialReturn.field.returnerPlaceholder')} />
-            </ProFormItem>
+            <UniUserSelect
+              name="returner_uuid"
+              label={t('app.kuaizhizao.warehouseMaterialReturn.field.returner')}
+              placeholder={t('app.kuaizhizao.warehouseMaterialReturn.field.selectReturner')}
+              onChange={(_value: any, user: any) => {
+                const picked = Array.isArray(user) ? user[0] : user;
+                formRef.current?.setFieldsValue({
+                  returner_id: picked?.id,
+                  returner_name: picked?.full_name || picked?.username || undefined,
+                });
+              }}
+            />
+            <Form.Item name="returner_name" hidden />
           </Col>
           <Col span={12} />
         </Row>

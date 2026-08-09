@@ -47,25 +47,25 @@
         "sort_order": 2,
         "children": [
           {
-            "title": "app.kuaiplm.menu.change-management",
-            "path": "/apps/kuaiplm/change-management",
-            "permission": "kuaiplm:change:read",
-            "sort_order": 1,
-            "meta": {
-              "node": "bom_change"
-            }
-          },
-          {
             "title": "app.master-data.menu.process.drawings",
             "path": "/apps/master-data/process/drawings",
             "permission": "master-data:process:drawing:read",
-            "sort_order": 2
+            "sort_order": 1
           },
           {
             "title": "app.master-data.menu.process.engineering-bom",
             "path": "/apps/master-data/process/engineering-bom",
             "permission": "master-data:process:engineering-bom:read",
-            "sort_order": 3
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaiplm.menu.change-management",
+            "path": "/apps/kuaiplm/change-management",
+            "permission": "kuaiplm:change:read",
+            "sort_order": 3,
+            "meta": {
+              "node": "bom_change"
+            }
           }
         ]
       },

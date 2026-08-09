@@ -279,7 +279,6 @@ const MaterialBorrowsPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
-      align: 'left',
       hideInSearch: true,
       render: (_, record) => {
         const lifecycle = getMaterialBorrowLifecycle(record as Record<string, unknown>, t);
@@ -659,7 +658,6 @@ const MaterialBorrowsPage: React.FC = () => {
               {t('components.uniAction.print')}
             </Button>,
           ]}
-          scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
 

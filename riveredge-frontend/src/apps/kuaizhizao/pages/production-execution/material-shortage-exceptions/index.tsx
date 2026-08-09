@@ -13,7 +13,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -298,23 +298,18 @@ const MaterialShortageExceptionsPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 200,
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
-              {t('common.detail')}
-            </Button>,
-            ...buildMaterialShortageExceptionActionButtons({
-              record,
-              t,
-              onAction: (action) => openHandleModal(record, action),
-              keyPrefix: `material-shortage-actions-${record.id ?? 'row'}`,
-            }),
-          ],
-          { keyPrefix: `material-shortage-actions-${record.id ?? 'row'}` },
-        ),
+      render: (_, record) => [
+        <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+          {t('common.detail')}
+        </Button>,
+        ...buildMaterialShortageExceptionActionButtons({
+          record,
+          t,
+          onAction: (action) => openHandleModal(record, action),
+          keyPrefix: `material-shortage-actions-${record.id ?? 'row'}`,
+        }),
+      ],
     },
   ], SALES_DOC_LIST_FIELD_RANK), [alertLevelValueEnum, exceptionStatusValueEnum, t]);
 

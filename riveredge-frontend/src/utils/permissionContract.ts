@@ -62,6 +62,14 @@ const PERMISSION_CODE_LABEL_I18N: Record<string, string> = {
   'haoligo:equipment-documents-acceptance:submit': 'permission.haoligo.equipmentDocumentsAcceptance.submit',
   'haoligo:equipment-documents-acceptance:execute': 'permission.haoligo.equipmentDocumentsAcceptance.execute',
   'haoligo:equipment-documents-acceptance:complete': 'permission.haoligo.equipmentDocumentsAcceptance.complete',
+  'kuaizhizao:quality-management-incoming-inspection:execute':
+    'permission.kuaizhizao.qualityManagementIncomingInspection.execute',
+  'kuaizhizao:quality-management-process-inspection:execute':
+    'permission.kuaizhizao.qualityManagementProcessInspection.execute',
+  'kuaizhizao:quality-management-finished-goods-inspection:execute':
+    'permission.kuaizhizao.qualityManagementFinishedGoodsInspection.execute',
+  'kuaizhizao:quality-management-oqc-inspection:execute':
+    'permission.kuaizhizao.qualityManagementOqcInspection.execute',
 };
 
 /** 角色矩阵 / 功能权限树：权限码级展示名优先，否则按 action 走 permission.action.* */

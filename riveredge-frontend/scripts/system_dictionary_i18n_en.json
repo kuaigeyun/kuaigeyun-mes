@@ -1122,5 +1122,53 @@
         "desc": "Urgent priority"
       }
     }
+  },
+  "INBOUND_REASON_TYPE": {
+    "name": "Other Inbound Reason Type",
+    "desc": "Reason types for other inbound orders; extend with items such as defective or nonconforming goods",
+    "items": {
+      "盘盈": {
+        "label": "Inventory Surplus",
+        "desc": "Inbound from inventory count surplus"
+      },
+      "调拨": {
+        "label": "Transfer",
+        "desc": "Transfer inbound"
+      },
+      "样品": {
+        "label": "Sample",
+        "desc": "Sample inbound"
+      },
+      "报废": {
+        "label": "Scrap",
+        "desc": "Scrap-related inbound"
+      },
+      "其他": {
+        "label": "Other",
+        "desc": "Other inbound reason"
+      }
+    }
+  },
+  "OUTBOUND_REASON_TYPE": {
+    "name": "Other Outbound Reason Type",
+    "desc": "Reason types for other outbound orders; extendable in the data dictionary",
+    "items": {
+      "盘亏": {
+        "label": "Inventory Loss",
+        "desc": "Outbound from inventory count loss"
+      },
+      "样品": {
+        "label": "Sample",
+        "desc": "Sample outbound"
+      },
+      "报废": {
+        "label": "Scrap",
+        "desc": "Scrap outbound"
+      },
+      "其他": {
+        "label": "Other",
+        "desc": "Other outbound reason"
+      }
+    }
   }
 }

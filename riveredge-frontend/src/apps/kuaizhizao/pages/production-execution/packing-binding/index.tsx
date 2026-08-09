@@ -986,7 +986,6 @@ const PackingBindingPage: React.FC = () => {
         title: t('app.kuaizhizao.packingBinding.colLifecycle'),
         dataIndex: 'lifecycle_stage',
         fixed: 'right',
-        align: 'left',
         hideInSearch: true,
         render: (_, record) => {
           const lifecycle = getPackingBindingLifecycle(record as Record<string, unknown>);
@@ -1178,7 +1177,6 @@ const PackingBindingPage: React.FC = () => {
           showDeleteButton={true}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.packingBinding.confirmBatchDelete', { count })}
-          scroll={{ x: 1900 }}
           toolBarActionsAfterCreate={[
             <Button {...rowActionKind('read')} key="task-pool" onClick={() => void openTaskPool()}>
               {t('app.kuaizhizao.packingBinding.taskPoolButton')}

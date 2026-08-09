@@ -325,7 +325,6 @@ const RdProjectsListPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         columnPersistenceId="apps.kuaiplm.pages.rd-projects"
-        scroll={{ x: 1400 }}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}

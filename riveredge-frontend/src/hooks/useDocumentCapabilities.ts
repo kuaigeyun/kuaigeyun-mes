@@ -1359,7 +1359,7 @@ export function qualityInspectionRowGates(
   return {
     conduct: qualityCapView(
       caps?.conduct,
-      inspectionPerms.canUpdate,
+      inspectionPerms.canAction?.('execute') ?? false,
       permDeniedTitle,
       t,
       QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES,
@@ -1447,7 +1447,7 @@ export function oqcInspectionRowGates(
   return {
     conduct: qualityCapView(
       caps?.conduct,
-      oqcPerms.canUpdate,
+      oqcPerms.canAction?.('execute') ?? false,
       permDeniedTitle,
       t,
       OQC_INSPECTION_CAPABILITY_REASON_MESSAGES,

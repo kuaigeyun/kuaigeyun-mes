@@ -52,7 +52,7 @@ import {
 } from './utils';
 import { bomApi, materialApi, materialGroupApi } from '../../../services/material';
 import { processRouteApi, unwrapProcessPagedList } from '../../../services/process';
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import { getMaterialUnitDisplayMapShared } from '../../../../../utils/materialUnitDisplay';
 import type { Material, MaterialCreate, MaterialUpdate, BOMHierarchyItem, MaterialUnits, BOMVersionCompareResult } from '../../../types/material';
 import type { ProcessRoute } from '../../../types/process';
 import {
@@ -100,6 +100,7 @@ const SOURCE_TYPE_COLORS: Record<string, string> = {
   Buy: 'green',
   Phantom: 'default',
   Outsource: 'orange',
+  CustomerProvided: 'purple',
   Service: 'cyan',
 };
 
@@ -120,6 +121,10 @@ const SOURCE_TYPE_NODE_COLORS: Record<string, { bg: string; border: string }> = 
   Outsource: {
     bg: 'color-mix(in srgb, #f59e0b 14%, var(--ant-color-bg-container, #ffffff))',
     border: '#f59e0b',
+  },
+  CustomerProvided: {
+    bg: 'color-mix(in srgb, #a855f7 14%, var(--ant-color-bg-container, #ffffff))',
+    border: '#a855f7',
   },
   Service: {
     bg: 'color-mix(in srgb, #14b8a6 14%, var(--ant-color-bg-container, #ffffff))',
@@ -309,6 +314,7 @@ const SOURCE_TYPE_I18N_KEYS: Record<string, string> = {
   Buy: 'app.master-data.bom.sourceBuy',
   Phantom: 'app.master-data.bom.sourcePhantom',
   Outsource: 'app.master-data.bom.sourceOutsource',
+  CustomerProvided: 'app.master-data.bom.sourceCustomerProvided',
   Service: 'app.master-data.bom.sourceService',
 };
 
@@ -500,24 +506,18 @@ const BOMDesignerPage: React.FC = () => {
   const [versionCompareResult, setVersionCompareResult] = useState<BOMVersionCompareResult | null>(null);
   const [versionCompareLoading, setVersionCompareLoading] = useState(false);
 
-  // Load unit dictionary
   useEffect(() => {
-    const loadUnitDict = async () => {
-      try {
-        const dict = await getDataDictionaryByCode('MATERIAL_UNIT');
-        if (dict?.uuid) {
-          const items = await getDictionaryItemList(dict.uuid);
-          const map: Record<string, string> = {};
-          items.forEach(item => {
-            map[item.value] = item.label;
-          });
-          setUnitMap(map);
-        }
-      } catch (e) {
-        console.error('Failed to load unit dictionary', e);
-      }
+    let cancelled = false;
+    getMaterialUnitDisplayMapShared()
+      .then((map) => {
+        if (!cancelled) setUnitMap(map);
+      })
+      .catch((e) => {
+        console.error('Failed to load unit catalog', e);
+      });
+    return () => {
+      cancelled = true;
     };
-    loadUnitDict();
   }, []);
 
   const selectedMaterialId = Form.useWatch('materialId', nodeConfigForm);
@@ -688,23 +688,20 @@ const BOMDesignerPage: React.FC = () => {
   }, []);
 
   /**
-   * 加载单位字典（MATERIAL_UNIT），用于节点配置中单位下拉显示标签
+   * 加载单位主数据，用于节点配置中单位下拉显示标签
    */
   useEffect(() => {
-    const loadUnitDictionary = async () => {
-      try {
-        const dictionary = await getDataDictionaryByCode('MATERIAL_UNIT');
-        const items = await getDictionaryItemList(dictionary.uuid, true);
-        const valueToLabel: Record<string, string> = {};
-        items.forEach((item: { value: string; label: string }) => {
-          valueToLabel[item.value] = item.label;
-        });
-        setUnitValueToLabel(valueToLabel);
-      } catch (error: any) {
-        console.error('加载单位字典失败:', error);
-      }
+    let cancelled = false;
+    getMaterialUnitDisplayMapShared()
+      .then((map) => {
+        if (!cancelled) setUnitValueToLabel(map);
+      })
+      .catch((error) => {
+        console.error('加载单位主数据失败:', error);
+      });
+    return () => {
+      cancelled = true;
     };
-    loadUnitDictionary();
   }, []);
 
   /**

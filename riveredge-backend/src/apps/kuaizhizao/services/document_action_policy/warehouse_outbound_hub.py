@@ -37,12 +37,29 @@ def derive_outbound_hub_capabilities(
     status = _norm(getattr(record, "status", None))
     is_outsource_issue = ot == "outsource_issue"
 
-    confirm_allowed = not is_outsource_issue and status in _OUTBOUND_PENDING_STATUSES
-    confirm_reason = None
-    if is_outsource_issue:
-        confirm_reason = "outbound_hub.confirm.outsource_issue"
-    elif not confirm_allowed:
-        confirm_reason = "outbound_hub.confirm.not_pending"
+    # 生产领料：仅「待领料」可确认（待审核/草稿须先走 UniAudit）
+    if ot == "production_picking":
+        confirm_allowed = status == "待领料"
+        confirm_reason = None
+        if status == "待审核":
+            confirm_reason = "outbound_hub.confirm.pending_audit"
+        elif not confirm_allowed:
+            confirm_reason = "outbound_hub.confirm.not_pending"
+    # 销售出库：仅「待出库」可确认（开启审核时须先通过 UniAudit）
+    elif ot == "sales_delivery":
+        confirm_allowed = status == "待出库"
+        confirm_reason = None
+        if status == "待审核":
+            confirm_reason = "outbound_hub.confirm.pending_audit"
+        elif not confirm_allowed:
+            confirm_reason = "outbound_hub.confirm.not_pending"
+    else:
+        confirm_allowed = not is_outsource_issue and status in _OUTBOUND_PENDING_STATUSES
+        confirm_reason = None
+        if is_outsource_issue:
+            confirm_reason = "outbound_hub.confirm.outsource_issue"
+        elif not confirm_allowed:
+            confirm_reason = "outbound_hub.confirm.not_pending"
 
     withdraw_allowed = not is_outsource_issue and status in _OUTBOUND_POSTED_STATUSES
     withdraw_reason = None

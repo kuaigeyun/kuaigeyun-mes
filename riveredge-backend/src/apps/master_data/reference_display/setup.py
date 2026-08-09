@@ -223,6 +223,7 @@ class _MaterialDisplayProvider:
                     "source_type": r.source_type,
                     "main_code": r.main_code,
                     "group_id": r.group_id,
+                    "images": r.images,
                 }
                 for r in rows
             ],
@@ -260,6 +261,7 @@ class _MaterialDisplayProvider:
                 "source_config": _flatten_material_source_config(r.source_config),
                 "main_code": r.main_code,
                 "group_id": r.group_id,
+                "images": r.images,
             }
             for r in rows
         ]

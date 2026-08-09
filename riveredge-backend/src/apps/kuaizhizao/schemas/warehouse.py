@@ -271,6 +271,7 @@ class ProductionReturnWithItemsResponse(ProductionReturnResponse):
 class InboundCreatePreviewLine(BaseSchema):
     """入库/退货创建 — 预览明细行"""
     sales_order_item_id: Optional[int] = Field(None, description="销售订单明细ID")
+    sales_delivery_item_id: Optional[int] = Field(None, description="销售出库明细ID")
     picking_item_id: Optional[int] = Field(None, description="领料单明细ID")
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
@@ -283,6 +284,8 @@ class InboundCreatePreviewLine(BaseSchema):
     receipt_quantity: Optional[float] = Field(None, description="本次入库数量")
     return_quantity: Optional[float] = Field(None, description="本次退货/退料数量")
     unit_price: Optional[float] = Field(None, description="单价")
+    batch_number: Optional[str] = Field(None, description="原出库/建议退货批号")
+    outbound_batch_options: List[str] = Field(default_factory=list, description="可选出库批号")
 
 
 class WorkOrderInboundPreviewResponse(BaseSchema):
@@ -316,6 +319,34 @@ class SalesOrderReturnPreviewResponse(BaseSchema):
     sales_order_code: str = Field(..., description="销售订单编码")
     lines: List[InboundCreatePreviewLine] = Field(default_factory=list, description="预览明细")
     message: Optional[str] = Field(None, description="提示信息")
+
+
+class SalesDeliveryReturnPreviewResponse(BaseSchema):
+    """销售退货 — 出库单预览"""
+    sales_delivery_id: int = Field(..., description="销售出库单ID")
+    sales_delivery_code: str = Field(..., description="销售出库单编码")
+    customer_id: Optional[int] = Field(None, description="客户ID")
+    customer_name: Optional[str] = Field(None, description="客户名称")
+    warehouse_id: Optional[int] = Field(None, description="出库仓库ID")
+    warehouse_name: Optional[str] = Field(None, description="出库仓库名称")
+    sales_order_id: Optional[int] = Field(None, description="销售订单ID")
+    sales_order_code: Optional[str] = Field(None, description="销售订单编码")
+    lines: List[InboundCreatePreviewLine] = Field(default_factory=list, description="预览明细")
+    message: Optional[str] = Field(None, description="提示信息")
+
+
+class CustomerOutboundBatchOption(BaseSchema):
+    """客户已出库可退批号选项"""
+    batch_number: Optional[str] = Field(None, description="批号")
+    sales_delivery_id: int = Field(..., description="销售出库单ID")
+    sales_delivery_code: str = Field(..., description="销售出库单编码")
+    sales_delivery_item_id: int = Field(..., description="销售出库明细ID")
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(default="", description="物料编码")
+    material_name: str = Field(default="", description="物料名称")
+    delivery_quantity: float = Field(..., description="出库数量")
+    returned_quantity: float = Field(..., description="已退数量")
+    returnable_quantity: float = Field(..., description="可退数量")
 
 
 # === 成品入库单 ===
@@ -362,6 +393,8 @@ class FinishedGoodsReceiptResponse(FinishedGoodsReceiptBase):
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
     updated_by: Optional[int] = Field(None, description="更新人ID")
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
+    customer_id: Optional[int] = Field(None, description="客户ID（由关联销售订单解析）")
+    customer_name: Optional[str] = Field(None, description="客户名称（由关联销售订单解析）")
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",
     )
@@ -469,6 +502,8 @@ class SemiFinishedGoodsReceiptResponse(SemiFinishedGoodsReceiptBase):
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
     updated_by: Optional[int] = Field(None, description="更新人ID")
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
+    customer_id: Optional[int] = Field(None, description="客户ID（由关联销售订单解析）")
+    customer_name: Optional[str] = Field(None, description="客户名称（由关联销售订单解析）")
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",
     )
@@ -1010,6 +1045,7 @@ class PurchaseReturnResponse(PurchaseReturnBase):
         None,
         description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
     )
+    items: Optional[List["PurchaseReturnItemResponse"]] = Field(None, description="退货明细（include_items 时返回）")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
 
     class Config:
@@ -1077,12 +1113,11 @@ class PurchaseReturnItemResponse(PurchaseReturnItemBase):
 
 # === 其他入库单 ===
 
-OtherInboundReasonType = Literal["盘盈", "调拨", "样品", "报废", "其他"]
-
-
 def normalize_other_inbound_reason_type(value: str) -> str:
-    """归一化其他入库原因：字典「调拨入库」等与 schema 对齐为「调拨」。"""
+    """归一化其他入库原因：字典「调拨入库」等与历史值对齐为「调拨」。"""
     normalized = (value or "").strip()
+    if not normalized:
+        raise ValueError("原因类型不能为空")
     if normalized == "调拨入库":
         return "调拨"
     return normalized
@@ -1091,7 +1126,12 @@ def normalize_other_inbound_reason_type(value: str) -> str:
 class OtherInboundBase(BaseSchema):
     """其他入库单基础schema"""
     inbound_code: Optional[str] = Field(None, max_length=50, description="入库单编码（可选，不提供则自动生成）")
-    reason_type: OtherInboundReasonType = Field(..., description="原因类型：盘盈/调拨/样品/报废/其他")
+    reason_type: str = Field(
+        ...,
+        min_length=1,
+        max_length=20,
+        description="原因类型（数据字典 INBOUND_REASON_TYPE，可扩展）",
+    )
     reason_desc: Optional[str] = Field(None, description="原因说明")
     warehouse_id: int = Field(..., description="入库仓库ID")
     warehouse_name: str = Field(..., max_length=100, description="入库仓库名称")
@@ -1204,13 +1244,15 @@ class OtherInboundWithItemsResponse(OtherInboundResponse):
 
 # === 其他出库单 ===
 
-OtherOutboundReasonType = Literal["盘亏", "样品", "报废", "其他"]
-
-
 class OtherOutboundBase(BaseSchema):
     """其他出库单基础schema"""
     outbound_code: Optional[str] = Field(None, max_length=50, description="出库单编码（可选，不提供则自动生成）")
-    reason_type: OtherOutboundReasonType = Field(..., description="原因类型：盘亏/样品/报废/其他")
+    reason_type: str = Field(
+        ...,
+        min_length=1,
+        max_length=20,
+        description="原因类型（数据字典 OUTBOUND_REASON_TYPE，可扩展）",
+    )
     reason_desc: Optional[str] = Field(None, description="原因说明")
     warehouse_id: int = Field(..., description="出库仓库ID")
     warehouse_name: str = Field(..., max_length=100, description="出库仓库名称")
@@ -1227,6 +1269,16 @@ class OtherOutboundBase(BaseSchema):
     total_amount: float = Field(0, ge=0, description="总金额")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+
+    @field_validator("reason_type", mode="before")
+    @classmethod
+    def _normalize_outbound_reason_type(cls, value: object) -> object:
+        if isinstance(value, str):
+            normalized = value.strip()
+            if not normalized:
+                raise ValueError("原因类型不能为空")
+            return normalized
+        return value
 
 
 class OtherOutboundCreate(OtherOutboundBase):

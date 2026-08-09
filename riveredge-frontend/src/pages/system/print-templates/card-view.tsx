@@ -25,7 +25,7 @@ import {
   PrintTemplateRenderResponse,
 } from '../../../services/printTemplate';
 import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../config/printTemplateSchemas';
-import { EMPTY_HTML_TEMPLATE } from '../../../utils/printTemplateDefaults';
+import { EMPTY_HTML_TEMPLATE, EMPTY_VISUAL_PRINT_CONFIG } from '../../../utils/printTemplateDefaults';
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
 import { CODE_FONT_FAMILY } from '../../../constants/fonts';
 import { formatDateTimeBySiteSetting } from '../../../utils/format';
@@ -188,7 +188,7 @@ const CardView: React.FC = () => {
         type: String(values.type ?? 'pdf'),
         description: values.description ? String(values.description) : undefined,
         content: EMPTY_HTML_TEMPLATE,
-        config: { document_type: values.document_type },
+        config: EMPTY_VISUAL_PRINT_CONFIG(values.document_type),
         is_active: true,
       });
       handleSuccess(t('pages.system.printTemplates.createSuccess'));

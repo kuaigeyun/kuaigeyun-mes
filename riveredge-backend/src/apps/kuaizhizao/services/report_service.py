@@ -3569,13 +3569,20 @@ class ReportService:
                 hours = row["total_hours"]
                 pieces = row["total_pieces"]
                 pph = float(pieces / hours) if hours > 0 else 0.0
+                pieces_f = float(pieces)
                 stats.append({
                     "worker_name": row["worker_name"],
-                    "total_pieces": float(pieces),
+                    "total_pieces": pieces_f,
+                    # 与生产域 worker-efficiency-ranking 的 total_qty 对齐，避免前端列绑错时空白
+                    "total_qty": pieces_f,
                     "total_hours": float(hours),
                     "pieces_per_hour": round(pph, 4),
                 })
-            stats.sort(key=lambda x: x["pieces_per_hour"], reverse=True)
+            # 有工时按效率排；工时全为 0 时按合格产量排（避免全部并列 0）
+            stats.sort(
+                key=lambda x: (x["pieces_per_hour"], x["total_pieces"]),
+                reverse=True,
+            )
             return {"data": stats, "success": True}
 
         if normalized == "piece-rate-salary-summary":

@@ -831,12 +831,10 @@ const MoldsPage: React.FC = () => {
     ...customFieldColumns,
     {
       title: t('common.actions'),
-      width: 200,
       fixed: 'right',
       render: (_text, record) =>
         renderEquipmentMasterRowActions({
           record,
-          keyPrefix: `mold-actions-${record.uuid ?? 'row'}`,
           t,
           canRead: perms.canRead,
           canUpdate: perms.canUpdate,
@@ -1114,7 +1112,6 @@ const MoldsPage: React.FC = () => {
               messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
-          scroll={{ x: 2000 }}
         />
       </ListPageTemplate>
 

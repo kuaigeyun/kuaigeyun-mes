@@ -15,7 +15,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { DetailDrawerTemplate, ListPageTemplate, detailDrawerDescriptionItems, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { renderRowActionsOverflow, rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
@@ -174,7 +174,6 @@ const BackflushRecordsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseCommon.colActions'),
         valueType: 'option',
-        width: 120,
         fixed: 'right',
         render: (_, record) => {
           const actions = [
@@ -187,7 +186,7 @@ const BackflushRecordsPage: React.FC = () => {
               </Button>,
             );
           }
-          return renderRowActionsOverflow(actions, { keyPrefix: `backflush-${record.id}` });
+          return actions;
         },
       },
     ],
@@ -257,7 +256,6 @@ const BackflushRecordsPage: React.FC = () => {
         rowKey="id"
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
-        scroll={{ x: 1480 }}
       />
 
       <DetailDrawerTemplate

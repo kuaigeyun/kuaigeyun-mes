@@ -21,6 +21,11 @@ import {
   findSopBindingConflicts,
   formatSopBindingConflictLabels,
 } from '../../../utils/sopBindingDuplicate';
+import {
+  MATERIAL_SELECT_OPTION_ITEM_HEIGHT,
+  MaterialSelectOptionContent,
+  formatMaterialSelectLabel,
+} from '../../../../../components/uni-material-select';
 
 const { Text } = Typography;
 
@@ -530,11 +535,22 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                   onChange={setSelectedMaterialUuids}
                   loading={materialsLoading}
                   showSearch
+                  listItemHeight={MATERIAL_SELECT_OPTION_ITEM_HEIGHT}
+                  popupMatchSelectWidth={480}
                   filterOption={(input, opt) =>
                     (opt?.label ?? '').toString().toLowerCase().includes((input || '').toLowerCase())
                   }
+                  optionRender={(option) => {
+                    const material = materials.find((m: any) => m.uuid === option.value);
+                    return (
+                      <MaterialSelectOptionContent
+                        material={material as Record<string, unknown> | undefined}
+                        fallbackLabel={option.label}
+                      />
+                    );
+                  }}
                   options={materials.map((m: any) => ({
-                    label: `${m.mainCode ?? m.code ?? ''} - ${m.name ?? ''}`,
+                    label: formatMaterialSelectLabel(m),
                     value: m.uuid,
                   }))}
                 />

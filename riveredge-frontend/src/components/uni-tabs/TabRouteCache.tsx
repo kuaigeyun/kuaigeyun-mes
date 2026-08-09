@@ -1,5 +1,9 @@
 import React, { useLayoutEffect, useMemo, useRef } from 'react';
-import { NavigationType, UNSAFE_LocationContext as LocationContext } from 'react-router-dom';
+import {
+  NavigationType,
+  UNSAFE_LocationContext as LocationContext,
+  useLocation,
+} from 'react-router-dom';
 import type { Location } from 'react-router-dom';
 import { RouteTransition } from '../route-transition';
 import { isCreateTabKey } from './isCreateTabKey';
@@ -30,6 +34,27 @@ function parseTabKeyToLocation(tabKey: string): Location {
   };
 }
 
+/** 与 UniTabs tabKey 对齐：去掉 _refresh，便于 live location 与表单标签比对 */
+export function normalizeTabRouteKey(pathname: string, search?: string): string {
+  const path = (pathname || '/').replace(/\/$/, '') || '/';
+  const params = new URLSearchParams(search || '');
+  params.delete('_refresh');
+  const cleanSearch = params.toString();
+  return cleanSearch ? `${path}?${cleanSearch}` : path;
+}
+
+export function liveRouteMatchesTabKey(
+  tabKey: string,
+  livePathname: string,
+  liveSearch?: string,
+): boolean {
+  const tabLoc = parseTabKeyToLocation(tabKey);
+  return (
+    normalizeTabRouteKey(tabLoc.pathname, tabLoc.search) ===
+    normalizeTabRouteKey(livePathname, liveSearch)
+  );
+}
+
 /** 表单页使用冻结 location，避免 list/new/edit 共用组件因全局路由变化卸载表单。 */
 function TabRouteLocationScope({ tabKey, children }: { tabKey: string; children: React.ReactNode }) {
   const locationContext = useMemo(
@@ -44,17 +69,21 @@ function TabRouteLocationScope({ tabKey, children }: { tabKey: string; children:
 
 /**
  * 单个表单标签保活 pane：首次激活后持续挂载，仅用 display 切换显隐，不替换子树。
+ * 仅在「当前 live 路由与本标签一致」时采纳 liveChildren，避免菜单跳转时
+ * activeKey 滞后一帧把其它模块 Outlet 冻进新建/编辑页导致明细丢失。
  */
 function FormTabKeepAlivePane({
   tabKey,
   active,
   visited,
+  liveMatchesTab,
   resetSignal,
   liveChildren,
 }: {
   tabKey: string;
   active: boolean;
   visited: boolean;
+  liveMatchesTab: boolean;
   resetSignal: number;
   liveChildren: React.ReactNode;
 }) {
@@ -72,7 +101,8 @@ function FormTabKeepAlivePane({
     hasMountedRef.current = true;
   }
 
-  if (active && !visited) {
+  // 首访且 live 路由匹配本标签时才采纳；Suspense→页面可继续更新，跨路由不可污染
+  if (active && !visited && liveMatchesTab) {
     frozenTreeRef.current = liveChildren;
   }
 
@@ -111,6 +141,7 @@ export function TabRouteCache({
   refreshToken: number;
   children: React.ReactNode;
 }) {
+  const liveLocation = useLocation();
   const refreshByKeyRef = useRef<Map<string, number>>(new Map());
   const prevActiveKeyRef = useRef(activeKey);
   const visitedCreateTabKeysRef = useRef<Set<string>>(new Set());
@@ -153,6 +184,8 @@ export function TabRouteCache({
   }, [activeKey, refreshToken]);
 
   const paneKeys = useMemo(() => new Set(createTabKeys), [createTabKeys]);
+  const livePathname = liveLocation.pathname;
+  const liveSearch = liveLocation.search;
 
   return (
     <>
@@ -162,13 +195,18 @@ export function TabRouteCache({
           tabKey={key}
           active={key === activeKey}
           visited={visitedCreateTabKeysRef.current.has(key)}
+          liveMatchesTab={liveRouteMatchesTabKey(key, livePathname, liveSearch)}
           resetSignal={paneResetSignalRef.current.get(key) ?? 0}
           liveChildren={children}
         />
       ))}
 
       {!isActiveCreate && (
-        <div className="uni-tabs-route-cache-pane uni-tabs-route-cache-pane--active" style={routePaneStyle}>
+        <div
+          key={`list-refresh-${refreshToken}`}
+          className="uni-tabs-route-cache-pane uni-tabs-route-cache-pane--active"
+          style={routePaneStyle}
+        >
           <RouteTransition>{children}</RouteTransition>
         </div>
       )}

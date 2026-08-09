@@ -177,7 +177,7 @@ class Material(BaseModel):
     source_type = fields.CharField(
         max_length=20, 
         null=True, 
-        description="物料来源类型（Make/Buy/Phantom/Outsource）：Make(自制件)、Buy(采购件)、Phantom(虚拟件)、Outsource(委外件)"
+        description="物料来源类型：Make(自制件)、Buy(采购件)、Outsource(委外件)、Phantom(虚拟件)、CustomerProvided(客供料)、Service(服务)"
     )
     source_config = fields.JSONField(
         null=True, 

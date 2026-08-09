@@ -1,10 +1,11 @@
 """加载快制造打印模板预设到租户。
 
 约定：库内 PrintTemplate.content 为版式唯一真源。
-预设仅在「租户尚无该 code」时创建；已存在则绝不覆盖 content / designer_schema。
+预设在「租户尚无该 code」时创建。
 
-例外：设备卡/模具卡仍带 compileMode=asset_card_table 的旧内置模板，
-可升级为可视化 blocks 真源（用户若已去掉 compileMode 则视为已定制，不覆盖）。
+升级：exact code 匹配的预置若尚非可视化（无 designer_schema.blocks，
+或仍为 asset_card_table），用当前可视化预置覆盖 content/config。
+用户自建的 code_001 等后缀模板不覆盖。
 """
 
 from __future__ import annotations
@@ -15,62 +16,56 @@ from apps.kuaizhizao.print.preset_templates import KUAIZHIZAO_PRESET_PRINT_TEMPL
 from core.models.print_template import PrintTemplate
 from core.schemas.print_template import PrintTemplateCreate
 from core.services.print.print_template_service import PrintTemplateService
-
-# 仍使用代码式表格编译的内置资产卡 → 可安全升级为可视化
-_ASSET_CARD_VISUAL_UPGRADE_CODES = frozenset({"EQUIPMENT_CARD_PRINT", "MOLD_CARD_PRINT"})
+from core.services.print.print_template_visual import is_visual_designer_config
 
 
-def _is_legacy_asset_card_table_schema(config: object) -> bool:
-    if not isinstance(config, dict):
-        return False
-    schema = config.get("designer_schema")
-    if not isinstance(schema, dict):
-        return False
-    return str(schema.get("compileMode") or "").strip() == "asset_card_table"
-
-
-async def _upgrade_legacy_asset_card_preset(tenant_id: int, item: dict) -> bool:
-    """将仍为 asset_card_table 的内置设备/模具卡升级为可视化预设。"""
+async def _upgrade_non_visual_builtin_preset(tenant_id: int, item: dict) -> bool:
+    """将 exact-code 预置从纯 HTML / 旧资产卡模式升级为可视化预设。"""
     code = str(item.get("code") or "").strip().upper()
-    if code not in _ASSET_CARD_VISUAL_UPGRADE_CODES:
+    if not code:
         return False
     tpl = await PrintTemplate.filter(
         tenant_id=tenant_id,
         deleted_at__isnull=True,
         code=code,
     ).first()
-    if not tpl or not _is_legacy_asset_card_table_schema(tpl.config):
+    if not tpl or is_visual_designer_config(tpl.config):
         return False
     tpl.name = item["name"]
     tpl.description = item.get("description")
     tpl.content = item["content"]
     tpl.config = item.get("config")
     tpl.is_active = item.get("is_active", True)
-    tpl.is_default = item.get("is_default", False)
+    if item.get("is_default") is not None:
+        tpl.is_default = bool(item.get("is_default"))
     await tpl.save()
-    logger.info("已升级资产卡打印模板为可视化: tenant={} code={}", tenant_id, code)
+    logger.info("已升级打印模板为可视化: tenant={} code={}", tenant_id, code)
     return True
 
 
 async def load_kuaizhizao_print_template_presets(tenant_id: int) -> int:
-    """按 code 去重：只创建缺失模板；资产卡旧表格模式可升级一次。"""
+    """按 code 去重：创建缺失模板；非可视化预置可升级一次。"""
     created = 0
     for item in KUAIZHIZAO_PRESET_PRINT_TEMPLATES:
         base_code = str(item["code"]).strip().upper()
-        exists = (
-            await PrintTemplate.filter(tenant_id=tenant_id, deleted_at__isnull=True, code=base_code).exists()
-            or await PrintTemplate.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-                code__startswith=f"{base_code}_",
-            ).exists()
-        )
-        if exists:
+        exact = await PrintTemplate.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            code=base_code,
+        ).first()
+        if exact:
             try:
-                if await _upgrade_legacy_asset_card_preset(tenant_id, item):
+                if await _upgrade_non_visual_builtin_preset(tenant_id, item):
                     created += 1
             except Exception as e:
                 logger.warning("升级快制造打印模板 {} 失败: {}", item["code"], e)
+            continue
+        suffix_exists = await PrintTemplate.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            code__startswith=f"{base_code}_",
+        ).exists()
+        if suffix_exists:
             continue
         try:
             data = PrintTemplateCreate(

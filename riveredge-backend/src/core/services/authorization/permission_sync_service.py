@@ -355,6 +355,12 @@ class PermissionSyncService:
                         purge_before,
                     )
 
+            execute_grants = 0
+            if not dry_run:
+                execute_grants = await cls._propagate_quality_inspection_execute_grants(
+                    conn, tenant_id=tenant_id
+                )
+
             result = {
                 "created": len(create_rows),
                 "updated": len(update_rows),
@@ -364,6 +370,7 @@ class PermissionSyncService:
                 "orphaned": len(orphaned_codes),
                 "scanned": len(desired_codes),
                 "type_repaired": type_repaired,
+                "execute_grants": execute_grants,
                 "dry_run": 1 if dry_run else 0,
             }
             cls._last_run_stats[tenant_id] = result
@@ -473,6 +480,90 @@ class PermissionSyncService:
             "DELETE FROM core_role_permissions WHERE permission_id = $1",
             from_permission_id,
         )
+
+    # 检验执行从 :update / 历史 :conduct 迁到 :execute；仅追加授权，不删除旧码
+    _QUALITY_INSPECTION_EXECUTE_GRANT_SOURCES: dict[str, tuple[str, ...]] = {
+        "kuaizhizao:quality-management-incoming-inspection:execute": (
+            "kuaizhizao:quality-management-incoming-inspection:update",
+            "kuaizhizao:incoming-inspection:update",
+            "kuaizhizao:incoming-inspection:conduct",
+        ),
+        "kuaizhizao:quality-management-process-inspection:execute": (
+            "kuaizhizao:quality-management-process-inspection:update",
+            "kuaizhizao:process-inspection:update",
+            "kuaizhizao:process-inspection:conduct",
+        ),
+        "kuaizhizao:quality-management-finished-goods-inspection:execute": (
+            "kuaizhizao:quality-management-finished-goods-inspection:update",
+            "kuaizhizao:finished-goods-inspection:update",
+            "kuaizhizao:finished-goods-inspection:conduct",
+        ),
+        "kuaizhizao:quality-management-oqc-inspection:execute": (
+            "kuaizhizao:quality-management-oqc-inspection:update",
+            "kuaizhizao:oqc-inspection:update",
+            "kuaizhizao:oqc-inspection:conduct",
+        ),
+    }
+
+    @classmethod
+    async def _propagate_quality_inspection_execute_grants(cls, conn, *, tenant_id: int) -> int:
+        """将仍可检验（持有 update/历史 conduct）的角色补上 :execute。"""
+        granted = 0
+        for execute_code, source_codes in cls._QUALITY_INSPECTION_EXECUTE_GRANT_SOURCES.items():
+            execute_row = await conn.fetchrow(
+                """
+                SELECT id FROM core_permissions
+                WHERE tenant_id = $1 AND code = $2 AND deleted_at IS NULL
+                """,
+                tenant_id,
+                execute_code,
+            )
+            if not execute_row:
+                continue
+            execute_id = int(execute_row["id"])
+            for source_code in source_codes:
+                source_row = await conn.fetchrow(
+                    """
+                    SELECT id FROM core_permissions
+                    WHERE tenant_id = $1 AND code = $2 AND deleted_at IS NULL
+                    """,
+                    tenant_id,
+                    source_code,
+                )
+                if not source_row:
+                    continue
+                before = await conn.fetchval(
+                    """
+                    SELECT COUNT(*) FROM core_role_permissions
+                    WHERE permission_id = $1
+                    """,
+                    execute_id,
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO core_role_permissions (role_id, permission_id, created_at)
+                    SELECT rp.role_id, $2, rp.created_at
+                    FROM core_role_permissions rp
+                    WHERE rp.permission_id = $1
+                      AND NOT EXISTS (
+                        SELECT 1
+                        FROM core_role_permissions rp2
+                        WHERE rp2.role_id = rp.role_id
+                          AND rp2.permission_id = $2
+                      )
+                    """,
+                    int(source_row["id"]),
+                    execute_id,
+                )
+                after = await conn.fetchval(
+                    """
+                    SELECT COUNT(*) FROM core_role_permissions
+                    WHERE permission_id = $1
+                    """,
+                    execute_id,
+                )
+                granted += max(0, int(after or 0) - int(before or 0))
+        return granted
 
     @staticmethod
     def _pick_keeper(entries: list[dict[str, Any]], desired_codes: set[str]) -> dict[str, Any]:

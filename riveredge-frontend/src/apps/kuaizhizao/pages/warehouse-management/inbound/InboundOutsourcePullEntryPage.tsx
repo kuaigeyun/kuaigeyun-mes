@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { App, Button, Card, Col, DatePicker, Form, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -42,6 +42,7 @@ import {
   mergeKeyedLineQuantities,
   usePullEntryFormDraft,
 } from '../shared/pullEntryFormDraft';
+import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 const PULL_TYPE_TO_RECEIPT_TYPE: Record<InboundOutsourcePullType, InboundReceiptType> = {
@@ -73,6 +74,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const pullType = parsePullType(searchParams.get('pullType'));
   const navigate = useNavigate();
+  const location = useLocation();
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
   const pullFromOutsourceWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_outsource_work_order');
@@ -111,8 +113,12 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
 
   const leavePage = useCallback(() => {
     clearDraft();
-    navigate(INBOUND_LIST_PATH);
-  }, [clearDraft, navigate]);
+    navigateLeavingPullEntry(
+      navigate,
+      INBOUND_LIST_PATH,
+      pullEntryTabKey(location.pathname, location.search),
+    );
+  }, [clearDraft, navigate, location.pathname, location.search]);
 
   useEffect(() => {
     bindSnapshot(() => ({
@@ -577,14 +583,17 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.outsourceReceiptConfirmed'));
           leavePage();
         } else if (createdIds.length === 1) {
-          navigate(INBOUND_LIST_PATH, {
-            state: {
+          navigateLeavingPullEntry(
+            navigate,
+            INBOUND_LIST_PATH,
+            pullEntryTabKey(location.pathname, location.search),
+            {
               inboundDirectConfirm: {
                 id: createdIds[0],
                 receipt_type: receiptType,
               },
             },
-          });
+          );
         } else {
           messageApi.success(t('app.kuaizhizao.warehouseInbound.entry.outsource.multiDraftConfirmInList', { count: createdIds.length }));
           leavePage();

@@ -9,7 +9,7 @@
 
 import React, { useRef, useState, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
 import type { TFunction } from 'i18next';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -47,7 +47,7 @@ import {
 } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, EditOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
@@ -59,6 +59,7 @@ import {
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
   ListPageTemplate,
@@ -86,6 +87,7 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import type { Material } from '../../../../master-data/types/material';
+import { getMaterialDefaultPurchasePrice } from '../../../../master-data/utils/resolve-partner-material-price';
 import { SimpleSparkline } from '../../../../../components';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -116,6 +118,7 @@ import {
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
@@ -123,6 +126,7 @@ import { pickImportExampleValue } from '../../../../../utils/loadImportDictionar
 import { batchImport } from '../../../../../utils/batchOperations';
 import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
+import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions';
 import {
   buildDocumentReturnListImportTemplate,
   parseDocumentReturnListImport,
@@ -142,6 +146,24 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const PURCHASE_RETURN_RESOURCE = 'kuaizhizao:purchase-return';
+
+const PURCHASE_RETURN_LIST_PERSISTENCE_ID =
+  'apps.kuaizhizao.pages.purchase-management.purchase-returns.v2';
+
+type PurchaseReturnItemRow = PurchaseReturnItem & {
+  _rowKey: string;
+  return_id: number;
+  return_code?: string;
+  supplier_name?: string;
+  purchase_receipt_code?: string;
+  purchase_order_code?: string;
+  warehouse_name?: string;
+  return_time?: string;
+  status?: string;
+  review_status?: string;
+  lifecycle?: Record<string, unknown>;
+  capabilities?: PurchaseReturn['capabilities'];
+};
 
 const PURCHASE_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_purchase_returns';
 
@@ -224,10 +246,6 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       span: col.span ?? 1,
     };
   });
-}
-
-function renderPurchaseReturnRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 type PullPurchaseOrderCandidate = PurchaseOrder & {
@@ -316,6 +334,18 @@ const PurchaseReturnsPage: React.FC = () => {
   );
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<PurchaseReturn[]>([]);
+  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
+    readPersistedUniTableViewType(PURCHASE_RETURN_LIST_PERSISTENCE_ID, 'table', [
+      'table',
+      'detailTable',
+      'help',
+    ]) as 'table' | 'detailTable' | 'help',
+  );
+  const dataViewMode = resolveDetailTableViewMode(viewTypeState);
+  const dataViewModeRef = useRef(dataViewMode);
+  useEffect(() => {
+    dataViewModeRef.current = dataViewMode;
+  }, [dataViewMode]);
   const purchaseReturnLifecycleValueEnum = useMemo(() => buildPurchaseReturnLifecycleValueEnum(t), [t]);
   const [supplierList, setSupplierList] = useState<Array<{ id: number; name?: string; code?: string }>>([]);
 
@@ -405,13 +435,24 @@ const PurchaseReturnsPage: React.FC = () => {
   const [returnTypeOptions, setReturnTypeOptions] = useState(fallbackReturnTypeOptions);
   const [shippingMethodOptions, setShippingMethodOptions] = useState(fallbackShippingMethodOptions);
   const [dictOptionsLoading, setDictOptionsLoading] = useState(false);
+  const materialUnitImport = useImportMaterialUnitOptions();
   const purchaseReturnImportDict = useImportDictionaryOptions([
-    'MATERIAL_UNIT',
     'RETURN_REASON',
     'RETURN_TYPE',
     'SHIPPING_METHOD',
   ]);
-  const purchaseReturnLineUnitOptions = purchaseReturnImportDict.MATERIAL_UNIT ?? [];
+  const purchaseReturnLineUnitOptions = materialUnitImport.options;
+  const purchaseReturnImportDictBag = useMemo(
+    () => ({
+      ...purchaseReturnImportDict,
+      MATERIAL_UNIT: materialUnitImport.options,
+      parseDict: (code: string, raw?: string | null) =>
+        code === 'MATERIAL_UNIT'
+          ? materialUnitImport.parse(raw)
+          : purchaseReturnImportDict.parseDict(code, raw),
+    }),
+    [purchaseReturnImportDict, materialUnitImport.options, materialUnitImport.parse],
+  );
   const purchaseReturnLineImportColumnOptions = useMemo(
     () => [
       undefined,
@@ -426,7 +467,7 @@ const PurchaseReturnsPage: React.FC = () => {
   );
   const purchaseReturnListImportTemplate = useMemo(
     () =>
-      buildDocumentReturnListImportTemplate(t, purchaseReturnImportDict, {
+      buildDocumentReturnListImportTemplate(t, purchaseReturnImportDictBag, {
         partnerField: 'supplier',
         codeLabelKey: 'app.kuaizhizao.purchaseReturn.colReturnCode',
         partnerLabelKey: 'app.kuaizhizao.purchaseReturn.supplier',
@@ -443,7 +484,7 @@ const PurchaseReturnsPage: React.FC = () => {
         exampleMaterial: 'MAT001',
         exampleWarehouse: t('app.kuaizhizao.purchaseReturn.listImport.exampleWarehouse'),
       }),
-    [t, i18n.language, purchaseReturnImportDict],
+    [t, i18n.language, purchaseReturnImportDictBag],
   );
 
   const invalidatePurchaseReturnStatistics = () => {
@@ -984,7 +1025,7 @@ const PurchaseReturnsPage: React.FC = () => {
       material_spec: m.specification,
       material_unit: m.baseUnit,
       return_quantity: 1,
-      unit_price: m.defaults?.defaultPurchasePrice ?? 0,
+      unit_price: getMaterialDefaultPurchasePrice(m),
     }));
     formRef.current?.setFieldsValue({
       items: [...currentItems, ...newItems],
@@ -1022,7 +1063,7 @@ const PurchaseReturnsPage: React.FC = () => {
         materials,
         defaultUnit: t('app.kuaizhizao.purchaseReturn.defaultUnit'),
         defaultReturnType: 'OTHER',
-        parseDict: purchaseReturnImportDict.parseDict,
+        parseDict: purchaseReturnImportDictBag.parseDict,
       });
 
       if (errors.length > 0) {
@@ -1436,7 +1477,6 @@ const PurchaseReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.purchaseReturn.colLifecycle'),
         dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
         fixed: 'right',
-        align: 'left',
         valueType: 'select',
         valueEnum: purchaseReturnLifecycleValueEnum,
         render: (_, record) => (
@@ -1446,7 +1486,6 @@ const PurchaseReturnsPage: React.FC = () => {
       ...purchaseReturnCustomFieldColumns,
       {
         title: t('common.actions'),
-        width: 220,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => {
@@ -1512,7 +1551,7 @@ const PurchaseReturnsPage: React.FC = () => {
               </Button>
             );
           }
-          return renderPurchaseReturnRowActions(parts, `purchase-return-actions-${record.id ?? 'row'}`);
+          return parts;
         },
       },
     ], SALES_DOC_LIST_FIELD_RANK),
@@ -1662,7 +1701,140 @@ const PurchaseReturnsPage: React.FC = () => {
       { title: t('app.kuaizhizao.quality.common.columns.inspectionStatus'), dataIndex: 'status', width: 120, align: 'center', render: (v) => v || '-' },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-') },
     ],
-    [t],
+    [t, i18n.language],
+  );
+
+  const detailTableColumns: ProColumns<PurchaseReturnItemRow>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.purchaseReturn.colSupplierReturnCode'),
+        key: 'return_code',
+        dataIndex: 'return_code',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
+        hideInSearch: false,
+        fieldProps: { placeholder: t('app.kuaizhizao.purchaseReturn.colReturnCode') },
+        render: (_, record) => (
+          <UniTableStackedPrimaryCell
+            primary={String(record.supplier_name ?? '')}
+            secondary={String(record.return_code ?? '')}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.colReturnCode'),
+        dataIndex: 'return_code',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.supplier'),
+        dataIndex: 'supplier_id',
+        hideInTable: true,
+        valueType: 'select',
+        fieldProps: {
+          showSearch: true,
+          optionFilterProp: 'label',
+          options: purchaseReturnSupplierSearchOptions,
+          placeholder: t('app.kuaizhizao.purchaseReturn.supplier'),
+        },
+      },
+      {
+        title: t('app.kuaizhizao.shipmentNotice.import.materialName'),
+        key: 'material_display',
+        dataIndex: 'material_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        hideInSearch: true,
+        render: (_, record) => (
+          <MaterialStackedCell
+            material_name={record.material_name}
+            material_code={record.material_code}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.import.materialCode'),
+        dataIndex: 'material_code',
+        hideInTable: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.returnQuantity'),
+        dataIndex: 'return_quantity',
+        width: 100,
+        align: 'right',
+        hideInSearch: true,
+        render: formatQuantity,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.unitPrice'),
+        dataIndex: 'unit_price',
+        width: 100,
+        align: 'right',
+        hideInSearch: true,
+        render: (text: unknown) =>
+          text != null && text !== '' ? `¥${formatNumber(text, 2)}` : '-',
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.amount'),
+        dataIndex: 'total_amount',
+        width: 100,
+        align: 'right',
+        hideInSearch: true,
+        render: (text: unknown) =>
+          text != null && text !== '' ? `¥${formatNumber(text, 2)}` : '-',
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.import.batchNumber'),
+        dataIndex: 'batch_number',
+        width: 120,
+        hideInSearch: true,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.location'),
+        dataIndex: 'location_code',
+        width: 100,
+        hideInSearch: true,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.colWarehouse'),
+        dataIndex: 'warehouse_name',
+        width: 140,
+        ellipsis: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.returnTime'),
+        dataIndex: 'return_time',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, record) =>
+          record.return_time ? formatDateTime(record.return_time, 'YYYY-MM-DD HH:mm') : '-',
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.colLifecycle'),
+        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+        fixed: 'right',
+        hideInSearch: false,
+        valueType: 'select',
+        valueEnum: purchaseReturnLifecycleValueEnum,
+        render: (_, record) => (
+          <ListUniLifecycleCell
+            lifecycle={getPurchaseReturnLifecycle(
+              {
+                status: record.status,
+                review_status: record.review_status,
+                lifecycle: record.lifecycle,
+              } as PurchaseReturn,
+              t,
+            )}
+          />
+        ),
+      },
+    ],
+    [purchaseReturnLifecycleValueEnum, purchaseReturnSupplierSearchOptions, t],
   );
 
   return (
@@ -1670,9 +1842,32 @@ const PurchaseReturnsPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
         <UniTable<PurchaseReturn>
           headerTitle={t('app.kuaizhizao.purchaseReturn.title')}
-          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-returns"
+          columnPersistenceId={PURCHASE_RETURN_LIST_PERSISTENCE_ID}
           actionRef={actionRef}
-          rowKey="id"
+          viewTypes={['table', 'detailTable', 'help']}
+          defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
+          onViewTypeChange={(v) => {
+            dataViewModeRef.current = resolveDetailTableViewMode(v as 'table' | 'detailTable' | 'help');
+            setViewTypeState(v as 'table' | 'detailTable' | 'help');
+            setSelectedRowKeys([]);
+            setTimeout(() => actionRef.current?.reload(), 0);
+          }}
+          detailTableColumns={detailTableColumns}
+          helpViewConfig={{
+            content: (
+              <div style={{ lineHeight: 1.8 }}>
+                <p>
+                  <strong>{t('components.uniTable.viewTable')}</strong>
+                  {t('app.kuaizhizao.purchaseReturn.title')}
+                </p>
+                <p>
+                  <strong>{t('components.uniTable.viewDetailTable')}</strong>
+                  {t('app.kuaizhizao.purchaseReturn.title')}
+                </p>
+              </div>
+            ),
+          }}
+          rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
           columns={columns}
           showAdvancedSearch={true}
           skipFuzzyPinyinClientFilter
@@ -1721,6 +1916,7 @@ const PurchaseReturnsPage: React.FC = () => {
                 limit: params.pageSize,
                 ...lifecycleParams,
                 order_by: orderBy,
+                include_items: dataViewModeRef.current === 'detail',
               };
               if (fuzzyKeyword) {
                 apiParams.keyword = fuzzyKeyword;
@@ -1753,8 +1949,58 @@ const PurchaseReturnsPage: React.FC = () => {
               const response = await warehouseApi.purchaseReturn.list(apiParams);
               const list = response?.data ?? [];
               const enriched = await enrichPurchaseReturnRecordsWithCustomFields(list);
+              if (dataViewModeRef.current === 'order') {
+                tableRowsRef.current = enriched;
+                return {
+                  data: enriched,
+                  success: true,
+                  total: response?.total ?? enriched.length,
+                };
+              }
+              const flatRows = flattenDocumentDetailRows<PurchaseReturn, PurchaseReturnItem>({
+                headers: enriched,
+                getHeaderId: (h) => h.id,
+                getItems: (h) => h.items,
+                buildRowKey: (h, item, index) =>
+                  item?.id
+                    ? `return-${h.id}-item-${item.id}`
+                    : `return-${h.id}-idx-${index}`,
+                mapItemRow: (h, item) => ({
+                  ...item,
+                  return_id: h.id ?? 0,
+                  return_code: h.return_code,
+                  supplier_name: h.supplier_name,
+                  purchase_receipt_code: h.purchase_receipt_code,
+                  purchase_order_code: h.purchase_order_code,
+                  warehouse_name: h.warehouse_name,
+                  return_time: h.return_time,
+                  status: h.status,
+                  review_status: h.review_status,
+                  lifecycle: h.lifecycle,
+                  capabilities: h.capabilities,
+                }),
+                mapEmptyHeaderRow: (h) => ({
+                  return_id: h.id ?? 0,
+                  return_code: h.return_code,
+                  supplier_name: h.supplier_name,
+                  purchase_receipt_code: h.purchase_receipt_code,
+                  purchase_order_code: h.purchase_order_code,
+                  warehouse_name: h.warehouse_name,
+                  return_time: h.return_time,
+                  status: h.status,
+                  review_status: h.review_status,
+                  lifecycle: h.lifecycle,
+                  capabilities: h.capabilities,
+                  material_code: '-',
+                  material_name: '-',
+                  return_quantity: 0,
+                  unit_price: 0,
+                  total_amount: 0,
+                }),
+              }) as PurchaseReturnItemRow[];
+              tableRowsRef.current = enriched;
               return {
-                data: enriched,
+                data: flatRows,
                 success: true,
                 total: response?.total ?? enriched.length,
               };
@@ -1767,10 +2013,15 @@ const PurchaseReturnsPage: React.FC = () => {
               };
             }
           }}
-          enableRowSelection={true}
+          enableRowSelection={viewTypeState !== 'detailTable'}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
-          showDeleteButton={true}
+          onTableDataChange={(rows) => {
+            if (dataViewModeRef.current === 'order') {
+              tableRowsRef.current = rows as PurchaseReturn[];
+            }
+          }}
+          showDeleteButton={viewTypeState !== 'detailTable'}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.purchaseReturn.confirmBatchDelete', { count })}
           toolBarActionsAfterBatch={[
@@ -1829,7 +2080,6 @@ const PurchaseReturnsPage: React.FC = () => {
           onTableDataChange={(rows) => {
             tableRowsRef.current = rows;
           }}
-          scroll={{ x: 1500 }}
         />
       </ListPageTemplate>
 

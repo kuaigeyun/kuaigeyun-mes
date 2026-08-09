@@ -1,4 +1,4 @@
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 维护保养计划管理页面
  *
@@ -109,10 +109,6 @@ function buildMaintenancePlanSubmitPayload(values: Record<string, unknown>) {
     remark: values.remark,
     attachments: normalizeDocumentAttachments(values.attachments),
   };
-}
-
-function renderPlanRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 interface MaintenancePlan {
@@ -700,7 +696,6 @@ const MaintenancePlansPage: React.FC = () => {
       title: t(`${P}.col.lifecycle`),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
-      align: 'left',
       hideInSearch: true,
       render: (_, record) => (
         <ListUniLifecycleCell lifecycle={getMaintenancePlanLifecycle(record as Record<string, unknown>, t)} />
@@ -709,11 +704,9 @@ const MaintenancePlansPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      width: 200,
       fixed: 'right',
       hideInSearch: true,
-      render: (_, record) =>
-        renderPlanRowActions(renderPlanRowNodes(record), `mpl-${record.uuid ?? 'row'}`),
+      render: (_, record) => renderPlanRowNodes(record),
     },
   ], SALES_DOC_LIST_FIELD_RANK), [t, planStatusValueEnum]);
 
@@ -763,7 +756,6 @@ const MaintenancePlansPage: React.FC = () => {
           showCreateButton={true}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
-          scroll={{ x: 1900 }}
         />
       </ListPageTemplate>
 

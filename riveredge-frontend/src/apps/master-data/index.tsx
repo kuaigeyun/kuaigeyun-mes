@@ -34,6 +34,7 @@ const MaterialsManagementPage = lazy(() => import('./pages/materials/management'
 const BOMPage = lazy(() => import('./pages/materials/bom'));
 const BOMDesignerPage = lazy(() => import('./pages/materials/bom/designer'));
 const VariantAttributesPage = lazy(() => import('./pages/materials/variant-attributes'));
+const UnitsPage = lazy(() => import('./pages/materials/units'));
 const BatchRulesPage = lazy(() => import('./pages/materials/batch-rules'));
 const BatchesPage = lazy(() => import('./pages/materials/batches'));
 const SerialRulesPage = lazy(() => import('./pages/materials/serial-rules'));
@@ -77,6 +78,7 @@ const MasterDataApp: React.FC = () => {
       {/* 物料管理路由 */}
       <Route path="materials" element={withPageSuspense(MaterialsManagementPage)} />
       <Route path="materials/variant-attributes" element={withPageSuspense(VariantAttributesPage)} />
+      <Route path="materials/units" element={withPageSuspense(UnitsPage)} />
       <Route path="materials/batch-rules" element={withPageSuspense(BatchRulesPage)} />
       <Route path="materials/batches" element={withPageSuspense(BatchesPage)} />
       <Route path="materials/serial-rules" element={withPageSuspense(SerialRulesPage)} />

@@ -290,7 +290,6 @@ const ChangeManagementPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         columnPersistenceId={`apps.kuaiplm.pages.change-management.${activeTab}`}
-        scroll={{ x: 1200 }}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={PLM_CHANGE_PINNED_STATUS_FIELD}

@@ -93,7 +93,8 @@ async def list_shipment_notices(
     sales_order_id: Optional[int] = Query(None),
     customer_id: Optional[int] = Query(None),
     warehouse_id: Optional[int] = Query(None),
-    keyword: Optional[str] = Query(None, description="关键词（通知单号、销售订单、客户、仓库、出库单）"),
+    keyword: Optional[str] = Query(None, description="关键词（通知单号、销售订单、客户、仓库、出库单、物料）"),
+    include_items: bool = Query(False, description="是否附带通知明细（明细表格视图）"),
     notice_code: Optional[str] = Query(None, description="通知单号（模糊）"),
     sales_order_code: Optional[str] = Query(None, description="销售订单号（模糊）"),
     planned_start_date: Optional[date] = Query(None, description="计划发货日期起"),
@@ -126,6 +127,7 @@ async def list_shipment_notices(
         created_start_date=created_start_date,
         created_end_date=created_end_date,
         order_by=safe_order_by,
+        include_items=include_items,
     )
 
 

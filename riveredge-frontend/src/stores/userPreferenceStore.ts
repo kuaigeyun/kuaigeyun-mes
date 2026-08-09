@@ -101,17 +101,35 @@ const preferenceStorage: any = { // 使用 any 暂时规避类型检查，或者
   },
 };
 
-/** 将偏好中的表格列设置同步到 localStorage，供 ProTable 读取（跨设备/换机后恢复列展示） */
+/** 将偏好中的表格列/视图设置同步到 localStorage（账号偏好 → 本机缓存） */
 function syncTableColumnsToLocalStorage(preferences: Record<string, any>): void {
   if (typeof window === 'undefined') return;
   const tables = preferences?.ui?.tables;
   if (!tables || typeof tables !== 'object') return;
   Object.keys(tables).forEach((tableId) => {
     const tablePref = tables[tableId];
-    const columns = tablePref?.columns ?? tablePref;
-    if (columns && typeof columns === 'object') {
+    if (!tablePref || typeof tablePref !== 'object') return;
+    if (tablePref.columns && typeof tablePref.columns === 'object') {
       try {
-        localStorage.setItem(`ui.tables.${tableId}.columns`, JSON.stringify(columns));
+        localStorage.setItem(`ui.tables.${tableId}.columns`, JSON.stringify(tablePref.columns));
+      } catch (_) {}
+    } else if (!('viewType' in tablePref) && !('columnsDetailTable' in tablePref)) {
+      // 旧数据：整段即 columns map
+      try {
+        localStorage.setItem(`ui.tables.${tableId}.columns`, JSON.stringify(tablePref));
+      } catch (_) {}
+    }
+    if (tablePref.columnsDetailTable && typeof tablePref.columnsDetailTable === 'object') {
+      try {
+        localStorage.setItem(
+          `ui.tables.${tableId}.columns::detailTable`,
+          JSON.stringify(tablePref.columnsDetailTable),
+        );
+      } catch (_) {}
+    }
+    if (typeof tablePref.viewType === 'string' && tablePref.viewType && tablePref.viewType !== 'help') {
+      try {
+        localStorage.setItem(`ui.tables.${tableId}.viewType`, tablePref.viewType);
       } catch (_) {}
     }
   });

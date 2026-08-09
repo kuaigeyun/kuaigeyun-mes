@@ -5,11 +5,13 @@ Author: RiverEdge Team
 Date: 2026-05-28
 """
 
+import asyncio
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from tortoise.expressions import Q
+from tortoise.functions import Count
 from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
@@ -79,6 +81,20 @@ PURCHASE_INQUIRY_SORTABLE_FIELDS = frozenset({
     "updated_at",
 })
 
+# 生命周期钉住 Tab → status 库值（与 get_purchase_inquiry_lifecycle 一致，避免全表加载）
+_INQUIRY_LIFECYCLE_STATUS_VALUES: Dict[str, Tuple[str, ...]] = {
+    "draft": ("DRAFT", "draft", "草稿", "CANCELLED", "cancelled", "已取消"),
+    "草稿": ("DRAFT", "draft", "草稿", "CANCELLED", "cancelled", "已取消"),
+    "quoting": ("QUOTING", "quoting", "询价中"),
+    "询价中": ("QUOTING", "quoting", "询价中"),
+    "pending_compare": ("PENDING_COMPARE", "pending_compare", "待比价"),
+    "待比价": ("PENDING_COMPARE", "pending_compare", "待比价"),
+    "awarded": ("AWARDED", "awarded", "已定标"),
+    "已定标": ("AWARDED", "awarded", "已定标"),
+    "converted": ("CONVERTED", "converted", "已转单"),
+    "已转单": ("CONVERTED", "converted", "已转单"),
+}
+
 
 class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
     def __init__(self):
@@ -100,19 +116,95 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
     def _status_label(self, status: str) -> str:
         return INQUIRY_STATUS_LABELS.get(status, status)
 
-    async def _build_response(self, tenant_id: int, inquiry: PurchaseInquiry) -> PurchaseInquiryResponse:
-        items = await PurchaseInquiryItem.filter(tenant_id=tenant_id, inquiry_id=inquiry.id).all()
-        vendors = await PurchaseInquiryVendor.filter(tenant_id=tenant_id, inquiry_id=inquiry.id).all()
+    @staticmethod
+    def _statuses_for_lifecycle_stage(lifecycle_stage: str) -> Optional[Tuple[str, ...]]:
+        from apps.kuaizhizao.services.document_lifecycle_service import (
+            normalize_purchase_inquiry_lifecycle_stage,
+        )
+
+        raw = (lifecycle_stage or "").strip()
+        if not raw:
+            return None
+        norm = normalize_purchase_inquiry_lifecycle_stage(raw)
+        return _INQUIRY_LIFECYCLE_STATUS_VALUES.get(norm) or _INQUIRY_LIFECYCLE_STATUS_VALUES.get(raw)
+
+    async def _batch_inquiry_items_count(
+        self, tenant_id: int, inquiry_ids: Sequence[int]
+    ) -> Dict[int, int]:
+        if not inquiry_ids:
+            return {}
+        rows = (
+            await PurchaseInquiryItem.filter(
+                tenant_id=tenant_id,
+                inquiry_id__in=list(inquiry_ids),
+            )
+            .group_by("inquiry_id")
+            .annotate(cnt=Count("id"))
+            .values("inquiry_id", "cnt")
+        )
+        return {int(row["inquiry_id"]): int(row["cnt"]) for row in rows}
+
+    async def _batch_awarded_amounts(
+        self, tenant_id: int, inquiry_ids: Sequence[int]
+    ) -> Dict[int, Decimal]:
+        """批量汇总已定标金额（quote_item.is_awarded），避免列表逐单查报价行。"""
+        result = {int(i): Decimal("0.00") for i in inquiry_ids}
+        if not inquiry_ids:
+            return result
         quotes = await PurchaseSupplierQuote.filter(
-            tenant_id=tenant_id, inquiry_id=inquiry.id, deleted_at__isnull=True
-        ).all()
+            tenant_id=tenant_id,
+            inquiry_id__in=list(inquiry_ids),
+            deleted_at__isnull=True,
+        ).values("id", "inquiry_id")
+        if not quotes:
+            return result
+        quote_to_inquiry = {int(q["id"]): int(q["inquiry_id"]) for q in quotes}
+        q_items = await PurchaseSupplierQuoteItem.filter(
+            tenant_id=tenant_id,
+            quote_id__in=list(quote_to_inquiry.keys()),
+            is_awarded=True,
+        ).values("quote_id", "quoted_quantity", "unit_price")
+        for row in q_items:
+            iid = quote_to_inquiry.get(int(row["quote_id"]))
+            if iid is None:
+                continue
+            result[iid] += Decimal(str(row.get("quoted_quantity") or 0)) * Decimal(
+                str(row.get("unit_price") or 0)
+            )
+        return {k: v.quantize(Decimal("0.01")) for k, v in result.items()}
+
+    async def _build_response(
+        self,
+        tenant_id: int,
+        inquiry: PurchaseInquiry,
+        *,
+        audit_required: Optional[bool] = None,
+    ) -> PurchaseInquiryResponse:
+        items, vendors, quotes = await asyncio.gather(
+            PurchaseInquiryItem.filter(tenant_id=tenant_id, inquiry_id=inquiry.id).all(),
+            PurchaseInquiryVendor.filter(tenant_id=tenant_id, inquiry_id=inquiry.id).all(),
+            PurchaseSupplierQuote.filter(
+                tenant_id=tenant_id, inquiry_id=inquiry.id, deleted_at__isnull=True
+            ).all(),
+        )
+        quote_ids = [int(q.id) for q in quotes]
+        quote_items_by_quote: Dict[int, List[Any]] = {qid: [] for qid in quote_ids}
+        if quote_ids:
+            all_quote_items = await PurchaseSupplierQuoteItem.filter(
+                tenant_id=tenant_id, quote_id__in=quote_ids
+            ).all()
+            for qi in all_quote_items:
+                quote_items_by_quote.setdefault(int(qi.quote_id), []).append(qi)
+
         quote_resps: List[PurchaseSupplierQuoteResponse] = []
         awarded_total_amount = Decimal(0)
         for q in quotes:
-            q_items = await PurchaseSupplierQuoteItem.filter(tenant_id=tenant_id, quote_id=q.id).all()
+            q_items = quote_items_by_quote.get(int(q.id), [])
             for qi in q_items:
                 if qi.is_awarded:
-                    awarded_total_amount += Decimal(str(qi.quoted_quantity or 0)) * Decimal(str(qi.unit_price or 0))
+                    awarded_total_amount += Decimal(str(qi.quoted_quantity or 0)) * Decimal(
+                        str(qi.unit_price or 0)
+                    )
             quote_resps.append(
                 PurchaseSupplierQuoteResponse.model_validate({
                     **{k: getattr(q, k) for k in q._meta.fields_map if hasattr(q, k)},
@@ -121,7 +213,10 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             )
         from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_inquiry_lifecycle
 
-        audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_inquiry")
+        if audit_required is None:
+            audit_required = await self.business_config_service.check_audit_required(
+                tenant_id, "purchase_inquiry"
+            )
         lifecycle = get_purchase_inquiry_lifecycle(inquiry, audit_required=audit_required)
         resp = PurchaseInquiryResponse.model_validate({
             **{k: getattr(inquiry, k) for k in inquiry._meta.fields_map if hasattr(inquiry, k)},
@@ -133,6 +228,59 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             "lifecycle": lifecycle,
         })
         return enrich_purchase_inquiry_capabilities_on_response(inquiry, resp)
+
+    async def _build_list_responses(
+        self,
+        tenant_id: int,
+        inquiries: List[PurchaseInquiry],
+        *,
+        audit_required: bool,
+        include_items: bool,
+    ) -> List[PurchaseInquiryResponse]:
+        """列表专用：批量预取，不附带 vendors/quotes（详情接口走 _build_response）。"""
+        from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_inquiry_lifecycle
+
+        if not inquiries:
+            return []
+
+        inquiry_ids = [int(i.id) for i in inquiries]
+        items_count_map, awarded_map = await asyncio.gather(
+            self._batch_inquiry_items_count(tenant_id, inquiry_ids),
+            self._batch_awarded_amounts(tenant_id, inquiry_ids),
+        )
+
+        items_by_inquiry: Dict[int, List[PurchaseInquiryItemResponse]] = {}
+        if include_items:
+            all_items = (
+                await PurchaseInquiryItem.filter(
+                    tenant_id=tenant_id, inquiry_id__in=inquiry_ids
+                )
+                .order_by("inquiry_id", "id")
+                .all()
+            )
+            for it in all_items:
+                items_by_inquiry.setdefault(int(it.inquiry_id), []).append(
+                    PurchaseInquiryItemResponse.model_validate(it)
+                )
+
+        out: List[PurchaseInquiryResponse] = []
+        for inquiry in inquiries:
+            iid = int(inquiry.id)
+            payload = {
+                k: getattr(inquiry, k)
+                for k in inquiry._meta.fields_map
+                if hasattr(inquiry, k)
+            }
+            payload["items_count"] = items_count_map.get(iid, 0)
+            payload["total_amount"] = awarded_map.get(iid, Decimal("0.00"))
+            payload["items"] = items_by_inquiry.get(iid, []) if include_items else []
+            payload["vendors"] = []
+            payload["quotes"] = []
+            payload["lifecycle"] = get_purchase_inquiry_lifecycle(
+                inquiry, audit_required=audit_required
+            )
+            out.append(PurchaseInquiryResponse.model_validate(payload))
+        return out
 
     async def get_inquiry_by_id(self, tenant_id: int, inquiry_id: int) -> PurchaseInquiryResponse:
         inquiry = await PurchaseInquiry.get_or_none(
@@ -192,17 +340,29 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         created_end_date: Optional[date] = None,
         source_id: Optional[int] = None,
         order_by: Optional[str] = None,
+        include_items: bool = False,
     ) -> Dict[str, Any]:
         qs = PurchaseInquiry.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if source_id:
             qs = qs.filter(source_id=source_id, source_type="PurchaseRequisition")
         kw = (keyword or "").strip()
         if kw:
+            from apps.kuaizhizao.utils.list_item_material_keyword import (
+                header_ids_matching_item_material,
+            )
+
+            material_inquiry_ids = await header_ids_matching_item_material(
+                tenant_id,
+                PurchaseInquiryItem,
+                "inquiry_id",
+                kw,
+            )
             qs = qs.filter(
                 Q(inquiry_code__icontains=kw)
                 | Q(inquiry_name__icontains=kw)
                 | Q(source_code__icontains=kw)
                 | Q(buyer_name__icontains=kw)
+                | Q(id__in=material_inquiry_ids)
             )
         code = (inquiry_code or "").strip()
         if code:
@@ -230,18 +390,23 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 created_at__lte=datetime.combine(created_end_date, time(23, 59, 59))
             )
 
+        lifecycle_filter = (lifecycle_stage or "").strip()
+        status_values = self._statuses_for_lifecycle_stage(lifecycle_filter)
+        if status_values:
+            qs = qs.filter(status__in=list(status_values))
+
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "purchase_inquiry"
         )
-        from apps.kuaizhizao.services.document_lifecycle_service import (
-            get_purchase_inquiry_lifecycle,
-            normalize_purchase_inquiry_lifecycle_stage,
-        )
-
         primary_order, secondary_order = self._resolve_list_order_by(order_by)
-        lifecycle_filter = (lifecycle_stage or "").strip()
 
-        if lifecycle_filter:
+        if lifecycle_filter and not status_values:
+            # 未知阶段名：回退内存筛选（不应成为常态路径）
+            from apps.kuaizhizao.services.document_lifecycle_service import (
+                get_purchase_inquiry_lifecycle,
+                normalize_purchase_inquiry_lifecycle_stage,
+            )
+
             candidate_rows = await qs.order_by(primary_order, secondary_order).all()
             norm_target = normalize_purchase_inquiry_lifecycle_stage(lifecycle_filter)
             matched_rows: List[PurchaseInquiry] = []
@@ -258,12 +423,16 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             page_rows = sorted_rows[skip : skip + limit]
         else:
             total = await qs.count()
-            page_rows = await qs.offset(skip).limit(limit).order_by(primary_order, secondary_order)
+            page_rows = await qs.offset(skip).limit(limit).order_by(
+                primary_order, secondary_order
+            )
 
-        out: List[PurchaseInquiryResponse] = []
-        for inquiry in page_rows:
-            resp = await self._build_response(tenant_id, inquiry)
-            out.append(resp)
+        out = await self._build_list_responses(
+            tenant_id,
+            page_rows,
+            audit_required=audit_required,
+            include_items=include_items,
+        )
         enriched = enrich_purchase_inquiry_list_capabilities(page_rows, out)
         from core.services.approval.audit_record_enricher import enrich_items
 
@@ -695,23 +864,33 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         )
         if not inquiry:
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
-        items = await PurchaseInquiryItem.filter(tenant_id=tenant_id, inquiry_id=inquiry_id).all()
-        vendors = await PurchaseInquiryVendor.filter(tenant_id=tenant_id, inquiry_id=inquiry_id).all()
-        quotes = await PurchaseSupplierQuote.filter(
-            tenant_id=tenant_id, inquiry_id=inquiry_id, deleted_at__isnull=True
-        ).all()
+        items, vendors, quotes = await asyncio.gather(
+            PurchaseInquiryItem.filter(tenant_id=tenant_id, inquiry_id=inquiry_id).all(),
+            PurchaseInquiryVendor.filter(tenant_id=tenant_id, inquiry_id=inquiry_id).all(),
+            PurchaseSupplierQuote.filter(
+                tenant_id=tenant_id, inquiry_id=inquiry_id, deleted_at__isnull=True
+            ).all(),
+        )
         quote_by_supplier = {q.supplier_id: q for q in quotes}
+        quote_ids = [int(q.id) for q in quotes]
+        quote_item_map: Dict[Tuple[int, int], Any] = {}
+        if quote_ids:
+            all_quote_items = await PurchaseSupplierQuoteItem.filter(
+                tenant_id=tenant_id, quote_id__in=quote_ids
+            ).all()
+            for qi in all_quote_items:
+                quote_item_map[(int(qi.quote_id), int(qi.inquiry_item_id))] = qi
         rows: List[ComparisonRow] = []
         for item in items:
             cells: List[ComparisonCell] = []
             prices: List[Decimal] = []
             for vendor in vendors:
                 quote = quote_by_supplier.get(vendor.supplier_id)
-                qi = None
-                if quote:
-                    qi = await PurchaseSupplierQuoteItem.get_or_none(
-                        tenant_id=tenant_id, quote_id=quote.id, inquiry_item_id=item.id
-                    )
+                qi = (
+                    quote_item_map.get((int(quote.id), int(item.id)))
+                    if quote
+                    else None
+                )
                 price = qi.unit_price if qi else None
                 if price is not None and price > 0:
                     prices.append(price)

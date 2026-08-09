@@ -1316,7 +1316,7 @@ async def push_sales_order_to_delivery(
     sales_order_id: int = Path(..., description="销售订单ID"),
     body: Optional[Dict[str, Any]] = Body(
         default=None,
-        description="可选：delivery_quantities={\"1\": 2}，line_warehouses={\"1\": 3}，warehouse_id=1",
+        description="可选：delivery_quantities、line_warehouses、warehouse_id、notes",
     ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -1331,7 +1331,7 @@ async def push_sales_order_to_delivery(
         if isinstance(delivery_quantities_raw, dict):
             delivery_quantities = {}
             for k, v in delivery_quantities_raw.items():
-                if k in ("line_warehouses", "warehouse_id", "warehouse_name"):
+                if k in ("line_warehouses", "warehouse_id", "warehouse_name", "notes"):
                     continue
                 try:
                     delivery_quantities[int(k)] = float(v)
@@ -1360,6 +1360,10 @@ async def push_sales_order_to_delivery(
                     continue
             if not line_warehouses:
                 line_warehouses = None
+        notes_raw = payload.get("notes")
+        notes = str(notes_raw).strip() if notes_raw is not None else None
+        if notes == "":
+            notes = None
         result = await sales_order_service.push_sales_order_to_delivery(
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
@@ -1368,6 +1372,7 @@ async def push_sales_order_to_delivery(
             warehouse_id=warehouse_id,
             warehouse_name=warehouse_name,
             line_warehouses=line_warehouses,
+            notes=notes,
         )
         return result
     except NotFoundError as e:

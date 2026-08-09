@@ -64,7 +64,11 @@ import { convertUnitPriceByPriceType } from '../utils/resolve-partner-material-p
 import { buildImageUploadFileUrls, getFileByUuid, uploadMultipleFiles } from '../../../services/file';
 import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
 import { saveSuspendedModal } from '../utils/suspendedModal';
-import { buildMaterialSourceTypeOptions } from '../utils/materialSourceType';
+import {
+  MATERIAL_SOURCE_TYPE_VALUES,
+  buildMaterialSourceTypeOptions,
+  getMaterialSourceTypeLabel,
+} from '../utils/materialSourceType';
 import { MaterialGroupFormModal } from './MaterialGroupFormModal';
 import { RouteFormModal } from './RouteFormModal';
 import { SupplierFormModal } from './SupplierFormModal';
@@ -123,8 +127,22 @@ function normalizeSourceTypeValues(
   return Array.from(new Set(merged));
 }
 
+/** 主来源按规范顺序取首个选中项，避免多选顺序导致展示/落库漂移 */
 function getPrimarySourceType(sourceTypes: string[]): string | undefined {
+  for (const candidate of MATERIAL_SOURCE_TYPE_VALUES) {
+    if (sourceTypes.includes(candidate)) return candidate;
+  }
   return sourceTypes[0];
+}
+
+function collectAllowedSourceConfigFields(sourceTypes: string[]): string[] {
+  const allowed = new Set<string>();
+  for (const st of sourceTypes) {
+    for (const field of SOURCE_CONFIG_FIELDS[st] || []) {
+      allowed.add(field);
+    }
+  }
+  return [...allowed];
 }
 
 /**
@@ -868,11 +886,8 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         setActiveTab('basic');
         throw new Error(t('app.master-data.materialForm.sourceTypePlaceholder'));
       }
-      const originalSourceType = (material as any)?.source_type || (material as any)?.sourceType;
-      // 关键修复：仅当 sourceType 未改变时才合并 existingSourceConfig，避免不同类型字段混合
-      const existingSourceConfig = (sourceType === originalSourceType) 
-        ? ((material as any)?.source_config || (material as any)?.sourceConfig || {})
-        : {};
+      const existingSourceConfig =
+        (material as any)?.source_config || (material as any)?.sourceConfig || {};
       let formSourceConfig = values.sourceConfig || values.source_config || {};
       // 兼容 ProForm 扁平 key：从 values 中收集 sourceConfig.xxx 构建对象（条件渲染字段常只出现在扁平 key 中）
       if (Object.keys(formSourceConfig).length === 0 && typeof values === 'object') {
@@ -892,24 +907,35 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           formSourceConfig = directSourceConfig;
         }
       }
-      
+
       const sourceConfig = { ...existingSourceConfig, ...formSourceConfig };
-      
-      // 关键修复：过滤掉不属于当前 sourceType 的字段（避免不同类型字段混合）
-      const allowedFields = SOURCE_CONFIG_FIELDS[sourceType ?? ''] || [];
+
+      // 同步名称字段，便于后端与下游使用（须在按多选类型过滤前写入）
+      if (sourceConfig.default_supplier_id && suppliers.length > 0) {
+        const supplier = suppliers.find((s) => s.id === sourceConfig.default_supplier_id);
+        if (supplier) sourceConfig.default_supplier_name = supplier.name;
+      }
+      if (sourceConfig.outsource_supplier_id && suppliers.length > 0) {
+        const supplier = suppliers.find((s) => s.id === sourceConfig.outsource_supplier_id);
+        if (supplier) sourceConfig.outsource_supplier_name = supplier.name;
+      }
+
+      // 按全部已选来源类型保留字段（自制+委外等可同时落库）
+      const allowedFields = new Set(collectAllowedSourceConfigFields(sourceTypes));
+      if (allowedFields.has('default_supplier_id')) allowedFields.add('default_supplier_name');
+      if (allowedFields.has('outsource_supplier_id')) allowedFields.add('outsource_supplier_name');
       const filteredSourceConfig: Record<string, any> = {};
       for (const key of Object.keys(sourceConfig)) {
-        if (allowedFields.includes(key)) {
-          let val = sourceConfig[key];
-          if (key === 'bom_variants' && typeof val === 'string' && val.trim()) {
-            try {
-              val = JSON.parse(val);
-            } catch {
-              messageApi.warning(t('app.master-data.source.bomVariantsLabel') + ': JSON 格式无效');
-            }
+        if (!allowedFields.has(key)) continue;
+        let val = sourceConfig[key];
+        if (key === 'bom_variants' && typeof val === 'string' && val.trim()) {
+          try {
+            val = JSON.parse(val);
+          } catch {
+            messageApi.warning(t('app.master-data.source.bomVariantsLabel') + ': JSON 格式无效');
           }
-          filteredSourceConfig[key] = val;
         }
+        filteredSourceConfig[key] = val;
       }
       // 同步多来源值（保留单值 source_type 作为主来源，不破坏现有业务链路）
       if (sourceTypes.length > 0) {
@@ -918,16 +944,6 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         delete filteredSourceConfig.source_types;
       }
 
-      // 同步名称字段，便于后端与下游使用
-      if (sourceConfig.default_supplier_id && suppliers.length > 0) {
-        const supplier = suppliers.find(s => s.id === sourceConfig.default_supplier_id);
-        if (supplier) sourceConfig.default_supplier_name = supplier.name;
-      }
-      if (sourceConfig.outsource_supplier_id && suppliers.length > 0) {
-        const supplier = suppliers.find(s => s.id === sourceConfig.outsource_supplier_id);
-        if (supplier) sourceConfig.outsource_supplier_name = supplier.name;
-      }
-      
       // 处理默认值数据转换（合并已有 defaults，避免只改物料来源时覆盖其他默认值）
       const allFormValues = formRef.current?.getFieldsValue?.(true) || {};
       const existingDefaults = (material as any)?.defaults || {};
@@ -3473,17 +3489,22 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
       'defaults.defaultTaxRate': value === 'Service' ? 6 : 13,
     });
 
-    const currentConfig = formRef.current?.getFieldValue('sourceConfig') || formRef.current?.getFieldValue('source_config') || {};
-    let newConfig = { ...currentConfig };
+    const currentConfig =
+      formRef.current?.getFieldValue('sourceConfig') ||
+      formRef.current?.getFieldValue('source_config') ||
+      {};
+    let newConfig: Record<string, any> = { ...currentConfig };
 
-    if (value === 'Make') {
+    // 多选时同时初始化各来源配置，取消勾选时清掉对应字段
+    if (nextSourceTypes.includes('Make')) {
       newConfig = {
         ...newConfig,
         manufacturing_mode: manufacturingMode ?? newConfig.manufacturing_mode,
         production_lead_time: newConfig.production_lead_time,
         min_production_batch: newConfig.min_production_batch,
       };
-    } else if (value === 'Buy') {
+    }
+    if (nextSourceTypes.includes('Buy')) {
       newConfig = {
         ...newConfig,
         default_supplier_id: newConfig.default_supplier_id,
@@ -3491,7 +3512,8 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
         min_purchase_batch: newConfig.min_purchase_batch,
         purchase_price: newConfig.purchase_price,
       };
-    } else if (value === 'Outsource') {
+    }
+    if (nextSourceTypes.includes('Outsource')) {
       newConfig = {
         ...newConfig,
         outsource_supplier_id: newConfig.outsource_supplier_id,
@@ -3500,6 +3522,13 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
         outsource_price: newConfig.outsource_price,
         material_provided_by: newConfig.material_provided_by || 'enterprise',
       };
+    }
+
+    const allowed = new Set(collectAllowedSourceConfigFields(nextSourceTypes));
+    if (allowed.has('default_supplier_id')) allowed.add('default_supplier_name');
+    if (allowed.has('outsource_supplier_id')) allowed.add('outsource_supplier_name');
+    for (const key of Object.keys(newConfig)) {
+      if (!allowed.has(key)) delete newConfig[key];
     }
 
     formRef.current?.setFieldsValue({
@@ -3547,297 +3576,331 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
         </Col>
       </Row>
 
-      <ProFormDependency name={['sourceType']}>
-        {({ sourceType: currentSourceType }) => {
-          if (currentSourceType === 'Make') {
-            return (
-              <Row gutter={16} style={{ marginTop: 0 }}>
-                <Col span={8}>
-                  <ProFormDependency name={['sourceConfig.manufacturing_mode']}>
-                    {({ 'sourceConfig.manufacturing_mode': mode }) => (
-                      <ProFormSelect
-                        name="sourceConfig.manufacturing_mode"
-                        label={t('app.master-data.materialForm.manufacturingMode')}
-                        placeholder={t('app.master-data.materialForm.manufacturingModePlaceholder')}
-                        options={manufacturingModeOptions}
-                        extra={
-                          mode && manufacturingModeHintMap[mode as string]
-                            ? manufacturingModeHintMap[mode as string]
-                            : t('app.master-data.materialForm.manufacturingModeExtra')
+      <ProFormDependency name={['sourceTypes', 'sourceType']}>
+        {({ sourceTypes: formSourceTypes, sourceType: currentSourceType }) => {
+          const selectedTypes = normalizeSourceTypeValues(currentSourceType, {
+            source_types: Array.isArray(formSourceTypes)
+              ? formSourceTypes
+              : formSourceTypes
+                ? [formSourceTypes]
+                : sourceTypes,
+          });
+          const showSectionTitle =
+            selectedTypes.filter((st) =>
+              ['Make', 'Buy', 'Outsource', 'Phantom', 'Service'].includes(st),
+            ).length > 1;
+          const sectionTitle = (sourceTypeCode: string) =>
+            showSectionTitle ? (
+              <Typography.Text
+                type="secondary"
+                style={{ display: 'block', margin: '8px 0 4px', fontSize: 12 }}
+              >
+                {getMaterialSourceTypeLabel(sourceTypeCode, t)}
+              </Typography.Text>
+            ) : null;
+
+          return (
+            <>
+              {selectedTypes.includes('Make') ? (
+                <>
+                  {sectionTitle('Make')}
+                  <Row gutter={16} style={{ marginTop: 0 }}>
+                    <Col span={8}>
+                      <ProFormDependency name={['sourceConfig.manufacturing_mode']}>
+                        {({ 'sourceConfig.manufacturing_mode': mode }) => (
+                          <ProFormSelect
+                            name="sourceConfig.manufacturing_mode"
+                            label={t('app.master-data.materialForm.manufacturingMode')}
+                            placeholder={t('app.master-data.materialForm.manufacturingModePlaceholder')}
+                            options={manufacturingModeOptions}
+                            extra={
+                              mode && manufacturingModeHintMap[mode as string]
+                                ? manufacturingModeHintMap[mode as string]
+                                : t('app.master-data.materialForm.manufacturingModeExtra')
+                            }
+                            fieldProps={{ allowClear: true }}
+                          />
+                        )}
+                      </ProFormDependency>
+                    </Col>
+                    <Col span={5}>
+                      <ProFormItem
+                        name="defaults.defaultProcessRouteUuid"
+                        label={
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span>{t('app.master-data.source.defaultProcessRoute')}</span>
+                            <Tooltip title={t('app.master-data.source.defaultProcessRouteMaterialHint')}>
+                              <QuestionCircleOutlined
+                                style={{ color: 'rgba(0,0,0,.45)', fontSize: 14, cursor: 'help' }}
+                              />
+                            </Tooltip>
+                          </span>
                         }
-                        fieldProps={{ allowClear: true }}
+                      >
+                        <UniDropdown
+                          placeholder={t('app.master-data.source.selectProcessRoute')}
+                          options={processRoutes.map((pr) => ({
+                            label: `${pr.code} - ${pr.name}`,
+                            value: pr.uuid,
+                          }))}
+                          allowClear
+                          showSearch
+                          loading={processRoutesLoading}
+                          optionFilterProp="label"
+                          style={{ width: '100%' }}
+                          quickCreate={
+                            onQuickAddProcessRoute
+                              ? {
+                                  label: t('app.master-data.materialForm.quickAddProcessRoute'),
+                                  onClick: () => onQuickAddProcessRoute(),
+                                }
+                              : undefined
+                          }
+                        />
+                      </ProFormItem>
+                    </Col>
+                    <Col span={5}>
+                      <ProFormItem
+                        label={
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span>{t('app.master-data.source.defaultBomVersion')}</span>
+                            <Tooltip title={t('app.master-data.source.defaultBomVersionHint')}>
+                              <QuestionCircleOutlined
+                                style={{ color: 'rgba(0,0,0,.45)', fontSize: 14, cursor: 'help' }}
+                              />
+                            </Tooltip>
+                          </span>
+                        }
+                      >
+                        <UniDropdown
+                          placeholder={
+                            materialId
+                              ? t('app.master-data.source.selectDefaultBomVersion')
+                              : t('app.master-data.source.saveMaterialFirstForBom')
+                          }
+                          disabled={!materialId}
+                          loading={bomVersionsLoading}
+                          allowClear={false}
+                          showSearch
+                          optionFilterProp="label"
+                          style={{ width: '100%' }}
+                          value={selectedBomVersion}
+                          options={bomVersionRows.map((row) => ({
+                            value: row.version,
+                            label: row.isDefault
+                              ? `${row.version} ${t('app.kuaizhizao.demandComputation.bomVersionDefault')}`
+                              : row.version,
+                          }))}
+                          onChange={(val) => handleDefaultBomVersionChange(val as string | undefined)}
+                          quickCreate={
+                            materialId
+                              ? {
+                                  label: t('app.master-data.materialForm.quickMaintainBom'),
+                                  onClick: () => goBomDesigner(),
+                                }
+                              : undefined
+                          }
+                        />
+                      </ProFormItem>
+                    </Col>
+                    <Col span={3}>
+                      <ProFormDigit
+                        name="sourceConfig.production_lead_time"
+                        label={t('app.master-data.source.productionLeadTime')}
+                        placeholder={t('app.master-data.source.leadTimePlaceholder')}
+                        min={0}
                       />
-                    )}
-                  </ProFormDependency>
-                </Col>
-                <Col span={5}>
-                  <ProFormItem
-                    name="defaults.defaultProcessRouteUuid"
-                    label={
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span>{t('app.master-data.source.defaultProcessRoute')}</span>
-                        <Tooltip title={t('app.master-data.source.defaultProcessRouteMaterialHint')}>
-                          <QuestionCircleOutlined
-                            style={{ color: 'rgba(0,0,0,.45)', fontSize: 14, cursor: 'help' }}
-                          />
-                        </Tooltip>
-                      </span>
-                    }
-                  >
-                    <UniDropdown
-                      placeholder={t('app.master-data.source.selectProcessRoute')}
-                      options={processRoutes.map((pr) => ({
-                        label: `${pr.code} - ${pr.name}`,
-                        value: pr.uuid,
-                      }))}
-                      allowClear
-                      showSearch
-                      loading={processRoutesLoading}
-                      optionFilterProp="label"
-                      style={{ width: '100%' }}
-                      quickCreate={
-                        onQuickAddProcessRoute
-                          ? {
-                              label: t('app.master-data.materialForm.quickAddProcessRoute'),
-                              onClick: () => onQuickAddProcessRoute(),
-                            }
-                          : undefined
-                      }
-                    />
-                  </ProFormItem>
-                </Col>
-                <Col span={5}>
-                  <ProFormItem
-                    label={
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span>{t('app.master-data.source.defaultBomVersion')}</span>
-                        <Tooltip title={t('app.master-data.source.defaultBomVersionHint')}>
-                          <QuestionCircleOutlined
-                            style={{ color: 'rgba(0,0,0,.45)', fontSize: 14, cursor: 'help' }}
-                          />
-                        </Tooltip>
-                      </span>
-                    }
-                  >
-                    <UniDropdown
-                      placeholder={
-                        materialId
-                          ? t('app.master-data.source.selectDefaultBomVersion')
-                          : t('app.master-data.source.saveMaterialFirstForBom')
-                      }
-                      disabled={!materialId}
-                      loading={bomVersionsLoading}
-                      allowClear={false}
-                      showSearch
-                      optionFilterProp="label"
-                      style={{ width: '100%' }}
-                      value={selectedBomVersion}
-                      options={bomVersionRows.map((row) => ({
-                        value: row.version,
-                        label: row.isDefault
-                          ? `${row.version} ${t('app.kuaizhizao.demandComputation.bomVersionDefault')}`
-                          : row.version,
-                      }))}
-                      onChange={(val) => handleDefaultBomVersionChange(val as string | undefined)}
-                      quickCreate={
-                        materialId
-                          ? {
-                              label: t('app.master-data.materialForm.quickMaintainBom'),
-                              onClick: () => goBomDesigner(),
-                            }
-                          : undefined
-                      }
-                    />
-                  </ProFormItem>
-                </Col>
-                <Col span={3}>
-                  <ProFormDigit
-                    name="sourceConfig.production_lead_time"
-                    label={t('app.master-data.source.productionLeadTime')}
-                    placeholder={t('app.master-data.source.leadTimePlaceholder')}
-                    min={0}
-                  />
-                </Col>
-                <Col span={3}>
-                  <ProFormDigit
-                    name="sourceConfig.min_production_batch"
-                    label={t('app.master-data.source.minProductionBatch')}
-                    placeholder={t('app.master-data.source.minBatchPlaceholder')}
-                    min={0}
-                  />
-                </Col>
-              </Row>
-            );
-          }
-          if (currentSourceType === 'Buy') {
-            return (
-              <Row gutter={16} style={{ marginTop: 0 }}>
-                <Col span={12}>
-                  <ProFormItem
-                    name="sourceConfig.default_supplier_id"
-                    label={t('app.master-data.source.defaultSupplier')}
-                  >
-                    <UniDropdown
-                      placeholder={t('app.master-data.source.selectDefaultSupplier')}
-                      options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
-                      loading={suppliersLoading}
-                      showSearch
-                      allowClear
-                      style={{ width: '100%' }}
-                      optionFilterProp="label"
-                      quickCreate={
-                        onQuickAddSupplier
-                          ? {
-                              label: t('app.master-data.materialForm.quickAddSupplier'),
-                              onClick: () => onQuickAddSupplier(),
-                            }
-                          : undefined
-                      }
-                    />
-                  </ProFormItem>
-                </Col>
-                <Col span={4}>
-                  <ProFormDigit
-                    name="sourceConfig.purchase_lead_time"
-                    label={t('app.master-data.source.purchaseLeadTime')}
-                    placeholder={t('app.master-data.source.leadTimePlaceholder')}
-                    min={0}
-                  />
-                </Col>
-                <Col span={4}>
-                  <ProFormDigit
-                    name="sourceConfig.min_purchase_batch"
-                    label={t('app.master-data.source.minPurchaseBatch')}
-                    placeholder={t('app.master-data.source.minBatchPlaceholder')}
-                    min={0}
-                  />
-                </Col>
-                <Col span={4}>
-                  <ProFormDigit
-                    name="sourceConfig.purchase_price"
-                    label={t('app.master-data.source.purchasePrice')}
-                    placeholder={t('app.master-data.source.pricePlaceholder')}
-                    min={0}
-                    fieldProps={{ precision: 2 }}
-                  />
-                </Col>
-              </Row>
-            );
-          }
-          if (currentSourceType === 'Outsource') {
-            return (
-              <Row gutter={16} style={{ marginTop: 0 }}>
-                <Col span={6}>
-                  <ProFormItem
-                    name="sourceConfig.outsource_supplier_id"
-                    label={t('app.master-data.source.outsourceSupplier')}
-                    rules={[{ required: true, message: t('app.master-data.source.selectOutsourceSupplier') }]}
-                  >
-                    <UniDropdown
-                      placeholder={t('app.master-data.source.selectOutsourceSupplier')}
-                      options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
-                      loading={suppliersLoading}
-                      showSearch
-                      style={{ width: '100%' }}
-                      optionFilterProp="label"
-                      quickCreate={
-                        onQuickAddOutsourceSupplier
-                          ? {
-                              label: t('app.master-data.materialForm.quickAddSupplier'),
-                              onClick: () => onQuickAddOutsourceSupplier(),
-                            }
-                          : undefined
-                      }
-                    />
-                  </ProFormItem>
-                </Col>
-                <Col span={6}>
-                  <ProFormItem
-                    name="sourceConfig.outsource_operation"
-                    label={t('app.master-data.source.outsourceOperation')}
-                    rules={[{ required: true, message: t('app.master-data.source.selectOutsourceOperation') }]}
-                  >
-                    <UniDropdown
-                      placeholder={t('app.master-data.source.selectOutsourceOperation')}
-                      options={operations.map((op) => ({ label: `${op.code} - ${op.name}`, value: op.uuid }))}
-                      loading={operationsLoading}
-                      showSearch
-                      style={{ width: '100%' }}
-                      optionFilterProp="label"
-                      quickCreate={
-                        onQuickAddOperation
-                          ? {
-                              label: t('app.master-data.materialForm.quickAddOperation'),
-                              onClick: () => onQuickAddOperation(),
-                            }
-                          : undefined
-                      }
-                    />
-                  </ProFormItem>
-                </Col>
-                <Col span={4}>
-                  <ProFormDigit
-                    name="sourceConfig.outsource_lead_time"
-                    label={t('app.master-data.source.outsourceLeadTime')}
-                    placeholder={t('app.master-data.source.leadTimePlaceholder')}
-                    min={0}
-                  />
-                </Col>
-                <Col span={4}>
-                  <ProFormDigit
-                    name="sourceConfig.outsource_price"
-                    label={t('app.master-data.source.outsourcePrice')}
-                    placeholder={t('app.master-data.source.pricePlaceholder')}
-                    min={0}
-                    fieldProps={{ precision: 2 }}
-                  />
-                </Col>
-                <Col span={4}>
-                  <ProFormSelect
-                    name="sourceConfig.material_provided_by"
-                    label={t('app.master-data.source.materialProvidedBy')}
-                    placeholder={t('app.master-data.source.selectPlaceholder')}
-                    options={[
-                      { label: t('app.master-data.source.enterpriseProvide'), value: 'enterprise' },
-                      { label: t('app.master-data.source.supplierProvide'), value: 'supplier' },
-                    ]}
-                    initialValue="enterprise"
-                  />
-                </Col>
-              </Row>
-            );
-          }
-          if (currentSourceType === 'Phantom') {
-            return (
-              <Row gutter={16} style={{ marginTop: 0 }}>
-                <Col span={24}>
-                  <Alert
-                    message={t('app.master-data.source.phantomTip')}
-                    description={t('app.master-data.source.phantomTipDesc')}
-                    type="info"
-                    showIcon
-                  />
-                </Col>
-              </Row>
-            );
-          }
-          if (currentSourceType === 'Service') {
-            return (
-              <Row gutter={16} style={{ marginTop: 0 }}>
-                <Col span={24}>
-                  <Alert
-                    message={t('app.master-data.source.serviceTip')}
-                    description={t('app.master-data.source.serviceTipDesc')}
-                    type="info"
-                    showIcon
-                  />
-                </Col>
-              </Row>
-            );
-          }
-          return null;
+                    </Col>
+                    <Col span={3}>
+                      <ProFormDigit
+                        name="sourceConfig.min_production_batch"
+                        label={t('app.master-data.source.minProductionBatch')}
+                        placeholder={t('app.master-data.source.minBatchPlaceholder')}
+                        min={0}
+                      />
+                    </Col>
+                  </Row>
+                </>
+              ) : null}
+
+              {selectedTypes.includes('Buy') ? (
+                <>
+                  {sectionTitle('Buy')}
+                  <Row gutter={16} style={{ marginTop: 0 }}>
+                    <Col span={12}>
+                      <ProFormItem
+                        name="sourceConfig.default_supplier_id"
+                        label={t('app.master-data.source.defaultSupplier')}
+                      >
+                        <UniDropdown
+                          placeholder={t('app.master-data.source.selectDefaultSupplier')}
+                          options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                          loading={suppliersLoading}
+                          showSearch
+                          allowClear
+                          style={{ width: '100%' }}
+                          optionFilterProp="label"
+                          quickCreate={
+                            onQuickAddSupplier
+                              ? {
+                                  label: t('app.master-data.materialForm.quickAddSupplier'),
+                                  onClick: () => onQuickAddSupplier(),
+                                }
+                              : undefined
+                          }
+                        />
+                      </ProFormItem>
+                    </Col>
+                    <Col span={4}>
+                      <ProFormDigit
+                        name="sourceConfig.purchase_lead_time"
+                        label={t('app.master-data.source.purchaseLeadTime')}
+                        placeholder={t('app.master-data.source.leadTimePlaceholder')}
+                        min={0}
+                      />
+                    </Col>
+                    <Col span={4}>
+                      <ProFormDigit
+                        name="sourceConfig.min_purchase_batch"
+                        label={t('app.master-data.source.minPurchaseBatch')}
+                        placeholder={t('app.master-data.source.minBatchPlaceholder')}
+                        min={0}
+                      />
+                    </Col>
+                    <Col span={4}>
+                      <ProFormDigit
+                        name="sourceConfig.purchase_price"
+                        label={t('app.master-data.source.purchasePrice')}
+                        placeholder={t('app.master-data.source.pricePlaceholder')}
+                        min={0}
+                        fieldProps={{ precision: 2 }}
+                      />
+                    </Col>
+                  </Row>
+                </>
+              ) : null}
+
+              {selectedTypes.includes('Outsource') ? (
+                <>
+                  {sectionTitle('Outsource')}
+                  <Row gutter={16} style={{ marginTop: 0 }}>
+                    <Col span={6}>
+                      <ProFormItem
+                        name="sourceConfig.outsource_supplier_id"
+                        label={t('app.master-data.source.outsourceSupplier')}
+                        rules={[{ required: true, message: t('app.master-data.source.selectOutsourceSupplier') }]}
+                      >
+                        <UniDropdown
+                          placeholder={t('app.master-data.source.selectOutsourceSupplier')}
+                          options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                          loading={suppliersLoading}
+                          showSearch
+                          style={{ width: '100%' }}
+                          optionFilterProp="label"
+                          quickCreate={
+                            onQuickAddOutsourceSupplier
+                              ? {
+                                  label: t('app.master-data.materialForm.quickAddSupplier'),
+                                  onClick: () => onQuickAddOutsourceSupplier(),
+                                }
+                              : undefined
+                          }
+                        />
+                      </ProFormItem>
+                    </Col>
+                    <Col span={6}>
+                      <ProFormItem
+                        name="sourceConfig.outsource_operation"
+                        label={t('app.master-data.source.outsourceOperation')}
+                        rules={[{ required: true, message: t('app.master-data.source.selectOutsourceOperation') }]}
+                      >
+                        <UniDropdown
+                          placeholder={t('app.master-data.source.selectOutsourceOperation')}
+                          options={operations.map((op) => ({ label: `${op.code} - ${op.name}`, value: op.uuid }))}
+                          loading={operationsLoading}
+                          showSearch
+                          style={{ width: '100%' }}
+                          optionFilterProp="label"
+                          quickCreate={
+                            onQuickAddOperation
+                              ? {
+                                  label: t('app.master-data.materialForm.quickAddOperation'),
+                                  onClick: () => onQuickAddOperation(),
+                                }
+                              : undefined
+                          }
+                        />
+                      </ProFormItem>
+                    </Col>
+                    <Col span={4}>
+                      <ProFormDigit
+                        name="sourceConfig.outsource_lead_time"
+                        label={t('app.master-data.source.outsourceLeadTime')}
+                        placeholder={t('app.master-data.source.leadTimePlaceholder')}
+                        min={0}
+                      />
+                    </Col>
+                    <Col span={4}>
+                      <ProFormDigit
+                        name="sourceConfig.outsource_price"
+                        label={t('app.master-data.source.outsourcePrice')}
+                        placeholder={t('app.master-data.source.pricePlaceholder')}
+                        min={0}
+                        fieldProps={{ precision: 2 }}
+                      />
+                    </Col>
+                    <Col span={4}>
+                      <ProFormSelect
+                        name="sourceConfig.material_provided_by"
+                        label={t('app.master-data.source.materialProvidedBy')}
+                        placeholder={t('app.master-data.source.selectPlaceholder')}
+                        options={[
+                          { label: t('app.master-data.source.enterpriseProvide'), value: 'enterprise' },
+                          { label: t('app.master-data.source.supplierProvide'), value: 'supplier' },
+                        ]}
+                        initialValue="enterprise"
+                      />
+                    </Col>
+                  </Row>
+                </>
+              ) : null}
+
+              {selectedTypes.includes('Phantom') ? (
+                <>
+                  {sectionTitle('Phantom')}
+                  <Row gutter={16} style={{ marginTop: 0 }}>
+                    <Col span={24}>
+                      <Alert
+                        message={t('app.master-data.source.phantomTip')}
+                        description={t('app.master-data.source.phantomTipDesc')}
+                        type="info"
+                        showIcon
+                      />
+                    </Col>
+                  </Row>
+                </>
+              ) : null}
+
+              {selectedTypes.includes('Service') ? (
+                <>
+                  {sectionTitle('Service')}
+                  <Row gutter={16} style={{ marginTop: 0 }}>
+                    <Col span={24}>
+                      <Alert
+                        message={t('app.master-data.source.serviceTip')}
+                        description={t('app.master-data.source.serviceTipDesc')}
+                        type="info"
+                        showIcon
+                      />
+                    </Col>
+                  </Row>
+                </>
+              ) : null}
+            </>
+          );
         }}
       </ProFormDependency>
+
     </Card>
   );
 };

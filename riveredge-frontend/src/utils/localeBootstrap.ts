@@ -8,8 +8,7 @@
 
 import { getPersistedConfigs } from '../stores/configStore';
 import { getLanguageFromPreferenceCache } from '../stores/userPreferenceStore';
-import { getTenantId } from './auth';
-import { getSessionCurrentUser } from './sessionCurrentUser';
+import { getTenantId, getUserInfo } from './auth';
 
 export const SUPPORTED_UI_LANGUAGES = ['zh-CN', 'en-US', 'zh-Hant', 'ja-JP', 'vi-VN'] as const;
 export type SupportedUiLanguage = (typeof SUPPORTED_UI_LANGUAGES)[number];
@@ -25,9 +24,17 @@ export function normalizeUiLanguage(code: unknown): SupportedUiLanguage | null {
   return code as SupportedUiLanguage;
 }
 
+/**
+ * 租户号只从存储层取（tenant_id → user_info）。
+ *
+ * 本模块在 config/i18n 的模块求值期就被调用，而会话 store 反过来依赖 i18n；
+ * 走 getSessionCurrentUser() 会形成 globalStore → i18n → 本模块 → globalStore 的环，
+ * 首帧直接 TDZ 崩在「Cannot access 'useGlobalStore' before initialization」。
+ * 首帧时 store 尚未灌入，其内容本就来自这两个存储键，读存储不丢信息。
+ */
 function getTenantDefaultLanguageStorageKey(): string | null {
   if (typeof window === 'undefined') return null;
-  const tenantId = getTenantId() ?? getSessionCurrentUser()?.tenant_id;
+  const tenantId = getTenantId() ?? getUserInfo()?.tenant_id;
   if (tenantId == null || String(tenantId).trim() === '') return null;
   return `${TENANT_DEFAULT_LANGUAGE_KEY_PREFIX}-${tenantId}`;
 }

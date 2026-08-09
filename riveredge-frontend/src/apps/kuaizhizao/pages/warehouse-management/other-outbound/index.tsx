@@ -351,7 +351,6 @@ const OtherOutboundPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
-      align: 'left',
       hideInSearch: true,
       render: (_, record) => {
         const lifecycle = getOtherOutboundLifecycle(record as Record<string, unknown>, t);
@@ -739,7 +738,6 @@ const OtherOutboundPage: React.FC = () => {
               {t('components.uniAction.print')}
             </Button>,
           ]}
-          scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
 
@@ -841,7 +839,10 @@ const OtherOutboundPage: React.FC = () => {
                 loading={reasonTypeLoading}
                 style={{ width: '100%' }}
                 options={reasonTypeOptions}
-                quickCreate={{ label: t('app.kuaizhizao.otherOutbound.field.dataDictionary'), onClick: () => navigate('/system/data-dictionaries') }}
+                quickCreate={{
+                  label: t('app.kuaizhizao.otherOutbound.field.dataDictionary'),
+                  onClick: () => navigate('/system/data-dictionaries?keyword=OUTBOUND_REASON_TYPE'),
+                }}
               />
             </ProFormItem>
           </Col>

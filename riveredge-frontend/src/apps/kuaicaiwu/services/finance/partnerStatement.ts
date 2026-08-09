@@ -8,6 +8,9 @@ export interface PartnerStatementLine {
   debit: number;
   credit: number;
   balance: number;
+  doc_id?: number;
+  inbound_detail_doc_type?: string;
+  inbound_detail_doc_id?: number;
 }
 
 export interface PartnerStatementSummary {
@@ -122,6 +125,12 @@ export const partnerStatementService = {
       method: 'GET',
       params: { format },
       responseType: 'blob',
+    }),
+
+  getLineDetail: (params: { doc_type: string; doc_id: number }) =>
+    apiRequest<{ items: Array<Record<string, unknown>> }>(`${API}/line-detail`, {
+      method: 'GET',
+      params,
     }),
 };
 

@@ -26,6 +26,17 @@ from apps.kuaicaiwu.models.partner_statement import PartnerStatement
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaicaiwu.services.accounting_event_service import AccountingEventService
 
+_MANUAL_FINANCE_SOURCE_TYPES = frozenset({"手工", "manual", "MANUAL", "Manual"})
+_SETTLEMENT_ELIGIBLE_REVIEW = ("已审核",)
+
+
+def _skip_finance_source_idempotency(source_type: Optional[str], source_id: Optional[int]) -> bool:
+    """手工/无来源单据不得共用 (source_type, source_id) 幂等键。"""
+    if source_id in (None, 0):
+        return True
+    st = str(source_type or "").strip()
+    return st in _MANUAL_FINANCE_SOURCE_TYPES
+
 from apps.kuaicaiwu.schemas.finance import (
     PayableCreate, PayableUpdate, PayableResponse, PayableListResponse,
     PurchaseInvoiceCreate, PurchaseInvoiceUpdate, PurchaseInvoiceResponse, PurchaseInvoiceListResponse,
@@ -103,14 +114,15 @@ class PayableService(AppBaseService[Payable]):
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "payable")
         if not is_enabled:
             raise BusinessLogicError("应付账款节点未启用，无法创建应付单")
-        existing = await Payable.get_or_none(
-            tenant_id=tenant_id,
-            source_type=payable_data.source_type,
-            source_id=payable_data.source_id,
-            deleted_at__isnull=True,
-        )
-        if existing:
-            return PayableResponse.model_validate(existing)
+        if not _skip_finance_source_idempotency(payable_data.source_type, payable_data.source_id):
+            existing = await Payable.get_or_none(
+                tenant_id=tenant_id,
+                source_type=payable_data.source_type,
+                source_id=payable_data.source_id,
+                deleted_at__isnull=True,
+            )
+            if existing:
+                return PayableResponse.model_validate(existing)
         user_info = await self.get_user_info(created_by)
         last_error: Optional[Exception] = None
         for attempt in range(5):
@@ -196,6 +208,8 @@ class PayableService(AppBaseService[Payable]):
             query = query.filter(supplier_id=filters['supplier_id'])
         if filters.get('pending_settlement'):
             query = query.filter(remaining_amount__gt=0)
+            if not filters.get('review_status'):
+                query = query.filter(review_status__in=_SETTLEMENT_ELIGIBLE_REVIEW)
 
         query, order_expr = apply_finance_ar_ap_list_filters(
             query,
@@ -797,14 +811,15 @@ class ReceivableService(AppBaseService[Receivable]):
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "receivable")
         if not is_enabled:
             raise BusinessLogicError("应收账款节点未启用，无法创建应收单")
-        existing = await Receivable.get_or_none(
-            tenant_id=tenant_id,
-            source_type=receivable_data.source_type,
-            source_id=receivable_data.source_id,
-            deleted_at__isnull=True,
-        )
-        if existing:
-            return ReceivableResponse.model_validate(existing)
+        if not _skip_finance_source_idempotency(receivable_data.source_type, receivable_data.source_id):
+            existing = await Receivable.get_or_none(
+                tenant_id=tenant_id,
+                source_type=receivable_data.source_type,
+                source_id=receivable_data.source_id,
+                deleted_at__isnull=True,
+            )
+            if existing:
+                return ReceivableResponse.model_validate(existing)
         user_info = await self.get_user_info(created_by)
         last_error: Optional[Exception] = None
         for attempt in range(5):
@@ -890,6 +905,8 @@ class ReceivableService(AppBaseService[Receivable]):
             query = query.filter(customer_id=filters['customer_id'])
         if filters.get('pending_settlement'):
             query = query.filter(remaining_amount__gt=0)
+            if not filters.get('review_status'):
+                query = query.filter(review_status__in=_SETTLEMENT_ELIGIBLE_REVIEW)
 
         query, order_expr = apply_finance_ar_ap_list_filters(
             query,

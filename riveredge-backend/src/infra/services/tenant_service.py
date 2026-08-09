@@ -772,16 +772,19 @@ class TenantService:
             operator_name: 操作人名称（可选）
         """
         try:
-            await TenantActivityLog.create(
-                tenant_id=tenant_id,
-                action=action,
-                description=description,
-                operator_id=operator_id,
-                operator_name=operator_name,
-            )
+            # 使用嵌套事务（SAVEPOINT）：写日志失败时回滚子事务，
+            # 避免 PostgreSQL「当前事务已中止」拖垮组织创建/更新主流程。
+            from tortoise.transactions import in_transaction
+
+            async with in_transaction():
+                await TenantActivityLog.create(
+                    tenant_id=tenant_id,
+                    action=action,
+                    description=description,
+                    operator_id=operator_id,
+                    operator_name=operator_name,
+                )
         except Exception as e:
-            # 日志记录失败不应该影响主流程，只记录错误
-            from loguru import logger
             logger.error(f"记录组织活动日志失败: {e}")
     
     async def get_tenant_activity_logs(

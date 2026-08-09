@@ -19,6 +19,9 @@ _IN_PROGRESS = frozenset({"in_progress", "执行中"})
 _COMPLETED = frozenset({"completed", "已完成"})
 _CANCELLED = frozenset({"cancelled", "已取消"})
 _SPLIT = frozenset({"split", "已拆分"})
+_REVIEW_APPROVED = frozenset({"已通过", "审核通过", "approved", "通过", "已审核"})
+_REVIEW_PENDING = frozenset({"待审核", "pending_review", "pending_approval", "pending", "已提交"})
+_REVIEW_REJECTED = frozenset({"已驳回", "审核驳回", "rejected"})
 
 
 def _cap(allowed: bool, reason: Optional[str] = None) -> ActionCapability:
@@ -55,6 +58,7 @@ def derive_work_order_capabilities(
     *,
     has_returnable_picking: bool | None = None,
     has_downstream_documents: bool | None = None,
+    audit_required: bool | None = None,
 ) -> WorkOrderCapabilities:
     if not _is_list_work_order_row(wo):
         deny = _cap(False, "work_order.not_applicable")
@@ -103,14 +107,25 @@ def derive_work_order_capabilities(
     delete_cap = _cap(delete_allowed, delete_reason)
 
     release_allowed = is_draft and not is_split and not is_frozen
-    release_cap = _cap(
-        release_allowed,
-        "work_order.release.not_draft" if not is_draft else "work_order.release.frozen"
-        if is_frozen
-        else "work_order.release.split"
-        if is_split
-        else None,
-    )
+    release_reason = None
+    if not is_draft:
+        release_reason = "work_order.release.not_draft"
+    elif is_frozen:
+        release_reason = "work_order.release.frozen"
+    elif is_split:
+        release_reason = "work_order.release.split"
+    elif release_allowed and audit_required:
+        review = _norm(getattr(wo, "review_status", None))
+        if review in _REVIEW_PENDING:
+            release_allowed = False
+            release_reason = "work_order.release.pending_audit"
+        elif review in _REVIEW_REJECTED:
+            release_allowed = False
+            release_reason = "work_order.release.audit_rejected"
+        elif review not in _REVIEW_APPROVED:
+            release_allowed = False
+            release_reason = "work_order.release.audit_required"
+    release_cap = _cap(release_allowed, release_reason)
 
     revoke_status_ok = _revoke_status_allowed(wo, status=status)
     if not revoke_status_ok:
@@ -221,11 +236,13 @@ def assert_work_order_capability(
     *,
     has_returnable_picking: bool | None = None,
     has_downstream_documents: bool | None = None,
+    audit_required: bool | None = None,
 ) -> None:
     caps = derive_work_order_capabilities(
         wo,
         has_returnable_picking=has_returnable_picking,
         has_downstream_documents=has_downstream_documents,
+        audit_required=audit_required,
     )
     cap_map = {
         "update": caps.update,

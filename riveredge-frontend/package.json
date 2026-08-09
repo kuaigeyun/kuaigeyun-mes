@@ -14,7 +14,7 @@
         "build:monolithic": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build",
         "build:saas": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build",
         "install:all": "npm install",
-        "postinstall": "patch-package --patch-dir static/patch-package && node scripts/sync-libredwg-wasm.mjs",
+        "postinstall": "patch-package --patch-dir static/patch-package && node scripts/sync-libredwg-wasm.mjs && node scripts/clear-vite-dep-cache.mjs",
         "clean": "rm -rf node_modules",
         "test:e2e": "playwright test",
         "test:e2e:login": "playwright test e2e/login.spec.ts",

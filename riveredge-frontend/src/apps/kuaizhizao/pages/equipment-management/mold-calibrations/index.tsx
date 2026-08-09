@@ -21,7 +21,7 @@ import {
   DRAWER_CONFIG,
   detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
@@ -231,19 +231,15 @@ const MoldCalibrationsPage: React.FC = () => {
       {
         title: t('common.actions'),
         valueType: 'option',
-        width: 100,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
           perms.canRead
-            ? renderRowActionsOverflow(
-                [
-                  <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
-                    {t('common.detail')}
-                  </Button>,
-                ],
-                `calibration-actions-${record.uuid ?? 'row'}`,
-              )
+            ? [
+                <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+                  {t('common.detail')}
+                </Button>,
+              ]
             : null,
       },
     ],
@@ -295,7 +291,6 @@ const MoldCalibrationsPage: React.FC = () => {
         }
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20 }}
-        scroll={{ x: 1500 }}
       />
     </ListPageTemplate>
 

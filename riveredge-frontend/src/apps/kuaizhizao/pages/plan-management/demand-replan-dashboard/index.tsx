@@ -364,7 +364,16 @@ const DemandReplanDashboardPage: React.FC = () => {
         },
         formItemProps: formDateRangeFormItemProps,
       },
-      { title: t('app.kuaizhizao.demandReplan.col.taskCode'), dataIndex: 'task_code', width: 180, fixed: 'left', sorter: true, hideInSearch: false },
+      {
+        title: t('app.kuaizhizao.demandReplan.col.taskCode'),
+        dataIndex: 'task_code',
+        // 与系统左固定单号列一致（付款单/运算历史等）：168 + ellipsis
+        width: 168,
+        fixed: 'left',
+        sorter: true,
+        hideInSearch: false,
+        ellipsis: true,
+      },
       {
         title: t('app.kuaizhizao.demandReplan.col.mode'),
         dataIndex: 'mode',
@@ -462,27 +471,39 @@ const DemandReplanDashboardPage: React.FC = () => {
       },
       {
         title: t('app.kuaizhizao.demandReplan.col.actions'),
-        key: 'action',
+        key: 'option',
+        valueType: 'option',
         fixed: 'right',
-        width: 180,
-        render: (_, row) => (
-          <Space size={4}>
-            {formatReplanTaskError(row, t) && (
-              <Button {...rowActionKind('read')} size="small" onClick={() => setFailureTask(row)}>
+        hideInSearch: true,
+        // 宽度由 UniTable 操作列契约注入（禁止页面硬编码 width）
+        render: (_, row) => {
+          const parts: React.ReactNode[] = [];
+          if (formatReplanTaskError(row, t)) {
+            parts.push(
+              <Button
+                {...rowActionKind('read')}
+                key="fail"
+                size="small"
+                onClick={() => setFailureTask(row)}
+              >
                 {t('app.kuaizhizao.demandReplan.action.viewFailure')}
-              </Button>
-            )}
+              </Button>,
+            );
+          }
+          parts.push(
             <Button
               {...rowActionKind('execute')}
+              key="exec"
               size="small"
               loading={executingTaskId === row.id}
               disabled={!isActionableTaskStatus(row.status)}
               onClick={() => executeTask(row)}
             >
               {t('app.kuaizhizao.demandReplan.action.execute')}
-            </Button>
-          </Space>
-        ),
+            </Button>,
+          );
+          return parts;
+        },
       },
     ],
     [executingTaskId, modeText, riskLevelText, taskStatusText, approvalStatusText, taskApprovalValueEnum, taskModeValueEnum, taskRiskValueEnum, taskStatusValueEnum, t]

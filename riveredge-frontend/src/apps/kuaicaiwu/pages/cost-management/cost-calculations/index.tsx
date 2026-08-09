@@ -844,7 +844,6 @@ const CostCalculationPage: React.FC = () => {
       <UniTable<CostCalculation>
         actionRef={actionRef}
         columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-calculations"
-        scroll={{ x: 'max-content' }}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={COST_CALCULATION_PINNED_STATUS_FIELD}

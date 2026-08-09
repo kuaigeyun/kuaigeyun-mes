@@ -76,6 +76,7 @@ async def list_inquiries(
     created_end_date: Optional[date] = Query(None),
     source_id: Optional[int] = Query(None),
     order_by: Optional[str] = Query(None, description="排序字段，如 created_at、-quote_deadline"),
+    include_items: bool = Query(False, description="是否附带询价明细（明细表格视图）"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     safe_order_by = None
@@ -98,6 +99,7 @@ async def list_inquiries(
         created_end_date=created_end_date,
         source_id=source_id,
         order_by=safe_order_by,
+        include_items=include_items,
     )
 
 

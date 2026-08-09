@@ -8,14 +8,14 @@
  * Date: 2026-01-27
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Card, Button, Space, message, Spin, Tag, Image, Empty, Divider } from 'antd';
-import { LeftOutlined, RightOutlined, ZoomInOutlined, ZoomOutOutlined, ReloadOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
-import { TouchScreenTemplate, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import React, { useState, useEffect } from 'react';
+import { Card, Button, Space, Spin, Tag, Empty } from 'antd';
+import { LeftOutlined, RightOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { TouchScreenTemplate } from '../../../../../components/layout-templates';
 import { sopApi } from '../../../../master-data/services/process';
-import { useTouchScreen } from '../../../../../hooks/useTouchScreen';
 import { App } from 'antd';
 import type { SOP } from '../../../../master-data/types/process';
+import { SecureImage } from '../../../../../components/secure-image';
 
 /**
  * SOP步骤接口
@@ -24,9 +24,25 @@ interface SOPStep {
   id: string;
   title: string;
   description?: string;
-  imageUrl?: string;
+  /** 节点附件文件 UUID（设计器写入 attachments，非 imageUrl） */
+  attachmentUuids?: string[];
   completed?: boolean;
   current?: boolean;
+}
+
+function toAttachmentUuids(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return Array.from(
+    new Set(
+      raw
+        .map((item: unknown) =>
+          typeof item === 'string'
+            ? item
+            : String((item as { uuid?: string; uid?: string })?.uuid || (item as { uid?: string })?.uid || ''),
+        )
+        .filter((u): u is string => Boolean(u)),
+    ),
+  );
 }
 
 /**
@@ -34,13 +50,10 @@ interface SOPStep {
  */
 const SOPViewerKioskPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const touchScreen = useTouchScreen();
   const [loading, setLoading] = useState(false);
   const [sop, setSop] = useState<SOP | null>(null);
   const [steps, setSteps] = useState<SOPStep[]>([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [imageScale, setImageScale] = useState(1);
-  const imageRef = useRef<HTMLImageElement>(null);
 
   // 从URL参数获取SOP UUID或工序ID
   useEffect(() => {
@@ -100,22 +113,22 @@ const SOPViewerKioskPage: React.FC = () => {
    */
   const parseSOPSteps = (sopData: SOP) => {
     const parsedSteps: SOPStep[] = [];
+    const nodes = sopData.flowConfig?.nodes || [];
 
-    // 如果SOP有flowConfig，从flowConfig中解析步骤
-    if (sopData.flowConfig && sopData.flowConfig.nodes) {
-      const nodes = sopData.flowConfig.nodes;
+    if (nodes.length) {
       nodes.forEach((node: any, index: number) => {
+        const nodeType = node.type || node.data?.type;
+        if (nodeType === 'start' || nodeType === 'end') return;
         parsedSteps.push({
           id: node.id || `step-${index}`,
-          title: node.label || node.title || `步骤 ${index + 1}`,
-          description: node.description || node.data?.description,
-          imageUrl: node.data?.imageUrl || node.imageUrl,
+          title: node.data?.label || node.label || node.title || `步骤 ${index + 1}`,
+          description: node.data?.description || node.description,
+          attachmentUuids: toAttachmentUuids(node.data?.attachments),
           completed: false,
-          current: index === 0, // 默认第一个步骤为当前步骤
+          current: parsedSteps.length === 0,
         });
       });
     } else if (sopData.content) {
-      // 如果SOP有content，尝试解析JSON格式的内容
       try {
         const content = typeof sopData.content === 'string' ? JSON.parse(sopData.content) : sopData.content;
         if (Array.isArray(content)) {
@@ -124,14 +137,13 @@ const SOPViewerKioskPage: React.FC = () => {
               id: step.id || `step-${index}`,
               title: step.title || `步骤 ${index + 1}`,
               description: step.description,
-              imageUrl: step.imageUrl || step.image,
+              attachmentUuids: toAttachmentUuids(step.attachments || step.attachmentUuids),
               completed: step.completed || false,
               current: index === 0,
             });
           });
         }
-      } catch (e) {
-        // 如果解析失败，将content作为单个步骤
+      } catch {
         parsedSteps.push({
           id: 'step-1',
           title: 'SOP内容',
@@ -141,7 +153,6 @@ const SOPViewerKioskPage: React.FC = () => {
         });
       }
     } else {
-      // 如果没有步骤数据，显示空状态
       messageApi.warning('SOP没有步骤数据');
     }
 
@@ -157,7 +168,6 @@ const SOPViewerKioskPage: React.FC = () => {
       const newIndex = currentStepIndex - 1;
       setCurrentStepIndex(newIndex);
       updateStepStatus(newIndex);
-      setImageScale(1); // 重置图片缩放
     }
   };
 
@@ -169,7 +179,6 @@ const SOPViewerKioskPage: React.FC = () => {
       const newIndex = currentStepIndex + 1;
       setCurrentStepIndex(newIndex);
       updateStepStatus(newIndex);
-      setImageScale(1); // 重置图片缩放
     }
   };
 
@@ -191,32 +200,13 @@ const SOPViewerKioskPage: React.FC = () => {
   const handleStepClick = (index: number) => {
     setCurrentStepIndex(index);
     updateStepStatus(index);
-    setImageScale(1); // 重置图片缩放
-  };
-
-  /**
-   * 处理图片缩放
-   */
-  const handleImageZoom = (delta: number) => {
-    const newScale = Math.max(0.5, Math.min(3, imageScale + delta));
-    setImageScale(newScale);
-  };
-
-  /**
-   * 处理图片双击缩放
-   */
-  const handleImageDoubleClick = () => {
-    if (imageScale === 1) {
-      setImageScale(2);
-    } else {
-      setImageScale(1);
-    }
   };
 
   /**
    * 当前步骤
    */
   const currentStep = steps[currentStepIndex];
+  const currentAttachmentUuids = currentStep?.attachmentUuids || [];
 
   return (
     <TouchScreenTemplate
@@ -331,71 +321,34 @@ const SOPViewerKioskPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* 步骤图片 */}
-                  {currentStep.imageUrl && (
+                  {currentAttachmentUuids.length > 0 ? (
                     <div
                       style={{
                         display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
+                        flexWrap: 'wrap',
                         gap: 16,
-                        padding: '16px',
+                        justifyContent: 'center',
+                        padding: 16,
                         backgroundColor: '#fafafa',
                         borderRadius: 8,
                       }}
                     >
-                      <div style={{ position: 'relative', width: '100%', overflow: 'auto', maxHeight: '60vh' }}>
-                        <img
-                          ref={imageRef}
-                          src={currentStep.imageUrl}
+                      {currentAttachmentUuids.map((uuid) => (
+                        <SecureImage
+                          key={uuid}
+                          fileUuid={uuid}
                           alt={currentStep.title}
-                          style={{
-                            width: '100%',
-                            height: 'auto',
-                            transform: `scale(${imageScale})`,
-                            transformOrigin: 'center center',
-                            transition: 'transform 0.3s ease',
-                            cursor: 'pointer',
-                            userSelect: 'none',
-                          }}
-                          onDoubleClick={handleImageDoubleClick}
-                          draggable={false}
+                          width={480}
+                          height={360}
+                          thumbSize={480}
+                          previewSize={1024}
+                          style={{ objectFit: 'contain', maxWidth: '100%' }}
                         />
-                      </div>
-
-                      {/* 图片缩放控制 */}
-                      <Space>
-                        <Button
-                          size="large"
-                          icon={<ZoomOutOutlined />}
-                          onClick={() => handleImageZoom(-0.2)}
-                          disabled={imageScale <= 0.5}
-                          style={{ height: 60, fontSize: 24 }}
-                        >
-                          缩小
-                        </Button>
-                        <Button
-                          size="large"
-                          onClick={() => setImageScale(1)}
-                          style={{ height: 60, fontSize: 24 }}
-                        >
-                          重置 ({Math.round(imageScale * 100)}%)
-                        </Button>
-                        <Button
-                          size="large"
-                          icon={<ZoomInOutlined />}
-                          onClick={() => handleImageZoom(0.2)}
-                          disabled={imageScale >= 3}
-                          style={{ height: 60, fontSize: 24 }}
-                        >
-                          放大
-                        </Button>
-                      </Space>
+                      ))}
                     </div>
-                  )}
+                  ) : null}
 
-                  {/* 如果没有图片和描述，显示提示 */}
-                  {!currentStep.description && !currentStep.imageUrl && (
+                  {!currentStep.description && currentAttachmentUuids.length === 0 && (
                     <Empty description="该步骤暂无内容" />
                   )}
                 </Space>

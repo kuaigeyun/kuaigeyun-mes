@@ -59,6 +59,7 @@ import {
   ClusterOutlined,
   SettingOutlined,
   QuestionCircleOutlined,
+  SafetyCertificateOutlined,
 } from '@ant-design/icons'
 import {
   ActionType,
@@ -110,7 +111,13 @@ import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/
 import { MaterialForm } from '../../components/MaterialForm'
 import { MaterialGroupFormModal } from '../../components/MaterialGroupFormModal'
 import { DEFAULT_MATERIAL_BASE_UNIT } from '../../constants/materialDefaults'
-import { normalizeStagesInput, stagesFromLegacy } from '../../components/InspectionStagesEditor'
+import {
+  InspectionStagesEditor,
+  MATERIAL_STAGE_KEYS,
+  normalizeStagesInput,
+  stagesFromLegacy,
+  type InspectionStagesValue,
+} from '../../components/InspectionStagesEditor'
 import { MaterialVariantSkusPanel } from '../../components/MaterialVariantSkusPanel'
 import {
   isVariantSkuMaterial,
@@ -138,7 +145,13 @@ import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 
 const LazyUniImport = lazy(() => import('../../../../components/uni-import'))
 
-type MaterialSplitImportKind = 'master' | 'sku' | 'units' | 'customerCodes' | 'defaults'
+type MaterialSplitImportKind =
+  | 'master'
+  | 'sku'
+  | 'units'
+  | 'customerCodes'
+  | 'defaults'
+  | 'inspection'
 
 /** SKU 子行列表单元格：不重复展示主物料字段 */
 function renderMasterCell(record: Material, node: React.ReactNode): React.ReactNode {
@@ -276,10 +289,11 @@ import {
   type MaterialGroupUpdate,
   type MaterialBulkTrackingPayload,
   type MaterialBulkVariantPayload,
+  type MaterialBulkInspectionPatchItem,
   type StandardPartsPresetCatalog,
 } from '../../types/material'
 import { batchRuleApi, serialRuleApi } from '../../services/batchSerialRules'
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../services/dataDictionary'
+import { materialUnitApi } from '../../services/material-unit'
 import { SecureImage } from '../../../../components/secure-image'
 import FilePreviewModal from '../../../../components/file-preview'
 import { getFileByUuid, getFileDownloadUrlWithToken } from '../../../../services/file'
@@ -312,6 +326,11 @@ import {
   buildMaterialDefaultsImportColumnIndex,
   parseMaterialDefaultsImportRows,
 } from '../../utils/materialDefaultsImport'
+import {
+  buildMaterialInspectionImportColumnIndex,
+  parseMaterialInspectionImportRows,
+} from '../../utils/materialInspectionImport'
+import { inspectionPlanApi, unwrapInspectionPlanList } from '../../../kuaizhizao/services/quality-execution'
 import { buildFactoryImportTemplate } from '../../utils/factoryImportTemplate'
 import { downloadFile } from '../../../../utils'
 import { formatDateTimeBySiteSetting } from '../../../../utils/format'
@@ -536,6 +555,17 @@ const MaterialsManagementPage: React.FC = () => {
   const [batchDefaultsSafetyStock, setBatchDefaultsSafetyStock] = useState<number | undefined>()
   const [batchDefaultsApplyMaxStock, setBatchDefaultsApplyMaxStock] = useState(false)
   const [batchDefaultsMaxStock, setBatchDefaultsMaxStock] = useState<number | undefined>()
+  const [batchInspectionOpen, setBatchInspectionOpen] = useState(false)
+  const [batchInspectionSubmitting, setBatchInspectionSubmitting] = useState(false)
+  const [batchInspectionApplyStages, setBatchInspectionApplyStages] = useState(true)
+  const [batchInspectionStages, setBatchInspectionStages] = useState<InspectionStagesValue>(() =>
+    normalizeStagesInput(null),
+  )
+  const [batchInspectionApplyOverReport, setBatchInspectionApplyOverReport] = useState(false)
+  const [batchInspectionOverReportMode, setBatchInspectionOverReportMode] = useState<
+    'none' | 'fixed' | 'percent'
+  >('none')
+  const [batchInspectionOverReportValue, setBatchInspectionOverReportValue] = useState<number>(0)
   const [batchVariantModalOpen, setBatchVariantModalOpen] = useState(false)
   const [batchVariantSubmitting, setBatchVariantSubmitting] = useState(false)
   const [bulkVariantMode, setBulkVariantMode] = useState<'enable' | 'disable'>('enable')
@@ -968,18 +998,14 @@ const MaterialsManagementPage: React.FC = () => {
   }, [messageApi, convertToTreeData, collectAllKeys, t])
 
   /**
-   * 加载数据字典选项（基础单位）
+   * 加载基础单位选项（单位主数据）与属性定义
    */
   const loadDictionaryOptions = useCallback(async () => {
-    // 加载基础单位选项
     try {
       setLoadingBaseUnitOptions(true)
-      const baseUnitDict = await getDataDictionaryByCode('MATERIAL_UNIT')
-      const baseUnitItems = await getDictionaryItemList(baseUnitDict.uuid, true)
+      const res = await materialUnitApi.list({ skip: 0, limit: 500, is_active: true })
       setBaseUnitOptions(
-        baseUnitItems
-          .sort((a, b) => a.sort_order - b.sort_order)
-          .map(item => ({ label: item.label, value: item.value }))
+        (res.items ?? []).map((u) => ({ label: u.name || u.code, value: u.code })),
       )
     } catch (error: any) {
       console.error('加载基础单位选项失败:', error)
@@ -1606,6 +1632,104 @@ const MaterialsManagementPage: React.FC = () => {
     t,
   ])
 
+  const handleOpenBatchInspection = useCallback(() => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('common.selectAtLeastOne'))
+      return
+    }
+    setBatchInspectionApplyStages(true)
+    setBatchInspectionStages(normalizeStagesInput(null))
+    setBatchInspectionApplyOverReport(false)
+    setBatchInspectionOverReportMode('none')
+    setBatchInspectionOverReportValue(0)
+    setBatchInspectionOpen(true)
+  }, [selectedRowKeys, messageApi, t])
+
+  const handleConfirmBatchInspection = useCallback(async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('common.selectAtLeastOne'))
+      return
+    }
+    if (!batchInspectionApplyStages && !batchInspectionApplyOverReport) {
+      messageApi.warning(t('app.master-data.materials.batchInspectionPickOne'))
+      return Promise.reject()
+    }
+    if (batchInspectionApplyStages) {
+      for (const key of MATERIAL_STAGE_KEYS) {
+        const pol = batchInspectionStages[key]
+        if (pol?.mode === 'plan' && !(pol.planId != null && Number(pol.planId) > 0)) {
+          messageApi.warning(t('app.master-data.materials.batchInspectionPlanRequired', { stage: key.toUpperCase() }))
+          return Promise.reject()
+        }
+      }
+    }
+    setBatchInspectionSubmitting(true)
+    try {
+      const patch: Omit<MaterialBulkInspectionPatchItem, 'materialUuid'> = {}
+      if (batchInspectionApplyStages) {
+        const stages: NonNullable<MaterialBulkInspectionPatchItem['inspectionStages']> = {}
+        for (const key of MATERIAL_STAGE_KEYS) {
+          const pol = batchInspectionStages[key] || { mode: 'none' as const, planId: null }
+          const mode = (pol.mode || 'none') as 'none' | 'simple' | 'plan'
+          stages[key] = {
+            mode,
+            planId: mode === 'plan' ? Number(pol.planId) : null,
+          }
+        }
+        patch.inspectionStages = stages
+      }
+      if (batchInspectionApplyOverReport) {
+        patch.overReportMode = batchInspectionOverReportMode
+        patch.overReportValue = batchInspectionOverReportValue
+      }
+      const uuids = selectedRowKeys.map((k) => String(k))
+      const CHUNK = 200
+      let updated = 0
+      const failReasons: string[] = []
+      for (let i = 0; i < uuids.length; i += CHUNK) {
+        const chunk = uuids.slice(i, i + CHUNK)
+        const res = await materialApi.bulkPatchInspection({
+          items: chunk.map((materialUuid) => ({ materialUuid, ...patch })),
+        })
+        updated += Number(res.updated_count ?? 0)
+        for (const f of res.failed_items ?? []) {
+          if (f.reason) failReasons.push(f.reason)
+        }
+      }
+      if (updated > 0) {
+        messageApi.success(t('app.master-data.materials.batchInspectionSuccess', { count: updated }))
+      }
+      if (failReasons.length > 0) {
+        messageApi.warning(
+          t('app.master-data.materials.batchInspectionPartialFailed', {
+            count: failReasons.length,
+            reason: failReasons[0],
+          }),
+        )
+      }
+      if (updated === 0 && failReasons.length === 0) {
+        messageApi.warning(t('app.master-data.materials.batchInspectionNoop'))
+      }
+      setBatchInspectionOpen(false)
+      setSelectedRowKeys([])
+      actionRef.current?.reload()
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.materials.batchInspectionFailed'))
+      return Promise.reject()
+    } finally {
+      setBatchInspectionSubmitting(false)
+    }
+  }, [
+    selectedRowKeys,
+    batchInspectionApplyStages,
+    batchInspectionStages,
+    batchInspectionApplyOverReport,
+    batchInspectionOverReportMode,
+    batchInspectionOverReportValue,
+    messageApi,
+    t,
+  ])
+
   const handleOpenBatchVariantModal = useCallback(() => {
     if (selectedRowKeys.length === 0) {
       messageApi.warning(t('common.selectAtLeastOne'))
@@ -1963,6 +2087,63 @@ const MaterialsManagementPage: React.FC = () => {
     [t, i18n.language],
   )
 
+  const materialInspectionImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'mainCode',
+            required: true,
+            labelKey: 'app.master-data.materials.materialCode',
+            aliases: ['主编码', '物料编号', '编号'],
+          },
+          {
+            field: 'iqcMode',
+            labelKey: 'app.master-data.materials.importInspection.iqcMode',
+            aliases: ['来料质检模式', 'IQC模式', 'IQC'],
+          },
+          {
+            field: 'iqcPlanCode',
+            labelKey: 'app.master-data.materials.importInspection.iqcPlanCode',
+            aliases: ['来料质检方案编码', 'IQC方案编码', 'IQC方案'],
+          },
+          {
+            field: 'fqcMode',
+            labelKey: 'app.master-data.materials.importInspection.fqcMode',
+            aliases: ['成品质检模式', 'FQC模式', 'FQC'],
+          },
+          {
+            field: 'fqcPlanCode',
+            labelKey: 'app.master-data.materials.importInspection.fqcPlanCode',
+            aliases: ['成品质检方案编码', 'FQC方案编码', 'FQC方案'],
+          },
+          {
+            field: 'oqcMode',
+            labelKey: 'app.master-data.materials.importInspection.oqcMode',
+            aliases: ['出货质检模式', 'OQC模式', 'OQC'],
+          },
+          {
+            field: 'oqcPlanCode',
+            labelKey: 'app.master-data.materials.importInspection.oqcPlanCode',
+            aliases: ['出货质检方案编码', 'OQC方案编码', 'OQC方案'],
+          },
+          {
+            field: 'overReportMode',
+            labelKey: 'app.master-data.materials.importInspection.overReportMode',
+            aliases: ['超报方式'],
+          },
+          {
+            field: 'overReportValue',
+            labelKey: 'app.master-data.materials.importInspection.overReportValue',
+            aliases: ['超报数值'],
+          },
+        ],
+        ['M001', '方案质检', 'IQC-001', '无质检', '', '无质检', '', '不允许', '0'],
+      ),
+    [t, i18n.language],
+  )
+
   const activeImportTemplate = useMemo(() => {
     switch (activeImportKind) {
       case 'sku':
@@ -1973,6 +2154,8 @@ const MaterialsManagementPage: React.FC = () => {
         return materialCustomerCodeImportTemplate
       case 'defaults':
         return materialDefaultsImportTemplate
+      case 'inspection':
+        return materialInspectionImportTemplate
       case 'master':
       default:
         return materialImportTemplate
@@ -1984,6 +2167,7 @@ const MaterialsManagementPage: React.FC = () => {
     materialUnitsImportTemplate,
     materialCustomerCodeImportTemplate,
     materialDefaultsImportTemplate,
+    materialInspectionImportTemplate,
   ])
 
   const activeImportTitle = useMemo(() => {
@@ -1996,6 +2180,8 @@ const MaterialsManagementPage: React.FC = () => {
         return t('app.master-data.materials.importMenu.customerCodesTitle')
       case 'defaults':
         return t('app.master-data.materials.importMenu.defaultsTitle')
+      case 'inspection':
+        return t('app.master-data.materials.importMenu.inspectionTitle')
       case 'master':
       default:
         return t('app.master-data.materials.importMenu.masterTitle')
@@ -2037,6 +2223,11 @@ const MaterialsManagementPage: React.FC = () => {
             key: 'defaults',
             label: t('app.master-data.materials.importMenu.defaults'),
             onClick: () => openMaterialImport('defaults'),
+          },
+          {
+            key: 'inspection',
+            label: t('app.master-data.materials.importMenu.inspection'),
+            onClick: () => openMaterialImport('inspection'),
           },
         ]}
       />
@@ -2627,6 +2818,134 @@ const MaterialsManagementPage: React.FC = () => {
     }
   }
 
+  const handleMaterialInspectionImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning(t('app.master-data.importEmpty'))
+      return
+    }
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim())
+    const rows = data.slice(2).filter((row: any[]) => row?.some((c: any) => c != null && String(c).trim() !== ''))
+    if (rows.length === 0) {
+      messageApi.warning(t('app.master-data.importNoRows'))
+      return
+    }
+
+    const idx = buildMaterialInspectionImportColumnIndex(
+      headers,
+      materialInspectionImportTemplate.importHeaderMap,
+    )
+    if (idx.mainCode < 0) {
+      messageApi.error(
+        t('app.master-data.importMissingField', {
+          field: t('app.master-data.materials.materialCode'),
+          headers: headers.join(', '),
+        }),
+      )
+      return
+    }
+
+    let plans: Array<{
+      id: number
+      plan_code?: string
+      planCode?: string
+      plan_type?: string
+      planType?: string
+    }> = []
+    try {
+      const plansRes = await inspectionPlanApi.list({ skip: 0, limit: 2000 })
+      plans = unwrapInspectionPlanList(plansRes).map((p) => {
+        const row = p as Record<string, unknown>
+        return {
+          id: Number(row.id),
+          plan_code: row.plan_code != null ? String(row.plan_code) : undefined,
+          planCode: row.planCode != null ? String(row.planCode) : undefined,
+          plan_type: row.plan_type != null ? String(row.plan_type) : undefined,
+          planType: row.planType != null ? String(row.planType) : undefined,
+        }
+      })
+    } catch (error: any) {
+      messageApi.error(
+        error?.message || t('app.master-data.materials.importInspection.fetchPlansFailed'),
+      )
+      return
+    }
+
+    const { items, errors } = parseMaterialInspectionImportRows(rows, idx, plans, 3, t)
+    if (errors.length > 0) {
+      showImportValidationErrors(errors)
+      return
+    }
+    if (items.length === 0) {
+      messageApi.warning(t('app.master-data.importAllEmpty'))
+      return
+    }
+
+    const masterCache = new Map<string, Material>()
+    const importErrors: Array<{ row: number; error: string }> = []
+    const batchItems: Array<{
+      materialUuid: string
+      inspectionStages?: MaterialBulkInspectionPatchItem['inspectionStages']
+      overReportMode?: MaterialBulkInspectionPatchItem['overReportMode']
+      overReportValue?: number
+      rowNum: number
+    }> = []
+
+    for (const item of items) {
+      try {
+        const master = await resolveMasterByMainCode(item.mainCode, masterCache)
+        if (!master?.uuid) {
+          throw new Error(
+            t('app.master-data.materials.importInspection.masterNotFound', { code: item.mainCode }),
+          )
+        }
+        batchItems.push({
+          materialUuid: master.uuid,
+          ...item.patch,
+          rowNum: item.rowNum,
+        })
+      } catch (error: any) {
+        importErrors.push({ row: item.rowNum, error: error?.message || String(error) })
+      }
+    }
+
+    if (batchItems.length === 0) {
+      showImportPartialErrors(0, importErrors)
+      return
+    }
+
+    try {
+      const CHUNK = 200
+      let successCount = 0
+      for (let i = 0; i < batchItems.length; i += CHUNK) {
+        const chunk = batchItems.slice(i, i + CHUNK)
+        const res = await materialApi.bulkPatchInspection({
+          items: chunk.map(({ rowNum: _r, ...patch }) => patch),
+        })
+        successCount += Number(res.updated_count ?? 0)
+        const failed = res.failed_items ?? []
+        for (const f of failed) {
+          const uuid = String(f.materialUuid ?? f.material_uuid ?? '')
+          const src = chunk.find((c) => c.materialUuid === uuid)
+          importErrors.push({
+            row: src?.rowNum ?? 0,
+            error: f.reason || t('app.master-data.importFailed', { defaultValue: '导入失败' }),
+          })
+        }
+      }
+
+      if (importErrors.length > 0) {
+        showImportPartialErrors(successCount, importErrors)
+      } else {
+        messageApi.success(t('app.master-data.importSuccess', { count: successCount }))
+      }
+      if (successCount > 0) {
+        actionRef.current?.reload()
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.importFailed', { defaultValue: '导入失败' }))
+    }
+  }
+
   const runActiveMaterialImport = async (data: any[][]) => {
     switch (activeImportKind) {
       case 'sku':
@@ -2637,6 +2956,8 @@ const MaterialsManagementPage: React.FC = () => {
         return handleMaterialCustomerCodesImport(data)
       case 'defaults':
         return handleMaterialDefaultsImport(data)
+      case 'inspection':
+        return handleMaterialInspectionImport(data)
       case 'master':
       default:
         return handleMaterialImport(data)
@@ -2839,6 +3160,57 @@ const MaterialsManagementPage: React.FC = () => {
         return { canImport: true }
       }
 
+      if (kind === 'inspection') {
+        const idx = buildMaterialInspectionImportColumnIndex(
+          headers,
+          materialInspectionImportTemplate.importHeaderMap,
+        )
+        if (idx.mainCode < 0) {
+          return {
+            canImport: false,
+            errors: [
+              t('app.master-data.importMissingField', {
+                field: t('app.master-data.materials.materialCode'),
+                headers: headers.join(', '),
+              }),
+            ],
+          }
+        }
+        let plans: Array<{
+          id: number
+          plan_code?: string
+          planCode?: string
+          plan_type?: string
+          planType?: string
+        }> = []
+        try {
+          const plansRes = await inspectionPlanApi.list({ skip: 0, limit: 2000 })
+          plans = unwrapInspectionPlanList(plansRes).map((p) => {
+            const row = p as Record<string, unknown>
+            return {
+              id: Number(row.id),
+              plan_code: row.plan_code != null ? String(row.plan_code) : undefined,
+              planCode: row.planCode != null ? String(row.planCode) : undefined,
+              plan_type: row.plan_type != null ? String(row.plan_type) : undefined,
+              planType: row.planType != null ? String(row.planType) : undefined,
+            }
+          })
+        } catch (error: any) {
+          return {
+            canImport: false,
+            errors: [
+              error?.message || t('app.master-data.materials.importInspection.fetchPlansFailed'),
+            ],
+          }
+        }
+        const { items, errors } = parseMaterialInspectionImportRows(rows, idx, plans, 3, t)
+        if (errors.length > 0) return rowErrorsToPrecheck(errors)
+        if (items.length === 0) {
+          return { canImport: false, errors: [t('app.master-data.importAllEmpty')] }
+        }
+        return { canImport: true }
+      }
+
       return { canImport: true }
     },
     [
@@ -2849,6 +3221,7 @@ const MaterialsManagementPage: React.FC = () => {
       materialUnitsImportTemplate.importHeaderMap,
       materialCustomerCodeImportTemplate.importHeaderMap,
       materialDefaultsImportTemplate.importHeaderMap,
+      materialInspectionImportTemplate.importHeaderMap,
       baseUnitOptions,
     ],
   )
@@ -3569,6 +3942,12 @@ const MaterialsManagementPage: React.FC = () => {
                           onClick: () => handleOpenBatchDefaults(),
                         },
                         {
+                          key: 'batchInspection',
+                          label: t('app.master-data.materials.batchInspection'),
+                          icon: <SafetyCertificateOutlined />,
+                          onClick: () => handleOpenBatchInspection(),
+                        },
+                        {
                           key: 'batchVariant',
                           label: t('app.master-data.materials.batchVariantToolbar'),
                           icon: <ClusterOutlined />,
@@ -3915,6 +4294,87 @@ const MaterialsManagementPage: React.FC = () => {
               value={batchDefaultsMaxStock}
               onChange={(v) => setBatchDefaultsMaxStock(v ?? undefined)}
             />
+          </div>
+        </Space>
+      </Modal>
+
+      <Modal
+        title={t('app.master-data.materials.batchInspectionTitle')}
+        open={batchInspectionOpen}
+        onCancel={() => {
+          if (!batchInspectionSubmitting) setBatchInspectionOpen(false)
+        }}
+        onOk={handleConfirmBatchInspection}
+        confirmLoading={batchInspectionSubmitting}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        destroyOnHidden
+        width={MODAL_CONFIG.LARGE_WIDTH}
+      >
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message={t('app.master-data.materials.batchInspectionHint', {
+              count: selectedRowKeys.length,
+            })}
+          />
+          <div>
+            <Checkbox
+              checked={batchInspectionApplyStages}
+              onChange={(e) => setBatchInspectionApplyStages(e.target.checked)}
+              disabled={batchInspectionSubmitting}
+            >
+              {t('app.master-data.materials.batchInspectionApplyStages')}
+            </Checkbox>
+            <div
+              style={{
+                marginTop: 8,
+                opacity: batchInspectionApplyStages ? 1 : 0.45,
+                pointerEvents: batchInspectionApplyStages ? 'auto' : 'none',
+              }}
+            >
+              <InspectionStagesEditor
+                scope="material"
+                value={batchInspectionStages}
+                onChange={setBatchInspectionStages}
+              />
+            </div>
+          </div>
+          <div>
+            <Checkbox
+              checked={batchInspectionApplyOverReport}
+              onChange={(e) => setBatchInspectionApplyOverReport(e.target.checked)}
+              disabled={batchInspectionSubmitting}
+            >
+              {t('app.master-data.materials.batchInspectionApplyOverReport')}
+            </Checkbox>
+            <Select
+              style={{ width: '100%', marginTop: 8 }}
+              disabled={!batchInspectionApplyOverReport || batchInspectionSubmitting}
+              value={batchInspectionOverReportMode}
+              onChange={(v) => setBatchInspectionOverReportMode(v)}
+              options={[
+                { label: t('field.operation.overReportModeNone'), value: 'none' },
+                { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
+                { label: t('field.operation.overReportModePercent'), value: 'percent' },
+              ]}
+            />
+            <InputNumber
+              style={{ width: '100%', marginTop: 8 }}
+              min={0}
+              disabled={
+                !batchInspectionApplyOverReport ||
+                batchInspectionSubmitting ||
+                batchInspectionOverReportMode === 'none'
+              }
+              value={batchInspectionOverReportValue}
+              onChange={(v) => setBatchInspectionOverReportValue(Number(v) || 0)}
+              placeholder={t('field.operation.overReportValue')}
+            />
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+              {t('field.operation.overReportValueExtra')}
+            </Typography.Text>
           </div>
         </Space>
       </Modal>

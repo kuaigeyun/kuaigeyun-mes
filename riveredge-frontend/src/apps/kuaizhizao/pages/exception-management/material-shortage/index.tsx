@@ -279,7 +279,6 @@ const MaterialShortageExceptionPage: React.FC = () => {
             };
           }
         }}
-        scroll={{ x: 1400 }}
       />
 
       {/* 处理异常Modal */}

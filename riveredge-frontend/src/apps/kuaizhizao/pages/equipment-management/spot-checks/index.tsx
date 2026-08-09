@@ -574,13 +574,11 @@ const SpotChecksPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        width: 160,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
           renderEquipmentMasterRowActions({
             record,
-            keyPrefix: `spot-check-actions-${record.id ?? 'row'}`,
             t,
             canRead: perms.canRead,
             canUpdate: perms.canUpdate,

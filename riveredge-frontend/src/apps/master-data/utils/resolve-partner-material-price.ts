@@ -8,8 +8,9 @@ import { parseVariantAttributesValue } from '../components/VariantAttributeField
 import { normalizeFormListItems } from '../../../utils/formListItems';
 
 type FormWithLineItems = {
-  getFieldValue: (name: string | string[]) => unknown;
+  getFieldValue: (name: string | (string | number)[]) => unknown;
   setFieldsValue: (values: Record<string, unknown>) => void;
+  setFieldValue?: (name: string | (string | number)[], value: unknown) => void;
 };
 
 function pickNumberField(
@@ -131,8 +132,10 @@ export async function resolveMaterialForPricing(
   let full =
     materialList?.find((m) => Number((m as any).id) === id) ?? material;
   const uuid = String((full as any).uuid ?? (material as any).uuid ?? '').trim();
+  // 列表常缺 defaults：销价与采购价都拿不到时才拉详情（避免仅缺采购价的销售料反复打详情）
   const needsDetail =
-    getMaterialDefaultSalePrice(full) <= 0 || getMaterialDefaultTaxRate(full) <= 0;
+    (getMaterialDefaultSalePrice(full) <= 0 && getMaterialDefaultPurchasePrice(full) <= 0) ||
+    getMaterialDefaultTaxRate(full) <= 0;
   if (uuid && needsDetail) {
     try {
       full = await materialApi.get(uuid);
@@ -423,6 +426,169 @@ export async function applySalesDocumentLineMaterialPricing(
   items[index] = { ...items[index], unit_price: up, tax_rate: taxRate };
   form.setFieldsValue({ items });
   // 嵌套字段显式写入，避免 Form.List 行内 InputNumber 与 store 不同步
-  form.setFieldValue(['items', index, 'unit_price'], up);
-  form.setFieldValue(['items', index, 'tax_rate'], taxRate);
+  form.setFieldValue?.(['items', index, 'unit_price'], up);
+  form.setFieldValue?.(['items', index, 'tax_rate'], taxRate);
+}
+
+export type ResolvedPurchaseMaterialLinePricing = {
+  material: Material | Record<string, unknown>;
+  unitPrice: number;
+  taxRate: number;
+};
+
+export async function resolveOrderLinePurchasePrice(
+  supplierId: number | undefined,
+  materialId: number | undefined,
+  variantAttributes: unknown,
+  material: Material | Record<string, unknown> | undefined,
+  asOf?: string | dayjs.Dayjs,
+): Promise<{ unitPrice: number; taxRate: number; resolved?: PartnerPriceResolveResult }> {
+  const attrs = parseVariantAttributesValue(variantAttributes);
+  const taxR = material != null ? getMaterialDefaultTaxRate(material) : 0;
+  if (!supplierId || !materialId) {
+    return {
+      unitPrice: material ? getMaterialDefaultPurchasePrice(material) : 0,
+      taxRate: taxR,
+    };
+  }
+  try {
+    const resolved = await resolveSupplierPurchasePrice(supplierId, materialId, asOf, attrs);
+    const taxRate = pickResolvedTaxRate(resolved) ?? taxR;
+    const unitPrice = pickPurchaseUnitPrice(material ?? {}, resolved);
+    return { unitPrice, taxRate, resolved };
+  } catch {
+    return {
+      unitPrice: material ? getMaterialDefaultPurchasePrice(material) : 0,
+      taxRate: taxR,
+    };
+  }
+}
+
+/** 批量选料：供应商价本 + 物料默认采购价（与单行 applyPurchaseDocumentLineMaterialPricing 一致） */
+export async function resolvePurchaseDocumentMaterialLinesPricing(
+  materials: Array<Material | Record<string, unknown>>,
+  options?: {
+    supplierId?: number;
+    asOf?: string | dayjs.Dayjs;
+    priceType?: string;
+    materialList?: Array<Material | Record<string, unknown>>;
+  },
+): Promise<ResolvedPurchaseMaterialLinePricing[]> {
+  if (!materials.length) return [];
+
+  const pt = options?.priceType ?? 'tax_exclusive';
+  const asOf =
+    options?.asOf != null
+      ? dayjs.isDayjs(options.asOf)
+        ? options.asOf
+        : dayjs(options.asOf)
+      : dayjs();
+
+  const enriched = await Promise.all(
+    materials.map((m) => resolveMaterialForPricing(m, options?.materialList)),
+  );
+
+  const resolveMap = new Map<number, PartnerPriceResolveResult>();
+  const supplierId = options?.supplierId ? Number(options.supplierId) : undefined;
+  if (supplierId && enriched.length) {
+    try {
+      const items = await resolveSupplierPurchasePricesBatch(
+        supplierId,
+        enriched.map((m) => ({
+          materialId: Number((m as Material).id),
+          variantAttributes: parseVariantAttributesValue(
+            (m as Material).variantAttributes ?? (m as any).variant_attributes,
+          ),
+        })),
+        asOf,
+        enriched,
+      );
+      enriched.forEach((m, i) => {
+        const id = Number((m as Material).id);
+        if (items[i]) resolveMap.set(id, items[i]);
+      });
+    } catch {
+      /* 回退物料默认采购价 */
+    }
+  }
+
+  return enriched.map((full, idx) => {
+    const id = Number((full as Material).id ?? (materials[idx] as Material).id);
+    const resolved = resolveMap.get(id);
+    const taxRate = pickResolvedTaxRate(resolved) ?? getMaterialDefaultTaxRate(full);
+    let unitPrice = pickPurchaseUnitPrice(full, resolved);
+    if (pt === 'tax_inclusive' && unitPrice > 0) {
+      unitPrice = convertUnitPriceByPriceType(unitPrice, taxRate, 'tax_exclusive', 'tax_inclusive');
+    }
+    return { material: full, unitPrice, taxRate };
+  });
+}
+
+/**
+ * 选物料后解析供应商价本/物料默认采购价并回填行单价。
+ * unitPriceField：PO 用 unit_price；采购申请用 suggested_unit_price。
+ */
+export async function applyPurchaseDocumentLineMaterialPricing(
+  form: FormWithLineItems | null | undefined,
+  index: number,
+  material: Material | Record<string, unknown>,
+  options?: {
+    materialList?: Array<Material | Record<string, unknown>>;
+    asOfField?: string;
+    unitPriceField?: 'unit_price' | 'suggested_unit_price';
+    includeTaxRate?: boolean;
+    /** 表头供应商；缺省时读行内 supplier_id */
+    supplierId?: number;
+  },
+): Promise<void> {
+  if (!form) return;
+  const full = await resolveMaterialForPricing(material, options?.materialList);
+  const unitPriceField = options?.unitPriceField ?? 'unit_price';
+  const includeTaxRate = options?.includeTaxRate !== false && unitPriceField === 'unit_price';
+  const asOfField = options?.asOfField ?? 'order_date';
+  const asOfRaw = form.getFieldValue(asOfField) ?? form.getFieldValue('requisition_date');
+  const asOf =
+    asOfRaw != null
+      ? dayjs.isDayjs(asOfRaw)
+        ? asOfRaw
+        : dayjs(asOfRaw as string)
+      : dayjs();
+  const pt = String(form.getFieldValue('price_type') ?? 'tax_exclusive');
+  const items = [...normalizeFormListItems<Record<string, unknown>>(form.getFieldValue('items'))];
+  if (!items[index]) return;
+  const lineSupplier = Number(items[index]?.supplier_id);
+  const headerSupplier = Number(form.getFieldValue('supplier_id'));
+  const supplierId =
+    options?.supplierId != null && Number.isFinite(options.supplierId)
+      ? Number(options.supplierId)
+      : Number.isFinite(lineSupplier) && lineSupplier > 0
+        ? lineSupplier
+        : Number.isFinite(headerSupplier) && headerSupplier > 0
+          ? headerSupplier
+          : undefined;
+  const materialId = Number((full as Material).id ?? (material as Record<string, unknown>).id);
+  const { unitPrice, taxRate } = await resolveOrderLinePurchasePrice(
+    supplierId,
+    Number.isFinite(materialId) ? materialId : undefined,
+    undefined,
+    full,
+    asOf,
+  );
+  let up = unitPrice;
+  if (pt === 'tax_inclusive' && up > 0) {
+    up = convertUnitPriceByPriceType(up, taxRate, 'tax_exclusive', 'tax_inclusive');
+  }
+  const nextRow: Record<string, unknown> = {
+    ...items[index],
+    [unitPriceField]: up,
+  };
+  if (includeTaxRate) {
+    nextRow.tax_rate = taxRate;
+  }
+  items[index] = nextRow;
+  form.setFieldsValue({ items });
+  form.setFieldValue?.(['items', index, unitPriceField], up);
+  if (includeTaxRate) {
+    form.setFieldValue?.(['items', index, 'tax_rate'], taxRate);
+  }
 }

@@ -149,6 +149,8 @@ export const workOrderApi = {
       planned_serial_nos?: string[];
     }>('/apps/kuaizhizao/work-orders/tracking/preview', { method: 'POST', data }),
   split: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/split`, { method: 'POST', data }),
+  unsplit: async (id: string) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${id}/unsplit`, { method: 'POST' }),
   getOperations: async (id: string, options?: { includeMeta?: boolean }) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, {
       method: 'GET',

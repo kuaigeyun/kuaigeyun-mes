@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { Form, App } from 'antd';
 import type { SelectProps } from 'antd';
 import { useDebounceFn } from 'ahooks';
@@ -9,12 +9,18 @@ import type { QuickCreateConfig } from '../uni-dropdown/types';
 import { NamePath } from 'antd/es/form/interface';
 import { MaterialFormModal } from '../../apps/master-data/components/MaterialFormModal';
 import { isVariantSkuMaterial } from '../../apps/master-data/components/MaterialVariantCombinationsTable';
+import {
+  MATERIAL_SELECT_OPTION_ITEM_HEIGHT,
+  MaterialSelectOptionContent,
+  formatMaterialSelectLabel,
+} from './materialSelectOption';
 
-function formatMaterialSelectLabel(m: Record<string, any>): string {
-  const mainCode = getMaterialField(m, 'mainCode') || '';
-  const nameVal = getMaterialField(m, 'name') || '';
-  return `${mainCode} - ${nameVal}`.trim() || String(m.id ?? '');
-}
+export {
+  MATERIAL_SELECT_OPTION_ITEM_HEIGHT,
+  MaterialSelectOptionContent,
+  formatMaterialSelectLabel,
+  resolveMaterialSelectImageFileUuid,
+} from './materialSelectOption';
 
 function filterSelectableMaterials(items: Material[], mastersOnly: boolean): Material[] {
   if (!mastersOnly) return items;
@@ -358,6 +364,29 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     return opts;
   }, [data, fallbackOption]);
 
+  const materialById = useMemo(() => {
+    const map = new Map<number, Material>();
+    for (const item of data) {
+      const id = Number((item as any).id);
+      if (Number.isFinite(id)) map.set(id, item);
+    }
+    return map;
+  }, [data]);
+
+  const optionRender = useCallback<NonNullable<SelectProps['optionRender']>>(
+    (option) => {
+      const id = Number(option.value);
+      const material = Number.isFinite(id) ? materialById.get(id) : undefined;
+      return (
+        <MaterialSelectOptionContent
+          material={material as Record<string, unknown> | undefined}
+          fallbackLabel={option.label}
+        />
+      );
+    },
+    [materialById],
+  );
+
   /**
    * rc-field-form：Form.Item 经 toChildrenArray 展开 Fragment 后若出现多个子节点，不会对任一子节点注入 value/onChange，
    * 导致 Select 仅本地展示、store 无 material_id。故 Form.Item 只包裹 UniDropdown，MaterialFormModal 放在外层兄弟节点。
@@ -376,6 +405,9 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
       onSearch={debounceFetch}
       onChange={mergedOnChange}
       getPopupContainer={getPopupContainer ?? fieldPropsGetPopupContainer}
+      optionRender={optionRender}
+      listItemHeight={MATERIAL_SELECT_OPTION_ITEM_HEIGHT}
+      popupMatchSelectWidth={480}
       quickCreate={effectiveQuickCreate}
       advancedSearch={
         showAdvancedSearch

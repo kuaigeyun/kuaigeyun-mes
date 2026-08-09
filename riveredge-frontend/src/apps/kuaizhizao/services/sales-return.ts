@@ -61,6 +61,7 @@ export interface SalesReturnListParams {
   created_start_date?: string;
   created_end_date?: string;
   order_by?: string;
+  include_items?: boolean;
 }
 
 export interface SalesReturnListResult {

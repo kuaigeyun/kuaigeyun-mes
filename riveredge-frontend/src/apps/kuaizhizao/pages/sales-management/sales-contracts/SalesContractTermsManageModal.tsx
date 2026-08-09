@@ -264,6 +264,8 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
                     setItemFormOpen(true);
                   }}
                   pagination={{ pageSize: 10 }}
+                  allowCustomScrollX
+                  allowCustomScrollY
                   scroll={{ x: 'max-content', y: 360 }}
                   request={async (params) => {
                     const res = await salesContractTermApi.listItems({
@@ -298,6 +300,8 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
                     loadAllItems();
                   }}
                   pagination={{ pageSize: 10 }}
+                  allowCustomScrollX
+                  allowCustomScrollY
                   scroll={{ x: 'max-content', y: 360 }}
                   request={async (params) => {
                     const res = await salesContractTermApi.listGroups({

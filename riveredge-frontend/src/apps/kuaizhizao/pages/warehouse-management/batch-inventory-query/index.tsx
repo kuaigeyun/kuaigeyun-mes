@@ -589,7 +589,6 @@ const BatchInventoryQuery: React.FC = () => {
         rowKey="id"
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
-        scroll={{ x: 2100 }}
         params={{
           material_id: searchParams.get('material_id') || undefined,
           warehouse_id: warehouseFilter === 'all' ? undefined : warehouseFilter,

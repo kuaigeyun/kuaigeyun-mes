@@ -2021,6 +2021,69 @@ WORK_ORDER_IN_PROGRESS_STATUS = [
 ]
 
 
+async def _count_sales_orders_with_open_shipment(
+    tenant_id: int,
+    *,
+    overdue_before: Optional[date] = None,
+) -> int:
+    """待发货订单：审核态订单中仍有明细剩余可发数量（勿仅按头状态，发完后头常仍为已审核）。"""
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+    from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+
+    order_q = SalesOrder.filter(
+        tenant_id=tenant_id,
+        status__in=SALES_ORDER_PENDING_SHIP_STATUS,
+        deleted_at__isnull=True,
+    )
+    if overdue_before is not None:
+        order_q = order_q.filter(delivery_date__lt=overdue_before)
+    order_ids = await order_q.values_list("id", flat=True)
+    if not order_ids:
+        return 0
+    open_order_ids = await SalesOrderItem.filter(
+        tenant_id=tenant_id,
+        sales_order_id__in=list(order_ids),
+        remaining_quantity__gt=0,
+        deleted_at__isnull=True,
+    ).values_list("sales_order_id", flat=True)
+    return len(set(open_order_ids))
+
+
+async def _count_purchase_orders_with_open_receipt(
+    tenant_id: int,
+    *,
+    overdue_before: Optional[date] = None,
+) -> int:
+    """待收货订单：审核态采购订单中仍有明细未到货数量。"""
+    from apps.kuaizhizao.models.purchase_order import (
+        PurchaseOrder,
+        PurchaseOrderItem,
+        effective_po_item_outstanding,
+    )
+
+    order_q = PurchaseOrder.filter(
+        tenant_id=tenant_id,
+        status__in=PURCHASE_ORDER_PENDING_RECEIPT_STATUS,
+        deleted_at__isnull=True,
+    )
+    if overdue_before is not None:
+        order_q = order_q.filter(delivery_date__lt=overdue_before)
+    order_ids = list(await order_q.values_list("id", flat=True))
+    if not order_ids:
+        return 0
+    items = await PurchaseOrderItem.filter(
+        tenant_id=tenant_id,
+        order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).all()
+    open_ids = {
+        int(item.order_id)
+        for item in items
+        if effective_po_item_outstanding(item) > 0
+    }
+    return len(open_ids)
+
+
 async def _compute_purchase_arrival_rate(
     tenant_id: int,
     range_start_date,
@@ -2081,17 +2144,8 @@ async def get_sales_summary(
 
     # 1. 待处理报价 (草稿/待审核)
     q1 = Quotation.filter(tenant_id=tenant_id, status__in=["草稿", "待审核"], deleted_at__isnull=True).count()
-    # 2. 待发货订单 (已审核且未发货 - 这里简化逻辑)
-    q2 = SalesOrder.filter(tenant_id=tenant_id, status__in=SALES_ORDER_PENDING_SHIP_STATUS, deleted_at__isnull=True).count()
-    
-    # 增加：逾期发货订单 (已审核且交期已过)
+    # 2/2b. 待发货 / 逾期发货：按明细 remaining_quantity，非仅头状态
     now_date = now.date()
-    q2_overdue = SalesOrder.filter(
-        tenant_id=tenant_id, 
-        status__in=SALES_ORDER_PENDING_SHIP_STATUS, 
-        delivery_date__lt=now_date,
-        deleted_at__isnull=True
-    ).count()
 
     q3 = SalesOrder.filter(
         tenant_id=tenant_id,
@@ -2121,8 +2175,20 @@ async def get_sales_summary(
         deleted_at__isnull=True
     ).count()
 
-    pending_quotations, pending_shipments, overdue_shipments, sales_amounts, last_month_amounts, new_quotations = await asyncio.gather(
-        q1, q2, q2_overdue, q3, q4, q5
+    (
+        pending_quotations,
+        pending_shipments,
+        overdue_shipments,
+        sales_amounts,
+        last_month_amounts,
+        new_quotations,
+    ) = await asyncio.gather(
+        q1,
+        _count_sales_orders_with_open_shipment(tenant_id),
+        _count_sales_orders_with_open_shipment(tenant_id, overdue_before=now_date),
+        q3,
+        q4,
+        q5,
     )
     
     total_amount = sum(float(x or 0) for x in sales_amounts)
@@ -2175,16 +2241,7 @@ async def get_purchase_summary(
         deleted_at__isnull=True,
     ).count()
     
-    # 2. 待收货订单
-    q2 = PurchaseOrder.filter(tenant_id=tenant_id, status__in=PURCHASE_ORDER_PENDING_RECEIPT_STATUS).count()
-    
-    # 增加：逾期未到货
-    q2_overdue = PurchaseOrder.filter(
-        tenant_id=tenant_id,
-        status__in=PURCHASE_ORDER_PENDING_RECEIPT_STATUS,
-        delivery_date__lt=now_date
-    ).count()
-
+    # 2/2b. 待收货 / 逾期未到货：按明细未到货数量，非仅头状态
     # 3. 区间内新增申购
     q3 = PurchaseRequisition.filter(
         tenant_id=tenant_id,
@@ -2194,7 +2251,10 @@ async def get_purchase_summary(
     ).count()
 
     pending_requisitions, pending_receipts, overdue_receipts, new_requisitions = await asyncio.gather(
-        q1, q2, q2_overdue, q3
+        q1,
+        _count_purchase_orders_with_open_receipt(tenant_id),
+        _count_purchase_orders_with_open_receipt(tenant_id, overdue_before=now_date),
+        q3,
     )
 
     arrival_rate = await _compute_purchase_arrival_rate(

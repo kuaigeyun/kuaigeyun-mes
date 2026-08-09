@@ -40,35 +40,89 @@ _PRINT_TEMPLATE_BODY_FONT_STACK = (
     "'Helvetica Neue', Helvetica, Arial, sans-serif"
 )
 
-# 预设打印模板（新建租户时可选加载）
-PRESET_PRINT_TEMPLATES = [
-    {
-        "name": "通用标签模板",
-        "code": "default_label",
-        "type": "html",
-        "description": "通用标签打印模板，支持 {{code}}、{{name}}、{{quantity}} 等变量",
-        "content": """<div style="padding:8px;border:1px solid #ccc;font-size:12px;">
-  <div><strong>{{code}}</strong></div>
-  <div>{{name}}</div>
-  <div>数量: {{quantity}}</div>
-</div>""",
-        "config": {"document_type": "label"},
-        "is_active": True,
-    },
-    {
-        "name": "通用收据模板",
-        "code": "default_receipt",
-        "type": "html",
-        "description": "通用收据打印模板，支持 {{title}}、{{items}}、{{total}} 等变量",
-        "content": """<div style="padding:16px;font-size:14px;">
-  <h3>{{title}}</h3>
-  <div>{{items}}</div>
-  <div>合计: {{total}}</div>
-</div>""",
-        "config": {"document_type": "receipt"},
-        "is_active": True,
-    },
-]
+def _build_core_sme_visual_presets() -> list[dict]:
+    """核心通用标签/收据：可视化 designer_json（字段块，非纯代码）。"""
+    from core.schemas.print_template import PrintTemplateCompileRequest
+
+    def _compile(schema: dict) -> str:
+        result = PrintTemplateService.compile_designer_schema(
+            PrintTemplateCompileRequest(source_type="designer_json", source=schema)
+        )
+        return str(result.get("compiled_template") or "")
+
+    label_schema = {
+        "version": "v1",
+        "pageSize": "A4",
+        "orientation": "portrait",
+        "margins": {"top": 8, "right": 8, "bottom": 8, "left": 8},
+        "itemSpacing": 4,
+        "blocks": [
+            {"id": "label-code", "type": "field", "key": "code", "label": "编码", "showLabel": True},
+            {"id": "label-name", "type": "field", "key": "name", "label": "名称", "showLabel": True},
+            {"id": "label-qty", "type": "field", "key": "quantity", "label": "数量", "showLabel": True},
+        ],
+    }
+    receipt_schema = {
+        "version": "v1",
+        "pageSize": "A4",
+        "orientation": "portrait",
+        "margins": {"top": 14, "right": 12, "bottom": 16, "left": 12},
+        "itemSpacing": 6,
+        "blocks": [
+            {"id": "receipt-title", "type": "field", "key": "title", "label": "标题", "showLabel": False},
+            {"id": "receipt-items", "type": "field", "key": "items", "label": "明细", "showLabel": True},
+            {"id": "receipt-total", "type": "field", "key": "total", "label": "合计", "showLabel": True},
+        ],
+    }
+    label_content = _compile(label_schema)
+    receipt_content = _compile(receipt_schema)
+    return [
+        {
+            "name": "通用标签模板",
+            "code": "default_label",
+            "type": "html",
+            "description": "通用标签打印模板（可视化），支持 code / name / quantity 等变量",
+            "content": label_content,
+            "config": {
+                "document_type": "label",
+                "engine": "jinja2",
+                "strict_variables": False,
+                "source_type": "designer_json",
+                "designer_version": "v1",
+                "designer_schema": label_schema,
+                "page": {"size": "A4", "orientation": "portrait", "margin": "8mm"},
+            },
+            "is_active": True,
+        },
+        {
+            "name": "通用收据模板",
+            "code": "default_receipt",
+            "type": "html",
+            "description": "通用收据打印模板（可视化），支持 title / items / total 等变量",
+            "content": receipt_content,
+            "config": {
+                "document_type": "receipt",
+                "engine": "jinja2",
+                "strict_variables": False,
+                "source_type": "designer_json",
+                "designer_version": "v1",
+                "designer_schema": receipt_schema,
+                "page": {"size": "A4", "orientation": "portrait", "margin": "14mm 12mm"},
+            },
+            "is_active": True,
+        },
+    ]
+
+
+# 预设打印模板（新建租户时可选加载）；延迟构建以免类定义前循环引用
+PRESET_PRINT_TEMPLATES: list[dict] = []
+
+
+def get_preset_print_templates() -> list[dict]:
+    global PRESET_PRINT_TEMPLATES
+    if not PRESET_PRINT_TEMPLATES:
+        PRESET_PRINT_TEMPLATES = _build_core_sme_visual_presets()
+    return PRESET_PRINT_TEMPLATES
 
 
 class PrintTemplateService:
@@ -241,44 +295,60 @@ class PrintTemplateService:
     ) -> int:
         """
         加载打印模板预设数据。
-        仅创建不存在的模板（按 code 去重）。
+        缺失则创建；exact code 且非可视化则升级。
         """
+        from core.services.print.print_template_visual import is_visual_designer_config
         from core.services.system.installed_feature_scope import (
             print_template_visible_for_installed_apps,
         )
 
         created = 0
-        for item in PRESET_PRINT_TEMPLATES:
+        for item in get_preset_print_templates():
             if installed_app_codes is not None and not print_template_visible_for_installed_apps(
                 item.get("config"),
                 installed_app_codes,
             ):
                 continue
             base_code = str(item["code"]).strip().upper()
-            exists = await PrintTemplate.filter(
+            exact = await PrintTemplate.filter(
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
-            ).filter(
                 code=base_code,
-            ).exists() or await PrintTemplate.filter(
+            ).first()
+            if exact:
+                if not is_visual_designer_config(exact.config):
+                    try:
+                        exact.name = item["name"]
+                        exact.description = item.get("description")
+                        exact.content = item["content"]
+                        exact.config = item.get("config")
+                        exact.is_active = item.get("is_active", True)
+                        await exact.save()
+                        created += 1
+                        logger.info("已升级核心打印模板为可视化: tenant={} code={}", tenant_id, base_code)
+                    except Exception as e:
+                        logger.warning("升级打印模板 {} 失败: {}", item["code"], e)
+                continue
+            suffix_exists = await PrintTemplate.filter(
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
                 code__startswith=f"{base_code}_",
             ).exists()
-            if not exists:
-                try:
-                    data = PrintTemplateCreate(
-                        name=item["name"],
-                        code=item["code"],
-                        type=item["type"],
-                        description=item.get("description"),
-                        content=item["content"],
-                        config=item.get("config"),
-                    )
-                    await PrintTemplateService.create_print_template(tenant_id, data)
-                    created += 1
-                except Exception as e:
-                    logger.warning(f"创建打印模板 {item['code']} 失败: {e}")
+            if suffix_exists:
+                continue
+            try:
+                data = PrintTemplateCreate(
+                    name=item["name"],
+                    code=item["code"],
+                    type=item["type"],
+                    description=item.get("description"),
+                    content=item["content"],
+                    config=item.get("config"),
+                )
+                await PrintTemplateService.create_print_template(tenant_id, data)
+                created += 1
+            except Exception as e:
+                logger.warning(f"创建打印模板 {item['code']} 失败: {e}")
         return created
 
     @staticmethod
@@ -557,6 +627,19 @@ class PrintTemplateService:
         blocks = schema.get("blocks")
         if not isinstance(blocks, list):
             raise ValidationError("designer_schema.blocks 必须为数组")
+
+        # 单一 html 根块：专业预置完整版式，原样输出，不套通用外层样式
+        if (
+            len(blocks) == 1
+            and isinstance(blocks[0], dict)
+            and str(blocks[0].get("type") or "").strip().lower() == "html"
+        ):
+            return {
+                "success": True,
+                "compiled_template": str(blocks[0].get("content") or ""),
+                "schema_version": schema_version,
+                "warnings": warnings,
+            }
 
         page_size = str(schema.get("pageSize") or "A4")
         orientation = str(schema.get("orientation") or "portrait")

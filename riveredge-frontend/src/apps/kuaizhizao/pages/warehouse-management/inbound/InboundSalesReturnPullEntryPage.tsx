@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Card, Col, DatePicker, Form, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -39,6 +39,7 @@ import {
   mergeRecordMaps,
   usePullEntryFormDraft,
 } from '../shared/pullEntryFormDraft';
+import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 type PreviewLine = {
@@ -66,6 +67,7 @@ const InboundSalesReturnPullEntryPage: React.FC = () => {
   const { salesOrderId: salesOrderIdParam } = useParams<{ salesOrderId: string }>();
   const salesOrderId = Number(salesOrderIdParam);
   const navigate = useNavigate();
+  const location = useLocation();
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_sales_order');
@@ -107,8 +109,12 @@ const InboundSalesReturnPullEntryPage: React.FC = () => {
 
   const leavePage = useCallback(() => {
     clearDraft();
-    navigate(INBOUND_LIST_PATH);
-  }, [clearDraft, navigate]);
+    navigateLeavingPullEntry(
+      navigate,
+      INBOUND_LIST_PATH,
+      pullEntryTabKey(location.pathname, location.search),
+    );
+  }, [clearDraft, navigate, location.pathname, location.search]);
 
   useEffect(() => {
     bindSnapshot(() => ({
@@ -267,14 +273,17 @@ const InboundSalesReturnPullEntryPage: React.FC = () => {
       invalidateMenuBadgeCounts();
       clearDraft();
       if (mode === 'confirm') {
-        navigate(INBOUND_LIST_PATH, {
-          state: {
+        navigateLeavingPullEntry(
+          navigate,
+          INBOUND_LIST_PATH,
+          pullEntryTabKey(location.pathname, location.search),
+          {
             inboundDirectConfirm: {
               id: Number(created.id),
               receipt_type: 'sales_return',
             },
           },
-        });
+        );
       } else {
         messageApi.success(
           t('app.kuaizhizao.warehouseInbound.entry.salesReturn.draftCreated', {

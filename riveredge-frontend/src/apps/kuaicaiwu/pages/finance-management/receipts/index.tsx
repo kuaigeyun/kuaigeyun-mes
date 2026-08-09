@@ -6,11 +6,11 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Tag, Drawer, Descriptions, Spin, Alert, Table, Empty } from 'antd';
-import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Modal, Typography, Tag, Drawer, Descriptions, Spin, Alert, Table, Empty, Form } from 'antd';
+import { ModalForm, ProForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
@@ -40,6 +40,9 @@ import {
   formatReceiptSettlementType,
   getPaymentMethodOptions,
   getReceiptSettlementTypeOptions,
+  assertBankAccountForTransfer,
+  isBankTransferPaymentMethod,
+  BANK_TRANSFER_PAYMENT_METHOD,
 } from '../../../utils/financeSharedOptions';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
@@ -69,7 +72,7 @@ const ReceiptsPage: React.FC = () => {
   const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
   const [pullPreviewData, setPullPreviewData] = useState<ReceiptPullPreview | null>(null);
   const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
-  const pullFormRef = useRef<any>(null);
+  const [pullForm] = Form.useForm();
   const pullFromReceivableCloseRef = useRef<(() => void) | null>(null);
   const [pullSubmitting, setPullSubmitting] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -81,6 +84,7 @@ const ReceiptsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const pullFromReceivableAction = getKuaicaiwuDocumentAction('receipt.pull_from_receivable');
   const receiptPerms = useResourcePermissions(RECEIPT_RESOURCE);
 
@@ -139,6 +143,12 @@ const ReceiptsPage: React.FC = () => {
   };
 
   const handleCreate = async (values: any) => {
+    try {
+      assertBankAccountForTransfer(values.payment_method, values.bank_account_id, t);
+    } catch (e: unknown) {
+      messageApi.warning((e as Error).message);
+      return false;
+    }
     const bank = bankAccountOptions.find((o) => o.value === values.bank_account_id);
     const data = {
       customer_id: values.customer_id,
@@ -162,7 +172,7 @@ const ReceiptsPage: React.FC = () => {
     setPullPreviewOpen(false);
     setPullPreviewSourceId(null);
     setPullPreviewData(null);
-    pullFormRef.current?.resetFields();
+    pullForm.resetFields();
   };
 
   const openPullPreview = async (receivableId: number) => {
@@ -174,12 +184,12 @@ const ReceiptsPage: React.FC = () => {
       const data = await receiptService.previewPullFromReceivable(receivableId);
       setPullPreviewData(data);
       const maxPush = Number(data.items?.[0]?.max_push_quantity ?? 0);
-      pullFormRef.current?.setFieldsValue({
+      pullForm.setFieldsValue({
         source_code: data.source_code,
         customer_name: data.customer_name,
         total_amount: maxPush > 0 ? maxPush : undefined,
         receipt_date: dayjs(),
-        payment_method: '银行转账',
+        payment_method: BANK_TRANSFER_PAYMENT_METHOD,
         settlement_type: 'normal',
         notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
           source: pullFromReceivableAction.sourceLabel,
@@ -244,9 +254,22 @@ const ReceiptsPage: React.FC = () => {
   });
   pullFromReceivableCloseRef.current = pullFromReceivableQuery.closeModal;
 
+  useEffect(() => {
+    const pullReceivableId = (location.state as { pullReceivableId?: number } | null)?.pullReceivableId;
+    if (!pullReceivableId) return;
+    void openPullPreview(pullReceivableId);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.pathname, navigate]);
+
   const handlePullCreateSubmit = async (values: any) => {
     if (!pullPreviewData || !pullPreviewSourceId) return false;
     if (pullPreviewData.has_blocking_issues) return false;
+    try {
+      assertBankAccountForTransfer(values.payment_method, values.bank_account_id, t);
+    } catch (e: unknown) {
+      messageApi.warning((e as Error).message);
+      return false;
+    }
     const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
     const totalAmount = Number(values.total_amount) || 0;
     if (totalAmount <= 0) {
@@ -548,8 +571,6 @@ const ReceiptsPage: React.FC = () => {
       title: t('app.kuaicaiwu.common.lifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
-      align: 'left',
-      width: 120,
       hideInSearch: true,
       render: (_, record) => {
         const lc = getFinanceVoucherLifecycle(record as unknown as Record<string, unknown>, t);
@@ -579,8 +600,17 @@ const ReceiptsPage: React.FC = () => {
                 {t('app.kuaicaiwu.common.confirm')}
               </Button>
             ) : null,
-            record.status === 'Confirmed' ? (
-              <Button {...rowActionKind('submit')} key="st" onClick={() => navigate(`/apps/kuaicaiwu/finance-management/settlement`)}>
+            record.status === 'Confirmed' && Number(record.unsettled_amount ?? 0) > 0 ? (
+              <Button
+                {...rowActionKind('submit')}
+                key="st"
+                onClick={() => {
+                  const qs = new URLSearchParams({ tab: 'receivable' });
+                  if (record.customer_id != null) qs.set('customerId', String(record.customer_id));
+                  if (record.id != null) qs.set('receiptId', String(record.id));
+                  navigate(`/apps/kuaicaiwu/finance-management/settlement?${qs.toString()}`);
+                }}
+              >
                 {t('app.kuaicaiwu.common.settle')}
               </Button>
             ) : null,
@@ -608,7 +638,6 @@ const ReceiptsPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receipts"
-        scroll={{ x: 1680 }}
         showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton={false}
@@ -703,7 +732,7 @@ const ReceiptsPage: React.FC = () => {
         okText={pullFromReceivableAction.targetLabel}
         cancelText={t('common.cancel')}
         confirmLoading={pullSubmitting}
-        onOk={() => pullFormRef.current?.submit?.()}
+        onOk={() => void pullForm.submit()}
         okButtonProps={{
           disabled:
             pullPreviewLoading ||
@@ -784,8 +813,9 @@ const ReceiptsPage: React.FC = () => {
               </Typography.Paragraph>
             ) : null}
             {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
-              <ModalForm
-                formRef={pullFormRef}
+              <ProForm
+                key={`pull-receipt-${pullPreviewSourceId}`}
+                form={pullForm}
                 submitter={false}
                 onFinish={handlePullCreateSubmit}
                 layout="vertical"
@@ -820,9 +850,22 @@ const ReceiptsPage: React.FC = () => {
                   name="bank_account_id"
                   label={t(`${R}.bankAccount`)}
                   options={bankAccountOptions}
-                  placeholder={t(`${R}.bankAccountPlaceholder`)}
+                  placeholder={
+                    bankAccountOptions.length > 0
+                      ? t(`${R}.bankAccountPlaceholder`)
+                      : t('app.kuaicaiwu.common.noBankAccountHint')
+                  }
                   showSearch
                   allowClear
+                  rules={[
+                    ({ getFieldValue }) => ({
+                      validator: async (_, value) => {
+                        if (isBankTransferPaymentMethod(getFieldValue('payment_method')) && !value) {
+                          throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForTransfer'));
+                        }
+                      },
+                    }),
+                  ]}
                 />
                 <ProFormText
                   name="bank_account"
@@ -831,7 +874,7 @@ const ReceiptsPage: React.FC = () => {
                 />
                 <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />
                 <DocumentAttachmentsField category="receipt_attachments" />
-              </ModalForm>
+              </ProForm>
             ) : null}
           </div>
         ) : null}

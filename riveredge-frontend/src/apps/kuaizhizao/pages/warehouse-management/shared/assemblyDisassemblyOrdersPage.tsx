@@ -553,7 +553,6 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
-      align: 'left',
       hideInSearch: true,
       render: (_, record) => {
         const lifecycle = config.getLifecycle(record as Record<string, unknown>, t);
@@ -790,7 +789,6 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           return { data, success: true, total };
         }}
         locale={{ emptyText: config.listEmptyText }}
-        scroll={{ x: 1800 }}
       />
 
       <FormModalTemplate

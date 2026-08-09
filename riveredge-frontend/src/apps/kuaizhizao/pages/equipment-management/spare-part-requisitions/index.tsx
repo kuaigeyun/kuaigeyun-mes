@@ -15,7 +15,7 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import {
   buildDetailDrawerEditExtra,
   EquipmentMasterDetailDrawer,
@@ -290,82 +290,77 @@ const SparePartRequisitionsPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        width: 280,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) =>
-          renderRowActionsOverflow(
-            [
-              perms.canRead ? (
-                <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
-                  {t('common.detail')}
-                </Button>
-              ) : null,
-              perms.canUpdate && record.status === '草稿' ? (
-                <Button key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)}>
-                  {t('common.edit')}
-                </Button>
-              ) : null,
-              perms.canAction?.('submit') && record.status === '草稿' ? (
-                <Button
-                  key="submit"
-                  {...rowActionKind('submit')}
-                  icon={<SendOutlined />}
-                  onClick={async () => {
-                    if (!record.id) return;
-                    try {
-                      await sparePartRequisitionsApi.submit(record.id);
-                      messageApi.success(t(`${P}.submitSuccess`));
-                      actionRef.current?.reload();
-                    } catch (error: unknown) {
-                      messageApi.error(
-                        error instanceof Error ? error.message : t('common.operationFailed'),
-                      );
-                    }
-                  }}
-                >
-                  {t(`${P}.action.submit`)}
-                </Button>
-              ) : null,
-              perms.canAction?.('approve') && record.status === '已提交' ? (
-                <Button
-                  key="approve"
-                  {...rowActionKind('approve')}
-                  icon={<CheckOutlined />}
-                  onClick={async () => {
-                    if (!record.id) return;
-                    try {
-                      await sparePartRequisitionsApi.approve(record.id);
-                      messageApi.success(t(`${P}.approveSuccess`));
-                      actionRef.current?.reload();
-                    } catch (error: unknown) {
-                      messageApi.error(
-                        error instanceof Error ? error.message : t('common.operationFailed'),
-                      );
-                    }
-                  }}
-                >
-                  {t(`${P}.action.approve`)}
-                </Button>
-              ) : null,
-              perms.canAction?.('reject') && record.status === '已提交' ? (
-                <Button
-                  key="reject"
-                  {...rowActionKind('reject')}
-                  danger
-                  icon={<CloseOutlined />}
-                  onClick={() => {
-                    setRejectTarget(record);
-                    setRejectReason('');
-                    setRejectModalVisible(true);
-                  }}
-                >
-                  {t(`${P}.action.reject`)}
-                </Button>
-              ) : null,
-            ],
-            `requisition-actions-${record.id ?? 'row'}`,
-          ),
+        render: (_, record) => [
+          perms.canRead ? (
+            <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+              {t('common.detail')}
+            </Button>
+          ) : null,
+          perms.canUpdate && record.status === '草稿' ? (
+            <Button key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)}>
+              {t('common.edit')}
+            </Button>
+          ) : null,
+          perms.canAction?.('submit') && record.status === '草稿' ? (
+            <Button
+              key="submit"
+              {...rowActionKind('submit')}
+              icon={<SendOutlined />}
+              onClick={async () => {
+                if (!record.id) return;
+                try {
+                  await sparePartRequisitionsApi.submit(record.id);
+                  messageApi.success(t(`${P}.submitSuccess`));
+                  actionRef.current?.reload();
+                } catch (error: unknown) {
+                  messageApi.error(
+                    error instanceof Error ? error.message : t('common.operationFailed'),
+                  );
+                }
+              }}
+            >
+              {t(`${P}.action.submit`)}
+            </Button>
+          ) : null,
+          perms.canAction?.('approve') && record.status === '已提交' ? (
+            <Button
+              key="approve"
+              {...rowActionKind('approve')}
+              icon={<CheckOutlined />}
+              onClick={async () => {
+                if (!record.id) return;
+                try {
+                  await sparePartRequisitionsApi.approve(record.id);
+                  messageApi.success(t(`${P}.approveSuccess`));
+                  actionRef.current?.reload();
+                } catch (error: unknown) {
+                  messageApi.error(
+                    error instanceof Error ? error.message : t('common.operationFailed'),
+                  );
+                }
+              }}
+            >
+              {t(`${P}.action.approve`)}
+            </Button>
+          ) : null,
+          perms.canAction?.('reject') && record.status === '已提交' ? (
+            <Button
+              key="reject"
+              {...rowActionKind('reject')}
+              danger
+              icon={<CloseOutlined />}
+              onClick={() => {
+                setRejectTarget(record);
+                setRejectReason('');
+                setRejectModalVisible(true);
+              }}
+            >
+              {t(`${P}.action.reject`)}
+            </Button>
+          ) : null,
+        ],
       },
     ], SALES_DOC_LIST_FIELD_RANK),
     [t, perms, messageApi, approvalStatusValueEnum, handleDetail],

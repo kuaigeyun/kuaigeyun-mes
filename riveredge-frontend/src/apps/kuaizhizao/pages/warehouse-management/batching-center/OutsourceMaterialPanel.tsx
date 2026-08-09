@@ -1,4 +1,4 @@
-import { rowActionKind, renderRowActionsOverflow } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 物料中心 - 委外发料 / 收货 / 退料 / 退货列表与新建
  */
@@ -225,7 +225,6 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
     {
       title: t('app.kuaizhizao.warehouseCommon.colActions'),
       valueType: 'option',
-      width: 160,
       fixed: 'right',
       render: (_, record) => {
         const actions: React.ReactNode[] = [];
@@ -266,7 +265,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
           );
         }
         if (!actions.length) return '-';
-        return renderRowActionsOverflow(actions, { keyPrefix: `outsource-${mode}-${record.id ?? 'row'}` });
+        return actions;
       },
     },
   ],

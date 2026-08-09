@@ -1,0 +1,381 @@
+/**
+ * UniTable 布局唯一 CSS 控制面（与 uniTableLayoutEngine.ts 配对）
+ *
+ * 唯一入口：global.less `@import './components/uni-table/uni-table.less'`
+ * 禁止：index.tsx 再 import；global.less 再写 .uni-table-* scroll/gutter/fixed/table-layout；
+ * 禁止：scrollbar-gutter: stable；对 .ant-table-* 的 JS style.scrollbarGutter 赋值。
+ */
+
+.uni-table-container {
+  position: relative;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.uni-table-container.uni-table-mobile {
+  padding: 0 8px;
+}
+
+.uni-table-container.uni-table-fill-viewport {
+  flex: 1;
+  min-height: 0;
+}
+
+.uni-table-container:not(.uni-table-embedded) .uni-table-pro-table.ant-pro-table > .ant-pro-card.ant-pro-card-border,
+.uni-table-container:not(.uni-table-embedded) .uni-table-alt-view-shell > .ant-pro-card.ant-pro-card-border {
+  border: 1px solid var(--ant-colorBorderSecondary, var(--ant-colorBorder)) !important;
+  border-radius: var(--ant-borderRadiusLG, var(--ant-borderRadius, 6px)) !important;
+  /* 禁止 overflow:hidden：会切断 antd sticky 固定列的 containing block */
+}
+
+.uni-table-container:not(.uni-table-embedded) .uni-table-pro-table .ant-table-container {
+  border: 1px solid var(--ant-colorBorderSecondary, var(--ant-colorBorder));
+  border-radius: var(--ant-borderRadius, 6px);
+  /* 禁止 overflow:hidden：会干扰 sticky 右固定列的 containing block，纵条插到滚动区与右固定列之间 */
+}
+
+.uni-table-container.uni-table-embedded .ant-pro-card {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.uni-table-container.uni-table-embedded .ant-pro-card .ant-pro-card-body {
+  padding: 0 !important;
+}
+
+.uni-table-container.uni-table-embedded .uni-table-pro-table {
+  margin: 0 !important;
+}
+
+.uni-table-container.uni-table-embedded .ant-pro-table-list-toolbar-container {
+  padding-block: 0 8px !important;
+}
+
+.uni-table-container .ant-table-tbody > tr > td {
+  border-bottom-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+.uni-table-container .ant-table-tbody > tr.ant-table-measure-row {
+  height: 0 !important;
+  line-height: 0 !important;
+  visibility: collapse;
+}
+
+.uni-table-container .ant-table-tbody > tr.ant-table-measure-row > .ant-table-measure-cell {
+  height: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  line-height: 0 !important;
+  font-size: 0 !important;
+  overflow: hidden !important;
+}
+
+.uni-table-container .ant-table-tbody > tr.ant-table-measure-row .ant-table-measure-cell-content {
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
+.uni-table-container .ant-table-tbody > tr > td:not(.uni-table-operation-cell):not(.uni-table-lifecycle-cell),
+.uni-table-container .ant-table-thead > tr > th:not(.uni-table-operation-cell):not(.uni-table-lifecycle-cell),
+.uni-table-container .ant-table-tbody > tr > td.uni-table-operation-cell,
+.uni-table-container .ant-table-thead > tr > th.uni-table-operation-cell,
+.uni-table-container .ant-table-tbody > tr > td.uni-table-lifecycle-cell,
+.uni-table-container .ant-table-thead > tr > th.uni-table-lifecycle-cell,
+.uni-table-container .uni-table-pro-table .ant-table-thead .ant-table-column-sorters,
+.uni-table-container .uni-table-pro-table .ant-table-thead .ant-table-column-title {
+  white-space: nowrap;
+}
+
+/*
+ * 结构不变式：table-layout:fixed 下单元格必须自己包住 nowrap 内容。
+ * 否则内容会溢出到滚动区，把 .ant-table-body/.ant-table-content 的 scrollWidth
+ * 撑得比 table 还宽；多出的滚动距离会把 sticky 固定列拖离右缘，并让
+ * scroll.y 的表头/表体双表结构错位。宽度真源见 utils/uniTableLayoutColumns.ts。
+ * 「更多」下拉与 Tooltip 走 portal，不受此裁剪影响。
+ */
+.uni-table-container .ant-table-tbody > tr > td.uni-table-operation-cell,
+.uni-table-container .ant-table-thead > tr > th.uni-table-operation-cell {
+  overflow: hidden;
+}
+
+/*
+ * 动作条固定为 max-content：宽度只由动作内容决定，不随所在列宽伸缩。
+ * UniTable 的列宽实测依赖这一点——否则列宽变化会改变测量值，测量将自反馈。
+ */
+.uni-table-container .ant-table-tbody > tr > td.uni-table-operation-cell .uni-table-operation-actions {
+  width: max-content;
+  flex: none;
+}
+
+/*
+ * 堆叠主列同一套规则：标识行（单号 / 编码）不可截断，固定 max-content 供实测；
+ * 单元格自己包住内容——左固定列是不透明 sticky 单元格，不裁剪就会把溢出部分
+ * 直接画到相邻列上（主行文字仍由自身 text-overflow 省略号收尾）。
+ */
+.uni-table-container .ant-table-tbody > tr > td.uni-table-primary-flex-cell {
+  overflow: hidden;
+}
+
+.uni-table-container .ant-table-tbody > tr > td.uni-table-primary-flex-cell .uni-table-stacked-identity {
+  width: max-content;
+  flex: none;
+}
+
+.uni-table-container .ant-pro-table-list-toolbar {
+  position: relative;
+  z-index: 3;
+}
+
+.uni-table-container.uni-table-has-list-toolbar .ant-pro-table-list-toolbar-container {
+  display: flex !important;
+  min-height: 32px;
+}
+
+.uni-table-container .uni-table-alt-view-toolbar {
+  border-bottom: 1px solid var(--ant-colorBorderSecondary, var(--ant-colorBorder));
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.uni-table-container .ant-table-thead .ant-table-column-sorters-tooltip-target-sorter .ant-table-column-sorter {
+  margin-inline-start: 4px;
+}
+
+/* ===== natural-height：不纵向滚动，不预留 gutter ===== */
+.uni-table-container.uni-table-natural-height .ant-pro-table,
+.uni-table-container.uni-table-natural-height .ant-pro-card,
+.uni-table-container.uni-table-natural-height .ant-pro-card-body,
+.uni-table-container.uni-table-natural-height .ant-pro-table-container,
+.uni-table-container.uni-table-natural-height .ant-table-wrapper,
+.uni-table-container.uni-table-natural-height .ant-spin-nested-loading,
+.uni-table-container.uni-table-natural-height .ant-spin-container,
+.uni-table-container.uni-table-natural-height .ant-table,
+.uni-table-container.uni-table-natural-height .ant-table-container {
+  height: auto !important;
+  max-height: none !important;
+  flex: 0 1 auto !important;
+}
+
+.uni-table-container.uni-table-natural-height .ant-table-header,
+.uni-table-container.uni-table-natural-height .ant-table-content,
+.uni-table-container.uni-table-natural-height .ant-table-body,
+.uni-table-container.uni-table-natural-height .ant-table-body-inner,
+.uni-table-container.uni-table-natural-height .ant-table-fixed-left .ant-table-body-inner,
+.uni-table-container.uni-table-natural-height .ant-table-fixed-right .ant-table-body-inner,
+.uni-table-container.uni-table-natural-height .ant-table-fixed-left .ant-table-body-outer,
+.uni-table-container.uni-table-natural-height .ant-table-fixed-right .ant-table-body-outer {
+  overflow-y: hidden !important;
+  max-height: none !important;
+  scrollbar-gutter: auto !important;
+  flex: none !important;
+}
+
+.uni-table-container.uni-table-natural-height .ant-table-wrapper .ant-table-content::-webkit-scrollbar,
+.uni-table-container.uni-table-natural-height .ant-table-wrapper .ant-table-body::-webkit-scrollbar {
+  width: 0 !important;
+  display: none !important;
+}
+
+.uni-table-container.uni-table-natural-height .ant-table-wrapper .ant-table-content::-webkit-scrollbar:horizontal,
+.uni-table-container.uni-table-natural-height .ant-table-wrapper .ant-table-body::-webkit-scrollbar:horizontal {
+  height: 6px !important;
+  display: block !important;
+}
+
+.uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-content,
+.uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-body,
+.uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-body-inner,
+.uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-fixed-left .ant-table-body-inner,
+.uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-fixed-right .ant-table-body-inner {
+  overflow-x: hidden !important;
+}
+
+.uni-table-container.uni-table-natural-height.uni-table-empty.uni-table-empty-has-fixed .ant-table-wrapper .ant-table-content::-webkit-scrollbar:horizontal,
+.uni-table-container.uni-table-natural-height.uni-table-empty.uni-table-empty-has-fixed .ant-table-wrapper .ant-table-body::-webkit-scrollbar:horizontal,
+.uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-wrapper .ant-table-content::-webkit-scrollbar:horizontal,
+.uni-table-container.uni-table-natural-height.uni-table-empty:not(.uni-table-empty-has-fixed) .ant-table-wrapper .ant-table-body::-webkit-scrollbar:horizontal {
+  height: 0 !important;
+  display: none !important;
+}
+
+/* ===== scroll-y：仅主表体 overflow-y:scroll + rc-table cell-scrollbar =====
+ * 禁止再给 .ant-table-fixed-* 加纵滚：旧版 shadow 固定表会在「滚动区 | 纵条 | 右固定列」之间挤出第二条滚动条。
+ */
+.uni-table-container.uni-table-scroll-y-mode .ant-table > .ant-table-container > .ant-table-body {
+  overflow-y: scroll !important;
+}
+
+.uni-table-container.uni-table-scroll-y-mode .uni-table-pro-table.uni-table-scroll-y .ant-table-header {
+  overflow: hidden !important;
+  scrollbar-gutter: auto !important;
+}
+
+.uni-table-container.uni-table-scroll-y-mode .uni-table-pro-table.uni-table-scroll-y .ant-table-body,
+.uni-table-container.uni-table-scroll-y-mode .uni-table-pro-table.uni-table-scroll-y .ant-table-content,
+.uni-table-container.uni-table-scroll-y-mode .ant-table-wrapper .ant-table-header,
+.uni-table-container.uni-table-scroll-y-mode .ant-table-wrapper .ant-table-body,
+.uni-table-container.uni-table-scroll-y-mode .ant-table-wrapper .ant-table-content {
+  scrollbar-gutter: auto !important;
+}
+
+.uni-table-container.uni-table-scroll-y-mode .ant-table-wrapper .ant-table-body::-webkit-scrollbar,
+.uni-table-container.uni-table-scroll-y-mode .ant-table-wrapper .ant-table-content::-webkit-scrollbar {
+  display: block;
+}
+
+.uni-table-container .uni-table-pro-table .ant-table-header table,
+.uni-table-container .uni-table-pro-table .ant-table-body table {
+  table-layout: fixed !important;
+}
+
+.uni-table-container .ant-table-tbody > tr > td.uni-table-operation-steps-cell {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 0;
+}
+
+.uni-table-container .ant-table-thead > tr > th.uni-table-operation-steps-cell {
+  overflow: hidden;
+  max-width: 0;
+}
+
+.uni-table-container .ant-table-tbody > tr > td.uni-table-operation-steps-cell .wo-ops-steps-strip {
+  margin-inline: auto;
+}
+
+/* 固定列背景 / z-index / overflow 交给 antd 原生 sticky 单元格，禁止第二套叠层补丁 */
+
+/* 列展示 Popover */
+.ant-pro-table-column-setting-title {
+  gap: 8px;
+}
+
+.ant-pro-table-column-setting-title .uni-table-column-setting-reset.ant-btn-link {
+  height: 22px;
+  padding: 0;
+  line-height: 22px;
+  font-size: 14px;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.ant-pro-table-column-setting-overlay.ant-popover .ant-popover-inner,
+.ant-pro-table-column-setting-overlay.ant-popover .ant-popover-inner-content {
+  background: var(--ant-color-bg-elevated, #ffffff);
+}
+
+.ant-pro-table-column-setting-list .ant-tree-treenode {
+  align-items: center !important;
+}
+
+.ant-pro-table-column-setting-list .ant-tree-node-content-wrapper {
+  min-height: 24px;
+  overflow: hidden;
+}
+
+.ant-pro-table-column-setting-overlay .wo-operations-col-hint {
+  display: none !important;
+}
+
+/* 固定列分组禁止拖拽把手 */
+.uni-table-container .ant-pro-table-column-setting-list-group > span.ant-pro-table-column-setting-list-title:first-of-type + .ant-tree .ant-tree-draggable-icon,
+.uni-table-container .ant-pro-table-column-setting-list-group > span.ant-pro-table-column-setting-list-title:last-of-type + .ant-tree .ant-tree-draggable-icon {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ===== 两栏布局：scrollY 填高（禁止 overflow:hidden / overflow-y:auto 第二控制面） ===== */
+.two-column-layout-content > .uni-table-container.uni-table-scroll-y-mode {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  height: 100% !important;
+
+  > div,
+  .ant-pro-table,
+  .ant-pro-table-container,
+  .ant-table-wrapper,
+  .ant-spin-nested-loading,
+  .ant-spin-container,
+  .ant-table,
+  .ant-table-container {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    height: 100% !important;
+  }
+
+  .ant-pro-table-list-toolbar,
+  .ant-table-header {
+    flex-shrink: 0 !important;
+  }
+
+  .ant-table-body {
+    flex: 1 !important;
+    min-height: 0 !important;
+  }
+}
+
+/* 两栏 + natural-height：不拉伸填满列高（复用上方 natural 纵滚关闭规则） */
+.two-column-layout-content > .uni-table-container.uni-table-natural-height {
+  height: auto !important;
+  flex: 0 1 auto !important;
+
+  > div,
+  .ant-pro-table,
+  .ant-pro-table-container,
+  .ant-table-wrapper,
+  .ant-spin-nested-loading,
+  .ant-spin-container,
+  .ant-table,
+  .ant-table-container {
+    height: auto !important;
+    flex: 0 1 auto !important;
+  }
+}
+
+/* UniTable 横滚（global 不再强制 overflow-x） */
+.uni-table-container .ant-table-wrapper .ant-table-body,
+.uni-table-container .ant-table-wrapper .ant-table-content {
+  overflow-x: auto;
+}
+
+/* ===== UniTableDetail：与列表同一 scroll 契约（natural、禁 stable gutter） ===== */
+.uni-table-detail .uni-table-detail-scroll {
+  width: 100%;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+
+.uni-table-detail .ant-table-wrapper .ant-table-body,
+.uni-table-detail .ant-table-wrapper .ant-table-content {
+  overflow-y: hidden !important;
+  max-height: none !important;
+  scrollbar-gutter: auto !important;
+}
+
+.uni-table-detail .uni-table-detail-scroll:has(.ant-table-content) .ant-table-header table,
+.uni-table-detail .uni-table-detail-scroll:has(.ant-table-content) .ant-table-body table {
+  table-layout: fixed;
+}
+
+.uni-table-detail .ant-table-tbody > tr.ant-table-measure-row {
+  height: 0 !important;
+  line-height: 0 !important;
+  visibility: collapse;
+}
+
+.uni-table-detail .ant-table-tbody > tr.ant-table-measure-row > td {
+  padding: 0 !important;
+  border: none !important;
+  height: 0 !important;
+  line-height: 0 !important;
+}

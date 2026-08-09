@@ -1022,7 +1022,6 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           listRowsRef.current = next;
           return { data, success: true, total };
         }}
-        scroll={{ x: 1500 }}
       />
 
       <FormModalTemplate

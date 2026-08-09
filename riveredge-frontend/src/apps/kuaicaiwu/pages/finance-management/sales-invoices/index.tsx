@@ -7,7 +7,7 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Space, Dropdown, Tag, Alert, Spin, Table, Empty, Form } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { CheckCircleOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -58,7 +58,7 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
-type PullPreviewKind = 'sales_order' | 'sales_delivery';
+type PullPreviewKind = 'sales_order' | 'sales_delivery' | 'receivable';
 
 const TAX_RATE_OPTIONS = [
   { label: '13%', value: 13 },
@@ -92,6 +92,7 @@ const SalesInvoicesPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
   const invoiceTypeOptions = useMemo(() => getChineseInvoiceTypeOptions(t), [t]);
   const reviewStatusEnum = useMemo(
@@ -116,10 +117,12 @@ const SalesInvoicesPage: React.FC = () => {
   const [pullForm] = Form.useForm();
   const pullFromSalesOrderCloseRef = useRef<(() => void) | null>(null);
   const pullFromSalesDeliveryCloseRef = useRef<(() => void) | null>(null);
+  const pullFromReceivableCloseRef = useRef<(() => void) | null>(null);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const { message: messageApi } = App.useApp();
   const pullFromSalesOrderAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_sales_order');
   const pullFromSalesDeliveryAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_sales_delivery');
+  const pullFromReceivableAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_receivable');
   const salesInvoicePerms = useResourcePermissions(SALES_INVOICE_RESOURCE);
 
   useEffect(() => {
@@ -176,7 +179,9 @@ const SalesInvoicesPage: React.FC = () => {
       const data =
         kind === 'sales_order'
           ? await salesInvoiceService.previewPullFromSalesOrder(sourceId)
-          : await salesInvoiceService.previewPullFromSalesDelivery(sourceId);
+          : kind === 'sales_delivery'
+            ? await salesInvoiceService.previewPullFromSalesDelivery(sourceId)
+            : await salesInvoiceService.previewPullFromReceivable(sourceId);
       setPullPreviewData(data);
     } catch (e: any) {
       messageApi.error(
@@ -271,6 +276,41 @@ const SalesInvoicesPage: React.FC = () => {
   });
   pullFromSalesDeliveryCloseRef.current = pullFromSalesDeliveryQuery.closeModal;
 
+  const pullFromReceivableQuery = useUniPullQuery<SalesInvoicePullCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullSalesInvoiceSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const res = await salesInvoiceService.listReceivablePullCandidates({
+          skip: 0,
+          limit: 200,
+          keyword: keyword.trim() || undefined,
+        });
+        const rows = res.data || [];
+        const filtered = filterByPullScope(rows, scope, isPullSalesInvoiceSelectable);
+        return paginatePullRows(filtered, page, pageSize);
+      } catch (e: any) {
+        messageApi.error(
+          e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
+        );
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      if (!selected?.id) {
+        messageApi.warning(t(`${P}.selectSource`, { label: pullFromReceivableAction.sourceLabel }));
+        return;
+      }
+      pullFromReceivableCloseRef.current?.();
+      await openPullPreview('receivable', selected.id);
+    },
+  });
+  pullFromReceivableCloseRef.current = pullFromReceivableQuery.closeModal;
+
   const handlePullCreateSubmit = async (values: any) => {
     if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) {
       messageApi.warning(t(`${P}.pullPreviewIncomplete`));
@@ -298,7 +338,9 @@ const SalesInvoicesPage: React.FC = () => {
     const sourceLabel =
       pullPreviewKind === 'sales_order'
         ? pullFromSalesOrderAction.sourceLabel
-        : pullFromSalesDeliveryAction.sourceLabel;
+        : pullPreviewKind === 'sales_delivery'
+          ? pullFromSalesDeliveryAction.sourceLabel
+          : pullFromReceivableAction.sourceLabel;
     setPullSubmitting(true);
     try {
       await apiRequest('/apps/kuaicaiwu/sales-invoices', {
@@ -308,6 +350,8 @@ const SalesInvoicesPage: React.FC = () => {
           customer_name: pullPreviewData.customer_name || '',
           sales_order_id: pullPreviewData.sales_order_id ?? undefined,
           sales_order_code: pullPreviewData.sales_order_code ?? pullPreviewData.source_code,
+          receivable_id: pullPreviewKind === 'receivable' ? pullPreviewSourceId : pullPreviewData.receivable_id,
+          receivable_code: pullPreviewKind === 'receivable' ? pullPreviewData.source_code : pullPreviewData.receivable_code,
           source_type: pullPreviewKind,
           source_id: pullPreviewSourceId,
           invoice_number: String(values.invoice_number ?? '').trim(),
@@ -552,8 +596,6 @@ const SalesInvoicesPage: React.FC = () => {
         title: t('app.kuaicaiwu.common.lifecycle'),
         dataIndex: 'lifecycle_stage',
         fixed: 'right',
-        align: 'left',
-        width: 130,
         hideInSearch: true,
         render: (_, record) => {
           const lc = getChineseInvoiceLifecycle(record as unknown as Record<string, unknown>, t);
@@ -643,7 +685,9 @@ const SalesInvoicesPage: React.FC = () => {
   const pullPreviewTargetLabel =
     pullPreviewKind === 'sales_delivery'
       ? pullFromSalesDeliveryAction.targetLabel
-      : pullFromSalesOrderAction.targetLabel;
+      : pullPreviewKind === 'receivable'
+        ? pullFromReceivableAction.targetLabel
+        : pullFromSalesOrderAction.targetLabel;
 
   const pullFormInitialValues = useMemo(() => {
     if (!pullPreviewData || !pullPreviewKind) return undefined;
@@ -657,7 +701,9 @@ const SalesInvoicesPage: React.FC = () => {
     const sourceLabel =
       pullPreviewKind === 'sales_order'
         ? pullFromSalesOrderAction.sourceLabel
-        : pullFromSalesDeliveryAction.sourceLabel;
+        : pullPreviewKind === 'sales_delivery'
+          ? pullFromSalesDeliveryAction.sourceLabel
+          : pullFromReceivableAction.sourceLabel;
     return {
       source_code: pullPreviewData.source_code,
       customer_name: pullPreviewData.customer_name,
@@ -672,8 +718,16 @@ const SalesInvoicesPage: React.FC = () => {
     pullPreviewKind,
     pullFromSalesOrderAction.sourceLabel,
     pullFromSalesDeliveryAction.sourceLabel,
+    pullFromReceivableAction.sourceLabel,
     t,
   ]);
+
+  useEffect(() => {
+    const pullReceivableId = (location.state as { pullReceivableId?: number } | null)?.pullReceivableId;
+    if (!pullReceivableId) return;
+    void openPullPreview('receivable', pullReceivableId);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.pathname, navigate]);
 
   useEffect(() => {
     if (!pullPreviewOpen || pullPreviewLoading || !pullFormInitialValues) return;
@@ -714,7 +768,6 @@ const SalesInvoicesPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices"
-        scroll={{ x: 1800 }}
         showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton={false}
@@ -760,6 +813,13 @@ const SalesInvoicesPage: React.FC = () => {
                 actionKey: 'sales_invoice.pull_from_sales_delivery',
                 onClick: () => {
                   pullFromSalesDeliveryQuery.openModal();
+                },
+              },
+              {
+                key: 'pull-from-receivable',
+                actionKey: 'sales_invoice.pull_from_receivable',
+                onClick: () => {
+                  pullFromReceivableQuery.openModal();
                 },
               },
             ])}
@@ -849,11 +909,45 @@ const SalesInvoicesPage: React.FC = () => {
         okText={t('components.uniLifecycle.nextStep')}
       />
 
+      <UniPullQueryModal<SalesInvoicePullCandidate>
+        open={pullFromReceivableQuery.open}
+        title={pullFromReceivableAction.label}
+        onCancel={pullFromReceivableQuery.closeModal}
+        onOk={() => {
+          void pullFromReceivableQuery.handleConfirm();
+        }}
+        rowKey="id"
+        columns={pullTableColumns}
+        dataSource={pullFromReceivableQuery.dataSource}
+        loading={pullFromReceivableQuery.loading}
+        confirmLoading={pullFromReceivableQuery.confirmLoading}
+        selectionType={pullFromReceivableQuery.selectionType}
+        selectedRowKeys={pullFromReceivableQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromReceivableQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromReceivableQuery.isRowDisabled}
+        searchDraft={pullFromReceivableQuery.searchDraft}
+        onSearchDraftChange={pullFromReceivableQuery.setSearchDraft}
+        onSearchApply={pullFromReceivableQuery.handleSearchApply}
+        onSearchClear={pullFromReceivableQuery.handleSearchClear}
+        appliedKeyword={pullFromReceivableQuery.appliedKeyword}
+        searchPlaceholder={t(`${P}.pull.searchPlaceholder`)}
+        page={pullFromReceivableQuery.page}
+        pageSize={pullFromReceivableQuery.pageSize}
+        total={pullFromReceivableQuery.total}
+        onPageChange={pullFromReceivableQuery.handlePageChange}
+        scopeOptions={pullFromReceivableQuery.scopeOptions}
+        scope={pullFromReceivableQuery.scope}
+        onScopeChange={pullFromReceivableQuery.handleScopeChange}
+        okText={t('components.uniLifecycle.nextStep')}
+      />
+
       <Modal
         title={
           pullPreviewKind === 'sales_delivery'
             ? pullFromSalesDeliveryAction.label
-            : pullFromSalesOrderAction.label
+            : pullPreviewKind === 'receivable'
+              ? pullFromReceivableAction.label
+              : pullFromSalesOrderAction.label
         }
         open={pullPreviewOpen}
         destroyOnClose

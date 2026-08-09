@@ -142,12 +142,10 @@ const DocumentTimingPage: React.FC = () => {
       render: (_, record) => record.total_duration_hours?.toFixed(2) || '-',
     },
     {
-      title: t('app.kuaireport.analysis.col.lifecycle', { defaultValue: '当前阶段' }),
+      title: t('app.kuaireport.analysis.col.lifecycle', { defaultValue: '执行状态' }),
       dataIndex: 'lifecycle_stage',
       key: 'lifecycle',
-      width: 200,
       fixed: 'right',
-      align: 'left',
       search: false,
       render: (_, record) => (
         <UniLifecycle {...getDocumentTimingLifecycle(record)} showCircleTooltip={false} />
@@ -186,9 +184,7 @@ const DocumentTimingPage: React.FC = () => {
       <UniTable
         headerTitle={t('app.kuaireport.analysis.timing.title', { defaultValue: '单据节点耗时' })}
         actionRef={actionRef}
-        columnPersistenceId="apps.kuaizhizao.pages.analysis-center.document-timing"
-        scroll={{ x: 'max-content' }}
-        rowKey={(r) => `${r.document_type}-${r.document_id}-${r.document_code}`}
+        columnPersistenceId="apps.kuaizhizao.pages.analysis-center.document-timing"rowKey={(r) => `${r.document_type}-${r.document_id}-${r.document_code}`}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         toolBarRender={() => {
           const actions: React.ReactNode[] = [];
@@ -300,7 +296,6 @@ const DocumentTimingPage: React.FC = () => {
                       rowKey={(r) => String(r.id ?? r.node_code ?? Math.random())}
                       pagination={false}
                       size="small"
-                      scroll={{ x: 'max-content' }}
                     />
                   </div>
                 ) : (

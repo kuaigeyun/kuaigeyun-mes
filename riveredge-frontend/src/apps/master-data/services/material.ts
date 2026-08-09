@@ -19,6 +19,8 @@ import type {
   MaterialBulkTrackingResult,
   MaterialBulkVariantPayload,
   MaterialBulkDefaultsPatchPayload,
+  MaterialBulkInspectionPatchPayload,
+  MaterialBulkInspectionPatchResult,
   MaterialGenerateVariantsPayload,
   MaterialGenerateVariantsResult,
   MaterialMaterializeVariantPayload,
@@ -472,6 +474,36 @@ export const materialApi = {
     if (data.defaultSalePrice !== undefined) body.defaultSalePrice = data.defaultSalePrice;
     if (data.defaultLocation !== undefined) body.defaultLocation = data.defaultLocation;
     return api.post('/apps/master-data/materials/batch-defaults', body);
+  },
+
+  /**
+   * 批量更新物料质检选项（分场景策略 / 超报）
+   */
+  bulkPatchInspection: async (
+    data: MaterialBulkInspectionPatchPayload,
+  ): Promise<MaterialBulkInspectionPatchResult> => {
+    return api.post('/apps/master-data/materials/batch-inspection', {
+      items: data.items.map((it) => ({
+        materialUuid: it.materialUuid,
+        ...(it.inspectionStages
+          ? {
+              inspectionStages: Object.fromEntries(
+                Object.entries(it.inspectionStages).map(([k, v]) => [
+                  k,
+                  v
+                    ? {
+                        mode: v.mode,
+                        planId: v.mode === 'plan' ? v.planId ?? null : null,
+                      }
+                    : undefined,
+                ]),
+              ),
+            }
+          : {}),
+        ...(it.overReportMode !== undefined ? { overReportMode: it.overReportMode } : {}),
+        ...(it.overReportValue !== undefined ? { overReportValue: it.overReportValue } : {}),
+      })),
+    });
   },
 
   listVariants: async (materialUuid: string): Promise<Material[]> =>

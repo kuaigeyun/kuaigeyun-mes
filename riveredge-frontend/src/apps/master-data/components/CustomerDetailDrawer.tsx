@@ -11,6 +11,7 @@ import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni
 import { getDictionaryLabelMapSync } from '../../../services/dataDictionaryCache';
 import { customerApi, getDictionaryOptions } from '../services/supply-chain';
 import type { Customer } from '../types/supply-chain';
+import { resolveDictionaryDisplayLabel } from '../../../utils/loadImportDictionaryValues';
 import {
   partnerEnterpriseTypeLabel,
   partnerInvoiceTypeLabel,
@@ -75,10 +76,8 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
   }, []);
 
   const dictLabel = useCallback(
-    (dictCode: string, value?: string) => {
-      if (value == null || value === '') return '—';
-      return dictLabelMaps[dictCode]?.[value] ?? '—';
-    },
+    (dictCode: string, value?: string) =>
+      resolveDictionaryDisplayLabel(dictLabelMaps[dictCode], value),
     [dictLabelMaps],
   );
 

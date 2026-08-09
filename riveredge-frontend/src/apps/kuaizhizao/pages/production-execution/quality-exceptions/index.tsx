@@ -14,7 +14,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { ActionType, ProColumns, ProFormTextArea, ProFormDatePicker } from '@ant-design/pro-components';
 import { App, Button, Divider, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
@@ -314,25 +314,20 @@ const QualityExceptionsPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 250,
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
-              {t('common.detail')}
-            </Button>,
-            ...buildQualityExceptionActionButtons({
-              record,
-              t,
-              onAction: (action) => openHandleModal(record, action),
-              onStart8D: () => { void handleStart8D(record); },
-              canCreate8D,
-              keyPrefix: `quality-exception-actions-${record.id ?? 'row'}`,
-            }),
-          ],
-          { keyPrefix: `quality-exception-actions-${record.id ?? 'row'}` },
-        ),
+      render: (_, record) => [
+        <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+          {t('common.detail')}
+        </Button>,
+        ...buildQualityExceptionActionButtons({
+          record,
+          t,
+          onAction: (action) => openHandleModal(record, action),
+          onStart8D: () => { void handleStart8D(record); },
+          canCreate8D,
+          keyPrefix: `quality-exception-actions-${record.id ?? 'row'}`,
+        }),
+      ],
     },
   ], SALES_DOC_LIST_FIELD_RANK), [qualityStatusValueEnum, t, canCreate8D, handleStart8D]);
 
@@ -415,7 +410,6 @@ const QualityExceptionsPage: React.FC = () => {
         skipFuzzyPinyinClientFilter
         pinnedTabsField="status"
         pinnedTabsValueEnum={qualityStatusValueEnum}
-        scroll={{ x: 1680 }}
       />
 
       <DetailDrawerTemplate

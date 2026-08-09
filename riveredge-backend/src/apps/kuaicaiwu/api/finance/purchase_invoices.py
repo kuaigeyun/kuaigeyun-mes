@@ -14,6 +14,7 @@ from apps.kuaicaiwu.schemas.finance import (
 )
 from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
 from apps.kuaicaiwu.services.purchase_invoice_pull_service import PurchaseInvoicePullService
+from apps.kuaicaiwu.models.payable import Payable
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
@@ -77,6 +78,20 @@ async def create_purchase_invoice(
                             ),
                         }
                     )
+                if str(data.source_type or "").strip() == "payable":
+                    payable_id = pull_preview.get("payable_id")
+                    payable_code = pull_preview.get("payable_code")
+                    if payable_id:
+                        data = data.model_copy(
+                            update={
+                                "payable_id": int(payable_id),
+                                "payable_code": str(payable_code or data.payable_code or ""),
+                                "supplier_id": int(pull_preview.get("supplier_id") or data.supplier_id),
+                                "supplier_name": str(
+                                    pull_preview.get("supplier_name") or data.supplier_name or ""
+                                ),
+                            }
+                        )
 
         invoice = await invoice_service.create_purchase_invoice(
             tenant_id,
@@ -94,6 +109,14 @@ async def create_purchase_invoice(
                 invoice_code=str(invoice.invoice_code),
                 created_by=current_user.id,
             )
+        if pull_preview and str(data.source_type or "").strip() == "payable" and data.payable_id:
+            payable_update: dict = {
+                "invoice_received": True,
+                "updated_by": current_user.id,
+            }
+            if data.invoice_number:
+                payable_update["invoice_number"] = data.invoice_number
+            await Payable.filter(tenant_id=tenant_id, id=int(data.payable_id)).update(**payable_update)
         return invoice
     except ValidationError as e:
         raise _http_exception_with_trace(422, str(e), "/purchase-invoices", tenant_id) from e
@@ -220,6 +243,40 @@ async def preview_pull_purchase_invoice_from_purchase_receipt(
     return await purchase_invoice_pull_service.preview_pull_from_purchase_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
+    )
+
+
+@router.get(
+    "/pull-candidates/payables",
+    summary="List payable pull candidates for purchase invoice",
+)
+async def list_purchase_invoice_payable_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await purchase_invoice_pull_service.list_payable_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/from-payable/{payable_id}/pull-preview",
+    summary="Preview pull purchase invoice from payable",
+)
+async def preview_pull_purchase_invoice_from_payable(
+    payable_id: int = Path(..., description="应付单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await purchase_invoice_pull_service.preview_pull_from_payable(
+        tenant_id=tenant_id,
+        payable_id=payable_id,
     )
 
 

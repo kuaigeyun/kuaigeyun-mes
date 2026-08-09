@@ -1,4 +1,4 @@
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 设备故障维修管理页面
  *
@@ -86,10 +86,6 @@ const FAULT_STATUS_COLORS: Record<string, string> = {
   '已修复': 'success',
   '已关闭': 'default',
 };
-
-function renderFaultRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, { keyPrefix });
-}
 
 interface EquipmentFault {
   id?: number;
@@ -713,7 +709,6 @@ const EquipmentFaultsPage: React.FC = () => {
       title: t(`${P}.col.lifecycle`),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
-      align: 'left',
       hideInSearch: true,
       render: (_, record) => (
         <ListUniLifecycleCell lifecycle={getEquipmentFaultLifecycle(record as Record<string, unknown>, t)} />
@@ -722,11 +717,9 @@ const EquipmentFaultsPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      width: 200,
       fixed: 'right',
       hideInSearch: true,
-      render: (_, record) =>
-        renderFaultRowActions(renderFaultRowNodes(record), `flt-${record.uuid ?? 'row'}`),
+      render: (_, record) => renderFaultRowNodes(record),
     },
   ], SALES_DOC_LIST_FIELD_RANK), [t, faultStatusValueEnum]);
 
@@ -776,7 +769,6 @@ const EquipmentFaultsPage: React.FC = () => {
           showCreateButton={perms.canCreate}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
-          scroll={{ x: 1900 }}
         />
       </ListPageTemplate>
 

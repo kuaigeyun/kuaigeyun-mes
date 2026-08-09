@@ -495,7 +495,8 @@ def _step_conduct_key(item: Dict[str, Any], idx: int) -> str:
 def _is_value_filled(value: Any, value_type: str) -> bool:
     vt = normalize_value_type(value_type)
     if vt == "multi_select":
-        return isinstance(value, list) and len(value) > 0
+        # 缺陷多选：未选/空选即「无缺陷」，视为已作答（合格）
+        return value is None or isinstance(value, list)
     if vt == "boolean":
         return value is not None and value != ""
     if vt == "text":
@@ -507,6 +508,13 @@ def judge_step_value(value_type: str, value_spec: Dict[str, Any], value: Any) ->
     """自动判定 pass/fail；无法判定时返回 None（需人工）。"""
     vt = normalize_value_type(value_type)
     spec = normalize_value_spec(vt, value_spec)
+
+    if vt == "multi_select":
+        selected = {str(v) for v in (value if isinstance(value, list) else [])}
+        defect_values = {str(o.get("value")) for o in (spec.get("options") or []) if o.get("defect")}
+        if spec.get("pass_rule") == "no_defect_selected":
+            return "fail" if selected & defect_values else "pass"
+        return "pass"
 
     if not _is_value_filled(value, vt):
         return None
@@ -521,13 +529,6 @@ def judge_step_value(value_type: str, value_spec: Dict[str, Any], value: Any) ->
             if str(opt.get("value")) == selected:
                 return str(opt.get("result") or "pass")
         return None
-
-    if vt == "multi_select":
-        selected = {str(v) for v in (value if isinstance(value, list) else [])}
-        defect_values = {str(o.get("value")) for o in (spec.get("options") or []) if o.get("defect")}
-        if spec.get("pass_rule") == "no_defect_selected":
-            return "fail" if selected & defect_values else "pass"
-        return "pass"
 
     if vt == "numeric":
         try:

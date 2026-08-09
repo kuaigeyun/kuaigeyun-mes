@@ -65,6 +65,7 @@ import {
   IMPORT_YES_NO_OPTIONS,
   importDropdownLabelsFromCodeLabelMap,
   parseImportCodedCell,
+  resolveDictionaryDisplayLabel,
 } from '../../../../../utils/loadImportDictionaryValues';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
@@ -285,10 +286,8 @@ const CustomersPage: React.FC = () => {
     [salesmanOptions],
   );
 
-  const dictLabel = (dictCode: string, value?: string) => {
-    if (value == null || value === '') return '—';
-    return dictLabelMaps[dictCode]?.[value] ?? '—';
-  };
+  const dictLabel = (dictCode: string, value?: string) =>
+    resolveDictionaryDisplayLabel(dictLabelMaps[dictCode], value);
 
   /**
    * 处理新建客户

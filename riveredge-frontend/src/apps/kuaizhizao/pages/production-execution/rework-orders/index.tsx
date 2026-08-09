@@ -9,7 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
@@ -38,7 +38,11 @@ import { getReworkOrderLifecycle, buildReworkOrderLifecycleValueEnum, resolveRew
 import { resolveReworkTypeDisplay } from '../../../utils/reworkOrderType';
 import {formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  formDateFormItemProps,
+  formDateRangeFormItemProps,
+  toApiDateTimeString,
+} from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -491,8 +495,9 @@ const ReworkOrdersPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.reworkOrder.colLifecycle'),
+      // 搜索仍绑 status；key 声明列身份，UniTable 据此给出与审核状态列一致的宽度与对齐
+      key: 'lifecycle',
       dataIndex: 'status',
-      width: 140,
       fixed: 'right',
       hideInSearch: false,
       valueType: 'select',
@@ -518,83 +523,78 @@ const ReworkOrdersPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 220,
       fixed: 'right',
-      render: (_text, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
-              {t('common.detail')}
-            </Button>,
-            reworkCapabilityAllowed(record, 'release') ? (
-              <Button
-                key="release"
-                {...rowActionKind('release')}
-                onClick={() => void handleReleaseRework(record)}
-              >
-                {t('app.kuaizhizao.reworkOrder.actionRelease')}
-              </Button>
-            ) : null,
-            reworkCapabilityAllowed(record, 'execute') ? (
-              <Button
-                {...rowActionKind('execute')}
-                key="report"
-                icon={<FormOutlined />}
-                onClick={() => void handleOpenReport(record)}
-              >
-                {t('app.kuaizhizao.reworkOrder.report')}
-              </Button>
-            ) : null,
-            reworkCapabilityAllowed(record, 'advance_next') ? (
-              <Button
-                key="advance"
-                {...rowActionKind('execute')}
-                onClick={() => void handleAdvanceNext(record)}
-              >
-                {t('app.kuaizhizao.reworkOrder.actionAdvanceNext')}
-              </Button>
-            ) : null,
-            reworkCapabilityAllowed(record, 'request_complete') ? (
-              <Button
-                key="complete"
-                {...rowActionKind('complete')}
-                onClick={() => void handleRequestComplete(record)}
-              >
-                {t('app.kuaizhizao.reworkOrder.actionRequestComplete')}
-              </Button>
-            ) : null,
-            reworkCapabilityAllowed(record, 'quality_release') ? (
-              <Button
-                key="quality_release"
-                {...rowActionKind('audit')}
-                onClick={() => void handleQualityRelease(record)}
-              >
-                {t('app.kuaizhizao.reworkOrder.actionQualityRelease')}
-              </Button>
-            ) : null,
-            reworkCapabilityAllowed(record, 'close') ? (
-              <Button key="close" {...rowActionKind('close')} onClick={() => void handleCloseRework(record)}>
-                {t('app.kuaizhizao.reworkOrder.actionClose')}
-              </Button>
-            ) : null,
-            reworkCapabilityAllowed(record, 'update') ? (
-              <Button
-                key="edit"
-                {...rowActionKind('update')}
-                icon={<EditOutlined />}
-                onClick={() => handleEdit(record)}
-              >
-                {t('common.edit')}
-              </Button>
-            ) : null,
-            reworkCapabilityAllowed(record, 'delete') ? (
-              <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDelete(record)}>
-                {t('common.delete')}
-              </Button>
-            ) : null,
-          ],
-          { keyPrefix: `rework-order-actions-${record.id ?? 'row'}` },
-        ),
+      render: (_text, record) => [
+        <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+          {t('common.detail')}
+        </Button>,
+        reworkCapabilityAllowed(record, 'release') ? (
+          <Button
+            key="release"
+            {...rowActionKind('release')}
+            onClick={() => void handleReleaseRework(record)}
+          >
+            {t('app.kuaizhizao.reworkOrder.actionRelease')}
+          </Button>
+        ) : null,
+        reworkCapabilityAllowed(record, 'execute') ? (
+          <Button
+            {...rowActionKind('execute')}
+            key="report"
+            icon={<FormOutlined />}
+            onClick={() => void handleOpenReport(record)}
+          >
+            {t('app.kuaizhizao.reworkOrder.report')}
+          </Button>
+        ) : null,
+        reworkCapabilityAllowed(record, 'advance_next') ? (
+          <Button
+            key="advance"
+            {...rowActionKind('execute')}
+            onClick={() => void handleAdvanceNext(record)}
+          >
+            {t('app.kuaizhizao.reworkOrder.actionAdvanceNext')}
+          </Button>
+        ) : null,
+        reworkCapabilityAllowed(record, 'request_complete') ? (
+          <Button
+            key="complete"
+            {...rowActionKind('complete')}
+            onClick={() => void handleRequestComplete(record)}
+          >
+            {t('app.kuaizhizao.reworkOrder.actionRequestComplete')}
+          </Button>
+        ) : null,
+        reworkCapabilityAllowed(record, 'quality_release') ? (
+          <Button
+            key="quality_release"
+            {...rowActionKind('audit')}
+            onClick={() => void handleQualityRelease(record)}
+          >
+            {t('app.kuaizhizao.reworkOrder.actionQualityRelease')}
+          </Button>
+        ) : null,
+        reworkCapabilityAllowed(record, 'close') ? (
+          <Button key="close" {...rowActionKind('close')} onClick={() => void handleCloseRework(record)}>
+            {t('app.kuaizhizao.reworkOrder.actionClose')}
+          </Button>
+        ) : null,
+        reworkCapabilityAllowed(record, 'update') ? (
+          <Button
+            key="edit"
+            {...rowActionKind('update')}
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
+            {t('common.edit')}
+          </Button>
+        ) : null,
+        reworkCapabilityAllowed(record, 'delete') ? (
+          <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDelete(record)}>
+            {t('common.delete')}
+          </Button>
+        ) : null,
+      ],
     },
   ], SALES_DOC_LIST_FIELD_RANK);
   }, [reworkListCustomFields, generateReworkCustomFieldColumns, reworkOrderLifecycleValueEnum, reworkTypeOptions, t]);
@@ -715,9 +715,7 @@ const ReworkOrdersPage: React.FC = () => {
         qualified_quantity: Number(values.qualified_quantity),
         unqualified_quantity: Number(values.unqualified_quantity ?? 0),
         work_hours: Number(values.work_hours ?? 0),
-        reported_at: values.reported_at
-          ? values.reported_at.toDate().toISOString()
-          : new Date().toISOString(),
+        reported_at: toApiDateTimeString(values.reported_at) ?? toApiDateTimeString(dayjs()),
         remarks: values.remarks || undefined,
       });
       messageApi.success(t('app.kuaizhizao.reworkOrder.reportSuccess'));
@@ -965,12 +963,8 @@ const ReworkOrdersPage: React.FC = () => {
         quantity: values.quantity != null ? Number(values.quantity) : undefined,
         start_work_order_operation_id: values.start_work_order_operation_id || undefined,
         predefined_operation_ids: values.predefined_operation_ids || undefined,
-        planned_start_date: values.planned_start_date
-          ? values.planned_start_date.toDate().toISOString()
-          : undefined,
-        planned_end_date: values.planned_end_date
-          ? values.planned_end_date.toDate().toISOString()
-          : undefined,
+        planned_start_date: toApiDateTimeString(values.planned_start_date),
+        planned_end_date: toApiDateTimeString(values.planned_end_date),
         remarks: values.remarks || undefined,
       };
       const created = await reworkOrderApi.createFromWorkOrder(String(pullWorkOrderDetail.id), payload);
@@ -2038,6 +2032,7 @@ const ReworkOrdersPage: React.FC = () => {
               name="reported_at"
               label={t('app.kuaizhizao.reworkOrder.formReportedAt')}
               rules={[{ required: true, message: t('app.kuaizhizao.reworkOrder.formReportedAtRequired') }]}
+              {...formDateFormItemProps}
               fieldProps={{ showTime: true, style: { width: '100%' } }}
             />
             <ProFormTextArea name="remarks" label={t('app.kuaizhizao.workReporting.colRemarks')} fieldProps={{ rows: 2 }} />

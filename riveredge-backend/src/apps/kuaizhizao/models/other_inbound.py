@@ -1,7 +1,7 @@
 """
 其他入库单模型
 
-提供其他入库单数据模型定义，用于盘盈/样品/报废/其他等杂项入库。
+提供其他入库单数据模型定义，用于盘盈/调拨/样品/报废/其他等杂项入库。
 
 Author: RiverEdge Team
 Date: 2026-02-19
@@ -15,13 +15,13 @@ class OtherInbound(BaseModel):
     """
     其他入库单
 
-    用于记录无上游单据的杂项入库，通过 reason_type 区分（盘盈/样品/报废/其他）
+    用于记录无上游单据的杂项入库，通过 reason_type 区分（盘盈/调拨/样品/报废/其他）
     """
     tenant_id = fields.IntField(description="租户ID")
     inbound_code = fields.CharField(max_length=50, db_index=True, description="入库单编码")  # 租户内未删除唯一，见迁移 462
 
     # 入库原因
-    reason_type = fields.CharField(max_length=20, description="原因类型：盘盈/样品/报废/其他")
+    reason_type = fields.CharField(max_length=20, description="原因类型：盘盈/调拨/样品/报废/其他")
     reason_desc = fields.TextField(null=True, description="原因说明")
 
     # 入库信息

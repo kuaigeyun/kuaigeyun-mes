@@ -585,4 +585,27 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "紧急", "value": "urgent", "description": "紧急优先级", "sort_order": 4},
         ],
     },
+    {
+        "code": "INBOUND_REASON_TYPE",
+        "name": "其他入库原因类型",
+        "description": "其他入库单原因类型；可在字典项中新增如不良品、不合格品等",
+        "items": [
+            {"label": "盘盈", "value": "盘盈", "description": "盘点盘盈入库", "sort_order": 1},
+            {"label": "调拨", "value": "调拨", "description": "调拨入库", "sort_order": 2},
+            {"label": "样品", "value": "样品", "description": "样品入库", "sort_order": 3},
+            {"label": "报废", "value": "报废", "description": "报废相关入库", "sort_order": 4},
+            {"label": "其他", "value": "其他", "description": "其他原因入库", "sort_order": 99},
+        ],
+    },
+    {
+        "code": "OUTBOUND_REASON_TYPE",
+        "name": "其他出库原因类型",
+        "description": "其他出库单原因类型；可在字典项中扩展维护",
+        "items": [
+            {"label": "盘亏", "value": "盘亏", "description": "盘点盘亏出库", "sort_order": 1},
+            {"label": "样品", "value": "样品", "description": "样品出库", "sort_order": 2},
+            {"label": "报废", "value": "报废", "description": "报废出库", "sort_order": 3},
+            {"label": "其他", "value": "其他", "description": "其他原因出库", "sort_order": 99},
+        ],
+    },
 ]

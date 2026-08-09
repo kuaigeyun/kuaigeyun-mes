@@ -91,6 +91,7 @@ async def list_purchase_orders(
         None,
         description="加载目标：purchase_order_change；与 pullable_only 组合使用",
     ),
+    include_items: bool = Query(False, description="是否附带订单明细（明细表格视图）"),
     current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -124,6 +125,7 @@ async def list_purchase_orders(
         order_by=safe_order_by,
         pullable_only=pullable_only,
         pull_target=pull_target,
+        include_items=include_items,
     )
 
     return await PurchaseService().list_purchase_orders(tenant_id, params, current_user=current_user)

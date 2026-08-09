@@ -1,1 +1,0 @@
-import{j as r}from"./vendor-BMaGbjOO.js";import{A as i}from"./AuditPhaseBadge-CYdgjSr6.js";import"./statusBadges-Bu8jW2Cu.js";import"./clearSessionQueries-DKxl7gZm.js";function e({record:t}){return r.jsx(i,{record:t,variant:"column"})}export{e as ListAuditPhaseCell};

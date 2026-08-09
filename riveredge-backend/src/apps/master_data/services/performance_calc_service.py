@@ -146,39 +146,67 @@ class PerformanceCalcService:
             return existing
 
         config = await EmployeePerformanceConfigService.get_by_employee(tenant_id, employee_id)
-        calc_mode = config.calc_mode if config else "time"
+        calc_mode = ((config.calc_mode if config else None) or "time").strip().lower()
+        piece_rate_mode = ((config.piece_rate_mode if config else None) or "operation").strip().lower()
         default_piece_rate = config.default_piece_rate if config else None
         base_salary = config.base_salary if config else None
         as_of = PerformanceCalcService._period_as_of_date(period)
 
-        hourly_rate = await PerformanceCalcService._resolve_hourly_rate(
-            tenant_id,
-            employee_id,
-            period,
-            config_hourly=config.hourly_rate if config else None,
-        )
+        # 已维护默认计件单价且本期有合格产量，但模式仍为「计时」：按混合计薪。
+        # 否则常见误配会导致总件数>0 而计件金额恒为 0。
+        if (
+            calc_mode == "time"
+            and default_piece_rate is not None
+            and (total_pieces or Decimal("0")) > 0
+        ):
+            calc_mode = "mixed"
 
-        time_amount = total_hours * hourly_rate
+        time_amount = Decimal("0")
+        if calc_mode in ("time", "mixed"):
+            hourly_rate = await PerformanceCalcService._resolve_hourly_rate(
+                tenant_id,
+                employee_id,
+                period,
+                config_hourly=config.hourly_rate if config else None,
+            )
+            time_amount = total_hours * hourly_rate
+
         piece_amount = Decimal("0")
-
-        if calc_mode in ("piece", "mixed") and records:
-            for r in records:
-                material_id = await PerformanceCalcService._material_id_for_record(tenant_id, r)
-                rate = await PieceRateService.get_rate_for_operation(
-                    tenant_id, r.operation_id, material_id=material_id, as_of_date=as_of,
-                )
-                if rate is None:
-                    rate = default_piece_rate
-                if rate is None:
+        if calc_mode in ("piece", "mixed"):
+            if piece_rate_mode == "default":
+                if default_piece_rate is None:
                     raise ValidationError(
-                        f"员工 {employee_name} 工序 {r.operation_name or r.operation_id} 未配置计件单价"
+                        f"员工 {employee_name} 计件单价来源为默认单价，但未配置默认计件单价"
                     )
-                piece_amount += (r.qualified_quantity or Decimal("0")) * rate
+                piece_amount = (total_pieces or Decimal("0")) * default_piece_rate
+            else:
+                if not records:
+                    if default_piece_rate is None:
+                        raise ValidationError(
+                            f"员工 {employee_name} 无报工明细且未配置默认计件单价，无法计算计件金额"
+                        )
+                    piece_amount = (total_pieces or Decimal("0")) * default_piece_rate
+                else:
+                    for r in records:
+                        material_id = await PerformanceCalcService._material_id_for_record(
+                            tenant_id, r
+                        )
+                        rate = await PieceRateService.get_rate_for_operation(
+                            tenant_id,
+                            r.operation_id,
+                            material_id=material_id,
+                            as_of_date=as_of,
+                        )
+                        if rate is None:
+                            rate = default_piece_rate
+                        if rate is None:
+                            raise ValidationError(
+                                f"员工 {employee_name} 工序 {r.operation_name or r.operation_id} 未配置计件单价"
+                            )
+                        piece_amount += (r.qualified_quantity or Decimal("0")) * rate
 
         total_amount = time_amount + piece_amount
-        if base_salary is not None and calc_mode in ("piece", "mixed"):
-            total_amount = max(total_amount, base_salary)
-        elif base_salary is not None and calc_mode == "time":
+        if base_salary is not None:
             total_amount = max(total_amount, base_salary)
 
         ctx = await KPIEvaluatorService.build_context(
@@ -250,7 +278,8 @@ class PerformanceCalcService:
                 results.append(PerformanceSummaryResponse.model_validate(summary))
             except ValidationError as exc:
                 errors.append(str(exc))
-        if errors and not results:
+        # 任一员工计薪失败须暴露，禁止静默跳过导致列表残留件数为正、金额为 0
+        if errors:
             raise ValidationError("; ".join(errors))
         return results
 

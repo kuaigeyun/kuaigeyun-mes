@@ -9,7 +9,7 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import type { TFunction } from 'i18next';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useNavigate } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -22,10 +22,11 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText,
 import { App, Button, Space, Table, Row, Col, Form as AntForm, InputNumber, Input, Select, Dropdown, Tag, Card, Typography, Spin, Empty, Modal, Switch, Alert, List, Descriptions } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined, EditOutlined, PrinterOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniCapabilityBatchButton, UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -70,6 +71,7 @@ import { listSalesOrders } from '../../../services/sales-order';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import {
   DocumentTrackingTimelineBody,
   useDocumentTracking,
@@ -87,6 +89,7 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
@@ -94,13 +97,32 @@ import { pickImportExampleValue } from '../../../../../utils/loadImportDictionar
 import { batchImport } from '../../../../../utils/batchOperations';
 import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
+import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions';
 import {
   buildDocumentReturnListImportTemplate,
   parseDocumentReturnListImport,
 } from '../../shared/documentReturnListImport';
 
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
+const SALES_RETURN_LIST_PERSISTENCE_ID =
+  'apps.kuaizhizao.pages.sales-management.sales-returns.v2';
 const SALES_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_returns';
+
+type SalesReturnItemRow = SalesReturnItem & {
+  _rowKey: string;
+  return_id: number;
+  return_code?: string;
+  customer_name?: string;
+  sales_delivery_code?: string;
+  sales_order_code?: string;
+  warehouse_name?: string;
+  return_time?: string;
+  status?: string;
+  review_status?: string;
+  lifecycle?: Record<string, unknown>;
+  capabilities?: SalesReturn['capabilities'];
+  audit?: SalesReturn['audit'];
+};
 
 /** 与后端 review_status / status 对齐，供 UniWorkflowActions 识别 */
 const SR_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft'];
@@ -123,6 +145,130 @@ interface PullSalesOrderCandidate {
     push_sales_return?: { allowed?: boolean; reason?: string | null };
   };
 }
+
+interface PullSalesDeliveryCandidate {
+  id: number;
+  delivery_code?: string;
+  customer_name?: string;
+  sales_order_code?: string;
+  status?: string;
+  warehouse_name?: string;
+  delivery_time?: string;
+  updated_at?: string;
+}
+
+type PullPreviewSourceType = 'sales_order' | 'sales_delivery';
+
+type CustomerOutboundBatchOption = {
+  batch_number?: string | null;
+  sales_delivery_id: number;
+  sales_delivery_code: string;
+  sales_delivery_item_id: number;
+  material_id: number;
+  material_code?: string;
+  material_name?: string;
+  returnable_quantity: number;
+};
+
+function pullPreviewLineKey(line: any, sourceType: PullPreviewSourceType): number {
+  if (sourceType === 'sales_delivery') {
+    return Number(line?.sales_delivery_item_id);
+  }
+  return Number(line?.sales_order_item_id);
+}
+
+/** 手工建退货：按客户+物料加载已出库可退批号 */
+const SalesReturnOutboundBatchSelect: React.FC<{
+  customerId?: number;
+  materialId?: number;
+  deliveryItemId?: number;
+  value?: string;
+  onChange?: (value: string | undefined) => void;
+  onPick?: (option: CustomerOutboundBatchOption | null) => void;
+  size?: 'small' | 'middle' | 'large';
+}> = ({ customerId, materialId, deliveryItemId, value, onChange, onPick, size }) => {
+  const { t } = useTranslation();
+  const [options, setOptions] = useState<CustomerOutboundBatchOption[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const cid = Number(customerId);
+    const mid = Number(materialId);
+    if (!Number.isFinite(cid) || cid <= 0 || !Number.isFinite(mid) || mid <= 0) {
+      setOptions([]);
+      return;
+    }
+    setLoading(true);
+    void warehouseApi.salesReturn
+      .listCustomerOutboundBatches({ customer_id: cid, material_id: mid })
+      .then((res) => {
+        if (cancelled) return;
+        const rows = Array.isArray(res) ? res : [];
+        setOptions(rows as CustomerOutboundBatchOption[]);
+      })
+      .catch(() => {
+        if (!cancelled) setOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [customerId, materialId]);
+
+  const selectOptions = options.map((row) => {
+    const batch = String(row.batch_number || '').trim();
+    const label = batch
+      ? `${batch} (${row.sales_delivery_code})`
+      : `${row.sales_delivery_code}#${row.sales_delivery_item_id}`;
+    return {
+      label,
+      value: String(row.sales_delivery_item_id),
+      row,
+    };
+  });
+
+  const selectedValue = (() => {
+    const itemId = Number(deliveryItemId);
+    if (Number.isFinite(itemId) && itemId > 0) {
+      return String(itemId);
+    }
+    if (!value) return undefined;
+    const matched = options.find((row) => String(row.batch_number || '').trim() === String(value).trim());
+    return matched ? String(matched.sales_delivery_item_id) : undefined;
+  })();
+
+  const disabled = !Number(customerId) || !Number(materialId);
+
+  return (
+    <Select
+      size={size}
+      style={{ width: '100%' }}
+      loading={loading}
+      disabled={disabled}
+      allowClear
+      showSearch
+      optionFilterProp="label"
+      placeholder={
+        disabled
+          ? t('app.kuaizhizao.salesReturn.selectCustomerFirstForBatch')
+          : options.length
+            ? t('app.kuaizhizao.salesReturn.selectOutboundBatch')
+            : t('app.kuaizhizao.salesReturn.noOutboundBatchForCustomer')
+      }
+      value={selectedValue}
+      options={selectOptions}
+      onChange={(next) => {
+        const itemId = Number(next);
+        const picked = options.find((row) => Number(row.sales_delivery_item_id) === itemId) || null;
+        onChange?.(picked?.batch_number ? String(picked.batch_number) : undefined);
+        onPick?.(picked);
+      }}
+    />
+  );
+};
 
 /** 与后端 `system_dictionaries.py` 一致，租户未同步字典时的下拉兜底 */
 const RETURN_REASON_VALUES = [
@@ -181,6 +327,7 @@ const SalesReturnsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_return.pull_from_sales_order');
+  const pullFromSalesDeliveryAction = resolveKuaizhizaoDocumentAction(t, 'sales_return.pull_from_sales_delivery');
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -230,6 +377,18 @@ const SalesReturnsPage: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<SalesReturn[]>([]);
+  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
+    readPersistedUniTableViewType(SALES_RETURN_LIST_PERSISTENCE_ID, 'table', [
+      'table',
+      'detailTable',
+      'help',
+    ]) as 'table' | 'detailTable' | 'help',
+  );
+  const dataViewMode = resolveDetailTableViewMode(viewTypeState);
+  const dataViewModeRef = useRef(dataViewMode);
+  useEffect(() => {
+    dataViewModeRef.current = dataViewMode;
+  }, [dataViewMode]);
   const [customerList, setCustomerList] = useState<any[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const salesReturnCustomerSearchOptions = useMemo(
@@ -310,10 +469,12 @@ const SalesReturnsPage: React.FC = () => {
   const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
   const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
   const [pullPreviewConfirming, setPullPreviewConfirming] = useState(false);
-  const [pullPreviewSalesOrderId, setPullPreviewSalesOrderId] = useState<number | null>(null);
+  const [pullPreviewSourceType, setPullPreviewSourceType] = useState<PullPreviewSourceType>('sales_order');
+  const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
   const [pullPreviewLines, setPullPreviewLines] = useState<any[]>([]);
   const [pullPreviewMessage, setPullPreviewMessage] = useState<string | null>(null);
   const [pullSelectedItemIds, setPullSelectedItemIds] = useState<number[]>([]);
+  const [pullBatchNumbers, setPullBatchNumbers] = useState<Record<number, string>>({});
   const [pullReturnQuantities, setPullReturnQuantities] = useState<Record<number, number>>({});
   const pullPreviewWarehouseFormRef = useRef<ProFormInstance>();
   const formRef = useRef<ProFormInstance>(null);
@@ -352,13 +513,24 @@ const SalesReturnsPage: React.FC = () => {
   const [returnTypeOptions, setReturnTypeOptions] = useState(fallbackReturnTypeOptions);
   const [shippingMethodOptions, setShippingMethodOptions] = useState(fallbackShippingMethodOptions);
   const [dictOptionsLoading, setDictOptionsLoading] = useState(false);
+  const materialUnitImport = useImportMaterialUnitOptions();
   const salesReturnImportDict = useImportDictionaryOptions([
-    'MATERIAL_UNIT',
     'RETURN_REASON',
     'RETURN_TYPE',
     'SHIPPING_METHOD',
   ]);
-  const salesReturnLineUnitOptions = salesReturnImportDict.MATERIAL_UNIT ?? [];
+  const salesReturnLineUnitOptions = materialUnitImport.options;
+  const salesReturnImportDictBag = useMemo(
+    () => ({
+      ...salesReturnImportDict,
+      MATERIAL_UNIT: materialUnitImport.options,
+      parseDict: (code: string, raw?: string | null) =>
+        code === 'MATERIAL_UNIT'
+          ? materialUnitImport.parse(raw)
+          : salesReturnImportDict.parseDict(code, raw),
+    }),
+    [salesReturnImportDict, materialUnitImport.options, materialUnitImport.parse],
+  );
   const salesReturnLineImportColumnOptions = useMemo(
     () => [
       undefined,
@@ -373,7 +545,7 @@ const SalesReturnsPage: React.FC = () => {
   );
   const salesReturnListImportTemplate = useMemo(
     () =>
-      buildDocumentReturnListImportTemplate(t, salesReturnImportDict, {
+      buildDocumentReturnListImportTemplate(t, salesReturnImportDictBag, {
         partnerField: 'customer',
         codeLabelKey: 'app.kuaizhizao.salesReturn.colReturnCode',
         partnerLabelKey: 'app.kuaizhizao.salesReturn.customer',
@@ -390,7 +562,7 @@ const SalesReturnsPage: React.FC = () => {
         exampleMaterial: 'MAT001',
         exampleWarehouse: t('app.kuaizhizao.salesReturn.listImport.exampleWarehouse'),
       }),
-    [t, i18n.language, salesReturnImportDict],
+    [t, i18n.language, salesReturnImportDictBag],
   );
 
   /** 打开表单时拉取字典；若租户未初始化则尝试同步系统字典（与 core 配置一致） */
@@ -430,10 +602,6 @@ const SalesReturnsPage: React.FC = () => {
       cancelled = true;
     };
   }, [modalVisible, fallbackReturnReasonOptions, fallbackReturnTypeOptions, fallbackShippingMethodOptions]);
-
-  const renderSalesReturnRowActions = (actions: React.ReactNode[], keyPrefix: string) => {
-    return renderRowActionsOverflow(actions, keyPrefix);
-  };
 
   const salesReturnCustomFieldColumns = generateSalesReturnCustomFieldColumns();
 
@@ -545,10 +713,7 @@ const SalesReturnsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesReturn.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      width: 170,
-      align: 'left',
       fixed: 'right',
-      uniTableKeepWidth: true,
       valueType: 'select',
       valueEnum: salesReturnLifecycleValueEnum,
       render: (_, record) => (
@@ -558,10 +723,9 @@ const SalesReturnsPage: React.FC = () => {
     ...salesReturnCustomFieldColumns,
     {
       title: t('common.actions'),
-      width: 220,
       fixed: 'right',
       hideInSearch: true,
-      render: (_, record) => renderSalesReturnRowActions([
+      render: (_, record) => [
         <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)}>{t('common.detail')}</Button>,
         record.capabilities?.update?.allowed && salesReturnPerms.canUpdate ? (
           <Button {...rowActionKind('update')} key="edit" onClick={() => void handleEdit(record)}>{t('common.edit')}</Button>
@@ -589,7 +753,7 @@ const SalesReturnsPage: React.FC = () => {
               : t('app.kuaizhizao.salesReturn.submitConfirmAuto'),
           }}
         />,
-      ].filter(Boolean), `sr-${record.id ?? 'row'}`),
+      ].filter(Boolean),
     },
   ], SALES_DOC_LIST_FIELD_RANK),
     [
@@ -680,45 +844,70 @@ const SalesReturnsPage: React.FC = () => {
 
   const resetPullPreviewModal = () => {
     setPullPreviewOpen(false);
-    setPullPreviewSalesOrderId(null);
+    setPullPreviewSourceType('sales_order');
+    setPullPreviewSourceId(null);
     setPullPreviewLines([]);
     setPullPreviewMessage(null);
     setPullSelectedItemIds([]);
     setPullReturnQuantities({});
+    setPullBatchNumbers({});
     setPullWarehouseId(undefined);
     setPullWarehouseName('');
   };
 
-  const showPullReturnPreview = async (salesOrderId: number) => {
+  const showPullReturnPreview = async (
+    sourceType: PullPreviewSourceType,
+    sourceId: number,
+  ) => {
     setPullPreviewOpen(true);
     setPullPreviewLoading(true);
     setPullPreviewConfirming(false);
-    setPullPreviewSalesOrderId(salesOrderId);
+    setPullPreviewSourceType(sourceType);
+    setPullPreviewSourceId(sourceId);
     setPullPreviewLines([]);
     setPullPreviewMessage(null);
     setPullSelectedItemIds([]);
     setPullReturnQuantities({});
+    setPullBatchNumbers({});
     setPullWarehouseId(undefined);
     setPullWarehouseName('');
     try {
-      const preview = (await warehouseApi.salesReturn.previewFromSalesOrder(salesOrderId)) as {
+      const preview = (
+        sourceType === 'sales_delivery'
+          ? await warehouseApi.salesReturn.previewFromSalesDelivery(sourceId)
+          : await warehouseApi.salesReturn.previewFromSalesOrder(sourceId)
+      ) as {
         lines?: any[];
         message?: string | null;
+        warehouse_id?: number;
+        warehouse_name?: string;
       };
       const lines = Array.isArray(preview?.lines) ? preview.lines : [];
       setPullPreviewLines(lines);
       setPullPreviewMessage(preview?.message ?? null);
+      if (sourceType === 'sales_delivery') {
+        const whId = Number(preview?.warehouse_id);
+        if (Number.isFinite(whId) && whId > 0) {
+          setPullWarehouseId(whId);
+          setPullWarehouseName(String(preview?.warehouse_name || ''));
+          pullPreviewWarehouseFormRef.current?.setFieldsValue?.({ warehouse_id: whId });
+        }
+      }
       const ids: number[] = [];
       const qtyMap: Record<number, number> = {};
+      const batchMap: Record<number, string> = {};
       lines.forEach((line) => {
-        const itemId = Number(line.sales_order_item_id);
+        const itemId = pullPreviewLineKey(line, sourceType);
         const maxQty = Number(line.source_pending_quantity ?? line.return_quantity ?? 0);
         if (!Number.isFinite(itemId) || itemId <= 0 || maxQty <= 0) return;
         ids.push(itemId);
         qtyMap[itemId] = maxQty;
+        const batch = String(line.batch_number || '').trim();
+        if (batch) batchMap[itemId] = batch;
       });
       setPullSelectedItemIds(ids);
       setPullReturnQuantities(qtyMap);
+      setPullBatchNumbers(batchMap);
     } catch (error: any) {
       messageApi.error(error?.message || t('app.kuaizhizao.salesReturn.pullPreviewFailed'));
       resetPullPreviewModal();
@@ -728,15 +917,15 @@ const SalesReturnsPage: React.FC = () => {
   };
 
   const handlePullPreviewConfirm = async () => {
-    if (!pullPreviewSalesOrderId) return;
+    if (!pullPreviewSourceId) return;
     if (!pullWarehouseId || pullWarehouseId <= 0) {
       messageApi.warning(t('app.kuaizhizao.salesReturn.selectReturnWarehouse'));
       return;
     }
     const lineById = new Map(
       pullPreviewLines
-        .filter((line) => Number(line.sales_order_item_id) > 0)
-        .map((line) => [Number(line.sales_order_item_id), line]),
+        .filter((line) => pullPreviewLineKey(line, pullPreviewSourceType) > 0)
+        .map((line) => [pullPreviewLineKey(line, pullPreviewSourceType), line]),
     );
     const selectedIds = pullSelectedItemIds.filter((id) => lineById.has(id));
     if (!selectedIds.length) {
@@ -744,6 +933,7 @@ const SalesReturnsPage: React.FC = () => {
       return;
     }
     const returnQuantities: Record<number, number> = {};
+    const batchNumbers: Record<number, string> = {};
     for (const id of selectedIds) {
       const line = lineById.get(id);
       const qty = Number(pullReturnQuantities[id] ?? 0);
@@ -761,15 +951,27 @@ const SalesReturnsPage: React.FC = () => {
         return;
       }
       returnQuantities[id] = qty;
+      const batch = String(pullBatchNumbers[id] ?? line?.batch_number ?? '').trim();
+      if (batch) batchNumbers[id] = batch;
     }
     setPullPreviewConfirming(true);
     try {
-      await warehouseApi.salesReturn.pullFromSalesOrder({
-        sales_order_id: pullPreviewSalesOrderId,
-        warehouse_id: pullWarehouseId,
-        warehouse_name: pullWarehouseName || undefined,
-        return_quantities: returnQuantities,
-      });
+      if (pullPreviewSourceType === 'sales_delivery') {
+        await warehouseApi.salesReturn.pullFromSalesDelivery({
+          sales_delivery_id: pullPreviewSourceId,
+          warehouse_id: pullWarehouseId,
+          warehouse_name: pullWarehouseName || undefined,
+          return_quantities: returnQuantities,
+        });
+      } else {
+        await warehouseApi.salesReturn.pullFromSalesOrder({
+          sales_order_id: pullPreviewSourceId,
+          warehouse_id: pullWarehouseId,
+          warehouse_name: pullWarehouseName || undefined,
+          return_quantities: returnQuantities,
+          batch_numbers: Object.keys(batchNumbers).length ? batchNumbers : undefined,
+        });
+      }
       messageApi.success(t('app.kuaizhizao.salesReturn.pullSuccess'));
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
@@ -829,12 +1031,86 @@ const SalesReturnsPage: React.FC = () => {
         return;
       }
       pullFromSalesOrderQuery.closeModal();
-      void showPullReturnPreview(selectedId);
+      void showPullReturnPreview('sales_order', selectedId);
+    },
+  });
+
+  const pullSalesDeliveryColumns: ProColumns<PullSalesDeliveryCandidate>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.salesReturn.deliveryCode'), dataIndex: 'delivery_code', width: 180, ellipsis: true },
+      { title: t('app.kuaizhizao.salesReturn.customer'), dataIndex: 'customer_name', width: 200, ellipsis: true },
+      { title: t('app.kuaizhizao.salesReturn.salesOrderNo'), dataIndex: 'sales_order_code', width: 160, ellipsis: true },
+      { title: t('app.kuaizhizao.salesReturn.orderStatus'), dataIndex: 'status', width: 120, align: 'center' },
+      { title: t('app.kuaizhizao.salesReturn.returnWarehouse'), dataIndex: 'warehouse_name', width: 140, ellipsis: true },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 180,
+        render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+    ],
+    [t],
+  );
+
+  const pullFromSalesDeliveryQuery = useUniPullQuery<PullSalesDeliveryCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        const res = await warehouseApi.salesDelivery.list({
+          skip: 0,
+          limit: 200,
+          status: '已出库',
+        });
+        const list = Array.isArray((res as any)?.data)
+          ? (res as any).data
+          : Array.isArray((res as any)?.items)
+            ? (res as any).items
+            : [];
+        const kw = keyword.trim().toLowerCase();
+        const candidates: PullSalesDeliveryCandidate[] = list
+          .map((row: any) => ({
+            id: Number(row.id),
+            delivery_code: row.delivery_code,
+            customer_name: row.customer_name,
+            sales_order_code: row.sales_order_code,
+            status: row.status,
+            warehouse_name: row.warehouse_name,
+            delivery_time: row.delivery_time,
+            updated_at: row.updated_at,
+          }))
+          .filter((o: PullSalesDeliveryCandidate) => Number.isFinite(o.id) && o.id > 0)
+          .filter((o) => {
+            if (!kw) return true;
+            return [o.delivery_code, o.customer_name, o.sales_order_code]
+              .map((v) => String(v || '').toLowerCase())
+              .some((v) => v.includes(kw));
+          });
+        const size = pageSize || 20;
+        const start = ((page || 1) - 1) * size;
+        return { data: candidates.slice(start, start + size), total: candidates.length };
+      } catch (error: any) {
+        messageApi.error(error?.message || t('app.kuaizhizao.salesReturn.loadSalesDeliveriesFailed'));
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys) => {
+      const selectedId = Number(keys[0]);
+      if (!selectedId || selectedId <= 0) {
+        messageApi.warning(t('app.kuaizhizao.salesReturn.selectSalesDelivery'));
+        return;
+      }
+      pullFromSalesDeliveryQuery.closeModal();
+      void showPullReturnPreview('sales_delivery', selectedId);
     },
   });
 
   const openPullFromSalesOrder = () => {
     pullFromSalesOrderQuery.openModal();
+  };
+
+  const openPullFromSalesDelivery = () => {
+    pullFromSalesDeliveryQuery.openModal();
   };
 
   const handleEdit = async (record: SalesReturn) => {
@@ -1010,7 +1286,7 @@ const SalesReturnsPage: React.FC = () => {
         materials,
         defaultUnit: t('app.kuaizhizao.salesReturn.defaultUnit'),
         defaultReturnType: 'OTHER',
-        parseDict: salesReturnImportDict.parseDict,
+        parseDict: salesReturnImportDictBag.parseDict,
       });
 
       if (errors.length > 0) {
@@ -1260,6 +1536,134 @@ const SalesReturnsPage: React.FC = () => {
     );
   }, [returnDetail, t]);
 
+  const detailTableColumns: ProColumns<SalesReturnItemRow>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.salesReturn.colCustomerReturnCode'),
+        key: 'return_code',
+        dataIndex: 'return_code',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
+        hideInSearch: false,
+        fieldProps: { placeholder: t('app.kuaizhizao.salesReturn.colReturnCode') },
+        render: (_, record) => (
+          <UniTableStackedPrimaryCell
+            primary={String(record.customer_name ?? '')}
+            secondary={String(record.return_code ?? '')}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.colReturnCode'),
+        dataIndex: 'return_code',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.customer'),
+        dataIndex: 'customer_id',
+        hideInTable: true,
+        valueType: 'select',
+        fieldProps: {
+          showSearch: true,
+          optionFilterProp: 'label',
+          loading: customersLoading,
+          options: salesReturnCustomerSearchOptions,
+          placeholder: t('app.kuaizhizao.salesReturn.customer'),
+        },
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.materialName'),
+        key: 'material_display',
+        dataIndex: 'material_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        hideInSearch: true,
+        render: (_, record) => (
+          <MaterialStackedCell
+            material_name={record.material_name}
+            material_code={record.material_code}
+            material_spec={record.material_spec}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.materialCode'),
+        dataIndex: 'material_code',
+        hideInTable: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.returnQuantity'),
+        dataIndex: 'return_quantity',
+        width: 100,
+        align: 'right',
+        hideInSearch: true,
+        render: (val: unknown, record) => (
+          <QuantityWithUnitDisplay quantity={val} unit={record.material_unit} />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.unitPrice'),
+        dataIndex: 'unit_price',
+        width: 100,
+        align: 'right',
+        hideInSearch: true,
+        render: (text: unknown) =>
+          `¥${Number(text || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.totalAmount'),
+        dataIndex: 'total_amount',
+        width: 120,
+        align: 'right',
+        hideInSearch: true,
+        render: (text: unknown) =>
+          `¥${Number(text || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.batchNumber'),
+        dataIndex: 'batch_number',
+        width: 120,
+        hideInSearch: true,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.location'),
+        dataIndex: 'location_code',
+        width: 100,
+        hideInSearch: true,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.colWarehouse'),
+        dataIndex: 'warehouse_name',
+        width: 140,
+        ellipsis: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.returnTime'),
+        dataIndex: 'return_time',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, record) =>
+          record.return_time ? formatDateTime(record.return_time, 'YYYY-MM-DD HH:mm') : '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesReturn.colLifecycle'),
+        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+        fixed: 'right',
+        hideInSearch: false,
+        valueType: 'select',
+        valueEnum: salesReturnLifecycleValueEnum,
+        render: (_, record) => (
+          <ListUniLifecycleCell lifecycle={getSalesReturnLifecycle(record as SalesReturn, t)} />
+        ),
+      },
+    ],
+    [customersLoading, salesReturnCustomerSearchOptions, salesReturnLifecycleValueEnum, t],
+  );
+
   const salesReturnTraceDocument = useMemo(() => {
     if (returnDetail?.id == null) return null;
     return {
@@ -1284,13 +1688,38 @@ const SalesReturnsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-returns"
+          columnPersistenceId={SALES_RETURN_LIST_PERSISTENCE_ID}
           headerTitle={t('app.kuaizhizao.salesReturn.title')}
           actionRef={actionRef}
-          rowKey="id"
+          viewTypes={['table', 'detailTable', 'help']}
+          defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
+          onViewTypeChange={(v) => {
+            dataViewModeRef.current = resolveDetailTableViewMode(v as 'table' | 'detailTable' | 'help');
+            setViewTypeState(v as 'table' | 'detailTable' | 'help');
+            setSelectedRowKeys([]);
+            setTimeout(() => actionRef.current?.reload(), 0);
+          }}
+          detailTableColumns={detailTableColumns}
+          helpViewConfig={{
+            content: (
+              <div style={{ lineHeight: 1.8 }}>
+                <p>
+                  <strong>{t('components.uniTable.viewTable')}</strong>
+                  {t('app.kuaizhizao.salesReturn.title')}
+                </p>
+                <p>
+                  <strong>{t('components.uniTable.viewDetailTable')}</strong>
+                  {t('app.kuaizhizao.salesReturn.title')}
+                </p>
+              </div>
+            ),
+          }}
+          rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
           columns={columns}
           onTableDataChange={(rows) => {
-            tableRowsRef.current = rows;
+            if (dataViewModeRef.current === 'order') {
+              tableRowsRef.current = rows as SalesReturn[];
+            }
           }}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
@@ -1315,6 +1744,11 @@ const SalesReturnsPage: React.FC = () => {
               onCreate={handleCreate}
               menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
                 {
+                  key: 'pull-from-sales-delivery',
+                  actionKey: 'sales_return.pull_from_sales_delivery',
+                  onClick: openPullFromSalesDelivery,
+                },
+                {
                   key: 'pull-from-sales-order',
                   actionKey: 'sales_return.pull_from_sales_order',
                   onClick: openPullFromSalesOrder,
@@ -1337,6 +1771,7 @@ const SalesReturnsPage: React.FC = () => {
                 limit: params.pageSize || 20,
                 ...lifecycleParams,
                 order_by: orderBy,
+                include_items: dataViewModeRef.current === 'detail',
               };
               if (fuzzyKeyword) {
                 apiParams.keyword = fuzzyKeyword;
@@ -1369,8 +1804,60 @@ const SalesReturnsPage: React.FC = () => {
               const response = await warehouseApi.salesReturn.list(apiParams);
               const list = response?.data ?? [];
               const enriched = await enrichSalesReturnRecordsWithCustomFields(list);
+              if (dataViewModeRef.current === 'order') {
+                tableRowsRef.current = enriched;
+                return {
+                  data: enriched,
+                  success: true,
+                  total: response?.total ?? enriched.length,
+                };
+              }
+              const flatRows = flattenDocumentDetailRows<SalesReturn, SalesReturnItem>({
+                headers: enriched,
+                getHeaderId: (h) => h.id,
+                getItems: (h) => h.items,
+                buildRowKey: (h, item, index) =>
+                  item?.id
+                    ? `return-${h.id}-item-${item.id}`
+                    : `return-${h.id}-idx-${index}`,
+                mapItemRow: (h, item) => ({
+                  ...item,
+                  return_id: h.id ?? 0,
+                  return_code: h.return_code,
+                  customer_name: h.customer_name,
+                  sales_delivery_code: h.sales_delivery_code,
+                  sales_order_code: h.sales_order_code,
+                  warehouse_name: h.warehouse_name,
+                  return_time: h.return_time,
+                  status: h.status,
+                  review_status: h.review_status,
+                  lifecycle: h.lifecycle,
+                  capabilities: h.capabilities,
+                  audit: h.audit,
+                }),
+                mapEmptyHeaderRow: (h) => ({
+                  return_id: h.id ?? 0,
+                  return_code: h.return_code,
+                  customer_name: h.customer_name,
+                  sales_delivery_code: h.sales_delivery_code,
+                  sales_order_code: h.sales_order_code,
+                  warehouse_name: h.warehouse_name,
+                  return_time: h.return_time,
+                  status: h.status,
+                  review_status: h.review_status,
+                  lifecycle: h.lifecycle,
+                  capabilities: h.capabilities,
+                  audit: h.audit,
+                  material_code: '-',
+                  material_name: '-',
+                  return_quantity: 0,
+                  unit_price: 0,
+                  total_amount: 0,
+                }),
+              }) as SalesReturnItemRow[];
+              tableRowsRef.current = enriched;
               return {
-                data: enriched,
+                data: flatRows,
                 success: true,
                 total: response?.total ?? enriched.length,
               };
@@ -1383,8 +1870,8 @@ const SalesReturnsPage: React.FC = () => {
               };
             }
           }}
-          enableRowSelection={true}
-          showDeleteButton={true}
+          enableRowSelection={viewTypeState !== 'detailTable'}
+          showDeleteButton={viewTypeState !== 'detailTable'}
           onDelete={handleDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.salesReturn.confirmBatchDelete', { count })}
           toolBarActionsAfterDelete={[
@@ -1473,7 +1960,6 @@ const SalesReturnsPage: React.FC = () => {
               size="middle"
             />,
           ]}
-          scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
 
@@ -1652,11 +2138,50 @@ const SalesReturnsPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesReturn.batchNumber'),
                       dataIndex: 'batch_number',
-                      width: 150,
+                      width: 200,
                       ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) => (
-                        <AntForm.Item name={[index, 'batch_number']} noStyle>
-                          <Input size={DOCUMENT_DETAIL_CONTROL_SIZE} placeholder={t('app.kuaizhizao.salesReturn.batchNumberPlaceholder')} />
+                        <AntForm.Item
+                          noStyle
+                          shouldUpdate={(prev, cur) =>
+                            prev?.customer_id !== cur?.customer_id ||
+                            prev?.items?.[index]?.material_id !== cur?.items?.[index]?.material_id
+                          }
+                        >
+                          {() => {
+                            const customerId = formRef.current?.getFieldValue('customer_id');
+                            const materialId = formRef.current?.getFieldValue(['items', index, 'material_id']);
+                            const deliveryItemId = formRef.current?.getFieldValue([
+                              'items',
+                              index,
+                              'sales_delivery_item_id',
+                            ]);
+                            return (
+                              <>
+                                <AntForm.Item name={[index, 'batch_number']} noStyle>
+                                  <SalesReturnOutboundBatchSelect
+                                    customerId={customerId}
+                                    materialId={materialId}
+                                    deliveryItemId={deliveryItemId}
+                                    size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                                    onPick={(picked) => {
+                                      const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+                                      const row = { ...(items[index] || {}) };
+                                      row.batch_number = picked?.batch_number
+                                        ? String(picked.batch_number)
+                                        : undefined;
+                                      row.sales_delivery_item_id = picked?.sales_delivery_item_id;
+                                      items[index] = row;
+                                      formRef.current?.setFieldsValue({ items });
+                                    }}
+                                  />
+                                </AntForm.Item>
+                                <AntForm.Item name={[index, 'sales_delivery_item_id']} hidden>
+                                  <Input />
+                                </AntForm.Item>
+                              </>
+                            );
+                          }}
                         </AntForm.Item>
                       ),
                     },
@@ -1748,8 +2273,39 @@ const SalesReturnsPage: React.FC = () => {
         okText={t('common.next')}
       />
 
+      <UniPullQueryModal<PullSalesDeliveryCandidate>
+        open={pullFromSalesDeliveryQuery.open}
+        title={pullFromSalesDeliveryAction.label}
+        onCancel={pullFromSalesDeliveryQuery.closeModal}
+        onOk={pullFromSalesDeliveryQuery.handleConfirm}
+        rowKey="id"
+        columns={pullSalesDeliveryColumns}
+        dataSource={pullFromSalesDeliveryQuery.dataSource}
+        loading={pullFromSalesDeliveryQuery.loading}
+        confirmLoading={pullFromSalesDeliveryQuery.confirmLoading}
+        selectionType={pullFromSalesDeliveryQuery.selectionType}
+        selectedRowKeys={pullFromSalesDeliveryQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromSalesDeliveryQuery.handleSelectedRowKeysChange}
+        searchDraft={pullFromSalesDeliveryQuery.searchDraft}
+        onSearchDraftChange={pullFromSalesDeliveryQuery.setSearchDraft}
+        onSearchApply={pullFromSalesDeliveryQuery.handleSearchApply}
+        onSearchClear={pullFromSalesDeliveryQuery.handleSearchClear}
+        appliedKeyword={pullFromSalesDeliveryQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.salesReturn.pullSearchPlaceholder')}
+        page={pullFromSalesDeliveryQuery.page}
+        pageSize={pullFromSalesDeliveryQuery.pageSize}
+        total={pullFromSalesDeliveryQuery.total}
+        onPageChange={pullFromSalesDeliveryQuery.handlePageChange}
+        isRowDisabled={pullFromSalesDeliveryQuery.isRowDisabled}
+        okText={t('common.next')}
+      />
+
       <Modal
-        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
+        title={
+          pullPreviewSourceType === 'sales_delivery'
+            ? pullFromSalesDeliveryAction.label
+            : pullFromSalesOrderAction.label
+        }
         open={pullPreviewOpen}
         destroyOnClose
         width={1100}
@@ -1801,16 +2357,16 @@ const SalesReturnsPage: React.FC = () => {
               <Table
                 size="small"
                 dataSource={pullPreviewLines}
-                rowKey={(row) => String(row.sales_order_item_id)}
+                rowKey={(row) => String(pullPreviewLineKey(row, pullPreviewSourceType))}
                 pagination={false}
-                scroll={{ x: 960 }}
+                scroll={{ x: 1100 }}
                 columns={[
                   {
                     title: t('common.select'),
-                    dataIndex: 'sales_order_item_id',
+                    key: 'select',
                     width: 64,
                     render: (_: unknown, row) => {
-                      const itemId = Number(row.sales_order_item_id);
+                      const itemId = pullPreviewLineKey(row, pullPreviewSourceType);
                       const maxQty = Number(row.source_pending_quantity ?? 0);
                       const disabled = !Number.isFinite(maxQty) || maxQty <= 0;
                       return (
@@ -1833,11 +2389,47 @@ const SalesReturnsPage: React.FC = () => {
                   { title: t('app.kuaizhizao.salesReturn.colReturnedQty'), dataIndex: 'source_received_quantity', width: 90, align: 'right' },
                   { title: t('app.kuaizhizao.salesReturn.colReturnableQty'), dataIndex: 'source_pending_quantity', width: 90, align: 'right' },
                   {
+                    title: t('app.kuaizhizao.warehouseCommon.colBatchNo'),
+                    key: 'batch_number',
+                    width: 160,
+                    render: (_: unknown, row) => {
+                      const itemId = pullPreviewLineKey(row, pullPreviewSourceType);
+                      const options = (Array.isArray(row.outbound_batch_options) ? row.outbound_batch_options : [])
+                        .map((batch: string) => String(batch || '').trim())
+                        .filter(Boolean)
+                        .map((batch: string) => ({ label: batch, value: batch }));
+                      const selected = pullSelectedItemIds.includes(itemId);
+                      if (pullPreviewSourceType === 'sales_delivery') {
+                        return String(row.batch_number || pullBatchNumbers[itemId] || '—');
+                      }
+                      if (options.length > 1) {
+                        return (
+                          <Select
+                            style={{ width: '100%', minWidth: 120 }}
+                            placeholder={t('app.kuaizhizao.salesOrder.pushReturnSelectBatchPlaceholder')}
+                            showSearch
+                            optionFilterProp="label"
+                            disabled={!selected}
+                            value={pullBatchNumbers[itemId] || undefined}
+                            options={options}
+                            onChange={(nv) => {
+                              setPullBatchNumbers((prev) => ({ ...prev, [itemId]: String(nv ?? '') }));
+                            }}
+                          />
+                        );
+                      }
+                      if (options.length === 1) {
+                        return options[0].label;
+                      }
+                      return String(row.batch_number || '—');
+                    },
+                  },
+                  {
                     title: t('app.kuaizhizao.salesReturn.colReturnQty'),
                     dataIndex: 'return_quantity',
                     width: 130,
                     render: (_: unknown, row) => {
-                      const itemId = Number(row.sales_order_item_id);
+                      const itemId = pullPreviewLineKey(row, pullPreviewSourceType);
                       const maxQty = Number(row.source_pending_quantity ?? 0);
                       return (
                         <InputNumber

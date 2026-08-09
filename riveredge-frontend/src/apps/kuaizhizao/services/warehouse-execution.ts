@@ -277,12 +277,30 @@ export const warehouseApi = {
       warehouse_id: number;
       warehouse_name?: string;
       return_quantities?: Record<number, number>;
+      batch_numbers?: Record<number, string>;
       return_code?: string;
     }) => apiRequest('/apps/kuaizhizao/sales-returns/pull-from-sales-order', { method: 'POST', data }),
     previewFromSalesOrder: async (salesOrderId: number) =>
       apiRequest('/apps/kuaizhizao/sales-returns/sales-order-preview', {
         method: 'GET',
         params: { sales_order_id: salesOrderId },
+      }),
+    pullFromSalesDelivery: async (data: {
+      sales_delivery_id: number;
+      warehouse_id: number;
+      warehouse_name?: string;
+      return_quantities?: Record<number, number>;
+      return_code?: string;
+    }) => apiRequest('/apps/kuaizhizao/sales-returns/pull-from-sales-delivery', { method: 'POST', data }),
+    previewFromSalesDelivery: async (salesDeliveryId: number) =>
+      apiRequest('/apps/kuaizhizao/sales-returns/sales-delivery-preview', {
+        method: 'GET',
+        params: { sales_delivery_id: salesDeliveryId },
+      }),
+    listCustomerOutboundBatches: async (params: { customer_id: number; material_id?: number }) =>
+      apiRequest('/apps/kuaizhizao/sales-returns/customer-outbound-batches', {
+        method: 'GET',
+        params,
       }),
   },
   purchaseReturn: {

@@ -19,6 +19,8 @@ export interface ShipmentNoticeListParams {
   created_start_date?: string;
   created_end_date?: string;
   order_by?: string;
+  /** 明细表格视图：附带通知明细 */
+  include_items?: boolean;
 }
 
 export interface ShipmentNoticeListResult {

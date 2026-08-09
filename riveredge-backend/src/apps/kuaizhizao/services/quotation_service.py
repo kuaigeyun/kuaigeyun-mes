@@ -1326,6 +1326,7 @@ class QuotationService:
         pullable_only: Optional[bool] = None,
         pull_target: Optional[str] = None,
         current_user: Optional[User] = None,
+        include_items: bool = False,
     ) -> QuotationListResponse:
         """获取报价单列表。order_by 如 quotation_date、-updated_at（前缀-表示降序）"""
         from tortoise.expressions import Q
@@ -1350,11 +1351,22 @@ class QuotationService:
             query = query.filter(quotation_date__lte=end_date)
         if keyword and str(keyword).strip():
             kw = str(keyword).strip()
+            from apps.kuaizhizao.utils.list_item_material_keyword import (
+                header_ids_matching_item_material,
+            )
+
+            material_quotation_ids = await header_ids_matching_item_material(
+                tenant_id,
+                QuotationItem,
+                "quotation_id",
+                kw,
+            )
             query = query.filter(
                 Q(quotation_code__icontains=kw)
                 | Q(customer_name__icontains=kw)
                 | Q(quotation_series_code__icontains=kw)
                 | Q(salesman_name__icontains=kw)
+                | Q(id__in=material_quotation_ids)
             )
         if quotation_code and quotation_code.strip():
             query = query.filter(quotation_code__icontains=quotation_code.strip())
@@ -1421,8 +1433,21 @@ class QuotationService:
                     q.status = "已接受"
                     missing_by_id[int(q.id)] = False
         data = []
+        items_by_quotation: Dict[int, List[QuotationItem]] = {}
+        if include_items and quotations:
+            q_ids = [int(q.id) for q in quotations if q.id is not None]
+            if q_ids:
+                all_items = (
+                    await QuotationItem.filter(tenant_id=tenant_id, quotation_id__in=q_ids)
+                    .order_by("quotation_id", "id")
+                    .all()
+                )
+                for it in all_items:
+                    qid = int(it.quotation_id)
+                    items_by_quotation.setdefault(qid, []).append(it)
         for q in quotations:
-            r = self._quotation_to_response(q)
+            line_items = items_by_quotation.get(int(q.id)) if include_items else None
+            r = self._quotation_to_response(q, items=line_items)
             conv_missing = missing_by_id[int(q.id)]
             contract_missing = contract_missing_by_id[int(q.id)]
             lifecycle = get_quotation_lifecycle(

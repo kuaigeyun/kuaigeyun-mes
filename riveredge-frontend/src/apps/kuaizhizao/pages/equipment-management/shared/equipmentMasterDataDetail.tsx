@@ -11,7 +11,7 @@ import {
   DRAWER_CONFIG,
   detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 
 export function renderIsActiveTag(t: TFunction, isActive?: boolean) {
@@ -35,7 +35,6 @@ export function buildIsActiveDescriptionColumn<T extends { is_active?: boolean }
 
 type RowActionsParams<T extends { id?: number }> = {
   record: T;
-  keyPrefix: string;
   t: TFunction;
   canRead: boolean;
   canUpdate: boolean;
@@ -47,7 +46,6 @@ type RowActionsParams<T extends { id?: number }> = {
 
 export function renderEquipmentMasterRowActions<T extends { id?: number }>({
   record,
-  keyPrefix,
   t,
   canRead,
   canUpdate,
@@ -55,40 +53,37 @@ export function renderEquipmentMasterRowActions<T extends { id?: number }>({
   onDetail,
   onEdit,
   onDelete,
-}: RowActionsParams<T>) {
-  return renderRowActionsOverflow(
-    [
-      canRead ? (
-        <Button key="detail" {...rowActionKind('read')} onClick={() => onDetail(record)}>
-          {t('common.detail')}
-        </Button>
-      ) : null,
-      canUpdate ? (
-        <Button key="edit" {...rowActionKind('update')} onClick={() => onEdit(record)}>
-          {t('common.edit')}
-        </Button>
-      ) : null,
-      canDelete ? (
-        <Button
-          key="delete"
-          {...rowActionKind('delete')}
-          onClick={() => {
-            Modal.confirm({
-              title: t('common.deleteTitle'),
-              onOk: () => {
-                if (record.id != null) {
-                  onDelete(record);
-                }
-              },
-            });
-          }}
-        >
-          {t('common.delete')}
-        </Button>
-      ) : null,
-    ],
-    keyPrefix,
-  );
+}: RowActionsParams<T>): React.ReactNode[] {
+  return [
+    canRead ? (
+      <Button key="detail" {...rowActionKind('read')} onClick={() => onDetail(record)}>
+        {t('common.detail')}
+      </Button>
+    ) : null,
+    canUpdate ? (
+      <Button key="edit" {...rowActionKind('update')} onClick={() => onEdit(record)}>
+        {t('common.edit')}
+      </Button>
+    ) : null,
+    canDelete ? (
+      <Button
+        key="delete"
+        {...rowActionKind('delete')}
+        onClick={() => {
+          Modal.confirm({
+            title: t('common.deleteTitle'),
+            onOk: () => {
+              if (record.id != null) {
+                onDelete(record);
+              }
+            },
+          });
+        }}
+      >
+        {t('common.delete')}
+      </Button>
+    ) : null,
+  ];
 }
 
 type EquipmentMasterDetailDrawerProps<T extends Record<string, unknown>> = {

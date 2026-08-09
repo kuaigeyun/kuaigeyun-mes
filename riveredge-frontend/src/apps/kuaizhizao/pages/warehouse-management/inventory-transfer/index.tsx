@@ -563,7 +563,6 @@ const InventoryTransferPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
-      align: 'left',
       hideInSearch: true,
       render: (_, record) => {
         const lifecycle = getInventoryTransferLifecycle(record as Record<string, unknown>, t);
@@ -772,7 +771,6 @@ const InventoryTransferPage: React.FC = () => {
           }
         }}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.inventoryTransfer.deleteConfirm', { count })}
-        scroll={{ x: 2000 }}
       />
 
       {/* 创建调拨单Modal */}

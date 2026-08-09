@@ -1,6 +1,11 @@
 import type { ProColumns } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
 import type { AuditPhaseRecord } from '../../../../../components/uni-audit/AuditPhaseBadge';
+import { isUniTableOperationColumn } from '../../../../../components/uni-action/operationColumn';
+import {
+  isUniTableLifecycleColumn,
+  UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH,
+} from '../../../../../utils/uniTableLayoutColumns';
 import { ListAuditPhaseCell } from './ListAuditPhaseCell';
 
 export interface ListAuditPhaseColumnOptions {
@@ -15,7 +20,7 @@ export interface ListAuditPhaseColumnOptions {
 export function createListAuditPhaseColumn<T extends AuditPhaseRecord>(
   options: ListAuditPhaseColumnOptions,
 ): ProColumns<T> {
-  const { t, title, width = 96, fixed = 'right' } = options;
+  const { t, title, width = UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH, fixed = 'right' } = options;
 
   return {
     key: 'audit_phase',
@@ -34,19 +39,10 @@ export function insertAuditPhaseColumnBeforeLifecycle<T extends AuditPhaseRecord
   auditColumn: ProColumns<T> | null,
 ): ProColumns<T>[] {
   if (!auditColumn) return columns;
-  const lifecycleIdx = columns.findIndex((c) => {
-    if (c.dataIndex === 'lifecycle_stage') return true;
-    const title = typeof c.title === 'string' ? c.title : '';
-    return (
-      title.includes('当前阶段') ||
-      title.includes('生命周期') ||
-      title.toLowerCase().includes('lifecycle')
-    );
-  });
+  // 列身份只认 key / dataIndex（与 UniTable 同一真源）；按标题文案匹配会随文案改动失效
+  const lifecycleIdx = columns.findIndex((c) => isUniTableLifecycleColumn(c));
   if (lifecycleIdx < 0) {
-    const actionsIdx = columns.findIndex(
-      (c) => c.valueType === 'option' || c.title === '操作' || c.title === 'Actions',
-    );
+    const actionsIdx = columns.findIndex((c) => isUniTableOperationColumn(c));
     const insertAt = actionsIdx >= 0 ? actionsIdx : columns.length;
     return [...columns.slice(0, insertAt), auditColumn, ...columns.slice(insertAt)];
   }

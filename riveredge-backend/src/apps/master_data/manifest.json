@@ -96,34 +96,40 @@
             "sort_order": 1
           },
           {
+            "title": "app.master-data.menu.materials.units",
+            "path": "/apps/master-data/materials/units",
+            "permission": "master-data:material-unit:read",
+            "sort_order": 2
+          },
+          {
             "title": "app.master-data.menu.materials.management",
             "path": "/apps/master-data/materials",
             "permission": "master-data:material:read",
-            "sort_order": 2
+            "sort_order": 3
           },
           {
             "title": "app.master-data.menu.materials.batch-rules",
             "path": "/apps/master-data/materials/batch-rules",
             "permission": "master-data:material-batch-rule:read",
-            "sort_order": 3
+            "sort_order": 4
           },
           {
             "title": "app.master-data.menu.materials.batches",
             "path": "/apps/master-data/materials/batches",
             "permission": "master-data:material-batch:read",
-            "sort_order": 4
+            "sort_order": 5
           },
           {
             "title": "app.master-data.menu.materials.serial-rules",
             "path": "/apps/master-data/materials/serial-rules",
             "permission": "master-data:material-serial:read",
-            "sort_order": 5
+            "sort_order": 6
           },
           {
             "title": "app.master-data.menu.materials.serials",
             "path": "/apps/master-data/materials/serials",
             "permission": "master-data:material-serial:read",
-            "sort_order": 6
+            "sort_order": 7
           }
         ]
       },
@@ -540,6 +546,16 @@
     "master-data:material-variant-attribute:revoke",
     "master-data:material-variant-attribute:audit",
     "master-data:material-variant-attribute:print",
+    "master-data:material-unit:read",
+    "master-data:material-unit:create",
+    "master-data:material-unit:delete",
+    "master-data:material-unit:update",
+    "master-data:material-unit:import",
+    "master-data:material-unit:export",
+    "master-data:material-unit:submit",
+    "master-data:material-unit:revoke",
+    "master-data:material-unit:audit",
+    "master-data:material-unit:print",
     "master-data:process:read",
     "master-data:process:create",
     "master-data:process:delete",

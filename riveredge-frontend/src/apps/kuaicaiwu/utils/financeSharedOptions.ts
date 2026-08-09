@@ -26,6 +26,23 @@ export function formatPaymentMethod(value: string | null | undefined, t: TFuncti
   return key ? t(key) : value;
 }
 
+/** 与后端收款/付款单 payment_method 存值一致 */
+export const BANK_TRANSFER_PAYMENT_METHOD = '银行转账';
+
+export function isBankTransferPaymentMethod(method: string | null | undefined): boolean {
+  return String(method || '').trim() === BANK_TRANSFER_PAYMENT_METHOD;
+}
+
+export function assertBankAccountForTransfer(
+  paymentMethod: string | null | undefined,
+  bankAccountId: unknown,
+  t: TFunction,
+): void {
+  if (isBankTransferPaymentMethod(paymentMethod) && (bankAccountId == null || bankAccountId === '')) {
+    throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForTransfer'));
+  }
+}
+
 export function getReceiptSettlementTypeOptions(t: TFunction) {
   return [
     { label: t('app.kuaicaiwu.receipt.settlementType.normal'), value: 'normal' },

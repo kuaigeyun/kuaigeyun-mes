@@ -65,7 +65,8 @@ async def list_contracts(
     limit: int = Query(100, ge=1, le=1000),
     status: Optional[str] = Query(None),
     contract_type: Optional[str] = Query(None),
-    keyword: Optional[str] = Query(None, description="关键词（合同编号、客户、来源报价、销售员）"),
+    keyword: Optional[str] = Query(None, description="关键词（合同编号、客户、来源报价、销售员、物料）"),
+    include_items: bool = Query(False, description="是否附带合同明细（明细表格视图）"),
     customer_id: Optional[int] = Query(None, description="客户 ID"),
     contract_code: Optional[str] = Query(None, description="合同编号（模糊）"),
     start_date: Optional[date] = Query(None, description="签订日期起"),
@@ -95,6 +96,7 @@ async def list_contracts(
         end_date=end_date,
         order_by=safe_order_by,
         pullable_only=pullable_only,
+        include_items=include_items,
     )
 
 

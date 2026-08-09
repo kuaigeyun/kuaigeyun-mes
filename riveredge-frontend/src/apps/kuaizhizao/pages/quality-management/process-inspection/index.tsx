@@ -8,7 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
@@ -83,6 +83,7 @@ import { qualityApi } from '../../../services/production';
 import type { DocumentPushPreview } from '../../../services/purchase-requisition';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
 import InspectionTemplateConductResultsTable from '../components/InspectionTemplateConductResultsTable';
+import QualityInspectionDetailAttachments from '../components/QualityInspectionDetailAttachments';
 import InspectionDetailQualityActions from '../components/InspectionDetailQualityActions';
 import { pickInspectionConductExtras } from '../components/inspectionTemplateUtils';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -125,12 +126,14 @@ import {
 } from '../../../../../components/custom-fields';
 import {
   getQualityFinishedDisposalFallback,
+  mergeQualityDisposalOptions,
   renderQualityResultTag,
   renderQualityDocStatusTag,
   renderQualityQualityStatusTag,
   getQualityDefectTypeOptions,
   qualityInspectionUniAuditProps,
 } from '../components/qualityMeta';
+import { DowngradeDispositionFields } from '../components/DowngradeDispositionFields';
 import {
   filterDeletableQualityInspectionRecords,
   filterRevokeConductQualityInspectionRecords,
@@ -178,10 +181,6 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       span: col.span ?? 1,
     };
   });
-}
-
-function renderProcessRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 // 过程检验接口定义
@@ -337,7 +336,12 @@ const ProcessInspectionPage: React.FC = () => {
           return;
         }
         const items = await getDictionaryItemList(dict.uuid, true);
-        setDisposalOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+        setDisposalOptions(
+          mergeQualityDisposalOptions(
+            items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })),
+            disposalFallback,
+          ),
+        );
       } catch {
         setDisposalOptions(disposalFallback);
       } finally {
@@ -675,6 +679,8 @@ const ProcessInspectionPage: React.FC = () => {
           defect_type: values.defect_type,
           defect_reason: values.defect_reason,
           disposition: values.disposition,
+          downgrade_material_id: values.downgrade_material_id,
+          downgrade_warehouse_id: values.downgrade_warehouse_id,
           remarks: values.remarks,
         });
       }
@@ -977,7 +983,6 @@ const ProcessInspectionPage: React.FC = () => {
       title: t('app.kuaizhizao.quality.common.columns.lifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
-      align: 'left',
       hideInSearch: true,
       render: (_, record) => {
         const lifecycle = getIncomingInspectionLifecycle(record as Record<string, unknown>);
@@ -997,11 +1002,9 @@ const ProcessInspectionPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.quality.common.columns.actions'),
       key: 'action',
-      width: 240,
       fixed: 'right',
       hideInSearch: true,
-      render: (_, record) =>
-        renderProcessRowActions(renderProcessRowNodes(record), `proc-${record.id ?? 'row'}`),
+      render: (_, record) => renderProcessRowNodes(record),
     },
   ], SALES_DOC_LIST_FIELD_RANK),
     [t, processAuditColumn, inspectionCustomFieldColumns, inspectionDocStatusValueEnum, inspectionQualityStatusValueEnum],
@@ -1129,7 +1132,6 @@ const ProcessInspectionPage: React.FC = () => {
           />,
         ]}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.process.messages.deleteConfirm', { count })}
-        scroll={{ x: 1800 }}
       />
 
       <FormModalTemplate
@@ -1432,6 +1434,13 @@ const ProcessInspectionPage: React.FC = () => {
                 <InspectionTemplateConductResultsTable inspection={inspectionDetail as Record<string, unknown>} />
               </DetailDrawerSection>
 
+              {Array.isArray(inspectionDetail.attachments) && inspectionDetail.attachments.length > 0 ? (
+                <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.attachments')}>
+                  <QualityInspectionDetailAttachments attachments={inspectionDetail.attachments} />
+                </DetailDrawerSection>
+              ) : null}
+
+
               <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.operationLog')}>
                 {processTracking.loading && (
                   <div style={{ textAlign: 'center', padding: 24 }}>
@@ -1516,6 +1525,7 @@ const ProcessInspectionPage: React.FC = () => {
             quickCreate={{ label: t('app.kuaizhizao.quality.common.form.dataDictionaryManage'), onClick: () => navigate('/system/data-dictionaries') }}
           />
         </ProFormItem>
+        <DowngradeDispositionFields />
         <ProFormTextArea
           name="remarks"
           label={t('app.kuaizhizao.quality.common.form.remarks')}

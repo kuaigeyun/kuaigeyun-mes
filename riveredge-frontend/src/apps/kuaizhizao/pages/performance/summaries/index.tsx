@@ -278,7 +278,6 @@ const SummariesPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1500 }}
           toolBarRender={() => [
             <Space key="filters">
               <DatePicker

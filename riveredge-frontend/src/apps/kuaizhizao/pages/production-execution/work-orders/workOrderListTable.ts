@@ -206,19 +206,26 @@ function propagateWorkOrderGroupIdFromParent(flat: WorkOrderListRow[]): WorkOrde
   })
 }
 
-/** 拆分工单子行继承主工单工序步骤摘要 */
+/** 仅拆分子行在自身无工序摘要时继承主工单；BOM 子工单不得继承上级成品工序 */
 function inheritOperationStepsFromParent(rows: WorkOrderListRow[]): WorkOrderListRow[] {
   return rows.map((row) => {
     if (!Array.isArray(row.children) || row.children.length === 0) {
       return row
     }
-    const children = row.children.map((child: WorkOrderListRow) => ({
-      ...child,
-      operation_steps:
+    const children = row.children.map((child: WorkOrderListRow) => {
+      const kind = child.row_kind || 'work_order'
+      const ownSteps =
         Array.isArray(child.operation_steps) && child.operation_steps.length > 0
           ? child.operation_steps
-          : row.operation_steps,
-    }))
+          : undefined
+      if (ownSteps) {
+        return { ...child, operation_steps: ownSteps }
+      }
+      if (kind === 'split') {
+        return { ...child, operation_steps: row.operation_steps }
+      }
+      return child
+    })
     return {
       ...row,
       children: inheritOperationStepsFromParent(children),
@@ -243,15 +250,18 @@ function normalizeUngroupedWorkOrderTree(rows: WorkOrderListRow[]): WorkOrderLis
   const attachChild = (parent: WorkOrderListRow, child: WorkOrderListRow) => {
     if (child.id == null || parent.id == null || child.id === parent.id) return
     if (!parent.children) parent.children = []
+    const kind = child.row_kind || 'split'
+    const ownSteps =
+      Array.isArray(child.operation_steps) && child.operation_steps.length > 0
+        ? child.operation_steps
+        : undefined
     parent.children.push({
       ...child,
-      row_kind: child.row_kind || 'split',
+      row_kind: kind,
       parent_work_order_id: parent.id,
       list_tree_depth: (parent.list_tree_depth ?? 0) + 1,
       operation_steps:
-        Array.isArray(child.operation_steps) && child.operation_steps.length > 0
-          ? child.operation_steps
-          : parent.operation_steps,
+        ownSteps ?? (kind === 'split' ? parent.operation_steps : child.operation_steps),
     })
     childIds.add(Number(child.id))
   }
@@ -318,8 +328,8 @@ export function normalizeWorkOrderListTreeData(rows: WorkOrderListRow[]): WorkOr
 }
 
 function listSnapshotStorageKey(queryKey: readonly unknown[]): string {
-  /* v13：树形组默认展开，平级组/拆返委外默认收起 */
-  return `riveredge.woList.v13:${tenantIdForSnapshot()}:${stableJsonForQueryKey(queryKey)}`
+  /* v14：拆分主工单不再继承 BOM 上级工序摘要 */
+  return `riveredge.woList.v14:${tenantIdForSnapshot()}:${stableJsonForQueryKey(queryKey)}`
 }
 
 /** 将上次成功的列表写入 sessionStorage，下次进页可瞬时 hydrate */

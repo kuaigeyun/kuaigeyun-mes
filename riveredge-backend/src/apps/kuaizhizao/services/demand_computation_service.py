@@ -40,6 +40,7 @@ from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_PHANTOM,
     SOURCE_TYPE_OUTSOURCE,
     SOURCE_TYPE_CONFIGURE,
+    SOURCE_TYPE_CUSTOMER_PROVIDED,
     SOURCE_TYPE_SERVICE,
     MANUFACTURING_MODE_FABRICATION,
     MANUFACTURING_MODE_ASSEMBLY,
@@ -955,7 +956,7 @@ class DemandComputationService(AppBaseService):
         computation_type: str
     ) -> str:
         """
-        生成需求计算编码
+        生成需求计算编码（单据编码模块：kuaizhizao-demand-computation / DEMAND_COMPUTATION_CODE）
         
         Args:
             tenant_id: 租户ID
@@ -964,18 +965,16 @@ class DemandComputationService(AppBaseService):
         Returns:
             str: 计算编码
         """
-        try:
-            # 使用编码生成服务生成编码
-            code = await CodeGenerationService.generate_code(
-                tenant_id=tenant_id,
-                rule_code="DEMAND_COMPUTATION",
-                context={"computation_type": computation_type}
-            )
-            return code
-        except Exception as e:
-            logger.warning(f"使用编码规则生成失败: {e}，使用简单编码")
-            now = resolve_business_datetime()
-            return f"MRP-{now.strftime('%Y%m%d')}-NEW"
+        from core.config.code_rule_pages import get_canonical_rule_code
+
+        rule_code = get_canonical_rule_code("kuaizhizao-demand-computation")
+        if not rule_code:
+            raise ValidationError("需求计算页面未配置编码规则")
+        return await CodeGenerationService.generate_code(
+            tenant_id=tenant_id,
+            rule_code=rule_code,
+            context={"computation_type": computation_type},
+        )
     
     async def _build_computation_response(
         self,
@@ -2326,7 +2325,7 @@ class DemandComputationService(AppBaseService):
         while queue:
             parent_id = queue.pop(0)
             st = await get_material_source_type(tenant_id, parent_id)
-            if st in (SOURCE_TYPE_BUY, SOURCE_TYPE_SERVICE, None):
+            if st in (SOURCE_TYPE_BUY, SOURCE_TYPE_CUSTOMER_PROVIDED, SOURCE_TYPE_SERVICE, None):
                 continue
             if st == SOURCE_TYPE_PHANTOM:
                 continue

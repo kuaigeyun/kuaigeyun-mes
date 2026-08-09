@@ -90,7 +90,8 @@ async def list_receipt_notices(
     purchase_order_id: Optional[int] = Query(None),
     supplier_id: Optional[int] = Query(None),
     warehouse_id: Optional[int] = Query(None),
-    keyword: Optional[str] = Query(None, description="模糊：通知单号/采购订单/供应商/仓库/入库单号"),
+    keyword: Optional[str] = Query(None, description="模糊：通知单号/采购订单/供应商/仓库/入库单号/物料"),
+    include_items: bool = Query(False, description="是否附带通知明细（明细表格视图）"),
     notice_code: Optional[str] = Query(None),
     purchase_order_code: Optional[str] = Query(None),
     planned_start_date: Optional[date] = Query(None),
@@ -123,6 +124,7 @@ async def list_receipt_notices(
         created_start_date=created_start_date,
         created_end_date=created_end_date,
         order_by=safe_order_by,
+        include_items=include_items,
     )
 
 

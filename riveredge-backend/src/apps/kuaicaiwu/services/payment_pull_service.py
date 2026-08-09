@@ -80,24 +80,8 @@ class PaymentPullService(AppBaseService[Payment]):
                     reserved += Decimal(str(payment.unsettled_amount or 0))
             result[payable_id] = reserved
 
-        codes = [c for c in code_by_id.values() if c]
-        if codes:
-            code_to_id = {str(v).strip(): k for k, v in code_by_id.items() if v}
-            orphan_payments = await Payment.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-            ).exclude(status__in=list(self._EXCLUDED_PAYMENT_STATUSES))
-            linked_ids = set(payment_map.keys())
-            for payment in orphan_payments:
-                if int(payment.id) in linked_ids:
-                    continue
-                note = str(payment.notes or "")
-                for code, pid in code_to_id.items():
-                    if code and code in note:
-                        result[pid] = result.get(pid, Decimal("0")) + Decimal(
-                            str(payment.unsettled_amount or 0)
-                        )
-                        break
+        # 占用金额仅认 DocumentRelation；不再全表扫 notes（列表路径性能陷阱）。
+        _ = code_by_id
         return result
 
     def _build_preview_item(

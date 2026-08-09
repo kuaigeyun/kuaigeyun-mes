@@ -101,6 +101,7 @@ from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_OUTSOURCE,
     SOURCE_TYPE_BUY,
     SOURCE_TYPE_PHANTOM,
+    SOURCE_TYPE_CUSTOMER_PROVIDED,
     SOURCE_TYPE_CONFIGURE,
 )
 from loguru import logger
@@ -1085,16 +1086,29 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 if existing:
                     raise ValidationError(f"工单编码 {code} 已存在")
             elif code_rule:
-                # 使用编码规则生成编码
-                # 构建上下文变量
+                # 使用编码规则生成编码；批量下推时若序号未校准到库内最大号会撞号，
+                # 故生成后若已存在则继续占号直至唯一。
                 today = today_site_str()
                 context = {"prefix": f"WO{today}"}
-                
-                code = await CodeGenerationService.generate_code(
-                    tenant_id=tenant_id,
-                    rule_code=code_rule,
-                    context=context
-                )
+                code = None
+                for _attempt in range(30):
+                    candidate = await CodeGenerationService.generate_code(
+                        tenant_id=tenant_id,
+                        rule_code=code_rule,
+                        context=context,
+                    )
+                    existing = await WorkOrder.filter(
+                        tenant_id=tenant_id,
+                        code=candidate,
+                        deleted_at__isnull=True,
+                    ).first()
+                    if not existing:
+                        code = candidate
+                        break
+                if not code:
+                    raise ValidationError(
+                        "无法生成唯一工单编码，请检查编码规则序号或清理重复规则后重试"
+                    )
             else:
                 raise ValidationError("必须提供 code 或 code_rule")
 
@@ -1175,6 +1189,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 elif source_type == SOURCE_TYPE_BUY:
                     # 采购件：不生成生产工单（应该生成采购订单）
                     error_msg = f"采购件不应创建生产工单，物料: {product_code} ({product_name})，请使用采购订单功能"
+                    logger.warning(f"工单创建失败 - {error_msg}")
+                    raise ValidationError(error_msg)
+                elif source_type == SOURCE_TYPE_CUSTOMER_PROVIDED:
+                    error_msg = (
+                        f"客供料不应创建生产工单，物料: {product_code} ({product_name})，"
+                        "请通过客供料入库管理库存"
+                    )
                     logger.warning(f"工单创建失败 - {error_msg}")
                     raise ValidationError(error_msg)
                 elif source_type == SOURCE_TYPE_PHANTOM:
@@ -1263,7 +1284,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 # 父单不存列表，拆分时写入子单
                 pass
 
-            # 创建工单
+            # 创建工单（审核默认关闭→已通过可直接下达；开启后需提交审核）
+            audit_required = await BusinessConfigService().check_audit_required(
+                tenant_id, "work_order"
+            )
+            initial_review = "已通过" if not audit_required else "草稿"
             work_order = await WorkOrder.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -1281,7 +1306,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 workshop_name=work_order_data.workshop_name,
                 work_center_id=work_order_data.work_center_id,
                 work_center_name=work_order_data.work_center_name,
-                status=work_order_data.status,
+                status=work_order_data.status or "draft",
+                review_status=initial_review,
                 priority=work_order_data.priority,
                 planned_start_date=coerce_business_datetime_to_utc(
                     work_order_data.planned_start_date
@@ -1602,11 +1628,18 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             tenant_id,
             [work_order_id],
         )
-        return enrich_work_order_capabilities_on_response(
+        from core.services.approval.audit_record_enricher import audit_enabled_for, enrich_record
+
+        audit_required = await audit_enabled_for(tenant_id, "work_order")
+        response = enrich_work_order_capabilities_on_response(
             work_order,
             response,
             has_returnable_picking=returnable_map.get(work_order_id, False),
             has_downstream_documents=downstream_map.get(work_order_id, False),
+            audit_required=audit_required,
+        )
+        return await enrich_record(
+            tenant_id, "work_order", response, audit_enabled=audit_required
         )
 
     async def compute_split_remaining_quantity(
@@ -2283,6 +2316,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 list(work_orders),
             )
 
+        from core.services.approval.audit_record_enricher import audit_enabled_for, enrich_items
+
+        audit_required = await audit_enabled_for(tenant_id, "work_order")
+
         for wo in work_orders:
             try:
                 item_dict = WorkOrderListResponse.model_validate(wo).model_dump()
@@ -2320,6 +2357,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     wo,
                     has_returnable_picking=returnable_by_wo.get(int(wo.id), False) if wo.id is not None else False,
                     has_downstream_documents=downstream_by_wo.get(int(wo.id), False) if wo.id is not None else False,
+                    audit_required=audit_required,
                 )
                 if wo.id is not None:
                     item_dict["downstream_push_progress"] = push_progress_by_wo.get(int(wo.id), 0.0)
@@ -2339,6 +2377,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             except Exception as e:
                 logger.error(f"工单列表响应校验失败: {str(e)}")
                 continue
+
+        result = await enrich_items(
+            tenant_id, "work_order", result, audit_enabled=audit_required
+        )
 
         result = await WorkOrderTreeService().attach_tree_children(
             tenant_id,
@@ -3269,7 +3311,26 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
-            assert_work_order_capability(work_order, "delete")
+            split_parent_id = work_order.parent_work_order_id
+            split_child_ops_template: List[WorkOrderOperation] = []
+            if split_parent_id is not None:
+                split_child_ops_template = await WorkOrderOperation.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    deleted_at__isnull=True,
+                ).order_by("sequence").all()
+
+            # 已拆分主工单：无子单时可删；capability 默认禁删 split，此处单独放行
+            if (work_order.status or "") == "split" and work_order.parent_work_order_id is None:
+                child_count = await WorkOrder.filter(
+                    tenant_id=tenant_id,
+                    parent_work_order_id=work_order_id,
+                    deleted_at__isnull=True,
+                ).count()
+                if child_count > 0:
+                    raise ValidationError("已拆分主工单存在子工单，不能删除。请先删除全部拆分工单或使用撤销拆分")
+            else:
+                assert_work_order_capability(work_order, "delete")
 
             if work_order.parent_work_order_id is not None:
                 if work_order.status == "released":
@@ -3280,13 +3341,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 elif work_order.status not in ["draft", "cancelled"]:
                     raise ValidationError("只能删除草稿、已取消或未执行的拆分工单")
             elif (work_order.status or "") == "split":
-                child_count = await WorkOrder.filter(
-                    tenant_id=tenant_id,
-                    parent_work_order_id=work_order_id,
-                    deleted_at__isnull=True,
-                ).count()
-                if child_count > 0:
-                    raise ValidationError("已拆分主工单存在子工单，不能删除。请先删除全部拆分工单")
+                pass  # 无子单校验已在上方完成
             elif work_order.status == "released":
                 if work_order.actual_start_date or (
                     work_order.completed_quantity and work_order.completed_quantity > 0
@@ -3324,6 +3379,20 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 tenant_id=tenant_id,
                 id=work_order_id
             ).update(deleted_at=now)
+
+            if split_parent_id is not None:
+                await self._remove_split_document_relation(
+                    tenant_id,
+                    parent_id=int(split_parent_id),
+                    child_id=int(work_order_id),
+                )
+                await self._restore_split_parent_if_no_children(
+                    tenant_id,
+                    parent_work_order_id=int(split_parent_id),
+                    template_ops=split_child_ops_template,
+                    restored_by=work_order.updated_by or work_order.created_by or 0,
+                    restore_status_hint=work_order.status,
+                )
 
     async def check_material_shortage(
         self,
@@ -3422,6 +3491,168 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             "work_order_name": work_order.name or "",
         }
 
+    async def submit_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        submitted_by: int,
+    ) -> WorkOrderResponse:
+        work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+        status = str(work_order.status or "").strip()
+        if status not in ("draft", "草稿"):
+            raise BusinessLogicError(f"当前状态不可提交审核: {status or '-'}")
+        review = str(work_order.review_status or "").strip()
+        if review == "待审核":
+            return await self.get_work_order_by_id(tenant_id, work_order_id)
+
+        audit_required = await BusinessConfigService().check_audit_required(
+            tenant_id, "work_order"
+        )
+        if not audit_required:
+            submitter_name = await self.get_user_name(submitted_by)
+            await WorkOrder.filter(tenant_id=tenant_id, id=work_order_id).update(
+                review_status="已通过",
+                reviewer_id=submitted_by,
+                reviewer_name=submitter_name,
+                review_time=resolve_business_datetime(),
+                updated_by=submitted_by,
+            )
+            return await self.get_work_order_by_id(tenant_id, work_order_id)
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=submitted_by,
+            node_key="work_order",
+            entity_type="work_order",
+            entity_id=work_order.id,
+            entity_uuid=str(work_order.uuid),
+            title=f"生产工单审批: {work_order.code}",
+            content=f"产品: {work_order.product_name}, 数量: {work_order.quantity}",
+        )
+        if not instance:
+            raise BusinessLogicError(
+                "生产工单审核已开启但未找到可用的审批流程，请在配置中心检查 work_order 审批流程是否已激活"
+            )
+        await WorkOrder.filter(tenant_id=tenant_id, id=work_order_id).update(
+            review_status="待审核",
+            updated_by=submitted_by,
+        )
+        return await self.get_work_order_by_id(tenant_id, work_order_id)
+
+    async def approve_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        approver_id: int,
+    ) -> WorkOrderResponse:
+        work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+        status = str(work_order.status or "").strip()
+        review = str(work_order.review_status or "").strip()
+        if status not in ("draft", "草稿") or review != "待审核":
+            raise BusinessLogicError(
+                f"只能审核待审核的草稿工单，当前: status={status or '-'}, review={review or '-'}"
+            )
+        approver_name = await self.get_user_name(approver_id)
+        await WorkOrder.filter(tenant_id=tenant_id, id=work_order_id).update(
+            review_status="已通过",
+            reviewer_id=approver_id,
+            reviewer_name=approver_name,
+            review_time=resolve_business_datetime(),
+            updated_by=approver_id,
+        )
+        return await self.get_work_order_by_id(tenant_id, work_order_id)
+
+    async def reject_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        approver_id: int,
+        *,
+        rejection_reason: Optional[str] = None,
+    ) -> WorkOrderResponse:
+        work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+        status = str(work_order.status or "").strip()
+        review = str(work_order.review_status or "").strip()
+        if status not in ("draft", "草稿") or review != "待审核":
+            raise BusinessLogicError(
+                f"只能驳回待审核的草稿工单，当前: status={status or '-'}, review={review or '-'}"
+            )
+        await WorkOrder.filter(tenant_id=tenant_id, id=work_order_id).update(
+            review_status="已驳回",
+            review_remarks=rejection_reason,
+            updated_by=approver_id,
+        )
+        return await self.get_work_order_by_id(tenant_id, work_order_id)
+
+    async def withdraw_work_order_submit(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        operator_id: int,
+    ) -> WorkOrderResponse:
+        work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+        status = str(work_order.status or "").strip()
+        review = str(work_order.review_status or "").strip()
+        if status not in ("draft", "草稿") or review != "待审核":
+            raise BusinessLogicError(
+                f"只能撤回待审核的草稿工单，当前: status={status or '-'}, review={review or '-'}"
+            )
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        await ApprovalInstanceService.cancel_approval(
+            tenant_id=tenant_id,
+            entity_type="work_order",
+            entity_id=work_order_id,
+            operator_id=operator_id,
+        )
+        await WorkOrder.filter(tenant_id=tenant_id, id=work_order_id).update(
+            review_status="草稿",
+            updated_by=operator_id,
+        )
+        return await self.get_work_order_by_id(tenant_id, work_order_id)
+
+    async def revoke_work_order_approval(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        operator_id: int,
+    ) -> WorkOrderResponse:
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
+        from core.services.approval.uni_audit_service import UniAuditService
+
+        work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+        status = str(work_order.status or "").strip()
+        review = str(work_order.review_status or "").strip()
+        if status not in ("draft", "草稿") or review not in ("已通过", "审核通过", "approved"):
+            raise BusinessLogicError(
+                f"仅已通过审核且未下达的工单可撤销审核，当前: status={status or '-'}, review={review or '-'}"
+            )
+        audit_required = await BusinessConfigService().check_audit_required(
+            tenant_id, "work_order"
+        )
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+        target_review = "待审核" if landing == "pending" else "草稿"
+
+        async def _do_revoke() -> WorkOrderResponse:
+            await WorkOrder.filter(tenant_id=tenant_id, id=work_order_id).update(
+                review_status=target_review,
+                reviewer_id=None,
+                reviewer_name=None,
+                review_time=None,
+                updated_by=operator_id,
+            )
+            return await self.get_work_order_by_id(tenant_id, work_order_id)
+
+        return await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="work_order",
+            entity_id=work_order_id,
+            operator_id=operator_id,
+            flow_revoke=_do_revoke,
+        )
+
     async def release_work_order(
         self,
         tenant_id: int,
@@ -3448,7 +3679,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
-            assert_work_order_capability(work_order, "release")
+            audit_required = await BusinessConfigService().check_audit_required(
+                tenant_id, "work_order"
+            )
+            assert_work_order_capability(work_order, "release", audit_required=audit_required)
 
             if (work_order.status or "") == "split":
                 raise BusinessLogicError("已拆分主工单不可下达，请将剩余数量拆分为子工单后由子工单执行")
@@ -4243,6 +4477,205 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 work_order_id=parent_work_order.id,
                 deleted_at__isnull=True,
             ).update(deleted_at=now)
+
+    async def _remove_split_document_relation(
+        self,
+        tenant_id: int,
+        *,
+        parent_id: int,
+        child_id: int,
+    ) -> None:
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="work_order",
+            source_id=parent_id,
+            target_type="work_order",
+            target_id=child_id,
+            relation_desc="工单拆分",
+        ).delete()
+
+    async def _assert_split_child_revocable(self, tenant_id: int, child: WorkOrder) -> None:
+        if child.id is None:
+            raise ValidationError("拆分工单无效")
+        if child.status == "released":
+            if child.actual_start_date or (
+                child.completed_quantity and child.completed_quantity > 0
+            ):
+                raise ValidationError(
+                    f"拆分工单 {child.code} 已开始执行，不能撤销拆分"
+                )
+        elif child.status not in ["draft", "cancelled"]:
+            raise ValidationError(
+                f"拆分工单 {child.code} 当前状态不可撤销（仅草稿/已取消/未执行的已下达）"
+            )
+        reporting_count = await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id=child.id,
+        ).count()
+        if reporting_count > 0:
+            raise ValidationError(
+                f"拆分工单 {child.code} 存在报工记录，不能撤销拆分"
+            )
+
+    async def _restore_split_parent_if_no_children(
+        self,
+        tenant_id: int,
+        *,
+        parent_work_order_id: int,
+        template_ops: Optional[List[WorkOrderOperation]] = None,
+        restored_by: int = 0,
+        restore_status_hint: Optional[str] = None,
+    ) -> bool:
+        """若主工单已无拆分子单，恢复为可执行状态并还原工序。"""
+        parent = await WorkOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=parent_work_order_id,
+            deleted_at__isnull=True,
+        )
+        if parent is None or (parent.status or "") != "split":
+            return False
+
+        remaining = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            parent_work_order_id=parent_work_order_id,
+            deleted_at__isnull=True,
+        ).count()
+        if remaining > 0:
+            return False
+
+        restore_status = "released"
+        hint = (restore_status_hint or "").strip()
+        if hint in ("draft", "草稿"):
+            restore_status = "draft"
+        elif hint in ("released", "已下达"):
+            restore_status = "released"
+
+        archived_ops = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=parent_work_order_id,
+            deleted_at__isnull=False,
+        ).all()
+        if archived_ops:
+            for op in archived_ops:
+                op.deleted_at = None
+                op.status = "pending"
+                op.completed_quantity = Decimal("0")
+                op.qualified_quantity = Decimal("0")
+                op.unqualified_quantity = Decimal("0")
+                await op.save(
+                    update_fields=[
+                        "deleted_at",
+                        "status",
+                        "completed_quantity",
+                        "qualified_quantity",
+                        "unqualified_quantity",
+                        "updated_at",
+                    ]
+                )
+        elif template_ops:
+            user_info = await self.get_user_info(restored_by) if restored_by else {
+                "name": "系统",
+            }
+            await self._copy_work_order_operations(
+                tenant_id,
+                source_ops=template_ops,
+                target_work_order=parent,
+                created_by=restored_by or 0,
+                created_by_name=user_info.get("name") or "系统",
+            )
+
+        parent.status = restore_status
+        parent.updated_by = restored_by or parent.updated_by
+        if restored_by:
+            try:
+                user_info = await self.get_user_info(restored_by)
+                parent.updated_by_name = user_info.get("name") or parent.updated_by_name
+            except Exception:
+                pass
+        await parent.save(update_fields=["status", "updated_by", "updated_by_name", "updated_at"])
+        logger.info(
+            "工单 %s 拆分已全部撤销，恢复状态为 %s",
+            parent.code,
+            restore_status,
+        )
+        return True
+
+    async def unsplit_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        updated_by: int,
+    ) -> WorkOrderResponse:
+        """
+        撤销拆分：删除全部未执行的拆分子工单，并恢复主工单状态与工序。
+        """
+        async with in_transaction():
+            parent = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+            if parent.parent_work_order_id is not None:
+                raise BusinessLogicError("只能对拆分主工单执行撤销拆分")
+            if (parent.status or "") != "split":
+                raise BusinessLogicError("仅已拆分主工单可撤销拆分")
+
+            children = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                parent_work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).order_by("code").all()
+
+            template_ops: List[WorkOrderOperation] = []
+            for child in children:
+                await self._assert_split_child_revocable(tenant_id, child)
+                if not template_ops and child.id is not None:
+                    template_ops = await WorkOrderOperation.filter(
+                        tenant_id=tenant_id,
+                        work_order_id=child.id,
+                        deleted_at__isnull=True,
+                    ).order_by("sequence").all()
+
+            now = now_utc()
+            from apps.kuaizhizao.services.batching_order_service import BatchingOrderService
+
+            batching_svc = BatchingOrderService()
+            restore_status_hint = (
+                "draft"
+                if any((child.status or "") == "draft" for child in children)
+                else "released"
+            )
+            for child in children:
+                if child.id is None:
+                    continue
+                await batching_svc.void_open_batching_orders_for_work_order(
+                    tenant_id, child.id
+                )
+                await WorkOrderOperation.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=child.id,
+                    deleted_at__isnull=True,
+                ).update(deleted_at=now)
+                await WorkOrder.filter(
+                    tenant_id=tenant_id,
+                    id=child.id,
+                ).update(deleted_at=now)
+                await self._remove_split_document_relation(
+                    tenant_id,
+                    parent_id=work_order_id,
+                    child_id=int(child.id),
+                )
+
+            restored = await self._restore_split_parent_if_no_children(
+                tenant_id,
+                parent_work_order_id=work_order_id,
+                template_ops=template_ops,
+                restored_by=updated_by,
+                restore_status_hint=restore_status_hint,
+            )
+            if not restored:
+                raise BusinessLogicError("撤销拆分失败：主工单未能恢复")
+
+            parent = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+            return WorkOrderResponse.model_validate(parent)
 
     async def _resolve_manufacturing_mode(self, tenant_id: int, product_id: Optional[int]) -> str:
         """product_id 为工单制造对象对应物料 id；制造模式定义在该物料 source_config，与 get_work_order_by_id 一致。"""

@@ -500,13 +500,11 @@ const RoutePatrolsPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        width: 160,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
           renderEquipmentMasterRowActions({
             record,
-            keyPrefix: `route-patrol-actions-${record.id ?? 'row'}`,
             t,
             canRead: perms.canRead,
             canUpdate: perms.canUpdate,

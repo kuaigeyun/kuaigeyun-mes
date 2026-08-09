@@ -13,6 +13,7 @@ from loguru import logger
 from apps.kuaicaiwu.schemas.finance import (
     PartnerStatementCreate,
     PartnerStatementDisputeRequest,
+    PartnerStatementLineDetailResponse,
     PartnerStatementListResponse,
     PartnerStatementMarkSentRequest,
     PartnerStatementPreviewResponse,
@@ -68,6 +69,21 @@ async def preview_partner_statement(
         return PartnerStatementPreviewResponse.model_validate(data)
     except (ValidationError, NotFoundError) as e:
         raise _http_exception_with_trace(400, str(e), "/partner-statements/preview", tenant_id)
+
+
+@router.get("/line-detail", response_model=PartnerStatementLineDetailResponse)
+async def get_partner_statement_line_detail(
+    doc_type: str = Query(..., description="purchase_receipt/采购入库 或 outsource_material_receipt/委外收货"),
+    doc_id: int = Query(..., ge=1),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:read")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        data = await service.get_statement_line_detail(tenant_id, doc_type, doc_id)
+        return PartnerStatementLineDetailResponse.model_validate(data)
+    except (ValidationError, NotFoundError) as e:
+        code = 404 if isinstance(e, NotFoundError) else 400
+        raise _http_exception_with_trace(code, str(e), "/partner-statements/line-detail", tenant_id)
 
 
 @router.post("", response_model=PartnerStatementResponse, status_code=status.HTTP_201_CREATED)

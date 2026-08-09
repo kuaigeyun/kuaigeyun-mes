@@ -526,11 +526,81 @@ class PayablePullService(AppBaseService[Payable]):
                 already_pulled_reason="payment.pull_from_payable.already_pulled",
             )
             payload = row.model_dump() if hasattr(row, "model_dump") else dict(row)
-            payload["capabilities"] = {
-                "push_payment": {
-                    "allowed": allowed,
-                    "reason": reason,
-                }
+            existing_caps = dict(payload.get("capabilities") or {})
+            existing_caps["push_payment"] = {
+                "allowed": allowed,
+                "reason": reason,
             }
+            payload["capabilities"] = existing_caps
             enriched.append(payload)
         return enriched
+
+    async def enrich_push_purchase_invoice_capabilities(
+        self,
+        tenant_id: int,
+        payables: List[Any],
+    ) -> List[Dict[str, Any]]:
+        """为应付单列表补充下推进项发票 capability（实际创建进项发票在进项发票页加载）。"""
+        from apps.kuaicaiwu.services.purchase_invoice_pull_service import PurchaseInvoicePullService
+
+        if not payables:
+            return []
+
+        purchase_invoice_pull = PurchaseInvoicePullService()
+        payable_ids = [int(p.id) for p in payables]
+        code_by_id = {int(p.id): str(getattr(p, "payable_code", None) or p.id) for p in payables}
+        pushed_map = await purchase_invoice_pull._sum_pushed_totals_by_payable(
+            tenant_id, payable_ids, code_by_id
+        )
+        po_by_payable = await purchase_invoice_pull._resolve_purchase_orders_from_payables(
+            tenant_id, payables
+        )
+
+        enriched: List[Dict[str, Any]] = []
+        for row in payables:
+            pid = int(row.id)
+            preview_items = await purchase_invoice_pull._build_preview_items_for_payable(
+                tenant_id,
+                row,
+                pushed=pushed_map.get(pid, Decimal("0")),
+            )
+            source_allowed = purchase_invoice_pull._payable_source_allowed(row)
+            po_id, _ = po_by_payable.get(pid, (None, None))
+            if source_allowed and po_id is None:
+                source_allowed = False
+            allowed, reason = purchase_invoice_pull._derive_pull_capability(
+                source_allowed=source_allowed,
+                preview_items=preview_items,
+                not_allowed_reason="purchase_invoice.pull_from_payable.not_allowed",
+                no_lines_reason="purchase_invoice.pull_from_payable.no_lines",
+                already_pulled_reason="purchase_invoice.pull_from_payable.already_pulled",
+            )
+            if not po_id and preview_items:
+                allowed = False
+                reason = reason or "purchase_invoice.pull_from_payable.no_purchase_order"
+            payload = row.model_dump() if hasattr(row, "model_dump") else dict(row)
+            existing_caps = dict(payload.get("capabilities") or {})
+            existing_caps["push_purchase_invoice"] = {
+                "allowed": allowed,
+                "reason": reason,
+            }
+            payload["capabilities"] = existing_caps
+            enriched.append(payload)
+        return enriched
+
+    async def enrich_push_capabilities(
+        self,
+        tenant_id: int,
+        payables: List[Any],
+    ) -> List[Dict[str, Any]]:
+        """合并下推付款与下推进项发票 capability。"""
+        payment_enriched = await self.enrich_push_payment_capabilities(tenant_id, payables)
+        invoice_enriched = await self.enrich_push_purchase_invoice_capabilities(tenant_id, payables)
+        merged: List[Dict[str, Any]] = []
+        for pay_row, inv_row in zip(payment_enriched, invoice_enriched):
+            caps = dict(pay_row.get("capabilities") or {})
+            inv_caps = (inv_row.get("capabilities") or {}).get("push_purchase_invoice")
+            if inv_caps is not None:
+                caps["push_purchase_invoice"] = inv_caps
+            merged.append({**pay_row, "capabilities": caps})
+        return merged

@@ -1,6 +1,7 @@
 export type KuaicaiwuDocumentActionKey =
   | 'sales_invoice.pull_from_sales_order'
   | 'sales_invoice.pull_from_sales_delivery'
+  | 'sales_invoice.pull_from_receivable'
   | 'receivable.pull_from_sales_order'
   | 'receivable.pull_from_sales_delivery'
   | 'payable.pull_from_purchase_order'
@@ -8,6 +9,7 @@ export type KuaicaiwuDocumentActionKey =
   | 'receipt.pull_from_receivable'
   | 'purchase_invoice.pull_from_purchase_order'
   | 'purchase_invoice.pull_from_purchase_receipt'
+  | 'purchase_invoice.pull_from_payable'
   | 'payment.pull_from_payable';
 
 export interface KuaicaiwuDocumentActionDefinition {
@@ -34,6 +36,14 @@ export const KUAICAIWU_DOCUMENT_ACTION_REGISTRY: Record<KuaicaiwuDocumentActionK
     kind: 'pull_create',
     label: '从销售出库创建销项发票',
     sourceLabel: '销售出库',
+    targetLabel: '销项发票',
+  },
+  'sales_invoice.pull_from_receivable': {
+    key: 'sales_invoice.pull_from_receivable',
+    module: 'kuaicaiwu',
+    kind: 'pull_create',
+    label: '从应收单创建销项发票',
+    sourceLabel: '应收单',
     targetLabel: '销项发票',
   },
   'receivable.pull_from_sales_order': {
@@ -90,6 +100,14 @@ export const KUAICAIWU_DOCUMENT_ACTION_REGISTRY: Record<KuaicaiwuDocumentActionK
     kind: 'pull_create',
     label: '从采购入库创建进项发票',
     sourceLabel: '采购入库',
+    targetLabel: '进项发票',
+  },
+  'purchase_invoice.pull_from_payable': {
+    key: 'purchase_invoice.pull_from_payable',
+    module: 'kuaicaiwu',
+    kind: 'pull_create',
+    label: '从应付单创建进项发票',
+    sourceLabel: '应付单',
     targetLabel: '进项发票',
   },
   'payment.pull_from_payable': {

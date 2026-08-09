@@ -407,7 +407,6 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
               {t('app.kuaizhizao.replenishmentSuggestions.actionGenerateFromAlerts')}
             </Button>,
           ]}
-          scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
 

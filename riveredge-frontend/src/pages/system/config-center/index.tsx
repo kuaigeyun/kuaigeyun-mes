@@ -24,6 +24,7 @@ import {
   FLOW_CATEGORIES,
   AUTOMATION_CATEGORIES,
   type ConfigCategory,
+  type ParamMeta,
 } from './configTree';
 import AuditSettingsPanel from './AuditSettingsPanel';
 import { TRIAL_RUN_MODE_QUERY_KEY } from '../../../hooks/useTrialRunMode';
@@ -34,6 +35,13 @@ import type { Color } from 'antd/es/color-picker';
 const { Sider, Content } = Layout;
 const { Text, Paragraph } = Typography;
 const { useToken } = theme;
+
+/** 参数卡片网格列宽唯一真源（单卡与分组卡同宽） */
+const PARAM_CARD_GRID_STYLE: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))',
+  gap: 16,
+};
 
 export const PARAM_GUIDANCE_I18N_KEY_MAP: Record<string, string> = {
   'work_order.material_shortage_block_level': 'pages.system.configCenter.param.work_order_material_shortage_block_level_guide',
@@ -117,6 +125,52 @@ function toBusinessParams(flat: Record<string, any>, bizParamKeys: string[]): Re
     params[cat][paramKey] = flat[key];
   }
   return params;
+}
+
+type ParamRenderBlock =
+  | { kind: 'single'; param: ParamMeta }
+  | {
+      kind: 'group';
+      groupKey: string;
+      groupNameKey: string;
+      groupDescriptionKey?: string;
+      params: ParamMeta[];
+    };
+
+/** 按 groupKey 聚合同组参数；无组参数保持单卡。同组首次出现位置决定整组插入点。 */
+function groupParamsForRender(params: ParamMeta[]): ParamRenderBlock[] {
+  const blocks: ParamRenderBlock[] = [];
+  const groupBuckets = new Map<string, ParamMeta[]>();
+
+  for (const param of params) {
+    const gk = param.groupKey?.trim();
+    if (!gk) {
+      blocks.push({ kind: 'single', param });
+      continue;
+    }
+    if (!groupBuckets.has(gk)) {
+      const bucket: ParamMeta[] = [];
+      groupBuckets.set(gk, bucket);
+      blocks.push({
+        kind: 'group',
+        groupKey: gk,
+        groupNameKey: param.groupNameKey || gk,
+        groupDescriptionKey: param.groupDescriptionKey,
+        params: bucket,
+      });
+    }
+    groupBuckets.get(gk)!.push(param);
+  }
+
+  return blocks.map((block) => {
+    if (block.kind !== 'group') return block;
+    const first = block.params[0];
+    return {
+      ...block,
+      groupNameKey: first?.groupNameKey || block.groupNameKey,
+      groupDescriptionKey: first?.groupDescriptionKey || block.groupDescriptionKey,
+    };
+  });
 }
 
 const BUSINESS_CONFIG_QUERY_KEY = ['businessConfig'] as const;
@@ -207,6 +261,54 @@ const ConfigCenterPage: React.FC = () => {
   const getParamGuidance = (paramKey: string): string => {
     const key = getParamGuidanceI18nKey(paramKey);
     return key ? renderText(key, '') : '';
+  };
+
+  const renderParamControl = (
+    param: ParamMeta,
+    switchDisabled?: boolean,
+  ) => {
+    const implemented = isImplementedParam(param.sourcePath);
+    const disabled =
+      switchDisabled ??
+      (!implemented
+        || isQualityParamDisabled(param.key, qualityFormValues)
+        || isFinanceParamDisabled(param.key, qualityFormValues));
+    return (
+      <Form.Item
+        name={[param.key]}
+        noStyle
+        valuePropName={param.type === 'boolean' ? 'checked' : undefined}
+        getValueFromEvent={
+          param.type === 'color'
+            ? (c: Color) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)
+            : undefined
+        }
+      >
+        {param.type === 'boolean' ? <Switch disabled={disabled} /> :
+         param.type === 'number' ? <InputNumber size="middle" min={param.min} max={param.max} style={{ width: 120 }} disabled={!implemented} /> :
+         param.type === 'select' ? <Select size="middle" options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))} style={{ minWidth: 160 }} disabled={!implemented} /> :
+         param.type === 'multiselect' ? (
+           <Select
+             mode="multiple"
+             size="middle"
+             allowClear
+             options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))}
+             style={{ minWidth: 220 }}
+             disabled={!implemented}
+           />
+         ) :
+         param.type === 'tags' ? (
+           <Select
+             mode="tags"
+             size="middle"
+             tokenSeparators={[',', ' ']}
+             style={{ minWidth: 220 }}
+             disabled={!implemented}
+           />
+         ) :
+         param.type === 'color' ? <ColorPicker showText disabled={!implemented} /> : null}
+      </Form.Item>
+    );
   };
 
   useEffect(() => {
@@ -334,14 +436,60 @@ const ConfigCenterPage: React.FC = () => {
                       }
                     }}
                   >
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 16 }}>
-                      {currentCat.params
-                        .filter((param) => param.source === 'quality_stage_toggle' || isImplementedParam(param.sourcePath))
-                        .map(param => {
-                        const implemented = isImplementedParam(param.sourcePath);
-                        const switchDisabled = !implemented
-                          || isQualityParamDisabled(param.key, qualityFormValues)
-                          || isFinanceParamDisabled(param.key, qualityFormValues);
+                    <div style={PARAM_CARD_GRID_STYLE}>
+                      {groupParamsForRender(
+                        currentCat.params.filter(
+                          (param) => param.source === 'quality_stage_toggle' || isImplementedParam(param.sourcePath),
+                        ),
+                      ).map((block) => {
+                        if (block.kind === 'group') {
+                          const { groupKey, groupNameKey, groupDescriptionKey, params } = block;
+                          // 外层占满一行（不与其他卡并排）；内层同列宽网格，卡片宽度与单卡一致
+                          return (
+                            <div
+                              key={groupKey}
+                              style={{ gridColumn: '1 / -1', ...PARAM_CARD_GRID_STYLE }}
+                            >
+                              <Card
+                                size="small"
+                                title={
+                                  <div>
+                                    <Text strong>{renderText(groupNameKey, groupKey)}</Text>
+                                    {groupDescriptionKey ? (
+                                      <Paragraph type="secondary" style={{ fontSize: 12, margin: '4px 0 0' }}>
+                                        {renderText(groupDescriptionKey, '')}
+                                      </Paragraph>
+                                    ) : null}
+                                  </div>
+                                }
+                              >
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                  {params.map((param) => (
+                                    <div
+                                      key={param.key}
+                                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                                    >
+                                      <div style={{ flex: 1, marginRight: 16 }}>
+                                        <Text strong>{renderText(param.nameKey, param.key)}</Text>
+                                        <Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>
+                                          {renderText(param.descriptionKey, '')}
+                                        </Paragraph>
+                                        {!!getParamGuidance(param.key) && (
+                                          <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4 }}>
+                                            {getParamGuidance(param.key)}
+                                          </Paragraph>
+                                        )}
+                                      </div>
+                                      {renderParamControl(param)}
+                                    </div>
+                                  ))}
+                                </div>
+                              </Card>
+                            </div>
+                          );
+                        }
+
+                        const param = block.param;
                         return (
                           <Card key={param.key} size="small">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -350,40 +498,7 @@ const ConfigCenterPage: React.FC = () => {
                                 <Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>{renderText(param.descriptionKey, '')}</Paragraph>
                                 {!!getParamGuidance(param.key) && <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4 }}>{getParamGuidance(param.key)}</Paragraph>}
                               </div>
-                              <Form.Item
-                                name={[param.key]}
-                                noStyle
-                                valuePropName={param.type === 'boolean' ? 'checked' : undefined}
-                                getValueFromEvent={
-                                  param.type === 'color'
-                                    ? (c: Color) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)
-                                    : undefined
-                                }
-                              >
-                                {param.type === 'boolean' ? <Switch disabled={switchDisabled} /> :
-                                 param.type === 'number' ? <InputNumber size="middle" min={param.min} max={param.max} style={{ width: 120 }} disabled={!implemented} /> :
-                                 param.type === 'select' ? <Select size="middle" options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))} style={{ minWidth: 160 }} disabled={!implemented} /> :
-                                 param.type === 'multiselect' ? (
-                                   <Select
-                                     mode="multiple"
-                                     size="middle"
-                                     allowClear
-                                     options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))}
-                                     style={{ minWidth: 220 }}
-                                     disabled={!implemented}
-                                   />
-                                 ) :
-                                 param.type === 'tags' ? (
-                                   <Select
-                                     mode="tags"
-                                     size="middle"
-                                     tokenSeparators={[',', ' ']}
-                                     style={{ minWidth: 220 }}
-                                     disabled={!implemented}
-                                   />
-                                 ) :
-                                 param.type === 'color' ? <ColorPicker showText disabled={!implemented} /> : null}
-                              </Form.Item>
+                              {renderParamControl(param)}
                             </div>
                           </Card>
                         );

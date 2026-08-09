@@ -1,4 +1,4 @@
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 工单委外管理页面
  *
@@ -99,7 +99,7 @@ import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateTimeString } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_WIDTH } from '../../sales-management/shared/DocumentPushProgressBar';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
 import { outsourceWorkOrderPushPercent } from '../../sales-management/shared/pushProgress';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
@@ -235,10 +235,6 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       span: col.span ?? 1,
     };
   });
-}
-
-function renderOwoRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 /** 委外总金额只读展示：须在 ProForm 内用 Form.useWatch，勿用 ProFormDependency 包 colProps（会打断栅格导致左侧裁切） */
@@ -1674,9 +1670,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
         dataIndex: 'downstream_push_progress',
-        width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
+        ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
         render: (_, record) => {
           const percent = outsourceWorkOrderPushPercent(record);
           return (
@@ -1692,8 +1686,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       ...buildDocumentAuditColumns<OutsourceWorkOrder>(t),
       {
         title: t('app.kuaizhizao.outsourceWorkOrder.colLifecycle'),
+        // 搜索仍绑 status；key 声明列身份，UniTable 据此给出与审核状态列一致的宽度与对齐
+        key: 'lifecycle',
         dataIndex: 'status',
-        width: 140,
         fixed: 'right',
         hideInSearch: false,
         valueType: 'select',
@@ -1716,11 +1711,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       ...owoCustomFieldColumns,
       {
         title: t('common.actions'),
-        width: 200,
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) =>
-          renderOwoRowActions(renderOwoRowActionNodes(record), `owo-${record.id ?? 'row'}`),
+        render: (_, record) => renderOwoRowActionNodes(record),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
     [getOwoPriorityTag, owoCustomFieldColumns, outsourceWorkOrderLifecycleValueEnum, prioritySearchValueEnum, supplierSearchValueEnum, t],
@@ -1858,7 +1851,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           showDeleteButton={true}
           onDelete={handleDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.outsourceWorkOrder.confirmBatchDelete', { count })}
-          scroll={{ x: 2000 }}
         />
       </ListPageTemplate>
 

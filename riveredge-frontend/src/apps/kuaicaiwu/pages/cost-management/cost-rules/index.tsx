@@ -402,7 +402,6 @@ const CostRulePage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-rules"
-        scroll={{ x: 'max-content' }}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={COST_CRUD_PINNED_ACTIVE_FIELD}

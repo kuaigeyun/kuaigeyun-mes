@@ -520,13 +520,11 @@ const ToolLedgerPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 200,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) =>
         renderEquipmentMasterRowActions({
           record,
-          keyPrefix: `tool-ledger-actions-${record.uuid ?? 'row'}`,
           t,
           canRead: perms.canRead,
           canUpdate: perms.canUpdate,
@@ -748,7 +746,6 @@ const ToolLedgerPage: React.FC = () => {
               messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
-          scroll={{ x: 1800 }}
         />
       </ListPageTemplate>
 

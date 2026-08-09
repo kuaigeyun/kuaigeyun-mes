@@ -7,7 +7,7 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Typography, Modal, Spin, Alert, Table, Empty, Form } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
-import { EyeOutlined, DollarOutlined, PlusOutlined } from '@ant-design/icons';
+import { EyeOutlined, DollarOutlined, PlusOutlined, FileTextOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import {
   receivableService,
@@ -48,7 +48,7 @@ import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   DocumentPushProgressBar,
-  DOCUMENT_PROGRESS_COLUMN_WIDTH,
+  DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
 } from '../../../../kuaizhizao/pages/sales-management/shared/DocumentPushProgressBar';
 import { receivableReceiptPushPercent } from '../../../../kuaizhizao/pages/sales-management/shared/pushProgress';
 import {
@@ -62,6 +62,7 @@ import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
 const P = 'app.kuaicaiwu.receivable';
 const RECEIVABLE_RESOURCE = 'kuaicaiwu:receivable';
+const SALES_INVOICE_RESOURCE = 'kuaicaiwu:sales-invoice';
 
 type PullPreviewKind = 'sales_order' | 'sales_delivery';
 
@@ -93,6 +94,7 @@ const ReceivableList: React.FC = () => {
 
     const receivableAuditEnabled = useAuditRequired('receivable', false);
     const receivablePerms = useResourcePermissions(RECEIVABLE_RESOURCE);
+    const salesInvoicePerms = useResourcePermissions(SALES_INVOICE_RESOURCE);
     const receivableAuditBatchHandlers = useMemo(
         () => createUniAuditBatchHandlers('receivable'),
         [],
@@ -172,10 +174,14 @@ const ReceivableList: React.FC = () => {
             notes: values.notes,
             attachments: normalizeDocumentAttachments(values.attachments),
         };
-        await receivableService.createReceivable(data);
+        const created = await receivableService.createReceivable(data);
         messageApi.success(t('common.createSuccess'));
         setCreateModalVisible(false);
         actionRef.current?.reload();
+        if (created?.id) {
+            navigate(`/apps/kuaicaiwu/finance-management/receivables/${created.id}`);
+        }
+        return true;
     };
 
     const resetPullPreview = () => {
@@ -549,9 +555,7 @@ const ReceivableList: React.FC = () => {
         {
             title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
             dataIndex: 'receipt_push_progress',
-            width: DOCUMENT_PROGRESS_COLUMN_WIDTH,
-            uniTableKeepWidth: true,
-            hideInSearch: true,
+            ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
             render: (_, record) => {
                 const percent = receivableReceiptPushPercent(record.received_amount, record.total_amount);
                 return (
@@ -569,8 +573,6 @@ const ReceivableList: React.FC = () => {
             title: t('app.kuaicaiwu.common.lifecycle'),
             dataIndex: 'lifecycle_stage',
             fixed: 'right',
-            align: 'left',
-            width: 130,
             hideInSearch: true,
             render: (_, record) => {
                 const lc = getReceivableLifecycle(record as unknown as Record<string, unknown>, t);
@@ -626,14 +628,30 @@ const ReceivableList: React.FC = () => {
                                 type="link"
                                 size="small"
                                 icon={<DollarOutlined />}
-                                onClick={() => navigate(`/apps/kuaicaiwu/finance-management/receivables/${record.id}`)}
+                                onClick={() => navigate(`/apps/kuaicaiwu/finance-management/receipts`, {
+                                    state: { pullReceivableId: record.id },
+                                })}
                             >
                                 {t('app.kuaicaiwu.common.collect')}
                             </Button>
                         ) : null,
+                        record.capabilities?.push_sales_invoice?.allowed !== false &&
+                        salesInvoicePerms.canCreate ? (
+                            <Button {...rowActionKind('execute')}
+                                key="invoice"
+                                type="link"
+                                size="small"
+                                icon={<FileTextOutlined />}
+                                onClick={() => navigate('/apps/kuaicaiwu/finance-management/sales-invoices', {
+                                    state: { pullReceivableId: record.id },
+                                })}
+                            >
+                                {t('app.kuaicaiwu.receivable.createInvoice')}
+                            </Button>
+                        ) : null,
                     ].filter(Boolean) as React.ReactNode[],
         },
-    ], [t, navigate, customerOptions, receivablePerms]);
+    ], [t, navigate, customerOptions, receivablePerms, salesInvoicePerms]);
 
     return (
         <ListPageTemplate>
@@ -642,7 +660,6 @@ const ReceivableList: React.FC = () => {
                 actionRef={actionRef}
                 columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
                 columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receivables"
-                scroll={{ x: 1680 }}
                 request={async (params, sort, _filter, searchFormValues) => {
                     const { current, pageSize } = params;
                     const listParams = resolveReceivableListParams(searchFormValues, sort);
