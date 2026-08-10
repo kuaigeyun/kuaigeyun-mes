@@ -428,6 +428,8 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
             { label: t('app.master-data.materialForm.sourceBuy'), value: 'Buy' },
             { label: t('app.master-data.materialForm.sourceOutsource'), value: 'Outsource' },
             { label: t('app.master-data.materialForm.sourcePhantom'), value: 'Phantom' },
+            { label: t('app.master-data.materialForm.sourceCustomerProvided'), value: 'CustomerProvided' },
+            { label: t('app.master-data.materialForm.sourceGift'), value: 'Gift' },
             { label: t('app.master-data.materialForm.sourceService'), value: 'Service' },
           ]}
         />

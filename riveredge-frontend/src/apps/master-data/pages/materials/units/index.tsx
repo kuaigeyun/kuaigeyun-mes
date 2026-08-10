@@ -952,7 +952,7 @@ const UnitsPage: React.FC = () => {
             : t('app.master-data.units.createTitle')
         }
         open={unitModalOpen}
-        onOpenChange={setUnitModalOpen}
+        onClose={() => setUnitModalOpen(false)}
         formRef={unitFormRef}
         width={MODAL_CONFIG.SMALL_WIDTH}
         onFinish={async (values) => {
@@ -1010,7 +1010,7 @@ const UnitsPage: React.FC = () => {
             : t('app.master-data.units.createConversionTitle')
         }
         open={convModalOpen}
-        onOpenChange={setConvModalOpen}
+        onClose={() => setConvModalOpen(false)}
         formRef={convFormRef}
         width={MODAL_CONFIG.SMALL_WIDTH}
         onFinish={async (values) => {

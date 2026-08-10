@@ -3759,7 +3759,7 @@ const SalesContractsPage: React.FC = () => {
           });
 
           const contracts = res.items || [];
-          tableRowsRef.current = contracts;
+          // 行缓存唯一真源：onTableDataChange（prefetchNextPage 也会走本 request，禁止在此覆盖）
           if (dataViewModeRef.current === 'order') {
             return { data: contracts, success: true, total: res.total || 0 };
           }

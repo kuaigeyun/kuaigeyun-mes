@@ -1949,8 +1949,8 @@ const PurchaseReturnsPage: React.FC = () => {
               const response = await warehouseApi.purchaseReturn.list(apiParams);
               const list = response?.data ?? [];
               const enriched = await enrichPurchaseReturnRecordsWithCustomFields(list);
+              // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）
               if (dataViewModeRef.current === 'order') {
-                tableRowsRef.current = enriched;
                 return {
                   data: enriched,
                   success: true,
@@ -1998,7 +1998,6 @@ const PurchaseReturnsPage: React.FC = () => {
                   total_amount: 0,
                 }),
               }) as PurchaseReturnItemRow[];
-              tableRowsRef.current = enriched;
               return {
                 data: flatRows,
                 success: true,
@@ -2077,9 +2076,6 @@ const PurchaseReturnsPage: React.FC = () => {
               variant="solid"
             />,
           ]}
-          onTableDataChange={(rows) => {
-            tableRowsRef.current = rows;
-          }}
         />
       </ListPageTemplate>
 

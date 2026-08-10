@@ -993,6 +993,13 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         showCreateButton
         createButtonText={createButtonLabel}
         onCreate={handleCreate}
+        onTableDataChange={(rows) => {
+          const next = new Map<string, CustomerMaterialRegistration>();
+          for (const row of rows) {
+            if (row.id != null) next.set(String(row.id), row);
+          }
+          listRowsRef.current = next;
+        }}
         enableRowSelection={resourcePerms.canDelete}
         showDeleteButton={resourcePerms.canDelete}
         rowSelectionGetCheckboxProps={(record) => ({
@@ -1015,11 +1022,6 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             ...listParams,
           });
           const { data, total } = normalizeWarehouseListResponse(result);
-          const next = new Map<string, CustomerMaterialRegistration>();
-          for (const row of data as CustomerMaterialRegistration[]) {
-            if (row.id != null) next.set(String(row.id), row);
-          }
-          listRowsRef.current = next;
           return { data, success: true, total };
         }}
       />

@@ -2004,8 +2004,8 @@ export default function SalesForecastsPage() {
             const paramsKey = JSON.stringify({ ...apiParams, include_items: needItems });
 
             const formatListResponse = (forecasts: SalesForecast[], total: number) => {
+              // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）
               if (dataViewModeRef.current === 'order') {
-                tableRowsRef.current = forecasts;
                 return { data: forecasts, success: true, total };
               }
               const flatRows = flattenDocumentDetailRows<SalesForecast, SalesForecastItem>({
@@ -2047,7 +2047,6 @@ export default function SalesForecastsPage() {
                   forecast_quantity: 0,
                 }),
               }) as SalesForecastItemRow[];
-              tableRowsRef.current = forecasts;
               return { data: flatRows, success: true, total };
             };
 

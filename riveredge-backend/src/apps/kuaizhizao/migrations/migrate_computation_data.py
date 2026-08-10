@@ -196,12 +196,12 @@ class ComputationDataMigration:
         try:
             computation_code = await CodeGenerationService.generate_code(
                 tenant_id=tenant_id,
-                rule_code="DEMAND_COMPUTATION",
+                rule_code="DEMAND_COMPUTATION_CODE",
                 context={"computation_type": "MRP"}
             )
         except Exception:
             now = datetime.now()
-            computation_code = f"MRP-{now.strftime('%Y%m%d')}-MIGRATED"
+            computation_code = f"MRP{now.strftime('%Y%m%d')}MIGRATED"
         
         # 创建计算对象
         computation = await DemandComputation.create(
@@ -430,12 +430,12 @@ class ComputationDataMigration:
         try:
             computation_code = await CodeGenerationService.generate_code(
                 tenant_id=tenant_id,
-                rule_code="DEMAND_COMPUTATION",
+                rule_code="DEMAND_COMPUTATION_CODE",
                 context={"computation_type": "LRP"}
             )
         except Exception:
             now = datetime.now()
-            computation_code = f"LRP-{now.strftime('%Y%m%d')}-MIGRATED"
+            computation_code = f"MRP{now.strftime('%Y%m%d')}MIGRATED"
         
         # 创建计算对象
         computation = await DemandComputation.create(

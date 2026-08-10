@@ -585,6 +585,13 @@ const MaterialBorrowsPage: React.FC = () => {
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
           enableRowSelection
+          onTableDataChange={(rows) => {
+            const next = new Map<string, MaterialBorrow>();
+            for (const row of rows) {
+              if (row.id != null) next.set(String(row.id), row);
+            }
+            listRowsRef.current = next;
+          }}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
@@ -634,11 +641,6 @@ const MaterialBorrowsPage: React.FC = () => {
                 ...listParams,
               });
               const { data, total } = normalizeWarehouseListResponse(response);
-              const next = new Map<string, MaterialBorrow>();
-              for (const row of data as MaterialBorrow[]) {
-                if (row.id != null) next.set(String(row.id), row);
-              }
-              listRowsRef.current = next;
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.materialBorrow.msg.loadListFailed'));

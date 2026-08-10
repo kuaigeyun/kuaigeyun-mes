@@ -62,10 +62,11 @@ _ACTIVE_WORK_ORDER_STATUSES = frozenset(
     {"draft", "released", "dispatched", "confirmed", "in_progress", "草稿", "已下达", "已确认", "执行中"}
 )
 
-# source_type -> 编码回退用 type_code 映射（Buy/客供->RAW, Make/Outsource->SEMI, Phantom->SEMI, Service->SVC）
+# source_type -> 编码回退用 type_code 映射（Buy/客供/赠品->RAW, Make/Outsource->SEMI, Phantom->SEMI, Service->SVC）
 _SOURCE_TYPE_TO_TYPE_CODE = {
     "Buy": "RAW",
     "CustomerProvided": "RAW",
+    "Gift": "RAW",
     "Make": "SEMI",
     "Outsource": "SEMI",
     "Phantom": "SEMI",

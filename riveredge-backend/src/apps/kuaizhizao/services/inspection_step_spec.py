@@ -261,6 +261,37 @@ def format_sampling_criteria(spec: Dict[str, Any]) -> Optional[str]:
     return f"抽检 n={n}，Ac={a}，Re={r}"
 
 
+def resolve_numeric_effective_limits(spec: Dict[str, Any]) -> Dict[str, Any]:
+    """解析数值项有效合格上下限。
+
+    - 无目标值，或目标值落在 [下限, 上限] 内：按绝对合格限
+    - 有目标值且目标不在 [下限, 上限] 内：按相对目标公差
+      （下限≥0 表示负向公差幅度，如目标 12、上下限 0.5 → 11.5 ~ 12.5；
+       下限<0 则按 signed 偏差 target+lower）
+    """
+    raw_lo, raw_hi, raw_target = spec.get("lower_limit"), spec.get("upper_limit"), spec.get("target")
+
+    def _num(v: Any) -> Optional[float]:
+        if v is None or v == "":
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    lo, hi, target = _num(raw_lo), _num(raw_hi), _num(raw_target)
+    if target is None or (lo is None and hi is None):
+        return {"lower": lo, "upper": hi, "target": target, "mode": "absolute"}
+    if lo is not None and hi is not None and lo <= target <= hi:
+        return {"lower": lo, "upper": hi, "target": target, "mode": "absolute"}
+    return {
+        "lower": (target + lo if lo < 0 else target - lo) if lo is not None else None,
+        "upper": (target + hi) if hi is not None else None,
+        "target": target,
+        "mode": "deviation",
+    }
+
+
 def format_acceptance_criteria(value_type: str, spec: Dict[str, Any]) -> Optional[str]:
     vt = normalize_value_type(value_type)
     if vt == "boolean":
@@ -270,9 +301,11 @@ def format_acceptance_criteria(value_type: str, spec: Dict[str, Any]) -> Optiona
         suffix = f" {unit}".rstrip()
         if spec.get("derived") and spec.get("formula"):
             return f"派生：{spec.get('formula')}"
-        lo, hi = spec.get("lower_limit"), spec.get("upper_limit")
-        target = spec.get("target")
+        bounds = resolve_numeric_effective_limits(spec)
+        lo, hi, target = bounds.get("lower"), bounds.get("upper"), bounds.get("target")
         if lo is not None and hi is not None:
+            if bounds.get("mode") == "deviation" and target is not None:
+                return f"{lo} ~ {hi}{suffix}（目标 {target}）"
             return f"{lo} ~ {hi}{suffix}"
         if lo is not None:
             return f"≥ {lo}{suffix}"
@@ -310,13 +343,12 @@ def prepare_plan_step_dict(step_dict: Dict[str, Any]) -> Dict[str, Any]:
         out["value_spec"] = {k: v for k, v in out["value_spec"].items() if k != "sampling"}
     if not out.get("step_key"):
         out["step_key"] = str(uuid.uuid4())
-    if not out.get("acceptance_criteria"):
-        auto = format_acceptance_criteria(vt, out["value_spec"])
-        if out.get("sampling_type") == "sampling":
-            sampling_text = format_sampling_criteria(out["value_spec"])
-            auto = " - ".join(x for x in [auto, sampling_text] if x)
-        if auto:
-            out["acceptance_criteria"] = auto
+    auto = format_acceptance_criteria(vt, out["value_spec"])
+    if out.get("sampling_type") == "sampling":
+        sampling_text = format_sampling_criteria(out["value_spec"])
+        auto = " / ".join(x for x in [auto, sampling_text] if x)
+    if auto:
+        out["acceptance_criteria"] = auto
     return out
 
 
@@ -472,10 +504,11 @@ def plan_step_to_snapshot_item(step: Any) -> Dict[str, Any]:
     spec = normalize_value_spec(vt, getattr(step, "value_spec", None))
     step_key = getattr(step, "step_key", None) or str(uuid.uuid4())
     sampling_type = getattr(step, "sampling_type", "full")
-    ac = getattr(step, "acceptance_criteria", None) or format_acceptance_criteria(vt, spec)
+    # 始终由 value_spec 重算合格标准，避免陈旧文案与抽检说明重复拼接
+    ac = format_acceptance_criteria(vt, spec)
     if sampling_type == "sampling":
         sampling_text = format_sampling_criteria(spec)
-        ac = " - ".join(x for x in [ac, sampling_text] if x)
+        ac = " / ".join(x for x in [ac, sampling_text] if x)
     return {
         "step_key": step_key,
         "sequence": getattr(step, "sequence", 0),
@@ -535,7 +568,8 @@ def judge_step_value(value_type: str, value_spec: Dict[str, Any], value: Any) ->
             num = float(value)
         except (TypeError, ValueError):
             return None
-        lo, hi = spec.get("lower_limit"), spec.get("upper_limit")
+        bounds = resolve_numeric_effective_limits(spec)
+        lo, hi = bounds.get("lower"), bounds.get("upper")
         if lo is not None:
             if spec.get("lower_inclusive", True):
                 if num < lo:

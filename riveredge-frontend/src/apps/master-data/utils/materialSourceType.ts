@@ -1,12 +1,13 @@
 import type { TFunction } from 'i18next';
 
-/** 物料来源类型可选值（不含已废弃的 Configure）；顺序：自制→采购→委外→虚拟→客供→服务 */
+/** 物料来源类型可选值（不含已废弃的 Configure）；顺序：自制→采购→委外→虚拟→客供→赠品→服务 */
 export const MATERIAL_SOURCE_TYPE_VALUES = [
   'Make',
   'Buy',
   'Outsource',
   'Phantom',
   'CustomerProvided',
+  'Gift',
   'Service',
 ] as const;
 
@@ -18,6 +19,7 @@ const SOURCE_TYPE_I18N_KEY: Record<string, string> = {
   Outsource: 'app.master-data.materialForm.sourceOutsource',
   Phantom: 'app.master-data.materialForm.sourcePhantom',
   CustomerProvided: 'app.master-data.materialForm.sourceCustomerProvided',
+  Gift: 'app.master-data.materialForm.sourceGift',
   Service: 'app.master-data.materialForm.sourceService',
 };
 
@@ -28,6 +30,7 @@ export const MATERIAL_SOURCE_TYPE_TAG_COLORS: Record<string, string> = {
   Phantom: 'default',
   Outsource: 'orange',
   CustomerProvided: 'purple',
+  Gift: 'gold',
   Service: 'cyan',
 };
 
@@ -51,6 +54,10 @@ const SOURCE_TYPE_IMPORT_ALIASES: Record<string, MaterialSourceTypeValue> = {
   客供料: 'CustomerProvided',
   客供: 'CustomerProvided',
   客户供料: 'CustomerProvided',
+  赠品: 'Gift',
+  贈品: 'Gift',
+  供应商赠品: 'Gift',
+  供應商贈品: 'Gift',
   服務: 'Service',
   服务: 'Service',
 };

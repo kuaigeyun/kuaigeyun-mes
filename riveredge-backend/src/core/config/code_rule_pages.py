@@ -52,7 +52,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-receipt-notice": "SHTZ",        # 收货通知单
     "kuaizhizao-sales-forecast": "XSYC",        # 销售预测
     "kuaizhizao-demand-plan": "XQJH",           # 需求计划（手工计划）
-    "kuaizhizao-demand-computation": "XQJS",    # 需求计算（MRP）
+    "kuaizhizao-demand-computation": "MRP",     # 需求计算（MRP）
     "kuaizhizao-sales-return": "XSTH",          # 销售退货
     "kuaizhizao-warehouse-inbound": "LL",       # 领料
     "kuaizhizao-warehouse-production-return": "TL",       # 生产退料

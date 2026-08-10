@@ -418,6 +418,11 @@ export function invalidateUniTableListCache(
   }
 }
 
+/** UniTable request 调用意图：展示页 vs 后台预取下一页 */
+export type UniTableRequestMeta = {
+  purpose: 'display' | 'prefetch'
+}
+
 export interface UniTableProps<T extends Record<string, any> = Record<string, any>>
   extends Omit<ProTableProps<T, any>, 'request'> {
   /**
@@ -428,13 +433,19 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * @param sort - 排序参数
    * @param filter - 筛选参数
    * @param searchFormValues - 搜索表单值（从 searchParamsRef 或 formRef 获取）
+   * @param meta - `purpose=prefetch` 时为下一页预取；禁止在此路径同步「当前页选中行」缓存
    * @returns 数据响应
+   *
+   * 列表选中行 / 下推 / 批量操作解析记录时，唯一真源是 `onTableDataChange`
+   *（仅展示页会触发）。不得在 request 内写 `tableRowsRef`，否则预取会冲掉当前页导致
+   * 「所选记录不在当前列表」。
    */
   request: (
     params: any,
     sort: Record<string, 'ascend' | 'descend' | null>,
     filter: Record<string, React.ReactText[] | null>,
-    searchFormValues?: Record<string, any>
+    searchFormValues?: Record<string, any>,
+    meta?: UniTableRequestMeta,
   ) => Promise<{
     data: T[]
     success: boolean
@@ -498,7 +509,8 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   onRowSelectionChange?: (selectedRowKeys: React.Key[]) => void
   /**
-   * 表格当前页数据变更（含 TanStack 缓存命中路径；用于列表页同步选中行解析等副作用）
+   * 表格当前展示页数据变更（含 TanStack 缓存命中 / SWR 后台刷新）。
+   * 选中行解析、下推、批量操作的行缓存须只在此同步；勿在 request 内写入。
    */
   onTableDataChange?: (data: T[]) => void
   /**
@@ -986,6 +998,8 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
     /**
      * 当前页数据返回后，在后台预取「下一页」同一筛选/排序条件的数据；
      * 用户翻页时优先命中 TanStack 缓存。启用拼音首字母前端过滤时不预取（避免缓存与展示不一致）。
+     * 预取会调用页面 request 且 `meta.purpose='prefetch'`，不会触发 onTableDataChange；
+     * 页面不得在 request 内用预取结果覆盖当前页行缓存。
      */
     prefetchNextPage?: boolean
     /**
@@ -2045,9 +2059,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       const reqPageSize = params.pageSize ?? liveDefaultPageSize
       setCurrentPageSize((prev) => (prev === reqPageSize ? prev : reqPageSize))
 
-      const runRequest = () => {
+      const runRequest = (meta: UniTableRequestMeta = { purpose: 'display' }) => {
         if (typeof requestRef.current === 'function') {
-          return requestRef.current(params, sort, filter, searchFormValues)
+          return requestRef.current(params, sort, filter, searchFormValues, meta)
         }
         const rows = staticDataSourceRef.current ?? []
         const current = Number(params?.current ?? 1)
@@ -2147,9 +2161,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             searchKey,
           ] as const
           // prefetchQuery 会按 queryKey 去重；若已在飞行或缓存仍 fresh，则直接返回。
+          // purpose=prefetch：不触发 onTableDataChange；页面 request 内禁止写当前页行缓存。
           void queryClient.prefetchQuery({
             queryKey: [...nextKey],
-            queryFn: () => requestRef.current(nextParams, sort, filter, searchFormValues),
+            queryFn: () =>
+              requestRef.current(nextParams, sort, filter, searchFormValues, {
+                purpose: 'prefetch',
+              }),
             staleTime: staleTimeMs,
             gcTime: gcTimeMs,
           })

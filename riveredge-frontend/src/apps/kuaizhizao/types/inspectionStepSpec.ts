@@ -319,6 +319,50 @@ export function getStepConductKey(step: InspectionTemplateStepItem, index: numbe
   return step.step_key || String(index);
 }
 
+/**
+ * 解析数值项有效合格上下限。
+ * - 无目标值，或目标值落在 [下限, 上限] 内：按绝对合格限
+ * - 有目标值且目标不在 [下限, 上限] 内：按相对目标公差
+ *   （下限≥0 表示负向公差幅度，如目标 12、上下限 0.5 → 11.5 ~ 12.5；
+ *    下限<0 则按 signed 偏差 target+lower）
+ */
+export function resolveNumericEffectiveLimits(spec: InspectionStepValueSpec | undefined): {
+  lower?: number;
+  upper?: number;
+  target?: number;
+  mode: 'absolute' | 'deviation';
+} {
+  const rawLo = spec?.lower_limit;
+  const rawHi = spec?.upper_limit;
+  const rawTarget = spec?.target;
+  const lo = rawLo == null || rawLo === '' ? undefined : Number(rawLo);
+  const hi = rawHi == null || rawHi === '' ? undefined : Number(rawHi);
+  const target = rawTarget == null || rawTarget === '' ? undefined : Number(rawTarget);
+  const hasLo = lo != null && !Number.isNaN(lo);
+  const hasHi = hi != null && !Number.isNaN(hi);
+  const hasTarget = target != null && !Number.isNaN(target);
+
+  if (!hasTarget || (!hasLo && !hasHi)) {
+    return {
+      lower: hasLo ? lo : undefined,
+      upper: hasHi ? hi : undefined,
+      target: hasTarget ? target : undefined,
+      mode: 'absolute',
+    };
+  }
+
+  if (hasLo && hasHi && lo! <= target! && target! <= hi!) {
+    return { lower: lo, upper: hi, target, mode: 'absolute' };
+  }
+
+  return {
+    lower: hasLo ? (lo! < 0 ? target! + lo! : target! - lo!) : undefined,
+    upper: hasHi ? target! + hi! : undefined,
+    target,
+    mode: 'deviation',
+  };
+}
+
 export function judgeStepValueClient(
   valueType: string,
   valueSpec: InspectionStepValueSpec | undefined,
@@ -361,8 +405,7 @@ export function judgeStepValueClient(
   if (vt === 'numeric') {
     const num = Number(value);
     if (Number.isNaN(num)) return null;
-    const lo = spec.lower_limit as number | undefined;
-    const hi = spec.upper_limit as number | undefined;
+    const { lower: lo, upper: hi } = resolveNumericEffectiveLimits(spec);
     if (lo != null && num < lo) return 'fail';
     if (hi != null && num > hi) return 'fail';
     if (lo == null && hi == null) return null;
@@ -396,9 +439,20 @@ export function formatAcceptanceCriteriaPreview(
         ? t('app.kuaizhizao.quality.plans.stepSpec.criteriaDerived', { formula: spec.formula })
         : `派生：${spec.formula}`;
     }
-    const lo = spec.lower_limit as number | undefined;
-    const hi = spec.upper_limit as number | undefined;
+    const bounds = resolveNumericEffectiveLimits(spec);
+    const lo = bounds.lower;
+    const hi = bounds.upper;
     if (lo != null && hi != null) {
+      if (bounds.mode === 'deviation' && bounds.target != null) {
+        return t
+          ? t('app.kuaizhizao.quality.plans.stepSpec.criteriaRangeWithTarget', {
+              lo,
+              hi,
+              target: bounds.target,
+              unit,
+            })
+          : `${lo} ~ ${hi}${unit}（目标 ${bounds.target}）`;
+      }
       return t
         ? t('app.kuaizhizao.quality.plans.stepSpec.criteriaRange', { lo, hi, unit })
         : `${lo} ~ ${hi}${unit}`;
@@ -413,10 +467,10 @@ export function formatAcceptanceCriteriaPreview(
         ? t('app.kuaizhizao.quality.plans.stepSpec.criteriaLte', { hi, unit })
         : `≤ ${hi}${unit}`;
     }
-    if (spec.target != null) {
+    if (bounds.target != null) {
       return t
-        ? t('app.kuaizhizao.quality.plans.stepSpec.criteriaTarget', { target: spec.target, unit })
-        : `目标 ${spec.target}${unit}`;
+        ? t('app.kuaizhizao.quality.plans.stepSpec.criteriaTarget', { target: bounds.target, unit })
+        : `目标 ${bounds.target}${unit}`;
     }
     return '';
   }

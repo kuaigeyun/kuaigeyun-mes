@@ -11,6 +11,7 @@
 - Phantom（虚拟件）：不实际存在，仅用于BOM展开
 - Outsource（委外件）：委托外部加工
 - CustomerProvided（客供料）：客户提供物料
+- Gift（赠品）：供应商赠送给我方
 - Service（服务）：服务类物料
 
 可配置能力由 variant_managed / BOM 配置位表达，不再使用 Configure 来源类型。
@@ -170,9 +171,10 @@ SOURCE_TYPE_PHANTOM = "Phantom"  # 虚拟件
 SOURCE_TYPE_OUTSOURCE = "Outsource"  # 委外件
 SOURCE_TYPE_CONFIGURE = "Configure"  # 已废弃，仅兼容历史 BOM 展开逻辑
 SOURCE_TYPE_CUSTOMER_PROVIDED = "CustomerProvided"  # 客供料
+SOURCE_TYPE_GIFT = "Gift"  # 赠品（供应商赠送给我方）
 SOURCE_TYPE_SERVICE = "Service"  # 服务
 
-# MRP 多阶展开：仅自制/委外/历史配置件需递归子 BOM；采购件/客供料/服务按整件，不再拆子件
+# MRP 多阶展开：仅自制/委外/历史配置件需递归子 BOM；采购件/客供料/赠品/服务按整件，不再拆子件
 _MRP_RECURSE_SOURCE_TYPES = frozenset(
     {SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE}
 )
@@ -327,6 +329,10 @@ async def validate_material_source_config(
 
     elif source_type == SOURCE_TYPE_CUSTOMER_PROVIDED:
         # 客供料由客户提供，无需供应商/工艺等额外配置
+        pass
+
+    elif source_type == SOURCE_TYPE_GIFT:
+        # 赠品由供应商赠送给我方，不走采购下推，无需额外配置
         pass
 
     elif source_type == SOURCE_TYPE_SERVICE:

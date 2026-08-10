@@ -1779,7 +1779,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       const response = await outsourceWorkOrderApi.list(apiParams);
       const list = response.data ?? [];
       const enriched = await enrichOwoRecordsWithCustomFields(list);
-      tableRowsRef.current = enriched;
       return {
         data: enriched,
         success: response.success,
@@ -1837,7 +1836,10 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           enableRowSelection={true}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
-          showCreateButton={true}
+          onTableDataChange={(rows) => {
+            tableRowsRef.current = rows;
+          }}
+        showCreateButton={true}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
           toolBarRender={() => [

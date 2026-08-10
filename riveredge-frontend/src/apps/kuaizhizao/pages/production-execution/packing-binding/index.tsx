@@ -1078,7 +1078,6 @@ const PackingBindingPage: React.FC = () => {
 
       const result = (await packingBindingApi.listPage(apiParams)) as PackingBindingPageResult;
       const data = Array.isArray(result?.data) ? result.data : [];
-      tableRowsRef.current = data;
       return {
         data,
         success: result.success !== false,
@@ -1171,7 +1170,10 @@ const PackingBindingPage: React.FC = () => {
           pinnedTabsField="binding_method"
           pinnedTabsValueEnum={packingBindingMethodValueEnum}
           request={handleRequest}
-          enableRowSelection={true}
+          onTableDataChange={(rows) => {
+            tableRowsRef.current = rows;
+          }}
+        enableRowSelection={true}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={true}

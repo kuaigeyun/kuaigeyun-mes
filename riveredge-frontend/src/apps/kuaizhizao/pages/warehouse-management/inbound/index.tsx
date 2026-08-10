@@ -2096,16 +2096,18 @@ const InboundPage: React.FC = () => {
             },
               currentUser,
             );
-            const next = new Map<string, InboundOrder>();
-            for (const row of result.data ?? []) {
-              next.set(inboundRowKey(row), row);
-            }
-            listRowsRef.current = next;
             return result;
           } catch {
             messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadListFailed'));
             return { data: [], success: false, total: 0 };
           }
+        }}
+        onTableDataChange={(rows) => {
+          const next = new Map<string, InboundOrder>();
+          for (const row of rows) {
+            next.set(inboundRowKey(row), row);
+          }
+          listRowsRef.current = next;
         }}
         toolBarRender={() => {
           const pullMenuItems = buildKuaizhizaoPullCreateMenuItems(t, [

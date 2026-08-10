@@ -25,7 +25,7 @@ from apps.master_data.constants.material_source_type import (
 from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_MAKE, SOURCE_TYPE_BUY, SOURCE_TYPE_PHANTOM,
     SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE, SOURCE_TYPE_CUSTOMER_PROVIDED,
-    SOURCE_TYPE_SERVICE,
+    SOURCE_TYPE_GIFT, SOURCE_TYPE_SERVICE,
     MANUFACTURING_MODE_FABRICATION, MANUFACTURING_MODE_ASSEMBLY,
     VALID_SOURCE_TYPES,
     validate_material_source_config,
@@ -407,6 +407,10 @@ class MaterialSourceSuggestionService:
 
             elif material.source_type == SOURCE_TYPE_CUSTOMER_PROVIDED:
                 # 客供料由客户提供，无需供应商等额外配置
+                pass
+
+            elif material.source_type == SOURCE_TYPE_GIFT:
+                # 赠品由供应商赠送给我方，不走采购下推，无需额外配置
                 pass
 
             elif material.source_type == SOURCE_TYPE_SERVICE:

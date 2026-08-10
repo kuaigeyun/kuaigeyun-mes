@@ -17,6 +17,7 @@ from apps.kuaizhizao.services.inspection_step_spec import (
     normalize_value_type,
     normalize_value_spec,
     format_acceptance_criteria,
+    format_sampling_criteria,
     validate_plan_step_dict,
 )
 
@@ -47,10 +48,12 @@ class InspectionPlanStepBase(BaseSchema):
         spec = normalize_value_spec(vt, self.value_spec)
         object.__setattr__(self, "value_type", vt)
         object.__setattr__(self, "value_spec", spec)
-        if not self.acceptance_criteria:
-            auto = format_acceptance_criteria(vt, spec)
-            if auto:
-                object.__setattr__(self, "acceptance_criteria", auto)
+        auto = format_acceptance_criteria(vt, spec)
+        if self.sampling_type == "sampling":
+            sampling_text = format_sampling_criteria(spec)
+            auto = " / ".join(x for x in [auto, sampling_text] if x)
+        if auto:
+            object.__setattr__(self, "acceptance_criteria", auto)
         validate_plan_step_dict(self.model_dump())
         return self
 

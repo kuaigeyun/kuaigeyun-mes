@@ -108,6 +108,8 @@ const SOURCE_CONFIG_FIELDS: Record<string, string[]> = {
   Buy: ['purchase_price', 'purchase_lead_time', 'min_purchase_batch', 'default_supplier_id', 'default_supplier_name'],
   Outsource: ['outsource_supplier_id', 'outsource_supplier_name', 'outsource_lead_time', 'min_outsource_batch', 'outsource_operation', 'outsource_price', 'material_provided_by'],
   Phantom: [],
+  CustomerProvided: [],
+  Gift: [],
   Service: [],
 };
 

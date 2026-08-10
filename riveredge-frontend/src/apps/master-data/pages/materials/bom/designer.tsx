@@ -101,6 +101,7 @@ const SOURCE_TYPE_COLORS: Record<string, string> = {
   Phantom: 'default',
   Outsource: 'orange',
   CustomerProvided: 'purple',
+  Gift: 'gold',
   Service: 'cyan',
 };
 
@@ -125,6 +126,10 @@ const SOURCE_TYPE_NODE_COLORS: Record<string, { bg: string; border: string }> = 
   CustomerProvided: {
     bg: 'color-mix(in srgb, #a855f7 14%, var(--ant-color-bg-container, #ffffff))',
     border: '#a855f7',
+  },
+  Gift: {
+    bg: 'color-mix(in srgb, #eab308 14%, var(--ant-color-bg-container, #ffffff))',
+    border: '#eab308',
   },
   Service: {
     bg: 'color-mix(in srgb, #14b8a6 14%, var(--ant-color-bg-container, #ffffff))',
@@ -315,6 +320,7 @@ const SOURCE_TYPE_I18N_KEYS: Record<string, string> = {
   Phantom: 'app.master-data.bom.sourcePhantom',
   Outsource: 'app.master-data.bom.sourceOutsource',
   CustomerProvided: 'app.master-data.bom.sourceCustomerProvided',
+  Gift: 'app.master-data.bom.sourceGift',
   Service: 'app.master-data.bom.sourceService',
 };
 

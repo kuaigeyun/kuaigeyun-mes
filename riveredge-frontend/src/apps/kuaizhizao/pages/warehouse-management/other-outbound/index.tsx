@@ -689,6 +689,13 @@ const OtherOutboundPage: React.FC = () => {
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
           enableRowSelection
+          onTableDataChange={(rows) => {
+            const next = new Map<string, OtherOutbound>();
+            for (const row of rows) {
+              if (row.id != null) next.set(String(row.id), row);
+            }
+            listRowsRef.current = next;
+          }}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
@@ -714,11 +721,6 @@ const OtherOutboundPage: React.FC = () => {
               });
               const { data: raw, total } = normalizeWarehouseListResponse(response);
               const data = await enrichOtherOutboundRecordsWithCustomFields(raw);
-              const next = new Map<string, OtherOutbound>();
-              for (const row of data) {
-                if (row.id != null) next.set(String(row.id), row);
-              }
-              listRowsRef.current = next;
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.otherOutbound.msg.loadListFailed'));

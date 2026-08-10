@@ -1075,7 +1075,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       }
       const list = await listPurchaseInquiries(apiParams);
       const inquiries = list.data ?? [];
-      tableRowsRef.current = inquiries;
+      // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）
       if (dataViewModeRef.current === 'order') {
         return { data: inquiries, success: true, total: list.total ?? inquiries.length };
       }

@@ -3,6 +3,7 @@ import { ProFormDigit, ProFormItem } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
 import type { Material } from '../../apps/master-data/types/material';
 import {
+  convertFromBaseQuantity,
   convertToBaseQuantity,
   type MaterialScenario,
 } from '../../utils/materialScenarioUnit';
@@ -17,6 +18,13 @@ function readBaseUnit(material?: Material | null, fallback?: string | null): str
   return String(fallback ?? '').trim() || '个';
 }
 
+/** 检验单数量单位：单据 material_unit 优先（与 inspection_quantity 同口径） */
+function readDocumentUnit(material?: Material | null, materialUnit?: string | null): string {
+  const fromDoc = String(materialUnit ?? '').trim();
+  if (fromDoc) return fromDoc;
+  return readBaseUnit(material, materialUnit);
+}
+
 function materialHasAuxiliaryUnits(material: Material | null | undefined, baseUnit: string): boolean {
   const aux = material?.units?.units ?? [];
   return aux.some((row) => {
@@ -25,15 +33,21 @@ function materialHasAuxiliaryUnits(material: Material | null | undefined, baseUn
   });
 }
 
-function bundleToBaseQty(
+/**
+ * 将数量+单位换算为检验单存储单位（material_unit），与 inspection_quantity 对齐。
+ * 禁止直接换算到物料基础单位后再与单据检验数量比较（会把 1 千克误判成对 1 克）。
+ */
+function bundleToDocumentQty(
   material: Material | null | undefined,
   bundle: QuantityWithUnitValue | undefined,
-  fallbackUnit: string,
+  documentUnit: string,
 ): number {
   const qty = Number(bundle?.quantity ?? 0);
   if (!Number.isFinite(qty)) return 0;
-  const unit = String(bundle?.unit ?? fallbackUnit).trim() || fallbackUnit;
-  return convertToBaseQuantity(material, qty, unit);
+  const unit = String(bundle?.unit ?? documentUnit).trim() || documentUnit;
+  if (!documentUnit || unit === documentUnit) return qty;
+  const baseQty = convertToBaseQuantity(material, qty, unit);
+  return convertFromBaseQuantity(material, baseQty, documentUnit);
 }
 
 export type InspectionConductQuantityFieldsProps = {
@@ -44,7 +58,7 @@ export type InspectionConductQuantityFieldsProps = {
   t: TFunction;
 };
 
-/** 检验开展：合格/不合格数量（单单位 addon；多单位 QuantityWithUnit，提交换算基础单位） */
+/** 检验开展：合格/不合格数量（单单位 addon；多单位 QuantityWithUnit，提交换算为单据单位） */
 export function InspectionConductQuantityFields({
   materialId,
   materialUnit,
@@ -83,8 +97,12 @@ export function InspectionConductQuantityFields({
     () => readBaseUnit(material, materialUnit),
     [material, materialUnit],
   );
-  const displayUnitLabel = resolveMaterialUnitLabel(baseUnit, unitLabelMap) || baseUnit;
-  const addonProps = unitAddonFieldProps(baseUnit, unitLabelMap);
+  const documentUnit = useMemo(
+    () => readDocumentUnit(material, materialUnit),
+    [material, materialUnit],
+  );
+  const displayUnitLabel = resolveMaterialUnitLabel(documentUnit, unitLabelMap) || documentUnit;
+  const addonProps = unitAddonFieldProps(documentUnit, unitLabelMap);
   const useMultiUnit = Boolean(materialId) && materialHasAuxiliaryUnits(material, baseUnit);
 
   if (useMultiUnit && materialId) {
@@ -98,13 +116,13 @@ export function InspectionConductQuantityFields({
             { required: true, message: t('app.kuaizhizao.quality.common.validation.requiredQualifiedQty') },
             ({ getFieldValue }) => ({
               validator(_: unknown, value: QuantityWithUnitValue | undefined) {
-                const qualifiedBase = bundleToBaseQty(material, value, baseUnit);
-                const unqualifiedBase = bundleToBaseQty(
+                const qualifiedDoc = bundleToDocumentQty(material, value, documentUnit);
+                const unqualifiedDoc = bundleToDocumentQty(
                   material,
                   getFieldValue('unqualified_qty_with_unit') as QuantityWithUnitValue | undefined,
-                  baseUnit,
+                  documentUnit,
                 );
-                if (qualifiedBase + unqualifiedBase > inspectionQuantity + 1e-9) {
+                if (qualifiedDoc + unqualifiedDoc > inspectionQuantity + 1e-9) {
                   return Promise.reject(t('app.kuaizhizao.quality.common.validation.qtySumExceeds'));
                 }
                 return Promise.resolve();
@@ -122,13 +140,13 @@ export function InspectionConductQuantityFields({
             { required: true, message: t('app.kuaizhizao.quality.common.validation.requiredUnqualifiedQty') },
             ({ getFieldValue }) => ({
               validator(_: unknown, value: QuantityWithUnitValue | undefined) {
-                const unqualifiedBase = bundleToBaseQty(material, value, baseUnit);
-                const qualifiedBase = bundleToBaseQty(
+                const unqualifiedDoc = bundleToDocumentQty(material, value, documentUnit);
+                const qualifiedDoc = bundleToDocumentQty(
                   material,
                   getFieldValue('qualified_qty_with_unit') as QuantityWithUnitValue | undefined,
-                  baseUnit,
+                  documentUnit,
                 );
-                if (qualifiedBase + unqualifiedBase > inspectionQuantity + 1e-9) {
+                if (qualifiedDoc + unqualifiedDoc > inspectionQuantity + 1e-9) {
                   return Promise.reject(t('app.kuaizhizao.quality.common.validation.qtySumExceeds'));
                 }
                 return Promise.resolve();
@@ -275,16 +293,16 @@ export async function normalizeInspectionConductPayload(
     if (options.materialId) {
       material = (await fetchMaterialForUnitSelectCache(options.materialId)) ?? null;
     }
-    const baseUnit = readBaseUnit(material, options.materialUnit);
-    next.qualified_quantity = bundleToBaseQty(
+    const documentUnit = readDocumentUnit(material, options.materialUnit);
+    next.qualified_quantity = bundleToDocumentQty(
       material,
       next.qualified_qty_with_unit as QuantityWithUnitValue | undefined,
-      baseUnit,
+      documentUnit,
     );
-    next.unqualified_quantity = bundleToBaseQty(
+    next.unqualified_quantity = bundleToDocumentQty(
       material,
       next.unqualified_qty_with_unit as QuantityWithUnitValue | undefined,
-      baseUnit,
+      documentUnit,
     );
     delete next.qualified_qty_with_unit;
     delete next.unqualified_qty_with_unit;

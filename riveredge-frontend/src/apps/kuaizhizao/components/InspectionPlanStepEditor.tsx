@@ -236,8 +236,9 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
     );
     const typeCriteria = formatAcceptanceCriteriaPreview(vt, spec, t);
     const samplingCriteria = formatSamplingCriteriaPreview(samplingType, spec, t);
-    const autoCriteria = [typeCriteria, samplingCriteria].filter(Boolean).join(' - ');
-    const criteria = (vals.acceptance_criteria as string)?.trim() || autoCriteria || undefined;
+    const autoCriteria = [typeCriteria, samplingCriteria].filter(Boolean).join(' / ');
+    // 结构化规格始终以 value_spec 重算合格标准，避免手工文案与判定口径漂移
+    const criteria = autoCriteria || (vals.acceptance_criteria as string)?.trim() || undefined;
     return {
       sequence: existing?.sequence ?? steps.length,
       step_key: existing?.step_key || newStepKey(),

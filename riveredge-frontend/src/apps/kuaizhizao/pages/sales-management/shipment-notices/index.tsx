@@ -1789,7 +1789,7 @@ const ShipmentNoticesPage: React.FC = () => {
               const response = await shipmentNoticeApi.list(apiParams);
               const notices = response?.data ?? [];
               const total = response?.total ?? notices.length;
-              tableRowsRef.current = notices;
+              // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）
               if (dataViewModeRef.current === 'order') {
                 return { data: notices, success: true, total };
               }

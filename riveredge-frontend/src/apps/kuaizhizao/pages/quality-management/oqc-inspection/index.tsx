@@ -682,6 +682,9 @@ const OQCInspectionPage: React.FC = () => {
               toolBarButtonSize="middle"
             />,
           ]}
+          onTableDataChange={(rows) => {
+            tableRowsRef.current = rows;
+          }}
           toolBarRender={() =>
             canCreate
               ? [
@@ -730,7 +733,6 @@ const OQCInspectionPage: React.FC = () => {
                 total = data.length;
               }
             }
-            tableRowsRef.current = data as OQCInspection[];
             return {
               success: true,
               data: data as OQCInspection[],

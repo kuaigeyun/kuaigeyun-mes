@@ -11,6 +11,7 @@ import {
 import {
   defaultValueSpec,
   evaluateDerivedFormula,
+  formatAcceptanceCriteriaPreview,
   formatSamplingCriteriaPreview,
   getStepConductKey,
   normalizeValueType,
@@ -387,10 +388,12 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
         {steps.map((step, idx) => {
           const stepKey = getStepConductKey(step, idx);
           const label = step.inspection_item || t('app.kuaizhizao.quality.template.inspectionItemFallback', { index: idx + 1 });
-          const hintParts = [step.inspection_method, step.acceptance_criteria];
+          // 用 value_spec 现场重算合格范围，避免陈旧 acceptance_criteria / 抽检文案重复，且避免「 - -0.5」吞掉负号
+          const typeHint = formatAcceptanceCriteriaPreview(step.value_type || 'boolean', step.value_spec, t);
           const samplingHint = formatSamplingCriteriaPreview(step.sampling_type, step.value_spec, t);
-          if (samplingHint) hintParts.push(samplingHint);
-          const hint = hintParts.filter(Boolean).join(' - ');
+          const hint = [step.inspection_method, typeHint || step.acceptance_criteria, samplingHint]
+            .filter(Boolean)
+            .join(' / ');
           return (
             <TypedStepFields
               key={stepKey}

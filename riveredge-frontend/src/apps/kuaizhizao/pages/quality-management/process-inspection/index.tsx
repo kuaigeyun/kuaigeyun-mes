@@ -1063,7 +1063,6 @@ const ProcessInspectionPage: React.FC = () => {
             });
             const { data: raw, total } = normalizeQualityInspectionListResponse(response);
             const data = await enrichInspectionRecordsWithCustomFields(raw as ProcessInspection[]);
-            tableRowsRef.current = data;
             return {
               data,
               success: true,
@@ -1077,6 +1076,9 @@ const ProcessInspectionPage: React.FC = () => {
               total: 0,
             };
           }
+        }}
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
         }}
         showCreateButton={true}
         createButtonText={createButtonLabel}

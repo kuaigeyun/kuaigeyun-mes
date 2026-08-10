@@ -21,6 +21,11 @@ export interface FormModalTemplateProps {
   onClose?: () => void;
   /** @deprecated 请使用 onClose */
   onCancel?: () => void;
+  /**
+   * 兼容 ModalForm 的 onOpenChange；关闭时会调用 `onOpenChange(false)`。
+   * 仅传本属性、未传 onClose/onCancel 时也能关闭。
+   */
+  onOpenChange?: (open: boolean) => void;
   onFinish: (values: any) => Promise<void>;
   isEdit?: boolean;
   initialValues?: Record<string, any>;
@@ -68,6 +73,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   open,
   onClose,
   onCancel,
+  onOpenChange,
   onFinish,
   isEdit = false,
   initialValues,
@@ -96,7 +102,11 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   BODY_MAX_HEIGHT: _bmh,
   formItems: _unusedFormItems,
 }) => {
-  const handleClose = onClose ?? onCancel ?? (() => {});
+  const handleClose = useCallback(() => {
+    onClose?.();
+    if (!onClose) onCancel?.();
+    onOpenChange?.(false);
+  }, [onClose, onCancel, onOpenChange]);
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const screens = Grid.useBreakpoint();

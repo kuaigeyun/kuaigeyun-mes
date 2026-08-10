@@ -1241,7 +1241,6 @@ const FinishedGoodsInspectionPage: React.FC = () => {
             }
 
             const data = await enrichInspectionRecordsWithCustomFields(raw as FinishedGoodsInspection[]);
-            tableRowsRef.current = data;
             return {
               data,
               success: true,
@@ -1255,6 +1254,9 @@ const FinishedGoodsInspectionPage: React.FC = () => {
               total: 0,
             };
           }
+        }}
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
         }}
         showCreateButton={true}
         createButtonText={createButtonLabel}

@@ -274,7 +274,6 @@ const ComputationHistoryPage: React.FC = () => {
                 ...listParams,
               });
               const normalized = normalizePlanListResponse(response);
-              tableRowsRef.current = normalized.data as DemandComputation[];
               return {
                 data: normalized.data,
                 success: response.success !== false,
@@ -294,6 +293,9 @@ const ComputationHistoryPage: React.FC = () => {
           skipFuzzyPinyinClientFilter
           pinnedTabsField="computation_status"
           pinnedTabsValueEnum={computationStatusValueEnum}
+          onTableDataChange={(rows) => {
+            tableRowsRef.current = rows;
+          }}
           enableRowSelection={true}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={(keys) => setSelectedRowKeys(keys)}

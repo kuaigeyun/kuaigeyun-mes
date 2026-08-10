@@ -1141,6 +1141,13 @@ const DeliveryNotesPage: React.FC = () => {
           showCreateButton={false}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
+          onTableDataChange={(rows) => {
+            const next = new Map<string, DeliveryNotice>();
+            for (const row of rows) {
+              if (row.id != null) next.set(String(row.id), row);
+            }
+            listRowsRef.current = next;
+          }}
           toolBarRender={() => [
             <UniPullCreateToolbar
               compactKey="create-delivery-note-with-pull"
@@ -1238,11 +1245,6 @@ const DeliveryNotesPage: React.FC = () => {
                 ...listParams,
               });
               const { data, total } = normalizeWarehouseListResponse(response);
-              const next = new Map<string, DeliveryNotice>();
-              for (const row of data as DeliveryNotice[]) {
-                if (row.id != null) next.set(String(row.id), row);
-              }
-              listRowsRef.current = next;
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.deliveryNote.msg.loadListFailed'));

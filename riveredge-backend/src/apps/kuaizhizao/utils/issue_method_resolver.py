@@ -15,6 +15,7 @@ _SOURCE_DEFAULTS = {
     "Service": ISSUE_METHOD_NONE,
     "Buy": ISSUE_METHOD_BACKFLUSH,
     "CustomerProvided": ISSUE_METHOD_PICK,
+    "Gift": ISSUE_METHOD_PICK,
     "Make": ISSUE_METHOD_PICK,
     "Outsource": ISSUE_METHOD_PICK,
     "Configure": ISSUE_METHOD_PICK,

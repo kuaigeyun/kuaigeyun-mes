@@ -2139,8 +2139,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
             const res = await listPurchaseRequisitions(apiParams);
             const requisitions = res.data || [];
             const total = res.total || 0;
+            // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）
             if (dataViewModeRef.current === 'order') {
-              tableRowsRef.current = requisitions;
               return { data: requisitions, success: res.success ?? true, total };
             }
             const flatRows = flattenDocumentDetailRows<PurchaseRequisition, PurchaseRequisitionItem>({
@@ -2178,7 +2178,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 lifecycle: h.lifecycle,
               }),
             }) as PurchaseRequisitionItemRow[];
-            tableRowsRef.current = requisitions;
             return { data: flatRows, success: res.success ?? true, total };
           }}
           onTableDataChange={(rows) => {

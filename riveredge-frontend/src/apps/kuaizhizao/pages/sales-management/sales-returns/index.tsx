@@ -1804,8 +1804,8 @@ const SalesReturnsPage: React.FC = () => {
               const response = await warehouseApi.salesReturn.list(apiParams);
               const list = response?.data ?? [];
               const enriched = await enrichSalesReturnRecordsWithCustomFields(list);
+              // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）
               if (dataViewModeRef.current === 'order') {
-                tableRowsRef.current = enriched;
                 return {
                   data: enriched,
                   success: true,
@@ -1855,7 +1855,6 @@ const SalesReturnsPage: React.FC = () => {
                   total_amount: 0,
                 }),
               }) as SalesReturnItemRow[];
-              tableRowsRef.current = enriched;
               return {
                 data: flatRows,
                 success: true,

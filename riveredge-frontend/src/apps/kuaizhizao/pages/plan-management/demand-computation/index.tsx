@@ -282,6 +282,7 @@ const MATERIAL_SOURCE_TAG_COLORS: Record<string, string> = {
   Phantom: 'orange',
   Outsource: 'purple',
   CustomerProvided: 'magenta',
+  Gift: 'gold',
   Service: 'geekblue',
 }
 

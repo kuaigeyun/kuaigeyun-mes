@@ -41,6 +41,7 @@ from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_OUTSOURCE,
     SOURCE_TYPE_CONFIGURE,
     SOURCE_TYPE_CUSTOMER_PROVIDED,
+    SOURCE_TYPE_GIFT,
     SOURCE_TYPE_SERVICE,
     MANUFACTURING_MODE_FABRICATION,
     MANUFACTURING_MODE_ASSEMBLY,
@@ -2325,7 +2326,13 @@ class DemandComputationService(AppBaseService):
         while queue:
             parent_id = queue.pop(0)
             st = await get_material_source_type(tenant_id, parent_id)
-            if st in (SOURCE_TYPE_BUY, SOURCE_TYPE_CUSTOMER_PROVIDED, SOURCE_TYPE_SERVICE, None):
+            if st in (
+                SOURCE_TYPE_BUY,
+                SOURCE_TYPE_CUSTOMER_PROVIDED,
+                SOURCE_TYPE_GIFT,
+                SOURCE_TYPE_SERVICE,
+                None,
+            ):
                 continue
             if st == SOURCE_TYPE_PHANTOM:
                 continue

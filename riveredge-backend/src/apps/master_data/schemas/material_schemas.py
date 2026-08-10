@@ -210,7 +210,7 @@ class MaterialBase(BaseModel):
         None,
         alias="sourceType",
         max_length=20,
-        description="物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Service）",
+        description="物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Gift/Service）",
     )
     source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式），自制件含 manufacturing_mode、工艺路线、BOM等；采购件含供应商；委外件含委外供应商/工序等")
     
@@ -261,7 +261,7 @@ class MaterialCreate(MaterialBase):
         ...,
         alias="sourceType",
         max_length=20,
-        description="物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Service）",
+        description="物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Gift/Service）",
     )
 
     @validator("source_type")
@@ -319,7 +319,7 @@ class MaterialUpdate(BaseModel):
     defaults: Optional[Dict[str, Any]] = Field(None, description="默认值设置（JSON格式）")
 
     # 物料来源控制（与 MaterialBase 一致，支持更新时保存）
-    source_type: Optional[str] = Field(None, alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Service）")
+    source_type: Optional[str] = Field(None, alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Gift/Service）")
     source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式）")
 
     # 质检选项

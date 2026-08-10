@@ -13,7 +13,9 @@ import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import {
   defaultValueSpec,
+  formatAcceptanceCriteriaPreview,
   normalizeValueType,
+  resolveNumericEffectiveLimits,
   type InspectionStepValueSpec,
   type InspectionStepValueType,
   INSPECTION_STEP_VALUE_TYPES,
@@ -96,6 +98,8 @@ export const InspectionStepValueSpecFields: React.FC<Props> = ({
 
   if (vt === 'numeric') {
     const isDerived = !!spec.derived;
+    const bounds = resolveNumericEffectiveLimits(spec);
+    const rangePreview = formatAcceptanceCriteriaPreview('numeric', spec, t);
     return (
       <Space direction="vertical" style={{ width: '100%' }} size={8}>
         <Switch
@@ -146,6 +150,13 @@ export const InspectionStepValueSpecFields: React.FC<Props> = ({
           />
         </Form.Item>
         <Space wrap>
+          <Form.Item label={t('app.kuaizhizao.quality.plans.stepSpec.target')} style={{ marginBottom: 0 }}>
+            <InputNumber
+              value={spec.target as number | undefined}
+              onChange={(v) => patch({ target: v ?? undefined })}
+              style={{ width: 120 }}
+            />
+          </Form.Item>
           <Form.Item label={t('app.kuaizhizao.quality.plans.stepSpec.lowerLimit')} style={{ marginBottom: 0 }}>
             <InputNumber
               value={spec.lower_limit as number | undefined}
@@ -160,13 +171,6 @@ export const InspectionStepValueSpecFields: React.FC<Props> = ({
               style={{ width: 120 }}
             />
           </Form.Item>
-          <Form.Item label={t('app.kuaizhizao.quality.plans.stepSpec.target')} style={{ marginBottom: 0 }}>
-            <InputNumber
-              value={spec.target as number | undefined}
-              onChange={(v) => patch({ target: v ?? undefined })}
-              style={{ width: 120 }}
-            />
-          </Form.Item>
           <Form.Item label={t('app.kuaizhizao.quality.plans.stepSpec.decimalPlaces')} style={{ marginBottom: 0 }}>
             <InputNumber
               min={0}
@@ -177,6 +181,15 @@ export const InspectionStepValueSpecFields: React.FC<Props> = ({
             />
           </Form.Item>
         </Space>
+        <span style={{ fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+          {t('app.kuaizhizao.quality.plans.stepSpec.numericBoundsHint')}
+          {rangePreview
+            ? ` ${t('app.kuaizhizao.quality.plans.stepSpec.numericBoundsPreview', { range: rangePreview })}`
+            : ''}
+          {bounds.mode === 'deviation'
+            ? ` ${t('app.kuaizhizao.quality.plans.stepSpec.numericDeviationModeHint')}`
+            : ''}
+        </span>
       </Space>
     );
   }

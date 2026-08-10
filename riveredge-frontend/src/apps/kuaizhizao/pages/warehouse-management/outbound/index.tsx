@@ -1055,17 +1055,19 @@ const OutboundPage: React.FC = () => {
             },
               currentUser,
             );
-            const next = new Map<string, OutboundOrder>();
-            for (const row of result.data ?? []) {
-              next.set(outboundRowKey(row), row);
-            }
-            listRowsRef.current = next;
-            setListRowsVersion((v) => v + 1);
             return result;
           } catch {
             messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadListFailed'));
             return { data: [], success: false, total: 0 };
           }
+        }}
+        onTableDataChange={(rows) => {
+          const next = new Map<string, OutboundOrder>();
+          for (const row of rows) {
+            next.set(outboundRowKey(row), row);
+          }
+          listRowsRef.current = next;
+          setListRowsVersion((v) => v + 1);
         }}
         toolBarRender={() => [
           <UniPullLoadButton

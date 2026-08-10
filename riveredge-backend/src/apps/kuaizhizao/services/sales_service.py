@@ -95,27 +95,110 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         return False
 
     async def _forecast_has_downstream(self, tenant_id: int, forecast_id: int) -> bool:
-        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        """是否已有会阻断撤审的下游：仅「已下推需求计算」算阻断。
 
-        return await DocumentRelation.filter(
-            tenant_id=tenant_id,
-            source_type="sales_forecast",
-            source_id=forecast_id,
-            target_type__in=["demand", "demand_computation"],
-        ).exists()
+        下推失败时可能已落中间 Demand + 关联，但尚未创建需求计算；此类中间态不得阻断撤审/删除。
+        """
+        blocked = await self._forecast_downstream_ids(tenant_id, [forecast_id])
+        return forecast_id in blocked
 
     async def _forecast_downstream_ids(self, tenant_id: int, forecast_ids: List[int]) -> set[int]:
         if not forecast_ids:
             return set()
         from apps.kuaizhizao.models.document_relation import DocumentRelation
 
-        rows = await DocumentRelation.filter(
+        blocked: set[int] = set()
+
+        # 销售预测直接关联需求计算
+        direct_comp = await DocumentRelation.filter(
             tenant_id=tenant_id,
             source_type="sales_forecast",
             source_id__in=forecast_ids,
-            target_type__in=["demand", "demand_computation"],
+            target_type="demand_computation",
         ).values_list("source_id", flat=True)
-        return {int(x) for x in rows}
+        blocked.update(int(x) for x in direct_comp)
+
+        demands = await Demand.filter(
+            tenant_id=tenant_id,
+            source_type="sales_forecast",
+            source_id__in=forecast_ids,
+            deleted_at__isnull=True,
+        ).all()
+        if not demands:
+            return blocked
+
+        demand_ids = [int(d.id) for d in demands if d.id is not None]
+        # 需求已标记下推，或存在 demand→demand_computation 关联
+        pushed_forecast_ids = {
+            int(d.source_id)
+            for d in demands
+            if bool(getattr(d, "pushed_to_computation", False)) and d.source_id is not None
+        }
+        blocked.update(pushed_forecast_ids)
+
+        if demand_ids:
+            demand_comp_rels = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="demand",
+                source_id__in=demand_ids,
+                target_type="demand_computation",
+            ).values_list("source_id", flat=True)
+            demand_with_comp = {int(x) for x in demand_comp_rels}
+            for d in demands:
+                if d.id is not None and int(d.id) in demand_with_comp and d.source_id is not None:
+                    blocked.add(int(d.source_id))
+
+        return blocked
+
+    async def _cleanup_unpushed_forecast_demand(
+        self,
+        tenant_id: int,
+        forecast_id: int,
+        *,
+        demand_id: Optional[int] = None,
+    ) -> None:
+        """清理销售预测下推失败留下的、尚未真正下推到需求计算的中间 Demand。"""
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from core.utils.timezone_utils import resolve_business_datetime
+
+        q = Demand.filter(
+            tenant_id=tenant_id,
+            source_type="sales_forecast",
+            source_id=forecast_id,
+            deleted_at__isnull=True,
+            pushed_to_computation=False,
+        )
+        if demand_id is not None:
+            q = q.filter(id=demand_id)
+        demands = await q.all()
+        if not demands:
+            return
+
+        now = resolve_business_datetime()
+        for d in demands:
+            # 若已挂到需求计算则跳过（双重保险）
+            has_comp = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="demand",
+                source_id=d.id,
+                target_type="demand_computation",
+            ).exists()
+            if has_comp:
+                continue
+            await DemandItem.filter(tenant_id=tenant_id, demand_id=d.id).delete()
+            await Demand.filter(tenant_id=tenant_id, id=d.id).update(deleted_at=now, updated_at=now)
+            await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="sales_forecast",
+                source_id=forecast_id,
+                target_type="demand",
+                target_id=d.id,
+            ).delete()
+            logger.info(
+                "已清理销售预测 %s 未下推的中间需求 %s",
+                forecast_id,
+                d.demand_code,
+            )
 
     async def _forecast_has_items_map(self, tenant_id: int, forecast_ids: List[int]) -> Dict[int, bool]:
         if not forecast_ids:
@@ -716,6 +799,8 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         )
         if not forecast_row:
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
+        # 先清掉下推失败残留的未下推中间需求，再判定是否仍有真实下游
+        await self._cleanup_unpushed_forecast_demand(tenant_id, forecast_id)
         has_downstream = await self._forecast_has_downstream(tenant_id, forecast_id)
         assert_sales_forecast_capability(
             forecast_row,
@@ -1240,16 +1325,26 @@ class SalesForecastService(AppBaseService[SalesForecast]):
 
         forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
 
+        demand_created_here = False
         if not demand:
             demand = await self._create_demand_from_sales_forecast(
                 tenant_id, forecast_id, user_id or forecast.created_by
             )
+            demand_created_here = True
 
-        result = await DemandService().push_to_computation(
-            tenant_id=tenant_id,
-            demand_id=demand.id,
-            created_by=user_id or forecast.created_by,
-        )
+        try:
+            result = await DemandService().push_to_computation(
+                tenant_id=tenant_id,
+                demand_id=demand.id,
+                created_by=user_id or forecast.created_by,
+            )
+        except Exception:
+            # 编码规则缺失等失败时，勿留下阻断撤审的中间 Demand
+            if demand_created_here:
+                await self._cleanup_unpushed_forecast_demand(
+                    tenant_id, forecast_id, demand_id=demand.id
+                )
+            raise
         return {
             "forecast_id": forecast_id,
             "forecast_code": forecast.forecast_code,

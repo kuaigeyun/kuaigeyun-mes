@@ -11,6 +11,7 @@ const SOURCE_TYPE_COLOR: Record<string, string> = {
   Outsource: 'orange',
   Phantom: 'default',
   CustomerProvided: 'purple',
+  Gift: 'gold',
   Service: 'cyan',
 };
 
@@ -20,6 +21,7 @@ const SOURCE_TYPE_I18N_KEY: Record<string, string> = {
   Outsource: `${P}.sourceType.outsource`,
   Phantom: `${P}.sourceType.phantom`,
   CustomerProvided: `${P}.sourceType.customerProvided`,
+  Gift: `${P}.sourceType.gift`,
   Service: `${P}.sourceType.service`,
 };
 
