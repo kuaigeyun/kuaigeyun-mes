@@ -4,6 +4,7 @@ export { useUniPullQuery } from './useUniPullQuery';
 export {
   UNI_PULL_SCOPE_ALL,
   UNI_PULL_SCOPE_PULLABLE,
+  UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   filterByPullScope,
   isPullableScope,
   paginatePullRows,

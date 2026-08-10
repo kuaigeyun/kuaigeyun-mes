@@ -8,7 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
@@ -986,8 +986,12 @@ const IncomingInspectionPage: React.FC = () => {
     ];
     if (gates.conduct.allowed) {
       nodes.push(
-        <Button {...rowActionKind('execute')}
+        <Button
+          {...rowActionKind('execute')}
+          {...rowActionLabelKeep()}
           key="inspect"
+          // 主业务动作：排在详情之后、删除之前，避免被「更多」折叠
+          data-action-priority={15}
           size="small"
           type="primary"
           disabled={gates.conduct.disabled}

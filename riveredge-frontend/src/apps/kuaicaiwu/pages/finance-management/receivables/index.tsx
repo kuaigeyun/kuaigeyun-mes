@@ -34,6 +34,7 @@ import {
   UniPullQueryModal,
   filterByPullScope,
   paginatePullRows,
+  UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -237,7 +238,7 @@ const ReceivableList: React.FC = () => {
             try {
                 const res = await receivableService.listSalesOrderPullCandidates({
                     skip: 0,
-                    limit: 200,
+                    limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
                     keyword: keyword.trim() || undefined,
                 });
                 const rows = res.data || [];
@@ -272,7 +273,7 @@ const ReceivableList: React.FC = () => {
             try {
                 const res = await receivableService.listSalesDeliveryPullCandidates({
                     skip: 0,
-                    limit: 200,
+                    limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
                     keyword: keyword.trim() || undefined,
                 });
                 const rows = res.data || [];

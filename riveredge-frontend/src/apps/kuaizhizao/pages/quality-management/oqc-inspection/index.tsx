@@ -1,4 +1,4 @@
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { Alert, App, Button, Card, Col, Descriptions, Empty, Modal, Row, Spin, Table, Typography } from 'antd';
@@ -438,7 +438,10 @@ const OQCInspectionPage: React.FC = () => {
         nodes.push(
           <Button
             {...rowActionKind('execute')}
+            {...rowActionLabelKeep()}
             key="inspect"
+            // 主业务动作：排在详情之后、删除之前，避免被「更多」折叠
+            data-action-priority={15}
             size="small"
             type="primary"
             disabled={gates.conduct.disabled}

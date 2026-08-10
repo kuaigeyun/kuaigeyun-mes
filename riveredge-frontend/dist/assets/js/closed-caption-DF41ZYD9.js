@@ -1,6 +1,0 @@
-import{c as e}from"./building-2-Df35FBxS.js";import"./vendor-w9aC4qqS.js";/**
- * @license lucide-react v0.556.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */const t=[["path",{d:"M10 9.17a3 3 0 1 0 0 5.66",key:"h9wayk"}],["path",{d:"M17 9.17a3 3 0 1 0 0 5.66",key:"1v6zke"}],["rect",{x:"2",y:"5",width:"20",height:"14",rx:"2",key:"qneu4z"}]],c=e("closed-caption",t);export{t as __iconNode,c as default};

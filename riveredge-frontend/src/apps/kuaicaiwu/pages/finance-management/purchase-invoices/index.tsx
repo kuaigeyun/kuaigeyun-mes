@@ -26,6 +26,7 @@ import {
   UniPullQueryModal,
   filterByPullScope,
   paginatePullRows,
+  UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
@@ -212,7 +213,7 @@ const PurchaseInvoiceList: React.FC = () => {
       try {
         const res = await purchaseInvoiceService.listPurchaseOrderPullCandidates({
           skip: 0,
-          limit: 200,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
         });
         const rows = res.data || [];
@@ -247,7 +248,7 @@ const PurchaseInvoiceList: React.FC = () => {
       try {
         const res = await purchaseInvoiceService.listPurchaseReceiptPullCandidates({
           skip: 0,
-          limit: 200,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
         });
         const rows = res.data || [];
@@ -282,7 +283,7 @@ const PurchaseInvoiceList: React.FC = () => {
       try {
         const res = await purchaseInvoiceService.listPayablePullCandidates({
           skip: 0,
-          limit: 200,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
         });
         const rows = res.data || [];

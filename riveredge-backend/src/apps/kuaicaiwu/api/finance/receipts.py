@@ -124,6 +124,23 @@ async def create_receipt(
                 receipt_code=str(receipt.receipt_code),
                 created_by=current_user.id,
             )
+            if str(data.source_type or "").strip() == "receivable":
+                await receipt_pull_service.settle_pull_created_receipt(
+                    tenant_id=tenant_id,
+                    receivable_id=int(data.source_id),
+                    receipt_id=int(receipt.id),
+                    amount=Decimal(data.total_amount),
+                    operator_id=current_user.id,
+                )
+                if data.bank_account_id:
+                    from apps.kuaicaiwu.services.bank_account_service import BankAccountService
+
+                    await BankAccountService().sync_from_confirmed_voucher(
+                        tenant_id,
+                        voucher_type="receipt",
+                        voucher_id=int(receipt.id),
+                        operator_id=current_user.id,
+                    )
         return await _serialize(tenant_id, current_user.id, receipt)
     except BusinessLogicError as e:
         raise _http_exception_with_trace(422, str(e), "/receipts", tenant_id) from e
@@ -285,19 +302,31 @@ async def confirm_receipt(
     from apps.kuaicaiwu.services.bank_account_service import BankAccountService
     from infra.exceptions.exceptions import ValidationError
 
+    try:
+        settled = await receipt_pull_service.settle_draft_receipt_if_linked(
+            tenant_id=tenant_id,
+            receipt_id=id,
+            operator_id=current_user.id,
+        )
+    except ValidationError as exc:
+        raise _http_exception_with_trace(400, str(exc), "/receipts/{id}/confirm", tenant_id) from exc
+
+    if not settled:
+        from apps.common.audit_actor import apply_update_audit
+
+        confirm_payload: dict = {"status": "Confirmed"}
+        apply_update_audit(confirm_payload, current_user)
+        await Receipt.filter(id=id).update(**confirm_payload)
+
+    receipt = await _get_or_404(tenant_id, id)
     if receipt.bank_account_id:
         try:
             await BankAccountService().sync_from_confirmed_voucher(
                 tenant_id, voucher_type="receipt", voucher_id=id, operator_id=current_user.id
             )
         except ValidationError as exc:
-            raise _http_exception_with_trace(400, str(exc), "/receipts/{id}/confirm", tenant_id)
-    from apps.common.audit_actor import apply_update_audit
-
-    confirm_payload: dict = {"status": "Confirmed"}
-    apply_update_audit(confirm_payload, current_user)
-    await Receipt.filter(id=id).update(**confirm_payload)
-    return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
+            raise _http_exception_with_trace(400, str(exc), "/receipts/{id}/confirm", tenant_id) from exc
+    return await _serialize(tenant_id, current_user.id, receipt)
 
 
 @router.post("/{id}/cancel", response_model=ReceiptVoucherResponse)

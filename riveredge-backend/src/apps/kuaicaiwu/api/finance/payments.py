@@ -115,6 +115,23 @@ async def create_payment(
                 payment_code=str(payment.payment_code),
                 created_by=current_user.id,
             )
+            if str(data.source_type or "").strip() == "payable":
+                await payment_pull_service.settle_pull_created_payment(
+                    tenant_id=tenant_id,
+                    payable_id=int(data.source_id),
+                    payment_id=int(payment.id),
+                    amount=Decimal(data.total_amount),
+                    operator_id=current_user.id,
+                )
+                if data.bank_account_id:
+                    from apps.kuaicaiwu.services.bank_account_service import BankAccountService
+
+                    await BankAccountService().sync_from_confirmed_voucher(
+                        tenant_id,
+                        voucher_type="payment",
+                        voucher_id=int(payment.id),
+                        operator_id=current_user.id,
+                    )
         return _serialize(payment)
     except BusinessLogicError as e:
         raise _http_exception_with_trace(422, str(e), "/payments", tenant_id) from e
@@ -262,6 +279,23 @@ async def confirm_payment(
     from apps.kuaicaiwu.services.bank_account_service import BankAccountService
     from infra.exceptions.exceptions import ValidationError
 
+    try:
+        settled = await payment_pull_service.settle_draft_payment_if_linked(
+            tenant_id=tenant_id,
+            payment_id=id,
+            operator_id=current_user.id,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail={"message": str(exc)})
+
+    if not settled:
+        from apps.common.audit_actor import apply_update_audit
+
+        confirm_payload: dict = {"status": "Confirmed"}
+        apply_update_audit(confirm_payload, current_user)
+        await Payment.filter(id=id).update(**confirm_payload)
+
+    payment = await _get_or_404(tenant_id, id)
     if payment.bank_account_id:
         try:
             await BankAccountService().sync_from_confirmed_voucher(
@@ -269,12 +303,7 @@ async def confirm_payment(
             )
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail={"message": str(exc)})
-    from apps.common.audit_actor import apply_update_audit
-
-    confirm_payload: dict = {"status": "Confirmed"}
-    apply_update_audit(confirm_payload, current_user)
-    await Payment.filter(id=id).update(**confirm_payload)
-    return _serialize(await _get_or_404(tenant_id, id))
+    return _serialize(payment)
 
 
 @router.post("/{id}/cancel", response_model=PaymentVoucherResponse)

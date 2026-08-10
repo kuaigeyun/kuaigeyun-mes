@@ -21,6 +21,7 @@ import {
   UniPullQueryModal,
   filterByPullScope,
   paginatePullRows,
+  UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import dayjs from 'dayjs';
@@ -229,7 +230,7 @@ const ReceiptsPage: React.FC = () => {
       try {
         const res = await receiptService.listReceivablePullCandidates({
           skip: 0,
-          limit: 200,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
         });
         const rows = res.data || [];

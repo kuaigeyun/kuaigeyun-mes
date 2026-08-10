@@ -301,3 +301,59 @@ class PaymentPullService(AppBaseService[Payment]):
             ),
             created_by=created_by,
         )
+
+    async def settle_pull_created_payment(
+        self,
+        tenant_id: int,
+        *,
+        payable_id: int,
+        payment_id: int,
+        amount: Decimal,
+        operator_id: int,
+    ) -> None:
+        """从应付单加载创建付款单后，立即核销至源应付（与 record_payment 一致）。"""
+        from apps.kuaicaiwu.services.finance_service import AccountSettlementService
+
+        settlement_service = AccountSettlementService()
+        await settlement_service.settle_payable(
+            tenant_id=tenant_id,
+            payable_id=payable_id,
+            payment_id=payment_id,
+            amount=Decimal(amount),
+            operator_id=operator_id,
+        )
+
+    async def settle_draft_payment_if_linked(
+        self,
+        tenant_id: int,
+        *,
+        payment_id: int,
+        operator_id: int,
+    ) -> bool:
+        """确认草稿付款单时：若由应付单加载创建且尚未核销，补做核销。"""
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        rel = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="payable",
+            target_type="payment",
+            target_id=payment_id,
+        ).first()
+        if not rel or not rel.source_id:
+            return False
+
+        payment = await Payment.get_or_none(tenant_id=tenant_id, id=payment_id, deleted_at__isnull=True)
+        if not payment:
+            return False
+        unsettled = Decimal(str(payment.unsettled_amount or 0))
+        if unsettled <= 0:
+            return False
+
+        await self.settle_pull_created_payment(
+            tenant_id=tenant_id,
+            payable_id=int(rel.source_id),
+            payment_id=payment_id,
+            amount=unsettled,
+            operator_id=operator_id,
+        )
+        return True

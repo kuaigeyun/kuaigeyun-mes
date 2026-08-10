@@ -5,6 +5,9 @@
 export const UNI_PULL_SCOPE_PULLABLE = 'pullable';
 export const UNI_PULL_SCOPE_ALL = 'all';
 
+/** 与后端 pull-candidates 接口 Query(limit, le=100) 一致，取单弹窗批量拉取上限 */
+export const UNI_PULL_QUERY_MAX_FETCH_LIMIT = 100;
+
 export function isPullableScope(scope?: string): boolean {
   return (scope || UNI_PULL_SCOPE_PULLABLE) !== UNI_PULL_SCOPE_ALL;
 }

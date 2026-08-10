@@ -10,7 +10,7 @@ import { App, Button, Modal, Typography, Space, Dropdown, Tag, Alert, Spin, Tabl
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { CheckCircleOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
-import { apiRequest } from '../../../../../services/api';
+import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -20,6 +20,7 @@ import {
   UniPullQueryModal,
   filterByPullScope,
   paginatePullRows,
+  UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
@@ -88,6 +89,15 @@ function resolveInvoiceTotalFromExcl(
 const P = 'app.kuaicaiwu.salesInvoice';
 const SALES_INVOICE_RESOURCE = 'kuaicaiwu:sales-invoice';
 
+function resolveApiErrorMessage(error: unknown, fallback: string): string {
+  const err = error as { response?: { data?: { detail?: unknown } }; message?: string };
+  return (
+    formatApiErrorDetail(err?.response?.data?.detail)
+    || err?.message
+    || fallback
+  );
+}
+
 const SalesInvoicesPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
@@ -155,10 +165,16 @@ const SalesInvoicesPage: React.FC = () => {
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
     };
-    await apiRequest('/apps/kuaicaiwu/sales-invoices', { method: 'POST', data });
-    messageApi.success(t(`${P}.createSuccess`));
-    setCreateModalVisible(false);
-    actionRef.current?.reload();
+    try {
+      await apiRequest('/apps/kuaicaiwu/sales-invoices', { method: 'POST', data });
+      messageApi.success(t(`${P}.createSuccess`));
+      setCreateModalVisible(false);
+      actionRef.current?.reload();
+      return true;
+    } catch (e: unknown) {
+      messageApi.error(resolveApiErrorMessage(e, t('common.createFailed')));
+      return false;
+    }
   };
 
   const resetPullPreview = () => {
@@ -183,10 +199,8 @@ const SalesInvoicesPage: React.FC = () => {
             ? await salesInvoiceService.previewPullFromSalesDelivery(sourceId)
             : await salesInvoiceService.previewPullFromReceivable(sourceId);
       setPullPreviewData(data);
-    } catch (e: any) {
-      messageApi.error(
-        e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
-      );
+    } catch (e: unknown) {
+      messageApi.error(resolveApiErrorMessage(e, t(`${P}.loadSourceFailed`)));
       resetPullPreview();
     } finally {
       setPullPreviewLoading(false);
@@ -216,16 +230,14 @@ const SalesInvoicesPage: React.FC = () => {
       try {
         const res = await salesInvoiceService.listSalesOrderPullCandidates({
           skip: 0,
-          limit: 200,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
         });
-        const rows = res.data || [];
+        const rows = res?.data ?? [];
         const filtered = filterByPullScope(rows, scope, isPullSalesInvoiceSelectable);
         return paginatePullRows(filtered, page, pageSize);
-      } catch (e: any) {
-        messageApi.error(
-          e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
-        );
+      } catch (e: unknown) {
+        messageApi.error(resolveApiErrorMessage(e, t(`${P}.loadSourceFailed`)));
         return { data: [], total: 0 };
       }
     },
@@ -251,16 +263,14 @@ const SalesInvoicesPage: React.FC = () => {
       try {
         const res = await salesInvoiceService.listSalesDeliveryPullCandidates({
           skip: 0,
-          limit: 200,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
         });
-        const rows = res.data || [];
+        const rows = res?.data ?? [];
         const filtered = filterByPullScope(rows, scope, isPullSalesInvoiceSelectable);
         return paginatePullRows(filtered, page, pageSize);
-      } catch (e: any) {
-        messageApi.error(
-          e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
-        );
+      } catch (e: unknown) {
+        messageApi.error(resolveApiErrorMessage(e, t(`${P}.loadSourceFailed`)));
         return { data: [], total: 0 };
       }
     },
@@ -286,16 +296,14 @@ const SalesInvoicesPage: React.FC = () => {
       try {
         const res = await salesInvoiceService.listReceivablePullCandidates({
           skip: 0,
-          limit: 200,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
         });
-        const rows = res.data || [];
+        const rows = res?.data ?? [];
         const filtered = filterByPullScope(rows, scope, isPullSalesInvoiceSelectable);
         return paginatePullRows(filtered, page, pageSize);
-      } catch (e: any) {
-        messageApi.error(
-          e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
-        );
+      } catch (e: unknown) {
+        messageApi.error(resolveApiErrorMessage(e, t(`${P}.loadSourceFailed`)));
         return { data: [], total: 0 };
       }
     },
@@ -367,8 +375,8 @@ const SalesInvoicesPage: React.FC = () => {
       resetPullPreview();
       actionRef.current?.reload();
       return true;
-    } catch (e: any) {
-      messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t('common.createFailed'));
+    } catch (e: unknown) {
+      messageApi.error(resolveApiErrorMessage(e, t('common.createFailed')));
       return false;
     } finally {
       setPullSubmitting(false);
@@ -458,8 +466,8 @@ const SalesInvoicesPage: React.FC = () => {
       setEditingRecord(null);
       actionRef.current?.reload();
       return true;
-    } catch (e: any) {
-      messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t('common.saveFailed'));
+    } catch (e: unknown) {
+      messageApi.error(resolveApiErrorMessage(e, t('common.saveFailed')));
       return false;
     } finally {
       setEditSubmitting(false);

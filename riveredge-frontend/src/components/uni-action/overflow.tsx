@@ -25,8 +25,8 @@ import { rowActionSortRank } from './actionCatalog'
 import { normalizeActionTree } from './normalize'
 
 /**
- * 行内默认仅直出基础动作（详情/编辑/删除等），其余动作统一折叠到「更多」，
- * 以收窄操作列宽度并提升右侧固定列稳定性。
+ * 行内默认仅直出基础动作（详情/编辑/删除等），其余动作折叠到「更多」，
+ * 以收窄操作列宽度并提升右侧固定列稳定性；「更多」仅 1 项时仍直出。
  */
 export const ROW_ACTIONS_DIRECT_MAX = 3
 
@@ -339,6 +339,7 @@ function mergeOverflowIntoSelfManagedDropdown(
 
 /**
  * 列表操作列：统一顺序；禁用项隐藏；需要溢出时主行至少 ROW_ACTIONS_MIN_PRIMARY_VISIBLE 个可点操作，其余进「更多」。
+ * 若「更多」仅剩 1 项则改回主行直出（再点一层无收益，且「更多」触发器往往更宽）。
  */
 export function renderRowActionsOverflow(
   nodes: React.ReactNode[],
@@ -372,7 +373,7 @@ export function renderRowActionsOverflow(
   const collapsibleSlots = Math.max(0, primarySlotsBeforeMore - pinnedSlotConsumers)
 
   const inline: React.ReactNode[] = []
-  const overflow: React.ReactNode[] = []
+  let overflow: React.ReactNode[] = []
   let usedSlots = 0
   for (const node of enabled) {
     if (isPinnedInlineAction(node)) {
@@ -413,6 +414,12 @@ export function renderRowActionsOverflow(
         </Space>
       )
     }
+  }
+
+  // 系统「更多」仅 1 项时直出，避免多点一层
+  if (overflow.length === 1) {
+    finalInline = [...inline, overflow[0]]
+    overflow = []
   }
 
   if (overflow.length === 0) {

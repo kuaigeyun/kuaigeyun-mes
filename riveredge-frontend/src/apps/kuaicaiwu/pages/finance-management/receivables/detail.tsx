@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ProDescriptions, ModalForm, ProFormMoney, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
+import React, { useEffect, useState } from 'react';
+import { ProDescriptions } from '@ant-design/pro-components';
 import { Button, message, Statistic, Row, Col, Spin, Empty, Typography, Space } from 'antd';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -20,9 +20,6 @@ import {
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { getReceivableLifecycle } from '../../../utils/receivableLifecycle';
-import { getPaymentMethodOptions } from '../../../utils/financeSharedOptions';
-import dayjs from 'dayjs';
-import { formatDateTime } from '../../../../../utils/format';
 
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
@@ -37,9 +34,6 @@ const ReceivableDetail: React.FC = () => {
   const location = useLocation();
   const [data, setData] = useState<Receivable>();
   const [loading, setLoading] = useState(false);
-  const [receiptModalVisible, setReceiptModalVisible] = useState(false);
-
-  const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
 
   const pageTitle = data?.receivable_code
     ? `${t(`${P}.detailTitle`)} - ${data.receivable_code}`
@@ -77,22 +71,11 @@ const ReceivableDetail: React.FC = () => {
     data?.id
   );
 
-  const handleReceipt = async (values: any) => {
-    if (!id) return;
-    try {
-      await receivableService.recordReceipt(Number(id), {
-        receivable_id: Number(id),
-        receipt_amount: values.receipt_amount,
-        receipt_date: formatDateTime(values.receipt_date, 'YYYY-MM-DD'),
-        receipt_method: values.receipt_method || '银行转账',
-        notes: values.notes,
-      });
-      message.success(t(`${P}.receiptSuccess`));
-      setReceiptModalVisible(false);
-      loadData();
-    } catch {
-      // Error handled by interceptor
-    }
+  const openReceiptFromReceivable = () => {
+    if (!data?.id) return;
+    navigate('/apps/kuaicaiwu/finance-management/receipts', {
+      state: { pullReceivableId: data.id },
+    });
   };
 
   const pageActions = data ? (
@@ -113,7 +96,7 @@ const ReceivableDetail: React.FC = () => {
         onSuccess={loadData}
       />
       {data.status !== '已结清' && receivablePerms.canUpdate ? (
-        <Button type="primary" onClick={() => setReceiptModalVisible(true)}>
+        <Button type="primary" onClick={openReceiptFromReceivable}>
           {t(`${P}.recordReceipt`)}
         </Button>
       ) : null}
@@ -146,9 +129,7 @@ const ReceivableDetail: React.FC = () => {
     return renderShell(<Empty description={t(`${P}.detailNotFound`)} />);
   }
 
-  return (
-    <>
-      {renderShell(
+  return renderShell(
         <Row gutter={PAGE_SPACING.BLOCK_GAP} wrap={false} align="stretch">
           <Col flex="70%" style={{ minWidth: 0 }}>
             <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
@@ -254,36 +235,7 @@ const ReceivableDetail: React.FC = () => {
             </DetailDrawerSection>
           </Col>
         </Row>,
-      )}
-
-      <ModalForm
-        title={t(`${P}.recordReceipt`)}
-        open={receiptModalVisible}
-        onOpenChange={setReceiptModalVisible}
-        onFinish={handleReceipt}
-        initialValues={{
-          receipt_date: dayjs(),
-          receipt_amount: data.remaining_amount,
-          receipt_method: '银行转账',
-        }}
-      >
-        <ProFormMoney
-          name="receipt_amount"
-          label={t(`${P}.receiptAmount`)}
-          rules={[{ required: true }]}
-          fieldProps={{ max: data.remaining_amount }}
-        />
-        <ProFormDatePicker name="receipt_date" label={t(`${P}.receiptDate`)} rules={[{ required: true }]} width="md" />
-        <ProFormSelect
-          name="receipt_method"
-          label={t(`${P}.receiptMethod`)}
-          options={paymentMethodOptions}
-          rules={[{ required: true }]}
-        />
-        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
-      </ModalForm>
-    </>
-  );
+      );
 };
 
 export default ReceivableDetail;

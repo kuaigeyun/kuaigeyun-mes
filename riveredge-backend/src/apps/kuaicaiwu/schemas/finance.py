@@ -382,8 +382,12 @@ class SalesInvoiceCreate(SalesInvoiceBase):
     """销售发票创建schema"""
 
     invoice_amount: Decimal = Field(..., ge=0, description="不含税金额")
-    tax_amount: Decimal = Field(..., ge=0, description="税额")
-    total_amount: Decimal = Field(..., ge=0, description="价税合计")
+    tax_amount: Optional[Decimal] = Field(
+        None, ge=0, description="税额（服务端按未税金额×税率计算，入参可忽略）"
+    )
+    total_amount: Optional[Decimal] = Field(
+        None, ge=0, description="价税合计（服务端计算，入参可忽略）"
+    )
     source_type: Optional[str] = Field(None, description="加载源单类型 sales_order|sales_delivery|receivable")
     source_id: Optional[int] = Field(None, description="加载源单ID")
 

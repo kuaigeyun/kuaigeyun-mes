@@ -301,3 +301,59 @@ class ReceiptPullService(AppBaseService[Receipt]):
             ),
             created_by=created_by,
         )
+
+    async def settle_pull_created_receipt(
+        self,
+        tenant_id: int,
+        *,
+        receivable_id: int,
+        receipt_id: int,
+        amount: Decimal,
+        operator_id: int,
+    ) -> None:
+        """从应收单加载创建收款单后，立即核销至源应收（与 record_receipt 一致）。"""
+        from apps.kuaicaiwu.services.finance_service import AccountSettlementService
+
+        settlement_service = AccountSettlementService()
+        await settlement_service.settle_receivable(
+            tenant_id=tenant_id,
+            receivable_id=receivable_id,
+            receipt_id=receipt_id,
+            amount=Decimal(amount),
+            operator_id=operator_id,
+        )
+
+    async def settle_draft_receipt_if_linked(
+        self,
+        tenant_id: int,
+        *,
+        receipt_id: int,
+        operator_id: int,
+    ) -> bool:
+        """确认草稿收款单时：若由应收单加载创建且尚未核销，补做核销。"""
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        rel = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="receivable",
+            target_type="receipt",
+            target_id=receipt_id,
+        ).first()
+        if not rel or not rel.source_id:
+            return False
+
+        receipt = await Receipt.get_or_none(tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True)
+        if not receipt:
+            return False
+        unsettled = Decimal(str(receipt.unsettled_amount or 0))
+        if unsettled <= 0:
+            return False
+
+        await self.settle_pull_created_receipt(
+            tenant_id=tenant_id,
+            receivable_id=int(rel.source_id),
+            receipt_id=receipt_id,
+            amount=unsettled,
+            operator_id=operator_id,
+        )
+        return True
